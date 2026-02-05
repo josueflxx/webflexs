@@ -5,7 +5,7 @@ Uses PostgreSQL database.
 
 from .base import *
 
-DEBUG = False
+DEBUG = os.getenv('DJANGO_DEBUG', 'False').lower() == 'true'
 
 # PostgreSQL for production
 DATABASES = {
