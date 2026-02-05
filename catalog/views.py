@@ -45,13 +45,43 @@ def catalog(request):
             for attr in category_attributes:
                 val = request.GET.get(attr.slug, '').strip()
                 if val:
-                    # Filter by JSON field key
-                    # Using kwargs unpacking for dynamic field name
-                    # Case-insensitive matching for text usually better, but for select exact is fine.
-                    # Start with exact match for simplicity and consistency with options.
                     filter_kwargs = {f"attributes__{attr.slug}": val}
                     products = products.filter(**filter_kwargs)
                     active_filters[attr.slug] = val
+                    
+            # --- PHASE 4: Abrazaderas Special Filters ---
+            if 'ABRAZADERA' in current_category.name.upper():
+                clamp_filter_fields = ['fabrication', 'diameter', 'shape']
+                for field in clamp_filter_fields:
+                    val = request.GET.get(field, '').strip()
+                    if val:
+                        filter_kwargs = {f"clamp_specs__{field}": val}
+                        products = products.filter(**filter_kwargs)
+                        active_filters[field] = val
+                
+                # Numeric filters (width, length) - optional, for now handles exact
+                for field in ['width', 'length']:
+                    val = request.GET.get(field, '').strip()
+                    if val:
+                        try:
+                            filter_kwargs = {f"clamp_specs__{field}": int(val)}
+                            products = products.filter(**filter_kwargs)
+                            active_filters[field] = val
+                        except ValueError:
+                            pass
+                
+                # Get available options for these filters to show in UI
+                from .models import ClampSpecs
+                context_extra = {
+                    'clamp_options': {
+                        'fabrication': ClampSpecs.objects.filter(product__category=current_category).values_list('fabrication', flat=True).distinct().exclude(fabrication__isnull=True),
+                        'diameter': ClampSpecs.objects.filter(product__category=current_category).values_list('diameter', flat=True).distinct().exclude(diameter__isnull=True),
+                        'shape': ClampSpecs.objects.filter(product__category=current_category).values_list('shape', flat=True).distinct().exclude(shape__isnull=True),
+                    }
+                }
+                # I'll merge this into context later in the view logic
+            else:
+                context_extra = {}
     
     # Ordering
     order_by = request.GET.get('order', 'name')
@@ -92,6 +122,9 @@ def catalog(request):
         'price_message': settings.public_prices_message,
         'request_get': request.GET, # Useful for keeping other params in links
     }
+    
+    if 'context_extra' in locals():
+        context.update(context_extra)
     
     return render(request, 'catalog/catalog_v2.html', context)
 

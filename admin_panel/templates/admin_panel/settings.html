@@ -9,14 +9,17 @@
     <form method="post">
         {% csrf_token %}
 
-        <div class="form-group">
-            <div class="flex items-center gap-2">
-                <input type="checkbox" name="show_public_prices" id="show_public_prices" {% if settings.show_public_prices %}checked{% endif %}>
-                <label for="show_public_prices" style="cursor: pointer; margin-bottom: 0;">
+        <div class="form-group mb-4">
+            <div class="flex items-center gap-3">
+                <input type="checkbox" name="show_public_prices" id="show_public_prices" {% if
+                    settings.show_public_prices %}checked{% endif %}
+                    style="width: 18px; height: 18px; cursor: pointer;">
+                <label for="show_public_prices" style="cursor: pointer; margin-bottom: 0; font-size: 1.1rem;">
                     <strong>Mostrar precios en catálogo público</strong>
                 </label>
             </div>
-            <small class="text-muted" style="display: block; margin-top: 5px; margin-left: 1.5rem;">Si está activado, los visitantes pueden ver precios sin iniciar sesión</small>
+            <small class="text-muted" style="display: block; margin-top: 8px; margin-left: 2rem;">Si está activado, los
+                visitantes pueden ver precios sin iniciar sesión</small>
         </div>
 
         <div class="form-group">

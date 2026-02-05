@@ -65,14 +65,80 @@
                     </ul>
                 </div>
 
-                {% if category_attributes %}
+                {% if current_category and 'ABRAZADERA' in current_category.name.upper %}
                 <div class="filter-section">
-                    <h3>Filtros: {{ current_category.name }}</h3>
+                    <h3>Especificaciones: {{ current_category.name }}</h3>
                     <form method="get" action="{% url 'catalog' %}">
                         <!-- Preserve other parameters -->
                         <input type="hidden" name="q" value="{{ search_query }}">
                         <input type="hidden" name="category" value="{{ category_slug }}">
                         <input type="hidden" name="order" value="{{ order_by }}">
+
+                        <!-- Fabrication -->
+                        {% if clamp_options.fabrication %}
+                        <div class="filter-group mb-3">
+                            <h4 class="filter-title"
+                                style="font-size: 0.95em; margin-bottom: 5px; color: var(--color-gray);">Fabricación
+                            </h4>
+                            <select name="fabrication" class="form-select form-select-sm" style="width: 100%;">
+                                <option value="">- Todas -</option>
+                                {% for opt in clamp_options.fabrication %}
+                                <option value="{{ opt }}" {% if active_filters.fabrication==opt %}selected{% endif %}>{{
+                                    opt }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        {% endif %}
+
+                        <!-- Diameter -->
+                        {% if clamp_options.diameter %}
+                        <div class="filter-group mb-3">
+                            <h4 class="filter-title"
+                                style="font-size: 0.95em; margin-bottom: 5px; color: var(--color-gray);">Diámetro</h4>
+                            <select name="diameter" class="form-select form-select-sm" style="width: 100%;">
+                                <option value="">- Todos -</option>
+                                {% for opt in clamp_options.diameter %}
+                                <option value="{{ opt }}" {% if active_filters.diameter==opt %}selected{% endif %}>{{
+                                    opt }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        {% endif %}
+
+                        <!-- Shape -->
+                        {% if clamp_options.shape %}
+                        <div class="filter-group mb-3">
+                            <h4 class="filter-title"
+                                style="font-size: 0.95em; margin-bottom: 5px; color: var(--color-gray);">Forma</h4>
+                            <select name="shape" class="form-select form-select-sm" style="width: 100%;">
+                                <option value="">- Todas -</option>
+                                {% for opt in clamp_options.shape %}
+                                <option value="{{ opt }}" {% if active_filters.shape==opt %}selected{% endif %}>{{ opt
+                                    }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        {% endif %}
+
+                        <button type="submit" class="btn btn-primary btn-sm btn-block mt-3" style="width: 100%;">
+                            Aplicar Filtros Técnicos
+                        </button>
+                    </form>
+                </div>
+                {% endif %}
+
+                {% if category_attributes %}
+                <div class="filter-section">
+                    <h3>Otros Filtros</h3>
+                    <form method="get" action="{% url 'catalog' %}">
+                        <!-- Preserve other parameters -->
+                        <input type="hidden" name="q" value="{{ search_query }}">
+                        <input type="hidden" name="category" value="{{ category_slug }}">
+                        <input type="hidden" name="order" value="{{ order_by }}">
+                        <!-- Preserve technical filters if they exist -->
+                        <input type="hidden" name="fabrication" value="{{ active_filters.fabrication|default:'' }}">
+                        <input type="hidden" name="diameter" value="{{ active_filters.diameter|default:'' }}">
+                        <input type="hidden" name="shape" value="{{ active_filters.shape|default:'' }}">
 
                         {% for attr in category_attributes %}
                         <div class="filter-group mb-3">
@@ -86,7 +152,7 @@
                                 <option value="">- Todos -</option>
                                 {% for opt in attr.options_list %}
                                 {% with current_val=active_filters|get_item:attr.slug %}
-                                <option value="{{ opt }}" {% if current_val == opt %}selected{% endif %}>
+                                <option value="{{ opt }}" {% if current_val==opt %}selected{% endif %}>
                                     {{ opt }}
                                 </option>
                                 {% endwith %}
@@ -124,11 +190,11 @@
                     </span>
                     <select name="order" class="form-select order-select"
                         onchange="window.location.href='?order='+this.value+'&q={{ search_query }}&category={{ category_slug }}'">
-                        <option value="name" {% if order_by == 'name' %}selected{% endif %}>Nombre A-Z</option>
-                        <option value="-name" {% if order_by == '-name' %}selected{% endif %}>Nombre Z-A</option>
-                        <option value="price" {% if order_by == 'price' %}selected{% endif %}>Menor precio</option>
-                        <option value="-price" {% if order_by == '-price' %}selected{% endif %}>Mayor precio</option>
-                        <option value="sku" {% if order_by == 'sku' %}selected{% endif %}>SKU</option>
+                        <option value="name" {% if order_by=='name' %}selected{% endif %}>Nombre A-Z</option>
+                        <option value="-name" {% if order_by=='-name' %}selected{% endif %}>Nombre Z-A</option>
+                        <option value="price" {% if order_by=='price' %}selected{% endif %}>Menor precio</option>
+                        <option value="-price" {% if order_by=='-price' %}selected{% endif %}>Mayor precio</option>
+                        <option value="sku" {% if order_by=='sku' %}selected{% endif %}>SKU</option>
                     </select>
                 </div>
 
@@ -156,7 +222,7 @@
                             <div class="product-pricing">
                                 {% if discount %}
                                 <span class="price-original">${{ product.price|floatformat:2 }}</span>
-                                <span class="price-final">${{ product.get_discounted_price:discount|floatformat:2
+                                <span class="price-final">${{ product.price|calculate_discount:discount|floatformat:2
                                     }}</span>
                                 {% else %}
                                 <span class="price-final">${{ product.price|floatformat:2 }}</span>
