@@ -1,0 +1,93 @@
+{% extends 'base.html' %}
+
+{% block title %}Iniciar Sesión - FLEXS{% endblock %}
+
+{% block content %}
+<div class="auth-page">
+    <div class="container">
+        <div class="auth-card">
+            <div class="auth-header">
+                <h1>Iniciar Sesión</h1>
+                <p>Accedé a tu cuenta para ver precios y hacer pedidos</p>
+            </div>
+
+            <form method="post" class="auth-form">
+                {% csrf_token %}
+
+                <div class="form-group">
+                    <label for="username" class="form-label">Usuario</label>
+                    <input type="text" name="username" id="username" class="form-input" required autofocus>
+                </div>
+
+                <div class="form-group">
+                    <label for="password" class="form-label">Contraseña</label>
+                    <input type="password" name="password" id="password" class="form-input" required>
+                </div>
+
+                <button type="submit" class="btn btn-primary btn-lg btn-block">
+                    Ingresar
+                </button>
+            </form>
+
+            <div class="auth-footer">
+                <p>¿No tenés cuenta?</p>
+                <a href="{% url 'account_request' %}" class="btn btn-outline">
+                    Solicitar Cuenta
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .auth-page {
+        min-height: calc(100vh - 100px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: var(--spacing-xl) 0;
+    }
+
+    .auth-card {
+        background: var(--color-dark-light);
+        border-radius: var(--radius-xl);
+        padding: var(--spacing-3xl);
+        width: 100%;
+        max-width: 450px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .auth-header {
+        text-align: center;
+        margin-bottom: var(--spacing-2xl);
+    }
+
+    .auth-header h1 {
+        font-size: var(--font-size-3xl);
+        margin-bottom: var(--spacing-sm);
+    }
+
+    .auth-header p {
+        color: var(--color-gray-light);
+    }
+
+    .auth-form {
+        margin-bottom: var(--spacing-2xl);
+    }
+
+    .btn-block {
+        width: 100%;
+    }
+
+    .auth-footer {
+        text-align: center;
+        padding-top: var(--spacing-xl);
+        border-top: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .auth-footer p {
+        color: var(--color-gray-light);
+        margin-bottom: var(--spacing-md);
+    }
+</style>
+{% endblock %}

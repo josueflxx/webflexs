@@ -1,0 +1,71 @@
+{% extends 'admin_panel/base.html' %}
+
+{% block page_title %}Configuración{% endblock %}
+
+{% block content %}
+<div class="admin-form-container">
+    <h2>Configuración del Sitio</h2>
+
+    <form method="post">
+        {% csrf_token %}
+
+        <div class="form-group">
+            <div class="flex items-center gap-2">
+                <input type="checkbox" name="show_public_prices" id="show_public_prices" {% if settings.show_public_prices %}checked{% endif %}>
+                <label for="show_public_prices" style="cursor: pointer; margin-bottom: 0;">
+                    <strong>Mostrar precios en catálogo público</strong>
+                </label>
+            </div>
+            <small class="text-muted" style="display: block; margin-top: 5px; margin-left: 1.5rem;">Si está activado, los visitantes pueden ver precios sin iniciar sesión</small>
+        </div>
+
+        <div class="form-group">
+            <label for="public_prices_message" class="form-label">Mensaje cuando precios están ocultos</label>
+            <input type="text" name="public_prices_message" id="public_prices_message" class="form-input"
+                value="{{ settings.public_prices_message }}">
+        </div>
+
+        <hr style="border-color: rgba(255,255,255,0.1); margin: 2rem 0;">
+
+        <h3 class="mb-3">Datos de la Empresa</h3>
+
+        <div class="flex gap-3" style="flex-wrap: wrap;">
+            <div class="form-group" style="flex: 1; min-width: 250px;">
+                <label for="company_name" class="form-label">Nombre</label>
+                <input type="text" name="company_name" id="company_name" class="form-input"
+                    value="{{ settings.company_name }}">
+            </div>
+
+            <div class="form-group" style="flex: 1; min-width: 250px;">
+                <label for="company_email" class="form-label">Email</label>
+                <input type="email" name="company_email" id="company_email" class="form-input"
+                    value="{{ settings.company_email }}">
+            </div>
+        </div>
+
+        <div class="flex gap-3" style="flex-wrap: wrap;">
+            <div class="form-group" style="flex: 1; min-width: 250px;">
+                <label for="company_phone" class="form-label">Teléfono principal</label>
+                <input type="text" name="company_phone" id="company_phone" class="form-input"
+                    value="{{ settings.company_phone }}">
+            </div>
+
+            <div class="form-group" style="flex: 1; min-width: 250px;">
+                <label for="company_phone_2" class="form-label">Teléfono secundario</label>
+                <input type="text" name="company_phone_2" id="company_phone_2" class="form-input"
+                    value="{{ settings.company_phone_2 }}">
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label for="company_address" class="form-label">Dirección</label>
+            <textarea name="company_address" id="company_address"
+                class="form-textarea">{{ settings.company_address }}</textarea>
+        </div>
+
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary">Guardar Configuración</button>
+        </div>
+    </form>
+</div>
+{% endblock %}

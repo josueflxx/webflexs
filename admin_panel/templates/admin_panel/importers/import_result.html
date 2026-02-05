@@ -1,0 +1,112 @@
+{% extends 'admin_panel/base.html' %}
+
+{% block page_title %}Resultado Importación{% endblock %}
+
+{% block content %}
+<div class="admin-form-container" style="max-width: 1000px; margin: 0 auto;">
+    <h2 class="mb-3">
+        {% if dry_run %}
+        Vista Previa (Dry Run)
+        {% else %}
+        Resultado Final
+        {% endif %}
+    </h2>
+
+    <div class="dashboard-grid mb-4" style="grid-template-columns: repeat(4, 1fr);">
+        <div class="stat-card">
+            <h3>Total Filas</h3>
+            <div class="number">{{ result.total_rows }}</div>
+        </div>
+        <div class="stat-card">
+            <h3>Nuevos</h3>
+            <div class="number text-success">{{ result.created }}</div>
+        </div>
+        <div class="stat-card">
+            <h3>Existentes</h3>
+            <div class="number text-info">{{ result.updated }}</div>
+        </div>
+        <div class="stat-card">
+            <h3>Errores</h3>
+            <div class="number text-danger">{{ result.errors }}</div>
+        </div>
+    </div>
+
+    {% if result.row_results %}
+    <h3 class="mb-3">Detalle de Filas</h3>
+    <div class="admin-table-container" style="max-height: 600px; overflow-y: auto;">
+        <table class="admin-table">
+            <thead>
+                <tr>
+                    <th>Fila (Excel)</th>
+                    <th>Datos Clave</th>
+                    <th>Acción</th>
+                    <th>Estado</th>
+                    <th>Detalles</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in result.row_results %}
+                <tr class="{% if not row.success %}bg-danger-light{% endif %}">
+                    <td>{{ row.row_number }}</td>
+                    <td>
+                        {% for k, v in row.data.items %}
+                        {% if k in 'sku,nombre,cuit,company_name' %}
+                        <strong>{{ k|title }}:</strong> {{ v }}<br>
+                        {% endif %}
+                        {% endfor %}
+                    </td>
+                    <td>
+                        {% if row.action == 'created' %}
+                        <span class="badge badge-success">Crear</span>
+                        {% elif row.action == 'updated' %}
+                        <span class="badge badge-info">Actualizar</span>
+                        {% elif row.action == 'skipped' %}
+                        <span class="badge badge-warning">Omitir</span>
+                        {% else %}
+                        <span class="badge badge-danger">Error</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if row.success %}
+                        <span class="text-success">✅ OK</span>
+                        {% else %}
+                        <span class="text-danger">❌ Fallo</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if row.errors %}
+                        <ul class="text-danger" style="margin: 0; padding-left: 1rem;">
+                            {% for error in row.errors %}
+                            <li>{{ error }}</li>
+                            {% endfor %}
+                        </ul>
+                        {% else %}
+                        <span class="text-muted">-</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+
+    <div class="form-actions mt-4">
+        {% if dry_run and not result.errors %}
+        <div class="alert alert-success">
+            <strong>¡Validación exitosa!</strong><br>
+            El archivo no tiene errores. Para aplicar los cambios, vuelve a subirlo desmarcando la opción "Modo de
+            Prueba".
+        </div>
+        <a href="{% url 'admin_import_process' import_type %}" class="btn btn-primary">Volver e Importar Realmente</a>
+        {% elif dry_run and result.errors %}
+        <div class="alert alert-warning">
+            Hay errores en el archivo. Por favor corrígelos y vuelve a subirlo.
+        </div>
+        <a href="{% url 'admin_import_dashboard' %}" class="btn btn-primary">Volver a Intentar</a>
+        {% else %}
+        <a href="{% url 'admin_import_dashboard' %}" class="btn btn-primary">Volver al Dashboard</a>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,109 @@
+{% extends 'base.html' %}
+
+{% block title %}Mis Pedidos - FLEXS{% endblock %}
+
+{% block content %}
+<div class="orders-page">
+    <div class="container">
+        <h1>Mis Pedidos</h1>
+
+        {% if orders %}
+        <div class="orders-list">
+            {% for order in orders %}
+            <div class="order-card">
+                <div class="order-header">
+                    <span class="order-number">Pedido #{{ order.pk }}</span>
+                    <span
+                        class="badge badge-{% if order.status == 'pending' %}warning{% elif order.status == 'confirmed' %}info{% elif order.status == 'cancelled' %}danger{% else %}success{% endif %}">
+                        {{ order.get_status_display }}
+                    </span>
+                </div>
+                <div class="order-info">
+                    <span>{{ order.created_at|date:"d/m/Y H:i" }}</span>
+                    <span>{{ order.get_item_count }} productos</span>
+                    <span class="order-total">${{ order.total|floatformat:2 }}</span>
+                </div>
+                <a href="{% url 'order_detail' order.pk %}" class="btn btn-outline">Ver Detalles</a>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty-orders">
+            <p>No tenés pedidos todavía</p>
+            <a href="{% url 'catalog' %}" class="btn btn-primary">Ver Catálogo</a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<style>
+    .orders-page {
+        padding: var(--spacing-2xl) 0;
+    }
+
+    .orders-page h1 {
+        margin-bottom: var(--spacing-2xl);
+    }
+
+    .orders-list {
+        display: flex;
+        flex-direction: column;
+        gap: var(--spacing-lg);
+    }
+
+    .order-card {
+        background: var(--color-dark-light);
+        padding: var(--spacing-xl);
+        border-radius: var(--radius-lg);
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-xl);
+    }
+
+    .order-header {
+        display: flex;
+        flex-direction: column;
+        gap: var(--spacing-xs);
+        min-width: 150px;
+    }
+
+    .order-number {
+        font-weight: 700;
+        font-size: var(--font-size-lg);
+    }
+
+    .order-info {
+        flex: 1;
+        display: flex;
+        gap: var(--spacing-xl);
+        color: var(--color-gray-light);
+    }
+
+    .order-total {
+        font-weight: 700;
+        color: var(--color-primary);
+    }
+
+    .empty-orders {
+        text-align: center;
+        padding: var(--spacing-3xl);
+    }
+
+    .empty-orders p {
+        margin-bottom: var(--spacing-xl);
+        color: var(--color-gray-light);
+    }
+
+    @media (max-width: 768px) {
+        .order-card {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
+        .order-info {
+            flex-direction: column;
+            gap: var(--spacing-sm);
+        }
+    }
+</style>
+{% endblock %}

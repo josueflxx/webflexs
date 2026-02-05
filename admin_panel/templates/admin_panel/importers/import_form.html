@@ -1,0 +1,61 @@
+{% extends 'admin_panel/base.html' %}
+
+{% block page_title %}Importar Datos{% endblock %}
+
+{% block content %}
+<div class="admin-form-container" style="max-width: 600px; margin: 0 auto;">
+    <h2 class="mb-3">Importar {{ import_type|title }}</h2>
+
+    <div class="alert alert-info">
+        <strong>Instrucciones:</strong>
+        <ul class="mt-2" style="margin-left: 1.5rem;">
+            <li>El archivo debe ser formato <strong>.xlsx</strong> (Excel).</li>
+            <li>La primera fila debe contener los encabezados exactos.</li>
+            <li>SKU es obligatorio para productos.</li>
+        </ul>
+    </div>
+
+    <form method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+
+        <div class="form-group">
+            <label for="{{ form.file.id_for_label }}" class="form-label">{{ form.file.label }}</label>
+            {{ form.file }}
+            {% if form.file.errors %}
+            <div class="form-error">{{ form.file.errors }}</div>
+            {% endif %}
+        </div>
+
+        <div class="form-group">
+            <div class="flex items-center gap-2">
+                {{ form.dry_run }}
+                <label for="{{ form.dry_run.id_for_label }}" style="margin-bottom: 0; cursor: pointer;">
+                    {{ form.dry_run.label }}
+                </label>
+            </div>
+            <small class="text-muted" style="display: block; margin-top: 5px; margin-left: 1.5rem;">
+                {{ form.dry_run.help_text }}
+            </small>
+        </div>
+
+        {% if form.update_existing %}
+        <div class="form-group">
+            <div class="flex items-center gap-2">
+                {{ form.update_existing }}
+                <label for="{{ form.update_existing.id_for_label }}" style="margin-bottom: 0; cursor: pointer;">
+                    {{ form.update_existing.label }}
+                </label>
+            </div>
+            <small class="text-muted" style="display: block; margin-top: 5px; margin-left: 1.5rem;">
+                {{ form.update_existing.help_text }}
+            </small>
+        </div>
+        {% endif %}
+
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary">Subir y Analizar</button>
+            <a href="{% url 'admin_dashboard' %}" class="btn btn-outline">Cancelar</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

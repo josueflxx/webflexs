@@ -1,0 +1,52 @@
+"""
+Admin Panel URL configuration.
+"""
+from django.urls import path
+from . import views
+
+urlpatterns = [
+    # Dashboard
+    path('', views.dashboard, name='admin_dashboard'),
+    
+    # Products
+    path('productos/', views.product_list, name='admin_product_list'),
+    path('productos/nuevo/', views.product_create, name='admin_product_create'),
+    path('productos/<int:pk>/editar/', views.product_edit, name='admin_product_edit'),
+    path('productos/toggle-active/', views.product_toggle_active, name='admin_product_toggle'),
+    
+    # Clients
+    path('clientes/', views.client_list, name='admin_client_list'),
+    path('clientes/<int:pk>/editar/', views.client_edit, name='admin_client_edit'),
+    
+    # Account Requests
+    path('solicitudes/', views.request_list, name='admin_request_list'),
+    path('solicitudes/<int:pk>/aprobar/', views.request_approve, name='admin_request_approve'),
+    path('solicitudes/<int:pk>/rechazar/', views.request_reject, name='admin_request_reject'),
+    
+    # Orders
+    path('pedidos/', views.order_list, name='admin_order_list'),
+    path('pedidos/<int:pk>/', views.order_detail, name='admin_order_detail'),
+    
+    # Categories
+    path('categorias/', views.category_list, name='admin_category_list'),
+    path('categorias/nueva/', views.category_create, name='admin_category_create'),
+    path('categorias/<int:pk>/editar/', views.category_edit, name='admin_category_edit'),
+    
+    # Category Attributes
+    path('categorias/<int:category_id>/atributos/nuevo/', views.category_attribute_create, name='admin_category_attribute_create'),
+    path('categorias/<int:category_id>/atributos/<int:attribute_id>/editar/', views.category_attribute_edit, name='admin_category_attribute_edit'),
+    path('categorias/<int:category_id>/atributos/<int:attribute_id>/eliminar/', views.category_attribute_delete, name='admin_category_attribute_delete'),
+    
+    # Settings
+    path('configuracion/', views.settings_view, name='admin_settings'),
+    
+    # API
+    path('api/category-attributes/<int:category_id>/', views.get_category_attributes, name='api_category_attributes'),
+    path('api/parse-description/', views.parse_product_description, name='api_parse_description'),
+    
+    # Importers
+    path('importar/', views.import_dashboard, name='admin_import_dashboard'),
+    path('importar/<str:import_type>/', views.import_process, name='admin_import_process'),
+    # Commit view removed as we handle it in process view for MVP simplicity
+    # path('importar/<str:import_type>/confirmar/', views.import_commit, name='admin_import_commit'),
+]

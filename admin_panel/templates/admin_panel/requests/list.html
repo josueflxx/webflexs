@@ -1,0 +1,65 @@
+{% extends 'admin_panel/base.html' %}
+
+{% block page_title %}Solicitudes de Cuenta{% endblock %}
+
+{% block content %}
+<div class="admin-table-container">
+    <div class="admin-toolbar">
+        <form method="get" class="toolbar-search">
+            <select name="status" class="form-select" onchange="this.form.submit()">
+                <option value="pending" {% if status_filter == 'pending' %}selected{% endif %}>Pendientes</option>
+                <option value="approved" {% if status_filter == 'approved' %}selected{% endif %}>Aprobadas</option>
+                <option value="rejected" {% if status_filter == 'rejected' %}selected{% endif %}>Rechazadas</option>
+                <option value="" {% if not status_filter %}selected{% endif %}>Todas</option>
+            </select>
+        </form>
+    </div>
+
+    <table class="admin-table">
+        <thead>
+            <tr>
+                <th>Fecha</th>
+                <th>Empresa</th>
+                <th>Contacto</th>
+                <th>Email</th>
+                <th>Teléfono</th>
+                <th>Estado</th>
+                <th>Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for req in page_obj %}
+            <tr>
+                <td>{{ req.created_at|date:"d/m/Y" }}</td>
+                <td><strong>{{ req.company_name }}</strong></td>
+                <td>{{ req.contact_name }}</td>
+                <td>{{ req.email }}</td>
+                <td>{{ req.phone }}</td>
+                <td>
+                    <span
+                        class="badge badge-{% if req.status == 'pending' %}warning{% elif req.status == 'approved' %}success{% else %}danger{% endif %}">
+                        {{ req.get_status_display }}
+                    </span>
+                </td>
+                <td class="actions">
+                    {% if req.status == 'pending' %}
+                    <a href="{% url 'admin_request_approve' req.pk %}" class="btn btn-primary">Aprobar</a>
+                    <form method="post" action="{% url 'admin_request_reject' req.pk %}" style="display: inline;">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-outline"
+                            onclick="return confirm('¿Rechazar esta solicitud?')">Rechazar</button>
+                    </form>
+                    {% else %}
+                    -
+                    {% endif %}
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="7" class="text-center text-muted">No hay solicitudes</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

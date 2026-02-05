@@ -1,0 +1,182 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Catálogo - FLEXS{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'core/css/catalog.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="catalog-page">
+    <div class="container">
+        <div class="catalog-header">
+            <h1>Catálogo de Productos</h1>
+            <p class="catalog-subtitle">
+                {% if not show_prices %}
+                <span class="price-notice">{{ price_message }}</span>
+                {% elif discount %}
+                <span class="discount-notice">Tenés un {{ discount|floatformat:0 }}% de descuento aplicado</span>
+                {% endif %}
+            </p>
+        </div>
+
+        <div class="catalog-layout">
+            <!-- Sidebar Filters -->
+            <aside class="catalog-sidebar">
+                <div class="filter-section">
+                    <h3>Buscar</h3>
+                    <form method="get" class="search-form">
+                        <input type="text" name="q" value="{{ search_query }}" placeholder="SKU o nombre..."
+                            class="form-input">
+                        <button type="submit" class="btn btn-primary">Buscar</button>
+                    </form>
+                </div>
+
+                <div class="filter-section">
+                    <h3>Categorías</h3>
+                    <ul class="category-list">
+                        <li>
+                            <a href="{% url 'catalog' %}" class="{% if not category_slug %}active{% endif %}">
+                                Todas
+                            </a>
+                        </li>
+                        {% for category in categories %}
+                        <li>
+                            <a href="?category={{ category.slug }}"
+                                class="{% if category_slug == category.slug %}active{% endif %}">
+                                {{ category.name }}
+                            </a>
+                            {% if category.children.exists %}
+                            <ul class="subcategory-list">
+                                {% for sub in category.children.all %}
+                                <li>
+                                    <a href="?category={{ sub.slug }}"
+                                        class="{% if category_slug == sub.slug %}active{% endif %}">
+                                        {{ sub.name }}
+                                    </a>
+                                </li>
+                                {% endfor %}
+                            </ul>
+                            {% endif %}
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </aside>
+
+            <!-- Products Grid -->
+            <main class="catalog-main">
+                <div class="catalog-toolbar">
+                    <span class="result-count">
+                        {{ page_obj.paginator.count }} productos encontrados
+                    </span>
+                    <select name="order" class="form-select order-select"
+                        onchange="window.location.href='?order='+this.value+'&q={{ search_query }}&category={{ category_slug }}'">
+                        <option value="name" {% if order_by=='name' %}selected{% endif %}>Nombre A-Z</option>
+                        <option value="-name" {% if order_by=='-name' %}selected{% endif %}>Nombre Z-A</option>
+                        <option value="price" {% if order_by=='price' %}selected{% endif %}>Menor precio</option>
+                        <option value="-price" {% if order_by=='-price' %}selected{% endif %}>Mayor precio</option>
+                        <option value="sku" {% if order_by=='sku' %}selected{% endif %}>SKU</option>
+                    </select>
+                </div>
+
+                {% if page_obj.object_list %}
+                <div class="products-grid">
+                    {% for product in page_obj %}
+                    <div class="product-card" data-product-id="{{ product.id }}">
+                        <div class="product-image">
+                            {% if product.image %}
+                            <img src="{{ product.image.url }}" alt="{{ product.name }}">
+                            {% else %}
+                            <div class="product-placeholder">
+                                <span>📦</span>
+                            </div>
+                            {% endif %}
+                        </div>
+                        <div class="product-info">
+                            <span class="product-sku">{{ product.sku }}</span>
+                            <h3 class="product-name">{{ product.name }}</h3>
+                            {% if product.category %}
+                            <span class="product-category">{{ product.category.name }}</span>
+                            {% endif %}
+
+                            {% if show_prices %}
+                            <div class="product-pricing">
+                                {% if discount %}
+                                <span class="price-original">${{ product.price|floatformat:2 }}</span>
+                                <span class="price-final">${{ product.get_discounted_price:discount|floatformat:2
+                                    }}</span>
+                                {% else %}
+                                <span class="price-final">${{ product.price|floatformat:2 }}</span>
+                                {% endif %}
+                            </div>
+                            {% else %}
+                            <div class="product-pricing">
+                                <span class="price-hidden">
+                                    <a href="{% url 'login' %}">Iniciar sesión</a> para ver precio
+                                </span>
+                            </div>
+                            {% endif %}
+
+                            {% if user.is_authenticated %}
+                            <button class="btn btn-primary btn-add-cart" onclick="addToCart({{ product.id }})">
+                                Agregar al carrito
+                            </button>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+
+                <!-- Pagination -->
+                {% if page_obj.paginator.num_pages > 1 %}
+                <nav class="pagination">
+                    {% if page_obj.has_previous %}
+                    <a href="?page={{ page_obj.previous_page_number }}&q={{ search_query }}&category={{ category_slug }}&order={{ order_by }}"
+                        class="page-link">← Anterior</a>
+                    {% endif %}
+
+                    <span class="page-info">
+                        Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}
+                    </span>
+
+                    {% if page_obj.has_next %}
+                    <a href="?page={{ page_obj.next_page_number }}&q={{ search_query }}&category={{ category_slug }}&order={{ order_by }}"
+                        class="page-link">Siguiente →</a>
+                    {% endif %}
+                </nav>
+                {% endif %}
+
+                {% else %}
+                <div class="no-products">
+                    <p>No se encontraron productos con los filtros seleccionados.</p>
+                    <a href="{% url 'catalog' %}" class="btn btn-outline">Ver todos los productos</a>
+                </div>
+                {% endif %}
+            </main>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    async function addToCart(productId) {
+        try {
+            const response = await fetchWithCSRF('/pedidos/carrito/agregar/', {
+                method: 'POST',
+                body: JSON.stringify({ product_id: productId, quantity: 1 })
+            });
+            const data = await response.json();
+            if (data.success) {
+                alert(data.message);
+            } else {
+                alert('Error: ' + data.error);
+            }
+        } catch (error) {
+            alert('Error al agregar al carrito');
+        }
+    }
+</script>
+{% endblock %}

@@ -1,0 +1,50 @@
+{% extends 'admin_panel/base.html' %}
+
+{% block page_title %}Importadores de Datos{% endblock %}
+
+{% block content %}
+<div style="max-width: 1000px; margin: 0 auto;">
+    <h2 class="mb-4">Centro de Importación</h2>
+
+    <div class="dashboard-grid">
+        <!-- Products -->
+        <div class="stat-card" style="border-left: 4px solid var(--color-primary);">
+            <div class="flex justify-between items-center mb-2">
+                <h3>Productos</h3>
+                <span class="text-primary" style="font-size: 1.5rem;">📦</span>
+            </div>
+            <p class="text-muted mb-3" style="font-size: 0.9rem;">
+                Carga masiva de productos vía Excel. Soporta creación y actualización de stock/precios.
+            </p>
+            <a href="{% url 'admin_import_process' 'products' %}" class="btn btn-primary btn-sm"
+                style="width: 100%;">Importar Productos</a>
+        </div>
+
+        <!-- Clients -->
+        <div class="stat-card" style="border-left: 4px solid var(--color-info);">
+            <div class="flex justify-between items-center mb-2">
+                <h3>Clientes</h3>
+                <span class="text-info" style="font-size: 1.5rem;">👥</span>
+            </div>
+            <p class="text-muted mb-3" style="font-size: 0.9rem;">
+                Importación de clientes. Crea usuarios y perfiles. Pass = CUIT.
+            </p>
+            <a href="{% url 'admin_import_process' 'clients' %}" class="btn btn-info btn-sm"
+                style="width: 100%;">Importar Clientes</a>
+        </div>
+
+        <!-- Categories -->
+        <div class="stat-card" style="border-left: 4px solid var(--color-warning);">
+            <div class="flex justify-between items-center mb-2">
+                <h3>Categorías</h3>
+                <span class="text-warning" style="font-size: 1.5rem;">📁</span>
+            </div>
+            <p class="text-muted mb-3" style="font-size: 0.9rem;">
+                Estructura de categorías. Define jerarquías (Padre/Hijo).
+            </p>
+            <a href="{% url 'admin_import_process' 'categories' %}" class="btn btn-warning btn-sm"
+                style="width: 100%;">Importar Categorías</a>
+        </div>
+    </div>
+</div>
+{% endblock %}

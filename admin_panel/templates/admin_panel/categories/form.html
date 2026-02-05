@@ -1,0 +1,89 @@
+{% extends 'admin_panel/base.html' %}
+
+{% block page_title %}{{ action }} Categoría{% endblock %}
+
+{% block content %}
+<div class="admin-form-container">
+    <h2>{{ action }} Categoría</h2>
+
+    <form method="post">
+        {% csrf_token %}
+
+        <div class="form-group">
+            <label for="name" class="form-label">Nombre *</label>
+            <input type="text" name="name" id="name" class="form-input" required value="{{ category.name|default:'' }}">
+        </div>
+
+        <div class="form-group">
+            <label for="parent" class="form-label">Categoría Padre (opcional)</label>
+            <select name="parent" id="parent" class="form-select">
+                <option value="">-- Sin padre (categoría principal) --</option>
+                {% for cat in parent_categories %}
+                <option value="{{ cat.pk }}" {% if category.parent_id==cat.pk %}selected{% endif %}>{{ cat.name }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+
+
+
+        {% if category %}
+        <hr style="border-top: 1px solid rgba(255,255,255,0.1); margin: 2rem 0;">
+
+        <div class="flex justify-between items-center mb-3">
+            <h3>Atributos de Categoría</h3>
+            <a href="{% url 'admin_category_attribute_create' category.pk %}" class="btn btn-sm btn-outline">+ Agregar
+                Atributo</a>
+        </div>
+
+        {% if category.attributes.all %}
+        <table class="admin-table mb-4">
+            <thead>
+                <tr>
+                    <th>Nombre</th>
+                    <th>Slug</th>
+                    <th>Tipo</th>
+                    <th>Regex</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for attr in category.attributes.all %}
+                <tr>
+                    <td>{{ attr.name }}</td>
+                    <td><code>{{ attr.slug }}</code></td>
+                    <td>
+                        <span class="badge badge-info">{{ attr.get_type_display }}</span>
+                        {% if attr.required %}<span class="badge badge-warning" title="Requerido">*</span>{% endif %}
+                    </td>
+                    <td>
+                        {% if attr.regex_pattern %}
+                        <span title="{{ attr.regex_pattern }}" style="cursor: help;">✅</span>
+                        {% else %}
+                        <span class="text-muted">-</span>
+                        {% endif %}
+                    </td>
+                    <td class="actions">
+                        <a href="{% url 'admin_category_attribute_edit' category.pk attr.pk %}"
+                            class="btn btn-sm btn-outline">✏️</a>
+                        <a href="{% url 'admin_category_attribute_delete' category.pk attr.pk %}"
+                            class="btn btn-sm btn-outline" onclick="return confirm('¿Eliminar atributo?')">🗑️</a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="alert alert-info">
+            Esta categoría no tiene atributos definidos. Agregar atributos permite filtros específicos.
+        </div>
+        {% endif %}
+        {% endif %}
+
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary">Guardar Categoría</button>
+            <a href="{% url 'admin_category_list' %}" class="btn btn-outline">Cancelar</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

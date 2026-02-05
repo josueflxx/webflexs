@@ -1,0 +1,226 @@
+{% extends 'admin_panel/base.html' %}
+
+{% block page_title %}{{ action }} Producto{% endblock %}
+
+{% block content %}
+<div class="admin-form-container">
+    <h2>{{ action }} Producto</h2>
+
+    <form method="post">
+        {% csrf_token %}
+
+        <div class="form-group">
+            <label for="sku" class="form-label">SKU *</label>
+            <input type="text" name="sku" id="sku" class="form-input" required value="{{ product.sku|default:'' }}">
+        </div>
+
+        <div class="form-group">
+            <label for="name" class="form-label">Nombre *</label>
+            <input type="text" name="name" id="name" class="form-input" required value="{{ product.name|default:'' }}">
+        </div>
+
+        <div class="form-group">
+            <label for="price" class="form-label">Precio *</label>
+            <input type="number" step="0.01" name="price" id="price" class="form-input" required
+                value="{{ product.price|default:'0' }}">
+        </div>
+
+        <div class="form-group">
+            <label for="stock" class="form-label">Stock</label>
+            <input type="number" name="stock" id="stock" class="form-input" value="{{ product.stock|default:'0' }}">
+        </div>
+
+        <div class="form-group">
+            <label for="category" class="form-label">Categoría</label>
+            <select name="category" id="category" class="form-select" onchange="loadCategoryAttributes()">
+                <option value="">Sin categoría</option>
+                {% for cat in categories %}
+                <option value="{{ cat.pk }}" {% if product.category_id==cat.pk %}selected{% endif %}>{{ cat.name }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <!-- Dynamic Attributes Container -->
+        <div id="dynamic-attributes-container" class="form-group"
+            style="display:none; border: 1px solid #eee; padding: 15px; border-radius: 5px; margin-top: 15px; background-color: #f9f9f9;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                <h4 style="margin: 0;">Atributos de Categoría</h4>
+                <button type="button" id="btn-auto-detect" class="btn btn-sm btn-info" onclick="autoDetectAttributes()">
+                    ✨ Auto-detectar desde Descripción
+                </button>
+            </div>
+            <div id="attributes-fields">
+                <!-- Fields will be injected here via JS -->
+            </div>
+            <!-- Hidden input to store JSON data -->
+            <input type="hidden" name="attributes_json" id="attributes_json">
+        </div>
+
+        <div class="form-group">
+            <label for="description" class="form-label">Descripción</label>
+            <textarea name="description" id="description"
+                class="form-textarea">{{ product.description|default:'' }}</textarea>
+        </div>
+
+        {% if product %}
+        <div class="form-group">
+            <label class="form-label">
+                <input type="checkbox" name="is_active" {% if product.is_active %}checked{% endif %}>
+                Producto activo
+            </label>
+        </div>
+        {% endif %}
+
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary">Guardar</button>
+            <a href="{% url 'admin_product_list' %}" class="btn btn-outline">Cancelar</a>
+        </div>
+    </form>
+</div>
+
+{{ product.attributes|default:dict|json_script:"attributes-data" }}
+
+<script>
+    // Store current attributes if editing
+    const currentAttributes = JSON.parse(document.getElementById('attributes-data').textContent || '{}');
+
+    document.addEventListener('DOMContentLoaded', function () {
+        // Initial load
+        loadCategoryAttributes();
+
+        // Intercept form submission to collect JSON
+        const form = document.querySelector('form');
+        form.addEventListener('submit', function (e) {
+            collectAttributes();
+        });
+    });
+
+    async function loadCategoryAttributes() {
+        const categoryId = document.getElementById('category').value;
+        const container = document.getElementById('dynamic-attributes-container');
+        const fieldsContainer = document.getElementById('attributes-fields');
+
+        if (!categoryId) {
+            container.style.display = 'none';
+            fieldsContainer.innerHTML = '';
+            return;
+        }
+
+        try {
+            const response = await fetch(`/admin-panel/api/category-attributes/${categoryId}/`);
+            const data = await response.json();
+
+            if (data.attributes && data.attributes.length > 0) {
+                container.style.display = 'block';
+                fieldsContainer.innerHTML = '';
+
+                data.attributes.forEach(attr => {
+                    const existingValue = currentAttributes[attr.slug] || '';
+                    let fieldHtml = `<div class="form-group" style="margin-bottom: 10px;">
+                        <label class="form-label" style="font-size: 0.9em;">${attr.name}</label>`;
+
+                    if (attr.type === 'select') {
+                        const options = attr.options.split(',').map(o => o.trim());
+                        fieldHtml += `<select name="attr_${attr.slug}" class="form-select attr-field" data-slug="${attr.slug}">
+                            <option value="">- Seleccionar -</option>`;
+                        options.forEach(opt => {
+                            const selected = existingValue === opt ? 'selected' : '';
+                            fieldHtml += `<option value="${opt}" ${selected}>${opt}</option>`;
+                        });
+                        fieldHtml += `</select>`;
+                    } else {
+                        fieldHtml += `<input type="text" name="attr_${attr.slug}" class="form-input attr-field" 
+                            data-slug="${attr.slug}" value="${existingValue}">`;
+                    }
+
+                    if (attr.regex_pattern) {
+                        fieldHtml += `<small class="text-muted" style="font-size: 0.8em; display: block; margin-top: 2px;">
+                            Auto-extraíble via regex</small>`;
+                    }
+
+                    fieldHtml += `</div>`;
+                    fieldsContainer.insertAdjacentHTML('beforeend', fieldHtml);
+                });
+            } else {
+                container.style.display = 'none';
+                fieldsContainer.innerHTML = '';
+            }
+        } catch (error) {
+            console.error('Error loading attributes:', error);
+        }
+    }
+
+    async function autoDetectAttributes() {
+        const categoryId = document.getElementById('category').value;
+        const description = document.getElementById('description').value;
+        const btn = document.getElementById('btn-auto-detect');
+
+        if (!categoryId || !description) {
+            alert('Selecciona una categoría y escribe una descripción.');
+            return;
+        }
+
+        btn.disabled = true;
+        btn.innerHTML = 'Detectando...';
+
+        try {
+            // Need CSRF token
+            const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+
+            const response = await fetch('/admin-panel/api/parse-description/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken
+                },
+                body: JSON.stringify({
+                    category_id: categoryId,
+                    description: description
+                })
+            });
+
+            const data = await response.json();
+
+            if (data.success && data.attributes) {
+                let foundAny = false;
+                Object.entries(data.attributes).forEach(([slug, value]) => {
+                    const field = document.querySelector(`.attr-field[data-slug="${slug}"]`);
+                    if (field) {
+                        field.value = value;
+                        // Use a distinct color to show it was auto-detected
+                        field.style.borderColor = '#2ecc71';
+                        foundAny = true;
+                    }
+                });
+
+                if (foundAny) {
+                    // alert('Atributos detectados y completados.');
+                } else {
+                    alert('No se encontraron coincidencias con los patrones definidos.');
+                }
+            } else {
+                alert('Error: ' + (data.error || 'Desconocido'));
+            }
+        } catch (error) {
+            console.error('Error parsing description:', error);
+            alert('Error al conectar con el servidor.');
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '✨ Auto-detectar desde Descripción';
+        }
+    }
+
+    function collectAttributes() {
+        const fields = document.querySelectorAll('.attr-field');
+        const attributes = {};
+
+        fields.forEach(field => {
+            if (field.value) {
+                attributes[field.dataset.slug] = field.value;
+            }
+        });
+
+        document.getElementById('attributes_json').value = JSON.stringify(attributes);
+    }
+</script>{% endblock %}

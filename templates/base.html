@@ -1,0 +1,118 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="FLEXS - Repuestos de Elásticos en Argentina. Expertos en repuestos para industrias de transporte.">
+    <title>{% block title %}FLEXS - Repuestos de Elásticos{% endblock %}</title>
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- Base CSS -->
+    <link rel="stylesheet" href="{% static 'core/css/base.css' %}">
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="header-top">
+            <div class="container">
+                <div class="header-contact">
+                    <a href="mailto:{{ site_settings.company_email }}">{{ site_settings.company_email }}</a>
+                    <span class="separator">|</span>
+                    <a href="tel:{{ site_settings.company_phone }}">{{ site_settings.company_phone }}</a>
+                </div>
+            </div>
+        </div>
+        <nav class="navbar">
+            <div class="container navbar-content">
+                <a href="{% url 'home' %}" class="logo">
+                    <span class="logo-text">FLEXS</span>
+                </a>
+                <button class="mobile-menu-toggle" id="mobileMenuToggle" aria-label="Abrir menú">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </button>
+                <ul class="nav-menu" id="navMenu">
+                    <li><a href="{% url 'home' %}#inicio">Inicio</a></li>
+                    <li><a href="{% url 'home' %}#nosotros">Nosotros</a></li>
+                    <li><a href="{% url 'home' %}#servicios">Servicios</a></li>
+                    <li><a href="{% url 'home' %}#productos">Productos</a></li>
+                    <li><a href="{% url 'home' %}#contacto">Contacto</a></li>
+                    <li class="nav-divider"></li>
+                    {% if user.is_authenticated %}
+                        <li><a href="{% url 'catalog' %}" class="btn btn-outline">Ver Catálogo</a></li>
+                        {% if user.is_staff %}
+                            <li><a href="{% url 'admin_dashboard' %}" class="btn btn-primary">Panel Admin</a></li>
+                        {% endif %}
+                        <li><a href="{% url 'logout' %}" class="btn btn-ghost">Salir</a></li>
+                    {% else %}
+                        <li><a href="{% url 'catalog' %}" class="btn btn-outline">Ver Catálogo</a></li>
+                        <li><a href="{% url 'login' %}" class="btn btn-primary">Iniciar Sesión</a></li>
+                    {% endif %}
+                </ul>
+            </div>
+        </nav>
+    </header>
+
+    <!-- Messages -->
+    {% if messages %}
+    <div class="messages-container">
+        <div class="container">
+            {% for message in messages %}
+            <div class="alert alert-{{ message.tags }}">
+                {{ message }}
+                <button class="alert-close" onclick="this.parentElement.remove()">&times;</button>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Main Content -->
+    <main class="main-content">
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-grid">
+                <div class="footer-section">
+                    <h3 class="footer-title">FLEXS</h3>
+                    <p>Expertos en repuestos de elásticos para camiones y acoplados.</p>
+                </div>
+                <div class="footer-section">
+                    <h4>Contacto</h4>
+                    <p><strong>Dirección:</strong><br>{{ site_settings.company_address }}</p>
+                </div>
+                <div class="footer-section">
+                    <h4>Teléfonos</h4>
+                    <p>
+                        <a href="tel:{{ site_settings.company_phone }}">{{ site_settings.company_phone }}</a><br>
+                        {% if site_settings.company_phone_2 %}
+                        <a href="tel:{{ site_settings.company_phone_2 }}">{{ site_settings.company_phone_2 }}</a>
+                        {% endif %}
+                    </p>
+                </div>
+                <div class="footer-section">
+                    <h4>Email</h4>
+                    <p><a href="mailto:{{ site_settings.company_email }}">{{ site_settings.company_email }}</a></p>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>&copy; 2024 FLEXS. Todos los derechos reservados.</p>
+            </div>
+        </div>
+    </footer>
+
+    <!-- JavaScript -->
+    <script src="{% static 'core/js/main.js' %}"></script>
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

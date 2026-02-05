@@ -1,0 +1,237 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}FLEXS - Repuestos de Elásticos en Argentina{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'core/css/home.css' %}">
+{% endblock %}
+
+{% block content %}
+<!-- Hero Section -->
+<section id="inicio" class="hero">
+    <div class="hero-overlay"></div>
+    <div class="container hero-content">
+        <div class="hero-text">
+            <h1 class="hero-title">
+                <span class="hero-title-line">Descubra la gama de</span>
+                <span class="hero-title-line text-primary">productos FLEXS</span>
+            </h1>
+            <h2 class="hero-subtitle">Optimice el rendimiento de sus vehículos</h2>
+            <p class="hero-description">
+                Expertos en repuestos para industrias de transporte.<br>
+                Ayudando a empresas a mantenerse en movimiento.
+            </p>
+            <div class="hero-buttons">
+                <a href="{% url 'catalog' %}" class="btn btn-primary btn-lg">
+                    Ver Catálogo
+                </a>
+                {% if not user.is_authenticated %}
+                <a href="{% url 'account_request' %}" class="btn btn-outline btn-lg">
+                    Solicitar Cuenta
+                </a>
+                {% endif %}
+            </div>
+        </div>
+        <div class="hero-visual">
+            <div class="hero-circle"></div>
+        </div>
+    </div>
+    <div class="hero-scroll">
+        <a href="#nosotros">
+            <span class="scroll-text">Scroll</span>
+            <span class="scroll-arrow">↓</span>
+        </a>
+    </div>
+</section>
+
+<!-- Nosotros Section -->
+<section id="nosotros" class="section section-dark">
+    <div class="container">
+        <div class="section-header">
+            <span class="section-number">01</span>
+            <h2 class="section-title">Nosotros</h2>
+        </div>
+        <div class="about-grid">
+            <div class="about-content">
+                <h3>Expertos en Repuestos para Industrias de Transporte</h3>
+                <p>
+                    En <strong>Flexs</strong>, nos dedicamos a ofrecer repuestos de elástico de alta calidad
+                    para camiones y acoplados. Nuestro amplio catálogo y nuestro compromiso con el servicio
+                    al cliente nos convierten en la opción ideal para talleres, empresas con flotas de
+                    vehículos y distribuidoras.
+                </p>
+                <p>
+                    Nuestro equipo dedicado está siempre disponible para ayudarte a encontrar las piezas
+                    adecuadas y garantizar una experiencia de compra sin problemas, desde el pedido hasta
+                    la entrega.
+                </p>
+                <div class="about-cta">
+                    <p class="cta-text">
+                        <strong>Estamos esperando su mensaje para conocerlo y brindarle una lista de precios a su
+                            medida</strong>
+                    </p>
+                    <a href="#contacto" class="btn btn-primary">Contactanos</a>
+                </div>
+            </div>
+            <div class="about-stats">
+                <div class="stat-card">
+                    <span class="stat-number">8000+</span>
+                    <span class="stat-label">Productos</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-number">2000+</span>
+                    <span class="stat-label">Clientes</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-number">30+</span>
+                    <span class="stat-label">Años de experiencia</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Servicios Section -->
+<section id="servicios" class="section">
+    <div class="container">
+        <div class="section-header">
+            <span class="section-number">02</span>
+            <h2 class="section-title">Cómo podemos ayudarlo?</h2>
+        </div>
+        <div class="services-grid">
+            <div class="service-card">
+                <div class="service-icon">📦</div>
+                <h3>Amplio Catálogo, Amplio Stock</h3>
+                <p>
+                    Más de 8.000 productos disponibles con stock permanente para satisfacer
+                    todas sus necesidades de repuestos.
+                </p>
+            </div>
+            <div class="service-card">
+                <div class="service-icon">🔧</div>
+                <h3>Fabricación Propia</h3>
+                <p>
+                    Producimos nuestras propias abrazaderas U-bolt con la más alta calidad
+                    y especificaciones precisas.
+                </p>
+                <a href="https://www.ubolt.com.ar" target="_blank" class="service-link">
+                    Ver ubolt.com.ar →
+                </a>
+            </div>
+            <div class="service-card">
+                <div class="service-icon">🚚</div>
+                <h3>Entregas Rápidas y Atención Personalizada</h3>
+                <p>
+                    Envíos a todo el país con rapidez y un equipo dedicado a resolver
+                    todas sus consultas.
+                </p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Productos Section -->
+<section id="productos" class="section section-dark">
+    <div class="container">
+        <div class="section-header">
+            <span class="section-number">03</span>
+            <h2 class="section-title">Nuestros Productos</h2>
+        </div>
+        <div class="products-grid">
+            <div class="product-category-card">
+                <div class="category-icon">🔩</div>
+                <h4>Elásticos</h4>
+            </div>
+            <div class="product-category-card">
+                <div class="category-icon">⚙️</div>
+                <h4>Bujes</h4>
+            </div>
+            <div class="product-category-card">
+                <div class="category-icon">🏭</div>
+                <h4>Fundición</h4>
+            </div>
+            <div class="product-category-card">
+                <div class="category-icon">🔗</div>
+                <h4>Pernos</h4>
+            </div>
+            <div class="product-category-card">
+                <div class="category-icon">🔧</div>
+                <h4>Bulonería</h4>
+            </div>
+            <div class="product-category-card featured">
+                <div class="category-icon">🔨</div>
+                <h4>Abrazaderas</h4>
+                <span class="featured-badge">Fabricación propia</span>
+            </div>
+            <div class="product-category-card">
+                <div class="category-icon">💨</div>
+                <h4>Suspensión Neumática</h4>
+            </div>
+            <div class="product-category-card">
+                <div class="category-icon">📎</div>
+                <h4>Insertos de Elástico</h4>
+            </div>
+            <div class="product-category-card">
+                <div class="category-icon">⚖️</div>
+                <h4>Balancines</h4>
+            </div>
+        </div>
+        <div class="products-cta">
+            <a href="{% url 'catalog' %}" class="btn btn-primary btn-lg">Ver Catálogo Completo</a>
+        </div>
+    </div>
+</section>
+
+<!-- Contacto Section -->
+<section id="contacto" class="section">
+    <div class="container">
+        <div class="section-header">
+            <span class="section-number">04</span>
+            <h2 class="section-title">Contacto</h2>
+        </div>
+        <div class="contact-grid">
+            <div class="contact-info">
+                <div class="contact-item">
+                    <span class="contact-icon">📍</span>
+                    <div>
+                        <h4>Dirección</h4>
+                        <p>{{ site_settings.company_address }}</p>
+                    </div>
+                </div>
+                <div class="contact-item">
+                    <span class="contact-icon">📞</span>
+                    <div>
+                        <h4>Teléfonos</h4>
+                        <p>
+                            <a href="tel:{{ site_settings.company_phone }}">{{ site_settings.company_phone }}</a><br>
+                            {% if site_settings.company_phone_2 %}
+                            <a href="tel:{{ site_settings.company_phone_2 }}">{{ site_settings.company_phone_2 }}</a>
+                            {% endif %}
+                        </p>
+                    </div>
+                </div>
+                <div class="contact-item">
+                    <span class="contact-icon">✉️</span>
+                    <div>
+                        <h4>Email</h4>
+                        <p><a href="mailto:{{ site_settings.company_email }}">{{ site_settings.company_email }}</a></p>
+                    </div>
+                </div>
+            </div>
+            <div class="contact-actions">
+                <h3>¿Listo para empezar?</h3>
+                <p>Solicitá tu cuenta y accedé a precios especiales para tu negocio.</p>
+                <div class="contact-buttons">
+                    {% if user.is_authenticated %}
+                    <a href="{% url 'catalog' %}" class="btn btn-primary btn-lg">Ir al Catálogo</a>
+                    {% else %}
+                    <a href="{% url 'account_request' %}" class="btn btn-primary btn-lg">Solicitar Cuenta</a>
+                    <a href="{% url 'login' %}" class="btn btn-outline btn-lg">Iniciar Sesión</a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}

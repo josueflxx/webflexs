@@ -1,0 +1,158 @@
+{% extends 'base.html' %}
+
+{% block title %}Pedido #{{ order.pk }} - FLEXS{% endblock %}
+
+{% block content %}
+<div class="order-detail-page">
+    <div class="container">
+        <div class="order-header">
+            <h1>Pedido #{{ order.pk }}</h1>
+            <span
+                class="badge badge-{% if order.status == 'pending' %}warning{% elif order.status == 'confirmed' %}info{% elif order.status == 'cancelled' %}danger{% else %}success{% endif %}"
+                style="font-size: 1rem; padding: 0.5rem 1rem;">
+                {{ order.get_status_display }}
+            </span>
+        </div>
+
+        <div class="order-meta">
+            <p>Fecha: {{ order.created_at|date:"d/m/Y H:i" }}</p>
+        </div>
+
+        <div class="order-items">
+            <h3>Productos</h3>
+            <table class="items-table">
+                <thead>
+                    <tr>
+                        <th>SKU</th>
+                        <th>Producto</th>
+                        <th>Cantidad</th>
+                        <th>Precio Unit.</th>
+                        <th>Subtotal</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in order.items.all %}
+                    <tr>
+                        <td><code>{{ item.product_sku }}</code></td>
+                        <td>{{ item.product_name }}</td>
+                        <td>{{ item.quantity }}</td>
+                        <td>${{ item.price_at_purchase|floatformat:2 }}</td>
+                        <td>${{ item.subtotal|floatformat:2 }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <div class="order-totals">
+            <div class="total-row">
+                <span>Subtotal</span>
+                <span>${{ order.subtotal|floatformat:2 }}</span>
+            </div>
+            {% if order.discount_percentage %}
+            <div class="total-row discount">
+                <span>Descuento ({{ order.discount_percentage|floatformat:0 }}%)</span>
+                <span>-${{ order.discount_amount|floatformat:2 }}</span>
+            </div>
+            {% endif %}
+            <div class="total-row total">
+                <span>Total</span>
+                <span>${{ order.total|floatformat:2 }}</span>
+            </div>
+        </div>
+
+        {% if order.notes %}
+        <div class="order-notes">
+            <h4>Notas</h4>
+            <p>{{ order.notes }}</p>
+        </div>
+        {% endif %}
+
+        <a href="{% url 'order_list' %}" class="btn btn-outline">← Volver a Mis Pedidos</a>
+    </div>
+</div>
+
+<style>
+    .order-detail-page {
+        padding: var(--spacing-2xl) 0;
+    }
+
+    .order-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: var(--spacing-lg);
+    }
+
+    .order-meta {
+        color: var(--color-gray-light);
+        margin-bottom: var(--spacing-2xl);
+    }
+
+    .order-items {
+        background: var(--color-dark-light);
+        padding: var(--spacing-xl);
+        border-radius: var(--radius-lg);
+        margin-bottom: var(--spacing-xl);
+    }
+
+    .order-items h3 {
+        margin-bottom: var(--spacing-lg);
+    }
+
+    .items-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    .items-table th,
+    .items-table td {
+        padding: var(--spacing-md);
+        text-align: left;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .items-table th {
+        font-weight: 600;
+        color: var(--color-gray-light);
+    }
+
+    .order-totals {
+        background: var(--color-dark-light);
+        padding: var(--spacing-xl);
+        border-radius: var(--radius-lg);
+        max-width: 350px;
+        margin-left: auto;
+        margin-bottom: var(--spacing-xl);
+    }
+
+    .total-row {
+        display: flex;
+        justify-content: space-between;
+        padding: var(--spacing-sm) 0;
+    }
+
+    .total-row.discount {
+        color: var(--color-success);
+    }
+
+    .total-row.total {
+        font-size: var(--font-size-xl);
+        font-weight: 700;
+        color: var(--color-primary);
+        padding-top: var(--spacing-md);
+        border-top: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .order-notes {
+        background: var(--color-dark);
+        padding: var(--spacing-lg);
+        border-radius: var(--radius-md);
+        margin-bottom: var(--spacing-xl);
+    }
+
+    .order-notes h4 {
+        margin-bottom: var(--spacing-sm);
+    }
+</style>
+{% endblock %}

@@ -1,0 +1,72 @@
+{% extends 'admin_panel/base.html' %}
+
+{% block page_title %}Categorías{% endblock %}
+
+{% block content %}
+<div class="admin-table-container">
+    <div class="admin-toolbar">
+        <span>Gestión de Categorías</span>
+        <div class="toolbar-actions">
+            <a href="{% url 'admin_category_create' %}" class="btn btn-primary">+ Nueva Categoría</a>
+        </div>
+    </div>
+
+    <table class="admin-table">
+        <thead>
+            <tr>
+                <th>Nombre</th>
+                <th>Subcategorías</th>
+                <th>Productos</th>
+                <th>Estado</th>
+                <th>Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for category in categories %}
+            <tr>
+                <td><strong>{{ category.name }}</strong></td>
+                <td>
+                    {% for child in category.children.all %}
+                    <span class="badge badge-info">{{ child.name }}</span>
+                    {% empty %}
+                    -
+                    {% endfor %}
+                </td>
+                <td>{{ category.products.count }}</td>
+                <td>
+                    {% if category.is_active %}
+                    <span class="badge badge-success">Activa</span>
+                    {% else %}
+                    <span class="badge badge-danger">Inactiva</span>
+                    {% endif %}
+                </td>
+                <td class="actions">
+                    <a href="{% url 'admin_category_edit' category.pk %}" class="btn btn-outline">Editar</a>
+                </td>
+            </tr>
+            {% for child in category.children.all %}
+            <tr style="background: rgba(0,0,0,0.2);">
+                <td style="padding-left: 2rem;">↳ {{ child.name }}</td>
+                <td>-</td>
+                <td>{{ child.products.count }}</td>
+                <td>
+                    {% if child.is_active %}
+                    <span class="badge badge-success">Activa</span>
+                    {% else %}
+                    <span class="badge badge-danger">Inactiva</span>
+                    {% endif %}
+                </td>
+                <td class="actions">
+                    <a href="{% url 'admin_category_edit' child.pk %}" class="btn btn-outline">Editar</a>
+                </td>
+            </tr>
+            {% endfor %}
+            {% empty %}
+            <tr>
+                <td colspan="5" class="text-center text-muted">No hay categorías</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

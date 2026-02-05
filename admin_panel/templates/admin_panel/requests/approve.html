@@ -1,0 +1,55 @@
+{% extends 'admin_panel/base.html' %}
+
+{% block page_title %}Aprobar Solicitud{% endblock %}
+
+{% block content %}
+<div class="admin-form-container">
+    <h2>Aprobar Solicitud de Cuenta</h2>
+
+    <div style="background: var(--color-dark); padding: 1.5rem; border-radius: 8px; margin-bottom: 2rem;">
+        <h4>Datos del Solicitante</h4>
+        <p>
+            <strong>Empresa:</strong> {{ account_request.company_name }}<br>
+            <strong>Contacto:</strong> {{ account_request.contact_name }}<br>
+            <strong>Email:</strong> {{ account_request.email }}<br>
+            <strong>Teléfono:</strong> {{ account_request.phone }}<br>
+            {% if account_request.cuit_dni %}<strong>CUIT/DNI:</strong> {{ account_request.cuit_dni }}<br>{% endif %}
+            {% if account_request.province %}<strong>Provincia:</strong> {{ account_request.province }}<br>{% endif %}
+            {% if account_request.address %}<strong>Domicilio:</strong> {{ account_request.address }}<br>{% endif %}
+        </p>
+        {% if account_request.message %}
+        <p><strong>Mensaje:</strong><br>{{ account_request.message }}</p>
+        {% endif %}
+    </div>
+
+    <form method="post">
+        {% csrf_token %}
+
+        <h4>Crear Usuario</h4>
+
+        <div class="form-group">
+            <label for="username" class="form-label">Nombre de Usuario *</label>
+            <input type="text" name="username" id="username" class="form-input" required
+                placeholder="Ej: empresa_nombre">
+        </div>
+
+        <div class="form-group">
+            <label for="password" class="form-label">Contraseña *</label>
+            <input type="text" name="password" id="password" class="form-input" required
+                placeholder="Contraseña inicial">
+            <small class="text-muted">Esta contraseña se le enviará al cliente</small>
+        </div>
+
+        <div class="form-group">
+            <label for="discount" class="form-label">Descuento (%)</label>
+            <input type="number" step="0.01" name="discount" id="discount" class="form-input" value="0" min="0"
+                max="100">
+        </div>
+
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary">Aprobar y Crear Usuario</button>
+            <a href="{% url 'admin_request_list' %}" class="btn btn-outline">Cancelar</a>
+        </div>
+    </form>
+</div>
+{% endblock %}
