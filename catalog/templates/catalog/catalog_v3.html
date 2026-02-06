@@ -1,5 +1,4 @@
-{# Syntax fix #}
-{% extends 'base.html' %}
+﻿{% extends 'base.html' %}
 {% load static %}
 {% load core_extras %}
 
@@ -84,7 +83,7 @@
                             <select name="fabrication" class="form-select form-select-sm" style="width: 100%;">
                                 <option value="">- Todas -</option>
                                 {% for opt in clamp_options.fabrication %}
-                                <option value="{{ opt }}" {% if active_filters.fabrication==opt %}selected{% endif %}>{{
+                                <option value="{{ opt }}" {% if active_filters.fabrication == opt %}selected{% endif %}>{{
                                     opt }}</option>
                                 {% endfor %}
                             </select>
@@ -99,7 +98,7 @@
                             <select name="diameter" class="form-select form-select-sm" style="width: 100%;">
                                 <option value="">- Todos -</option>
                                 {% for opt in clamp_options.diameter %}
-                                <option value="{{ opt }}" {% if active_filters.diameter==opt %}selected{% endif %}>{{
+                                <option value="{{ opt }}" {% if active_filters.diameter == opt %}selected{% endif %}>{{
                                     opt }}</option>
                                 {% endfor %}
                             </select>
@@ -114,7 +113,7 @@
                             <select name="shape" class="form-select form-select-sm" style="width: 100%;">
                                 <option value="">- Todas -</option>
                                 {% for opt in clamp_options.shape %}
-                                <option value="{{ opt }}" {% if active_filters.shape==opt %}selected{% endif %}>{{ opt
+                                <option value="{{ opt }}" {% if active_filters.shape == opt %}selected{% endif %}>{{ opt
                                     }}</option>
                                 {% endfor %}
                             </select>
@@ -153,7 +152,7 @@
                                 <option value="">- Todos -</option>
                                 {% for opt in attr.options_list %}
                                 {% with current_val=active_filters|get_item:attr.slug %}
-                                <option value="{{ opt }}" {% if current_val==opt %}selected{% endif %}>
+                                <option value="{{ opt }}" {% if current_val == opt %}selected{% endif %}>
                                     {{ opt }}
                                 </option>
                                 {% endwith %}
@@ -191,11 +190,11 @@
                     </span>
                     <select name="order" class="form-select order-select"
                         onchange="window.location.href='?order='+this.value+'&q={{ search_query }}&category={{ category_slug }}'">
-                        <option value="name" {% if order_by=='name' %}selected{% endif %}>Nombre A-Z</option>
-                        <option value="-name" {% if order_by=='-name' %}selected{% endif %}>Nombre Z-A</option>
-                        <option value="price" {% if order_by=='price' %}selected{% endif %}>Menor precio</option>
-                        <option value="-price" {% if order_by=='-price' %}selected{% endif %}>Mayor precio</option>
-                        <option value="sku" {% if order_by=='sku' %}selected{% endif %}>SKU</option>
+                        <option value="name" {% if order_by == 'name' %}selected{% endif %}>Nombre A-Z</option>
+                        <option value="-name" {% if order_by == '-name' %}selected{% endif %}>Nombre Z-A</option>
+                        <option value="price" {% if order_by == 'price' %}selected{% endif %}>Menor precio</option>
+                        <option value="-price" {% if order_by == '-price' %}selected{% endif %}>Mayor precio</option>
+                        <option value="sku" {% if order_by == 'sku' %}selected{% endif %}>SKU</option>
                     </select>
                 </div>
 
@@ -208,7 +207,7 @@
                             <img src="{{ product.image.url }}" alt="{{ product.name }}">
                             {% else %}
                             <div class="product-placeholder">
-                                <span>📦</span>
+                                <span>ðŸ“¦</span>
                             </div>
                             {% endif %}
                         </div>
@@ -252,7 +251,7 @@
                 <nav class="pagination">
                     {% if page_obj.has_previous %}
                     <a href="?page={{ page_obj.previous_page_number }}&q={{ search_query }}&category={{ category_slug }}&order={{ order_by }}"
-                        class="page-link">← Anterior</a>
+                        class="page-link">â† Anterior</a>
                     {% endif %}
 
                     <span class="page-info">
@@ -261,7 +260,7 @@
 
                     {% if page_obj.has_next %}
                     <a href="?page={{ page_obj.next_page_number }}&q={{ search_query }}&category={{ category_slug }}&order={{ order_by }}"
-                        class="page-link">Siguiente →</a>
+                        class="page-link">Siguiente â†’</a>
                     {% endif %}
                 </nav>
                 {% endif %}

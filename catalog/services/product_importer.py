@@ -76,9 +76,13 @@ class ProductImporter(BaseImporter):
                 'price': price,
                 'description': row.get('descripcion', ''),
                 'stock': int(row.get('stock', 0)),
-                'brand': row.get('marca', ''),
+                'stock': int(row.get('stock', 0)),
+                # 'brand' removed as it is not a model field
                 'is_active': str(row.get('activo', 'si')).lower() in ['si', 'yes', 'true', '1'],
             }
+            
+            # Handle brand in attributes
+            brand = row.get('marca', '').strip()
             
             # Handle category creation if missing and configured to do so
             if category_name and not category:
@@ -93,11 +97,18 @@ class ProductImporter(BaseImporter):
                 product.category = category
                 product.save()
                 
-            # JSON Attributes Parsing (Optional)
+            # JSON Attributes Parsing
             # If there's a column 'atributos' with format "Key:Val;Key2:Val2"
             attrs_raw = row.get('atributos', '')
+            
+            # Initialize attributes if needed
+            current_attrs = product.attributes or {}
+            
+            # Add brand if exists
+            if brand:
+                current_attrs['Marca'] = brand
+                
             if attrs_raw and isinstance(attrs_raw, str):
-                current_attrs = product.attributes or {}
                 # simple parser
                 for pair in attrs_raw.split(';'):
                     if ':' in pair:

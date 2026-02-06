@@ -45,6 +45,19 @@
             <a href="{% url 'admin_import_process' 'categories' %}" class="btn btn-warning btn-sm"
                 style="width: 100%;">Importar Categorías</a>
         </div>
+
+        <!-- Abrazaderas (Special) -->
+        <div class="stat-card" style="border-left: 4px solid #6f42c1;">
+            <div class="flex justify-between items-center mb-2">
+                <h3>Abrazaderas</h3>
+                <span style="font-size: 1.5rem; color: #6f42c1;">🏭</span>
+            </div>
+            <p class="text-muted mb-3" style="font-size: 0.9rem;">
+                Importador especializado. Detecta specs (trifilado, lamiando, medidas) automáticamete.
+            </p>
+            <a href="{% url 'admin_import_process' 'abrazaderas' %}" class="btn btn-sm"
+                style="width: 100%; background-color: #6f42c1; color: white;">Importar Abrazaderas</a>
+        </div>
     </div>
 </div>
 {% endblock %}

@@ -2,7 +2,9 @@
 Admin Panel views - Custom admin interface.
 """
 from django.shortcuts import render, redirect, get_object_or_404
+from django.urls import reverse
 from django.contrib.admin.views.decorators import staff_member_required
+from django.contrib.auth.forms import SetPasswordForm
 from django.contrib import messages
 from django.core.paginator import Paginator
 from django.db.models import Q, Count, Sum
@@ -20,6 +22,10 @@ from admin_panel.forms.import_forms import ProductImportForm, ClientImportForm, 
 from catalog.services.product_importer import ProductImporter
 from accounts.services.client_importer import ClientImporter
 from catalog.services.category_importer import CategoryImporter
+from catalog.services.abrazadera_importer import AbrazaderaImporter
+from core.services.import_manager import ImportTaskManager
+import threading
+import traceback
 
 
 @staff_member_required
@@ -54,24 +60,28 @@ def product_list(request):
     
     # Category filter
     category_id = request.GET.get('category', '')
+    current_category_id = None
     if category_id:
-        products = products.filter(category_id=category_id)
-    
+        try:
+            current_category_id = int(category_id)
+            products = products.filter(category_id=category_id)
+        except (ValueError, TypeError):
+            pass
+        
     # Active filter
     active_filter = request.GET.get('active', '')
-    if active_filter == '1':
-        products = products.filter(is_active=True)
-    elif active_filter == '0':
-        products = products.filter(is_active=False)
+    if active_filter:
+        is_active = active_filter == '1'
+        products = products.filter(is_active=is_active)
     
     # Ordering
     order = request.GET.get('order', '-updated_at')
     products = products.order_by(order)
     
     # Pagination
-    paginator = Paginator(products, 50)
-    page = request.GET.get('page', 1)
-    page_obj = paginator.get_page(page)
+    paginator = Paginator(products, 20)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
     
     categories = Category.objects.filter(is_active=True)
     
@@ -79,7 +89,7 @@ def product_list(request):
         'page_obj': page_obj,
         'categories': categories,
         'search': search,
-        'category_id': category_id,
+        'current_category_id': current_category_id,
         'active_filter': active_filter,
     }
     return render(request, 'admin_panel/products/list.html', context)
@@ -151,13 +161,31 @@ def product_edit(request, pk):
             product.save()
             messages.success(request, f'Producto "{product.sku}" actualizado.')
             return redirect('admin_product_list')
+            
         except Exception as e:
             messages.error(request, f'Error: {str(e)}')
-    
+            
     return render(request, 'admin_panel/products/form.html', {
         'product': product,
         'categories': categories,
         'action': 'Editar',
+    })
+
+
+@staff_member_required
+def product_delete(request, pk):
+    """Delete single product."""
+    product = get_object_or_404(Product, pk=pk)
+    
+    if request.method == 'POST':
+        sku = product.sku
+        product.delete()
+        messages.success(request, f'Producto "{sku}" eliminado.')
+        return redirect('admin_product_list')
+        
+    return render(request, 'admin_panel/delete_confirm.html', {
+        'object': f"{product.name} ({product.sku})",
+        'cancel_url': reverse('admin_product_list')
     })
 
 
@@ -178,6 +206,33 @@ def product_toggle_active(request):
         })
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, status=400)
+
+
+@staff_member_required
+@require_POST
+def product_bulk_category_update(request):
+    """Bulk update product categories."""
+    try:
+        product_ids = request.POST.getlist('product_ids')
+        category_id = request.POST.get('category_id')
+        
+        if not product_ids:
+            messages.warning(request, 'No se seleccionaron productos.')
+            return redirect('admin_product_list')
+            
+        if not category_id:
+            messages.warning(request, 'No se seleccionó una categoría.')
+            return redirect('admin_product_list')
+            
+        count = Product.objects.filter(id__in=product_ids).update(category_id=category_id)
+        
+        category = Category.objects.get(pk=category_id)
+        messages.success(request, f'{count} productos movidos a categoría "{category.name}".')
+        
+    except Exception as e:
+        messages.error(request, f'Error al actualizar categorías: {str(e)}')
+        
+    return redirect('admin_product_list')
 
 
 # ===================== CLIENTS =====================
@@ -225,6 +280,48 @@ def client_edit(request, pk):
         return redirect('admin_client_list')
     
     return render(request, 'admin_panel/clients/form.html', {'client': client})
+
+
+@staff_member_required
+def client_password_change(request, pk):
+    """Change client password."""
+    client = get_object_or_404(ClientProfile, pk=pk)
+    if not client.user:
+        messages.error(request, 'Este cliente no tiene un usuario asociado.')
+        return redirect('admin_client_edit', pk=pk)
+        
+    if request.method == 'POST':
+        form = SetPasswordForm(client.user, request.POST)
+        if form.is_valid():
+            form.save()
+            messages.success(request, f'Contraseña actualizada para el usuario "{client.user.username}".')
+            return redirect('admin_client_list')
+    else:
+        form = SetPasswordForm(client.user)
+        
+    return render(request, 'admin_panel/clients/password_form.html', {
+        'form': form,
+        'client': client
+    })
+
+
+@staff_member_required
+def client_delete(request, pk):
+    """Delete single client."""
+    client = get_object_or_404(ClientProfile, pk=pk)
+    
+    if request.method == 'POST':
+        name = client.company_name
+        # Delete user reference will cascade delete profile usually, but here profile is main view
+        user = client.user
+        user.delete() # This deletes the client profile too via cascade
+        messages.success(request, f'Cliente "{name}" eliminado.')
+        return redirect('admin_client_list')
+        
+    return render(request, 'admin_panel/delete_confirm.html', {
+        'object': f"{client.company_name} (Usuario: {client.user.username if client.user else 'Sin usuario'})",
+        'cancel_url': reverse('admin_client_list')
+    })
 
 
 # ===================== ACCOUNT REQUESTS =====================
@@ -442,6 +539,23 @@ def category_edit(request, pk):
 
 
 @staff_member_required
+def category_delete(request, pk):
+    """Delete single category."""
+    category = get_object_or_404(Category, pk=pk)
+    
+    if request.method == 'POST':
+        name = category.name
+        category.delete()
+        messages.success(request, f'Categoría "{name}" eliminada.')
+        return redirect('admin_category_list')
+        
+    return render(request, 'admin_panel/delete_confirm.html', {
+        'object': f"Categoría: {category.name}",
+        'cancel_url': reverse('admin_category_list')
+    })
+
+
+@staff_member_required
 def category_attribute_create(request, category_id):
     """Create new category attribute."""
     category = get_object_or_404(Category, pk=category_id)
@@ -560,6 +674,48 @@ def parse_product_description(request):
 
 # ===================== IMPORTERS =====================
 
+def run_background_import(task_id, ImporterClass, file_path, dry_run):
+    """Function to run in a separate thread."""
+    try:
+        # Define callback
+        def progress_callback(current, total):
+            ImportTaskManager.update_progress(task_id, current, total, f"Procesando fila {current} de {total}")
+            
+        # Initialize
+        # Note: We are passing a path or file object? 
+        # Since Django file objects might be closed if view returns, we usually need to save it to disk temporarily 
+        # OR passing the InMemoryUploadedFile might work if we are lucky (but risky across threads).
+        # Best practice: We will assume the file was saved to a temp location by the view.
+        
+        importer = ImporterClass(file_path)
+        result = importer.run(dry_run=dry_run, progress_callback=progress_callback)
+        
+        # Serialize result for JSON
+        result_data = {
+            'created': result.created,
+            'updated': result.updated,
+            'errors': result.errors,
+            'has_errors': result.has_errors,
+            'row_errors': [
+                {'row': r.row_number, 'message': str(r.errors)} 
+                for r in result.row_results if not r.success
+            ][:50] # Limit to 50 errors to avoid cache bloat
+        }
+        
+        ImportTaskManager.complete_task(task_id, result_data)
+        
+    except Exception as e:
+        traceback.print_exc()
+        ImportTaskManager.fail_task(task_id, str(e))
+
+@staff_member_required
+def import_status(request, task_id):
+    """API to poll status."""
+    status = ImportTaskManager.get_status(task_id)
+    if not status:
+        return JsonResponse({'status': 'unknown'}, status=404)
+    return JsonResponse(status)
+
 @staff_member_required
 def import_dashboard(request):
     """Import dashboard / hub."""
@@ -580,6 +736,10 @@ def import_process(request, import_type):
         FormClass = CategoryImportForm
         ImporterClass = CategoryImporter
         template = 'admin_panel/importers/import_form.html'
+    elif import_type == 'abrazaderas':
+        FormClass = ProductImportForm # We can reuse the basic file upload form
+        ImporterClass = AbrazaderaImporter
+        template = 'admin_panel/importers/import_form.html'
     else:
         messages.error(request, 'Tipo de importación no válido.')
         return redirect('admin_dashboard')
@@ -588,26 +748,41 @@ def import_process(request, import_type):
         form = FormClass(request.POST, request.FILES)
         if form.is_valid():
             try:
-                file = request.FILES['file']
+                # 1. Save file locally (threading requires persistent file access)
+                uploaded_file = request.FILES['file']
+                import os
+                from django.conf import settings
+                
+                # Make temp dir
+                temp_dir = os.path.join(settings.BASE_DIR, 'media', 'temp_imports')
+                os.makedirs(temp_dir, exist_ok=True)
+                
+                file_path = os.path.join(temp_dir, f"import_{uploaded_file.name}")
+                with open(file_path, 'wb+') as destination:
+                    for chunk in uploaded_file.chunks():
+                        destination.write(chunk)
+                        
                 dry_run = form.cleaned_data.get('dry_run', True)
                 
-                importer = ImporterClass(file)
-                result = importer.run(dry_run=dry_run)
+                # 2. Start Background Task
+                task_id = ImportTaskManager.start_task()
                 
-                if result.has_errors and not dry_run:
-                     messages.warning(request, f'La importación finalizó con {result.errors} errores.')
-                elif not dry_run:
-                     messages.success(request, f'Importación completada. Creados: {result.created}, Actualizados: {result.updated}.')
-
-                return render(request, 'admin_panel/importers/import_result.html', {
-                    'result': result,
-                    'dry_run': dry_run,
-                    'import_type': import_type,
+                thread = threading.Thread(
+                    target=run_background_import,
+                    args=(task_id, ImporterClass, file_path, dry_run)
+                )
+                thread.daemon = True
+                thread.start()
+                
+                # 3. Return Task ID for AJAX polling
+                return JsonResponse({
+                    'success': True,
+                    'task_id': task_id,
+                    'message': 'Iniciando importación...'
                 })
 
             except Exception as e:
-                messages.error(request, f'Error crítico en la importación: {str(e)}')
-                return redirect('admin_import_process', import_type=import_type)
+                return JsonResponse({'success': False, 'error': str(e)}, status=500)
     else:
         form = FormClass()
 
@@ -615,3 +790,52 @@ def import_process(request, import_type):
         'form': form,
         'import_type': import_type
     })
+
+
+# ===================== BULK DELETE ACTIONS =====================
+
+@staff_member_required
+@require_POST
+def product_delete_all(request):
+    """Deletes ALL products if confirmation is correct."""
+    confirmation = request.POST.get('confirmation', '').strip().lower()
+    expected = "delete productos"
+    
+    if confirmation != expected:
+        messages.error(request, f'Frase de confirmación incorrecta. Debe escribir: "{expected}"')
+        return redirect('admin_product_list')
+    
+    count, _ = Product.objects.all().delete()
+    messages.success(request, f'Se eliminaron {count} productos correctamente.')
+    return redirect('admin_product_list')
+
+@staff_member_required
+@require_POST
+def client_delete_all(request):
+    """Deletes ALL clients if confirmation is correct."""
+    confirmation = request.POST.get('confirmation', '').strip().lower()
+    expected = "delete clientes"
+    
+    if confirmation != expected:
+        messages.error(request, f'Frase de confirmación incorrecta. Debe escribir: "{expected}"')
+        return redirect('admin_client_list')
+    
+    # Safe fallback: Delete ClientProfile objects.
+    count, _ = ClientProfile.objects.all().delete()
+    messages.success(request, f'Se eliminaron {count} perfiles de cliente.')
+    return redirect('admin_client_list')
+
+@staff_member_required
+@require_POST
+def category_delete_all(request):
+    """Deletes ALL categories if confirmation is correct."""
+    confirmation = request.POST.get('confirmation', '').strip().lower()
+    expected = "delete categorias"
+    
+    if confirmation != expected:
+        messages.error(request, f'Frase de confirmación incorrecta. Debe escribir: "{expected}"')
+        return redirect('admin_category_list')
+    
+    count, _ = Category.objects.all().delete()
+    messages.success(request, f'Se eliminaron {count} categorías correctamente.')
+    return redirect('admin_category_list')

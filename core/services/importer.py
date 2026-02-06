@@ -67,7 +67,7 @@ class BaseImporter(ABC):
         """
         pass
 
-    def run(self, dry_run: bool = True) -> ImportResult:
+    def run(self, dry_run: bool = True, progress_callback=None) -> ImportResult:
         """Executes the import process."""
         self.load_data()
         self.validate_structure()
@@ -75,6 +75,10 @@ class BaseImporter(ABC):
         self.results.total_rows = len(self.df)
         
         for index, row in self.df.iterrows():
+            # Report progress
+            if progress_callback:
+                progress_callback(index + 1, self.results.total_rows)
+
             row_dict = row.to_dict()
             # row_number 2 because Excel header is 1, and 0-index
             row_num = index + 2 

@@ -126,7 +126,7 @@ def catalog(request):
     if 'context_extra' in locals():
         context.update(context_extra)
     
-    return render(request, 'catalog/catalog_v2.html', context)
+    return render(request, 'catalog/catalog_v3.html', context)
 
 
 def product_detail(request, sku):

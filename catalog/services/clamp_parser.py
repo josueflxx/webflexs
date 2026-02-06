@@ -9,25 +9,31 @@ class ClampParser:
     """
     Parser especializado para extraer especificaciones técnicas de Abrazaderas
     a partir de descripciones de texto plano.
+    
+    Implementa la lógica estricta de 8 pasos definida por el usuario.
     """
     
     @staticmethod
     def normalize_text(text: str) -> str:
         """
-        Normaliza el texto: mayúsculas, espacios, reemplazos variantes.
+        PASO 1 – Normalizar el texto
+        - Convertir a MAYÚSCULAS
+        - Quitar espacios duplicados
+        - Unificar variantes conocidas (S/CURVA -> SEMICURVA, etc)
+        - Asegurar separadores claros (X rodeado de espacios)
         """
         if not text:
             return ""
         
-        # 1. Mayúsculas
+        # 1. Mayúsculas y stripping
         text = text.upper().strip()
         
         # 2. Reemplazos variantes
         replacements = {
             'S/CURVA': 'SEMICURVA',
             'S-CURVA': 'SEMICURVA',
-            'CURV.': 'CURVA',
             'S/C': 'SEMICURVA',
+            'CURV.': 'CURVA',
         }
         
         for k, v in replacements.items():
@@ -36,17 +42,22 @@ class ClampParser:
         # 3. Espacios duplicados
         text = re.sub(r'\s+', ' ', text)
         
-        # 4. Normalizar separadores (ej: " X " -> " X ")
-        # Asegurar espacios alrededor de X para facilitar tokenización/regex
+        # 4. Asegurar separadores claros para X (dimensiones)
+        # "todo X rodeado de espacios -> X"
+        # Regex: cualquier espacio (o nada) seguido de X seguido de cualquier espacio (o nada)
+        # Se reemplaza por " X "
+        # Solo si la X parece ser un separador (está entre otras cosas, o dígitos)
+        # Para ser seguros segun requerimiento: "todo X rodeado de espacios"
         text = re.sub(r'\s*X\s*', ' X ', text)
         
-        return text
+        return text.strip()
 
     @classmethod
     def parse(cls, text: str) -> Dict[str, Any]:
         """
         Analiza el texto y retorna estructura con datos y confianza.
         """
+        # PASO 1 - Normalización
         text = cls.normalize_text(text)
         
         result = {
@@ -59,85 +70,95 @@ class ClampParser:
             'parse_warnings': []
         }
         
-        # Check condition: Start with ABRAZADERA (optional check here, usually done by caller)
-        # We proceed assuming it IS an abrazadera description
+        # PASO 2 – Validar que sea una abrazadera
+        if not text.startswith('ABRAZADERA'):
+            result['parse_warnings'].append("Ignorado: No comienza con 'ABRAZADERA'")
+            result['parse_confidence'] = 0
+            return result
         
-        # 1. Fabricación
+        # PASO 3 – Detectar tipo de fabricación
         has_trefilada = 'TREFILADA' in text
         has_laminada = 'LAMINADA' in text
         
         if has_trefilada and has_laminada:
-            result['parse_warnings'].append("Conflicto: TEXTO contiene TREFILADA y LAMINADA")
+            # Ambiguno
+            result['parse_warnings'].append("Ambigüedad: Detectadas ambas TREFILADA y LAMINADA")
             result['parse_confidence'] -= 20
         elif has_trefilada:
             result['fabrication'] = 'TREFILADA'
         elif has_laminada:
             result['fabrication'] = 'LAMINADA'
         else:
-            result['parse_warnings'].append("Falta: Fabricación no detectada")
-            result['parse_confidence'] -= 20
+            # Desconocido
+            pass 
 
-        # 2. Diámetro (Token after DE)
-        # Regex to find " DE {TOKEN} "
+        # PASO 4 – Detectar diámetro
+        # Regla: El diámetro siempre viene después de la palabra DE
+        # Buscar DE, leer token siguiente.
         match_diam = re.search(r'\bDE\s+([\d/]+|\d+)', text)
         if match_diam:
-            result['diameter'] = match_diam.group(1)
+            val = match_diam.group(1)
+            # Validar si es numero o fraccion (simple check)
+            if re.match(r'^[\d/]+$', val):
+                 result['diameter'] = val
+            else:
+                 result['parse_warnings'].append(f"Diámetro inválido detectado: {val}")
         else:
-            # Fallback: Maybe looks like "ABRAZADERA 1/2" directly?
-            # Let's stick to "DE" rule first as requested.
-            result['parse_warnings'].append("Falta: Diámetro (no se encontró 'DE ...')")
-            result['parse_confidence'] -= 20
+            result['diameter'] = None # Desconocido
 
-        # 3. Medidas (Ancho X Largo)
-        # Pattern: digits X digits
-        # We look for all numbers and see what surrounds 'X'
-        # Or simpler: find "DE {DIAM} X {ANCHO} X {LARGO}" often happens?
-        # User said: "Luego medidas separadas por X"
-        # Example: 1/2 X 85 X 260
-        # Wait, the structure is usually: DIAM X ANCHO X LARGO? 
-        # User example: "DE 1/2 X 85 X 260"
-        # It seems the diameter is extracted by "DE", but it participates in the X chain?
-        # Let's look at "X" separated integers.
-        # "85 X 260"
+        # PASO 5 – Detectar ancho y largo
+        # Buscar todas las ocurrencias del patrón: X <número>
+        # (\sX\s)(\d+) -> el espacio ya fue normalizado a " X "
         
-        # Let's find integer pairs separated by X that look like dimensions
-        # Exclude the diameter if it was found before.
+        # Find all " X number" patterns
+        # Note: \b is word boundary.
+        matches_dims = re.findall(r'\sX\s(\d+)', text)
         
-        # Strategy: find all numbers separated by X
-        # Regex: (\d+)\s*X\s*(\d+)
-        
-        # But wait, looking at example: "DE 1/2 X 85 X 260"
-        # 1/2 is diameter. Then X, then 85 (width?), then X, then 260 (length?)
-        # Or is 85 width and 260 length?
-        # "El primer número detectado -> ancho. El segundo número detectado -> largo" (Patrones X número)
-        
-        # Let's scan for integers after the diameter part?
-        # Or simple regex: look for " X (\d+) X (\d+)" pattern?
-        # Or look for any sequence of "X number"
-        
-        dimensions = re.findall(r'\sX\s(\d+)', text)
-        if len(dimensions) >= 2:
-            result['width'] = int(dimensions[0])
-            result['length'] = int(dimensions[1])
-        elif len(dimensions) == 1:
-            result['width'] = int(dimensions[0])
-            result['parse_warnings'].append("Falta: Largo (solo se encontró 1 medida)")
-            result['parse_confidence'] -= 10
-        else:
-            result['parse_warnings'].append("Falta: Ancho y Largo (no se encontraron patrones 'X number')")
-            result['parse_confidence'] -= 20
+        if len(matches_dims) >= 1:
+            # El primer número encontrado -> ancho
+            result['width'] = int(matches_dims[0])
             
-        # 4. Forma
-        # Priority: SEMICURVA > CURVA > PLANA
+            if len(matches_dims) >= 2:
+                # El segundo número encontrado -> largo
+                result['length'] = int(matches_dims[1])
+            else:
+                # Solo uno
+                result['parse_warnings'].append("Falta Largo (solo se encontró una medida X)")
+        else:
+            # Ninguno
+            pass
+
+        # PASO 6 – Detectar tipo (forma)
+        # Prioridad: SEMICURVA > CURVA > PLANA
         if 'SEMICURVA' in text:
             result['shape'] = 'SEMICURVA'
         elif 'CURVA' in text:
-            # Check it's not actually Semicurva (already handled by priority if-elif order)
-            result['shape'] = 'CURVA'
+             # Check if it was part of Semicurva (already normalized so S/CURVA is SEMICURVA)
+             # Basic check to ensure we don't double match if the logic was weak, but if/elif handles priority
+             result['shape'] = 'CURVA'
         elif 'PLANA' in text:
             result['shape'] = 'PLANA'
-        else:
-             result['parse_warnings'].append("Falta: Forma")
-             result['parse_confidence'] -= 10
+        # else None
 
+        # PASO 7 – Validar coherencia
+        # Marcar campos faltantes
+        if not result['fabrication']:
+             result['parse_warnings'].append("Falta: Fabricación")
+        if not result['diameter']:
+             result['parse_warnings'].append("Falta: Diámetro")
+        if not result['width']:
+             result['parse_warnings'].append("Falta: Ancho")
+        if not result['shape']:
+             result['parse_warnings'].append("Falta: Forma")
+
+        # Ajustar confianza
+        if result['parse_warnings']:
+            # Simple penalty logic
+            result['parse_confidence'] -= (len(result['parse_warnings']) * 10)
+            if result['parse_confidence'] < 0:
+                result['parse_confidence'] = 0
+
+        # PASO 8 – Uso para filtros
+        # Los datos estructurados result['fabrication'], etc. se usarán para el modelo.
+        
         return result

@@ -81,6 +81,22 @@
     color: var(--color-white);
 }
 
+.btn-danger-outline:hover {
+    background-color: var(--color-danger);
+    color: white;
+}
+
+.btn-warning-outline {
+    background-color: transparent;
+    color: #ffc107;
+    border: 1px solid #ffc107;
+}
+
+.btn-warning-outline:hover {
+    background-color: #ffc107;
+    color: #000;
+}
+
 .nav-item.active {
     background: rgba(255, 107, 53, 0.1);
     color: var(--color-primary);

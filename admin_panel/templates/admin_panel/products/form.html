@@ -1,4 +1,4 @@
-{% extends 'admin_panel/base.html' %}
+﻿{% extends 'admin_panel/base.html' %}
 
 {% block page_title %}{{ action }} Producto{% endblock %}
 
@@ -32,7 +32,7 @@
 
         <div class="form-group">
             <label for="category" class="form-label">Categoría</label>
-            <select name="category" id="category" class="form-select" onchange="loadCategoryAttributes()">
+            <select name="category" id="category" class="form-select" onchange="loadCategoryAttributes(this.value)">
                 <option value="">Sin categoría</option>
                 {% for cat in categories %}
                 <option value="{{ cat.pk }}" {% if product.category_id==cat.pk %}selected{% endif %}>{{ cat.name }}
@@ -79,7 +79,7 @@
     </form>
 </div>
 
-{{ product.attributes|default:dict|json_script:"attributes-data" }}
+{{ product.attributes|json_script:"attributes-data" }}
 
 <script>
     // Store current attributes if editing
@@ -120,12 +120,12 @@
                     let fieldHtml = `<div class="form-group" style="margin-bottom: 10px;">
                         <label class="form-label" style="font-size: 0.9em;">${attr.name}</label>`;
 
-                    if (attr.type === 'select') {
+                    if (attr.type = == 'select') {
                         const options = attr.options.split(',').map(o => o.trim());
                         fieldHtml += `<select name="attr_${attr.slug}" class="form-select attr-field" data-slug="${attr.slug}">
                             <option value="">- Seleccionar -</option>`;
                         options.forEach(opt => {
-                            const selected = existingValue === opt ? 'selected' : '';
+                            const selected = existingValue = == opt ? 'selected' : '';
                             fieldHtml += `<option value="${opt}" ${selected}>${opt}</option>`;
                         });
                         fieldHtml += `</select>`;
@@ -136,7 +136,7 @@
 
                     if (attr.regex_pattern) {
                         fieldHtml += `<small class="text-muted" style="font-size: 0.8em; display: block; margin-top: 2px;">
-                            Auto-extraíble via regex</small>`;
+                            Auto-extraÃ­ble via regex</small>`;
                     }
 
                     fieldHtml += `</div>`;
@@ -207,7 +207,7 @@
             alert('Error al conectar con el servidor.');
         } finally {
             btn.disabled = false;
-            btn.innerHTML = '✨ Auto-detectar desde Descripción';
+            btn.innerHTML = 'âœ¨ Auto-detectar desde Descripción';
         }
     }
 

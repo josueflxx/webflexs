@@ -10,75 +10,197 @@
             <select name="category" class="form-select">
                 <option value="">Todas las categorías</option>
                 {% for cat in categories %}
-                <option value="{{ cat.pk }}" {% if category_id == cat.pk|stringformat:"s" %}selected{% endif %}>{{ cat.name }}</option>
+                {% if current_category_id == cat.pk %}
+                <option value="{{ cat.pk }}" selected>{{ cat.name }}</option>
+                {% else %}
+                <option value="{{ cat.pk }}">{{ cat.name }}</option>
+                {% endif %}
                 {% endfor %}
             </select>
             <select name="active" class="form-select">
                 <option value="">Todos</option>
-                <option value="1" {% if active_filter == '1' %}selected{% endif %}>Activos</option>
-                <option value="0" {% if active_filter == '0' %}selected{% endif %}>Inactivos</option>
+                {% if active_filter == '1' %}
+                <option value="1" selected>Activos</option>
+                {% else %}
+                <option value="1">Activos</option>
+                {% endif %}
+
+                {% if active_filter == '0' %}
+                <option value="0" selected>Inactivos</option>
+                {% else %}
+                <option value="0">Inactivos</option>
+                {% endif %}
             </select>
             <button type="submit" class="btn btn-primary">Filtrar</button>
         </form>
-        <div class="toolbar-actions">
+        <div class="toolbar-actions" style="display: flex; gap: 10px; align-items: center;">
+            <form id="bulkCategoryForm" method="post" action="{% url 'admin_product_bulk_category' %}"
+                style="display: flex; gap: 5px;" onsubmit="return validateBulkAction()">
+                {% csrf_token %}
+                <select name="category_id" class="form-select" style="max-width: 200px;">
+                    <option value="">Mover seleccionados a...</option>
+                    {% for cat in categories %}
+                    <option value="{{ cat.pk }}">{{ cat.name }}</option>
+                    {% endfor %}
+                </select>
+                <button type="submit" class="btn btn-primary" id="bulkSubmitBtn" disabled>Mover</button>
+            </form>
+            <div style="width: 1px; height: 30px; background: #ddd; margin: 0 5px;"></div>
+            <button type="button" class="btn btn-danger" onclick="openDeleteModal()">Eliminar Todos</button>
             <a href="{% url 'admin_product_create' %}" class="btn btn-primary">+ Nuevo Producto</a>
         </div>
     </div>
 
-    <table class="admin-table">
-        <thead>
-            <tr>
-                <th>SKU</th>
-                <th>Nombre</th>
-                <th>Precio</th>
-                <th>Stock</th>
-                <th>Categoría</th>
-                <th>Estado</th>
-                <th>Acciones</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for product in page_obj %}
-            <tr>
-                <td><code>{{ product.sku }}</code></td>
-                <td>{{ product.name|truncatechars:50 }}</td>
-                <td>${{ product.price|floatformat:2 }}</td>
-                <td>{{ product.stock }}</td>
-                <td>{{ product.category.name|default:"-" }}</td>
-                <td>
-                    {% if product.is_active %}
-                    <span class="badge badge-success">Activo</span>
-                    {% else %}
-                    <span class="badge badge-danger">Inactivo</span>
-                    {% endif %}
-                </td>
-                <td class="actions">
-                    <a href="{% url 'admin_product_edit' product.pk %}" class="btn btn-outline">Editar</a>
-                </td>
-            </tr>
-            {% empty %}
-            <tr>
-                <td colspan="7" class="text-center text-muted">No hay productos</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+    <!-- Delete Modal -->
+    <div id="deleteModal" class="modal"
+        style="display:none; position:fixed; z-index:1000; left:0; top:0; width:100%; height:100%; background-color:rgba(0,0,0,0.5);">
+        <div class="modal-content"
+            style="background-color:#fff; margin:15% auto; padding:20px; border:1px solid #888; width:400px; border-radius:5px;">
+            <h3 style="color: #dc3545; margin-top: 0;">⚠️ Peligro: Borrado Masivo</h3>
+            <p>Estás a punto de eliminar <strong>TODOS</strong> los productos. Esta acción no se puede deshacer.</p>
+            <p>Para confirmar, escribe: <code>delete productos</code></p>
 
-    {% if page_obj.paginator.num_pages > 1 %}
-    <div class="admin-toolbar">
-        <span>Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }} ({{ page_obj.paginator.count }}
-            productos)</span>
-        <div class="toolbar-actions">
-            {% if page_obj.has_previous %}
-            <a href="?page={{ page_obj.previous_page_number }}&q={{ search }}&category={{ category_id }}&active={{ active_filter }}"
-                class="btn btn-outline">← Anterior</a>
-            {% endif %}
-            {% if page_obj.has_next %}
-            <a href="?page={{ page_obj.next_page_number }}&q={{ search }}&category={{ category_id }}&active={{ active_filter }}"
-                class="btn btn-outline">Siguiente →</a>
-            {% endif %}
+            <form method="post" action="{% url 'admin_product_delete_all' %}">
+                {% csrf_token %}
+                <input type="text" name="confirmation" id="deleteInput" class="form-input"
+                    style="width: 100%; margin-bottom: 15px;" placeholder="delete productos" autocomplete="off"
+                    onkeyup="checkDeleteInput(this, 'delete productos')">
+
+                <div style="display: flex; justify-content: flex-end; gap: 10px;">
+                    <button type="button" class="btn btn-outline" onclick="closeDeleteModal()">Cancelar</button>
+                    <button type="submit" id="deleteSubmitBtn" class="btn btn-danger" disabled>Confirmar
+                        Borrado</button>
+                </div>
+            </form>
         </div>
     </div>
-    {% endif %}
+
+    <script>
+        function openDeleteModal() {
+            document.getElementById('deleteModal').style.display = 'block';
+        }
+        function closeDeleteModal() {
+            document.getElementById('deleteModal').style.display = 'none';
+        }
+        function checkDeleteInput(input, expected) {
+            const btn = document.getElementById('deleteSubmitBtn');
+            if (input.value.trim().toLowerCase() === expected) {
+                btn.removeAttribute('disabled');
+            } else {
+                btn.setAttribute('disabled', 'true');
+            }
+        }
+
+        // Bulk Action Logic
+        function toggleSelectAll() {
+            const checkboxes = document.querySelectorAll('.product-checkbox');
+            const selectAll = document.getElementById('selectAll');
+            checkboxes.forEach(cb => cb.checked = selectAll.checked);
+            updateBulkButton();
+        }
+
+        function updateBulkButton() {
+            const checkboxes = document.querySelectorAll('.product-checkbox:checked');
+            const btn = document.getElementById('bulkSubmitBtn');
+            if (checkboxes.length > 0) {
+                btn.removeAttribute('disabled');
+            } else {
+                btn.setAttribute('disabled', 'true');
+            }
+        }
+
+        function validateBulkAction() {
+            const form = document.getElementById('bulkCategoryForm');
+            const checkboxes = document.querySelectorAll('.product-checkbox:checked');
+
+            // Remove old hidden inputs if any (clears previous selection)
+            form.querySelectorAll('input[name="product_ids"]').forEach(el => el.remove());
+
+            if (checkboxes.length === 0) {
+                alert('Por favor selecciona al menos un producto.');
+                return false;
+            }
+
+            // Append selected IDs to the form as hidden inputs
+            checkboxes.forEach(cb => {
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = 'product_ids';
+                input.value = cb.value;
+                form.appendChild(input);
+            });
+
+            return true;
+        }
+
+        // Close on outside click
+        window.onclick = function (event) {
+            if (event.target == document.getElementById('deleteModal')) {
+                closeDeleteModal();
+            }
+        }
+    </script>
+</div>
+
+<table class="admin-table">
+    <thead>
+        <tr>
+            <th style="width: 40px;"><input type="checkbox" id="selectAll" onclick="toggleSelectAll()"></th>
+            <th>SKU</th>
+            <th>Nombre</th>
+            <th>Precio</th>
+            <th>Stock</th>
+            <th>Categoría</th>
+            <th>Estado</th>
+            <th>Acciones</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for product in page_obj %}
+        <tr>
+            <td><input type="checkbox" name="product_ids" value="{{ product.pk }}" class="product-checkbox"
+                    onclick="updateBulkButton()"></td>
+            <td><code>{{ product.sku }}</code></td>
+            <td>{{ product.name|truncatechars:50 }}</td>
+            <td>${{ product.price|floatformat:2 }}</td>
+            <td>{{ product.stock }}</td>
+            <td>{{ product.category.name|default:"-" }}</td>
+            <td>
+                {% if product.is_active %}
+                <span class="badge badge-success">Activo</span>
+                {% else %}
+                <span class="badge badge-danger">Inactivo</span>
+                {% endif %}
+            </td>
+            <td class="actions">
+                <a href="{% url 'admin_product_edit' product.pk %}" class="btn btn-outline" title="Editar">✏️</a>
+                <a href="{% url 'admin_product_delete' product.pk %}" class="btn btn-danger-outline"
+                    title="Eliminar">🗑️</a>
+            </td>
+        </tr>
+        {% empty %}
+        <tr>
+            <td colspan="8" class="text-center text-muted">No hay productos</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+{% if page_obj.paginator.num_pages > 1 %}
+<div class="admin-toolbar">
+    <span>Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }} ({{ page_obj.paginator.count }}
+        productos)</span>
+    <div class="toolbar-actions">
+        {% if page_obj.has_previous %}
+        <a href="?page={{ page_obj.previous_page_number }}&q={{ search }}&category={{ current_category_id }}&active={{ active_filter }}"
+            class="btn btn-outline">← Anterior</a>
+        {% endif %}
+        {% if page_obj.has_next %}
+        <a href="?page={{ page_obj.next_page_number }}&q={{ search }}&category={{ current_category_id }}&active={{ active_filter }}"
+            class="btn btn-outline">Siguiente →</a>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
 </div>
 {% endblock %}

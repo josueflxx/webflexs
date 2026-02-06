@@ -13,10 +13,16 @@ urlpatterns = [
     path('productos/nuevo/', views.product_create, name='admin_product_create'),
     path('productos/<int:pk>/editar/', views.product_edit, name='admin_product_edit'),
     path('productos/toggle-active/', views.product_toggle_active, name='admin_product_toggle'),
+    path('productos/<int:pk>/eliminar/', views.product_delete, name='admin_product_delete'),
+    path('productos/eliminar-todos/', views.product_delete_all, name='admin_product_delete_all'),
+    path('productos/asignar-categoria/', views.product_bulk_category_update, name='admin_product_bulk_category'),
     
     # Clients
     path('clientes/', views.client_list, name='admin_client_list'),
     path('clientes/<int:pk>/editar/', views.client_edit, name='admin_client_edit'),
+    path('clientes/<int:pk>/password/', views.client_password_change, name='admin_client_password'),
+    path('clientes/<int:pk>/eliminar/', views.client_delete, name='admin_client_delete'),
+    path('clientes/eliminar-todos/', views.client_delete_all, name='admin_client_delete_all'),
     
     # Account Requests
     path('solicitudes/', views.request_list, name='admin_request_list'),
@@ -31,6 +37,8 @@ urlpatterns = [
     path('categorias/', views.category_list, name='admin_category_list'),
     path('categorias/nueva/', views.category_create, name='admin_category_create'),
     path('categorias/<int:pk>/editar/', views.category_edit, name='admin_category_edit'),
+    path('categorias/<int:pk>/eliminar/', views.category_delete, name='admin_category_delete'),
+    path('categorias/eliminar-todas/', views.category_delete_all, name='admin_category_delete_all'),
     
     # Category Attributes
     path('categorias/<int:category_id>/atributos/nuevo/', views.category_attribute_create, name='admin_category_attribute_create'),
@@ -46,6 +54,7 @@ urlpatterns = [
     
     # Importers
     path('importar/', views.import_dashboard, name='admin_import_dashboard'),
+    path('importar/status/<str:task_id>/', views.import_status, name='admin_import_status'),
     path('importar/<str:import_type>/', views.import_process, name='admin_import_process'),
     # Commit view removed as we handle it in process view for MVP simplicity
     # path('importar/<str:import_type>/confirmar/', views.import_commit, name='admin_import_commit'),

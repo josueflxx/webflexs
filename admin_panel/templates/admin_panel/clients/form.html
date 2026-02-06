@@ -52,8 +52,7 @@
             <select name="client_type" id="client_type" class="form-select">
                 <option value="">-</option>
                 <option value="taller" {% if client.client_type == 'taller' %}selected{% endif %}>Taller</option>
-                <option value="distribuidora" {% if client.client_type == 'distribuidora' %}selected{% endif %}>
-                    Distribuidora</option>
+                <option value="distribuidora" {% if client.client_type == 'distribuidora' %}selected{% endif %}>Distribuidora</option>
                 <option value="flota" {% if client.client_type == 'flota' %}selected{% endif %}>Flota</option>
                 <option value="otro" {% if client.client_type == 'otro' %}selected{% endif %}>Otro</option>
             </select>
@@ -63,13 +62,10 @@
             <label for="iva_condition" class="form-label">Condición IVA</label>
             <select name="iva_condition" id="iva_condition" class="form-select">
                 <option value="">-</option>
-                <option value="responsable_inscripto" {% if client.iva_condition == 'responsable_inscripto' %}selected{%
-                    endif %}>Responsable Inscripto</option>
-                <option value="monotributista" {% if client.iva_condition == 'monotributista' %}selected{% endif %}>
-                    Monotributista</option>
+                <option value="responsable_inscripto" {% if client.iva_condition == 'responsable_inscripto' %}selected{% endif %}>Responsable Inscripto</option>
+                <option value="monotributista" {% if client.iva_condition == 'monotributista' %}selected{% endif %}>Monotributista</option>
                 <option value="exento" {% if client.iva_condition == 'exento' %}selected{% endif %}>Exento</option>
-                <option value="consumidor_final" {% if client.iva_condition == 'consumidor_final' %}selected{% endif %}>
-                    Consumidor Final</option>
+                <option value="consumidor_final" {% if client.iva_condition == 'consumidor_final' %}selected{% endif %}>Consumidor Final</option>
             </select>
         </div>
 

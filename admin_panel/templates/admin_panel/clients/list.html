@@ -10,7 +10,45 @@
                 class="form-input">
             <button type="submit" class="btn btn-primary">Buscar</button>
         </form>
+        <div class="toolbar-actions">
+            <button type="button" class="btn btn-danger" onclick="openDeleteModal()">Eliminar Todos</button>
+        </div>
     </div>
+
+    <!-- Delete Modal -->
+    <div id="deleteModal" class="modal"
+        style="display:none; position:fixed; z-index:1000; left:0; top:0; width:100%; height:100%; background-color:rgba(0,0,0,0.5);">
+        <div class="modal-content"
+            style="background-color:#fff; margin:15% auto; padding:20px; border:1px solid #888; width:400px; border-radius:5px;">
+            <h3 style="color: #dc3545; margin-top: 0;">⚠️ Peligro: Borrado Masivo</h3>
+            <p>Estás a punto de eliminar <strong>TODOS</strong> los perfiles de clientes. Esta acción no se puede
+                deshacer.</p>
+            <p>Para confirmar, escribe: <code>delete clientes</code></p>
+
+            <form method="post" action="{% url 'admin_client_delete_all' %}">
+                {% csrf_token %}
+                <input type="text" name="confirmation" class="form-input" style="width: 100%; margin-bottom: 15px;"
+                    placeholder="delete clientes" autocomplete="off"
+                    onkeyup="checkDeleteInput(this, 'delete clientes')">
+
+                <div style="display: flex; justify-content: flex-end; gap: 10px;">
+                    <button type="button" class="btn btn-outline" onclick="closeDeleteModal()">Cancelar</button>
+                    <button type="submit" id="deleteSubmitBtn" class="btn btn-danger" disabled>Confirmar
+                        Borrado</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        function openDeleteModal() { document.getElementById('deleteModal').style.display = 'block'; }
+        function closeDeleteModal() { document.getElementById('deleteModal').style.display = 'none'; }
+        function checkDeleteInput(input, expected) {
+            const btn = document.getElementById('deleteSubmitBtn');
+            input.value.trim().toLowerCase() === expected ? btn.removeAttribute('disabled') : btn.setAttribute('disabled', 'true');
+        }
+        window.onclick = function (e) { if (e.target == document.getElementById('deleteModal')) closeDeleteModal(); }
+    </script>
 
     <table class="admin-table">
         <thead>
@@ -38,7 +76,13 @@
                     {% endif %}
                 </td>
                 <td class="actions">
-                    <a href="{% url 'admin_client_edit' client.pk %}" class="btn btn-outline">Editar</a>
+                    <a href="{% url 'admin_client_edit' client.pk %}" class="btn btn-outline" title="Editar">✏️</a>
+                    {% if client.user %}
+                    <a href="{% url 'admin_client_password' client.pk %}" class="btn btn-warning-outline"
+                        title="Cambiar Contraseña">🔑</a>
+                    {% endif %}
+                    <a href="{% url 'admin_client_delete' client.pk %}" class="btn btn-danger-outline"
+                        title="Eliminar">🗑️</a>
                 </td>
             </tr>
             {% empty %}
@@ -50,9 +94,52 @@
     </table>
 
     {% if page_obj.paginator.num_pages > 1 %}
-    <div class="admin-toolbar">
-        <span>Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
+    <div class="pagination-container">
+        <div class="pagination-info">
+            Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}
+        </div>
+
+        <div class="pagination-controls">
+            {% if page_obj.has_previous %}
+            <a href="?page=1{% if search %}&q={{ search }}{% endif %}" class="btn btn-outline btn-sm">&laquo;
+                Primera</a>
+            <a href="?page={{ page_obj.previous_page_number }}{% if search %}&q={{ search }}{% endif %}"
+                class="btn btn-outline btn-sm">Anterior</a>
+            {% else %}
+            <button class="btn btn-outline btn-sm" disabled>&laquo; Primera</button>
+            <button class="btn btn-outline btn-sm" disabled>Anterior</button>
+            {% endif %}
+
+            {% if page_obj.has_next %}
+            <a href="?page={{ page_obj.next_page_number }}{% if search %}&q={{ search }}{% endif %}"
+                class="btn btn-outline btn-sm">Siguiente</a>
+            <a href="?page={{ page_obj.paginator.num_pages }}{% if search %}&q={{ search }}{% endif %}"
+                class="btn btn-outline btn-sm">Última &raquo;</a>
+            {% else %}
+            <button class="btn btn-outline btn-sm" disabled>Siguiente</button>
+            <button class="btn btn-outline btn-sm" disabled>Última &raquo;</button>
+            {% endif %}
+        </div>
     </div>
+
+    <style>
+        .pagination-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 20px;
+            padding: 10px;
+            background-color: var(--color-secondary);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: var(--color-gray-light);
+            border-radius: 5px;
+        }
+
+        .pagination-controls {
+            display: flex;
+            gap: 5px;
+        }
+    </style>
     {% endif %}
 </div>
 {% endblock %}

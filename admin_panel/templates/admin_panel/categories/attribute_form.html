@@ -1,4 +1,4 @@
-{% extends 'admin_panel/base.html' %}
+﻿{% extends 'admin_panel/base.html' %}
 
 {% block page_title %}{{ action }} Atributo: {{ category.name }}{% endblock %}
 
@@ -16,65 +16,71 @@
         </div>
 
         <div class="form-group">
-            <label for="slug" class="form-label">Slug (Identificador) *</label>
-            <input type="text" name="slug" id="slug" class="form-input" required value="{{ attribute.slug|default:'' }}"
-                placeholder="Ej: diametro">
+            <label for="slug" class="form-label">Slug (Código)</label>
+            <input type="text" name="slug" id="slug" class="form-input" value="{{ form.instance.slug|default:'' }}">
             <small class="text-muted">Debe ser único dentro de la categoría. Solo letras minúsculas, números y
                 guiones.</small>
+            {% if form.slug.errors %}
+            <div class="error-feedback">{{ form.slug.errors.0 }}</div>
+            {% endif %}
         </div>
 
         <div class="form-group">
             <label for="type" class="form-label">Tipo de Dato</label>
-            <select name="type" id="type" class="form-select" onchange="toggleOptions()">
-                <option value="text" {% if attribute.type=='text' %}selected{% endif %}>Texto</option>
-                <option value="number" {% if attribute.type=='number' %}selected{% endif %}>Número</option>
-                <option value="select" {% if attribute.type=='select' %}selected{% endif %}>Selección (Menú desplegable)
-                </option>
+            <select name="type" id="type" class="form-select">
+                {% for value, label in form.fields.type.choices %}
+                <option value="{{ value }}" {% if form.instance.type==value %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
             </select>
         </div>
 
-        <div class="form-group" id="options-group" style="display: none;">
-            <label for="options" class="form-label">Opciones</label>
-            <textarea name="options" id="options" class="form-textarea"
-                placeholder="Opción 1, Opción 2, Opción 3">{{ attribute.options|default:'' }}</textarea>
-            <small class="text-muted">Separa las opciones por comas.</small>
-        </div>
+        <div class="form-group checkbox-group">
+            <label class="form-label" style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                <input type="checkbox" name="required" id="required" {% if form.instance.required %}checked{% endif %}>
+                <span>Es obligatorio</span>
+            </label>
+            <small class="text-muted" style="display: block; margin-top: 5px;">Si se marca, este atributo será
+                obligatorio al editar productos de esta categoría.</small>
+        </div> <label for="options" class="form-label">Opciones</label>
+        <textarea name="options" id="options" class="form-textarea"
+            placeholder="Opción 1, Opción 2, Opción 3">{{ attribute.options|default:'' }}</textarea>
+        <small class="text-muted">Separa las opciones por comas.</small>
+</div>
 
-        <div class="form-group">
-            <div class="flex items-center gap-3">
-                <input type="checkbox" name="required" id="required" {% if attribute.required %}checked{% endif %}
-                    style="width: 18px; height: 18px; cursor: pointer;">
-                <label for="required" style="cursor: pointer; margin-bottom: 0;">
-                    <strong>Campo Requerido</strong>
-                </label>
-            </div>
-            <small class="text-muted" style="display: block; margin-top: 5px; margin-left: 2rem;">Si está marcado, este
-                atributo será obligatorio al editar productos de esta categoría.</small>
-        </div>
+<div class="flex items-center gap-3">
+    <input type="checkbox" name="required" id="required" {% if attribute.required %}checked{% endif %}
+        style="width: 18px; height: 18px; cursor: pointer;">
+    <label for="required" style="cursor: pointer; margin-bottom: 0;">
+        <strong>Campo Requerido</strong>
+    </label>
+</div>
+<small class="text-muted" style="display: block; margin-top: 5px; margin-left: 2rem;">Si está marcado, este
+    atributo será obligatorio al editar productos de esta categoría.</small>
+</div>
 
-        <div class="form-group"
-            style="background: rgba(255, 107, 53, 0.05); padding: 1rem; border-radius: 8px; border: 1px dashed var(--color-primary);">
-            <label for="regex_pattern" class="form-label">Patrón Regex (Para Auto-detección)</label>
-            <input type="text" name="regex_pattern" id="regex_pattern" class="form-input"
-                value="{{ attribute.regex_pattern|default:'' }}" placeholder="Ej: Di[áa]metro:\s*([\d/]+(?:mm)?)">
-            <small class="text-muted">
-                <a href="https://regex101.com/" target="_blank" style="color: var(--color-primary);">Probar Regex</a>.
-                Usa un grupo de captura <code>()</code> para extraer el valor exacto.
-            </small>
-        </div>
+<div class="form-group"
+    style="background: rgba(255, 107, 53, 0.05); padding: 1rem; border-radius: 8px; border: 1px dashed var(--color-primary);">
+    <label for="regex_pattern" class="form-label">Patrón Regex (Para Auto-detección)</label>
+    <input type="text" name="regex_pattern" id="regex_pattern" class="form-input"
+        value="{{ attribute.regex_pattern|default:'' }}" placeholder="Ej: Di[áa]metro:\s*([\d/]+(?:mm)?)">
+    <small class="text-muted">
+        <a href="https://regex101.com/" target="_blank" style="color: var(--color-primary);">Probar Regex</a>.
+        Usa un grupo de captura <code>()</code> para extraer el valor exacto.
+    </small>
+</div>
 
-        <div class="form-actions">
-            <button type="submit" class="btn btn-primary">Guardar Atributo</button>
-            <a href="{% url 'admin_category_edit' category.pk %}" class="btn btn-outline">Cancelar</a>
-        </div>
-    </form>
+<div class="form-actions">
+    <button type="submit" class="btn btn-primary">Guardar Atributo</button>
+    <a href="{% url 'admin_category_edit' category.pk %}" class="btn btn-outline">Cancelar</a>
+</div>
+</form>
 </div>
 
 <script>
     function toggleOptions() {
         const typeSelect = document.getElementById('type');
         const optionsGroup = document.getElementById('options-group');
-        if (typeSelect.value === 'select') {
+        if (typeSelect.value = == 'select') {
             optionsGroup.style.display = 'block';
         } else {
             optionsGroup.style.display = 'none';
