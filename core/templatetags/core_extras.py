@@ -28,3 +28,15 @@ def calculate_discount(price, discount_percentage):
     except:
         return price
 
+
+@register.filter
+def multiply(value, arg):
+    """
+    Multiplies the value by the argument.
+    Usage: {{ value|multiply:100 }}
+    """
+    try:
+        return float(value) * float(arg)
+    except (ValueError, TypeError):
+        return 0
+

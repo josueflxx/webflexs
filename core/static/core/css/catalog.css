@@ -191,21 +191,53 @@
     border-radius: var(--radius-full);
 }
 
-.product-pricing {
+.product-pricing-details {
     margin: var(--spacing-md) 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
 }
 
-.price-original {
-    text-decoration: line-through;
+.price-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.9rem;
+}
+
+.list-price {
     color: var(--color-gray-light);
-    font-size: var(--font-size-sm);
-    margin-right: var(--spacing-sm);
 }
 
-.price-final {
-    font-size: var(--font-size-xl);
+.list-price .value {
+    text-decoration: line-through;
+}
+
+.discount-row {
+    color: var(--color-success);
+    font-weight: 500;
+}
+
+.final-price {
+    margin-top: 4px;
+    padding-top: 4px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.final-price .label {
+    font-weight: 600;
+    color: var(--color-white);
+}
+
+.final-price .value {
+    font-size: 1.2rem;
     font-weight: 700;
     color: var(--color-primary);
+}
+
+.single-price .value {
+    font-size: 1.3rem;
+    border: none;
 }
 
 .price-hidden {
