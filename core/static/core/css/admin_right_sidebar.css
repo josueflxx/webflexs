@@ -1,0 +1,136 @@
+/* Right Sidebar - Admin Activity */
+.admin-right-sidebar {
+    position: fixed;
+    top: 0;
+    right: 0;
+    width: 280px;
+    height: 100vh;
+    background: var(--color-secondary);
+    border-left: 1px solid rgba(255, 255, 255, 0.1);
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    z-index: 100;
+}
+
+.right-sidebar-header {
+    padding: var(--spacing-xl);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.right-sidebar-header h2 {
+    font-size: var(--font-size-lg);
+    font-weight: 700;
+    color: var(--color-white);
+    margin: 0;
+}
+
+.admin-profiles {
+    padding: var(--spacing-lg);
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-md);
+}
+
+.admin-profile {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-md);
+    padding: var(--spacing-md);
+    border-radius: var(--radius-lg);
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    transition: all var(--transition-fast);
+}
+
+.admin-profile:hover {
+    background: rgba(255, 255, 255, 0.08);
+    transform: translateY(-2px);
+}
+
+.admin-profile.active {
+    border-color: var(--color-success);
+}
+
+.admin-avatar {
+    position: relative;
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--color-primary), #ff8c42);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.admin-profile.inactive .admin-avatar {
+    background: linear-gradient(135deg, var(--color-gray), var(--color-gray-light));
+    opacity: 0.6;
+}
+
+.avatar-text {
+    font-size: var(--font-size-base);
+    font-weight: 700;
+    color: white;
+    text-transform: uppercase;
+}
+
+.status-dot {
+    position: absolute;
+    bottom: 2px;
+    right: 2px;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    border: 2px solid var(--color-secondary);
+    background: var(--color-gray);
+}
+
+.admin-profile.active .status-dot {
+    background: var(--color-success);
+    box-shadow: 0 0 12px var(--color-success);
+    animation: pulse 2s ease-in-out infinite;
+}
+
+.admin-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.admin-username {
+    font-size: var(--font-size-base);
+    font-weight: 600;
+    color: var(--color-white);
+    margin-bottom: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.admin-status {
+    font-size: var(--font-size-sm);
+    color: var(--color-gray-light);
+}
+
+.admin-profile.active .admin-status {
+    color: var(--color-success);
+    font-weight: 500;
+}
+
+/* Adjust main content for right sidebar */
+.admin-main {
+    margin-right: 280px;
+}
+
+@keyframes pulse {
+
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.5;
+    }
+}

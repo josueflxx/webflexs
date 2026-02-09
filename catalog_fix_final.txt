@@ -1,4 +1,4 @@
-{# FIXED VERSION - WITH AUTO-SUBMIT UX #}
+{# FIXED VERSION - FINAL ATOMIC WRITE #}
 {% extends 'base.html' %}
 {% load static %}
 {% load core_extras %}
@@ -6,7 +6,7 @@
 {% block title %}Catálogo - FLEXS{% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="{% static 'core/css/catalog.css' %}?v=2">
+<link rel="stylesheet" href="{% static 'core/css/catalog.css' %}">
 {% endblock %}
 
 {% block content %}
@@ -16,10 +16,9 @@
             <h1>Catálogo de Productos</h1>
             <p class="catalog-subtitle">
                 {% if not show_prices %}
-                <span class="price-notice">{{ price_message }}</span>
+                    <span class="price-notice">{{ price_message }}</span>
                 {% elif discount %}
-                <span class="discount-notice">Tenés un {{ discount|multiply:100|floatformat:0 }}% de descuento
-                    aplicado</span>
+                    <span class="discount-notice">Tenés un {{ discount|floatformat:0 }}% de descuento aplicado</span>
                 {% endif %}
             </p>
         </div>
@@ -30,8 +29,7 @@
                 <div class="filter-section">
                     <h3>Buscar</h3>
                     <form method="get" class="search-form">
-                        <input type="text" name="q" value="{{ search_query }}" placeholder="SKU o nombre..."
-                            class="form-input">
+                        <input type="text" name="q" value="{{ search_query }}" placeholder="SKU o nombre..." class="form-input">
                         <button type="submit" class="btn btn-primary">Buscar</button>
                     </form>
                 </div>
@@ -46,16 +44,14 @@
                         </li>
                         {% for category in categories %}
                         <li>
-                            <a href="?category={{ category.slug }}"
-                                class="{% if category_slug == category.slug %}active{% endif %}">
+                            <a href="?category={{ category.slug }}" class="{% if category_slug == category.slug %}active{% endif %}">
                                 {{ category.name }}
                             </a>
                             {% if category.children.exists %}
                             <ul class="subcategory-list">
                                 {% for sub in category.children.all %}
                                 <li>
-                                    <a href="?category={{ sub.slug }}"
-                                        class="{% if category_slug == sub.slug %}active{% endif %}">
+                                    <a href="?category={{ sub.slug }}" class="{% if category_slug == sub.slug %}active{% endif %}">
                                         {{ sub.name }}
                                     </a>
                                 </li>
@@ -79,11 +75,8 @@
                         <!-- Fabrication -->
                         {% if clamp_options.fabrication %}
                         <div class="filter-group mb-3">
-                            <h4 class="filter-title"
-                                style="font-size: 0.95em; margin-bottom: 5px; color: var(--color-gray);">Fabricación
-                            </h4>
-                            <select name="fabrication" class="form-select form-select-sm" style="width: 100%;"
-                                onchange="this.form.submit()">
+                            <h4 class="filter-title" style="font-size: 0.95em; margin-bottom: 5px; color: var(--color-gray);">Fabricación</h4>
+                            <select name="fabrication" class="form-select form-select-sm" style="width: 100%;">
                                 <option value="">- Todas -</option>
                                 {% for opt in clamp_options.fabrication %}
                                 <option value="{{ opt }}" {% if active_filters.fabrication == opt %}selected{% endif %}>{{ opt }}</option>
@@ -95,10 +88,8 @@
                         <!-- Diameter -->
                         {% if clamp_options.diameter %}
                         <div class="filter-group mb-3">
-                            <h4 class="filter-title"
-                                style="font-size: 0.95em; margin-bottom: 5px; color: var(--color-gray);">Diámetro</h4>
-                            <select name="diameter" class="form-select form-select-sm" style="width: 100%;"
-                                onchange="this.form.submit()">
+                            <h4 class="filter-title" style="font-size: 0.95em; margin-bottom: 5px; color: var(--color-gray);">Diámetro</h4>
+                            <select name="diameter" class="form-select form-select-sm" style="width: 100%;">
                                 <option value="">- Todos -</option>
                                 {% for opt in clamp_options.diameter %}
                                 <option value="{{ opt }}" {% if active_filters.diameter == opt %}selected{% endif %}>{{ opt }}</option>
@@ -110,10 +101,8 @@
                         <!-- Width (Ancho) -->
                         {% if clamp_options.width %}
                         <div class="filter-group mb-3">
-                            <h4 class="filter-title"
-                                style="font-size: 0.95em; margin-bottom: 5px; color: var(--color-gray);">Ancho</h4>
-                            <select name="width" class="form-select form-select-sm" style="width: 100%;"
-                                onchange="this.form.submit()">
+                            <h4 class="filter-title" style="font-size: 0.95em; margin-bottom: 5px; color: var(--color-gray);">Ancho</h4>
+                            <select name="width" class="form-select form-select-sm" style="width: 100%;">
                                 <option value="">- Todos -</option>
                                 {% for opt in clamp_options.width %}
                                 <option value="{{ opt }}" {% if active_filters.width == opt|stringformat:"s" %}selected{% endif %}>{{ opt }} mm</option>
@@ -125,10 +114,8 @@
                         <!-- Length (Largo) -->
                         {% if clamp_options.length %}
                         <div class="filter-group mb-3">
-                            <h4 class="filter-title"
-                                style="font-size: 0.95em; margin-bottom: 5px; color: var(--color-gray);">Largo</h4>
-                            <select name="length" class="form-select form-select-sm" style="width: 100%;"
-                                onchange="this.form.submit()">
+                            <h4 class="filter-title" style="font-size: 0.95em; margin-bottom: 5px; color: var(--color-gray);">Largo</h4>
+                            <select name="length" class="form-select form-select-sm" style="width: 100%;">
                                 <option value="">- Todos -</option>
                                 {% for opt in clamp_options.length %}
                                 <option value="{{ opt }}" {% if active_filters.length == opt|stringformat:"s" %}selected{% endif %}>{{ opt }} mm</option>
@@ -140,10 +127,8 @@
                         <!-- Shape -->
                         {% if clamp_options.shape %}
                         <div class="filter-group mb-3">
-                            <h4 class="filter-title"
-                                style="font-size: 0.95em; margin-bottom: 5px; color: var(--color-gray);">Forma</h4>
-                            <select name="shape" class="form-select form-select-sm" style="width: 100%;"
-                                onchange="this.form.submit()">
+                            <h4 class="filter-title" style="font-size: 0.95em; margin-bottom: 5px; color: var(--color-gray);">Forma</h4>
+                            <select name="shape" class="form-select form-select-sm" style="width: 100%;">
                                 <option value="">- Todas -</option>
                                 {% for opt in clamp_options.shape %}
                                 <option value="{{ opt }}" {% if active_filters.shape == opt %}selected{% endif %}>{{ opt }}</option>
@@ -152,11 +137,9 @@
                         </div>
                         {% endif %}
 
-                        <noscript>
-                            <button type="submit" class="btn btn-primary btn-sm btn-block mt-3" style="width: 100%;">
-                                Aplicar Filtros Técnicos
-                            </button>
-                        </noscript>
+                        <button type="submit" class="btn btn-primary btn-sm btn-block mt-3" style="width: 100%;">
+                            Aplicar Filtros Técnicos
+                        </button>
                     </form>
                 </div>
                 {% endif %}
@@ -178,14 +161,12 @@
 
                         {% for attr in category_attributes %}
                         <div class="filter-group mb-3">
-                            <h4 class="filter-title"
-                                style="font-size: 0.95em; margin-bottom: 5px; color: var(--color-gray);">
+                            <h4 class="filter-title" style="font-size: 0.95em; margin-bottom: 5px; color: var(--color-gray);">
                                 {{ attr.name }}
                             </h4>
 
                             {% if attr.type == 'select' %}
-                            <select name="{{ attr.slug }}" class="form-select form-select-sm" style="width: 100%;"
-                                onchange="this.form.submit()">
+                            <select name="{{ attr.slug }}" class="form-select form-select-sm" style="width: 100%;">
                                 <option value="">- Todos -</option>
                                 {% for opt in attr.options_list %}
                                 {% with current_val=active_filters|get_item:attr.slug %}
@@ -196,23 +177,17 @@
                                 {% endfor %}
                             </select>
                             {% else %}
-                            <input type="text" name="{{ attr.slug }}"
-                                value="{{ active_filters|get_item:attr.slug|default:'' }}"
-                                class="form-input form-input-sm" placeholder="Filtrar..." style="width: 100%;">
+                            <input type="text" name="{{ attr.slug }}" value="{{ active_filters|get_item:attr.slug|default:'' }}" class="form-input form-input-sm" placeholder="Filtrar..." style="width: 100%;">
                             {% endif %}
                         </div>
                         {% endfor %}
 
-                        <noscript>
-                            <button type="submit" class="btn btn-primary btn-sm btn-block mt-3" style="width: 100%;">
-                                Aplicar Filtros
-                            </button>
-                        </noscript>
+                        <button type="submit" class="btn btn-primary btn-sm btn-block mt-3" style="width: 100%;">
+                            Aplicar Filtros
+                        </button>
 
                         {% if active_filters %}
-                        <a href="?category={{ category_slug }}&q={{ search_query }}"
-                            class="btn btn-outline btn-sm btn-block mt-2"
-                            style="width: 100%; text-align: center; display: block;">
+                        <a href="?category={{ category_slug }}&q={{ search_query }}" class="btn btn-outline btn-sm btn-block mt-2" style="width: 100%; text-align: center; display: block;">
                             Limpiar Filtros
                         </a>
                         {% endif %}
@@ -227,8 +202,7 @@
                     <span class="result-count">
                         {{ page_obj.paginator.count }} productos encontrados
                     </span>
-                    <select name="order" class="form-select order-select"
-                        onchange="window.location.href='?order='+this.value+'&q={{ search_query }}&category={{ category_slug }}'">
+                    <select name="order" class="form-select order-select" onchange="window.location.href='?order='+this.value+'&q={{ search_query }}&category={{ category_slug }}'">
                         <option value="name" {% if order_by == 'name' %}selected{% endif %}>Nombre A-Z</option>
                         <option value="-name" {% if order_by == '-name' %}selected{% endif %}>Nombre Z-A</option>
                         <option value="price" {% if order_by == 'price' %}selected{% endif %}>Menor precio</option>
@@ -258,25 +232,12 @@
                             {% endif %}
 
                             {% if show_prices %}
-                            <div class="product-pricing-details">
+                            <div class="product-pricing">
                                 {% if discount %}
-                                <div class="price-row list-price">
-                                    <span class="label">Precio Lista:</span>
-                                    <span class="value">${{ product.price|floatformat:2 }}</span>
-                                </div>
-                                <div class="price-row discount-row">
-                                    <span class="label">Descuento:</span>
-                                    <span class="value">{{ discount|multiply:100|floatformat:0 }}% OFF</span>
-                                </div>
-                                <div class="price-row final-price">
-                                    <span class="label">Precio Final:</span>
-                                    <span class="value">${{ product.price|calculate_discount:discount|floatformat:2
-                                        }}</span>
-                                </div>
+                                <span class="price-original">${{ product.price|floatformat:2 }}</span>
+                                <span class="price-final">${{ product.price|calculate_discount:discount|floatformat:2 }}</span>
                                 {% else %}
-                                <div class="price-row final-price single-price">
-                                    <span class="value">${{ product.price|floatformat:2 }}</span>
-                                </div>
+                                <span class="price-final">${{ product.price|floatformat:2 }}</span>
                                 {% endif %}
                             </div>
                             {% else %}
@@ -301,8 +262,7 @@
                 {% if page_obj.paginator.num_pages > 1 %}
                 <nav class="pagination">
                     {% if page_obj.has_previous %}
-                    <a href="?page={{ page_obj.previous_page_number }}&q={{ search_query }}&category={{ category_slug }}&order={{ order_by }}"
-                        class="page-link">← Anterior</a>
+                    <a href="?page={{ page_obj.previous_page_number }}&q={{ search_query }}&category={{ category_slug }}&order={{ order_by }}" class="page-link">← Anterior</a>
                     {% endif %}
 
                     <span class="page-info">
@@ -310,8 +270,7 @@
                     </span>
 
                     {% if page_obj.has_next %}
-                    <a href="?page={{ page_obj.next_page_number }}&q={{ search_query }}&category={{ category_slug }}&order={{ order_by }}"
-                        class="page-link">Siguiente →</a>
+                    <a href="?page={{ page_obj.next_page_number }}&q={{ search_query }}&category={{ category_slug }}&order={{ order_by }}" class="page-link">Siguiente →</a>
                     {% endif %}
                 </nav>
                 {% endif %}
@@ -338,10 +297,6 @@
             });
             const data = await response.json();
             if (data.success) {
-                // Update cart badge
-                const badge = document.getElementById('cartBadge');
-                if (badge) badge.textContent = data.cart_count;
-
                 alert(data.message);
             } else {
                 alert('Error: ' + data.error);

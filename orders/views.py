@@ -197,3 +197,10 @@ def order_detail(request, order_id):
     order = get_object_or_404(Order, pk=order_id, user=request.user)
     
     return render(request, 'orders/order_detail.html', {'order': order})
+
+
+@login_required
+def cart_count(request):
+    """Get cart item count (AJAX)."""
+    cart, _ = Cart.objects.get_or_create(user=request.user)
+    return JsonResponse({'count': cart.get_item_count()})

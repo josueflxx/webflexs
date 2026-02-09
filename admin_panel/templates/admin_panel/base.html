@@ -9,7 +9,8 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{% static 'core/css/base.css' %}">
-    <link rel="stylesheet" href="{% static 'core/css/admin.css' %}?v=2">
+    <link rel="stylesheet" href="{% static 'core/css/admin.css' %}?v=3">
+    <link rel="stylesheet" href="{% static 'core/css/admin_right_sidebar.css' %}">
     {% block extra_css %}{% endblock %}
 </head>
 
@@ -115,6 +116,27 @@
                 {% block content %}{% endblock %}
             </div>
         </main>
+
+        <!-- Right Sidebar - Admin Activity -->
+        <aside class="admin-right-sidebar">
+            <div class="right-sidebar-header">
+                <h2>👥 Equipo Admin</h2>
+            </div>
+            <div class="admin-profiles">
+                {% for admin in active_admins %}
+                <div class="admin-profile {% if admin.activity.is_active %}active{% else %}inactive{% endif %}">
+                    <div class="admin-avatar">
+                        <span class="avatar-text">{{ admin.username|slice:":2"|upper }}</span>
+                        <span class="status-dot"></span>
+                    </div>
+                    <div class="admin-info">
+                        <div class="admin-username">{{ admin.username }}</div>
+                        <div class="admin-status">{% if admin.activity.is_active %}En línea{% else %}Desconectado{% endif %}</div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </aside>
     </div>
 
     <script src="{% static 'core/js/main.js' %}"></script>

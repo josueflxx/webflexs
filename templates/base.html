@@ -1,21 +1,25 @@
 {% load static %}
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="FLEXS - Repuestos de Elásticos en Argentina. Expertos en repuestos para industrias de transporte.">
+    <meta name="description"
+        content="FLEXS - Repuestos de Elásticos en Argentina. Expertos en repuestos para industrias de transporte.">
     <title>{% block title %}FLEXS - Repuestos de Elásticos{% endblock %}</title>
-    
+
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-    
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
+
     <!-- Base CSS -->
     <link rel="stylesheet" href="{% static 'core/css/base.css' %}">
     {% block extra_css %}{% endblock %}
 </head>
+
 <body>
     <!-- Header -->
     <header class="header">
@@ -46,14 +50,20 @@
                     <li><a href="{% url 'home' %}#contacto">Contacto</a></li>
                     <li class="nav-divider"></li>
                     {% if user.is_authenticated %}
-                        <li><a href="{% url 'catalog' %}" class="btn btn-outline">Ver Catálogo</a></li>
-                        {% if user.is_staff %}
-                            <li><a href="{% url 'admin_dashboard' %}" class="btn btn-primary">Panel Admin</a></li>
-                        {% endif %}
-                        <li><a href="{% url 'logout' %}" class="btn btn-ghost">Salir</a></li>
+                    <li><a href="{% url 'catalog' %}" class="btn btn-outline">Ver Catálogo</a></li>
+                    <li>
+                        <a href="{% url 'cart' %}" class="cart-link" id="cartLink">
+                            🛒 <span class="cart-badge" id="cartBadge">0</span>
+                        </a>
+                    </li>
+                    <li><a href="{% url 'order_list' %}">📋 Mis Pedidos</a></li>
+                    {% if user.is_staff %}
+                    <li><a href="{% url 'admin_dashboard' %}" class="btn btn-primary">Panel Admin</a></li>
+                    {% endif %}
+                    <li><a href="{% url 'logout' %}" class="btn btn-ghost">Salir</a></li>
                     {% else %}
-                        <li><a href="{% url 'catalog' %}" class="btn btn-outline">Ver Catálogo</a></li>
-                        <li><a href="{% url 'login' %}" class="btn btn-primary">Iniciar Sesión</a></li>
+                    <li><a href="{% url 'catalog' %}" class="btn btn-outline">Ver Catálogo</a></li>
+                    <li><a href="{% url 'login' %}" class="btn btn-primary">Iniciar Sesión</a></li>
                     {% endif %}
                 </ul>
             </div>
@@ -113,6 +123,26 @@
 
     <!-- JavaScript -->
     <script src="{% static 'core/js/main.js' %}"></script>
+    <script>
+        // Load cart count on page load
+        async function loadCartCount() {
+            const badge = document.getElementById('cartBadge');
+            if (!badge) return;
+
+            try {
+                const response = await fetch('/pedidos/carrito/count/');
+                if (response.ok) {
+                    const data = await response.json();
+                    badge.textContent = data.count;
+                }
+            } catch (e) {
+                console.error('Error loading cart count:', e);
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', loadCartCount);
+    </script>
     {% block extra_js %}{% endblock %}
 </body>
+
 </html>

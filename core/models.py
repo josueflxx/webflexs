@@ -65,3 +65,29 @@ class SiteSettings(models.Model):
 
     def __str__(self):
         return "Configuración del Sitio"
+
+
+class UserActivity(models.Model):
+    """Track user online/offline status."""
+    user = models.OneToOneField(
+        'auth.User',
+        on_delete=models.CASCADE,
+        related_name='activity'
+    )
+    last_activity = models.DateTimeField(auto_now=True)
+    is_online = models.BooleanField(default=False)
+    
+    class Meta:
+        verbose_name = "User Activity"
+        verbose_name_plural = "User Activities"
+    
+    def __str__(self):
+        return f"{self.user.username} - {'Online' if self.is_online else 'Offline'}"
+    
+    @property
+    def is_active(self):
+        """User is active if last activity was within 5 minutes."""
+        from django.utils import timezone
+        time_diff = timezone.now() - self.last_activity
+        return time_diff.total_seconds() < 300
+
