@@ -19,6 +19,7 @@ from orders.models import Order
 from core.models import SiteSettings
 from django.contrib.auth.models import User
 from admin_panel.forms.import_forms import ProductImportForm, ClientImportForm, CategoryImportForm
+from admin_panel.forms.category_forms import CategoryForm
 from catalog.services.product_importer import ProductImporter
 from accounts.services.client_importer import ClientImporter
 from catalog.services.category_importer import CategoryImporter
@@ -491,49 +492,44 @@ def category_list(request):
 
 
 @staff_member_required
+@staff_member_required
 def category_create(request):
     """Create category."""
-    parent_categories = Category.objects.filter(parent__isnull=True)
-    
     if request.method == 'POST':
-        name = request.POST.get('name', '').strip()
-        parent_id = request.POST.get('parent', '')
-        
-        if Category.objects.filter(name=name).exists():
-            messages.error(request, f'La categoría "{name}" ya existe.')
-        else:
-            Category.objects.create(
-                name=name,
-                parent_id=parent_id if parent_id else None,
-            )
-            messages.success(request, f'Categoría "{name}" creada.')
+        form = CategoryForm(request.POST)
+        if form.is_valid():
+            category = form.save()
+            messages.success(request, f'Categoría "{category.name}" creada.')
             return redirect('admin_category_list')
+    else:
+        form = CategoryForm()
     
     return render(request, 'admin_panel/categories/form.html', {
-        'parent_categories': parent_categories,
+        'form': form,
         'action': 'Crear',
     })
 
 
 @staff_member_required
+@staff_member_required
 def category_edit(request, pk):
     """Edit category."""
     category = get_object_or_404(Category, pk=pk)
-    parent_categories = Category.objects.filter(parent__isnull=True).exclude(pk=pk)
     
     if request.method == 'POST':
-        category.name = request.POST.get('name', '').strip()
-        parent_id = request.POST.get('parent', '')
-        category.parent_id = parent_id if parent_id else None
-        category.is_active = request.POST.get('is_active') == 'on'
-        category.save()
-        
-        messages.success(request, f'Categoría "{category.name}" actualizada.')
-        return redirect('admin_category_list')
+        form = CategoryForm(request.POST, instance=category)
+        if form.is_valid():
+            form.save()
+            messages.success(request, f'Categoría "{category.name}" actualizada.')
+            return redirect('admin_category_list')
+    else:
+        form = CategoryForm(instance=category)
+        # Exclude self from parents to avoid recursion
+        form.fields['parent'].queryset = Category.objects.exclude(pk=pk).order_by('name')
     
     return render(request, 'admin_panel/categories/form.html', {
-        'category': category,
-        'parent_categories': parent_categories,
+        'form': form,
+        'category': category, # Keep category in context for attributes links
         'action': 'Editar',
     })
 

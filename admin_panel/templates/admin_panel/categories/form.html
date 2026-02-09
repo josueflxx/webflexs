@@ -1,4 +1,4 @@
-﻿{% extends 'admin_panel/base.html' %}
+{% extends 'admin_panel/base.html' %}
 
 {% block page_title %}{{ action }} Categoría{% endblock %}
 
@@ -22,7 +22,7 @@
             <select name="parent" id="parent" class="form-select">
                 <option value="">-- Sin padre (categoría principal) --</option>
                 {% for cat in form.fields.parent.queryset %}
-                <option value="{{ cat.pk }}" {% if form.instance.parent_id==cat.pk %}selected{% endif %}>
+                <option value="{{ cat.pk }}" {% if form.instance.parent_id == cat.pk %}selected{% endif %}>
                     {{ cat.name }}
                 </option>
                 {% endfor %}
@@ -39,12 +39,20 @@
             <div class="error-feedback">{{ form.name.errors.0 }}</div>
             {% endif %}
         </div>
+        
+        <div class="form-group" style="margin-top: 15px;">
+            <label class="form-checkbox-label">
+                <input type="checkbox" name="is_active" {% if form.instance.is_active %}checked{% endif %}>
+                Categoría Activa
+            </label>
+            <small class="form-text text-muted">Las categorías inactivas no se muestran en el catálogo.</small>
+        </div>
 
         {% if action == 'Editar' %}
         <div class="attributes-section" style="margin-top: 30px; border-top: 1px solid #eee; padding-top: 20px;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
                 <h3 style="margin: 0;">Atributos de Categoría</h3>
-                <a href="{% url 'admin_attribute_create' form.instance.pk %}" class="btn btn-sm btn-outline">+ Nuevo
+                <a href="{% url 'admin_category_attribute_create' form.instance.pk %}" class="btn btn-sm btn-outline">+ Nuevo
                     Atributo</a>
             </div>
 
@@ -73,9 +81,9 @@
                             {% endif %}
                         </td>
                         <td class="actions">
-                            <a href="{% url 'admin_attribute_edit' attr.pk %}" class="btn btn-outline"
+                            <a href="{% url 'admin_category_attribute_edit' form.instance.pk attr.pk %}" class="btn btn-outline"
                                 title="Editar">✏️</a>
-                            <a href="{% url 'admin_attribute_delete' attr.pk %}" class="btn btn-danger-outline"
+                            <a href="{% url 'admin_category_attribute_delete' form.instance.pk attr.pk %}" class="btn btn-danger-outline"
                                 title="Eliminar">🗑️</a>
                         </td>
                     </tr>

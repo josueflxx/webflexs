@@ -120,12 +120,12 @@
                     let fieldHtml = `<div class="form-group" style="margin-bottom: 10px;">
                         <label class="form-label" style="font-size: 0.9em;">${attr.name}</label>`;
 
-                    if (attr.type = == 'select') {
+                    if (attr.type === 'select') {
                         const options = attr.options.split(',').map(o => o.trim());
                         fieldHtml += `<select name="attr_${attr.slug}" class="form-select attr-field" data-slug="${attr.slug}">
                             <option value="">- Seleccionar -</option>`;
                         options.forEach(opt => {
-                            const selected = existingValue = == opt ? 'selected' : '';
+                            const selected = existingValue === opt ? 'selected' : '';
                             fieldHtml += `<option value="${opt}" ${selected}>${opt}</option>`;
                         });
                         fieldHtml += `</select>`;

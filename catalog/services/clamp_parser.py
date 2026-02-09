@@ -34,20 +34,23 @@ class ClampParser:
             'S-CURVA': 'SEMICURVA',
             'S/C': 'SEMICURVA',
             'CURV.': 'CURVA',
+            'SC': 'SEMICURVA',  # Shortcut for Forjadas
         }
         
         for k, v in replacements.items():
-            text = text.replace(k, v)
+            # Use regex for whole word replacement to avoid partial matches if needed,
+            # but for SC/S/C usually direct replace is ok if normalized
+            # Let's be safer with word boundaries for SC
+            if k == 'SC':
+                text = re.sub(r'\bSC\b', v, text)
+            else:
+                text = text.replace(k, v)
             
         # 3. Espacios duplicados
         text = re.sub(r'\s+', ' ', text)
         
         # 4. Asegurar separadores claros para X (dimensiones)
         # "todo X rodeado de espacios -> X"
-        # Regex: cualquier espacio (o nada) seguido de X seguido de cualquier espacio (o nada)
-        # Se reemplaza por " X "
-        # Solo si la X parece ser un separador (está entre otras cosas, o dígitos)
-        # Para ser seguros segun requerimiento: "todo X rodeado de espacios"
         text = re.sub(r'\s*X\s*', ' X ', text)
         
         return text.strip()
@@ -79,8 +82,14 @@ class ClampParser:
         # PASO 3 – Detectar tipo de fabricación
         has_trefilada = 'TREFILADA' in text
         has_laminada = 'LAMINADA' in text
+        has_forjada = 'FORJADA' in text
         
-        if has_trefilada and has_laminada:
+        if has_forjada:
+             result['fabrication'] = 'FORJADA'
+             # If ambiguous with others
+             if has_trefilada or has_laminada:
+                 result['parse_warnings'].append("Ambigüedad: Detectadas FORJADA y otros tipos")
+        elif has_trefilada and has_laminada:
             # Ambiguno
             result['parse_warnings'].append("Ambigüedad: Detectadas ambas TREFILADA y LAMINADA")
             result['parse_confidence'] -= 20
@@ -92,41 +101,48 @@ class ClampParser:
             # Desconocido
             pass 
 
-        # PASO 4 – Detectar diámetro
-        # Regla: El diámetro siempre viene después de la palabra DE
-        # Buscar DE, leer token siguiente.
-        match_diam = re.search(r'\bDE\s+([\d/]+|\d+)', text)
-        if match_diam:
-            val = match_diam.group(1)
-            # Validar si es numero o fraccion (simple check)
-            if re.match(r'^[\d/]+$', val):
-                 result['diameter'] = val
-            else:
-                 result['parse_warnings'].append(f"Diámetro inválido detectado: {val}")
-        else:
-            result['diameter'] = None # Desconocido
-
-        # PASO 5 – Detectar ancho y largo
-        # Buscar todas las ocurrencias del patrón: X <número>
-        # (\sX\s)(\d+) -> el espacio ya fue normalizado a " X "
+        # PASO 3.5 - Compact Format Detection (DxWxL) typical in Forjadas
+        # Example: 18 X 82 X 220 -> Diam 18, Width 82, Length 220
+        # Format: Number(fraction?) X Number X Number
+        # Needs to closely precede or follow? Usually in middle.
         
-        # Find all " X number" patterns
-        # Note: \b is word boundary.
-        matches_dims = re.findall(r'\sX\s(\d+)', text)
+        # Regex for D x W x L
+        # ([\d/]+) \sX\s (\d+) \sX\s (\d+)
+        compact_match = re.search(r'([\d/]+)\sX\s(\d+)\sX\s(\d+)', text)
         
-        if len(matches_dims) >= 1:
-            # El primer número encontrado -> ancho
-            result['width'] = int(matches_dims[0])
+        if compact_match:
+            # Compact match found, likely forjada style
+            result['diameter'] = compact_match.group(1)
+            result['width'] = int(compact_match.group(2))
+            result['length'] = int(compact_match.group(3))
             
-            if len(matches_dims) >= 2:
-                # El segundo número encontrado -> largo
-                result['length'] = int(matches_dims[1])
-            else:
-                # Solo uno
-                result['parse_warnings'].append("Falta Largo (solo se encontró una medida X)")
+            # Skip standard steps 4 & 5 if we found this strong match
         else:
-            # Ninguno
-            pass
+            # PASO 4 – Detectar diámetro (Classic "DE ...")
+            # Regla: El diámetro siempre viene después de la palabra DE
+            # Buscar DE, leer token siguiente.
+            match_diam = re.search(r'\bDE\s+([\d/]+|\d+)', text)
+            if match_diam:
+                val = match_diam.group(1)
+                result['diameter'] = val
+            
+            # PASO 5 – Detectar ancho y largo
+            # Buscar todas las ocurrencias del patrón: X <número>
+            matches_dims = re.findall(r'\sX\s(\d+)', text)
+            
+            if len(matches_dims) >= 1:
+                # El primer número encontrado -> ancho
+                result['width'] = int(matches_dims[0])
+                
+                if len(matches_dims) >= 2:
+                    # El segundo número encontrado -> largo
+                    result['length'] = int(matches_dims[1])
+                else:
+                    # Solo uno
+                    result['parse_warnings'].append("Falta Largo (solo se encontró una medida X)")
+            else:
+                # Ninguno
+                pass
 
         # PASO 6 – Detectar tipo (forma)
         # Prioridad: SEMICURVA > CURVA > PLANA
@@ -145,6 +161,7 @@ class ClampParser:
         if not result['fabrication']:
              result['parse_warnings'].append("Falta: Fabricación")
         if not result['diameter']:
+             result['parse_warnings'].append("Falta: Diámetro")
              result['parse_warnings'].append("Falta: Diámetro")
         if not result['width']:
              result['parse_warnings'].append("Falta: Ancho")

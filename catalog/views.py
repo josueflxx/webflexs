@@ -50,36 +50,60 @@ def catalog(request):
                     active_filters[attr.slug] = val
                     
             # --- PHASE 4: Abrazaderas Special Filters ---
+            # --- PHASE 4: Abrazaderas Special Filters (Faceted) ---
             if 'ABRAZADERA' in current_category.name.upper():
-                clamp_filter_fields = ['fabrication', 'diameter', 'shape']
-                for field in clamp_filter_fields:
+                # Define managed fields
+                spec_fields = ['fabrication', 'diameter', 'width', 'length', 'shape']
+                
+                # Snapshot of products before specialized filters (but after generic category filters)
+                products_before_specs = products
+
+                # 1. Apply ALL active filters to the main 'products' queryset (for display)
+                for field in spec_fields:
                     val = request.GET.get(field, '').strip()
                     if val:
-                        filter_kwargs = {f"clamp_specs__{field}": val}
-                        products = products.filter(**filter_kwargs)
                         active_filters[field] = val
+                        if field in ['width', 'length']:
+                            try:
+                                products = products.filter(**{f"clamp_specs__{field}": int(val)})
+                            except ValueError:
+                                pass
+                        else:
+                            products = products.filter(**{f"clamp_specs__{field}": val})
                 
-                # Numeric filters (width, length) - optional, for now handles exact
-                for field in ['width', 'length']:
-                    val = request.GET.get(field, '').strip()
-                    if val:
-                        try:
-                            filter_kwargs = {f"clamp_specs__{field}": int(val)}
-                            products = products.filter(**filter_kwargs)
-                            active_filters[field] = val
-                        except ValueError:
-                            pass
+                # 2. Calculate available options (Facets)
+                # Logic: For each field, valid options are those available in products 
+                # filtered by ALL OTHER active filters (excluding itself).
+                clamp_options = {}
                 
-                # Get available options for these filters to show in UI
-                from .models import ClampSpecs
-                context_extra = {
-                    'clamp_options': {
-                        'fabrication': ClampSpecs.objects.filter(product__category=current_category).values_list('fabrication', flat=True).distinct().exclude(fabrication__isnull=True),
-                        'diameter': ClampSpecs.objects.filter(product__category=current_category).values_list('diameter', flat=True).distinct().exclude(diameter__isnull=True),
-                        'shape': ClampSpecs.objects.filter(product__category=current_category).values_list('shape', flat=True).distinct().exclude(shape__isnull=True),
-                    }
-                }
-                # I'll merge this into context later in the view logic
+                for field in spec_fields:
+                    # Start with base
+                    facet_qs = products_before_specs
+                    
+                    # Apply other filters
+                    for other_field in spec_fields:
+                        if other_field == field:
+                            continue # Skip self
+                        
+                        val = request.GET.get(other_field, '').strip()
+                        if val:
+                            if other_field in ['width', 'length']:
+                                try:
+                                    facet_qs = facet_qs.filter(**{f"clamp_specs__{other_field}": int(val)})
+                                except ValueError:
+                                    pass
+                            else:
+                                facet_qs = facet_qs.filter(**{f"clamp_specs__{other_field}": val})
+                    
+                    # Extract distinct values for this field from the faceted queryset
+                    # Use values_list traversing the relation
+                    field_lookup = f"clamp_specs__{field}"
+                    opts = facet_qs.values_list(field_lookup, flat=True).distinct().order_by(field_lookup)
+                    
+                    # Clean None/Empty
+                    clamp_options[field] = [o for o in opts if o]
+
+                context_extra = {'clamp_options': clamp_options}
             else:
                 context_extra = {}
     
