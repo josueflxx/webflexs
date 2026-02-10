@@ -1,0 +1,170 @@
+
+import os
+
+file_path = r'c:\Users\Brian\Desktop\webflexs\admin_panel\templates\admin_panel\base.html'
+
+content = """{% load static %}
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Panel Admin{% endblock %} - FLEXS</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{% static 'core/css/base.css' %}">
+    <link rel="stylesheet" href="{% static 'core/css/admin.css' %}?v=3">
+    <link rel="stylesheet" href="{% static 'core/css/admin_right_sidebar.css' %}">
+    {% block extra_css %}{% endblock %}
+</head>
+
+<body class="admin-body">
+    <div class="admin-layout">
+        <!-- Sidebar -->
+        <aside class="admin-sidebar">
+            <div class="sidebar-header">
+                <a href="{% url 'admin_dashboard' %}" class="sidebar-logo">
+                    <span>FLEXS</span>
+                    <small>Admin</small>
+                </a>
+            </div>
+
+            <nav class="sidebar-nav">
+                <a href="{% url 'admin_dashboard' %}"
+                    class="nav-item {% if request.resolver_match.url_name == 'admin_dashboard' %}active{% endif %}">
+                    <span class="nav-icon">📊</span>
+                    Dashboard
+                </a>
+
+                <div class="nav-section">Catálogo</div>
+                <a href="{% url 'admin_product_list' %}"
+                    class="nav-item {% if 'product' in request.resolver_match.url_name %}active{% endif %}">
+                    <span class="nav-icon">📦</span>
+                    Productos
+                </a>
+                <a href="{% url 'admin_category_list' %}"
+                    class="nav-item {% if 'category' in request.resolver_match.url_name %}active{% endif %}">
+                    <span class="nav-icon">📁</span>
+                    Categorías
+                </a>
+
+                <div class="nav-section">Clientes</div>
+                <a href="{% url 'admin_client_list' %}"
+                    class="nav-item {% if 'client' in request.resolver_match.url_name %}active{% endif %}">
+                    <span class="nav-icon">👥</span>
+                    Clientes
+                </a>
+                <a href="{% url 'admin_request_list' %}"
+                    class="nav-item {% if 'request' in request.resolver_match.url_name %}active{% endif %}">
+                    <span class="nav-icon">📝</span>
+                    Solicitudes
+                </a>
+
+                <div class="nav-section">Ventas</div>
+                <a href="{% url 'admin_order_list' %}"
+                    class="nav-item {% if 'order' in request.resolver_match.url_name %}active{% endif %}">
+                    <span class="nav-icon">🛒</span>
+                    Pedidos
+                </a>
+
+                {% if user.is_superuser %}
+                <div class="nav-section">Herramientas</div>
+                <a href="{% url 'admin_import_dashboard' %}"
+                    class="nav-item {% if 'import' in request.resolver_match.url_name %}active{% endif %}">
+                    <span class="nav-icon">📥</span>
+                    Importar
+                </a>
+                {% endif %}
+
+                <div class="nav-section">Sistema</div>
+                {% if user.is_superuser %}
+                <a href="{% url 'admin_settings' %}"
+                    class="nav-item {% if 'settings' in request.resolver_match.url_name %}active{% endif %}">
+                    <span class="nav-icon">⚙️</span>
+                    Configuración
+                </a>
+                {% endif %}
+                <a href="{% url 'catalog' %}" class="nav-item" target="_blank">
+                    <span class="nav-icon">🌐</span>
+                    Ver Catálogo
+                </a>
+            </nav>
+
+            <div class="sidebar-footer">
+                <a href="{% url 'logout' %}" class="nav-item logout">
+                    <span class="nav-icon">🚪</span>
+                    Cerrar Sesión
+                </a>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="admin-main">
+            <header class="admin-header">
+                <div class="header-title">
+                    <h1>{% block page_title %}Dashboard{% endblock %}</h1>
+                </div>
+                <div class="header-user">
+                    <span>{{ user.first_name|default:user.username }}</span>
+                </div>
+            </header>
+
+            {% if messages %}
+            <div class="admin-messages">
+                {% for message in messages %}
+                <div class="alert alert-{{ message.tags }}">
+                    {{ message }}
+                    <button class="alert-close" onclick="this.parentElement.remove()">&times;</button>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            <div class="admin-content">
+                {% block content %}{% endblock %}
+            </div>
+        </main>
+
+        <!-- Right Sidebar - Admin Activity -->
+        <aside class="admin-right-sidebar">
+            <div class="right-sidebar-header">
+                <h2>👥 Equipo Admin</h2>
+            </div>
+            <div class="admin-profiles">
+                {% for admin in active_admins %}
+                <div class="admin-profile {% if admin.activity.is_active %}active{% else %}inactive{% endif %}">
+                    <div class="admin-avatar">
+                        <span class="avatar-text">{{ admin.username|slice:":2"|upper }}</span>
+                        <span class="status-dot"></span>
+                    </div>
+                    <div class="admin-info">
+                        <div class="admin-username">{{ admin.username }}</div>
+                        <div class="admin-status">{% if admin.activity.is_active %}En línea{% else %}Desconectado{% endif %}</div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </aside>
+    </div>
+
+    <script src="{% static 'core/js/main.js' %}"></script>
+    {% block extra_js %}{% endblock %}
+</body>
+
+</html>
+"""
+
+with open(file_path, 'w', encoding='utf-8') as f:
+    f.write(content)
+
+print(f"File FORCE OVERWRITTEN: {file_path}")
+
+# Verify
+with open(file_path, 'r', encoding='utf-8') as f:
+    read_content = f.read()
+
+if "{% if admin.activity.is_active %}En línea{% else %}Desconectado{% endif %}" in read_content:
+    print("VERIFICATION SUCCESS: Status tag joined correctly")
+else:
+    print("VERIFICATION FAILED: Status tag still split or incorrect")
