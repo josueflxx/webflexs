@@ -49,6 +49,11 @@ def login_redirect(request):
 
 def logout_view(request):
     """User logout view."""
+    # Mark user as offline before destroying session
+    if request.user.is_authenticated and request.user.is_staff:
+        from core.models import UserActivity
+        UserActivity.objects.filter(user=request.user).update(is_online=False)
+    
     logout(request)
     messages.info(request, 'Has cerrado sesión.')
     return redirect('home')

@@ -86,8 +86,10 @@ class UserActivity(models.Model):
     
     @property
     def is_active(self):
-        """User is active if last activity was within 5 minutes."""
+        """User is active if marked online AND last activity was within 5 minutes."""
         from django.utils import timezone
+        if not self.is_online:
+            return False
         time_diff = timezone.now() - self.last_activity
         return time_diff.total_seconds() < 300
 
