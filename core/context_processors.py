@@ -15,10 +15,16 @@ def active_admins(request):
     """Add list of active admin users to all templates."""
     from django.contrib.auth.models import User
     if request.user.is_authenticated and request.user.is_staff:
-        # Only show these 4 specific admin accounts
-        admin_usernames = ['josueflexs', 'fedeflexs', 'ricardoroces', 'brianroces']
+        # Show all staff members (Admins + Operators)
+        # We filter by is_staff=True to include Operators
+        # Exclude specific testing accounts as requested
+        excluded_usernames = ['admin', 'admin_tester']
+        
         admins = User.objects.filter(
-            username__in=admin_usernames
+            is_staff=True,
+            is_active=True
+        ).exclude(
+            username__in=excluded_usernames
         ).select_related('activity').order_by('username')
         return {'active_admins': admins}
     return {}

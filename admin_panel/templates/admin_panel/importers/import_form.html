@@ -93,8 +93,7 @@
                 body: formData,
                 headers: {
                     'X-Requested-With': 'XMLHttpRequest'
-                }
-            });
+                } });
 
             const data = await response.json();
 
@@ -105,8 +104,7 @@
                 alert('Error al iniciar: ' + data.error);
                 form.style.display = 'block';
                 progressContainer.style.display = 'none';
-            }
-        } catch (error) {
+            } } catch (error) {
             console.error(error);
             alert('Error de conexión');
         }
@@ -141,11 +139,9 @@
                         progressStatus.innerText = 'Falló';
                         progressBar.style.backgroundColor = '#dc3545';
                         alert('Error: ' + status.message);
-                    }
-                } catch (err) {
+                    } } catch (err) {
                     console.error(err);
-                }
-            }, 1000);
+                } }, 1000);
         }
 
         function showResult(result) {
@@ -167,8 +163,7 @@
                 });
                 errorHtml += '</ul>';
                 document.getElementById('errorZone').innerHTML = errorHtml;
-            }
-        }
+            } }
     });
 </script>
 {% endblock %}

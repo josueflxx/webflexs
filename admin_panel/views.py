@@ -4,6 +4,7 @@ Admin Panel views - Custom admin interface.
 from django.shortcuts import render, redirect, get_object_or_404
 from django.urls import reverse
 from django.contrib.admin.views.decorators import staff_member_required
+from django.contrib.auth.decorators import user_passes_test
 from django.contrib.auth.forms import SetPasswordForm
 from django.contrib import messages
 from django.core.paginator import Paginator
@@ -457,9 +458,26 @@ def order_detail(request, pk):
     })
 
 
+@staff_member_required
+def order_delete(request, pk):
+    """Delete single order."""
+    order = get_object_or_404(Order, pk=pk)
+    
+    if request.method == 'POST':
+        pk_display = order.pk
+        order.delete()
+        messages.success(request, f'Pedido #{pk_display} eliminado.')
+        return redirect('admin_order_list')
+        
+    return render(request, 'admin_panel/delete_confirm.html', {
+        'object': f"Pedido #{order.pk} (Cliente: {order.user.username if order.user else 'Anonimo'})",
+        'cancel_url': reverse('admin_order_detail', args=[pk])
+    })
+
+
 # ===================== SETTINGS =====================
 
-@staff_member_required
+@user_passes_test(lambda u: u.is_superuser)
 def settings_view(request):
     """Site settings management."""
     settings = SiteSettings.get_settings()
@@ -712,12 +730,12 @@ def import_status(request, task_id):
         return JsonResponse({'status': 'unknown'}, status=404)
     return JsonResponse(status)
 
-@staff_member_required
+@user_passes_test(lambda u: u.is_superuser)
 def import_dashboard(request):
     """Import dashboard / hub."""
     return render(request, 'admin_panel/importers/dashboard.html')
 
-@staff_member_required
+@user_passes_test(lambda u: u.is_superuser)
 def import_process(request, import_type):
     """Handle file upload and processing for imports."""
     if import_type == 'products':

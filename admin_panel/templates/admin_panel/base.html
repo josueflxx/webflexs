@@ -63,19 +63,23 @@
                     Pedidos
                 </a>
 
+                {% if user.is_superuser %}
                 <div class="nav-section">Herramientas</div>
                 <a href="{% url 'admin_import_dashboard' %}"
                     class="nav-item {% if 'import' in request.resolver_match.url_name %}active{% endif %}">
                     <span class="nav-icon">📥</span>
                     Importar
                 </a>
+                {% endif %}
 
                 <div class="nav-section">Sistema</div>
+                {% if user.is_superuser %}
                 <a href="{% url 'admin_settings' %}"
                     class="nav-item {% if 'settings' in request.resolver_match.url_name %}active{% endif %}">
                     <span class="nav-icon">⚙️</span>
                     Configuración
                 </a>
+                {% endif %}
                 <a href="{% url 'catalog' %}" class="nav-item" target="_blank">
                     <span class="nav-icon">🌐</span>
                     Ver Catálogo

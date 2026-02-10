@@ -22,10 +22,18 @@ def cart_view(request):
     if hasattr(request.user, 'client_profile'):
         discount = request.user.client_profile.get_discount_decimal()
     
+    # Calculate totals
+    subtotal = cart.get_total()
+    discount_amount = subtotal * discount
+    total = subtotal - discount_amount
+    
     context = {
         'cart': cart,
         'discount': discount,
         'discount_display': discount * 100,
+        'subtotal': subtotal,
+        'discount_amount': discount_amount,
+        'total': total,
     }
     
     return render(request, 'orders/cart.html', context)

@@ -35,7 +35,7 @@
             <select name="category" id="category" class="form-select" onchange="loadCategoryAttributes(this.value)">
                 <option value="">Sin categoría</option>
                 {% for cat in categories %}
-                <option value="{{ cat.pk }}" {% if product.category_id==cat.pk %}selected{% endif %}>{{ cat.name }}
+                <option value="{{ cat.pk }}" {% if product.category_id == cat.pk %}selected{% endif %}>{{ cat.name }}
                 </option>
                 {% endfor %}
             </select>
@@ -145,11 +145,9 @@
             } else {
                 container.style.display = 'none';
                 fieldsContainer.innerHTML = '';
-            }
-        } catch (error) {
+            } } catch (error) {
             console.error('Error loading attributes:', error);
-        }
-    }
+        } }
 
     async function autoDetectAttributes() {
         const categoryId = document.getElementById('category').value;
@@ -191,25 +189,21 @@
                         // Use a distinct color to show it was auto-detected
                         field.style.borderColor = '#2ecc71';
                         foundAny = true;
-                    }
-                });
+                    } });
 
                 if (foundAny) {
                     // alert('Atributos detectados y completados.');
                 } else {
                     alert('No se encontraron coincidencias con los patrones definidos.');
-                }
-            } else {
+                } } else {
                 alert('Error: ' + (data.error || 'Desconocido'));
-            }
-        } catch (error) {
+            } } catch (error) {
             console.error('Error parsing description:', error);
             alert('Error al conectar con el servidor.');
         } finally {
             btn.disabled = false;
             btn.innerHTML = 'âœ¨ Auto-detectar desde Descripción';
-        }
-    }
+        } }
 
     function collectAttributes() {
         const fields = document.querySelectorAll('.attr-field');
@@ -218,8 +212,7 @@
         fields.forEach(field => {
             if (field.value) {
                 attributes[field.dataset.slug] = field.value;
-            }
-        });
+            } });
 
         document.getElementById('attributes_json').value = JSON.stringify(attributes);
     }

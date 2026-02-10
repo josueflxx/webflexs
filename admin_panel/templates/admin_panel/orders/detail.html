@@ -29,11 +29,9 @@
                 <strong>Fecha:</strong> {{ order.created_at|date:"d/m/Y H:i" }}<br>
                 <strong>Subtotal:</strong> ${{ order.subtotal|floatformat:2 }}<br>
                 {% if order.discount_percentage %}
-                <strong>Descuento ({{ order.discount_percentage|floatformat:0 }}%):</strong> -${{
-                order.discount_amount|floatformat:2 }}<br>
+                <strong>Descuento ({{ order.discount_percentage|floatformat:0 }}%):</strong> -${{ order.discount_amount|floatformat:2 }}<br>
                 {% endif %}
-                <strong>Total:</strong> <span style="font-size: 1.25rem; color: var(--color-primary);">${{
-                    order.total|floatformat:2 }}</span>
+                <strong>Total:</strong> <span style="font-size: 1.25rem; color: var(--color-primary);">${{ order.total|floatformat:2 }}</span>
             </p>
         </div>
     </div>
@@ -82,8 +80,9 @@
         <button type="submit" class="btn btn-primary">Actualizar Estado</button>
     </form>
 
-    <div class="form-actions">
+    <div class="form-actions" style="display: flex; justify-content: space-between; align-items: center;">
         <a href="{% url 'admin_order_list' %}" class="btn btn-outline">← Volver a Pedidos</a>
+        <a href="{% url 'admin_order_delete' order.pk %}" class="btn btn-danger" style="background-color: #dc3545; color: white; border: none;">Eliminar Pedido</a>
     </div>
 </div>
 {% endblock %}
