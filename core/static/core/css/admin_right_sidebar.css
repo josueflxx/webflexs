@@ -35,22 +35,29 @@
 
 /* Sidebar Toggle Buttons */
 .sidebar-toggle-btn {
-    background: transparent;
-    border: none;
-    color: var(--color-gray-light);
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: var(--color-white);
     cursor: pointer;
-    padding: 5px;
-    font-size: 1.2rem;
+    padding: 8px 12px;
+    font-size: 1.4rem;
     display: flex;
     align-items: center;
     justify-content: center;
-    border-radius: var(--radius-sm);
-    transition: all 0.2s;
+    border-radius: var(--radius-md);
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    line-height: 1;
+    z-index: 110;
 }
 
 .sidebar-toggle-btn:hover {
-    color: var(--color-white);
-    background: rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.15);
+    border-color: var(--color-primary);
+    transform: scale(1.05);
+}
+
+.sidebar-toggle-btn:active {
+    transform: scale(0.95);
 }
 
 .sidebar-show-btn {
@@ -58,17 +65,21 @@
     top: 50%;
     right: 0;
     transform: translateY(-50%);
-    background: var(--color-secondary);
+    background: var(--color-primary);
     color: var(--color-white);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-right: none;
-    padding: 15px 8px;
+    border: none;
+    padding: 20px 10px;
     border-radius: var(--radius-lg) 0 0 var(--radius-lg);
     cursor: pointer;
-    z-index: 90;
+    z-index: 200;
     display: none;
-    transition: all 0.2s;
-    box-shadow: -2px 0 10px rgba(0, 0, 0, 0.2);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: -4px 0 15px rgba(0, 0, 0, 0.3);
+}
+
+.sidebar-show-btn span {
+    font-size: 1.2rem;
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
 }
 
 .sidebar-show-btn:hover {
@@ -180,22 +191,25 @@
     transition: margin-right 0.3s ease;
 }
 
-/* When collapsed, remove margin */
-.admin-layout.sidebar-collapsed .admin-main {
-    margin-right: 0;
-}
-
 /* Mobile Adjustments */
 @media (max-width: 1024px) {
     .admin-main {
         margin-right: 0;
     }
 
-    .admin-right-sidebar:not(.expanded) {
-        transform: translateX(100%);
+    .admin-right-sidebar {
+        z-index: 1000;
+        /* Mobile default is effectively out of view unless .collapsed class is removed */
     }
 
-    .admin-layout:not(.sidebar-collapsed) .sidebar-show-btn {
+    /* On mobile, if we are NOT collapsed, the sidebar should show */
+    .admin-layout:not(.sidebar-collapsed) .admin-right-sidebar {
+        transform: translateX(0);
+        box-shadow: -10px 0 30px rgba(0, 0, 0, 0.5);
+    }
+
+    /* Ensure show button is visible if logic dictates (collapsed) */
+    .admin-layout.sidebar-collapsed .sidebar-show-btn {
         display: block;
     }
 }
