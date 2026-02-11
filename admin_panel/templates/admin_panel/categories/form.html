@@ -19,7 +19,7 @@
 
         <div class="form-group">
             <label for="parent" class="form-label">Categoría Padre (opcional)</label>
-            <select name="parent" id="parent" class="form-select">
+            <select name="parent" id="parent" class="form-select" {% if not user.is_superuser %}disabled{% endif %}>
                 <option value="">-- Sin padre (categoría principal) --</option>
                 {% for cat in form.fields.parent.queryset %}
                 <option value="{{ cat.pk }}" {% if form.instance.parent_id == cat.pk %}selected{% endif %}>
@@ -34,15 +34,15 @@
 
         <div class="form-group">
             <label for="name" class="form-label">Nombre</label>
-            <input type="text" name="name" id="name" class="form-input" value="{{ form.instance.name|default:'' }}">
+            <input type="text" name="name" id="name" class="form-input" value="{{ form.instance.name|default:'' }}" {% if not user.is_superuser %}disabled{% endif %}>
             {% if form.name.errors %}
             <div class="error-feedback">{{ form.name.errors.0 }}</div>
             {% endif %}
         </div>
-        
+
         <div class="form-group" style="margin-top: 15px;">
             <label class="form-checkbox-label">
-                <input type="checkbox" name="is_active" {% if form.instance.is_active %}checked{% endif %}>
+                <input type="checkbox" name="is_active" {% if form.instance.is_active %}checked{% endif %} {% if not user.is_superuser %}disabled{% endif %}>
                 Categoría Activa
             </label>
             <small class="form-text text-muted">Las categorías inactivas no se muestran en el catálogo.</small>
@@ -52,8 +52,10 @@
         <div class="attributes-section" style="margin-top: 30px; border-top: 1px solid #eee; padding-top: 20px;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
                 <h3 style="margin: 0;">Atributos de Categoría</h3>
-                <a href="{% url 'admin_category_attribute_create' form.instance.pk %}" class="btn btn-sm btn-outline">+ Nuevo
-                    Atributo</a>
+                {% if user.is_superuser %}
+                <a href="{% url 'admin_category_attribute_create' form.instance.pk %}" class="btn btn-sm btn-outline">+
+                    Nuevo Atributo</a>
+                {% endif %}
             </div>
 
             {% if form.instance.attributes.exists %}
@@ -81,10 +83,15 @@
                             {% endif %}
                         </td>
                         <td class="actions">
-                            <a href="{% url 'admin_category_attribute_edit' form.instance.pk attr.pk %}" class="btn btn-outline"
-                                title="Editar">✏️</a>
-                            <a href="{% url 'admin_category_attribute_delete' form.instance.pk attr.pk %}" class="btn btn-danger-outline"
-                                title="Eliminar">🗑️</a>
+                            <a href="{% url 'admin_category_attribute_edit' form.instance.pk attr.pk %}"
+                                class="btn btn-outline"
+                                title="{% if user.is_superuser %}Editar{% else %}Ver{% endif %}">
+                                {% if user.is_superuser %}✏️{% else %}👁️{% endif %}
+                            </a>
+                            {% if user.is_superuser %}
+                            <a href="{% url 'admin_category_attribute_delete' form.instance.pk attr.pk %}"
+                                class="btn btn-danger-outline" title="Eliminar">🗑️</a>
+                            {% endif %}
                         </td>
                     </tr>
                     {% endfor %}
@@ -99,8 +106,12 @@
         {% endif %}
 
         <div class="form-actions">
-            <a href="{% url 'admin_category_list' %}" class="btn btn-outline">Cancelar</a>
+            {% if user.is_superuser %}
             <button type="submit" class="btn btn-primary">Guardar Categoría</button>
+            {% else %}
+            <button type="button" class="btn btn-primary" disabled title="Solo lectura">Solo Lectura</button>
+            {% endif %}
+            <a href="{% url 'admin_category_list' %}" class="btn btn-outline">Cancelar</a>
         </div>
     </form>
 </div>

@@ -7,8 +7,10 @@
     <div class="admin-toolbar">
         <span>Gestión de Categorías</span>
         <div class="toolbar-actions">
+            {% if user.is_superuser %}
             <button type="button" class="btn btn-danger" onclick="openDeleteModal()">Eliminar Todas</button>
             <a href="{% url 'admin_category_create' %}" class="btn btn-primary">+ Nueva Categoría</a>
+            {% endif %}
         </div>
     </div>
 
@@ -76,9 +78,14 @@
                     {% endif %}
                 </td>
                 <td class="actions">
-                    <a href="{% url 'admin_category_edit' category.pk %}" class="btn btn-outline" title="Editar">✏️</a>
+                    <a href="{% url 'admin_category_edit' category.pk %}" class="btn btn-outline"
+                        title="{% if user.is_superuser %}Editar{% else %}Ver{% endif %}">
+                        {% if user.is_superuser %}✏️{% else %}👁️{% endif %}
+                    </a>
+                    {% if user.is_superuser %}
                     <a href="{% url 'admin_category_delete' category.pk %}" class="btn btn-danger-outline"
                         title="Eliminar">🗑️</a>
+                    {% endif %}
                 </td>
             </tr>
             {% for child in category.children.all %}
@@ -94,7 +101,10 @@
                     {% endif %}
                 </td>
                 <td class="actions">
-                    <a href="{% url 'admin_category_edit' child.pk %}" class="btn btn-outline">Editar</a>
+                    <a href="{% url 'admin_category_edit' child.pk %}" class="btn btn-outline"
+                        title="{% if user.is_superuser %}Editar{% else %}Ver{% endif %}">
+                        {% if user.is_superuser %}Editar{% else %}Ver{% endif %}
+                    </a>
                 </td>
             </tr>
             {% endfor %}

@@ -11,7 +11,9 @@
             <button type="submit" class="btn btn-primary">Buscar</button>
         </form>
         <div class="toolbar-actions">
+            {% if user.is_superuser %}
             <button type="button" class="btn btn-danger" onclick="openDeleteModal()">Eliminar Todos</button>
+            {% endif %}
         </div>
     </div>
 
@@ -76,13 +78,18 @@
                     {% endif %}
                 </td>
                 <td class="actions">
-                    <a href="{% url 'admin_client_edit' client.pk %}" class="btn btn-outline" title="Editar">✏️</a>
+                    <a href="{% url 'admin_client_edit' client.pk %}" class="btn btn-outline"
+                        title="{% if user.is_superuser %}Editar{% else %}Ver{% endif %}">
+                        {% if user.is_superuser %}✏️{% else %}👁️{% endif %}
+                    </a>
+                    {% if user.is_superuser %}
                     {% if client.user %}
                     <a href="{% url 'admin_client_password' client.pk %}" class="btn btn-warning-outline"
                         title="Cambiar Contraseña">🔑</a>
                     {% endif %}
                     <a href="{% url 'admin_client_delete' client.pk %}" class="btn btn-danger-outline"
                         title="Eliminar">🗑️</a>
+                    {% endif %}
                 </td>
             </tr>
             {% empty %}

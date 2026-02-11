@@ -28,6 +28,7 @@ from catalog.services.abrazadera_importer import AbrazaderaImporter
 from core.services.import_manager import ImportTaskManager
 import threading
 import traceback
+from core.decorators import superuser_required_for_modifications
 
 
 @staff_member_required
@@ -98,6 +99,7 @@ def product_list(request):
 
 
 @staff_member_required
+@superuser_required_for_modifications
 def product_create(request):
     """Create new product."""
     categories = Category.objects.filter(is_active=True)
@@ -135,6 +137,7 @@ def product_create(request):
 
 
 @staff_member_required
+@superuser_required_for_modifications
 def product_edit(request, pk):
     """Edit existing product."""
     product = get_object_or_404(Product, pk=pk)
@@ -175,6 +178,7 @@ def product_edit(request, pk):
 
 
 @staff_member_required
+@superuser_required_for_modifications
 def product_delete(request, pk):
     """Delete single product."""
     product = get_object_or_404(Product, pk=pk)
@@ -193,6 +197,7 @@ def product_delete(request, pk):
 
 @staff_member_required
 @require_POST
+@superuser_required_for_modifications
 def product_toggle_active(request):
     """Toggle product active status (AJAX)."""
     try:
@@ -212,6 +217,7 @@ def product_toggle_active(request):
 
 @staff_member_required
 @require_POST
+@superuser_required_for_modifications
 def product_bulk_category_update(request):
     """Bulk update product categories."""
     try:
@@ -263,6 +269,7 @@ def client_list(request):
 
 
 @staff_member_required
+@superuser_required_for_modifications
 def client_edit(request, pk):
     """Edit client profile."""
     client = get_object_or_404(ClientProfile, pk=pk)
@@ -285,6 +292,7 @@ def client_edit(request, pk):
 
 
 @staff_member_required
+@superuser_required_for_modifications
 def client_password_change(request, pk):
     """Change client password."""
     client = get_object_or_404(ClientProfile, pk=pk)
@@ -308,6 +316,7 @@ def client_password_change(request, pk):
 
 
 @staff_member_required
+@superuser_required_for_modifications
 def client_delete(request, pk):
     """Delete single client."""
     client = get_object_or_404(ClientProfile, pk=pk)
@@ -348,6 +357,7 @@ def request_list(request):
 
 
 @staff_member_required
+@superuser_required_for_modifications
 def request_approve(request, pk):
     """Approve account request and create user."""
     account_request = get_object_or_404(AccountRequest, pk=pk)
@@ -398,6 +408,7 @@ def request_approve(request, pk):
 
 @staff_member_required
 @require_POST
+@superuser_required_for_modifications
 def request_reject(request, pk):
     """Reject account request."""
     account_request = get_object_or_404(AccountRequest, pk=pk)
@@ -440,6 +451,7 @@ def order_list(request):
 
 
 @staff_member_required
+@superuser_required_for_modifications
 def order_detail(request, pk):
     """Order detail and status management."""
     order = get_object_or_404(Order.objects.prefetch_related('items'), pk=pk)
@@ -459,6 +471,7 @@ def order_detail(request, pk):
 
 
 @staff_member_required
+@superuser_required_for_modifications
 def order_delete(request, pk):
     """Delete single order."""
     order = get_object_or_404(Order, pk=pk)
@@ -510,7 +523,7 @@ def category_list(request):
 
 
 @staff_member_required
-@staff_member_required
+@superuser_required_for_modifications
 def category_create(request):
     """Create category."""
     if request.method == 'POST':
@@ -529,7 +542,7 @@ def category_create(request):
 
 
 @staff_member_required
-@staff_member_required
+@superuser_required_for_modifications
 def category_edit(request, pk):
     """Edit category."""
     category = get_object_or_404(Category, pk=pk)
@@ -553,6 +566,7 @@ def category_edit(request, pk):
 
 
 @staff_member_required
+@superuser_required_for_modifications
 def category_delete(request, pk):
     """Delete single category."""
     category = get_object_or_404(Category, pk=pk)
@@ -570,6 +584,7 @@ def category_delete(request, pk):
 
 
 @staff_member_required
+@superuser_required_for_modifications
 def category_attribute_create(request, category_id):
     """Create new category attribute."""
     category = get_object_or_404(Category, pk=category_id)
@@ -608,6 +623,7 @@ def category_attribute_create(request, category_id):
 
 
 @staff_member_required
+@superuser_required_for_modifications
 def category_attribute_edit(request, category_id, attribute_id):
     """Edit existing category attribute."""
     category = get_object_or_404(Category, pk=category_id)
@@ -642,6 +658,7 @@ def category_attribute_edit(request, category_id, attribute_id):
 
 
 @staff_member_required
+@superuser_required_for_modifications
 def category_attribute_delete(request, category_id, attribute_id):
     """Delete a category attribute."""
     category = get_object_or_404(Category, pk=category_id)

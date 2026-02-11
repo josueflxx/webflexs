@@ -68,10 +68,12 @@
     </table>
 
     <h4>Cambiar Estado</h4>
+    {% if user.is_superuser %}
     <form method="post" style="display: flex; gap: 1rem; align-items: flex-end;">
         {% csrf_token %}
         <div class="form-group" style="margin: 0; flex: 1;">
-            <select name="status" class="form-select">
+            <label for="status_select" class="form-label">Estado:</label>
+            <select name="status" id="status_select" class="form-select">
                 {% for value, label in status_choices %}
                 <option value="{{ value }}" {% if order.status == value %}selected{% endif %}>{{ label }}</option>
                 {% endfor %}
@@ -79,10 +81,21 @@
         </div>
         <button type="submit" class="btn btn-primary">Actualizar Estado</button>
     </form>
+    {% else %}
+    <div class="alert alert-info">
+        Estado actual: <strong>{{ order.get_status_display }}</strong>. Solo el administrador principal puede cambiar el
+        estado.
+    </div>
+    {% endif %}
 
-    <div class="form-actions" style="display: flex; justify-content: space-between; align-items: center;">
+    <div class="form-actions" style="display: flex; justify-content: space-between; align-items: center; margin-top: 2rem;">
         <a href="{% url 'admin_order_list' %}" class="btn btn-outline">← Volver a Pedidos</a>
-        <a href="{% url 'admin_order_delete' order.pk %}" class="btn btn-danger" style="background-color: #dc3545; color: white; border: none;">Eliminar Pedido</a>
+        {% if user.is_superuser %}
+        <form method="post" action="{% url 'admin_order_delete' order.pk %}" onsubmit="return confirm('¿Estás seguro de que deseas eliminar este pedido? Esta acción no se puede deshacer.');">
+             {% csrf_token %}
+            <button type="submit" class="btn btn-danger" style="background-color: #dc3545; color: white; border: none;">Eliminar Pedido</button>
+        </form>
+        {% endif %}
     </div>
 </div>
 {% endblock %}

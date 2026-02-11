@@ -34,6 +34,7 @@
             <button type="submit" class="btn btn-primary">Filtrar</button>
         </form>
         <div class="toolbar-actions" style="display: flex; gap: 10px; align-items: center;">
+            {% if user.is_superuser %}
             <form id="bulkCategoryForm" method="post" action="{% url 'admin_product_bulk_category' %}"
                 style="display: flex; gap: 5px;" onsubmit="return validateBulkAction()">
                 {% csrf_token %}
@@ -48,6 +49,7 @@
             <div style="width: 1px; height: 30px; background: #ddd; margin: 0 5px;"></div>
             <button type="button" class="btn btn-danger" onclick="openDeleteModal()">Eliminar Todos</button>
             <a href="{% url 'admin_product_create' %}" class="btn btn-primary">+ Nuevo Producto</a>
+            {% endif %}
         </div>
     </div>
 
@@ -88,7 +90,8 @@
                 btn.removeAttribute('disabled');
             } else {
                 btn.setAttribute('disabled', 'true');
-            } }
+            }
+        }
 
         // Bulk Action Logic
         function toggleSelectAll() {
@@ -105,7 +108,8 @@
                 btn.removeAttribute('disabled');
             } else {
                 btn.setAttribute('disabled', 'true');
-            } }
+            }
+        }
 
         function validateBulkAction() {
             const form = document.getElementById('bulkCategoryForm');
@@ -135,7 +139,8 @@
         window.onclick = function (event) {
             if (event.target == document.getElementById('deleteModal')) {
                 closeDeleteModal();
-            } }
+            }
+        }
     </script>
 </div>
 
@@ -170,9 +175,14 @@
                 {% endif %}
             </td>
             <td class="actions">
-                <a href="{% url 'admin_product_edit' product.pk %}" class="btn btn-outline" title="Editar">✏️</a>
+                <a href="{% url 'admin_product_edit' product.pk %}" class="btn btn-outline"
+                    title="{% if user.is_superuser %}Editar{% else %}Ver{% endif %}">
+                    {% if user.is_superuser %}✏️{% else %}👁️{% endif %}
+                </a>
+                {% if user.is_superuser %}
                 <a href="{% url 'admin_product_delete' product.pk %}" class="btn btn-danger-outline"
                     title="Eliminar">🗑️</a>
+                {% endif %}
             </td>
         </tr>
         {% empty %}

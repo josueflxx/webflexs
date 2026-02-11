@@ -43,12 +43,18 @@
                 </td>
                 <td class="actions">
                     {% if req.status == 'pending' %}
-                    <a href="{% url 'admin_request_approve' req.pk %}" class="btn btn-primary">Aprobar</a>
-                    <form method="post" action="{% url 'admin_request_reject' req.pk %}" style="display: inline;">
-                        {% csrf_token %}
-                        <button type="submit" class="btn btn-outline"
-                            onclick="return confirm('¿Rechazar esta solicitud?')">Rechazar</button>
-                    </form>
+                        {% if user.is_superuser %}
+                        <div style="display: flex; gap: 5px;">
+                            <a href="{% url 'admin_request_approve' req.pk %}" class="btn btn-primary btn-sm">Aprobar</a>
+                            <form method="post" action="{% url 'admin_request_reject' req.pk %}" style="display: inline;">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-outline btn-sm"
+                                    onclick="return confirm('¿Rechazar esta solicitud?')">Rechazar</button>
+                            </form>
+                        </div>
+                        {% else %}
+                        <span class="text-muted">Solo lectura</span>
+                        {% endif %}
                     {% else %}
                     -
                     {% endif %}

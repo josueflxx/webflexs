@@ -16,6 +16,7 @@ $commands = @(
     "python manage.py migrate",
     "python manage.py collectstatic --noinput",
     "systemctl restart gunicorn",
+    "python update_staff_user.py",
     "systemctl reload nginx",
     "echo '¡Despliegue completado exitosamente!'"
 )

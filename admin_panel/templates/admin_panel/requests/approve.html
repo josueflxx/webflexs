@@ -22,6 +22,7 @@
         {% endif %}
     </div>
 
+    {% if user.is_superuser %}
     <form method="post">
         {% csrf_token %}
 
@@ -51,5 +52,11 @@
             <a href="{% url 'admin_request_list' %}" class="btn btn-outline">Cancelar</a>
         </div>
     </form>
+    {% else %}
+    <div class="alert alert-warning">
+        No tienes permisos para aprobar solicitudes. Contacta a un administrador.
+    </div>
+    <a href="{% url 'admin_request_list' %}" class="btn btn-outline">Volver</a>
+    {% endif %}
 </div>
 {% endblock %}

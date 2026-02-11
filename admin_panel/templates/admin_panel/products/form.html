@@ -1,4 +1,4 @@
-﻿{% extends 'admin_panel/base.html' %}
+{% extends 'admin_panel/base.html' %}
 
 {% block page_title %}{{ action }} Producto{% endblock %}
 
@@ -11,42 +11,71 @@
 
         <div class="form-group">
             <label for="sku" class="form-label">SKU *</label>
-            <input type="text" name="sku" id="sku" class="form-input" required value="{{ product.sku|default:'' }}">
+            <input type="text" 
+                   name="sku" 
+                   id="sku" 
+                   class="form-input" 
+                   required 
+                   value="{{ product.sku|default:'' }}" 
+                   {% if not user.is_superuser %}disabled{% endif %}>
         </div>
 
         <div class="form-group">
             <label for="name" class="form-label">Nombre *</label>
-            <input type="text" name="name" id="name" class="form-input" required value="{{ product.name|default:'' }}">
+            <input type="text" 
+                   name="name" 
+                   id="name" 
+                   class="form-input" 
+                   required 
+                   value="{{ product.name|default:'' }}" 
+                   {% if not user.is_superuser %}disabled{% endif %}>
         </div>
 
         <div class="form-group">
             <label for="price" class="form-label">Precio *</label>
-            <input type="number" step="0.01" name="price" id="price" class="form-input" required
-                value="{{ product.price|default:'0' }}">
+            <input type="number" 
+                   step="0.01" 
+                   name="price" 
+                   id="price" 
+                   class="form-input" 
+                   required 
+                   value="{{ product.price|default:'0' }}" 
+                   {% if not user.is_superuser %}disabled{% endif %}>
         </div>
 
         <div class="form-group">
             <label for="stock" class="form-label">Stock</label>
-            <input type="number" name="stock" id="stock" class="form-input" value="{{ product.stock|default:'0' }}">
+            <input type="number" 
+                   name="stock" 
+                   id="stock" 
+                   class="form-input" 
+                   value="{{ product.stock|default:'0' }}" 
+                   {% if not user.is_superuser %}disabled{% endif %}>
         </div>
 
         <div class="form-group">
             <label for="category" class="form-label">Categoría</label>
-            <select name="category" id="category" class="form-select" onchange="loadCategoryAttributes(this.value)">
+            <select name="category" 
+                    id="category" 
+                    class="form-select" 
+                    onchange="loadCategoryAttributes(this.value)" 
+                    {% if not user.is_superuser %}disabled{% endif %}>
                 <option value="">Sin categoría</option>
                 {% for cat in categories %}
-                <option value="{{ cat.pk }}" {% if product.category_id == cat.pk %}selected{% endif %}>{{ cat.name }}
-                </option>
+                <option value="{{ cat.pk }}" {% if product.category_id == cat.pk %}selected{% endif %}>{{ cat.name }}</option>
                 {% endfor %}
             </select>
         </div>
 
         <!-- Dynamic Attributes Container -->
-        <div id="dynamic-attributes-container" class="form-group"
-            style="display:none; border: 1px solid #eee; padding: 15px; border-radius: 5px; margin-top: 15px; background-color: #f9f9f9;">
+        <div id="dynamic-attributes-container" class="form-group" style="display:none; border: 1px solid #eee; padding: 15px; border-radius: 5px; margin-top: 15px; background-color: #f9f9f9;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
                 <h4 style="margin: 0;">Atributos de Categoría</h4>
-                <button type="button" id="btn-auto-detect" class="btn btn-sm btn-info" onclick="autoDetectAttributes()">
+                <button type="button" 
+                        id="btn-auto-detect" 
+                        class="btn btn-sm btn-info" 
+                        onclick="autoDetectAttributes()" 
+                        {% if not user.is_superuser %}disabled style="display:none;"{% endif %}>
                     ✨ Auto-detectar desde Descripción
                 </button>
             </div>
@@ -59,21 +88,30 @@
 
         <div class="form-group">
             <label for="description" class="form-label">Descripción</label>
-            <textarea name="description" id="description"
-                class="form-textarea">{{ product.description|default:'' }}</textarea>
+            <textarea name="description" 
+                      id="description" 
+                      class="form-textarea" 
+                      {% if not user.is_superuser %}disabled{% endif %}>{{ product.description|default:'' }}</textarea>
         </div>
 
         {% if product %}
         <div class="form-group">
             <label class="form-label">
-                <input type="checkbox" name="is_active" {% if product.is_active %}checked{% endif %}>
+                <input type="checkbox" 
+                       name="is_active" 
+                       {% if product.is_active %}checked{% endif %} 
+                       {% if not user.is_superuser %}disabled{% endif %}>
                 Producto activo
             </label>
         </div>
         {% endif %}
 
         <div class="form-actions">
+            {% if user.is_superuser %}
             <button type="submit" class="btn btn-primary">Guardar</button>
+            {% else %}
+            <button type="button" class="btn btn-primary" disabled title="Solo lectura">Solo Lectura</button>
+            {% endif %}
             <a href="{% url 'admin_product_list' %}" class="btn btn-outline">Cancelar</a>
         </div>
     </form>
@@ -84,14 +122,15 @@
 <script>
     // Store current attributes if editing
     const currentAttributes = JSON.parse(document.getElementById('attributes-data').textContent || '{}');
+    const isReadOnly = {% if user.is_superuser %}false{% else %}true{% endif %};
 
-    document.addEventListener('DOMContentLoaded', function () {
+    document.addEventListener('DOMContentLoaded', function() {
         // Initial load
         loadCategoryAttributes();
 
         // Intercept form submission to collect JSON
         const form = document.querySelector('form');
-        form.addEventListener('submit', function (e) {
+        form.addEventListener('submit', function(e) {
             collectAttributes();
         });
     });
@@ -122,7 +161,7 @@
 
                     if (attr.type === 'select') {
                         const options = attr.options.split(',').map(o => o.trim());
-                        fieldHtml += `<select name="attr_${attr.slug}" class="form-select attr-field" data-slug="${attr.slug}">
+                        fieldHtml += `<select name="attr_${attr.slug}" class="form-select attr-field" data-slug="${attr.slug}" ${isReadOnly ? 'disabled' : ''}>
                             <option value="">- Seleccionar -</option>`;
                         options.forEach(opt => {
                             const selected = existingValue === opt ? 'selected' : '';
@@ -131,12 +170,12 @@
                         fieldHtml += `</select>`;
                     } else {
                         fieldHtml += `<input type="text" name="attr_${attr.slug}" class="form-input attr-field" 
-                            data-slug="${attr.slug}" value="${existingValue}">`;
+                            data-slug="${attr.slug}" value="${existingValue}" ${isReadOnly ? 'disabled' : ''}>`;
                     }
 
                     if (attr.regex_pattern) {
                         fieldHtml += `<small class="text-muted" style="font-size: 0.8em; display: block; margin-top: 2px;">
-                            Auto-extraÃ­ble via regex</small>`;
+                            Auto-extraíble via regex</small>`;
                     }
 
                     fieldHtml += `</div>`;
@@ -145,9 +184,11 @@
             } else {
                 container.style.display = 'none';
                 fieldsContainer.innerHTML = '';
-            } } catch (error) {
+            }
+        } catch (error) {
             console.error('Error loading attributes:', error);
-        } }
+        }
+    }
 
     async function autoDetectAttributes() {
         const categoryId = document.getElementById('category').value;
@@ -189,21 +230,25 @@
                         // Use a distinct color to show it was auto-detected
                         field.style.borderColor = '#2ecc71';
                         foundAny = true;
-                    } });
+                    }
+                });
 
                 if (foundAny) {
                     // alert('Atributos detectados y completados.');
                 } else {
                     alert('No se encontraron coincidencias con los patrones definidos.');
-                } } else {
+                }
+            } else {
                 alert('Error: ' + (data.error || 'Desconocido'));
-            } } catch (error) {
+            }
+        } catch (error) {
             console.error('Error parsing description:', error);
             alert('Error al conectar con el servidor.');
         } finally {
             btn.disabled = false;
-            btn.innerHTML = 'âœ¨ Auto-detectar desde Descripción';
-        } }
+            btn.innerHTML = '✨ Auto-detectar desde Descripción';
+        }
+    }
 
     function collectAttributes() {
         const fields = document.querySelectorAll('.attr-field');
@@ -212,8 +257,10 @@
         fields.forEach(field => {
             if (field.value) {
                 attributes[field.dataset.slug] = field.value;
-            } });
+            }
+        });
 
         document.getElementById('attributes_json').value = JSON.stringify(attributes);
     }
-</script>{% endblock %}
+</script>
+{% endblock %}
