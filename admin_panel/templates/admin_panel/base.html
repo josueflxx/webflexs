@@ -15,7 +15,7 @@
 </head>
 
 <body class="admin-body">
-    <div class="admin-layout">
+    <div class="admin-layout" id="adminLayout">
         <!-- Sidebar -->
         <aside class="admin-sidebar">
             <div class="sidebar-header">
@@ -121,10 +121,18 @@
             </div>
         </main>
 
+        <!-- Right Sidebar Toggle (Visible when collapsed) -->
+        <button class="sidebar-show-btn" id="showRightSidebar" title="Mostrar actividad">
+            <span>👥</span>
+        </button>
+
         <!-- Right Sidebar - Admin Activity -->
-        <aside class="admin-right-sidebar">
+        <aside class="admin-right-sidebar" id="rightSidebar">
             <div class="right-sidebar-header">
-                <h2>👥 Equipo Admin</h2>
+                <h2>Equipo Admin</h2>
+                <button class="sidebar-toggle-btn" id="hideRightSidebar" title="Ocultar">
+                    <span>&times;</span>
+                </button>
             </div>
             <div class="admin-profiles">
                 {% for admin in active_admins %}
@@ -135,7 +143,8 @@
                     </div>
                     <div class="admin-info">
                         <div class="admin-username">{{ admin.username }}</div>
-                        <div class="admin-status">{% if admin.activity.is_active %}En línea{% else %}Desconectado{% endif %}</div>
+                        <div class="admin-status">{% if admin.activity.is_active %}En línea{% else %}Desconectado{%
+                            endif %}</div>
                     </div>
                 </div>
                 {% endfor %}
@@ -145,6 +154,36 @@
 
     <script src="{% static 'core/js/main.js' %}"></script>
     <script>
+        // Right Sidebar Toggle Logic
+        const adminLayout = document.getElementById('adminLayout');
+        const rightSidebar = document.getElementById('rightSidebar');
+        const hideBtn = document.getElementById('hideRightSidebar');
+        const showBtn = document.getElementById('showRightSidebar');
+
+        function setSidebarState(collapsed) {
+            if (collapsed) {
+                adminLayout.classList.add('sidebar-collapsed');
+                rightSidebar.classList.add('collapsed');
+                localStorage.setItem('adminRightSidebarCollapsed', 'true');
+            } else {
+                adminLayout.classList.remove('sidebar-collapsed');
+                rightSidebar.classList.remove('collapsed');
+                localStorage.setItem('adminRightSidebarCollapsed', 'false');
+            }
+        }
+
+        // Initialize from localStorage
+        const isCollapsed = localStorage.getItem('adminRightSidebarCollapsed') === 'true';
+        // Check if mobile
+        const isMobile = window.innerWidth <= 1024;
+
+        if (isCollapsed || (isMobile && localStorage.getItem('adminRightSidebarCollapsed') === null)) {
+            setSidebarState(true);
+        }
+
+        hideBtn.addEventListener('click', () => setSidebarState(true));
+        showBtn.addEventListener('click', () => setSidebarState(false));
+
         // Mark user as offline when closing/navigating away
         window.addEventListener('beforeunload', function () {
             navigator.sendBeacon('/api/go-offline/');
