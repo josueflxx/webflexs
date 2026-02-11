@@ -135,8 +135,7 @@
                     </div>
                     <div class="admin-info">
                         <div class="admin-username">{{ admin.username }}</div>
-                        <div class="admin-status">{% if admin.activity.is_active %}En línea{% else %}Desconectado{%
-                            endif %}</div>
+                        <div class="admin-status">{% if admin.activity.is_active %}En línea{% else %}Desconectado{% endif %}</div>
                     </div>
                 </div>
                 {% endfor %}

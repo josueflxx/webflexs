@@ -6,11 +6,12 @@
 {% block title %}Catálogo - FLEXS{% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="{% static 'core/css/catalog.css' %}?v=2">
+<link rel="stylesheet" href="{% static 'core/css/catalog.css' %}?v={% now 'U' %}">
 {% endblock %}
 
 {% block content %}
 <div class="catalog-page">
+    {% csrf_token %}
     <div class="container">
         <div class="catalog-header">
             <h1>Catálogo de Productos</h1>
@@ -37,129 +38,126 @@
                 </div>
 
                 <div class="filter-section">
-                    <h3>Categorías</h3>
-                    <ul class="category-list">
-                        <li>
-                            <a href="{% url 'catalog' %}" class="{% if not category_slug %}active{% endif %}">
-                                Todas
-                            </a>
-                        </li>
-                        {% for category in categories %}
-                        <li>
-                            <a href="?category={{ category.slug }}"
-                                class="{% if category_slug == category.slug %}active{% endif %}">
-                                {{ category.name }}
-                            </a>
-                            {% if category.children.exists %}
-                            <ul class="subcategory-list">
-                                {% for sub in category.children.all %}
-                                <li>
-                                    <a href="?category={{ sub.slug }}"
-                                        class="{% if category_slug == sub.slug %}active{% endif %}">
-                                        {{ sub.name }}
-                                    </a>
-                                </li>
-                                {% endfor %}
-                            </ul>
-                            {% endif %}
-                        </li>
-                        {% endfor %}
-                    </ul>
+                    <div
+                        style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                        <h3 style="margin-bottom: 0;">Categorías</h3>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" id="toggleCategoriesBtn"
+                            style="padding: 2px 8px; font-size: 0.8rem;">
+                            Ver
+                        </button>
+                    </div>
+                    <div id="categoriesWrapper" style="display: none;">
+                        <ul class="category-list">
+                            <li>
+                                <a href="{% url 'catalog' %}" class="{% if not category_slug %}active{% endif %}">
+                                    Todas
+                                </a>
+                            </li>
+                            {% for category in categories %}
+                            <li>
+                                <a href="?category={{ category.slug }}"
+                                    class="category-clickable {% if category_slug   ==   category.slug %}active{% endif %}"
+                                    data-category-slug="{{ category.slug }}">
+                                    {{ category.name }}
+                                    {% if 'ABRAZADERA' in category.name.upper %}
+                                    <span class="collapse-icon">▼</span>
+                                    {% endif %}
+                                </a>
+
+                                {# Inline filters for Abrazaderas #}
+ {% if 'ABRAZADERA' in category.name.upper and category_slug == category.slug and clamp_options %}
+
+                                <div class="category-filters-collapse" style="display: block;">
+                                    <form method="get" action="{% url 'catalog' %}" class="inline-filter-form">
+                                        <input type="hidden" name="q" value="{{ search_query }}">
+                                        <input type="hidden" name="category" value="{{ category_slug }}">
+                                        <input type="hidden" name="order" value="{{ order_by }}">
+
+                                        {% if clamp_options.fabrication %}
+                                        <div class="filter-mini-group">
+                                            <label>Fabricación</label>
+                                            <select name="fabrication" class="form-select-mini"
+                                                onchange="this.form.submit()">
+                                                <option value="">- Todas -</option>
+                                                {% for opt in clamp_options.fabrication %}
+ <option value="{{ opt }}" {% if active_filters.fabrication == opt %}selected{% endif %}>{{ opt }}</option>
+
+                                                {% endfor %}
+                                            </select>
+                                        </div>
+                                        {% endif %}
+
+                                        {% if clamp_options.diameter %}
+                                        <div class="filter-mini-group">
+                                            <label>Diámetro</label>
+                                            <select name="diameter" class="form-select-mini"
+                                                onchange="this.form.submit()">
+                                                <option value="">- Todos -</option>
+                                                {% for opt in clamp_options.diameter %}
+ <option value="{{ opt }}" {% if active_filters.diameter == opt %}selected{% endif %}>{{ opt }}</option>
+
+                                                {% endfor %}
+                                            </select>
+                                        </div>
+                                        {% endif %}
+
+                                        {% if clamp_options.width %}
+                                        <div class="filter-mini-group">
+                                            <label>Ancho</label>
+                                            <select name="width" class="form-select-mini" onchange="this.form.submit()">
+                                                <option value="">- Todos -</option>
+                                                {% for opt in clamp_options.width %}
+ <option value="{{ opt }}" {% if active_filters.width == opt|stringformat:"s" %}selected{% endif %}>{{ opt }}</option>
+                                                {% endfor %}
+                                            </select>
+                                        </div>
+                                        {% endif %}
+
+                                        {% if clamp_options.length %}
+                                        <div class="filter-mini-group">
+                                            <label>Largo</label>
+                                            <select name="length" class="form-select-mini"
+                                                onchange="this.form.submit()">
+                                                <option value="">- Todos -</option>
+                                                {% for opt in clamp_options.length %}
+ <option value="{{ opt }}" {% if active_filters.length == opt|stringformat:"s" %}selected{% endif %}>{{ opt }}</option>
+                                                {% endfor %}
+                                            </select>
+                                        </div>
+                                        {% endif %}
+
+                                        {% if clamp_options.shape %}
+                                        <div class="filter-mini-group">
+                                            <label>Forma</label>
+                                            <select name="shape" class="form-select-mini" onchange="this.form.submit()">
+                                                <option value="">- Todas -</option>
+                                                {% for opt in clamp_options.shape %}
+                                                <option value="{{ opt }}" {% if active_filters.shape == opt %}selected{% endif %}>{{ opt }}</option>
+                                                {% endfor %}
+                                            </select>
+                                        </div>
+                                        {% endif %}
+                                    </form>
+                                </div>
+                                {% endif %}
+
+                                {% if category.children.exists %}
+                                <ul class="subcategory-list">
+                                    {% for sub in category.children.all %}
+                                    <li>
+                                        <a href="?category={{ sub.slug }}"
+                                            class="{% if category_slug   ==   sub.slug %}active{% endif %}">
+                                            {{ sub.name }}
+                                        </a>
+                                    </li>
+                                    {% endfor %}
+                                </ul>
+                                {% endif %}
+                            </li>
+                            {% endfor %}
+                        </ul>
+                    </div>
                 </div>
-
-                {% if current_category and 'ABRAZADERA' in current_category.name.upper %}
-                <div class="filter-section">
-                    <h3>Especificaciones: {{ current_category.name }}</h3>
-                    <form method="get" action="{% url 'catalog' %}">
-                        <!-- Preserve other parameters -->
-                        <input type="hidden" name="q" value="{{ search_query }}">
-                        <input type="hidden" name="category" value="{{ category_slug }}">
-                        <input type="hidden" name="order" value="{{ order_by }}">
-
-                        <!-- Fabrication -->
-                        {% if clamp_options.fabrication %}
-                        <div class="filter-group mb-3">
-                            <h4 class="filter-title"
-                                style="font-size: 0.95em; margin-bottom: 5px; color: var(--color-gray);">Fabricación
-                            </h4>
-                            <select name="fabrication" class="form-select form-select-sm" style="width: 100%;"
-                                onchange="this.form.submit()">
-                                <option value="">- Todas -</option>
-                                {% for opt in clamp_options.fabrication %}
-                                <option value="{{ opt }}" {% if active_filters.fabrication == opt %}selected{% endif %}>{{ opt }}</option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                        {% endif %}
-
-                        <!-- Diameter -->
-                        {% if clamp_options.diameter %}
-                        <div class="filter-group mb-3">
-                            <h4 class="filter-title"
-                                style="font-size: 0.95em; margin-bottom: 5px; color: var(--color-gray);">Diámetro</h4>
-                            <select name="diameter" class="form-select form-select-sm" style="width: 100%;"
-                                onchange="this.form.submit()">
-                                <option value="">- Todos -</option>
-                                {% for opt in clamp_options.diameter %}
-                                <option value="{{ opt }}" {% if active_filters.diameter == opt %}selected{% endif %}>{{ opt }}</option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                        {% endif %}
-
-                        <!-- Width (Ancho) -->
-                        {% if clamp_options.width %}
-                        <div class="filter-group mb-3">
-                            <h4 class="filter-title"
-                                style="font-size: 0.95em; margin-bottom: 5px; color: var(--color-gray);">Ancho</h4>
-                            <select name="width" class="form-select form-select-sm" style="width: 100%;"
-                                onchange="this.form.submit()">
-                                <option value="">- Todos -</option>
-                                {% for opt in clamp_options.width %}
-                                <option value="{{ opt }}" {% if active_filters.width == opt|stringformat:"s" %}selected{% endif %}>{{ opt }} mm</option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                        {% endif %}
-
-                        <!-- Length (Largo) -->
-                        {% if clamp_options.length %}
-                        <div class="filter-group mb-3">
-                            <h4 class="filter-title"
-                                style="font-size: 0.95em; margin-bottom: 5px; color: var(--color-gray);">Largo</h4>
-                            <select name="length" class="form-select form-select-sm" style="width: 100%;"
-                                onchange="this.form.submit()">
-                                <option value="">- Todos -</option>
-                                {% for opt in clamp_options.length %}
-                                <option value="{{ opt }}" {% if active_filters.length == opt|stringformat:"s" %}selected{% endif %}>{{ opt }} mm</option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                        {% endif %}
-
-                        <!-- Shape -->
-                        {% if clamp_options.shape %}
-                        <div class="filter-group mb-3">
-                            <h4 class="filter-title"
-                                style="font-size: 0.95em; margin-bottom: 5px; color: var(--color-gray);">Forma</h4>
-                            <select name="shape" class="form-select form-select-sm" style="width: 100%;"
-                                onchange="this.form.submit()">
-                                <option value="">- Todas -</option>
-                                {% for opt in clamp_options.shape %}
-                                <option value="{{ opt }}" {% if active_filters.shape == opt %}selected{% endif %}>{{ opt }}</option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                        {% endif %}
-
-                        <noscript>
-                            <button type="submit" class="btn btn-primary btn-sm btn-block mt-3" style="width: 100%;">
-                                Aplicar Filtros Técnicos
-                            </button>
-                        </noscript>
-                    </form>
-                </div>
-                {% endif %}
 
                 {% if category_attributes %}
                 <div class="filter-section">
@@ -189,7 +187,7 @@
                                 <option value="">- Todos -</option>
                                 {% for opt in attr.options_list %}
                                 {% with current_val=active_filters|get_item:attr.slug %}
-                                <option value="{{ opt }}" {% if current_val == opt %}selected{% endif %}>
+                                <option value="{{ opt }}" {% if current_val == opt %}selected {% endif %}>
                                     {{ opt }}
                                 </option>
                                 {% endwith %}
@@ -229,11 +227,11 @@
                     </span>
                     <select name="order" class="form-select order-select"
                         onchange="window.location.href='?order='+this.value+'&q={{ search_query }}&category={{ category_slug }}'">
-                        <option value="name" {% if order_by == 'name' %}selected{% endif %}>Nombre A-Z</option>
-                        <option value="-name" {% if order_by == '-name' %}selected{% endif %}>Nombre Z-A</option>
-                        <option value="price" {% if order_by == 'price' %}selected{% endif %}>Menor precio</option>
-                        <option value="-price" {% if order_by == '-price' %}selected{% endif %}>Mayor precio</option>
-                        <option value="sku" {% if order_by == 'sku' %}selected{% endif %}>SKU</option>
+                        <option value="name" {% if order_by == 'name' %}selected {% endif %}>Nombre A-Z</option>
+                        <option value="-name" {% if order_by == '-name' %}selected {% endif %}>Nombre Z-A</option>
+                        <option value="price" {% if order_by == 'price' %}selected {% endif %}>Menor precio</option>
+                        <option value="-price" {% if order_by == '-price' %}selected {% endif %}>Mayor precio</option>
+                        <option value="sku" {% if order_by == 'sku' %}selected {% endif %}>SKU</option>
                     </select>
                 </div>
 
@@ -270,7 +268,8 @@
                                 </div>
                                 <div class="price-row final-price">
                                     <span class="label">Precio Final:</span>
-                                    <span class="value">${{ product.price|calculate_discount:discount|floatformat:2 }}</span>
+                                    <span class="value">${{ product.price|calculate_discount:discount|floatformat:2
+                                        }}</span>
                                 </div>
                                 {% else %}
                                 <div class="price-row final-price single-price">
@@ -329,10 +328,15 @@
 
 {% block extra_js %}
 <script>
+    // Shopping Cart Logic
     async function addToCart(productId) {
         try {
-            const response = await fetchWithCSRF('/pedidos/carrito/agregar/', {
+            const response = await fetch('/pedidos/carrito/agregar/', {
                 method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+                },
                 body: JSON.stringify({ product_id: productId, quantity: 1 })
             });
             const data = await response.json();
@@ -340,14 +344,76 @@
                 // Update cart badge
                 const badge = document.getElementById('cartBadge');
                 if (badge) badge.textContent = data.cart_count;
-
-                alert(data.message);
+                // Optional: Show success message
+                // alert(data.message);
             } else {
                 alert('Error: ' + data.error);
             }
         } catch (error) {
+            console.error(error);
             alert('Error al agregar al carrito');
         }
     }
+
+    // Category Visibility Toggle
+    const toggleBtn = document.getElementById('toggleCategoriesBtn');
+    const categoriesWrapper = document.getElementById('categoriesWrapper');
+
+    if (toggleBtn && categoriesWrapper) {
+        // One-time reset: Force categories hidden for all users
+        if (!localStorage.getItem('categoriesResetV1')) {
+            localStorage.setItem('categoriesVisible', 'false');
+            localStorage.setItem('categoriesResetV1', 'true');
+        }
+        
+        // Load saved state from localStorage (default: hidden)
+        const savedState = localStorage.getItem('categoriesVisible');
+        const shouldShow = savedState === 'true';
+
+        // Apply saved state
+        if (shouldShow) {
+            categoriesWrapper.style.display = 'block';
+            toggleBtn.textContent = 'Ocultar';
+        } else {
+            categoriesWrapper.style.display = 'none';
+            toggleBtn.textContent = 'Ver';
+        }
+
+        // Toggle and save state on click
+        toggleBtn.addEventListener('click', function () {
+            const isHidden = categoriesWrapper.style.display === 'none';
+            if (isHidden) {
+                categoriesWrapper.style.display = 'block';
+                toggleBtn.textContent = 'Ocultar';
+                localStorage.setItem('categoriesVisible', 'true');
+            } else {
+                categoriesWrapper.style.display = 'none';
+                toggleBtn.textContent = 'Ver';
+                localStorage.setItem('categoriesVisible', 'false');
+            }
+        });
+    }
+
+    // Accordion Logic (existing code below)
+    document.addEventListener('DOMContentLoaded', function () {
+        const toggles = document.querySelectorAll('.category-clickable');
+
+        toggles.forEach(toggle => {
+            // Check if this category has filters (it will be the next sibling element)
+            const filters = toggle.nextElementSibling;
+
+            if (filters && filters.classList.contains('category-filters-collapse')) {
+                // Initialize state
+                toggle.setAttribute('aria-expanded', 'true');
+
+                toggle.addEventListener('click', function (e) {
+                    e.preventDefault();
+                    const isHidden = filters.style.display === 'none';
+                    filters.style.display = isHidden ? 'block' : 'none';
+                    this.setAttribute('aria-expanded', isHidden ? 'true' : 'false');
+                });
+            }
+        });
+    });
 </script>
 {% endblock %}
