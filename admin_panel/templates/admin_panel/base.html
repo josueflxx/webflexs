@@ -10,7 +10,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{% static 'core/css/base.css' %}">
     <link rel="stylesheet" href="{% static 'core/css/admin.css' %}?v=3">
-    <link rel="stylesheet" href="{% static 'core/css/admin_right_sidebar.css' %}">
+    <link rel="stylesheet" href="{% static 'core/css/admin_right_sidebar.css' %}?v=1">
     {% block extra_css %}{% endblock %}
 </head>
 
@@ -143,8 +143,7 @@
                     </div>
                     <div class="admin-info">
                         <div class="admin-username">{{ admin.username }}</div>
-                        <div class="admin-status">{% if admin.activity.is_active %}En línea{% else %}Desconectado{%
-                            endif %}</div>
+                        <div class="admin-status">{% if admin.activity.is_active %}En línea{% else %}Desconectado{% endif %}</div>
                     </div>
                 </div>
                 {% endfor %}
@@ -155,7 +154,7 @@
     <script src="{% static 'core/js/main.js' %}"></script>
     <script>
         // Right Sidebar Toggle Logic
-        document.addEventListener('DOMContentLoaded', function () {
+        document.addEventListener('DOMContentLoaded', function() {
             const adminLayout = document.getElementById('adminLayout');
             const rightSidebar = document.getElementById('rightSidebar');
             const hideBtn = document.getElementById('hideRightSidebar');
@@ -181,19 +180,19 @@
             // Initialize from localStorage
             const isCollapsed = localStorage.getItem('adminRightSidebarCollapsed') === 'true';
             const isMobile = window.innerWidth <= 1024;
-
+            
             // Collapse by default on mobile if no preference is set, or if preference is collapsed
             if (isCollapsed || (isMobile && localStorage.getItem('adminRightSidebarCollapsed') === null)) {
                 setSidebarState(true);
             }
 
             // Explicit click handlers
-            hideBtn.addEventListener('click', function (e) {
+            hideBtn.addEventListener('click', function(e) {
                 e.preventDefault();
                 setSidebarState(true);
             });
 
-            showBtn.addEventListener('click', function (e) {
+            showBtn.addEventListener('click', function(e) {
                 e.preventDefault();
                 setSidebarState(false);
             });
