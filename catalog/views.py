@@ -132,12 +132,25 @@ def catalog(request):
     if request.user.is_authenticated and hasattr(request.user, 'client_profile'):
         discount = request.user.client_profile.get_discount_decimal()
     
+    # Calculate expanded categories for sidebar accordion
+    expanded_category_ids = []
+    if current_category:
+        # Always expand the current category (to show its children if any)
+        expanded_category_ids.append(current_category.id)
+        
+        # Walk up the tree to expand all parents
+        parent = current_category.parent
+        while parent:
+            expanded_category_ids.append(parent.id)
+            parent = parent.parent
+            
     context = {
         'page_obj': page_obj,
         'categories': categories,
         'search_query': search_query,
         'category_slug': category_slug,
         'current_category': current_category,
+        'expanded_category_ids': expanded_category_ids,
         'category_attributes': category_attributes,
         'active_filters': active_filters,
         'order_by': order_by,

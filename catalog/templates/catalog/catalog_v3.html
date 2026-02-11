@@ -49,104 +49,66 @@
                     <div id="categoriesWrapper" style="display: none;">
                         <ul class="category-list">
                             <li>
-                                <a href="{% url 'catalog' %}" class="{% if not category_slug %}active{% endif %}">
-                                    Todas
+                                <a href="{% url 'catalog' %}"
+                                    class="category-link-wrapper {% if not category_slug %}active{% endif %}">
+                                    <span>Todas</span>
                                 </a>
                             </li>
                             {% for category in categories %}
                             <li>
-                                <a href="?category={{ category.slug }}"
-                                    class="category-clickable {% if category_slug   ==   category.slug %}active{% endif %}"
-                                    data-category-slug="{{ category.slug }}">
-                                    {{ category.name }}
-                                    {% if 'ABRAZADERA' in category.name.upper %}
-                                    <span class="collapse-icon">▼</span>
-                                    {% endif %}
-                                </a>
+                                <div class="category-item">
+                                    <a href="?category={{ category.slug }}"
+                                        class="category-link-wrapper {% if category_slug == category.slug %}active{% endif %} {% if category.id in expanded_category_ids %}expanded{% endif %}"
+                                        data-category-slug="{{ category.slug }}"
+                                        onclick="toggleCategory(event, this, 'cat-{{ category.id }}')">
 
-                                {# Inline filters for Abrazaderas #}
- {% if 'ABRAZADERA' in category.name.upper and category_slug == category.slug and clamp_options %}
+                                        <span>{{ category.name }}</span>
 
-                                <div class="category-filters-collapse" style="display: block;">
+                                        {% if category.children.exists %}
+                                        <span
+                                            class="category-toggle-icon {% if category.id in expanded_category_ids %}rotated{% endif %}">
+                                            ▼
+                                        </span>
+                                        {% endif %}
+                                    </a>
+                                </div>
+
+                                {# Inline filters for Abrazaderas (Keep existing logic) #}
+                                {% if 'ABRAZADERA' in category.name.upper and category_slug == category.slug and clamp_options %}
+                                <div class="category-filters-collapse"
+                                    style="display: block; margin-left: 10px; margin-bottom: 10px;">
                                     <form method="get" action="{% url 'catalog' %}" class="inline-filter-form">
                                         <input type="hidden" name="q" value="{{ search_query }}">
                                         <input type="hidden" name="category" value="{{ category_slug }}">
                                         <input type="hidden" name="order" value="{{ order_by }}">
 
-                                        {% if clamp_options.fabrication %}
+                                        {% for field, options in clamp_options.items %}
                                         <div class="filter-mini-group">
-                                            <label>Fabricación</label>
-                                            <select name="fabrication" class="form-select-mini"
-                                                onchange="this.form.submit()">
-                                                <option value="">- Todas -</option>
-                                                {% for opt in clamp_options.fabrication %}
- <option value="{{ opt }}" {% if active_filters.fabrication == opt %}selected{% endif %}>{{ opt }}</option>
-
-                                                {% endfor %}
-                                            </select>
-                                        </div>
-                                        {% endif %}
-
-                                        {% if clamp_options.diameter %}
-                                        <div class="filter-mini-group">
-                                            <label>Diámetro</label>
-                                            <select name="diameter" class="form-select-mini"
+                                            <label>{{ field|title }}</label>
+                                            <select name="{{ field }}" class="form-select-mini"
                                                 onchange="this.form.submit()">
                                                 <option value="">- Todos -</option>
-                                                {% for opt in clamp_options.diameter %}
- <option value="{{ opt }}" {% if active_filters.diameter == opt %}selected{% endif %}>{{ opt }}</option>
-
+                                                {% for opt in options %}
+                                                {% with field_val=active_filters|get_item:field %}
+                                                {% with opt_str=opt|stringformat:"s" %}
+                                                <option value="{{ opt }}" {% if field_val == opt_str %}selected{% endif %}>{{ opt }}</option>
+                                                {% endwith %}
+                                                {% endwith %}
                                                 {% endfor %}
                                             </select>
                                         </div>
-                                        {% endif %}
-
-                                        {% if clamp_options.width %}
-                                        <div class="filter-mini-group">
-                                            <label>Ancho</label>
-                                            <select name="width" class="form-select-mini" onchange="this.form.submit()">
-                                                <option value="">- Todos -</option>
-                                                {% for opt in clamp_options.width %}
- <option value="{{ opt }}" {% if active_filters.width == opt|stringformat:"s" %}selected{% endif %}>{{ opt }}</option>
-                                                {% endfor %}
-                                            </select>
-                                        </div>
-                                        {% endif %}
-
-                                        {% if clamp_options.length %}
-                                        <div class="filter-mini-group">
-                                            <label>Largo</label>
-                                            <select name="length" class="form-select-mini"
-                                                onchange="this.form.submit()">
-                                                <option value="">- Todos -</option>
-                                                {% for opt in clamp_options.length %}
- <option value="{{ opt }}" {% if active_filters.length == opt|stringformat:"s" %}selected{% endif %}>{{ opt }}</option>
-                                                {% endfor %}
-                                            </select>
-                                        </div>
-                                        {% endif %}
-
-                                        {% if clamp_options.shape %}
-                                        <div class="filter-mini-group">
-                                            <label>Forma</label>
-                                            <select name="shape" class="form-select-mini" onchange="this.form.submit()">
-                                                <option value="">- Todas -</option>
-                                                {% for opt in clamp_options.shape %}
-                                                <option value="{{ opt }}" {% if active_filters.shape == opt %}selected{% endif %}>{{ opt }}</option>
-                                                {% endfor %}
-                                            </select>
-                                        </div>
-                                        {% endif %}
+                                        {% endfor %}
                                     </form>
                                 </div>
                                 {% endif %}
 
                                 {% if category.children.exists %}
-                                <ul class="subcategory-list">
+                                <ul class="subcategory-list {% if category.id in expanded_category_ids %}visible{% endif %}"
+                                    id="cat-{{ category.id }}">
                                     {% for sub in category.children.all %}
                                     <li>
                                         <a href="?category={{ sub.slug }}"
-                                            class="{% if category_slug   ==   sub.slug %}active{% endif %}">
+                                            class="{% if category_slug == sub.slug %}active{% endif %}">
                                             {{ sub.name }}
                                         </a>
                                     </li>
@@ -156,6 +118,50 @@
                             </li>
                             {% endfor %}
                         </ul>
+
+                        <script>
+                            function toggleCategory(event, element, targetId) {
+                                // Logic:
+                                // 1. If click is on the ICON (arrow), prevent navigation and just toggle visibility.
+                                // 2. If click is on the TEXT:
+                                //    a. If category is ACTIVE (current), prevent reload and toggle visibility.
+                                //    b. If category is INACTIVE, let it navigate (backend will handle expansion).
+
+                                const target = document.getElementById(targetId);
+                                if (!target) return; // No children to toggle
+
+                                // Check if the click target is the icon or inside it
+                                const isIconClick = event.target.classList.contains('category-toggle-icon') ||
+                                    event.target.closest('.category-toggle-icon');
+
+                                // Check if this is the currently active category
+                                const isActive = element.classList.contains('active');
+
+                                if (isIconClick || isActive) {
+                                    event.preventDefault(); // Stop navigation
+                                    event.stopPropagation(); // Stop bubbling (good practice)
+
+                                    // Toggle visual state
+                                    const list = document.getElementById(targetId);
+                                    if (list) list.classList.toggle('visible');
+
+                                    element.classList.toggle('expanded');
+
+                                    const icon = element.querySelector('.category-toggle-icon');
+                                    if (icon) icon.classList.toggle('rotated');
+
+                                    return; // Done
+                                }
+
+                                // If clicking the text of an INACTIVE category, we allow navigation.
+                                // Optional: If we want to force expand visually right before reload for better UX:
+                                if (!element.classList.contains('expanded')) {
+                                    element.classList.add('expanded');
+                                    const icon = element.querySelector('.category-toggle-icon');
+                                    if (icon) icon.classList.add('rotated');
+                                }
+                            }
+                        </script>
                     </div>
                 </div>
 
@@ -365,7 +371,7 @@
             localStorage.setItem('categoriesVisible', 'false');
             localStorage.setItem('categoriesResetV1', 'true');
         }
-        
+
         // Load saved state from localStorage (default: hidden)
         const savedState = localStorage.getItem('categoriesVisible');
         const shouldShow = savedState === 'true';
