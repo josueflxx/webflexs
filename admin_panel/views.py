@@ -670,6 +670,82 @@ def category_attribute_delete(request, category_id, attribute_id):
     
     return redirect('admin_category_edit', pk=category.pk)
 
+
+@staff_member_required
+@superuser_required_for_modifications
+def category_manage_products(request, pk):
+    """
+    View to manage products within a category (bulk assign/remove).
+    """
+    category = get_object_or_404(Category, pk=pk)
+    
+    # 1. Handle Bulk Action (POST)
+    if request.method == 'POST':
+        product_ids = request.POST.getlist('product_ids')
+        action = request.POST.get('action')
+        
+        if product_ids:
+            if action == 'assign':
+                # Assign selected to this category
+                count = Product.objects.filter(id__in=product_ids).update(category=category)
+                messages.success(request, f'{count} productos asignados a "{category.name}".')
+                
+            elif action == 'remove':
+                # Remove selected from this category (set to None)
+                # Only remove if they are actually in this category (security check)
+                count = Product.objects.filter(id__in=product_ids, category=category).update(category=None)
+                messages.success(request, f'{count} productos desvinculados de "{category.name}".')
+                
+        return redirect('admin_category_products', pk=pk)
+
+    # 2. Filter & Search Logic (GET)
+    products = Product.objects.all().select_related('category')
+    
+    # Search
+    search = request.GET.get('q', '').strip()
+    if search:
+        products = products.filter(
+            Q(sku__icontains=search) | 
+            Q(name__icontains=search)
+        )
+        
+    # Filter by Status
+    status = request.GET.get('status')
+    if status == 'active':
+        products = products.filter(is_active=True)
+    elif status == 'inactive':
+        products = products.filter(is_active=False)
+        
+    # Filter by Current Category (The most important filter)
+    # Options: 'current' (in this cat), 'none' (no cat), 'all' (default), or specific ID
+    cat_filter = request.GET.get('category_filter', 'current') 
+    
+    if cat_filter == 'current':
+        products = products.filter(category=category)
+    elif cat_filter == 'none':
+        products = products.filter(category__isnull=True)
+    elif cat_filter == 'all':
+        pass # No filter
+    elif cat_filter.isdigit():
+        products = products.filter(category_id=int(cat_filter))
+
+    # Pagination
+    paginator = Paginator(products.order_by('name'), 50)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+    
+    # Context for template
+    all_categories = Category.objects.exclude(pk=pk).order_by('name')
+    
+    return render(request, 'admin_panel/categories/manage_products.html', {
+        'category': category,
+        'page_obj': page_obj,
+        'search': search,
+        'status': status,
+        'category_filter': cat_filter,
+        'all_categories': all_categories,
+    })
+
 # ===================== API =====================
 
 @staff_member_required

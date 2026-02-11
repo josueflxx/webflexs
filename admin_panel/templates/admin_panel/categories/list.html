@@ -78,6 +78,8 @@
                     {% endif %}
                 </td>
                 <td class="actions">
+                    <a href="{% url 'admin_category_products' category.pk %}" class="btn btn-outline"
+                        title="Gestionar Productos">📦</a>
                     <a href="{% url 'admin_category_edit' category.pk %}" class="btn btn-outline"
                         title="{% if user.is_superuser %}Editar{% else %}Ver{% endif %}">
                         {% if user.is_superuser %}✏️{% else %}👁️{% endif %}
@@ -101,9 +103,11 @@
                     {% endif %}
                 </td>
                 <td class="actions">
+                    <a href="{% url 'admin_category_products' child.pk %}" class="btn btn-outline"
+                        title="Gestionar Productos">📦</a>
                     <a href="{% url 'admin_category_edit' child.pk %}" class="btn btn-outline"
                         title="{% if user.is_superuser %}Editar{% else %}Ver{% endif %}">
-                        {% if user.is_superuser %}Editar{% else %}Ver{% endif %}
+                        {% if user.is_superuser %}✏️{% else %}👁️{% endif %}
                     </a>
                 </td>
             </tr>

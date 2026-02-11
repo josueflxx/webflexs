@@ -1,0 +1,171 @@
+{% extends 'admin_panel/base.html' %}
+
+{% block page_title %}Gestionar Productos: {{ category.name }}{% endblock %}
+
+{% block content %}
+<div class="admin-table-container">
+    <div class="admin-toolbar" style="flex-wrap: wrap; gap: 15px;">
+        <!-- Filters Form -->
+        <form method="get" class="toolbar-search" style="flex-grow: 1;">
+            <input type="text" name="q" value="{{ search }}" placeholder="Buscar SKU o nombre..." class="form-input">
+            
+            <select name="category_filter" class="form-select" onchange="this.form.submit()">
+                <option value="current" {% if category_filter == 'current' %}selected{% endif %}>En esta categoría</option>
+                <option value="none" {% if category_filter == 'none' %}selected{% endif %}>Sin categoría (Huérfanos)</option>
+                <option value="all" {% if category_filter == 'all' %}selected{% endif %}>Todos los productos</option>
+                <optgroup label="Otras categorías">
+                    {% for cat in all_categories %}
+                    <option value="{{ cat.pk }}" {% if category_filter == cat.pk|stringformat:"s" %}selected{% endif %}>{{ cat.name }}</option>
+                    {% endfor %}
+                </optgroup>
+            </select>
+
+            <select name="status" class="form-select" onchange="this.form.submit()">
+                <option value="">Todos los estados</option>
+                <option value="active" {% if status == 'active' %}selected{% endif %}>Activos</option>
+                <option value="inactive" {% if status == 'inactive' %}selected{% endif %}>Inactivos</option>
+            </select>
+            
+            <button type="submit" class="btn btn-primary">Filtrar</button>
+            <a href="{% url 'admin_category_products' category.pk %}" class="btn btn-outline" title="Limpiar filtros">↺</a>
+        </form>
+
+        <!-- Bulk Actions Form -->
+        <form id="bulkActionForm" method="post" class="toolbar-actions" style="display: flex; gap: 10px; align-items: center;">
+            {% csrf_token %}
+            <!-- Hidden inputs will be added by JS -->
+            
+            <button type="submit" name="action" value="assign" class="btn btn-success" id="btnAssign" disabled>
+                📥 Asignar a "{{ category.name }}"
+            </button>
+            
+            {% if category_filter == 'current' %}
+            <button type="submit" name="action" value="remove" class="btn btn-danger-outline" id="btnRemove" disabled>
+                📤 Desvincular
+            </button>
+            {% endif %}
+            
+            <a href="{% url 'admin_category_list' %}" class="btn btn-outline">Volver</a>
+        </form>
+    </div>
+
+    <script>
+        function toggleSelectAll() {
+            const checkboxes = document.querySelectorAll('.product-checkbox');
+            const selectAll = document.getElementById('selectAll');
+            checkboxes.forEach(cb => cb.checked = selectAll.checked);
+            updateBulkButtons();
+        }
+
+        function updateBulkButtons() {
+            const checkboxes = document.querySelectorAll('.product-checkbox:checked');
+            const btnAssign = document.getElementById('btnAssign');
+            const btnRemove = document.getElementById('btnRemove');
+            
+            if (checkboxes.length > 0) {
+                if (btnAssign) btnAssign.removeAttribute('disabled');
+                if (btnRemove) btnRemove.removeAttribute('disabled');
+            } else {
+                if (btnAssign) btnAssign.setAttribute('disabled', 'true');
+                if (btnRemove) btnRemove.setAttribute('disabled', 'true');
+            }
+        }
+
+        // Intercept form submission to add selected IDs
+        document.getElementById('bulkActionForm').addEventListener('submit', function(e) {
+            const form = this;
+            const checkboxes = document.querySelectorAll('.product-checkbox:checked');
+            
+            if (checkboxes.length === 0) {
+                e.preventDefault();
+                alert('Selecciona al menos un producto.');
+                return;
+            }
+
+            // Clean old inputs
+            form.querySelectorAll('input[name="product_ids"]').forEach(el => el.remove());
+
+            // Add new inputs
+            checkboxes.forEach(cb => {
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = 'product_ids';
+                input.value = cb.value;
+                form.appendChild(input);
+            });
+            
+            // Allow submit
+        });
+    </script>
+    
+    <div style="overflow-x: auto;">
+        <table class="admin-table">
+            <thead>
+                <tr>
+                    <th style="width: 40px;"><input type="checkbox" id="selectAll" onclick="toggleSelectAll()"></th>
+                    <th>SKU</th>
+                    <th>Nombre</th>
+                    <th>Categoría Actual</th>
+                    <th>Precio</th>
+                    <th>Estado</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for product in page_obj %}
+                <tr class="{% if product.category_id == category.pk %}bg-light-success{% endif %}">
+                    <td>
+                        <input type="checkbox" value="{{ product.pk }}" class="product-checkbox" onclick="updateBulkButtons()">
+                    </td>
+                    <td><code>{{ product.sku }}</code></td>
+                    <td>{{ product.name|truncatechars:60 }}</td>
+                    <td>
+                        {% if product.category %}
+                            {% if product.category_id == category.pk %}
+                                <span class="badge badge-success">✅ Esta categoría</span>
+                            {% else %}
+                                <span class="badge badge-secondary">{{ product.category.name }}</span>
+                            {% endif %}
+                        {% else %}
+                            <span class="badge badge-warning">⚠️ Sin categoría</span>
+                        {% endif %}
+                    </td>
+                    <td>${{ product.price|floatformat:2 }}</td>
+                    <td>
+                        {% if product.is_active %}
+                        <span class="badge badge-success">Activo</span>
+                        {% else %}
+                        <span class="badge badge-danger">Inactivo</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="6" class="text-center text-muted">No se encontraron productos con estos filtros.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Pagination -->
+    {% if page_obj.paginator.num_pages > 1 %}
+    <div class="admin-toolbar" style="margin-top: 20px;">
+        <span>Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }} ({{ page_obj.paginator.count }} items)</span>
+        <div class="toolbar-actions">
+            {% if page_obj.has_previous %}
+            <a href="?page={{ page_obj.previous_page_number }}&q={{ search }}&category_filter={{ category_filter }}&status={{ status }}" class="btn btn-outline">← Anterior</a>
+            {% endif %}
+            {% if page_obj.has_next %}
+            <a href="?page={{ page_obj.next_page_number }}&q={{ search }}&category_filter={{ category_filter }}&status={{ status }}" class="btn btn-outline">Siguiente →</a>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+    
+    <style>
+        .bg-light-success {
+            background-color: rgba(40, 167, 69, 0.05);
+        }
+    </style>
+</div>
+{% endblock %}
