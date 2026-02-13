@@ -131,6 +131,24 @@ def catalog(request):
     discount = 0
     if request.user.is_authenticated and hasattr(request.user, 'client_profile'):
         discount = request.user.client_profile.get_discount_decimal()
+
+    # Calculate final price for each product in the current page
+    # This avoids using complex template filters that might fail parsing
+    for product in page_obj.object_list:
+        if discount > 0:
+            # discount is decimal (e.g. 0.10)
+            if discount > 1: 
+                # Safety check if it's percentage (e.g. 10)
+                # But get_discount_decimal should return 0.xx
+                # core_extras check: if discount_percentage > 1: discount_percentage / 100
+                # Let's assume get_discount_decimal is correct, but safe math:
+                d = discount
+                if d > 1: d = d / 100
+                product.final_price = product.price * (1 - d)
+            else:
+                 product.final_price = product.price * (1 - discount)
+        else:
+            product.final_price = product.price
     
     # Calculate expanded categories for sidebar accordion
     expanded_category_ids = []
@@ -144,7 +162,17 @@ def catalog(request):
             expanded_category_ids.append(parent.id)
             parent = parent.parent
             
+    # Field labels for translation
+    field_labels = {
+        'fabrication': 'Fabricación',
+        'diameter': 'Diámetro',
+        'width': 'Ancho',
+        'length': 'Largo',
+        'shape': 'Forma',
+    }
+
     context = {
+        'field_labels': field_labels,
         'page_obj': page_obj,
         'categories': categories,
         'search_query': search_query,

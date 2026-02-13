@@ -25,11 +25,11 @@
                         <span class="item-price">${{ item.product.price|floatformat:2 }}</span>
                     </div>
                     <div class="item-quantity">
-                        <button class="qty-btn"
-                            onclick="updateQuantity({{ item.pk }}, {{ item.quantity|add:'-1' }})">-</button>
-                        <span>{{ item.quantity }}</span>
-                        <button class="qty-btn"
-                            onclick="updateQuantity({{ item.pk }}, {{ item.quantity|add:'1' }})">+</button>
+                        <button class="qty-btn" type="button" onclick="adjustQuantity({{ item.pk }}, -1)">-</button>
+                        <input type="number" id="qty-{{ item.pk }}" value="{{ item.quantity }}" min="1"
+                            class="qty-input" onchange="updateQuantity({{ item.pk }}, this.value)"
+                            onkeydown="if(event.key==='Enter') this.blur()">
+                        <button class="qty-btn" type="button" onclick="adjustQuantity({{ item.pk }}, 1)">+</button>
                     </div>
                     <div class="item-subtotal">
                         ${{ item.subtotal|floatformat:2 }}
@@ -146,6 +146,25 @@
         background: transparent;
         color: var(--color-white);
         cursor: pointer;
+        cursor: pointer;
+    }
+
+    .qty-input {
+        width: 60px;
+        height: 32px;
+        text-align: center;
+        background: transparent;
+        color: var(--color-white);
+        border: 1px solid var(--color-gray);
+        border-radius: var(--radius-sm);
+        /* Remove arrows/spinners */
+        -moz-appearance: textfield;
+    }
+
+    .qty-input::-webkit-outer-spin-button,
+    .qty-input::-webkit-inner-spin-button {
+        -webkit-appearance: none;
+        margin: 0;
     }
 
     .item-subtotal {
@@ -228,11 +247,30 @@
 
 <script>
     async function updateQuantity(itemId, qty) {
-        const response = await fetchWithCSRF('/pedidos/carrito/actualizar/', {
-            method: 'POST',
-            body: JSON.stringify({ item_id: itemId, quantity: qty })
-        });
-        if (response.ok) location.reload();
+        if (qty < 1) return;
+
+        try {
+            const response = await fetchWithCSRF('/pedidos/carrito/actualizar/', {
+                method: 'POST',
+                body: JSON.stringify({ item_id: itemId, quantity: parseInt(qty) })
+            });
+            if (response.ok) location.reload();
+        } catch (error) {
+            console.error('Error updating cart:', error);
+        }
+    }
+
+    function adjustQuantity(itemId, delta) {
+        const input = document.getElementById(`qty-${itemId}`);
+        if (!input) return;
+
+        let currentQty = parseInt(input.value) || 0;
+        let newQty = currentQty + delta;
+
+        if (newQty < 1) newQty = 1;
+
+        input.value = newQty;
+        updateQuantity(itemId, newQty);
     }
 
     async function removeItem(itemId) {

@@ -84,7 +84,7 @@
 
                                         {% for field, options in clamp_options.items %}
                                         <div class="filter-mini-group">
-                                            <label>{{ field|title }}</label>
+                                            <label>{{ field_labels|get_item:field|default:field|title }}</label>
                                             <select name="{{ field }}" class="form-select-mini"
                                                 onchange="this.form.submit()">
                                                 <option value="">- Todos -</option>
@@ -274,8 +274,7 @@
                                 </div>
                                 <div class="price-row final-price">
                                     <span class="label">Precio Final:</span>
-                                    <span class="value">${{ product.price|calculate_discount:discount|floatformat:2
-                                        }}</span>
+                                    <span class="value">${{ product.final_price|floatformat:2 }}</span>
                                 </div>
                                 {% else %}
                                 <div class="price-row final-price single-price">

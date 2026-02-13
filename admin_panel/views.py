@@ -51,31 +51,7 @@ def dashboard(request):
 @staff_member_required
 def product_list(request):
     """Product list with search, filters, and pagination."""
-    products = Product.objects.select_related('category').all()
-    
-    # Search
-    search = request.GET.get('q', '').strip()
-    if search:
-        products = products.filter(
-            Q(sku__icontains=search) |
-            Q(name__icontains=search)
-        )
-    
-    # Category filter
-    category_id = request.GET.get('category', '')
-    current_category_id = None
-    if category_id:
-        try:
-            current_category_id = int(category_id)
-            products = products.filter(category_id=category_id)
-        except (ValueError, TypeError):
-            pass
-        
-    # Active filter
-    active_filter = request.GET.get('active', '')
-    if active_filter:
-        is_active = active_filter == '1'
-        products = products.filter(is_active=is_active)
+    products, search, current_category_id, active_filter = get_product_queryset(request.GET)
     
     # Ordering
     order = request.GET.get('order', '-updated_at')
@@ -94,8 +70,41 @@ def product_list(request):
         'search': search,
         'current_category_id': current_category_id,
         'active_filter': active_filter,
+        'total_count': products.count(),
+        'pagination_count': page_obj.paginator.count,
     }
     return render(request, 'admin_panel/products/list.html', context)
+
+
+def get_product_queryset(data):
+    """Resusable filter logic for products."""
+    products = Product.objects.select_related('category').all()
+    
+    # Search
+    search = data.get('q', '').strip()
+    if search:
+        products = products.filter(
+            Q(sku__icontains=search) |
+            Q(name__icontains=search)
+        )
+    
+    # Category filter
+    category_id = data.get('category', '')
+    current_category_id = None
+    if category_id:
+        try:
+            current_category_id = int(category_id)
+            products = products.filter(category_id=category_id)
+        except (ValueError, TypeError):
+            pass
+        
+    # Active filter
+    active_filter = data.get('active', '')
+    if active_filter:
+        is_active = active_filter == '1'
+        products = products.filter(is_active=is_active)
+        
+    return products, search, current_category_id, active_filter
 
 
 @staff_member_required
@@ -221,18 +230,23 @@ def product_toggle_active(request):
 def product_bulk_category_update(request):
     """Bulk update product categories."""
     try:
-        product_ids = request.POST.getlist('product_ids')
         category_id = request.POST.get('category_id')
+        select_all_pages = request.POST.get('select_all_pages') == 'true'
         
-        if not product_ids:
-            messages.warning(request, 'No se seleccionaron productos.')
-            return redirect('admin_product_list')
-            
         if not category_id:
             messages.warning(request, 'No se seleccionó una categoría.')
             return redirect('admin_product_list')
+
+        if select_all_pages:
+            products_to_update, _, _, _ = get_product_queryset(request.POST)
+        else:
+            product_ids = request.POST.getlist('product_ids')
+            if not product_ids:
+                messages.warning(request, 'No se seleccionaron productos.')
+                return redirect('admin_product_list')
+            products_to_update = Product.objects.filter(id__in=product_ids)
             
-        count = Product.objects.filter(id__in=product_ids).update(category_id=category_id)
+        count = products_to_update.update(category_id=category_id)
         
         category = Category.objects.get(pk=category_id)
         messages.success(request, f'{count} productos movidos a categoría "{category.name}".')
@@ -679,56 +693,71 @@ def category_manage_products(request, pk):
     """
     category = get_object_or_404(Category, pk=pk)
     
+    # Common Filter Logic (Reused for GET & POST)
+    def get_filtered_queryset(req_data):
+        qs = Product.objects.all()
+        
+        # Search
+        search = req_data.get('q', '').strip()
+        if search:
+            qs = qs.filter(
+                Q(sku__icontains=search) | 
+                Q(name__icontains=search)
+            )
+            
+        # Filter by Status
+        status = req_data.get('status')
+        if status == 'active':
+            qs = qs.filter(is_active=True)
+        elif status == 'inactive':
+            qs = qs.filter(is_active=False)
+            
+        # Filter by Current Category
+        cat_filter = req_data.get('category_filter', 'current') 
+        if cat_filter == 'current':
+            qs = qs.filter(category=category)
+        elif cat_filter == 'none':
+            qs = qs.filter(category__isnull=True)
+        elif cat_filter == 'all':
+            pass
+        elif cat_filter.isdigit():
+            qs = qs.filter(category_id=int(cat_filter))
+            
+        return qs, search, status, cat_filter
+
     # 1. Handle Bulk Action (POST)
     if request.method == 'POST':
-        product_ids = request.POST.getlist('product_ids')
         action = request.POST.get('action')
+        select_all_pages = request.POST.get('select_all_pages') == 'true'
         
-        if product_ids:
-            if action == 'assign':
-                # Assign selected to this category
-                count = Product.objects.filter(id__in=product_ids).update(category=category)
-                messages.success(request, f'{count} productos asignados a "{category.name}".')
-                
-            elif action == 'remove':
-                # Remove selected from this category (set to None)
-                # Only remove if they are actually in this category (security check)
-                count = Product.objects.filter(id__in=product_ids, category=category).update(category=None)
-                messages.success(request, f'{count} productos desvinculados de "{category.name}".')
+        if select_all_pages:
+            # Re-apply filters to get ALL matching products
+            products_to_update, _, _, _ = get_filtered_queryset(request.POST)
+        else:
+            # Use specific IDs
+            product_ids = request.POST.getlist('product_ids')
+            if not product_ids:
+                messages.warning(request, 'No se seleccionaron productos.')
+                return redirect('admin_category_products', pk=pk)
+            products_to_update = Product.objects.filter(id__in=product_ids)
+        
+        count = 0
+        if action == 'assign':
+            count = products_to_update.update(category=category)
+            messages.success(request, f'{count} productos asignados a "{category.name}".')
+            
+        elif action == 'remove':
+            # Only remove if they are actually in this category (security check)
+            # When selecting all pages, we should also filter by category to be safe, 
+            # though update(category=None) on products not in category is harmless no-op usually.
+            count = products_to_update.filter(category=category).update(category=None)
+            messages.success(request, f'{count} productos desvinculados de "{category.name}".')
                 
         return redirect('admin_category_products', pk=pk)
 
     # 2. Filter & Search Logic (GET)
-    products = Product.objects.all().select_related('category')
+    products, search, status, cat_filter = get_filtered_queryset(request.GET)
     
-    # Search
-    search = request.GET.get('q', '').strip()
-    if search:
-        products = products.filter(
-            Q(sku__icontains=search) | 
-            Q(name__icontains=search)
-        )
-        
-    # Filter by Status
-    status = request.GET.get('status')
-    if status == 'active':
-        products = products.filter(is_active=True)
-    elif status == 'inactive':
-        products = products.filter(is_active=False)
-        
-    # Filter by Current Category (The most important filter)
-    # Options: 'current' (in this cat), 'none' (no cat), 'all' (default), or specific ID
-    cat_filter = request.GET.get('category_filter', 'current') 
-    
-    if cat_filter == 'current':
-        products = products.filter(category=category)
-    elif cat_filter == 'none':
-        products = products.filter(category__isnull=True)
-    elif cat_filter == 'all':
-        pass # No filter
-    elif cat_filter.isdigit():
-        products = products.filter(category_id=int(cat_filter))
-
     # Pagination
     paginator = Paginator(products.order_by('name'), 50)
     page_number = request.GET.get('page')
@@ -744,6 +773,8 @@ def category_manage_products(request, pk):
         'status': status,
         'category_filter': cat_filter,
         'all_categories': all_categories,
+        'total_count': products.count(),
+        'pagination_count': page_obj.paginator.count,
     })
 
 # ===================== API =====================

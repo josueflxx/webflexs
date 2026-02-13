@@ -38,6 +38,12 @@
             <form id="bulkCategoryForm" method="post" action="{% url 'admin_product_bulk_category' %}"
                 style="display: flex; gap: 5px;" onsubmit="return validateBulkAction()">
                 {% csrf_token %}
+                <!-- Hidden inputs for global selection -->
+                <input type="hidden" name="q" value="{{ search }}">
+                <input type="hidden" name="category" value="{{ current_category_id|default:'' }}">
+                <input type="hidden" name="active" value="{{ active_filter }}">
+                <input type="hidden" name="select_all_pages" id="selectAllPagesInput" value="false">
+
                 <select name="category_id" class="form-select" style="max-width: 200px;">
                     <option value="">Mover seleccionados a...</option>
                     {% for cat in categories %}
@@ -77,7 +83,27 @@
         </div>
     </div>
 
+    <!-- Select All Warning/Option -->
+    <div id="selectAllContainer" class="alert alert-info" style="display: none; margin-bottom: 15px;">
+        <span id="selectAllMessage">Has seleccionado los {{ page_obj.object_list|length }} productos de esta
+            página.</span>
+        {% if total_count > 50 %}
+        <a href="#" id="selectAllLink" onclick="selectAllPages(event)" class="alert-link"
+            style="font-weight: bold; text-decoration: underline;">
+            Seleccionar los {{ total_count }} productos de la búsqueda.
+        </a>
+        {% endif %}
+        <span id="allSelectedMessage" style="display: none; font-weight: bold;">
+            ✅ Se han seleccionado todos los {{ total_count }} productos.
+            <a href="#" onclick="clearSelectAll(event)"
+                style="font-weight: normal; font-size: 0.9em; margin-left: 10px;">(Cancelar selección masiva)</a>
+        </span>
+    </div>
+
     <script>
+        const TOTAL_COUNT = {{ total_count }};
+        const PAGINATION_COUNT = {{ pagination_count }};
+
         function openDeleteModal() {
             document.getElementById('deleteModal').style.display = 'block';
         }
@@ -97,40 +123,111 @@
         function toggleSelectAll() {
             const checkboxes = document.querySelectorAll('.product-checkbox');
             const selectAll = document.getElementById('selectAll');
-            checkboxes.forEach(cb => cb.checked = selectAll.checked);
+
+            // If globally selected, clear it
+            const selectAllInput = document.getElementById('selectAllPagesInput');
+            if (selectAllInput && selectAllInput.value === 'true') {
+                clearSelectAll(new Event('click'));
+                checkboxes.forEach(cb => cb.checked = false);
+                selectAll.checked = false;
+            } else {
+                checkboxes.forEach(cb => cb.checked = selectAll.checked);
+
+                // Show "Select all pages" option if > 50 items and checking all
+                const linkContainer = document.getElementById('selectAllContainer');
+                if (selectAll.checked && TOTAL_COUNT > checkboxes.length) {
+                    linkContainer.style.display = 'block';
+                    document.getElementById('selectAllMessage').style.display = 'inline';
+                    const link = document.getElementById('selectAllLink');
+                    if (link) link.style.display = 'inline';
+                    document.getElementById('allSelectedMessage').style.display = 'none';
+                } else {
+                    linkContainer.style.display = 'none';
+                }
+            }
+            updateBulkButton();
+        }
+
+        function selectAllPages(e) {
+            e.preventDefault();
+            document.getElementById('selectAllPagesInput').value = 'true';
+
+            // UI Updates
+            document.getElementById('selectAllMessage').style.display = 'none';
+            const link = document.getElementById('selectAllLink');
+            if (link) link.style.display = 'none';
+            document.getElementById('allSelectedMessage').style.display = 'inline';
+
+            // Disable individual checkboxes
+            document.querySelectorAll('.product-checkbox').forEach(cb => {
+                cb.checked = true;
+                cb.disabled = true;
+            });
+            document.getElementById('selectAll').checked = true;
+
+            updateBulkButton();
+        }
+
+        function clearSelectAll(e) {
+            if (e) e.preventDefault();
+            document.getElementById('selectAllPagesInput').value = 'false';
+
+            document.getElementById('selectAllContainer').style.display = 'none';
+
+            document.querySelectorAll('.product-checkbox').forEach(cb => {
+                cb.disabled = false;
+                cb.checked = false;
+            });
+            document.getElementById('selectAll').checked = false;
+
             updateBulkButton();
         }
 
         function updateBulkButton() {
             const checkboxes = document.querySelectorAll('.product-checkbox:checked');
+            const selectAllGlobal = document.getElementById('selectAllPagesInput').value === 'true';
             const btn = document.getElementById('bulkSubmitBtn');
-            if (checkboxes.length > 0) {
+
+            let count = 0;
+            if (selectAllGlobal) {
+                count = TOTAL_COUNT;
+            } else {
+                count = checkboxes.length;
+            }
+
+            if (count > 0) {
                 btn.removeAttribute('disabled');
+                btn.innerHTML = `Mover (${count})`;
             } else {
                 btn.setAttribute('disabled', 'true');
+                btn.innerHTML = `Mover`;
             }
         }
 
         function validateBulkAction() {
             const form = document.getElementById('bulkCategoryForm');
-            const checkboxes = document.querySelectorAll('.product-checkbox:checked');
+            const selectAllGlobal = document.getElementById('selectAllPagesInput').value === 'true';
 
-            // Remove old hidden inputs if any (clears previous selection)
-            form.querySelectorAll('input[name="product_ids"]').forEach(el => el.remove());
+            if (!selectAllGlobal) {
+                const checkboxes = document.querySelectorAll('.product-checkbox:checked');
 
-            if (checkboxes.length === 0) {
-                alert('Por favor selecciona al menos un producto.');
-                return false;
+                // Remove old hidden inputs if any (clears previous selection)
+                form.querySelectorAll('input[name="product_ids"]').forEach(el => el.remove());
+
+                if (checkboxes.length === 0) {
+                    alert('Por favor selecciona al menos un producto.');
+                    return false;
+                }
+
+                // Append selected IDs to the form as hidden inputs
+                checkboxes.forEach(cb => {
+                    const input = document.createElement('input');
+                    input.type = 'hidden';
+                    input.name = 'product_ids';
+                    input.value = cb.value;
+                    form.appendChild(input);
+                });
             }
-
-            // Append selected IDs to the form as hidden inputs
-            checkboxes.forEach(cb => {
-                const input = document.createElement('input');
-                input.type = 'hidden';
-                input.name = 'product_ids';
-                input.value = cb.value;
-                form.appendChild(input);
-            });
 
             return true;
         }
