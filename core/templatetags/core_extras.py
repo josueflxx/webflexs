@@ -40,3 +40,18 @@ def multiply(value, arg):
     except (ValueError, TypeError):
         return 0
 
+
+@register.simple_tag
+def querystring(request, **kwargs):
+    """
+    Build querystring preserving current params and overriding provided keys.
+    Usage: {% querystring request page=2 order='name' %}
+    """
+    query = request.GET.copy()
+    for key, value in kwargs.items():
+        if value in (None, ''):
+            query.pop(key, None)
+        else:
+            query[key] = value
+    return query.urlencode()
+

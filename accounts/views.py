@@ -6,6 +6,7 @@ from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.views.decorators.http import require_http_methods
+from django.utils.http import url_has_allowed_host_and_scheme
 from .models import AccountRequest
 
 
@@ -26,7 +27,11 @@ def login_view(request):
             
             # Check for next parameter
             next_url = request.GET.get('next', '')
-            if next_url:
+            if next_url and url_has_allowed_host_and_scheme(
+                next_url,
+                allowed_hosts={request.get_host()},
+                require_https=request.is_secure()
+            ):
                 return redirect(next_url)
             
             return redirect('login_redirect')

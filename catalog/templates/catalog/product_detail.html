@@ -1,0 +1,104 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ product.name }} - FLEXS{% endblock %}
+
+{% block content %}
+<div class="product-detail-page">
+    <div class="container">
+        <a href="{% url 'catalog' %}" class="btn btn-outline">Volver al catálogo</a>
+
+        <div class="product-detail-card">
+            <div class="product-media">
+                {% if product.image %}
+                <img src="{{ product.image.url }}" alt="{{ product.name }}">
+                {% else %}
+                <div class="product-placeholder">Sin imagen</div>
+                {% endif %}
+            </div>
+
+            <div class="product-data">
+                <p class="sku">SKU: {{ product.sku }}</p>
+                <h1>{{ product.name }}</h1>
+
+                {% if display_categories %}
+                <div class="detail-categories">
+                    {% for cat in display_categories %}
+                    <span class="detail-category">{{ cat.name }}</span>
+                    {% endfor %}
+                </div>
+                {% endif %}
+
+                {% if show_prices %}
+                <div class="price-box">
+                    {% if discount %}
+                    <p>Precio de lista: ${{ product.price|floatformat:2 }}</p>
+                    <p>Descuento: {{ discount_percentage|floatformat:0 }}%</p>
+                    <p class="price-final">Precio final: ${{ final_price|floatformat:2 }}</p>
+                    {% else %}
+                    <p class="price-final">${{ product.price|floatformat:2 }}</p>
+                    {% endif %}
+                </div>
+                {% else %}
+                <p class="price-hidden">{{ price_message }}</p>
+                {% endif %}
+
+                {% if product.description %}
+                <div class="description">
+                    <h3>Descripción</h3>
+                    <p>{{ product.description }}</p>
+                </div>
+                {% endif %}
+
+                {% if user.is_authenticated %}
+                <button class="btn btn-primary" onclick="addToCart({{ product.id }})">Agregar al carrito</button>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .product-detail-page { padding: var(--spacing-2xl) 0; }
+    .product-detail-card {
+        margin-top: var(--spacing-lg);
+        display: grid;
+        grid-template-columns: 420px 1fr;
+        gap: var(--spacing-xl);
+        background: var(--color-dark-light);
+        border-radius: var(--radius-lg);
+        padding: var(--spacing-xl);
+    }
+    .product-media { background: var(--color-dark); border-radius: var(--radius-md); overflow: hidden; }
+    .product-media img { width: 100%; height: 100%; object-fit: cover; }
+    .product-placeholder { min-height: 320px; display: grid; place-items: center; color: var(--color-gray-light); }
+    .sku { color: var(--color-gray-light); font-family: monospace; margin-bottom: var(--spacing-sm); }
+    .price-box { margin: var(--spacing-md) 0; }
+    .price-final { color: var(--color-primary); font-size: var(--font-size-2xl); font-weight: 700; }
+    .price-hidden { color: var(--color-warning); margin: var(--spacing-md) 0; }
+    .detail-categories { display: flex; gap: 8px; flex-wrap: wrap; margin: var(--spacing-sm) 0 var(--spacing-md); }
+    .detail-category { background: rgba(255, 107, 53, 0.2); color: var(--color-primary); padding: 4px 10px; border-radius: 999px; font-size: 0.8rem; }
+    .description { margin: var(--spacing-lg) 0; }
+    @media (max-width: 900px) {
+        .product-detail-card { grid-template-columns: 1fr; }
+    }
+</style>
+
+<script>
+    async function addToCart(productId) {
+        try {
+            const response = await fetchWithCSRF('/pedidos/carrito/agregar/', {
+                method: 'POST',
+                body: JSON.stringify({ product_id: productId, quantity: 1 })
+            });
+            const data = await response.json();
+            if (data.success) {
+                window.location.href = "{% url 'cart' %}";
+            } else {
+                alert(data.error || 'No se pudo agregar el producto');
+            }
+        } catch (error) {
+            alert('No se pudo agregar el producto');
+        }
+    }
+</script>
+{% endblock %}

@@ -1,26 +1,164 @@
 {% extends 'admin_panel/base.html' %}
 
-{% block page_title %}Categorías{% endblock %}
+{% block page_title %}Categorias{% endblock %}
+
+{% block extra_css %}
+<style>
+    .category-list-shell {
+        overflow: visible;
+    }
+
+    .category-toolbar {
+        align-items: flex-start;
+    }
+
+    .category-toolbar-title h2 {
+        margin: 0;
+        font-size: 1.15rem;
+    }
+
+    .category-toolbar-title p {
+        margin: 6px 0 0;
+        color: var(--color-gray-light);
+        font-size: 0.9rem;
+    }
+
+    .category-table-wrap {
+        overflow-x: auto;
+    }
+
+    .category-table td {
+        vertical-align: top;
+    }
+
+    .category-name-cell {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .category-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 999px;
+        background: var(--color-primary);
+        box-shadow: 0 0 0 4px rgba(255, 107, 53, 0.15);
+        flex-shrink: 0;
+    }
+
+    .category-name-cell.child .category-dot {
+        background: var(--color-info);
+        box-shadow: 0 0 0 4px rgba(23, 162, 184, 0.16);
+    }
+
+    .category-name-meta {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+    }
+
+    .category-name-meta small {
+        color: var(--color-gray-light);
+        font-size: 0.78rem;
+    }
+
+    .subcategory-chip-wrap,
+    .metric-chip-wrap {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+    }
+
+    .category-child-row {
+        background: rgba(0, 0, 0, 0.22);
+    }
+
+    .category-child-row td:first-child {
+        padding-left: 2.2rem;
+    }
+
+    .action-group {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+    }
+
+    .btn-inline {
+        padding: 6px 10px;
+        font-size: 0.82rem;
+        line-height: 1;
+        min-height: auto;
+    }
+
+    .btn-subcategory {
+        border-color: rgba(255, 107, 53, 0.45);
+        color: var(--color-primary);
+    }
+
+    .btn-subcategory:hover {
+        border-color: var(--color-primary);
+        background: rgba(255, 107, 53, 0.12);
+    }
+
+    .category-modal {
+        display: none;
+        position: fixed;
+        z-index: 1000;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.5);
+    }
+
+    .category-modal-content {
+        background-color: #fff;
+        margin: 12% auto;
+        padding: 20px;
+        border: 1px solid #888;
+        width: 420px;
+        max-width: calc(100% - 32px);
+        border-radius: 8px;
+        color: #1d1d1d;
+    }
+
+    @media (max-width: 900px) {
+        .category-toolbar {
+            flex-direction: column;
+            align-items: stretch;
+        }
+
+        .toolbar-actions {
+            width: 100%;
+        }
+
+        .toolbar-actions .btn {
+            flex: 1;
+            text-align: center;
+        }
+    }
+</style>
+{% endblock %}
 
 {% block content %}
-<div class="admin-table-container">
-    <div class="admin-toolbar">
-        <span>Gestión de Categorías</span>
+<div class="admin-table-container category-list-shell">
+    <div class="admin-toolbar category-toolbar">
+        <div class="category-toolbar-title">
+            <h2>Gestion de categorias</h2>
+            <p>Crea subcategorias en un clic desde cualquier fila con "Nueva sub".</p>
+        </div>
         <div class="toolbar-actions">
             {% if user.is_superuser %}
-            <button type="button" class="btn btn-danger" onclick="openDeleteModal()">Eliminar Todas</button>
-            <a href="{% url 'admin_category_create' %}" class="btn btn-primary">+ Nueva Categoría</a>
+            <button type="button" class="btn btn-danger" onclick="openDeleteModal()">Eliminar todas</button>
+            <a href="{% url 'admin_category_create' %}" class="btn btn-primary">Nueva categoria</a>
             {% endif %}
         </div>
     </div>
 
-    <!-- Delete Modal -->
-    <div id="deleteModal" class="modal"
-        style="display:none; position:fixed; z-index:1000; left:0; top:0; width:100%; height:100%; background-color:rgba(0,0,0,0.5);">
-        <div class="modal-content"
-            style="background-color:#fff; margin:15% auto; padding:20px; border:1px solid #888; width:400px; border-radius:5px;">
-            <h3 style="color: #dc3545; margin-top: 0;">⚠️ Peligro: Borrado Masivo</h3>
-            <p>Estás a punto de eliminar <strong>TODAS</strong> las categorías. Esta acción no se puede deshacer.</p>
+    <div id="deleteModal" class="category-modal">
+        <div class="category-modal-content">
+            <h3 style="color: #dc3545; margin-top: 0;">Peligro: borrado masivo</h3>
+            <p>Estas a punto de eliminar <strong>TODAS</strong> las categorias. Esta accion no se puede deshacer.</p>
             <p>Para confirmar, escribe: <code>delete categorias</code></p>
 
             <form method="post" action="{% url 'admin_category_delete_all' %}">
@@ -31,8 +169,7 @@
 
                 <div style="display: flex; justify-content: flex-end; gap: 10px;">
                     <button type="button" class="btn btn-outline" onclick="closeDeleteModal()">Cancelar</button>
-                    <button type="submit" id="deleteSubmitBtn" class="btn btn-danger" disabled>Confirmar
-                        Borrado</button>
+                    <button type="submit" id="deleteSubmitBtn" class="btn btn-danger" disabled>Confirmar borrado</button>
                 </div>
             </form>
         </div>
@@ -43,81 +180,127 @@
         function closeDeleteModal() { document.getElementById('deleteModal').style.display = 'none'; }
         function checkDeleteInput(input, expected) {
             const btn = document.getElementById('deleteSubmitBtn');
-            input.value.trim().toLowerCase() === expected ? btn.removeAttribute('disabled') : btn.setAttribute('disabled', 'true');
+            if (input.value.trim().toLowerCase() === expected) {
+                btn.removeAttribute('disabled');
+            } else {
+                btn.setAttribute('disabled', 'true');
+            }
         }
-        window.onclick = function (e) { if (e.target == document.getElementById('deleteModal')) closeDeleteModal(); }
+        window.onclick = function (e) {
+            if (e.target == document.getElementById('deleteModal')) closeDeleteModal();
+        }
     </script>
 
-    <table class="admin-table">
-        <thead>
-            <tr>
-                <th>Nombre</th>
-                <th>Subcategorías</th>
-                <th>Productos</th>
-                <th>Estado</th>
-                <th>Acciones</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for category in categories %}
-            <tr>
-                <td><strong>{{ category.name }}</strong></td>
-                <td>
-                    {% for child in category.children.all %}
-                    <span class="badge badge-info">{{ child.name }}</span>
-                    {% empty %}
-                    -
-                    {% endfor %}
-                </td>
-                <td>{{ category.products.count }}</td>
-                <td>
-                    {% if category.is_active %}
-                    <span class="badge badge-success">Activa</span>
-                    {% else %}
-                    <span class="badge badge-danger">Inactiva</span>
-                    {% endif %}
-                </td>
-                <td class="actions">
-                    <a href="{% url 'admin_category_products' category.pk %}" class="btn btn-outline"
-                        title="Gestionar Productos">📦</a>
-                    <a href="{% url 'admin_category_edit' category.pk %}" class="btn btn-outline"
-                        title="{% if user.is_superuser %}Editar{% else %}Ver{% endif %}">
-                        {% if user.is_superuser %}✏️{% else %}👁️{% endif %}
-                    </a>
-                    {% if user.is_superuser %}
-                    <a href="{% url 'admin_category_delete' category.pk %}" class="btn btn-danger-outline"
-                        title="Eliminar">🗑️</a>
-                    {% endif %}
-                </td>
-            </tr>
-            {% for child in category.children.all %}
-            <tr style="background: rgba(0,0,0,0.2);">
-                <td style="padding-left: 2rem;">↳ {{ child.name }}</td>
-                <td>-</td>
-                <td>{{ child.products.count }}</td>
-                <td>
-                    {% if child.is_active %}
-                    <span class="badge badge-success">Activa</span>
-                    {% else %}
-                    <span class="badge badge-danger">Inactiva</span>
-                    {% endif %}
-                </td>
-                <td class="actions">
-                    <a href="{% url 'admin_category_products' child.pk %}" class="btn btn-outline"
-                        title="Gestionar Productos">📦</a>
-                    <a href="{% url 'admin_category_edit' child.pk %}" class="btn btn-outline"
-                        title="{% if user.is_superuser %}Editar{% else %}Ver{% endif %}">
-                        {% if user.is_superuser %}✏️{% else %}👁️{% endif %}
-                    </a>
-                </td>
-            </tr>
-            {% endfor %}
-            {% empty %}
-            <tr>
-                <td colspan="5" class="text-center text-muted">No hay categorías</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+    <div class="category-table-wrap">
+        <table class="admin-table category-table">
+            <thead>
+                <tr>
+                    <th>Nombre</th>
+                    <th>Subcategorias</th>
+                    <th>Productos</th>
+                    <th>Estado</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for category in categories %}
+                <tr class="category-parent-row">
+                    <td>
+                        <div class="category-name-cell">
+                            <span class="category-dot"></span>
+                            <div class="category-name-meta">
+                                <strong>{{ category.name }}</strong>
+                                <small>Categoria principal</small>
+                            </div>
+                        </div>
+                    </td>
+                    <td>
+                        <div class="subcategory-chip-wrap">
+                            {% for child in category.children.all %}
+                            <span class="badge badge-info">{{ child.name }}</span>
+                            {% empty %}
+                            <span class="text-muted">Sin subcategorias</span>
+                            {% endfor %}
+                        </div>
+                    </td>
+                    <td>
+                        <div class="metric-chip-wrap">
+                            <span class="badge badge-secondary">Directos: {{ category.direct_products_count|default:0 }}</span>
+                            <span class="badge badge-info">Arbol: {{ category.tree_products_count|default:0 }}</span>
+                        </div>
+                    </td>
+                    <td>
+                        {% if category.is_active %}
+                        <span class="badge badge-success">Activa</span>
+                        {% else %}
+                        <span class="badge badge-danger">Inactiva</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <div class="action-group">
+                            <a href="{% url 'admin_category_products' category.pk %}" class="btn btn-outline btn-inline"
+                                title="Gestionar productos">Productos</a>
+                            <a href="{% url 'admin_category_edit' category.pk %}" class="btn btn-outline btn-inline"
+                                title="{% if user.is_superuser %}Editar{% else %}Ver{% endif %}">
+                                {% if user.is_superuser %}Editar{% else %}Ver{% endif %}
+                            </a>
+                            {% if user.is_superuser %}
+                            <a href="{% url 'admin_category_create' %}?parent={{ category.pk }}" class="btn btn-outline btn-inline btn-subcategory"
+                                title="Crear subcategoria">Nueva sub</a>
+                            <a href="{% url 'admin_category_delete' category.pk %}" class="btn btn-danger-outline btn-inline"
+                                title="Eliminar">Eliminar</a>
+                            {% endif %}
+                        </div>
+                    </td>
+                </tr>
+                {% for child in category.children.all %}
+                <tr class="category-child-row">
+                    <td>
+                        <div class="category-name-cell child">
+                            <span class="category-dot"></span>
+                            <div class="category-name-meta">
+                                <strong>{{ child.name }}</strong>
+                                <small>Subcategoria de {{ category.name }}</small>
+                            </div>
+                        </div>
+                    </td>
+                    <td><span class="text-muted">-</span></td>
+                    <td>
+                        <div class="metric-chip-wrap">
+                            <span class="badge badge-secondary">Directos: {{ child.direct_products_count|default:0 }}</span>
+                            <span class="badge badge-info">Arbol: {{ child.tree_products_count|default:0 }}</span>
+                        </div>
+                    </td>
+                    <td>
+                        {% if child.is_active %}
+                        <span class="badge badge-success">Activa</span>
+                        {% else %}
+                        <span class="badge badge-danger">Inactiva</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <div class="action-group">
+                            <a href="{% url 'admin_category_products' child.pk %}" class="btn btn-outline btn-inline"
+                                title="Gestionar productos">Productos</a>
+                            <a href="{% url 'admin_category_edit' child.pk %}" class="btn btn-outline btn-inline"
+                                title="{% if user.is_superuser %}Editar{% else %}Ver{% endif %}">
+                                {% if user.is_superuser %}Editar{% else %}Ver{% endif %}
+                            </a>
+                            {% if user.is_superuser %}
+                            <a href="{% url 'admin_category_create' %}?parent={{ child.pk }}" class="btn btn-outline btn-inline btn-subcategory"
+                                title="Crear subcategoria">Nueva sub</a>
+                            {% endif %}
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+                {% empty %}
+                <tr>
+                    <td colspan="5" class="text-center text-muted">No hay categorias</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
 </div>
 {% endblock %}

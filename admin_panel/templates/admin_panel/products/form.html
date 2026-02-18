@@ -54,17 +54,42 @@
         </div>
 
         <div class="form-group">
-            <label for="category" class="form-label">Categoría</label>
-            <select name="category" 
-                    id="category" 
-                    class="form-select" 
-                    onchange="loadCategoryAttributes(this.value)" 
+            <label for="category" class="form-label">Categoria principal (atributos/filtros)</label>
+            <select name="category"
+                    id="category"
+                    class="form-select"
+                    onchange="loadCategoryAttributes(this.value); syncPrimaryWithChecks(this.value)"
                     {% if not user.is_superuser %}disabled{% endif %}>
-                <option value="">Sin categoría</option>
+                <option value="">Sin categoria principal</option>
                 {% for cat in categories %}
-                <option value="{{ cat.pk }}" {% if product.category_id == cat.pk %}selected{% endif %}>{{ cat.name }}</option>
+                <option value="{{ cat.pk }}" {% if product.category_id == cat.pk %}selected{% endif %}>
+                    {% if cat.parent %}{{ cat.parent.name }} > {% endif %}{{ cat.name }}
+                </option>
                 {% endfor %}
             </select>
+            <small class="text-muted">Se usa para atributos dinamicos y compatibilidad.</small>
+        </div>
+
+        <div class="form-group">
+            <label class="form-label">Categorias vinculadas (multi-categoria)</label>
+            <input type="text" id="categorySearchInput" class="form-input" placeholder="Buscar categoria..." {% if not user.is_superuser %}disabled{% endif %}>
+            <div class="category-check-grid" id="categoryCheckGrid">
+                {% for cat in categories %}
+                <label class="category-check-item" data-name="{{ cat.name|lower }} {% if cat.parent %}{{ cat.parent.name|lower }}{% endif %}">
+                    <input type="checkbox"
+                           name="categories"
+                           value="{{ cat.pk }}"
+                           class="category-check"
+                           {% if cat.pk in selected_category_ids %}checked{% endif %}
+                           {% if not user.is_superuser %}disabled{% endif %}>
+                    <span>
+                        {% if cat.parent %}<small class="text-muted">{{ cat.parent.name }} ></small>{% endif %}
+                        {{ cat.name }}
+                    </span>
+                </label>
+                {% endfor %}
+            </div>
+            <small class="text-muted">Puedes vincular el producto a multiples categorias sin perder historial.</small>
         </div>
 
         <!-- Dynamic Attributes Container -->
@@ -119,6 +144,32 @@
 
 {{ product.attributes|json_script:"attributes-data" }}
 
+<style>
+    .category-check-grid {
+        margin-top: 10px;
+        max-height: 260px;
+        overflow: auto;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 8px;
+        padding: 10px;
+        display: grid;
+        grid-template-columns: repeat(2, minmax(220px, 1fr));
+        gap: 8px 14px;
+    }
+    .category-check-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 8px;
+        padding: 8px 10px;
+    }
+    @media (max-width: 900px) {
+        .category-check-grid { grid-template-columns: 1fr; }
+    }
+</style>
+
 <script>
     // Store current attributes if editing
     const currentAttributes = JSON.parse(document.getElementById('attributes-data').textContent || '{}');
@@ -127,6 +178,7 @@
     document.addEventListener('DOMContentLoaded', function() {
         // Initial load
         loadCategoryAttributes();
+        bindCategorySearch();
 
         // Intercept form submission to collect JSON
         const form = document.querySelector('form');
@@ -134,6 +186,26 @@
             collectAttributes();
         });
     });
+
+    
+    function bindCategorySearch() {
+        const input = document.getElementById('categorySearchInput');
+        const items = document.querySelectorAll('.category-check-item');
+        if (!input) return;
+        input.addEventListener('input', function() {
+            const q = this.value.trim().toLowerCase();
+            items.forEach(item => {
+                const text = item.dataset.name || '';
+                item.style.display = (!q || text.includes(q)) ? 'flex' : 'none';
+            });
+        });
+    }
+
+    function syncPrimaryWithChecks(primaryId) {
+        if (!primaryId) return;
+        const checkbox = document.querySelector(`.category-check[value="${primaryId}"]`);
+        if (checkbox) checkbox.checked = true;
+    }
 
     async function loadCategoryAttributes() {
         const categoryId = document.getElementById('category').value;

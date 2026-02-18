@@ -364,11 +364,19 @@
 }
 
 .product-category {
+    display: inline-block;
     font-size: var(--font-size-xs);
     color: var(--color-primary);
     background: rgba(255, 107, 53, 0.2);
     padding: 2px 8px;
     border-radius: var(--radius-full);
+}
+
+.product-category-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 6px;
 }
 
 .product-pricing-details {

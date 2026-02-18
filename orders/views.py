@@ -7,9 +7,12 @@ from django.contrib import messages
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST
 import json
+import logging
 
 from .models import Cart, CartItem, Order, OrderItem
 from catalog.models import Product
+
+logger = logging.getLogger(__name__)
 
 
 @login_required
@@ -48,7 +51,10 @@ def add_to_cart(request):
         product_id = data.get('product_id')
         quantity = int(data.get('quantity', 1))
         
-        product = get_object_or_404(Product, id=product_id, is_active=True)
+        product = get_object_or_404(
+            Product.catalog_visible(Product.objects.select_related('category').prefetch_related('categories')),
+            id=product_id
+        )
         cart, _ = Cart.objects.get_or_create(user=request.user)
         
         # Check if item already in cart
@@ -69,7 +75,8 @@ def add_to_cart(request):
         })
     
     except Exception as e:
-        return JsonResponse({'success': False, 'error': str(e)}, status=400)
+        logger.exception("Error adding product to cart")
+        return JsonResponse({'success': False, 'error': 'No se pudo agregar el producto.'}, status=400)
 
 
 @login_required
@@ -101,7 +108,8 @@ def update_cart_item(request):
         })
     
     except Exception as e:
-        return JsonResponse({'success': False, 'error': str(e)}, status=400)
+        logger.exception("Error updating cart item")
+        return JsonResponse({'success': False, 'error': 'No se pudo actualizar el carrito.'}, status=400)
 
 
 @login_required
@@ -124,7 +132,8 @@ def remove_from_cart(request):
         })
     
     except Exception as e:
-        return JsonResponse({'success': False, 'error': str(e)}, status=400)
+        logger.exception("Error removing cart item")
+        return JsonResponse({'success': False, 'error': 'No se pudo eliminar el producto.'}, status=400)
 
 
 @login_required

@@ -25,10 +25,20 @@ from catalog.services.product_importer import ProductImporter
 from accounts.services.client_importer import ClientImporter
 from catalog.services.category_importer import CategoryImporter
 from catalog.services.abrazadera_importer import AbrazaderaImporter
+from catalog.services.category_assignment import (
+    normalize_category_ids,
+    assign_categories_to_product,
+    add_category_to_products,
+    replace_categories_for_products,
+    remove_category_from_products,
+)
 from core.services.import_manager import ImportTaskManager
 import threading
 import traceback
+import logging
 from core.decorators import superuser_required_for_modifications
+
+logger = logging.getLogger(__name__)
 
 
 @staff_member_required
@@ -61,8 +71,10 @@ def product_list(request):
     paginator = Paginator(products, 20)
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
+
+    enrich_products_with_category_state(page_obj.object_list)
     
-    categories = Category.objects.filter(is_active=True)
+    categories = Category.objects.filter(is_active=True).select_related('parent').order_by('parent_id', 'name')
     
     context = {
         'page_obj': page_obj,
@@ -78,7 +90,7 @@ def product_list(request):
 
 def get_product_queryset(data):
     """Resusable filter logic for products."""
-    products = Product.objects.select_related('category').all()
+    products = Product.objects.select_related('category').prefetch_related('categories').all()
     
     # Search
     search = data.get('q', '').strip()
@@ -94,7 +106,12 @@ def get_product_queryset(data):
     if category_id:
         try:
             current_category_id = int(category_id)
-            products = products.filter(category_id=category_id)
+            selected_category = Category.objects.filter(pk=current_category_id).first()
+            if selected_category:
+                descendant_ids = selected_category.get_descendant_ids(include_self=True)
+                products = products.filter(
+                    Q(category_id__in=descendant_ids) | Q(categories__id__in=descendant_ids)
+                ).distinct()
         except (ValueError, TypeError):
             pass
         
@@ -107,11 +124,43 @@ def get_product_queryset(data):
     return products, search, current_category_id, active_filter
 
 
+def enrich_products_with_category_state(products):
+    """
+    Attach category status metadata for admin templates.
+    """
+    for product in products:
+        linked_categories = product.get_linked_categories()
+        category_status_rows = []
+        active_category_count = 0
+
+        for cat in linked_categories:
+            is_category_active = bool(cat.is_active)
+            is_effective_active = bool(product.is_active and is_category_active)
+            if is_effective_active:
+                active_category_count += 1
+
+            category_status_rows.append({
+                'id': cat.id,
+                'name': cat.name,
+                'is_category_active': is_category_active,
+                'is_effective_active': is_effective_active,
+            })
+
+        product.linked_categories = linked_categories
+        product.category_status_rows = category_status_rows
+        product.active_category_count = active_category_count
+        product.catalog_visibility = bool(
+            product.is_active and (
+                active_category_count > 0 or len(linked_categories) == 0
+            )
+        )
+
+
 @staff_member_required
 @superuser_required_for_modifications
 def product_create(request):
     """Create new product."""
-    categories = Category.objects.filter(is_active=True)
+    categories = Category.objects.filter(is_active=True).select_related('parent').order_by('parent_id', 'name')
     
     if request.method == 'POST':
         try:
@@ -119,7 +168,8 @@ def product_create(request):
             name = request.POST.get('name', '').strip()
             price = request.POST.get('price', '0')
             stock = request.POST.get('stock', '0')
-            category_id = request.POST.get('category', '')
+            primary_category_id = request.POST.get('category', '')
+            selected_category_ids = normalize_category_ids(request.POST.getlist('categories'))
             description = request.POST.get('description', '').strip()
             
             if Product.objects.filter(sku=sku).exists():
@@ -130,10 +180,11 @@ def product_create(request):
                     name=name,
                     price=float(price),
                     stock=int(stock),
-                    category_id=category_id if category_id else None,
+                    category_id=int(primary_category_id) if str(primary_category_id).isdigit() else None,
                     description=description,
                     attributes=json.loads(request.POST.get('attributes_json', '{}')),
                 )
+                assign_categories_to_product(product, selected_category_ids, primary_category_id)
                 messages.success(request, f'Producto "{sku}" creado exitosamente.')
                 return redirect('admin_product_list')
         except Exception as e:
@@ -141,6 +192,7 @@ def product_create(request):
     
     return render(request, 'admin_panel/products/form.html', {
         'categories': categories,
+        'selected_category_ids': [],
         'action': 'Crear',
     })
 
@@ -150,7 +202,7 @@ def product_create(request):
 def product_edit(request, pk):
     """Edit existing product."""
     product = get_object_or_404(Product, pk=pk)
-    categories = Category.objects.filter(is_active=True)
+    categories = Category.objects.filter(is_active=True).select_related('parent').order_by('parent_id', 'name')
     
     if request.method == 'POST':
         try:
@@ -161,8 +213,9 @@ def product_edit(request, pk):
             product.description = request.POST.get('description', '').strip()
             product.is_active = request.POST.get('is_active') == 'on'
             
-            category_id = request.POST.get('category', '')
-            product.category_id = category_id if category_id else None
+            primary_category_id = request.POST.get('category', '')
+            selected_category_ids = normalize_category_ids(request.POST.getlist('categories'))
+            product.category_id = int(primary_category_id) if str(primary_category_id).isdigit() else None
             
             # Update attributes
             attributes_json = request.POST.get('attributes_json', '{}')
@@ -173,15 +226,21 @@ def product_edit(request, pk):
                     pass
             
             product.save()
+            assign_categories_to_product(product, selected_category_ids, primary_category_id)
             messages.success(request, f'Producto "{product.sku}" actualizado.')
             return redirect('admin_product_list')
             
         except Exception as e:
             messages.error(request, f'Error: {str(e)}')
             
+    selected_category_ids = list(product.categories.values_list('id', flat=True))
+    if not selected_category_ids and product.category_id:
+        selected_category_ids = [product.category_id]
+
     return render(request, 'admin_panel/products/form.html', {
         'product': product,
         'categories': categories,
+        'selected_category_ids': selected_category_ids,
         'action': 'Editar',
     })
 
@@ -221,20 +280,22 @@ def product_toggle_active(request):
             'message': f'{len(product_ids)} productos actualizados'
         })
     except Exception as e:
-        return JsonResponse({'success': False, 'error': str(e)}, status=400)
+        logger.exception("Error toggling product active status")
+        return JsonResponse({'success': False, 'error': 'No se pudieron actualizar los productos.'}, status=400)
 
 
 @staff_member_required
 @require_POST
 @superuser_required_for_modifications
 def product_bulk_category_update(request):
-    """Bulk update product categories."""
+    """Bulk categorize selected products."""
     try:
         category_id = request.POST.get('category_id')
+        mode = request.POST.get('mode', 'append')
         select_all_pages = request.POST.get('select_all_pages') == 'true'
-        
+
         if not category_id:
-            messages.warning(request, 'No se seleccionó una categoría.')
+            messages.warning(request, 'No se selecciono una categoria.')
             return redirect('admin_product_list')
 
         if select_all_pages:
@@ -245,17 +306,23 @@ def product_bulk_category_update(request):
                 messages.warning(request, 'No se seleccionaron productos.')
                 return redirect('admin_product_list')
             products_to_update = Product.objects.filter(id__in=product_ids)
-            
-        count = products_to_update.update(category_id=category_id)
-        
-        category = Category.objects.get(pk=category_id)
-        messages.success(request, f'{count} productos movidos a categoría "{category.name}".')
-        
-    except Exception as e:
-        messages.error(request, f'Error al actualizar categorías: {str(e)}')
-        
-    return redirect('admin_product_list')
 
+        target_ids = list(products_to_update.values_list('id', flat=True))
+        if mode == 'replace':
+            count = replace_categories_for_products(target_ids, category_id)
+        else:
+            count = add_category_to_products(target_ids, category_id)
+
+        category = Category.objects.get(pk=category_id)
+        if mode == 'replace':
+            messages.success(request, f'{count} productos recategorizados a "{category.name}".')
+        else:
+            messages.success(request, f'{count} productos vinculados a "{category.name}".')
+
+    except Exception as e:
+        messages.error(request, f'Error al actualizar categorias: {str(e)}')
+
+    return redirect('admin_product_list')
 
 # ===================== CLIENTS =====================
 
@@ -529,7 +596,21 @@ def settings_view(request):
 @staff_member_required
 def category_list(request):
     """Category list."""
-    categories = Category.objects.filter(parent__isnull=True).prefetch_related('children')
+    categories = list(Category.objects.filter(parent__isnull=True).prefetch_related('children'))
+
+    for category in categories:
+        tree_ids = category.get_descendant_ids(include_self=True)
+        category.tree_products_count = Product.objects.filter(
+            Q(categories__id__in=tree_ids) | Q(category_id__in=tree_ids)
+        ).distinct().count()
+        category.direct_products_count = category.products_m2m.count()
+
+        for child in category.children.all():
+            child_tree_ids = child.get_descendant_ids(include_self=True)
+            child.tree_products_count = Product.objects.filter(
+                Q(categories__id__in=child_tree_ids) | Q(category_id__in=child_tree_ids)
+            ).distinct().count()
+            child.direct_products_count = child.products_m2m.count()
     
     return render(request, 'admin_panel/categories/list.html', {
         'categories': categories,
@@ -540,20 +621,34 @@ def category_list(request):
 @superuser_required_for_modifications
 def category_create(request):
     """Create category."""
+    parent_from_query = None
+    parent_query_id = request.GET.get('parent', '').strip()
+    if parent_query_id.isdigit():
+        parent_from_query = Category.objects.filter(pk=int(parent_query_id)).first()
+
     if request.method == 'POST':
         form = CategoryForm(request.POST)
         if form.is_valid():
             category = form.save()
-            messages.success(request, f'Categoría "{category.name}" creada.')
+            messages.success(request, f'Categoria "{category.name}" creada.')
             return redirect('admin_category_list')
     else:
-        form = CategoryForm()
-    
+        initial = {}
+        if parent_from_query:
+            initial['parent'] = parent_from_query.pk
+        form = CategoryForm(initial=initial)
+
+    selected_parent_id = form['parent'].value()
+    selected_parent = None
+    if str(selected_parent_id).isdigit():
+        selected_parent = Category.objects.filter(pk=int(selected_parent_id)).first()
+
     return render(request, 'admin_panel/categories/form.html', {
         'form': form,
+        'selected_parent_id': str(selected_parent_id or ''),
+        'selected_parent': selected_parent,
         'action': 'Crear',
     })
-
 
 @staff_member_required
 @superuser_required_for_modifications
@@ -571,9 +666,16 @@ def category_edit(request, pk):
         form = CategoryForm(instance=category)
         # Exclude self from parents to avoid recursion
         form.fields['parent'].queryset = Category.objects.exclude(pk=pk).order_by('name')
+
+    selected_parent_id = form['parent'].value()
+    selected_parent = None
+    if str(selected_parent_id).isdigit():
+        selected_parent = Category.objects.filter(pk=int(selected_parent_id)).first()
     
     return render(request, 'admin_panel/categories/form.html', {
         'form': form,
+        'selected_parent_id': str(selected_parent_id or ''),
+        'selected_parent': selected_parent,
         'category': category, # Keep category in context for attributes links
         'action': 'Editar',
     })
@@ -689,83 +791,70 @@ def category_attribute_delete(request, category_id, attribute_id):
 @superuser_required_for_modifications
 def category_manage_products(request, pk):
     """
-    View to manage products within a category (bulk assign/remove).
+    Manage direct category links for products (many-to-many).
     """
     category = get_object_or_404(Category, pk=pk)
-    
-    # Common Filter Logic (Reused for GET & POST)
+
     def get_filtered_queryset(req_data):
-        qs = Product.objects.all()
-        
-        # Search
+        qs = Product.objects.select_related('category').prefetch_related('categories').all()
+
         search = req_data.get('q', '').strip()
         if search:
-            qs = qs.filter(
-                Q(sku__icontains=search) | 
-                Q(name__icontains=search)
-            )
-            
-        # Filter by Status
+            qs = qs.filter(Q(sku__icontains=search) | Q(name__icontains=search))
+
         status = req_data.get('status')
         if status == 'active':
             qs = qs.filter(is_active=True)
         elif status == 'inactive':
             qs = qs.filter(is_active=False)
-            
-        # Filter by Current Category
-        cat_filter = req_data.get('category_filter', 'current') 
+
+        cat_filter = req_data.get('category_filter', 'current')
         if cat_filter == 'current':
-            qs = qs.filter(category=category)
+            qs = qs.filter(categories=category)
         elif cat_filter == 'none':
-            qs = qs.filter(category__isnull=True)
+            qs = qs.filter(category__isnull=True, categories__isnull=True)
         elif cat_filter == 'all':
             pass
         elif cat_filter.isdigit():
-            qs = qs.filter(category_id=int(cat_filter))
-            
-        return qs, search, status, cat_filter
+            qs = qs.filter(categories__id=int(cat_filter))
 
-    # 1. Handle Bulk Action (POST)
+        return qs.distinct(), search, status, cat_filter
+
     if request.method == 'POST':
         action = request.POST.get('action')
         select_all_pages = request.POST.get('select_all_pages') == 'true'
-        
+
         if select_all_pages:
-            # Re-apply filters to get ALL matching products
             products_to_update, _, _, _ = get_filtered_queryset(request.POST)
+            target_ids = list(products_to_update.values_list('id', flat=True))
         else:
-            # Use specific IDs
-            product_ids = request.POST.getlist('product_ids')
-            if not product_ids:
+            target_ids = normalize_category_ids(request.POST.getlist('product_ids'))
+            if not target_ids:
                 messages.warning(request, 'No se seleccionaron productos.')
                 return redirect('admin_category_products', pk=pk)
-            products_to_update = Product.objects.filter(id__in=product_ids)
-        
+
         count = 0
         if action == 'assign':
-            count = products_to_update.update(category=category)
-            messages.success(request, f'{count} productos asignados a "{category.name}".')
-            
+            count = add_category_to_products(target_ids, category.id)
+            messages.success(request, f'{count} productos vinculados a "{category.name}".')
         elif action == 'remove':
-            # Only remove if they are actually in this category (security check)
-            # When selecting all pages, we should also filter by category to be safe, 
-            # though update(category=None) on products not in category is harmless no-op usually.
-            count = products_to_update.filter(category=category).update(category=None)
-            messages.success(request, f'{count} productos desvinculados de "{category.name}".')
-                
+            count = remove_category_from_products(target_ids, category.id)
+            messages.success(request, f'{count} vinculos removidos de "{category.name}".')
+
         return redirect('admin_category_products', pk=pk)
 
-    # 2. Filter & Search Logic (GET)
     products, search, status, cat_filter = get_filtered_queryset(request.GET)
-    
-    # Pagination
+
     paginator = Paginator(products.order_by('name'), 50)
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
-    
-    # Context for template
+
+    enrich_products_with_category_state(page_obj.object_list)
+    for product in page_obj.object_list:
+        product.is_linked_to_current = any(cat.id == category.id for cat in product.linked_categories)
+
     all_categories = Category.objects.exclude(pk=pk).order_by('name')
-    
+
     return render(request, 'admin_panel/categories/manage_products.html', {
         'category': category,
         'page_obj': page_obj,
@@ -807,7 +896,8 @@ def parse_product_description(request):
         
         return JsonResponse({'success': True, 'attributes': extracted})
     except Exception as e:
-        return JsonResponse({'success': False, 'error': str(e)})
+        logger.exception("Error parsing product description")
+        return JsonResponse({'success': False, 'error': 'No se pudo procesar la descripción.'}, status=400)
 
 
 # ===================== IMPORTERS =====================
@@ -920,7 +1010,8 @@ def import_process(request, import_type):
                 })
 
             except Exception as e:
-                return JsonResponse({'success': False, 'error': str(e)}, status=500)
+                logger.exception("Error starting import process")
+                return JsonResponse({'success': False, 'error': 'No se pudo iniciar la importación.'}, status=500)
     else:
         form = FormClass()
 
@@ -934,6 +1025,7 @@ def import_process(request, import_type):
 
 @staff_member_required
 @require_POST
+@superuser_required_for_modifications
 def product_delete_all(request):
     """Deletes ALL products if confirmation is correct."""
     confirmation = request.POST.get('confirmation', '').strip().lower()
@@ -949,6 +1041,7 @@ def product_delete_all(request):
 
 @staff_member_required
 @require_POST
+@superuser_required_for_modifications
 def client_delete_all(request):
     """Deletes ALL clients if confirmation is correct."""
     confirmation = request.POST.get('confirmation', '').strip().lower()
@@ -965,6 +1058,7 @@ def client_delete_all(request):
 
 @staff_member_required
 @require_POST
+@superuser_required_for_modifications
 def category_delete_all(request):
     """Deletes ALL categories if confirmation is correct."""
     confirmation = request.POST.get('confirmation', '').strip().lower()

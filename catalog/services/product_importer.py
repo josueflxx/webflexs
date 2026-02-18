@@ -76,7 +76,6 @@ class ProductImporter(BaseImporter):
                 'price': price,
                 'description': row.get('descripcion', ''),
                 'stock': int(row.get('stock', 0)),
-                'stock': int(row.get('stock', 0)),
                 # 'brand' removed as it is not a model field
                 'is_active': str(row.get('activo', 'si')).lower() in ['si', 'yes', 'true', '1'],
             }
@@ -96,6 +95,7 @@ class ProductImporter(BaseImporter):
             if category:
                 product.category = category
                 product.save()
+                product.categories.add(category)
                 
             # JSON Attributes Parsing
             # If there's a column 'atributos' with format "Key:Val;Key2:Val2"
@@ -138,9 +138,12 @@ class ProductImporter(BaseImporter):
             return
 
         is_clamp = product.name.upper().startswith('ABRAZADERA')
-        if not is_clamp and product.category:
-            # Also check category name
-            is_clamp = 'ABRAZADERA' in product.category.name.upper()
+        if not is_clamp:
+            primary_category = product.get_primary_category()
+            if primary_category:
+                is_clamp = 'ABRAZADERA' in primary_category.name.upper()
+            if not is_clamp:
+                is_clamp = product.categories.filter(name__icontains='ABRAZADERA').exists()
             
         if is_clamp:
             # Run parser

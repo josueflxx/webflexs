@@ -12,7 +12,7 @@
             <select name="category_filter" class="form-select" onchange="this.form.submit()">
                 <option value="current" {% if category_filter == 'current' %}selected{% endif %}>En esta categoría
                 </option>
-                <option value="none" {% if category_filter == 'none' %}selected{% endif %}>Sin categoría (Huérfanos)
+                <option value="none" {% if category_filter == 'none' %}selected{% endif %}>Sin vínculos de categoría
                 </option>
                 <option value="all" {% if category_filter == 'all' %}selected{% endif %}>Todos los productos</option>
                 <optgroup label="Otras categorías">
@@ -44,7 +44,7 @@
             <input type="hidden" name="select_all_pages" id="selectAllPagesInput" value="false">
 
             <button type="submit" name="action" value="assign" class="btn btn-success" id="btnAssign" disabled>
-                📥 Asignar a "{{ category.name }}"
+                Vincular a "{{ category.name }}"
             </button>
 
             {% if category_filter == 'current' %}
@@ -182,7 +182,7 @@
             if (count > 0) {
                 if (btnAssign) {
                     btnAssign.removeAttribute('disabled');
-                    btnAssign.innerHTML = `📥 Asignar (${count})`;
+                    btnAssign.innerHTML = `Vincular (${count})`;
                 }
                 if (btnRemove) {
                     btnRemove.removeAttribute('disabled');
@@ -191,7 +191,7 @@
             } else {
                 if (btnAssign) {
                     btnAssign.setAttribute('disabled', 'true');
-                    btnAssign.innerHTML = `📥 Asignar a "{{ category.name }}"`;
+                    btnAssign.innerHTML = `Vincular a "{{ category.name }}"`;
                 }
                 if (btnRemove) {
                     btnRemove.setAttribute('disabled', 'true');
@@ -236,14 +236,14 @@
                     <th style="width: 40px;"><input type="checkbox" id="selectAll" onclick="toggleSelectAll()"></th>
                     <th>SKU</th>
                     <th>Nombre</th>
-                    <th>Categoría Actual</th>
+                    <th>Categorías vinculadas</th>
                     <th>Precio</th>
                     <th>Estado</th>
                 </tr>
             </thead>
             <tbody>
                 {% for product in page_obj %}
-                <tr class="{% if product.category_id == category.pk %}bg-light-success{% endif %}">
+                <tr class="{% if product.is_linked_to_current %}bg-light-success{% endif %}">
                     <td>
                         <input type="checkbox" value="{{ product.pk }}" class="product-checkbox"
                             onclick="updateBulkButtons()">
@@ -251,14 +251,26 @@
                     <td><code>{{ product.sku }}</code></td>
                     <td>{{ product.name|truncatechars:60 }}</td>
                     <td>
-                        {% if product.category %}
-                        {% if product.category_id == category.pk %}
-                        <span class="badge badge-success">✅ Esta categoría</span>
-                        {% else %}
-                        <span class="badge badge-secondary">{{ product.category.name }}</span>
+                        {% if product.category_status_rows %}
+                        {% if product.is_linked_to_current %}
+                        <span class="badge badge-success">En esta categoria</span>
                         {% endif %}
+                        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;">
+                            {% for cat in product.category_status_rows|slice:":4" %}
+                            {% if cat.is_effective_active %}
+                            <span class="badge badge-success">{{ cat.name }} (activa)</span>
+                            {% elif cat.is_category_active %}
+                            <span class="badge badge-warning">{{ cat.name }} (prod. inactivo)</span>
+                            {% else %}
+                            <span class="badge badge-danger">{{ cat.name }} (inactiva)</span>
+                            {% endif %}
+                            {% endfor %}
+                            {% if product.category_status_rows|length > 4 %}
+                            <span class="badge badge-info">+{{ product.category_status_rows|length|add:"-4" }}</span>
+                            {% endif %}
+                        </div>
                         {% else %}
-                        <span class="badge badge-warning">⚠️ Sin categoría</span>
+                        <span class="badge badge-warning">Sin categoria</span>
                         {% endif %}
                     </td>
                     <td>${{ product.price|floatformat:2 }}</td>
@@ -267,6 +279,12 @@
                         <span class="badge badge-success">Activo</span>
                         {% else %}
                         <span class="badge badge-danger">Inactivo</span>
+                        {% endif %}
+                        <br>
+                        {% if product.catalog_visibility %}
+                        <span class="badge badge-info">Visible en catalogo</span>
+                        {% else %}
+                        <span class="badge badge-warning">Oculto por categorias</span>
                         {% endif %}
                     </td>
                 </tr>

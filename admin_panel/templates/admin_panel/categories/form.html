@@ -1,11 +1,147 @@
 {% extends 'admin_panel/base.html' %}
 
-{% block page_title %}{{ action }} Categoría{% endblock %}
+{% block page_title %}{{ action }} Categoria{% endblock %}
+
+{% block extra_css %}
+<style>
+    .category-form-shell {
+        max-width: 920px;
+    }
+
+    .category-form-header {
+        margin-bottom: 20px;
+    }
+
+    .category-form-header-top {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+    }
+
+    .category-form-header h2 {
+        margin-bottom: 8px;
+    }
+
+    .category-form-header p {
+        margin: 0;
+        color: var(--color-gray-light);
+    }
+
+    .category-context {
+        border: 1px solid rgba(23, 162, 184, 0.4);
+        background: rgba(23, 162, 184, 0.1);
+        border-radius: 10px;
+        padding: 14px;
+        margin-bottom: 18px;
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        align-items: center;
+    }
+
+    .category-context strong {
+        color: var(--color-info);
+    }
+
+    .category-context small {
+        color: var(--color-gray-light);
+    }
+
+    .category-grid {
+        display: grid;
+        grid-template-columns: 1.8fr 1fr;
+        gap: 16px;
+        align-items: start;
+    }
+
+    .category-active-card {
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 10px;
+        padding: 12px;
+        background: rgba(255, 255, 255, 0.03);
+    }
+
+    .category-active-card .form-checkbox-label {
+        margin-bottom: 8px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .category-active-card small {
+        color: var(--color-gray-light);
+        display: block;
+        line-height: 1.4;
+    }
+
+    .category-field-help {
+        margin-top: 6px;
+        color: var(--color-gray-light);
+        font-size: 0.84rem;
+    }
+
+    .attributes-section {
+        margin-top: 26px;
+        border-top: 1px solid rgba(255, 255, 255, 0.12);
+        padding-top: 20px;
+    }
+
+    .attributes-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 14px;
+    }
+
+    .attributes-header h3 {
+        margin: 0;
+        font-size: 1.05rem;
+    }
+
+    .btn-inline {
+        padding: 6px 10px;
+        font-size: 0.82rem;
+        line-height: 1;
+        min-height: auto;
+    }
+
+    @media (max-width: 900px) {
+        .category-form-header-top {
+            align-items: flex-start;
+        }
+
+        .category-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .category-context {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
+        .attributes-header {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 8px;
+        }
+    }
+</style>
+{% endblock %}
 
 {% block content %}
-<div class="admin-form-container">
-    <div class="form-header">
-        <h2>{{ action }} Categoría</h2>
+<div class="admin-form-container category-form-shell">
+    <div class="category-form-header">
+        <div class="category-form-header-top">
+            <h2>{{ action }} categoria</h2>
+            {% if action == 'Editar' and category and user.is_superuser %}
+            <a href="{% url 'admin_category_create' %}?parent={{ category.pk }}" class="btn btn-outline btn-inline">
+                Crear subcategoria de esta
+            </a>
+            {% endif %}
+        </div>
+        <p>Define la jerarquia y el estado de la categoria para controlar visibilidad en catalogo.</p>
     </div>
 
     <form method="post" class="admin-form">
@@ -17,44 +153,56 @@
         </div>
         {% endif %}
 
-        <div class="form-group">
-            <label for="parent" class="form-label">Categoría Padre (opcional)</label>
-            <select name="parent" id="parent" class="form-select" {% if not user.is_superuser %}disabled{% endif %}>
-                <option value="">-- Sin padre (categoría principal) --</option>
-                {% for cat in form.fields.parent.queryset %}
-                <option value="{{ cat.pk }}" {% if form.instance.parent_id == cat.pk %}selected{% endif %}>
-                    {{ cat.name }}
-                </option>
-                {% endfor %}
-            </select>
-            {% if form.parent.errors %}
-            <div class="error-feedback">{{ form.parent.errors.0 }}</div>
-            {% endif %}
+        {% if action == 'Crear' and selected_parent %}
+        <div class="category-context">
+            <div>
+                <div>Creando subcategoria dentro de: <strong>{{ selected_parent.name }}</strong></div>
+                <small>Si quieres, puedes cambiar el padre antes de guardar.</small>
+            </div>
+            <a href="{% url 'admin_category_create' %}" class="btn btn-outline btn-inline">Crear sin padre</a>
+        </div>
+        {% endif %}
+
+        <div class="category-grid">
+            <div class="form-group">
+                <label for="parent" class="form-label">Categoria padre (opcional)</label>
+                <select name="parent" id="parent" class="form-select" {% if not user.is_superuser %}disabled{% endif %}>
+                    <option value="">-- Sin padre (categoria principal) --</option>
+                    {% for cat in form.fields.parent.queryset %}
+                    <option value="{{ cat.pk }}" {% if selected_parent_id == cat.pk|stringformat:'s' %}selected{% endif %}>
+                        {{ cat.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+                <div class="category-field-help">Tip: desde la lista puedes usar "Nueva sub" para entrar ya con este campo completo.</div>
+                {% if form.parent.errors %}
+                <div class="error-feedback">{{ form.parent.errors.0 }}</div>
+                {% endif %}
+            </div>
+
+            <div class="category-active-card">
+                <label class="form-checkbox-label">
+                    <input type="checkbox" name="is_active" {% if form.instance.is_active %}checked{% endif %} {% if not user.is_superuser %}disabled{% endif %}>
+                    Categoria activa
+                </label>
+                <small>Las categorias inactivas no se muestran en catalogo y pueden ocultar productos sin otras categorias activas.</small>
+            </div>
         </div>
 
         <div class="form-group">
             <label for="name" class="form-label">Nombre</label>
-            <input type="text" name="name" id="name" class="form-input" value="{{ form.instance.name|default:'' }}" {% if not user.is_superuser %}disabled{% endif %}>
+            <input type="text" name="name" id="name" class="form-input" value="{{ form.name.value|default:'' }}" {% if not user.is_superuser %}disabled{% endif %}>
             {% if form.name.errors %}
             <div class="error-feedback">{{ form.name.errors.0 }}</div>
             {% endif %}
         </div>
 
-        <div class="form-group" style="margin-top: 15px;">
-            <label class="form-checkbox-label">
-                <input type="checkbox" name="is_active" {% if form.instance.is_active %}checked{% endif %} {% if not user.is_superuser %}disabled{% endif %}>
-                Categoría Activa
-            </label>
-            <small class="form-text text-muted">Las categorías inactivas no se muestran en el catálogo.</small>
-        </div>
-
         {% if action == 'Editar' %}
-        <div class="attributes-section" style="margin-top: 30px; border-top: 1px solid #eee; padding-top: 20px;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                <h3 style="margin: 0;">Atributos de Categoría</h3>
+        <div class="attributes-section">
+            <div class="attributes-header">
+                <h3>Atributos de categoria</h3>
                 {% if user.is_superuser %}
-                <a href="{% url 'admin_category_attribute_create' form.instance.pk %}" class="btn btn-sm btn-outline">+
-                    Nuevo Atributo</a>
+                <a href="{% url 'admin_category_attribute_create' form.instance.pk %}" class="btn btn-outline btn-inline">+ Nuevo atributo</a>
                 {% endif %}
             </div>
 
@@ -77,20 +225,20 @@
                         <td>{{ attr.get_type_display }}</td>
                         <td>
                             {% if attr.required %}
-                            <span class="badge badge-success">Sí</span>
+                            <span class="badge badge-success">Si</span>
                             {% else %}
                             <span class="badge badge-secondary">No</span>
                             {% endif %}
                         </td>
                         <td class="actions">
                             <a href="{% url 'admin_category_attribute_edit' form.instance.pk attr.pk %}"
-                                class="btn btn-outline"
+                                class="btn btn-outline btn-inline"
                                 title="{% if user.is_superuser %}Editar{% else %}Ver{% endif %}">
-                                {% if user.is_superuser %}✏️{% else %}👁️{% endif %}
+                                {% if user.is_superuser %}Editar{% else %}Ver{% endif %}
                             </a>
                             {% if user.is_superuser %}
                             <a href="{% url 'admin_category_attribute_delete' form.instance.pk attr.pk %}"
-                                class="btn btn-danger-outline" title="Eliminar">🗑️</a>
+                                class="btn btn-danger-outline btn-inline" title="Eliminar">Eliminar</a>
                             {% endif %}
                         </td>
                     </tr>
@@ -99,7 +247,7 @@
             </table>
             {% else %}
             <div class="alert alert-info">
-                Esta categoría no tiene atributos definidos. Agregar atributos permite filtros específicos.
+                Esta categoria no tiene atributos definidos. Agregar atributos permite filtros especificos.
             </div>
             {% endif %}
         </div>
@@ -107,9 +255,9 @@
 
         <div class="form-actions">
             {% if user.is_superuser %}
-            <button type="submit" class="btn btn-primary">Guardar Categoría</button>
+            <button type="submit" class="btn btn-primary">Guardar categoria</button>
             {% else %}
-            <button type="button" class="btn btn-primary" disabled title="Solo lectura">Solo Lectura</button>
+            <button type="button" class="btn btn-primary" disabled title="Solo lectura">Solo lectura</button>
             {% endif %}
             <a href="{% url 'admin_category_list' %}" class="btn btn-outline">Cancelar</a>
         </div>

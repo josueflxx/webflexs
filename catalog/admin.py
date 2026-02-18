@@ -17,8 +17,12 @@ def reparse_abrazaderas(modeladmin, request, queryset):
     count = 0
     for product in queryset:
         is_clamp = product.name.upper().startswith('ABRAZADERA')
-        if not is_clamp and product.category:
-            is_clamp = 'ABRAZADERA' in product.category.name.upper()
+        if not is_clamp:
+            primary_category = product.get_primary_category()
+            if primary_category:
+                is_clamp = 'ABRAZADERA' in primary_category.name.upper()
+            if not is_clamp:
+                is_clamp = product.categories.filter(name__icontains='ABRAZADERA').exists()
             
         if is_clamp:
             specs_data = ClampParser.parse(product.description or product.name)
@@ -47,9 +51,14 @@ class CategoryAdmin(admin.ModelAdmin):
 
 @admin.register(Product)
 class ProductAdmin(admin.ModelAdmin):
-    list_display = ('sku', 'name', 'category', 'price', 'stock', 'is_active')
-    list_filter = ('category', 'is_active')
+    list_display = ('sku', 'name', 'category', 'categories_display', 'price', 'stock', 'is_active')
+    list_filter = ('category', 'categories', 'is_active')
     search_fields = ('sku', 'name', 'description')
     readonly_fields = ('created_at', 'updated_at')
     inlines = [ClampSpecsInline]
     actions = [reparse_abrazaderas]
+
+    def categories_display(self, obj):
+        return ", ".join(obj.categories.values_list('name', flat=True)[:4]) or "-"
+
+    categories_display.short_description = "Categorias"

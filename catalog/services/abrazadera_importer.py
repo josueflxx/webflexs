@@ -91,6 +91,7 @@ class AbrazaderaImporter(BaseImporter):
                 sku=sku,
                 defaults=defaults
             )
+            product.categories.add(category)
             
             # 4. Run Parser
             specs_data = ClampParser.parse(description)

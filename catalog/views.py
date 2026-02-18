@@ -3,7 +3,7 @@ Catalog app views - Product listing and detail.
 """
 from django.shortcuts import render, get_object_or_404
 from django.core.paginator import Paginator
-from django.db.models import Q
+from django.db.models import Q, Prefetch
 from .models import Product, Category, CategoryAttribute
 from core.models import SiteSettings
 
@@ -13,8 +13,10 @@ def catalog(request):
     Public catalog view with search and filters.
     Prices shown based on site settings.
     """
-    # Get all active products
-    products = Product.objects.filter(is_active=True).select_related('category')
+    # Publicly visible products (product active + at least one active category).
+    products = Product.catalog_visible(
+        Product.objects.select_related('category').prefetch_related('categories')
+    )
     
     # Search
     search_query = request.GET.get('q', '').strip()
@@ -34,9 +36,12 @@ def catalog(request):
     if category_slug:
         # Use filter().first() to avoid 404 if category doesn't exist (just show empty or all)
         # But logically if selecting a category, we want that context.
-        current_category = Category.objects.filter(slug=category_slug).first()
+        current_category = Category.objects.filter(slug=category_slug, is_active=True).first()
         if current_category:
-            products = products.filter(category=current_category)
+            category_ids = current_category.get_descendant_ids(include_self=True, only_active=True)
+            products = products.filter(
+                Q(category_id__in=category_ids) | Q(categories__id__in=category_ids)
+            ).distinct()
             
             # Get attributes for this category
             category_attributes = CategoryAttribute.objects.filter(category=current_category)
@@ -119,7 +124,12 @@ def catalog(request):
     page_obj = paginator.get_page(page_number)
     
     # Get categories for filter sidebar
-    categories = Category.objects.filter(is_active=True, parent__isnull=True).prefetch_related('children')
+    categories = Category.objects.filter(is_active=True, parent__isnull=True).prefetch_related(
+        Prefetch(
+            'children',
+            queryset=Category.objects.filter(is_active=True).order_by('order', 'name')
+        )
+    )
     
     # Get site settings for price visibility
     settings = SiteSettings.get_settings()
@@ -135,6 +145,9 @@ def catalog(request):
     # Calculate final price for each product in the current page
     # This avoids using complex template filters that might fail parsing
     for product in page_obj.object_list:
+        linked_categories = [cat for cat in product.get_linked_categories() if cat.is_active]
+        product.display_categories = linked_categories[:3]
+
         if discount > 0:
             # discount is decimal (e.g. 0.10)
             if discount > 1: 
@@ -196,7 +209,12 @@ def catalog(request):
 
 def product_detail(request, sku):
     """Product detail view."""
-    product = get_object_or_404(Product, sku=sku, is_active=True)
+    product = get_object_or_404(
+        Product.catalog_visible(
+            Product.objects.select_related('category').prefetch_related('categories')
+        ),
+        sku=sku,
+    )
     
     settings = SiteSettings.get_settings()
     show_prices = settings.show_public_prices or request.user.is_authenticated
@@ -204,11 +222,20 @@ def product_detail(request, sku):
     discount = 0
     if request.user.is_authenticated and hasattr(request.user, 'client_profile'):
         discount = request.user.client_profile.get_discount_decimal()
+
+    final_price = product.price
+    if discount:
+        final_price = product.price * (1 - discount)
     
+    linked_categories = [cat for cat in product.get_linked_categories() if cat.is_active]
+
     context = {
         'product': product,
+        'display_categories': linked_categories[:6],
         'show_prices': show_prices,
         'discount': discount,
+        'discount_percentage': discount * 100,
+        'final_price': final_price,
         'price_message': settings.public_prices_message,
     }
     
