@@ -3,6 +3,7 @@ Catalog app models - products, categories, and clamp specs.
 """
 from django.db import models
 from django.db.models import Q
+from django.utils import timezone
 import re
 
 
@@ -50,6 +51,14 @@ class Category(models.Model):
         ]
 
     def save(self, *args, **kwargs):
+        previous_is_active = None
+        if self.pk:
+            previous_is_active = (
+                Category.objects.filter(pk=self.pk)
+                .values_list("is_active", flat=True)
+                .first()
+            )
+
         if not self.slug:
             from django.utils.text import slugify
 
@@ -60,6 +69,18 @@ class Category(models.Model):
                 self.slug = f"{original_slug}-{counter}"
                 counter += 1
         super().save(*args, **kwargs)
+
+        # If a parent category is deactivated, cascade deactivation to descendants.
+        if previous_is_active is True and self.is_active is False:
+            descendant_ids = self.get_descendant_ids(include_self=False)
+            if descendant_ids:
+                Category.objects.filter(
+                    id__in=descendant_ids,
+                    is_active=True,
+                ).update(
+                    is_active=False,
+                    updated_at=timezone.now(),
+                )
 
     def __str__(self):
         if self.parent:

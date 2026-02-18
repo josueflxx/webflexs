@@ -215,6 +215,7 @@
                 <div class="deactivation-impact">
                     <h4>Impacto estimado al desactivar</h4>
                     <ul>
+                        <li>Subcategorias que tambien se desactivaran: {{ deactivation_impact.descendants_count }}</li>
                         <li>Productos vinculados: {{ deactivation_impact.linked_products }}</li>
                         <li>Quedarian ocultos: {{ deactivation_impact.would_hide }}</li>
                         <li>Seguirian visibles por otras categorias activas: {{ deactivation_impact.would_remain_visible }}</li>

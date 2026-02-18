@@ -184,23 +184,30 @@ def detect_category_integrity_issues(categories):
 
 def calculate_category_deactivation_impact(category):
     """
-    Simulate how many products would become hidden if this category is deactivated.
+    Simulate how many products would become hidden if this category tree is deactivated.
     """
+    category_tree_ids = category.get_descendant_ids(include_self=True)
+
     linked_products = Product.objects.filter(
-        Q(category_id=category.id) | Q(categories__id=category.id)
+        Q(category_id__in=category_tree_ids) | Q(categories__id__in=category_tree_ids)
     ).distinct().prefetch_related("categories").select_related("category")
 
     would_hide = 0
     for product in linked_products:
         linked_categories = product.get_linked_categories()
-        has_other_active = any(cat.is_active and cat.id != category.id for cat in linked_categories)
+        has_other_active = any(
+            cat.is_active and cat.id not in category_tree_ids
+            for cat in linked_categories
+        )
         if product.is_active and not has_other_active:
             would_hide += 1
 
+    linked_total = linked_products.count()
     return {
-        "linked_products": linked_products.count(),
+        "descendants_count": max(len(category_tree_ids) - 1, 0),
+        "linked_products": linked_total,
         "would_hide": would_hide,
-        "would_remain_visible": max(linked_products.count() - would_hide, 0),
+        "would_remain_visible": max(linked_total - would_hide, 0),
     }
 
 
