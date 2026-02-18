@@ -41,17 +41,6 @@
                 <p class="sku">SKU: {{ product.sku }}</p>
                 <h1>{{ product.name }}</h1>
 
-                {% if product.supplier_ref or product.supplier %}
-                <p class="detail-supplier">
-                    Proveedor:
-                    {% if product.supplier_ref %}
-                    <strong>{{ product.supplier_ref.name }}</strong>
-                    {% else %}
-                    <strong>{{ product.supplier }}</strong>
-                    {% endif %}
-                </p>
-                {% endif %}
-
                 {% if display_categories %}
                 <div class="detail-categories">
                     {% for cat in display_categories %}

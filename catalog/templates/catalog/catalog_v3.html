@@ -285,16 +285,6 @@
                                 <a href="{% url 'product_detail' product.sku %}">{{ product.name }}</a>
                             </h3>
 
-                            {% if product.supplier_ref or product.supplier %}
-                            <p class="product-supplier">
-                                {% if product.supplier_ref %}
-                                {{ product.supplier_ref.name }}
-                                {% else %}
-                                {{ product.supplier }}
-                                {% endif %}
-                            </p>
-                            {% endif %}
-
                             {% if product.display_categories %}
                             <div class="product-category-list">
                                 {% for cat in product.display_categories %}
