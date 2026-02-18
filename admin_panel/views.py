@@ -648,12 +648,6 @@ def supplier_list(request):
             products_count=Count('products', distinct=True),
             active_products_count=Count('products', filter=Q(products__is_active=True), distinct=True),
             stock_total=Sum('products__stock'),
-            inventory_value=Sum(
-                ExpressionWrapper(
-                    F('products__price') * F('products__stock'),
-                    output_field=DecimalField(max_digits=16, decimal_places=2),
-                )
-            ),
         )
         .order_by('name')
     )
@@ -723,12 +717,6 @@ def supplier_detail(request, supplier_id):
     metrics = products.aggregate(
         stock_total=Sum('stock'),
         avg_price=Avg('price'),
-        inventory_value=Sum(
-            ExpressionWrapper(
-                F('price') * F('stock'),
-                output_field=DecimalField(max_digits=16, decimal_places=2),
-            )
-        ),
     )
     audit_logs = AdminAuditLog.objects.filter(
         target_type='supplier',
@@ -746,7 +734,6 @@ def supplier_detail(request, supplier_id):
             'total_products': products.count(),
             'stock_total': metrics.get('stock_total') or 0,
             'avg_price': metrics.get('avg_price') or Decimal('0.00'),
-            'inventory_value': metrics.get('inventory_value') or Decimal('0.00'),
             'audit_logs': audit_logs,
         },
     )
@@ -888,15 +875,7 @@ def supplier_print(request, supplier_id):
     """
     supplier = get_object_or_404(Supplier, pk=supplier_id)
     products, _, _ = build_supplier_products_queryset(supplier, request.GET)
-    metrics = products.aggregate(
-        stock_total=Sum('stock'),
-        inventory_value=Sum(
-            ExpressionWrapper(
-                F('price') * F('stock'),
-                output_field=DecimalField(max_digits=16, decimal_places=2),
-            )
-        ),
-    )
+    metrics = products.aggregate(stock_total=Sum('stock'))
     log_admin_action(
         request,
         action='supplier_export_print',
@@ -911,7 +890,6 @@ def supplier_print(request, supplier_id):
             'supplier': supplier,
             'products': products,
             'stock_total': metrics.get('stock_total') or 0,
-            'inventory_value': metrics.get('inventory_value') or Decimal('0.00'),
             'generated_at': timezone.now(),
         },
     )

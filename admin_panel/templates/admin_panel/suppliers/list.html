@@ -78,7 +78,6 @@
                 <th>Productos</th>
                 <th>Activos</th>
                 <th>Stock Total</th>
-                <th>Valor Stock</th>
                 <th>Acciones</th>
             </tr>
         </thead>
@@ -96,14 +95,13 @@
                 <td><span class="badge badge-info">{{ supplier.products_count|default:0 }}</span></td>
                 <td><span class="badge badge-success">{{ supplier.active_products_count|default:0 }}</span></td>
                 <td>{{ supplier.stock_total|default:0 }}</td>
-                <td>${{ supplier.inventory_value|default:0|floatformat:2 }}</td>
                 <td>
                     <a href="{% url 'admin_supplier_detail' supplier.pk %}" class="btn btn-outline">Ver productos</a>
                 </td>
             </tr>
             {% empty %}
             <tr>
-                <td colspan="7" class="text-center text-muted">No hay proveedores cargados.</td>
+                <td colspan="6" class="text-center text-muted">No hay proveedores cargados.</td>
             </tr>
             {% endfor %}
         </tbody>
