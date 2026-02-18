@@ -1,62 +1,159 @@
 {% extends 'admin_panel/base.html' %}
 
-{% block page_title %}Importadores de Datos{% endblock %}
+{% block page_title %}Importadores{% endblock %}
+
+{% block extra_css %}
+<style>
+    .import-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 14px;
+        margin-bottom: 22px;
+    }
+
+    .import-card {
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 12px;
+        padding: 14px;
+        background: rgba(255, 255, 255, 0.02);
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .import-card h3 {
+        margin: 0;
+    }
+
+    .import-card p {
+        margin: 0;
+        color: var(--color-gray-light);
+        font-size: 0.88rem;
+        min-height: 52px;
+    }
+
+    .execution-shell {
+        margin-top: 14px;
+    }
+
+    .execution-shell h2 {
+        margin-bottom: 10px;
+    }
+
+    .execution-table-wrap {
+        overflow-x: auto;
+    }
+
+    .execution-table td,
+    .execution-table th {
+        vertical-align: middle;
+        white-space: nowrap;
+    }
+
+    .execution-result {
+        font-size: 0.83rem;
+        color: var(--color-gray-light);
+    }
+</style>
+{% endblock %}
 
 {% block content %}
-<div style="max-width: 1000px; margin: 0 auto;">
-    <h2 class="mb-4">Centro de Importación</h2>
+<div style="max-width: 1200px; margin: 0 auto;">
+    <h2 class="mb-4">Centro de importacion</h2>
 
-    <div class="dashboard-grid">
-        <!-- Products -->
-        <div class="stat-card" style="border-left: 4px solid var(--color-primary);">
-            <div class="flex justify-between items-center mb-2">
-                <h3>Productos</h3>
-                <span class="text-primary" style="font-size: 1.5rem;">📦</span>
-            </div>
-            <p class="text-muted mb-3" style="font-size: 0.9rem;">
-                Carga masiva de productos vía Excel. Soporta creación y actualización de stock/precios.
-            </p>
-            <a href="{% url 'admin_import_process' 'products' %}" class="btn btn-primary btn-sm"
-                style="width: 100%;">Importar Productos</a>
+    <div class="import-grid">
+        <div class="import-card">
+            <h3>Productos</h3>
+            <p>Carga y actualiza productos, precios, stock y categorias.</p>
+            <a href="{% url 'admin_import_process' 'products' %}" class="btn btn-primary">Importar productos</a>
         </div>
 
-        <!-- Clients -->
-        <div class="stat-card" style="border-left: 4px solid var(--color-info);">
-            <div class="flex justify-between items-center mb-2">
-                <h3>Clientes</h3>
-                <span class="text-info" style="font-size: 1.5rem;">👥</span>
-            </div>
-            <p class="text-muted mb-3" style="font-size: 0.9rem;">
-                Importación de clientes. Crea usuarios y perfiles. Pass = CUIT.
-            </p>
-            <a href="{% url 'admin_import_process' 'clients' %}" class="btn btn-info btn-sm"
-                style="width: 100%;">Importar Clientes</a>
+        <div class="import-card">
+            <h3>Clientes</h3>
+            <p>Importacion masiva de usuarios y perfiles de cliente.</p>
+            <a href="{% url 'admin_import_process' 'clients' %}" class="btn btn-info">Importar clientes</a>
         </div>
 
-        <!-- Categories -->
-        <div class="stat-card" style="border-left: 4px solid var(--color-warning);">
-            <div class="flex justify-between items-center mb-2">
-                <h3>Categorías</h3>
-                <span class="text-warning" style="font-size: 1.5rem;">📁</span>
-            </div>
-            <p class="text-muted mb-3" style="font-size: 0.9rem;">
-                Estructura de categorías. Define jerarquías (Padre/Hijo).
-            </p>
-            <a href="{% url 'admin_import_process' 'categories' %}" class="btn btn-warning btn-sm"
-                style="width: 100%;">Importar Categorías</a>
+        <div class="import-card">
+            <h3>Categorias</h3>
+            <p>Estructura de categorias y subcategorias del catalogo.</p>
+            <a href="{% url 'admin_import_process' 'categories' %}" class="btn btn-warning">Importar categorias</a>
         </div>
 
-        <!-- Abrazaderas (Special) -->
-        <div class="stat-card" style="border-left: 4px solid #6f42c1;">
-            <div class="flex justify-between items-center mb-2">
-                <h3>Abrazaderas</h3>
-                <span style="font-size: 1.5rem; color: #6f42c1;">🏭</span>
-            </div>
-            <p class="text-muted mb-3" style="font-size: 0.9rem;">
-                Importador especializado. Detecta specs (trifilado, lamiando, medidas) automáticamete.
-            </p>
-            <a href="{% url 'admin_import_process' 'abrazaderas' %}" class="btn btn-sm"
-                style="width: 100%; background-color: #6f42c1; color: white;">Importar Abrazaderas</a>
+        <div class="import-card">
+            <h3>Abrazaderas</h3>
+            <p>Importador especializado para parseo tecnico de abrazaderas.</p>
+            <a href="{% url 'admin_import_process' 'abrazaderas' %}" class="btn" style="background: #5d3fd3; color: #fff;">Importar abrazaderas</a>
+        </div>
+    </div>
+
+    <div class="execution-shell admin-table-container">
+        <h2>Historial de ejecuciones</h2>
+
+        <div class="execution-table-wrap">
+            <table class="admin-table execution-table">
+                <thead>
+                    <tr>
+                        <th>Fecha</th>
+                        <th>Tipo</th>
+                        <th>Archivo</th>
+                        <th>Modo</th>
+                        <th>Estado</th>
+                        <th>Resultado</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for execution in executions %}
+                    <tr>
+                        <td>{{ execution.created_at|date:'d/m/Y H:i' }}</td>
+                        <td>{{ execution.import_type }}</td>
+                        <td>{{ execution.file_name|default:'-' }}</td>
+                        <td>
+                            {% if execution.dry_run %}
+                            <span class="badge badge-secondary">Dry run</span>
+                            {% else %}
+                            <span class="badge badge-info">Real</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if execution.status == 'completed' %}
+                            <span class="badge badge-success">Completado</span>
+                            {% elif execution.status == 'failed' %}
+                            <span class="badge badge-danger">Fallido</span>
+                            {% elif execution.status == 'rolled_back' %}
+                            <span class="badge badge-warning">Rollback</span>
+                            {% else %}
+                            <span class="badge badge-info">Procesando</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="execution-result">
+                                Creados: {{ execution.created_count }}<br>
+                                Actualizados: {{ execution.updated_count }}<br>
+                                Errores: {{ execution.error_count }}
+                            </div>
+                        </td>
+                        <td>
+                            {% if not execution.dry_run and execution.status == 'completed' and execution.created_refs %}
+                            <form method="post" action="{% url 'admin_import_rollback' execution.pk %}" onsubmit="return confirm('Aplicar rollback a esta ejecucion?');">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-danger-outline btn-sm">Rollback</button>
+                            </form>
+                            {% elif execution.status == 'rolled_back' %}
+                            <span class="text-muted">Aplicado</span>
+                            {% else %}
+                            <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="7" class="text-center text-muted">No hay ejecuciones registradas.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
         </div>
     </div>
 </div>

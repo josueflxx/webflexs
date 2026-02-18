@@ -6,7 +6,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description"
-        content="FLEXS - Repuestos de Elásticos en Argentina. Expertos en repuestos para industrias de transporte.">
+        content="{% block meta_description %}FLEXS - Repuestos de elasticos en Argentina. Expertos en repuestos para industrias de transporte.{% endblock %}">
     <title>{% block title %}FLEXS - Repuestos de Elásticos{% endblock %}</title>
 
     <!-- Google Fonts -->
@@ -17,6 +17,7 @@
 
     <!-- Base CSS -->
     <link rel="stylesheet" href="{% static 'core/css/base.css' %}">
+    {% block extra_head %}{% endblock %}
     {% block extra_css %}{% endblock %}
 </head>
 

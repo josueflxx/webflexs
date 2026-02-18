@@ -5,11 +5,11 @@
 {% block content %}
 <div class="dashboard-grid">
     <div class="stat-card">
-        <h3>Productos Activos</h3>
+        <h3>Productos activos</h3>
         <span class="number">{{ active_product_count }}</span>
     </div>
     <div class="stat-card">
-        <h3>Total Productos</h3>
+        <h3>Total productos</h3>
         <span class="number">{{ product_count }}</span>
     </div>
     <div class="stat-card">
@@ -17,14 +17,22 @@
         <span class="number">{{ client_count }}</span>
     </div>
     <div class="stat-card">
-        <h3>Pedidos Pendientes</h3>
+        <h3>Pedidos pendientes</h3>
         <span class="number">{{ pending_orders }}</span>
+    </div>
+    <div class="stat-card">
+        <h3>Solicitudes pendientes</h3>
+        <span class="number">{{ pending_requests }}</span>
+    </div>
+    <div class="stat-card">
+        <h3>Eventos de auditoria (30 dias)</h3>
+        <span class="number">{{ audit_count_last_30 }}</span>
     </div>
 </div>
 
 <div class="dashboard-sections">
     <div class="dashboard-section">
-        <h2>Solicitudes Pendientes ({{ pending_requests }})</h2>
+        <h2>Solicitudes pendientes ({{ pending_requests }})</h2>
         {% if recent_requests %}
         <ul class="quick-list">
             {% for req in recent_requests %}
@@ -33,20 +41,18 @@
                     <strong>{{ req.company_name }}</strong><br>
                     <small>{{ req.email }}</small>
                 </span>
-                <a href="{% url 'admin_request_approve' req.pk %}" class="btn btn-primary">
-                    Revisar
-                </a>
+                <a href="{% url 'admin_request_approve' req.pk %}" class="btn btn-primary">Revisar</a>
             </li>
             {% endfor %}
         </ul>
         <a href="{% url 'admin_request_list' %}" class="btn btn-outline mt-2">Ver todas</a>
         {% else %}
-        <p class="text-muted">No hay solicitudes pendientes</p>
+        <p class="text-muted">No hay solicitudes pendientes.</p>
         {% endif %}
     </div>
 
     <div class="dashboard-section">
-        <h2>Últimos Pedidos</h2>
+        <h2>Ultimos pedidos</h2>
         {% if recent_orders %}
         <ul class="quick-list">
             {% for order in recent_orders %}
@@ -55,8 +61,7 @@
                     <strong>Pedido #{{ order.pk }}</strong><br>
                     <small>{{ order.user.username }} - ${{ order.total }}</small>
                 </span>
-                <span
-                    class="badge badge-{% if order.status == 'pending' %}warning{% elif order.status == 'confirmed' %}info{% else %}success{% endif %}">
+                <span class="badge badge-{% if order.status == 'pending' %}warning{% elif order.status == 'confirmed' %}info{% else %}success{% endif %}">
                     {{ order.get_status_display }}
                 </span>
             </li>
@@ -64,17 +69,96 @@
         </ul>
         <a href="{% url 'admin_order_list' %}" class="btn btn-outline mt-2">Ver todos</a>
         {% else %}
-        <p class="text-muted">No hay pedidos recientes</p>
+        <p class="text-muted">No hay pedidos recientes.</p>
+        {% endif %}
+    </div>
+</div>
+
+<div class="dashboard-sections" style="margin-top: 20px;">
+    <div class="dashboard-section">
+        <h2>Busquedas sin resultados (30 dias)</h2>
+        {% if top_zero_result_searches %}
+        <ul class="quick-list">
+            {% for item in top_zero_result_searches %}
+            <li>
+                <span>
+                    <strong>{{ item.query }}</strong><br>
+                    <small>Sin resultados</small>
+                </span>
+                <span class="badge badge-warning">{{ item.total }}</span>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="text-muted">Sin datos por ahora.</p>
+        {% endif %}
+    </div>
+
+    <div class="dashboard-section">
+        <h2>Categorias mas vistas (30 dias)</h2>
+        {% if top_category_views %}
+        <ul class="quick-list">
+            {% for item in top_category_views %}
+            <li>
+                <span>
+                    <strong>{{ item.category_slug }}</strong><br>
+                    <small>Vista de categoria</small>
+                </span>
+                <span class="badge badge-info">{{ item.total }}</span>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="text-muted">Sin datos por ahora.</p>
+        {% endif %}
+    </div>
+
+    <div class="dashboard-section">
+        <h2>Filtros mas usados (30 dias)</h2>
+        {% if top_filter_sets %}
+        <ul class="quick-list">
+            {% for item in top_filter_sets %}
+            <li>
+                <span>
+                    <strong>{{ item.query }}</strong><br>
+                    <small>Combinacion de filtros</small>
+                </span>
+                <span class="badge badge-success">{{ item.total }}</span>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="text-muted">Sin datos por ahora.</p>
+        {% endif %}
+    </div>
+
+    <div class="dashboard-section">
+        <h2>Ultimas acciones de auditoria</h2>
+        {% if recent_audit_logs %}
+        <ul class="quick-list">
+            {% for log in recent_audit_logs %}
+            <li>
+                <span>
+                    <strong>{{ log.action }}</strong><br>
+                    <small>{{ log.user.username|default:'sistema' }} - {{ log.created_at|date:'d/m H:i' }}</small>
+                </span>
+                <span class="badge badge-secondary">{{ log.target_type|default:'-' }}</span>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="text-muted">Sin datos por ahora.</p>
         {% endif %}
     </div>
 </div>
 
 <div class="dashboard-section mt-4" style="max-width: 100%;">
-    <h2>Acciones Rápidas</h2>
+    <h2>Acciones rapidas</h2>
     <div class="flex gap-3" style="flex-wrap: wrap;">
-        <a href="{% url 'admin_product_create' %}" class="btn btn-primary">+ Nuevo Producto</a>
-        <a href="{% url 'admin_category_create' %}" class="btn btn-outline">+ Nueva Categoría</a>
-        <a href="{% url 'admin_settings' %}" class="btn btn-outline">⚙️ Configuración</a>
+        <a href="{% url 'admin_product_create' %}" class="btn btn-primary">+ Nuevo producto</a>
+        <a href="{% url 'admin_category_create' %}" class="btn btn-outline">+ Nueva categoria</a>
+        <a href="{% url 'admin_import_dashboard' %}" class="btn btn-outline">Importaciones</a>
+        <a href="{% url 'admin_settings' %}" class="btn btn-outline">Configuracion</a>
     </div>
 </div>
 {% endblock %}

@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reporte proveedor - {{ supplier.name }}</title>
+    <style>
+        body { font-family: Arial, sans-serif; color: #111; margin: 24px; }
+        h1 { margin: 0 0 8px; }
+        .meta { color: #555; margin-bottom: 14px; font-size: 14px; }
+        .kpi { display: flex; gap: 24px; margin-bottom: 18px; font-size: 14px; }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; vertical-align: top; }
+        th { background: #f3f3f3; }
+        .desc { max-width: 520px; }
+        @media print {
+            .no-print { display: none; }
+            body { margin: 0; }
+        }
+    </style>
+</head>
+<body>
+    <div class="no-print" style="margin-bottom: 12px;">
+        <button onclick="window.print()">Imprimir / Guardar PDF</button>
+    </div>
+
+    <h1>Proveedor: {{ supplier.name }}</h1>
+    <div class="meta">Generado: {{ generated_at|date:"d/m/Y H:i" }}</div>
+    <div class="kpi">
+        <div><strong>Productos:</strong> {{ products|length }}</div>
+        <div><strong>Stock total:</strong> {{ stock_total }}</div>
+        <div><strong>Valor stock:</strong> ${{ inventory_value|floatformat:2 }}</div>
+    </div>
+
+    <table>
+        <thead>
+            <tr>
+                <th>SKU</th>
+                <th>Nombre</th>
+                <th>Precio</th>
+                <th>Stock</th>
+                <th>Descripcion</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for product in products %}
+            <tr>
+                <td>{{ product.sku }}</td>
+                <td>{{ product.name }}</td>
+                <td>${{ product.price|floatformat:2 }}</td>
+                <td>{{ product.stock }}</td>
+                <td class="desc">{{ product.description|default:"-" }}</td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="5">No hay productos para este proveedor.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</body>
+</html>

@@ -1,9 +1,12 @@
-{# FIXED VERSION - WITH AUTO-SUBMIT UX #}
 {% extends 'base.html' %}
 {% load static %}
 {% load core_extras %}
 
-{% block title %}Catálogo - FLEXS{% endblock %}
+{% block title %}{{ seo_title|default:'Catalogo - FLEXS' }}{% endblock %}
+{% block meta_description %}{{ seo_description|default:'Catalogo de productos FLEXS.' }}{% endblock %}
+{% block extra_head %}
+<link rel="canonical" href="{{ canonical_url }}">
+{% endblock %}
 
 {% block extra_css %}
 <link rel="stylesheet" href="{% static 'core/css/catalog.css' %}">
@@ -14,82 +17,144 @@
     {% csrf_token %}
     <div class="container">
         <div class="catalog-header">
-            <h1>Catálogo de Productos</h1>
-            <p class="catalog-subtitle">
-                {% if current_category and current_category.children.exists %}
-                <span class="price-notice">Mostrando también productos de subcategorías de "{{ current_category.name }}"</span><br>
+            <div class="catalog-header-main">
+                <h1>Catalogo de Productos</h1>
+                <p class="catalog-subtitle">
+                    {% if current_category and current_category_has_descendants %}
+                    <span class="price-notice">
+                        Incluye productos de subcategorias de "{{ current_category.name }}"
+                    </span><br>
+                    {% endif %}
+                    {% if not show_prices %}
+                    <span class="price-notice">{{ price_message }}</span>
+                    {% elif discount %}
+                    <span class="discount-notice">
+                        Tenes un {{ discount|multiply:100|floatformat:0 }}% de descuento aplicado
+                    </span>
+                    {% endif %}
+                </p>
+            </div>
+            <div class="catalog-header-stats">
+                <span class="header-stat">
+                    <strong>{{ page_obj.paginator.count }}</strong>
+                    productos
+                </span>
+                {% if current_category %}
+                <span class="header-stat">
+                    categoria: <strong>{{ current_category.name }}</strong>
+                </span>
                 {% endif %}
-                {% if not show_prices %}
-                <span class="price-notice">{{ price_message }}</span>
-                {% elif discount %}
-                <span class="discount-notice">Tenés un {{ discount|multiply:100|floatformat:0 }}% de descuento
-                    aplicado</span>
+                {% if search_query %}
+                <span class="header-stat">
+                    busqueda: <strong>{{ search_query }}</strong>
+                </span>
                 {% endif %}
-            </p>
+            </div>
         </div>
 
+        <button
+            type="button"
+            class="catalog-mobile-filter-btn"
+            id="catalogMobileFilterBtn"
+            onclick="openCatalogFilters()"
+        >
+            Filtrar catalogo
+        </button>
+        <div class="catalog-overlay" id="catalogOverlay" onclick="closeCatalogFilters()"></div>
+
         <div class="catalog-layout">
-            <!-- Sidebar Filters -->
-            <aside class="catalog-sidebar">
+            <aside class="catalog-sidebar" id="catalogSidebar">
+                <div class="catalog-sidebar-head">
+                    <h3>Filtros</h3>
+                    <button type="button" class="catalog-sidebar-close" onclick="closeCatalogFilters()">
+                        Cerrar
+                    </button>
+                </div>
+
                 <div class="filter-section">
                     <h3>Buscar</h3>
                     <form method="get" class="search-form">
-                        <input type="text" name="q" value="{{ search_query }}" placeholder="SKU o nombre..."
-                            class="form-input">
+                        <input type="hidden" name="category" value="{{ category_slug }}">
+                        <input type="hidden" name="order" value="{{ order_by }}">
+                        <input
+                            type="text"
+                            name="q"
+                            value="{{ search_query }}"
+                            placeholder="SKU o nombre..."
+                            class="form-input"
+                        >
                         <button type="submit" class="btn btn-primary">Buscar</button>
                     </form>
                 </div>
 
                 <div class="filter-section">
-                    <div
-                        style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                        <h3 style="margin-bottom: 0;">Categorías</h3>
-                        <button type="button" class="btn btn-sm btn-outline-secondary" id="toggleCategoriesBtn"
-                            style="padding: 2px 8px; font-size: 0.8rem;">
-                            Ver
-                        </button>
+                    <div class="category-filter-header">
+                        <h3>Categorias</h3>
+                        <div class="category-filter-header-actions">
+                            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="expandAllCategoryTree()">
+                                Expandir
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="collapseAllCategoryTree()">
+                                Ocultar
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" id="toggleCategoriesBtn">
+                                Ver
+                            </button>
+                        </div>
                     </div>
                     <div id="categoriesWrapper" style="display: none;">
-                        <ul class="category-list">
-                            <li>
-                                <a href="{% url 'catalog' %}"
-                                    class="category-link-wrapper {% if not category_slug %}active{% endif %}">
-                                    <span>Todas</span>
-                                </a>
-                            </li>
-                            {% for category in categories %}
-                            <li>
-                                <div class="category-item">
-                                    <a href="?category={{ category.slug }}"
-                                        class="category-link-wrapper {% if category_slug == category.slug %}active{% endif %} {% if category.id in expanded_category_ids %}expanded{% endif %}"
-                                        data-category-slug="{{ category.slug }}"
-                                        onclick="toggleCategory(event, this, 'cat-{{ category.id }}')">
+                        <div class="category-tree">
+                            <a href="{% url 'catalog' %}" class="category-tree-link category-tree-link-root {% if not category_slug %}active{% endif %}">
+                                <span class="category-tree-label">Todas</span>
+                            </a>
 
-                                        <span>{{ category.name }}</span>
+                            {% for row in category_tree_rows %}
+                            <div
+                                class="category-tree-row {% if row.has_children %}has-children{% endif %}{% if row.category.id in expanded_category_ids %} expanded{% endif %}"
+                                data-category-id="{{ row.category.id }}"
+                                data-parent-id="{{ row.category.parent_id|default:'' }}"
+                                data-depth="{{ row.depth }}"
+                                style="--depth: {{ row.depth }};"
+                            >
+                                <div class="category-tree-main">
+                                    {% if row.has_children %}
+                                    <button
+                                        type="button"
+                                        class="category-tree-toggle"
+                                        onclick="toggleCategoryTree(event, '{{ row.category.id }}')"
+                                        aria-label="Mostrar subcategorias de {{ row.category.name }}"
+                                    >
+                                        <span class="category-toggle-icon">&#9654;</span>
+                                    </button>
+                                    {% else %}
+                                    <span class="category-tree-spacer"></span>
+                                    {% endif %}
 
-                                        {% if category.children.exists %}
-                                        <span
-                                            class="category-toggle-icon {% if category.id in expanded_category_ids %}rotated{% endif %}">
-                                            ▼
-                                        </span>
+                                    <a
+                                        href="?category={{ row.category.slug }}"
+                                        class="category-tree-link {% if category_slug == row.category.slug %}active{% endif %}"
+                                        title="{{ row.full_path }}"
+                                    >
+                                        <span class="category-tree-label">{{ row.category.name }}</span>
+                                        {% if row.has_children %}
+                                        <span class="category-tree-count">{{ row.children_count }}</span>
                                         {% endif %}
                                     </a>
                                 </div>
 
-                                {# Inline filters for Abrazaderas (Keep existing logic) #}
-                                {% if 'ABRAZADERA' in category.name.upper and category_slug == category.slug and clamp_options %}
-                                <div class="category-filters-collapse"
-                                    style="display: block; margin-left: 10px; margin-bottom: 10px;">
+                                {% if row.category.slug == category_slug and clamp_options or row.category.slug == category_slug and category_attributes %}
+                                <div class="category-inline-filters" style="--depth: {{ row.depth }};">
                                     <form method="get" action="{% url 'catalog' %}" class="inline-filter-form">
                                         <input type="hidden" name="q" value="{{ search_query }}">
                                         <input type="hidden" name="category" value="{{ category_slug }}">
                                         <input type="hidden" name="order" value="{{ order_by }}">
 
+                                        {% if clamp_options %}
+                                        <div class="category-inline-title">Filtros tecnicos</div>
                                         {% for field, options in clamp_options.items %}
                                         <div class="filter-mini-group">
                                             <label>{{ field_labels|get_item:field|default:field|title }}</label>
-                                            <select name="{{ field }}" class="form-select-mini"
-                                                onchange="this.form.submit()">
+                                            <select name="{{ field }}" class="form-select-mini" onchange="this.form.submit()">
                                                 <option value="">- Todos -</option>
                                                 {% for opt in options %}
                                                 {% with field_val=active_filters|get_item:field %}
@@ -101,165 +166,135 @@
                                             </select>
                                         </div>
                                         {% endfor %}
+                                        {% endif %}
+
+                                        {% if category_attributes %}
+                                        <div class="category-inline-title">Atributos</div>
+                                        {% for attr in category_attributes %}
+                                        <div class="filter-mini-group">
+                                            <label>{{ attr.name }}</label>
+                                            {% if attr.type == 'select' %}
+                                            <select name="{{ attr.slug }}" class="form-select-mini" onchange="this.form.submit()">
+                                                <option value="">- Todos -</option>
+                                                {% for opt in attr.options_list %}
+                                                {% with current_val=active_filters|get_item:attr.slug %}
+                                                <option value="{{ opt }}" {% if current_val == opt %}selected{% endif %}>{{ opt }}</option>
+                                                {% endwith %}
+                                                {% endfor %}
+                                            </select>
+                                            {% else %}
+                                            <input
+                                                type="text"
+                                                name="{{ attr.slug }}"
+                                                value="{{ active_filters|get_item:attr.slug|default:'' }}"
+                                                class="form-input form-input-sm"
+                                                placeholder="Filtrar..."
+                                            >
+                                            {% endif %}
+                                        </div>
+                                        {% endfor %}
+                                        {% endif %}
+
+                                        <div class="category-inline-actions">
+                                            <button type="submit" class="btn btn-primary btn-sm">Aplicar</button>
+                                            {% if active_filters %}
+                                            <a href="?category={{ category_slug }}&q={{ search_query }}&order={{ order_by }}" class="btn btn-outline btn-sm">
+                                                Limpiar
+                                            </a>
+                                            {% endif %}
+                                        </div>
                                     </form>
                                 </div>
                                 {% endif %}
-
-                                {% if category.children.exists %}
-                                <ul class="subcategory-list {% if category.id in expanded_category_ids %}visible{% endif %}"
-                                    id="cat-{{ category.id }}">
-                                    {% for sub in category.children.all %}
-                                    <li>
-                                        <a href="?category={{ sub.slug }}"
-                                            class="{% if category_slug == sub.slug %}active{% endif %}">
-                                            {{ sub.name }}
-                                        </a>
-                                    </li>
-                                    {% endfor %}
-                                </ul>
-                                {% endif %}
-                            </li>
+                            </div>
+                            {% empty %}
+                            <p class="text-muted">No hay categorias activas.</p>
                             {% endfor %}
-                        </ul>
+                        </div>
+                    </div>
+                </div>
+            </aside>
 
-                        <script>
-                            function toggleCategory(event, element, targetId) {
-                                // Logic:
-                                // 1. If click is on the ICON (arrow), prevent navigation and just toggle visibility.
-                                // 2. If click is on the TEXT:
-                                //    a. If category is ACTIVE (current), prevent reload and toggle visibility.
-                                //    b. If category is INACTIVE, let it navigate (backend will handle expansion).
-
-                                const target = document.getElementById(targetId);
-                                if (!target) return; // No children to toggle
-
-                                // Check if the click target is the icon or inside it
-                                const isIconClick = event.target.classList.contains('category-toggle-icon') ||
-                                    event.target.closest('.category-toggle-icon');
-
-                                // Check if this is the currently active category
-                                const isActive = element.classList.contains('active');
-
-                                if (isIconClick || isActive) {
-                                    event.preventDefault(); // Stop navigation
-                                    event.stopPropagation(); // Stop bubbling (good practice)
-
-                                    // Toggle visual state
-                                    const list = document.getElementById(targetId);
-                                    if (list) list.classList.toggle('visible');
-
-                                    element.classList.toggle('expanded');
-
-                                    const icon = element.querySelector('.category-toggle-icon');
-                                    if (icon) icon.classList.toggle('rotated');
-
-                                    return; // Done
-                                }
-
-                                // If clicking the text of an INACTIVE category, we allow navigation.
-                                // Optional: If we want to force expand visually right before reload for better UX:
-                                if (!element.classList.contains('expanded')) {
-                                    element.classList.add('expanded');
-                                    const icon = element.querySelector('.category-toggle-icon');
-                                    if (icon) icon.classList.add('rotated');
-                                }
-                            }
-                        </script>
+            <main class="catalog-main">
+                <div class="catalog-toolbar">
+                    <div class="toolbar-meta">
+                        <span class="result-count">
+                            {{ page_obj.paginator.count }} productos encontrados
+                        </span>
+                    </div>
+                    <div class="toolbar-actions">
+                        <select name="order" class="form-select order-select" onchange="updateOrder(this.value)">
+                            <option value="name" {% if order_by == 'name' %}selected{% endif %}>Nombre A-Z</option>
+                            <option value="-name" {% if order_by == '-name' %}selected{% endif %}>Nombre Z-A</option>
+                            <option value="price" {% if order_by == 'price' %}selected{% endif %}>Menor precio</option>
+                            <option value="-price" {% if order_by == '-price' %}selected{% endif %}>Mayor precio</option>
+                            <option value="sku" {% if order_by == 'sku' %}selected{% endif %}>SKU</option>
+                        </select>
                     </div>
                 </div>
 
-                {% if category_attributes %}
-                <div class="filter-section">
-                    <h3>Otros Filtros</h3>
-                    <form method="get" action="{% url 'catalog' %}">
-                        <!-- Preserve other parameters -->
-                        <input type="hidden" name="q" value="{{ search_query }}">
-                        <input type="hidden" name="category" value="{{ category_slug }}">
-                        <input type="hidden" name="order" value="{{ order_by }}">
-                        <!-- Preserve technical filters if they exist -->
-                        <input type="hidden" name="fabrication" value="{{ active_filters.fabrication|default:'' }}">
-                        <input type="hidden" name="diameter" value="{{ active_filters.diameter|default:'' }}">
-                        <input type="hidden" name="width" value="{{ active_filters.width|default:'' }}">
-                        <input type="hidden" name="length" value="{{ active_filters.length|default:'' }}">
-                        <input type="hidden" name="shape" value="{{ active_filters.shape|default:'' }}">
+                {% if breadcrumb_categories %}
+                <nav class="catalog-breadcrumb">
+                    <a href="{% url 'catalog' %}">Catalogo</a>
+                    {% for crumb in breadcrumb_categories %}
+                    <span>/</span>
+                    {% if forloop.last %}
+                    <strong>{{ crumb.name }}</strong>
+                    {% else %}
+                    <a href="{{ crumb.url }}">{{ crumb.name }}</a>
+                    {% endif %}
+                    {% endfor %}
+                </nav>
+                {% endif %}
 
-                        {% for attr in category_attributes %}
-                        <div class="filter-group mb-3">
-                            <h4 class="filter-title"
-                                style="font-size: 0.95em; margin-bottom: 5px; color: var(--color-gray);">
-                                {{ attr.name }}
-                            </h4>
-
-                            {% if attr.type == 'select' %}
-                            <select name="{{ attr.slug }}" class="form-select form-select-sm" style="width: 100%;"
-                                onchange="this.form.submit()">
-                                <option value="">- Todos -</option>
-                                {% for opt in attr.options_list %}
-                                {% with current_val=active_filters|get_item:attr.slug %}
-                                <option value="{{ opt }}" {% if current_val == opt %}selected {% endif %}>
-                                    {{ opt }}
-                                </option>
-                                {% endwith %}
-                                {% endfor %}
-                            </select>
-                            {% else %}
-                            <input type="text" name="{{ attr.slug }}"
-                                value="{{ active_filters|get_item:attr.slug|default:'' }}"
-                                class="form-input form-input-sm" placeholder="Filtrar..." style="width: 100%;">
-                            {% endif %}
-                        </div>
-                        {% endfor %}
-
-                        <noscript>
-                            <button type="submit" class="btn btn-primary btn-sm btn-block mt-3" style="width: 100%;">
-                                Aplicar Filtros
-                            </button>
-                        </noscript>
-
-                        {% if active_filters %}
-                        <a href="?category={{ category_slug }}&q={{ search_query }}"
-                            class="btn btn-outline btn-sm btn-block mt-2"
-                            style="width: 100%; text-align: center; display: block;">
-                            Limpiar Filtros
-                        </a>
-                        {% endif %}
-                    </form>
+                {% if active_filter_chips %}
+                <div class="active-filter-chips">
+                    {% for chip in active_filter_chips %}
+                    <a class="filter-chip" href="{{ chip.remove_url }}" title="Quitar {{ chip.label }}">
+                        <span>{{ chip.label }}: {{ chip.value }}</span>
+                        <span class="chip-remove">x</span>
+                    </a>
+                    {% endfor %}
                 </div>
                 {% endif %}
-            </aside>
-
-            <!-- Products Grid -->
-            <main class="catalog-main">
-                <div class="catalog-toolbar">
-                    <span class="result-count">
-                        {{ page_obj.paginator.count }} productos encontrados
-                    </span>
-                    <select name="order" class="form-select order-select"
-                        onchange="updateOrder(this.value)">
-                        <option value="name" {% if order_by == 'name' %}selected {% endif %}>Nombre A-Z</option>
-                        <option value="-name" {% if order_by == '-name' %}selected {% endif %}>Nombre Z-A</option>
-                        <option value="price" {% if order_by == 'price' %}selected {% endif %}>Menor precio</option>
-                        <option value="-price" {% if order_by == '-price' %}selected {% endif %}>Mayor precio</option>
-                        <option value="sku" {% if order_by == 'sku' %}selected {% endif %}>SKU</option>
-                    </select>
-                </div>
 
                 {% if page_obj.object_list %}
                 <div class="products-grid">
                     {% for product in page_obj %}
-                    <div class="product-card" data-product-id="{{ product.id }}">
-                        <div class="product-image">
+                    <article class="product-card" data-product-id="{{ product.id }}">
+                        <a class="product-image" href="{% url 'product_detail' product.sku %}">
                             {% if product.image %}
                             <img src="{{ product.image.url }}" alt="{{ product.name }}">
                             {% else %}
                             <div class="product-placeholder">
-                                <span>📦</span>
+                                <span>+</span>
                             </div>
                             {% endif %}
-                        </div>
+                        </a>
                         <div class="product-info">
-                            <span class="product-sku">{{ product.sku }}</span>
-                            <h3 class="product-name">{{ product.name }}</h3>
+                            <div class="product-head">
+                                <span class="product-sku">{{ product.sku }}</span>
+                                {% if product.stock > 0 %}
+                                <span class="product-stock in-stock">En stock</span>
+                                {% else %}
+                                <span class="product-stock out-stock">Sin stock</span>
+                                {% endif %}
+                            </div>
+
+                            <h3 class="product-name">
+                                <a href="{% url 'product_detail' product.sku %}">{{ product.name }}</a>
+                            </h3>
+
+                            {% if product.supplier_ref or product.supplier %}
+                            <p class="product-supplier">
+                                {% if product.supplier_ref %}
+                                {{ product.supplier_ref.name }}
+                                {% else %}
+                                {{ product.supplier }}
+                                {% endif %}
+                            </p>
+                            {% endif %}
+
                             {% if product.display_categories %}
                             <div class="product-category-list">
                                 {% for cat in product.display_categories %}
@@ -272,15 +307,15 @@
                             <div class="product-pricing-details">
                                 {% if discount %}
                                 <div class="price-row list-price">
-                                    <span class="label">Precio Lista:</span>
+                                    <span class="label">Precio lista</span>
                                     <span class="value">${{ product.price|floatformat:2 }}</span>
                                 </div>
                                 <div class="price-row discount-row">
-                                    <span class="label">Descuento:</span>
+                                    <span class="label">Descuento</span>
                                     <span class="value">{{ discount|multiply:100|floatformat:0 }}% OFF</span>
                                 </div>
                                 <div class="price-row final-price">
-                                    <span class="label">Precio Final:</span>
+                                    <span class="label">Precio final</span>
                                     <span class="value">${{ product.final_price|floatformat:2 }}</span>
                                 </div>
                                 {% else %}
@@ -292,40 +327,49 @@
                             {% else %}
                             <div class="product-pricing">
                                 <span class="price-hidden">
-                                    <a href="{% url 'login' %}">Iniciar sesión</a> para ver precio
+                                    <a href="{% url 'login' %}">Iniciar sesion</a> para ver precio
                                 </span>
                             </div>
                             {% endif %}
 
-                            {% if user.is_authenticated %}
-                            <button class="btn btn-primary btn-add-cart" onclick="addToCart({{ product.id }})">
-                                Agregar al carrito
-                            </button>
-                            {% endif %}
+                            <div class="product-actions">
+                                <a href="{% url 'product_detail' product.sku %}" class="btn btn-outline product-detail-btn">
+                                    Ver detalle
+                                </a>
+                                {% if user.is_authenticated %}
+                                <button
+                                    class="btn btn-primary btn-add-cart"
+                                    onclick="addToCart({{ product.id }})"
+                                    {% if product.stock <= 0 %}disabled{% endif %}
+                                >
+                                    Agregar
+                                </button>
+                                {% endif %}
+                            </div>
                         </div>
-                    </div>
+                    </article>
                     {% endfor %}
                 </div>
 
-                <!-- Pagination -->
                 {% if page_obj.paginator.num_pages > 1 %}
                 <nav class="pagination">
                     {% if page_obj.has_previous %}
-                    <a href="?{% querystring request page=page_obj.previous_page_number %}"
-                        class="page-link">← Anterior</a>
+                    <a href="?{% querystring request page=page_obj.previous_page_number %}" class="page-link">
+                        Anterior
+                    </a>
                     {% endif %}
 
                     <span class="page-info">
-                        Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}
+                        Pagina {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}
                     </span>
 
                     {% if page_obj.has_next %}
-                    <a href="?{% querystring request page=page_obj.next_page_number %}"
-                        class="page-link">Siguiente →</a>
+                    <a href="?{% querystring request page=page_obj.next_page_number %}" class="page-link">
+                        Siguiente
+                    </a>
                     {% endif %}
                 </nav>
                 {% endif %}
-
                 {% else %}
                 <div class="no-products">
                     <p>No se encontraron productos con los filtros seleccionados.</p>
@@ -347,7 +391,6 @@
         window.location.search = params.toString();
     }
 
-    // Shopping Cart Logic
     async function addToCart(productId) {
         try {
             const response = await fetch('/pedidos/carrito/agregar/', {
@@ -360,11 +403,8 @@
             });
             const data = await response.json();
             if (data.success) {
-                // Update cart badge
                 const badge = document.getElementById('cartBadge');
                 if (badge) badge.textContent = data.cart_count;
-                // Optional: Show success message
-                // alert(data.message);
             } else {
                 alert('Error: ' + data.error);
             }
@@ -374,65 +414,112 @@
         }
     }
 
-    // Category Visibility Toggle
-    const toggleBtn = document.getElementById('toggleCategoriesBtn');
-    const categoriesWrapper = document.getElementById('categoriesWrapper');
+    function getDirectTreeChildren(categoryId) {
+        return document.querySelectorAll(`.category-tree-row[data-parent-id="${categoryId}"]`);
+    }
 
-    if (toggleBtn && categoriesWrapper) {
-        // One-time reset: Force categories hidden for all users
-        if (!localStorage.getItem('categoriesResetV1')) {
-            localStorage.setItem('categoriesVisible', 'false');
-            localStorage.setItem('categoriesResetV1', 'true');
-        }
+    function hideTreeDescendants(categoryId) {
+        const children = getDirectTreeChildren(categoryId);
+        children.forEach((row) => {
+            row.style.display = 'none';
+            row.classList.remove('expanded');
+            hideTreeDescendants(row.dataset.categoryId);
+        });
+    }
 
-        // Load saved state from localStorage (default: hidden)
-        const savedState = localStorage.getItem('categoriesVisible');
-        const shouldShow = savedState === 'true';
+    function setTreeExpanded(categoryId, expanded) {
+        const row = document.querySelector(`.category-tree-row[data-category-id="${categoryId}"]`);
+        if (!row || !row.classList.contains('has-children')) return;
 
-        // Apply saved state
-        if (shouldShow) {
-            categoriesWrapper.style.display = 'block';
-            toggleBtn.textContent = 'Ocultar';
+        if (expanded) {
+            getDirectTreeChildren(categoryId).forEach((childRow) => {
+                childRow.style.display = 'block';
+            });
+            row.classList.add('expanded');
         } else {
-            categoriesWrapper.style.display = 'none';
-            toggleBtn.textContent = 'Ver';
+            row.classList.remove('expanded');
+            hideTreeDescendants(categoryId);
         }
+    }
 
-        // Toggle and save state on click
-        toggleBtn.addEventListener('click', function () {
-            const isHidden = categoriesWrapper.style.display === 'none';
-            if (isHidden) {
-                categoriesWrapper.style.display = 'block';
-                toggleBtn.textContent = 'Ocultar';
-                localStorage.setItem('categoriesVisible', 'true');
-            } else {
-                categoriesWrapper.style.display = 'none';
-                toggleBtn.textContent = 'Ver';
-                localStorage.setItem('categoriesVisible', 'false');
+    function toggleCategoryTree(event, categoryId) {
+        event.preventDefault();
+        event.stopPropagation();
+        const row = document.querySelector(`.category-tree-row[data-category-id="${categoryId}"]`);
+        if (!row) return;
+        const expanded = row.classList.contains('expanded');
+        setTreeExpanded(categoryId, !expanded);
+    }
+
+    function initializeCategoryTree() {
+        const rows = document.querySelectorAll('.category-tree-row');
+        rows.forEach((row) => {
+            row.style.display = row.dataset.depth === '0' ? 'block' : 'none';
+        });
+
+        const expandedRows = Array.from(document.querySelectorAll('.category-tree-row.expanded'))
+            .sort((a, b) => Number(a.dataset.depth) - Number(b.dataset.depth));
+        expandedRows.forEach((row) => {
+            setTreeExpanded(row.dataset.categoryId, true);
+        });
+    }
+
+    function expandAllCategoryTree() {
+        document.querySelectorAll('.category-tree-row').forEach((row) => {
+            row.style.display = 'block';
+            if (row.classList.contains('has-children')) {
+                row.classList.add('expanded');
             }
         });
     }
 
-    // Accordion Logic (existing code below)
-    document.addEventListener('DOMContentLoaded', function () {
-        const toggles = document.querySelectorAll('.category-clickable');
-
-        toggles.forEach(toggle => {
-            // Check if this category has filters (it will be the next sibling element)
-            const filters = toggle.nextElementSibling;
-
-            if (filters && filters.classList.contains('category-filters-collapse')) {
-                // Initialize state
-                toggle.setAttribute('aria-expanded', 'true');
-
-                toggle.addEventListener('click', function (e) {
-                    e.preventDefault();
-                    const isHidden = filters.style.display === 'none';
-                    filters.style.display = isHidden ? 'block' : 'none';
-                    this.setAttribute('aria-expanded', isHidden ? 'true' : 'false');
-                });
-            }
+    function collapseAllCategoryTree() {
+        document.querySelectorAll('.category-tree-row').forEach((row) => {
+            if (row.dataset.depth !== '0') row.style.display = 'none';
+            row.classList.remove('expanded');
         });
+    }
+
+    function openCatalogFilters() {
+        const sidebar = document.getElementById('catalogSidebar');
+        const overlay = document.getElementById('catalogOverlay');
+        if (!sidebar || !overlay) return;
+        sidebar.classList.add('is-open');
+        overlay.classList.add('is-open');
+        document.body.classList.add('catalog-lock');
+    }
+
+    function closeCatalogFilters() {
+        const sidebar = document.getElementById('catalogSidebar');
+        const overlay = document.getElementById('catalogOverlay');
+        if (!sidebar || !overlay) return;
+        sidebar.classList.remove('is-open');
+        overlay.classList.remove('is-open');
+        document.body.classList.remove('catalog-lock');
+    }
+
+    function setupCategoryVisibilityToggle() {
+        const toggleBtn = document.getElementById('toggleCategoriesBtn');
+        const categoriesWrapper = document.getElementById('categoriesWrapper');
+        if (!toggleBtn || !categoriesWrapper) return;
+
+        const savedState = localStorage.getItem('catalogCategoriesVisible');
+        const shouldShow = savedState === null ? true : savedState === 'true';
+
+        categoriesWrapper.style.display = shouldShow ? 'block' : 'none';
+        toggleBtn.textContent = shouldShow ? 'Ocultar' : 'Ver';
+
+        toggleBtn.addEventListener('click', function () {
+            const isHidden = categoriesWrapper.style.display === 'none';
+            categoriesWrapper.style.display = isHidden ? 'block' : 'none';
+            toggleBtn.textContent = isHidden ? 'Ocultar' : 'Ver';
+            localStorage.setItem('catalogCategoriesVisible', isHidden ? 'true' : 'false');
+        });
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+        initializeCategoryTree();
+        setupCategoryVisibilityToggle();
     });
 </script>
 {% endblock %}

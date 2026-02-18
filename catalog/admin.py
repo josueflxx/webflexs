@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Category, CategoryAttribute, Product, ClampSpecs
+from .models import Category, CategoryAttribute, Product, ClampSpecs, Supplier
 from .services.clamp_parser import ClampParser
 
 class CategoryAttributeInline(admin.TabularInline):
@@ -51,9 +51,9 @@ class CategoryAdmin(admin.ModelAdmin):
 
 @admin.register(Product)
 class ProductAdmin(admin.ModelAdmin):
-    list_display = ('sku', 'name', 'category', 'categories_display', 'price', 'stock', 'is_active')
-    list_filter = ('category', 'categories', 'is_active')
-    search_fields = ('sku', 'name', 'description')
+    list_display = ('sku', 'name', 'supplier', 'supplier_ref', 'category', 'categories_display', 'price', 'stock', 'is_active')
+    list_filter = ('supplier_ref', 'category', 'categories', 'is_active')
+    search_fields = ('sku', 'name', 'supplier', 'description')
     readonly_fields = ('created_at', 'updated_at')
     inlines = [ClampSpecsInline]
     actions = [reparse_abrazaderas]
@@ -62,3 +62,10 @@ class ProductAdmin(admin.ModelAdmin):
         return ", ".join(obj.categories.values_list('name', flat=True)[:4]) or "-"
 
     categories_display.short_description = "Categorias"
+
+
+@admin.register(Supplier)
+class SupplierAdmin(admin.ModelAdmin):
+    list_display = ('name', 'is_active', 'updated_at')
+    list_filter = ('is_active',)
+    search_fields = ('name', 'normalized_name')

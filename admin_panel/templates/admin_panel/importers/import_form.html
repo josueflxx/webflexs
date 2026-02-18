@@ -1,17 +1,65 @@
 {% extends 'admin_panel/base.html' %}
 
-{% block page_title %}Importar Datos{% endblock %}
+{% block page_title %}Importar {{ import_type|title }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .import-form-shell {
+        max-width: 760px;
+        margin: 0 auto;
+    }
+
+    .import-help {
+        margin-bottom: 16px;
+    }
+
+    .import-help ul {
+        margin: 10px 0 0;
+        padding-left: 18px;
+    }
+
+    .progress {
+        height: 22px;
+        background-color: rgba(255, 255, 255, 0.1);
+        border-radius: 6px;
+        overflow: hidden;
+    }
+
+    .progress-bar {
+        width: 0;
+        height: 100%;
+        background-color: var(--color-primary);
+        transition: width 0.4s ease;
+    }
+
+    .result-shell {
+        margin-top: 16px;
+        padding: 14px;
+        border: 1px solid rgba(255, 255, 255, 0.16);
+        border-radius: 10px;
+        background: rgba(255, 255, 255, 0.03);
+    }
+
+    .error-zone {
+        color: var(--color-danger);
+        font-size: 0.9rem;
+    }
+</style>
+{% endblock %}
 
 {% block content %}
-<div class="admin-form-container" style="max-width: 600px; margin: 0 auto;">
+<div class="admin-form-container import-form-shell">
     <h2 class="mb-3">Importar {{ import_type|title }}</h2>
 
-    <div class="alert alert-info">
-        <strong>Instrucciones:</strong>
-        <ul class="mt-2" style="margin-left: 1.5rem;">
-            <li>El archivo debe ser formato <strong>.xlsx</strong> (Excel).</li>
-            <li>La primera fila debe contener los encabezados exactos.</li>
-            <li>SKU es obligatorio para productos.</li>
+    <div class="alert alert-info import-help">
+        <strong>Instrucciones</strong>
+        <ul>
+            <li>El archivo debe ser formato <strong>.xlsx</strong>.</li>
+            <li>La primera fila debe contener encabezados validos.</li>
+            <li>Activa "Dry run" para simular sin modificar datos.</li>
+            {% if import_type == 'products' %}
+            <li>Formato productos: A=SKU, B=Nombre, C=Proveedor, D=Precio, E=Stock, F..J=Filtro_1..Filtro_5.</li>
+            {% endif %}
         </ul>
     </div>
 
@@ -26,13 +74,9 @@
         <div class="form-group">
             <div class="flex items-center gap-2">
                 {{ form.dry_run }}
-                <label for="{{ form.dry_run.id_for_label }}" style="margin-bottom: 0; cursor: pointer;">
-                    {{ form.dry_run.label }}
-                </label>
+                <label for="{{ form.dry_run.id_for_label }}" style="margin-bottom: 0; cursor: pointer;">{{ form.dry_run.label }}</label>
             </div>
-            <small class="text-muted" style="display: block; margin-top: 5px; margin-left: 1.5rem;">
-                {{ form.dry_run.help_text }}
-            </small>
+            <small class="text-muted" style="display: block; margin-top: 5px; margin-left: 1.5rem;">{{ form.dry_run.help_text }}</small>
         </div>
 
         {% if form.update_existing %}
@@ -42,106 +86,124 @@
         {% endif %}
 
         <div class="form-actions">
-            <button type="submit" id="btnSubmit" class="btn btn-primary">Subir y Analizar</button>
-            <a href="{% url 'admin_dashboard' %}" class="btn btn-outline">Cancelar</a>
+            <button type="submit" id="btnSubmit" class="btn btn-primary">Subir y procesar</button>
+            <a href="{% url 'admin_import_dashboard' %}" class="btn btn-outline">Cancelar</a>
         </div>
     </form>
 
-    <!-- Progress UI (Hidden by default) -->
-    <div id="progressContainer" style="display: none; margin-top: 30px;">
+    <div id="progressContainer" style="display: none; margin-top: 24px;">
         <h4 id="progressStatus">Iniciando...</h4>
-        <div class="progress" style="height: 25px; background-color: #e9ecef; border-radius: 5px; overflow: hidden;">
-            <div id="progressBar" class="progress-bar" role="progressbar"
-                style="width: 0%; height: 100%; background-color: var(--color-primary); transition: width 0.5s;"></div>
+        <div class="progress">
+            <div id="progressBar" class="progress-bar"></div>
         </div>
-        <div class="text-center mt-2">
-            <span id="progressText">0 / 0</span> filas procesadas
-        </div>
+        <div class="text-center mt-2"><span id="progressText">0 / 0</span> filas procesadas</div>
 
-        <!-- Result Log -->
-        <div id="resultContainer"
-            style="display: none; margin-top: 20px; padding: 15px; background: #fff; border: 1px solid #ddd; border-radius: 5px;">
+        <div id="resultContainer" class="result-shell" style="display: none;">
             <h4 id="resultTitle">Resultado</h4>
             <p id="resultSummary"></p>
-            <div id="errorZone" style="color: red;"></div>
-            <a href="{% url 'admin_import_dashboard' %}" class="btn btn-primary mt-3">Volver al Dashboard</a>
+            <div id="errorZone" class="error-zone"></div>
+            <div class="form-actions" style="margin-top: 10px;">
+                <a href="{% url 'admin_import_dashboard' %}" class="btn btn-primary">Volver al historial</a>
+            </div>
         </div>
     </div>
 </div>
 
 <script>
+    const statusUrlTemplate = "{% url 'admin_import_status' '__TASK_ID__' %}";
+
     document.getElementById('importForm').addEventListener('submit', async function (e) {
         e.preventDefault();
 
         const form = e.target;
         const formData = new FormData(form);
-        const btnSubmit = document.getElementById('btnSubmit');
         const progressContainer = document.getElementById('progressContainer');
         const progressBar = document.getElementById('progressBar');
         const progressText = document.getElementById('progressText');
         const progressStatus = document.getElementById('progressStatus');
         const resultContainer = document.getElementById('resultContainer');
 
-        // UI Update
         form.style.display = 'none';
         progressContainer.style.display = 'block';
 
         try {
-            // 1. Start Import
             const response = await fetch(window.location.href, {
                 method: 'POST',
                 body: formData,
+                credentials: 'same-origin',
                 headers: {
                     'X-Requested-With': 'XMLHttpRequest'
-                } });
+                }
+            });
 
-            const data = await response.json();
+            const data = await response.json().catch(() => null);
+            if (!response.ok || !data.success) {
+                throw new Error((data && data.error) || 'No se pudo iniciar la importacion.');
+            }
 
-            if (data.success) {
-                const taskId = data.task_id;
-                pollStatus(taskId);
-            } else {
-                alert('Error al iniciar: ' + data.error);
-                form.style.display = 'block';
-                progressContainer.style.display = 'none';
-            } } catch (error) {
-            console.error(error);
-            alert('Error de conexión');
+            pollStatus(data.task_id, data.execution_id);
+        } catch (error) {
+            alert(error.message || 'Error de conexion');
+            form.style.display = 'block';
+            progressContainer.style.display = 'none';
         }
 
-        async function pollStatus(taskId) {
+        async function pollStatus(taskId, executionId) {
+            let consecutiveErrors = 0;
             const interval = setInterval(async () => {
                 try {
-                    const res = await fetch(`/admin-panel/importar/status/${taskId}/`);
+                    const statusUrl = statusUrlTemplate.replace('__TASK_ID__', encodeURIComponent(taskId));
+                    const url = `${statusUrl}?execution_id=${encodeURIComponent(executionId || '')}`;
+                    const res = await fetch(url, {
+                        method: 'GET',
+                        credentials: 'same-origin',
+                        headers: {
+                            'X-Requested-With': 'XMLHttpRequest'
+                        }
+                    });
+
+                    const contentType = res.headers.get('content-type') || '';
+                    if (!contentType.includes('application/json')) {
+                        throw new Error('La sesion expiro o el servidor devolvio una respuesta invalida.');
+                    }
+
                     const status = await res.json();
+                    consecutiveErrors = 0;
 
                     if (status.status === 'processing' || status.status === 'starting') {
-                        // Update Bar
                         const total = status.total || 1;
                         const current = status.current || 0;
                         const percent = Math.round((current / total) * 100);
 
-                        progressBar.style.width = percent + '%';
-                        progressBar.innerText = percent + '%';
+                        progressBar.style.width = `${percent}%`;
                         progressText.innerText = `${current} / ${total}`;
-                        progressStatus.innerText = status.message;
-
+                        progressStatus.innerText = status.message || 'Procesando...';
                     } else if (status.status === 'completed') {
                         clearInterval(interval);
                         progressBar.style.width = '100%';
-                        progressBar.innerText = '100%';
-                        progressStatus.innerText = '¡Completado!';
+                        progressStatus.innerText = 'Completado';
                         progressBar.style.backgroundColor = '#28a745';
-
-                        showResult(status.result);
+                        showResult(status.result || {});
                     } else if (status.status === 'failed') {
                         clearInterval(interval);
-                        progressStatus.innerText = 'Falló';
+                        progressStatus.innerText = 'Fallo';
                         progressBar.style.backgroundColor = '#dc3545';
-                        alert('Error: ' + status.message);
-                    } } catch (err) {
-                    console.error(err);
-                } }, 1000);
+                        alert(status.message || 'La importacion fallo.');
+                    } else if (status.status === 'unknown') {
+                        progressStatus.innerText = status.message || 'Esperando estado de importacion...';
+                    }
+                } catch (err) {
+                    consecutiveErrors += 1;
+                    if (consecutiveErrors < 6) {
+                        progressStatus.innerText = 'Reintentando consulta de estado...';
+                        return;
+                    }
+                    clearInterval(interval);
+                    const message = err && err.message ? err.message : 'No se pudo consultar el estado de la importacion.';
+                    progressStatus.innerText = 'Error de estado';
+                    alert(message);
+                }
+            }, 1000);
         }
 
         function showResult(result) {
@@ -149,21 +211,27 @@
             const created = result.created || 0;
             const updated = result.updated || 0;
             const errors = result.errors || 0;
+            const executionId = result.execution_id || '-';
 
             document.getElementById('resultSummary').innerHTML = `
-            <strong>Creados:</strong> ${created} <br>
-            <strong>Actualizados:</strong> ${updated} <br>
-            <strong>Errores:</strong> ${errors}
-        `;
+                <strong>Ejecucion:</strong> ${executionId}<br>
+                <strong>Creados:</strong> ${created}<br>
+                <strong>Actualizados:</strong> ${updated}<br>
+                <strong>Errores:</strong> ${errors}
+            `;
 
+            const errorZone = document.getElementById('errorZone');
             if (result.row_errors && result.row_errors.length > 0) {
-                let errorHtml = '<h5>Detalle de Errores:</h5><ul>';
-                result.row_errors.forEach(err => {
+                let errorHtml = '<h5>Detalle de errores:</h5><ul>';
+                result.row_errors.forEach((err) => {
                     errorHtml += `<li>Fila ${err.row}: ${err.message}</li>`;
                 });
                 errorHtml += '</ul>';
-                document.getElementById('errorZone').innerHTML = errorHtml;
-            } }
+                errorZone.innerHTML = errorHtml;
+            } else {
+                errorZone.innerHTML = '';
+            }
+        }
     });
 </script>
 {% endblock %}

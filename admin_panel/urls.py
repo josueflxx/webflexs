@@ -16,6 +16,13 @@ urlpatterns = [
     path('productos/<int:pk>/eliminar/', views.product_delete, name='admin_product_delete'),
     path('productos/eliminar-todos/', views.product_delete_all, name='admin_product_delete_all'),
     path('productos/asignar-categoria/', views.product_bulk_category_update, name='admin_product_bulk_category'),
+    path('proveedores/', views.supplier_list, name='admin_supplier_list'),
+    path('proveedores/sin-proveedor/', views.supplier_unassigned, name='admin_supplier_unassigned'),
+    path('proveedores/<int:supplier_id>/', views.supplier_detail, name='admin_supplier_detail'),
+    path('proveedores/<int:supplier_id>/estado/', views.supplier_toggle_active, name='admin_supplier_toggle_active'),
+    path('proveedores/<int:supplier_id>/acciones/', views.supplier_bulk_action, name='admin_supplier_bulk_action'),
+    path('proveedores/<int:supplier_id>/exportar/', views.supplier_export, name='admin_supplier_export'),
+    path('proveedores/<int:supplier_id>/imprimir/', views.supplier_print, name='admin_supplier_print'),
     
     # Clients
     path('clientes/', views.client_list, name='admin_client_list'),
@@ -40,6 +47,7 @@ urlpatterns = [
     path('categorias/<int:pk>/editar/', views.category_edit, name='admin_category_edit'),
     path('categorias/<int:pk>/eliminar/', views.category_delete, name='admin_category_delete'),
     path('categorias/eliminar-todas/', views.category_delete_all, name='admin_category_delete_all'),
+    path('categorias/reordenar/', views.category_reorder, name='admin_category_reorder'),
     path('categorias/<int:pk>/productos/', views.category_manage_products, name='admin_category_products'),
     
     # Category Attributes
@@ -58,6 +66,7 @@ urlpatterns = [
     path('importar/', views.import_dashboard, name='admin_import_dashboard'),
     path('importar/status/<str:task_id>/', views.import_status, name='admin_import_status'),
     path('importar/<str:import_type>/', views.import_process, name='admin_import_process'),
+    path('importar/rollback/<int:execution_id>/', views.import_rollback, name='admin_import_rollback'),
     # Commit view removed as we handle it in process view for MVP simplicity
     # path('importar/<str:import_type>/confirmar/', views.import_commit, name='admin_import_commit'),
 ]

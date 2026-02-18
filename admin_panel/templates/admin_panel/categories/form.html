@@ -76,6 +76,31 @@
         line-height: 1.4;
     }
 
+    .deactivation-impact {
+        margin-top: 14px;
+        border: 1px solid rgba(255, 193, 7, 0.4);
+        background: rgba(255, 193, 7, 0.08);
+        border-radius: 10px;
+        padding: 10px 12px;
+    }
+
+    .deactivation-impact h4 {
+        margin: 0 0 8px;
+        font-size: 0.9rem;
+        color: var(--color-warning);
+    }
+
+    .deactivation-impact ul {
+        margin: 0;
+        padding-left: 16px;
+    }
+
+    .deactivation-impact li {
+        margin-bottom: 3px;
+        font-size: 0.82rem;
+        color: var(--color-gray-light);
+    }
+
     .category-field-help {
         margin-top: 6px;
         color: var(--color-gray-light);
@@ -168,9 +193,9 @@
                 <label for="parent" class="form-label">Categoria padre (opcional)</label>
                 <select name="parent" id="parent" class="form-select" {% if not user.is_superuser %}disabled{% endif %}>
                     <option value="">-- Sin padre (categoria principal) --</option>
-                    {% for cat in form.fields.parent.queryset %}
-                    <option value="{{ cat.pk }}" {% if selected_parent_id == cat.pk|stringformat:'s' %}selected{% endif %}>
-                        {{ cat.name }}
+                    {% for cat in parent_options %}
+                    <option value="{{ cat.id }}" {% if selected_parent_id == cat.id|stringformat:'s' %}selected{% endif %}>
+                        {{ cat.label }}
                     </option>
                     {% endfor %}
                 </select>
@@ -182,10 +207,20 @@
 
             <div class="category-active-card">
                 <label class="form-checkbox-label">
-                    <input type="checkbox" name="is_active" {% if form.instance.is_active %}checked{% endif %} {% if not user.is_superuser %}disabled{% endif %}>
+                    <input type="checkbox" name="is_active" {% if form.is_active.value %}checked{% endif %} {% if not user.is_superuser %}disabled{% endif %}>
                     Categoria activa
                 </label>
                 <small>Las categorias inactivas no se muestran en catalogo y pueden ocultar productos sin otras categorias activas.</small>
+                {% if action == 'Editar' and deactivation_impact %}
+                <div class="deactivation-impact">
+                    <h4>Impacto estimado al desactivar</h4>
+                    <ul>
+                        <li>Productos vinculados: {{ deactivation_impact.linked_products }}</li>
+                        <li>Quedarian ocultos: {{ deactivation_impact.would_hide }}</li>
+                        <li>Seguirian visibles por otras categorias activas: {{ deactivation_impact.would_remain_visible }}</li>
+                    </ul>
+                </div>
+                {% endif %}
             </div>
         </div>
 
@@ -194,6 +229,25 @@
             <input type="text" name="name" id="name" class="form-input" value="{{ form.name.value|default:'' }}" {% if not user.is_superuser %}disabled{% endif %}>
             {% if form.name.errors %}
             <div class="error-feedback">{{ form.name.errors.0 }}</div>
+            {% endif %}
+        </div>
+
+        <div class="form-group">
+            <label for="seo_title" class="form-label">SEO title (opcional)</label>
+            <input type="text" name="seo_title" id="seo_title" class="form-input" maxlength="160"
+                value="{{ form.seo_title.value|default:'' }}" {% if not user.is_superuser %}disabled{% endif %}>
+            <div class="category-field-help">Se usa como titulo del navegador y buscadores para esta categoria.</div>
+            {% if form.seo_title.errors %}
+            <div class="error-feedback">{{ form.seo_title.errors.0 }}</div>
+            {% endif %}
+        </div>
+
+        <div class="form-group">
+            <label for="seo_description" class="form-label">SEO description (opcional)</label>
+            <textarea name="seo_description" id="seo_description" class="form-textarea" rows="3" {% if not user.is_superuser %}disabled{% endif %}>{{ form.seo_description.value|default:'' }}</textarea>
+            <div class="category-field-help">Descripcion corta para buscadores y redes.</div>
+            {% if form.seo_description.errors %}
+            <div class="error-feedback">{{ form.seo_description.errors.0 }}</div>
             {% endif %}
         </div>
 

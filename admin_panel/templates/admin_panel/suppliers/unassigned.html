@@ -1,0 +1,71 @@
+{% extends 'admin_panel/base.html' %}
+
+{% block page_title %}Productos sin proveedor{% endblock %}
+
+{% block content %}
+<div class="admin-table-container">
+    <div class="admin-toolbar">
+        <form method="get" class="toolbar-search">
+            <input type="text" name="q" value="{{ search }}" placeholder="Buscar SKU o nombre..." class="form-input">
+            <button type="submit" class="btn btn-primary">Filtrar</button>
+            {% if search %}
+            <a href="{% url 'admin_supplier_unassigned' %}" class="btn btn-outline">Limpiar</a>
+            {% endif %}
+        </form>
+        <div class="toolbar-actions">
+            <a href="{% url 'admin_supplier_list' %}" class="btn btn-outline">Volver a proveedores</a>
+        </div>
+    </div>
+
+    <div class="admin-toolbar" style="border-top: 1px solid rgba(255,255,255,0.08);">
+        <span><strong>{{ total_products }}</strong> productos sin proveedor normalizado.</span>
+    </div>
+
+    <table class="admin-table">
+        <thead>
+            <tr>
+                <th>SKU</th>
+                <th>Nombre</th>
+                <th>Proveedor texto</th>
+                <th>Precio</th>
+                <th>Stock</th>
+                <th>Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for product in page_obj %}
+            <tr>
+                <td><code>{{ product.sku }}</code></td>
+                <td>{{ product.name }}</td>
+                <td>{{ product.supplier|default:'-' }}</td>
+                <td>${{ product.price|floatformat:2 }}</td>
+                <td>{{ product.stock }}</td>
+                <td>
+                    <a href="{% url 'admin_product_edit' product.pk %}" class="btn btn-outline">
+                        {% if user.is_superuser %}Editar{% else %}Ver{% endif %}
+                    </a>
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="6" class="text-center text-muted">No hay productos sin proveedor.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    {% if page_obj.paginator.num_pages > 1 %}
+    <div class="admin-toolbar">
+        <span>Pagina {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
+        <div class="toolbar-actions">
+            {% if page_obj.has_previous %}
+            <a href="?page={{ page_obj.previous_page_number }}&q={{ search }}" class="btn btn-outline"><- Anterior</a>
+            {% endif %}
+            {% if page_obj.has_next %}
+            <a href="?page={{ page_obj.next_page_number }}&q={{ search }}" class="btn btn-outline">Siguiente -></a>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

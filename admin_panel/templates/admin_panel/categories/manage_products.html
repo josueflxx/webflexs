@@ -16,8 +16,8 @@
                 </option>
                 <option value="all" {% if category_filter == 'all' %}selected{% endif %}>Todos los productos</option>
                 <optgroup label="Otras categorías">
-                    {% for cat in all_categories %}
-                    <option value="{{ cat.pk }}" {% if category_filter == cat.pk|stringformat:"s" %}selected{% endif %}>{{ cat.name }}</option>
+                    {% for cat in all_category_options %}
+                    <option value="{{ cat.id }}" {% if category_filter == cat.id|stringformat:"s" %}selected{% endif %}>{{ cat.label }}</option>
                     {% endfor %}
                 </optgroup>
             </select>

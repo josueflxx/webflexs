@@ -32,6 +32,22 @@
         </div>
 
         <div class="form-group">
+            <label for="supplier" class="form-label">Proveedor</label>
+            <input type="text"
+                   name="supplier"
+                   id="supplier"
+                   class="form-input"
+                   list="supplierOptions"
+                   value="{{ product.supplier|default:'' }}"
+                   {% if not user.is_superuser %}disabled{% endif %}>
+            <datalist id="supplierOptions">
+                {% for supplier_name in supplier_suggestions %}
+                <option value="{{ supplier_name }}"></option>
+                {% endfor %}
+            </datalist>
+        </div>
+
+        <div class="form-group">
             <label for="price" class="form-label">Precio *</label>
             <input type="number" 
                    step="0.01" 
@@ -61,9 +77,9 @@
                     onchange="loadCategoryAttributes(this.value); syncPrimaryWithChecks(this.value)"
                     {% if not user.is_superuser %}disabled{% endif %}>
                 <option value="">Sin categoria principal</option>
-                {% for cat in categories %}
-                <option value="{{ cat.pk }}" {% if product.category_id == cat.pk %}selected{% endif %}>
-                    {% if cat.parent %}{{ cat.parent.name }} > {% endif %}{{ cat.name }}
+                {% for cat in category_options %}
+                <option value="{{ cat.id }}" {% if product.category_id == cat.id %}selected{% endif %}>
+                    {{ cat.label }}
                 </option>
                 {% endfor %}
             </select>
@@ -74,17 +90,19 @@
             <label class="form-label">Categorias vinculadas (multi-categoria)</label>
             <input type="text" id="categorySearchInput" class="form-input" placeholder="Buscar categoria..." {% if not user.is_superuser %}disabled{% endif %}>
             <div class="category-check-grid" id="categoryCheckGrid">
-                {% for cat in categories %}
-                <label class="category-check-item" data-name="{{ cat.name|lower }} {% if cat.parent %}{{ cat.parent.name|lower }}{% endif %}">
+                {% for cat in category_options %}
+                <label class="category-check-item"
+                       style="--depth: {{ cat.depth }};"
+                       data-name="{{ cat.full_path|lower }} {{ cat.name|lower }}">
                     <input type="checkbox"
                            name="categories"
-                           value="{{ cat.pk }}"
+                           value="{{ cat.id }}"
                            class="category-check"
-                           {% if cat.pk in selected_category_ids %}checked{% endif %}
+                           {% if cat.id in selected_category_ids %}checked{% endif %}
                            {% if not user.is_superuser %}disabled{% endif %}>
                     <span>
-                        {% if cat.parent %}<small class="text-muted">{{ cat.parent.name }} ></small>{% endif %}
-                        {{ cat.name }}
+                        <strong>{{ cat.label }}</strong>
+                        <small class="text-muted">{{ cat.full_path }}</small>
                     </span>
                 </label>
                 {% endfor %}
@@ -164,6 +182,16 @@
         border: 1px solid rgba(255, 255, 255, 0.08);
         border-radius: 8px;
         padding: 8px 10px;
+        padding-left: calc(10px + (var(--depth, 0) * 14px));
+    }
+    .category-check-item span {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+    }
+    .category-check-item strong {
+        font-size: 0.92rem;
+        font-weight: 600;
     }
     @media (max-width: 900px) {
         .category-check-grid { grid-template-columns: 1fr; }

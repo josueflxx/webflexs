@@ -1,0 +1,244 @@
+{% extends 'admin_panel/base.html' %}
+
+{% block page_title %}Proveedor: {{ supplier.name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .supplier-detail-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 12px;
+        margin-bottom: 14px;
+    }
+
+    .supplier-kpi-card {
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 10px;
+        padding: 12px;
+    }
+
+    .supplier-kpi-card .label {
+        color: var(--color-gray-light);
+        font-size: 0.82rem;
+        margin-bottom: 6px;
+        display: block;
+    }
+
+    .supplier-kpi-card .value {
+        font-size: 1.35rem;
+        font-weight: 700;
+    }
+
+    .supplier-ops {
+        display: grid;
+        grid-template-columns: 1.5fr 1fr;
+        gap: 12px;
+        margin-bottom: 14px;
+    }
+
+    .supplier-ops-card {
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 10px;
+        padding: 12px;
+    }
+
+    .supplier-ops-card h4 {
+        margin-top: 0;
+        margin-bottom: 8px;
+    }
+
+    .supplier-ops-row {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+
+    .audit-mini {
+        max-height: 190px;
+        overflow: auto;
+    }
+
+    .audit-mini ul {
+        margin: 0;
+        padding-left: 18px;
+    }
+
+    @media (max-width: 980px) {
+        .supplier-ops { grid-template-columns: 1fr; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="admin-table-container">
+    <div class="admin-toolbar">
+        <form method="get" class="toolbar-search">
+            <input type="text" name="q" value="{{ search }}" placeholder="Buscar SKU, nombre o descripcion..." class="form-input">
+            <select name="active" class="form-select">
+                <option value="">Todos</option>
+                <option value="1" {% if active_filter == '1' %}selected{% endif %}>Activos</option>
+                <option value="0" {% if active_filter == '0' %}selected{% endif %}>Inactivos</option>
+            </select>
+            <button type="submit" class="btn btn-primary">Filtrar</button>
+            {% if search or active_filter %}
+            <a href="{% url 'admin_supplier_detail' supplier.pk %}" class="btn btn-outline">Limpiar</a>
+            {% endif %}
+        </form>
+        <div class="toolbar-actions">
+            <a href="{% url 'admin_supplier_list' %}" class="btn btn-outline">Volver a proveedores</a>
+            {% if user.is_superuser %}
+            <form method="post" action="{% url 'admin_supplier_toggle_active' supplier.pk %}" style="display:inline-flex;gap:6px;">
+                {% csrf_token %}
+                {% if supplier.is_active %}
+                <input type="hidden" name="is_active" value="0">
+                <button type="submit" class="btn btn-danger-outline">Desactivar proveedor</button>
+                {% else %}
+                <input type="hidden" name="is_active" value="1">
+                <button type="submit" class="btn btn-info">Activar proveedor</button>
+                {% endif %}
+            </form>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="admin-toolbar" style="border-top: 1px solid rgba(255,255,255,0.08);">
+        <div class="supplier-detail-grid" style="width:100%;">
+            <div class="supplier-kpi-card">
+                <span class="label">Proveedor</span>
+                <span class="value">{{ supplier.name }}</span>
+            </div>
+            <div class="supplier-kpi-card">
+                <span class="label">Productos filtrados</span>
+                <span class="value">{{ total_products }}</span>
+            </div>
+            <div class="supplier-kpi-card">
+                <span class="label">Stock total</span>
+                <span class="value">{{ stock_total }}</span>
+            </div>
+            <div class="supplier-kpi-card">
+                <span class="label">Precio promedio</span>
+                <span class="value">${{ avg_price|floatformat:2 }}</span>
+            </div>
+            <div class="supplier-kpi-card">
+                <span class="label">Valor total stock</span>
+                <span class="value">${{ inventory_value|floatformat:2 }}</span>
+            </div>
+        </div>
+    </div>
+
+    {% if user.is_superuser %}
+    <div class="admin-toolbar" style="border-top: 1px solid rgba(255,255,255,0.08);">
+        <div class="supplier-ops" style="width:100%;">
+            <div class="supplier-ops-card">
+                <h4>Acciones masivas (sobre resultados filtrados)</h4>
+                <form method="post" action="{% url 'admin_supplier_bulk_action' supplier.pk %}">
+                    {% csrf_token %}
+                    <input type="hidden" name="q" value="{{ search }}">
+                    <input type="hidden" name="active" value="{{ active_filter }}">
+                    <div class="supplier-ops-row">
+                        <select name="action" class="form-select" style="min-width: 260px;">
+                            <option value="activate">Activar productos</option>
+                            <option value="deactivate">Desactivar productos</option>
+                            <option value="increase_pct">Aumentar precio (%)</option>
+                            <option value="decrease_pct">Bajar precio (%)</option>
+                        </select>
+                        <input type="number" name="percent" step="0.01" min="0" class="form-input" placeholder="% (solo precio)">
+                        <button type="submit" class="btn btn-primary">Aplicar</button>
+                    </div>
+                </form>
+                <small class="text-muted">Las acciones registran auditoria del proveedor.</small>
+            </div>
+
+            <div class="supplier-ops-card">
+                <h4>Exportar</h4>
+                <div class="supplier-ops-row">
+                    <a class="btn btn-outline" href="{% url 'admin_supplier_export' supplier.pk %}?format=xlsx&q={{ search|urlencode }}&active={{ active_filter }}">Exportar XLSX</a>
+                    <a class="btn btn-outline" href="{% url 'admin_supplier_export' supplier.pk %}?format=csv&q={{ search|urlencode }}&active={{ active_filter }}">Exportar CSV</a>
+                    <a class="btn btn-outline" target="_blank" rel="noopener noreferrer" href="{% url 'admin_supplier_print' supplier.pk %}?q={{ search|urlencode }}&active={{ active_filter }}">Imprimir/PDF</a>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <table class="admin-table">
+        <thead>
+            <tr>
+                <th>SKU</th>
+                <th>Nombre</th>
+                <th>Descripcion</th>
+                <th>Precio</th>
+                <th>Stock</th>
+                <th>Estado</th>
+                <th>Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for product in page_obj %}
+            <tr>
+                <td><code>{{ product.sku }}</code></td>
+                <td>{{ product.name }}</td>
+                <td style="max-width: 500px;">{{ product.description|default:'-'|truncatechars:220 }}</td>
+                <td>${{ product.price|floatformat:2 }}</td>
+                <td>{{ product.stock }}</td>
+                <td>
+                    {% if product.is_active %}
+                    <span class="badge badge-success">Activo</span>
+                    {% else %}
+                    <span class="badge badge-danger">Inactivo</span>
+                    {% endif %}
+                    <br>
+                    {% if product.catalog_visibility %}
+                    <span class="badge badge-info">Visible catalogo</span>
+                    {% else %}
+                    <span class="badge badge-warning">Oculto</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <a href="{% url 'admin_product_edit' product.pk %}" class="btn btn-outline">{% if user.is_superuser %}Editar{% else %}Ver{% endif %}</a>
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="7" class="text-center text-muted">No hay productos para este proveedor.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    {% if page_obj.paginator.num_pages > 1 %}
+    <div class="admin-toolbar">
+        <span>Pagina {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
+        <div class="toolbar-actions">
+            {% if page_obj.has_previous %}
+            <a href="?page={{ page_obj.previous_page_number }}&q={{ search }}&active={{ active_filter }}" class="btn btn-outline"><- Anterior</a>
+            {% endif %}
+            {% if page_obj.has_next %}
+            <a href="?page={{ page_obj.next_page_number }}&q={{ search }}&active={{ active_filter }}" class="btn btn-outline">Siguiente -></a>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="admin-toolbar" style="border-top: 1px solid rgba(255,255,255,0.08); align-items:flex-start;">
+        <div style="width:100%;" class="audit-mini">
+            <strong>Ultimas acciones de auditoria del proveedor</strong>
+            {% if audit_logs %}
+            <ul>
+                {% for log in audit_logs %}
+                <li>
+                    {{ log.created_at|date:'d/m H:i' }} - {{ log.action }}
+                    ({{ log.user.username|default:'sistema' }})
+                </li>
+                {% endfor %}
+            </ul>
+            {% else %}
+            <p class="text-muted" style="margin:8px 0 0;">Sin acciones registradas aun.</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

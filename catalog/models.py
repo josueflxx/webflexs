@@ -21,6 +21,18 @@ class Category(models.Model):
     )
     order = models.IntegerField(default=0, verbose_name="Orden")
     is_active = models.BooleanField(default=True, verbose_name="Activa")
+    seo_title = models.CharField(
+        max_length=160,
+        blank=True,
+        verbose_name="SEO title",
+        help_text="Opcional. Título para buscadores de esta categoría.",
+    )
+    seo_description = models.CharField(
+        max_length=255,
+        blank=True,
+        verbose_name="SEO description",
+        help_text="Opcional. Descripción para buscadores de esta categoría.",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -32,6 +44,9 @@ class Category(models.Model):
             models.Index(fields=["name"]),
             models.Index(fields=["slug"]),
             models.Index(fields=["parent"]),
+            models.Index(fields=["is_active"]),
+            models.Index(fields=["order"]),
+            models.Index(fields=["parent", "is_active"]),
         ]
 
     def save(self, *args, **kwargs):
@@ -155,11 +170,64 @@ class CategoryAttribute(models.Model):
         return []
 
 
+class Supplier(models.Model):
+    """Normalized supplier entity."""
+
+    name = models.CharField(max_length=120, verbose_name="Nombre")
+    normalized_name = models.CharField(max_length=120, unique=True, db_index=True)
+    slug = models.SlugField(max_length=140, unique=True, blank=True)
+    is_active = models.BooleanField(default=True, verbose_name="Activo")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Proveedor"
+        verbose_name_plural = "Proveedores"
+        ordering = ["name"]
+        indexes = [
+            models.Index(fields=["name"]),
+            models.Index(fields=["slug"]),
+            models.Index(fields=["is_active"]),
+        ]
+
+    @staticmethod
+    def normalize_name(value):
+        cleaned = re.sub(r"\s+", " ", str(value or "").strip())
+        return cleaned.upper()
+
+    def save(self, *args, **kwargs):
+        from django.utils.text import slugify
+
+        self.name = re.sub(r"\s+", " ", str(self.name or "").strip())
+        self.normalized_name = self.normalize_name(self.name)
+        if not self.slug:
+            base_slug = slugify(self.name) or "proveedor"
+            slug = base_slug
+            counter = 1
+            while Supplier.objects.filter(slug=slug).exclude(pk=self.pk).exists():
+                slug = f"{base_slug}-{counter}"
+                counter += 1
+            self.slug = slug
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return self.name
+
+
 class Product(models.Model):
     """Product model with all required fields."""
 
     sku = models.CharField(max_length=50, unique=True, db_index=True, verbose_name="SKU")
     name = models.CharField(max_length=255, db_index=True, verbose_name="Nombre")
+    supplier = models.CharField(max_length=120, blank=True, db_index=True, verbose_name="Proveedor")
+    supplier_ref = models.ForeignKey(
+        Supplier,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="products",
+        verbose_name="Proveedor normalizado",
+    )
     description = models.TextField(blank=True, verbose_name="Descripcion")
     price = models.DecimalField(max_digits=12, decimal_places=2, verbose_name="Precio")
     stock = models.IntegerField(default=0, verbose_name="Stock")
@@ -200,8 +268,11 @@ class Product(models.Model):
         indexes = [
             models.Index(fields=["sku"]),
             models.Index(fields=["name"]),
+            models.Index(fields=["supplier"]),
+            models.Index(fields=["supplier_ref"]),
             models.Index(fields=["category"]),
             models.Index(fields=["is_active"]),
+            models.Index(fields=["updated_at"]),
             models.Index(fields=["filter_1"]),
             models.Index(fields=["filter_2"]),
             models.Index(fields=["filter_3"]),
@@ -344,6 +415,13 @@ class ClampSpecs(models.Model):
     class Meta:
         verbose_name = "Especificacion abrazadera"
         verbose_name_plural = "Especificaciones abrazaderas"
+        indexes = [
+            models.Index(fields=["fabrication"]),
+            models.Index(fields=["diameter"]),
+            models.Index(fields=["width"]),
+            models.Index(fields=["length"]),
+            models.Index(fields=["shape"]),
+        ]
 
     def __str__(self):
         return f"Spec for {self.product.sku}"

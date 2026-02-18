@@ -27,14 +27,154 @@
         overflow-x: auto;
     }
 
+    .category-filterbar {
+        border-top: 1px solid rgba(255, 255, 255, 0.06);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+        background: rgba(255, 255, 255, 0.01);
+    }
+
+    .category-filter-form {
+        width: 100%;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .category-filter-form input[type="text"] {
+        min-width: 250px;
+        flex: 1 1 260px;
+    }
+
+    .category-filter-form .form-select {
+        min-width: 170px;
+    }
+
+    .category-filter-result {
+        margin-left: auto;
+        color: var(--color-gray-light);
+        font-size: 0.82rem;
+    }
+
+    .integrity-alert {
+        border: 1px solid rgba(255, 193, 7, 0.45);
+        background: rgba(255, 193, 7, 0.08);
+        border-radius: 10px;
+        padding: 12px 14px;
+        margin: 12px 0 16px;
+    }
+
+    .integrity-alert h4 {
+        margin: 0 0 8px;
+        color: var(--color-warning);
+        font-size: 0.95rem;
+    }
+
+    .integrity-alert ul {
+        margin: 0;
+        padding-left: 18px;
+    }
+
+    .integrity-alert li {
+        margin-bottom: 4px;
+        color: var(--color-gray-light);
+        font-size: 0.84rem;
+    }
+
+    .reorder-status {
+        color: var(--color-gray-light);
+        font-size: 0.82rem;
+        margin-top: 8px;
+        display: none;
+    }
+
+    .reorder-status.show {
+        display: block;
+    }
+
     .category-table td {
         vertical-align: top;
+    }
+
+    .category-row[data-depth]:not([data-depth="0"]) {
+        background: rgba(0, 0, 0, 0.22);
+        display: none;
+    }
+
+    .folder-toggle {
+        width: 24px;
+        height: 24px;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        border-radius: 6px;
+        background: rgba(255, 255, 255, 0.04);
+        color: var(--color-gray-light);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        flex-shrink: 0;
+    }
+
+    .folder-toggle:hover {
+        border-color: rgba(255, 107, 53, 0.65);
+        color: var(--color-primary);
+        background: rgba(255, 107, 53, 0.1);
+    }
+
+    .folder-chevron {
+        font-size: 0.66rem;
+        line-height: 1;
+        transform: rotate(0deg);
+        transition: transform 0.2s ease;
+    }
+
+    .category-row.expanded .folder-chevron {
+        transform: rotate(90deg);
+    }
+
+    .folder-spacer {
+        width: 24px;
+        height: 24px;
+        display: inline-block;
+        flex-shrink: 0;
     }
 
     .category-name-cell {
         display: flex;
         align-items: center;
         gap: 10px;
+    }
+
+    .drag-handle {
+        width: 24px;
+        height: 24px;
+        border: 1px dashed rgba(255, 255, 255, 0.3);
+        border-radius: 6px;
+        background: rgba(255, 255, 255, 0.04);
+        color: var(--color-gray-light);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        cursor: grab;
+        user-select: none;
+        line-height: 1;
+    }
+
+    .drag-handle:active {
+        cursor: grabbing;
+    }
+
+    .category-row.dragging {
+        opacity: 0.35;
+    }
+
+    .category-row.drop-before {
+        box-shadow: inset 0 2px 0 var(--color-info);
+    }
+
+    .category-row.drop-after {
+        box-shadow: inset 0 -2px 0 var(--color-info);
     }
 
     .category-dot {
@@ -44,11 +184,6 @@
         background: var(--color-primary);
         box-shadow: 0 0 0 4px rgba(255, 107, 53, 0.15);
         flex-shrink: 0;
-    }
-
-    .category-name-cell.child .category-dot {
-        background: var(--color-info);
-        box-shadow: 0 0 0 4px rgba(23, 162, 184, 0.16);
     }
 
     .category-name-meta {
@@ -67,14 +202,6 @@
         display: flex;
         gap: 6px;
         flex-wrap: wrap;
-    }
-
-    .category-child-row {
-        background: rgba(0, 0, 0, 0.22);
-    }
-
-    .category-child-row td:first-child {
-        padding-left: 2.2rem;
     }
 
     .action-group {
@@ -98,6 +225,16 @@
     .btn-subcategory:hover {
         border-color: var(--color-primary);
         background: rgba(255, 107, 53, 0.12);
+    }
+
+    .btn-tree {
+        border-color: rgba(23, 162, 184, 0.4);
+        color: var(--color-info);
+    }
+
+    .btn-tree:hover {
+        border-color: var(--color-info);
+        background: rgba(23, 162, 184, 0.12);
     }
 
     .category-modal {
@@ -136,6 +273,15 @@
             flex: 1;
             text-align: center;
         }
+
+        .category-filter-form {
+            flex-direction: column;
+            align-items: stretch;
+        }
+
+        .category-filter-result {
+            margin-left: 0;
+        }
     }
 </style>
 {% endblock %}
@@ -145,15 +291,50 @@
     <div class="admin-toolbar category-toolbar">
         <div class="category-toolbar-title">
             <h2>Gestion de categorias</h2>
-            <p>Crea subcategorias en un clic desde cualquier fila con "Nueva sub".</p>
+            <p>Arbol de categorias con apertura por carpetas (niveles infinitos).</p>
         </div>
         <div class="toolbar-actions">
+            <button type="button" class="btn btn-outline btn-tree" onclick="expandAllCategories()">Expandir todo</button>
+            <button type="button" class="btn btn-outline btn-tree" onclick="collapseAllCategories()">Ocultar todo</button>
             {% if user.is_superuser %}
+            {% if not search and status == 'all' %}
+            <button type="button" class="btn btn-info" id="saveOrderBtn" onclick="saveCategoryOrder()" style="display: none;">Guardar orden</button>
+            {% endif %}
             <button type="button" class="btn btn-danger" onclick="openDeleteModal()">Eliminar todas</button>
             <a href="{% url 'admin_category_create' %}" class="btn btn-primary">Nueva categoria</a>
             {% endif %}
         </div>
     </div>
+    {% if user.is_superuser and not search and status == 'all' %}
+    <div id="reorderStatus" class="reorder-status">Arrastra filas para reordenar y luego presiona "Guardar orden".</div>
+    {% endif %}
+
+    <div class="admin-toolbar category-filterbar">
+        <form method="get" class="category-filter-form">
+            <input type="text" name="q" value="{{ search }}" class="form-input" placeholder="Buscar categoria o subcategoria...">
+            <select name="status" class="form-select">
+                <option value="all" {% if status == 'all' %}selected{% endif %}>Todos los estados</option>
+                <option value="active" {% if status == 'active' %}selected{% endif %}>Solo activas</option>
+                <option value="inactive" {% if status == 'inactive' %}selected{% endif %}>Solo inactivas</option>
+            </select>
+            <button type="submit" class="btn btn-primary btn-inline">Filtrar</button>
+            {% if search or status != 'all' %}
+            <a href="{% url 'admin_category_list' %}" class="btn btn-outline btn-inline">Limpiar</a>
+            {% endif %}
+            <span class="category-filter-result">{{ visible_total }} categorias visibles</span>
+        </form>
+    </div>
+
+    {% if integrity_issues %}
+    <div class="integrity-alert">
+        <h4>Advertencias de integridad</h4>
+        <ul>
+            {% for issue in integrity_issues %}
+            <li>{{ issue }}</li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
 
     <div id="deleteModal" class="category-modal">
         <div class="category-modal-content">
@@ -175,26 +356,11 @@
         </div>
     </div>
 
-    <script>
-        function openDeleteModal() { document.getElementById('deleteModal').style.display = 'block'; }
-        function closeDeleteModal() { document.getElementById('deleteModal').style.display = 'none'; }
-        function checkDeleteInput(input, expected) {
-            const btn = document.getElementById('deleteSubmitBtn');
-            if (input.value.trim().toLowerCase() === expected) {
-                btn.removeAttribute('disabled');
-            } else {
-                btn.setAttribute('disabled', 'true');
-            }
-        }
-        window.onclick = function (e) {
-            if (e.target == document.getElementById('deleteModal')) closeDeleteModal();
-        }
-    </script>
-
     <div class="category-table-wrap">
         <table class="admin-table category-table">
             <thead>
                 <tr>
+                    <th style="width: 52px;">Orden</th>
                     <th>Nombre</th>
                     <th>Subcategorias</th>
                     <th>Productos</th>
@@ -203,34 +369,58 @@
                 </tr>
             </thead>
             <tbody>
-                {% for category in categories %}
-                <tr class="category-parent-row">
+                {% for row in tree_rows %}
+                <tr class="category-row{% if row.has_children %} has-children{% endif %}"
+                    data-category-id="{{ row.category.id }}"
+                    data-parent-id="{{ row.category.parent_id|default:'' }}"
+                    data-depth="{{ row.depth }}"
+                    {% if user.is_superuser and not search and status == 'all' %}draggable="true"{% endif %}>
                     <td>
-                        <div class="category-name-cell">
+                        {% if user.is_superuser and not search and status == 'all' %}
+                        <span class="drag-handle" title="Arrastrar para reordenar">::</span>
+                        {% else %}
+                        <span class="text-muted">-</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <div class="category-name-cell" style="padding-left: calc(6px + {{ row.depth }} * 26px);">
+                            {% if row.has_children %}
+                            <button type="button" class="folder-toggle"
+                                onclick="toggleCategoryChildren(event, '{{ row.category.id }}')"
+                                aria-label="Mostrar subcategorias de {{ row.category.name }}">
+                                <span class="folder-chevron">&#9654;</span>
+                            </button>
+                            {% else %}
+                            <span class="folder-spacer"></span>
+                            {% endif %}
                             <span class="category-dot"></span>
                             <div class="category-name-meta">
-                                <strong>{{ category.name }}</strong>
-                                <small>Categoria principal</small>
+                                <strong>{{ row.category.name }}</strong>
+                                {% if row.depth == 0 %}
+                                <small>Categoria raiz{% if row.has_children %} - {{ row.children_count }} subcategorias{% endif %}</small>
+                                {% else %}
+                                <small>Nivel {{ row.depth }} - sub de {{ row.category.parent.name }}</small>
+                                {% endif %}
                             </div>
                         </div>
                     </td>
                     <td>
                         <div class="subcategory-chip-wrap">
-                            {% for child in category.children.all %}
-                            <span class="badge badge-info">{{ child.name }}</span>
-                            {% empty %}
-                            <span class="text-muted">Sin subcategorias</span>
-                            {% endfor %}
+                            {% if row.has_children %}
+                            <span class="badge badge-info">{{ row.children_count }} subcategorias</span>
+                            {% else %}
+                            <span class="text-muted">-</span>
+                            {% endif %}
                         </div>
                     </td>
                     <td>
                         <div class="metric-chip-wrap">
-                            <span class="badge badge-secondary">Directos: {{ category.direct_products_count|default:0 }}</span>
-                            <span class="badge badge-info">Arbol: {{ category.tree_products_count|default:0 }}</span>
+                            <span class="badge badge-secondary">Directos: {{ row.category.direct_products_count|default:0 }}</span>
+                            <span class="badge badge-info">Arbol: {{ row.category.tree_products_count|default:0 }}</span>
                         </div>
                     </td>
                     <td>
-                        {% if category.is_active %}
+                        {% if row.category.is_active %}
                         <span class="badge badge-success">Activa</span>
                         {% else %}
                         <span class="badge badge-danger">Inactiva</span>
@@ -238,69 +428,245 @@
                     </td>
                     <td>
                         <div class="action-group">
-                            <a href="{% url 'admin_category_products' category.pk %}" class="btn btn-outline btn-inline"
-                                title="Gestionar productos">Productos</a>
-                            <a href="{% url 'admin_category_edit' category.pk %}" class="btn btn-outline btn-inline"
-                                title="{% if user.is_superuser %}Editar{% else %}Ver{% endif %}">
-                                {% if user.is_superuser %}Editar{% else %}Ver{% endif %}
-                            </a>
+                            <a href="{% url 'admin_category_products' row.category.pk %}" class="btn btn-outline btn-inline" title="Gestionar productos">Productos</a>
+                            <a href="{% url 'admin_category_edit' row.category.pk %}" class="btn btn-outline btn-inline" title="{% if user.is_superuser %}Editar{% else %}Ver{% endif %}">{% if user.is_superuser %}Editar{% else %}Ver{% endif %}</a>
                             {% if user.is_superuser %}
-                            <a href="{% url 'admin_category_create' %}?parent={{ category.pk }}" class="btn btn-outline btn-inline btn-subcategory"
-                                title="Crear subcategoria">Nueva sub</a>
-                            <a href="{% url 'admin_category_delete' category.pk %}" class="btn btn-danger-outline btn-inline"
-                                title="Eliminar">Eliminar</a>
+                            <a href="{% url 'admin_category_create' %}?parent={{ row.category.pk }}" class="btn btn-outline btn-inline btn-subcategory" title="Crear subcategoria">Nueva sub</a>
+                            <a href="{% url 'admin_category_delete' row.category.pk %}" class="btn btn-danger-outline btn-inline" title="Eliminar">Eliminar</a>
                             {% endif %}
                         </div>
                     </td>
                 </tr>
-                {% for child in category.children.all %}
-                <tr class="category-child-row">
-                    <td>
-                        <div class="category-name-cell child">
-                            <span class="category-dot"></span>
-                            <div class="category-name-meta">
-                                <strong>{{ child.name }}</strong>
-                                <small>Subcategoria de {{ category.name }}</small>
-                            </div>
-                        </div>
-                    </td>
-                    <td><span class="text-muted">-</span></td>
-                    <td>
-                        <div class="metric-chip-wrap">
-                            <span class="badge badge-secondary">Directos: {{ child.direct_products_count|default:0 }}</span>
-                            <span class="badge badge-info">Arbol: {{ child.tree_products_count|default:0 }}</span>
-                        </div>
-                    </td>
-                    <td>
-                        {% if child.is_active %}
-                        <span class="badge badge-success">Activa</span>
-                        {% else %}
-                        <span class="badge badge-danger">Inactiva</span>
-                        {% endif %}
-                    </td>
-                    <td>
-                        <div class="action-group">
-                            <a href="{% url 'admin_category_products' child.pk %}" class="btn btn-outline btn-inline"
-                                title="Gestionar productos">Productos</a>
-                            <a href="{% url 'admin_category_edit' child.pk %}" class="btn btn-outline btn-inline"
-                                title="{% if user.is_superuser %}Editar{% else %}Ver{% endif %}">
-                                {% if user.is_superuser %}Editar{% else %}Ver{% endif %}
-                            </a>
-                            {% if user.is_superuser %}
-                            <a href="{% url 'admin_category_create' %}?parent={{ child.pk }}" class="btn btn-outline btn-inline btn-subcategory"
-                                title="Crear subcategoria">Nueva sub</a>
-                            {% endif %}
-                        </div>
-                    </td>
-                </tr>
-                {% endfor %}
                 {% empty %}
                 <tr>
-                    <td colspan="5" class="text-center text-muted">No hay categorias</td>
+                    <td colspan="6" class="text-center text-muted">No hay categorias</td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
     </div>
 </div>
+
+<script>
+    function openDeleteModal() { document.getElementById('deleteModal').style.display = 'block'; }
+    function closeDeleteModal() { document.getElementById('deleteModal').style.display = 'none'; }
+    function checkDeleteInput(input, expected) {
+        const btn = document.getElementById('deleteSubmitBtn');
+        if (input.value.trim().toLowerCase() === expected) {
+            btn.removeAttribute('disabled');
+        } else {
+            btn.setAttribute('disabled', 'true');
+        }
+    }
+
+    window.onclick = function (e) {
+        if (e.target == document.getElementById('deleteModal')) closeDeleteModal();
+    }
+
+    function getDirectChildRows(categoryId) {
+        return document.querySelectorAll(`.category-row[data-parent-id="${categoryId}"]`);
+    }
+
+    function hideDescendants(categoryId) {
+        const childRows = getDirectChildRows(categoryId);
+        childRows.forEach((row) => {
+            row.style.display = 'none';
+            row.classList.remove('expanded');
+            hideDescendants(row.dataset.categoryId);
+        });
+    }
+
+    function setCategoryExpanded(categoryId, expanded) {
+        const parentRow = document.querySelector(`.category-row[data-category-id="${categoryId}"]`);
+        if (!parentRow || !parentRow.classList.contains('has-children')) return;
+
+        const childRows = getDirectChildRows(categoryId);
+        if (expanded) {
+            childRows.forEach((row) => {
+                row.style.display = 'table-row';
+            });
+            parentRow.classList.add('expanded');
+        } else {
+            parentRow.classList.remove('expanded');
+            hideDescendants(categoryId);
+        }
+    }
+
+    function toggleCategoryChildren(event, categoryId) {
+        event.preventDefault();
+        event.stopPropagation();
+        const parentRow = document.querySelector(`.category-row[data-category-id="${categoryId}"]`);
+        if (!parentRow) return;
+        const expanded = parentRow.classList.contains('expanded');
+        setCategoryExpanded(categoryId, !expanded);
+    }
+
+    function expandAllCategories() {
+        document.querySelectorAll('.category-row').forEach((row) => {
+            if (row.dataset.depth !== '0') {
+                row.style.display = 'table-row';
+            }
+        });
+        document.querySelectorAll('.category-row.has-children').forEach((row) => {
+            row.classList.add('expanded');
+        });
+    }
+
+    function collapseAllCategories() {
+        document.querySelectorAll('.category-row').forEach((row) => {
+            if (row.dataset.depth !== '0') {
+                row.style.display = 'none';
+            }
+            row.classList.remove('expanded');
+        });
+    }
+
+    function getCookie(name) {
+        const value = `; ${document.cookie}`;
+        const parts = value.split(`; ${name}=`);
+        if (parts.length === 2) return parts.pop().split(';').shift();
+        return '';
+    }
+
+    const reorderState = {
+        enabled: {% if user.is_superuser and not search and status == 'all' %}true{% else %}false{% endif %},
+        dirty: false,
+        dragSource: null,
+        dragBlock: []
+    };
+
+    function markReorderDirty() {
+        if (!reorderState.enabled) return;
+        reorderState.dirty = true;
+        const saveBtn = document.getElementById('saveOrderBtn');
+        const status = document.getElementById('reorderStatus');
+        if (saveBtn) saveBtn.style.display = 'inline-flex';
+        if (status) status.classList.add('show');
+    }
+
+    function clearDropTargets() {
+        document.querySelectorAll('.category-row.drop-before, .category-row.drop-after').forEach((row) => {
+            row.classList.remove('drop-before', 'drop-after');
+        });
+    }
+
+    function collectDescendantRows(startRow) {
+        const descendants = [];
+        const baseDepth = parseInt(startRow.dataset.depth || '0', 10);
+        let cursor = startRow.nextElementSibling;
+        while (cursor && cursor.classList.contains('category-row')) {
+            const depth = parseInt(cursor.dataset.depth || '0', 10);
+            if (depth <= baseDepth) break;
+            descendants.push(cursor);
+            cursor = cursor.nextElementSibling;
+        }
+        return descendants;
+    }
+
+    function initDragAndDrop() {
+        if (!reorderState.enabled) return;
+
+        const rows = Array.from(document.querySelectorAll('.category-row'));
+        rows.forEach((row) => {
+            row.addEventListener('dragstart', (event) => {
+                reorderState.dragSource = row;
+                reorderState.dragBlock = [row, ...collectDescendantRows(row)];
+                row.classList.add('dragging');
+                event.dataTransfer.effectAllowed = 'move';
+                event.dataTransfer.setData('text/plain', row.dataset.categoryId || '');
+            });
+
+            row.addEventListener('dragend', () => {
+                row.classList.remove('dragging');
+                clearDropTargets();
+                reorderState.dragSource = null;
+                reorderState.dragBlock = [];
+            });
+
+            row.addEventListener('dragover', (event) => {
+                if (!reorderState.dragSource || row === reorderState.dragSource) return;
+                if (reorderState.dragBlock.includes(row)) return;
+                event.preventDefault();
+                clearDropTargets();
+                const bounds = row.getBoundingClientRect();
+                const before = (event.clientY - bounds.top) < (bounds.height / 2);
+                row.classList.add(before ? 'drop-before' : 'drop-after');
+            });
+
+            row.addEventListener('dragleave', () => {
+                row.classList.remove('drop-before', 'drop-after');
+            });
+
+            row.addEventListener('drop', (event) => {
+                if (!reorderState.dragSource || row === reorderState.dragSource) return;
+                if (reorderState.dragBlock.includes(row)) return;
+                event.preventDefault();
+
+                const bounds = row.getBoundingClientRect();
+                const before = (event.clientY - bounds.top) < (bounds.height / 2);
+                const parent = row.parentElement;
+                const anchor = before ? row : row.nextElementSibling;
+
+                reorderState.dragBlock.forEach((blockRow) => {
+                    parent.insertBefore(blockRow, anchor);
+                });
+
+                clearDropTargets();
+                markReorderDirty();
+            });
+        });
+    }
+
+    async function saveCategoryOrder() {
+        if (!reorderState.enabled || !reorderState.dirty) return;
+
+        const orderedIds = Array.from(document.querySelectorAll('.category-row'))
+            .map((row) => row.dataset.categoryId)
+            .filter(Boolean);
+
+        const saveBtn = document.getElementById('saveOrderBtn');
+        const status = document.getElementById('reorderStatus');
+        if (saveBtn) saveBtn.disabled = true;
+
+        try {
+            const response = await fetch("{% url 'admin_category_reorder' %}", {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken'),
+                },
+                body: JSON.stringify({ ordered_ids: orderedIds }),
+            });
+            const data = await response.json();
+            if (!response.ok || !data.success) {
+                throw new Error(data.error || 'No se pudo guardar el orden');
+            }
+
+            reorderState.dirty = false;
+            if (saveBtn) {
+                saveBtn.disabled = false;
+                saveBtn.style.display = 'none';
+            }
+            if (status) {
+                status.classList.remove('show');
+                status.textContent = 'Orden guardado correctamente.';
+                status.classList.add('show');
+                setTimeout(() => {
+                    status.classList.remove('show');
+                    status.textContent = 'Arrastra filas para reordenar y luego presiona \"Guardar orden\".';
+                }, 1800);
+            }
+        } catch (error) {
+            if (saveBtn) saveBtn.disabled = false;
+            alert(error.message || 'No se pudo guardar el orden');
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        initDragAndDrop();
+        {% if search %}
+        expandAllCategories();
+        {% endif %}
+    });
+</script>
 {% endblock %}

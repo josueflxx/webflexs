@@ -4,6 +4,7 @@ from django.contrib.auth.models import User
 from accounts.models import ClientProfile
 from django.db import transaction
 from django.utils.text import slugify
+import pandas as pd
 
 class ClientImporter(BaseImporter):
     """

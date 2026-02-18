@@ -1,4 +1,4 @@
-{% load static %}
+﻿{% load static %}
 <!DOCTYPE html>
 <html lang="es">
 
@@ -9,14 +9,13 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{% static 'core/css/base.css' %}">
-    <link rel="stylesheet" href="{% static 'core/css/admin.css' %}?v=3">
+    <link rel="stylesheet" href="{% static 'core/css/admin.css' %}?v=4">
     <link rel="stylesheet" href="{% static 'core/css/admin_right_sidebar.css' %}?v=2">
     {% block extra_css %}{% endblock %}
 </head>
 
 <body class="admin-body">
     <div class="admin-layout" id="adminLayout">
-        <!-- Sidebar -->
         <aside class="admin-sidebar">
             <div class="sidebar-header">
                 <a href="{% url 'admin_dashboard' %}" class="sidebar-logo">
@@ -28,38 +27,43 @@
             <nav class="sidebar-nav">
                 <a href="{% url 'admin_dashboard' %}"
                     class="nav-item {% if request.resolver_match.url_name == 'admin_dashboard' %}active{% endif %}">
-                    <span class="nav-icon">📊</span>
+                    <span class="nav-icon" aria-hidden="true">&#128202;</span>
                     Dashboard
                 </a>
 
-                <div class="nav-section">Catálogo</div>
+                <div class="nav-section">Catalogo</div>
                 <a href="{% url 'admin_product_list' %}"
                     class="nav-item {% if 'product' in request.resolver_match.url_name %}active{% endif %}">
-                    <span class="nav-icon">📦</span>
+                    <span class="nav-icon" aria-hidden="true">&#128230;</span>
                     Productos
                 </a>
                 <a href="{% url 'admin_category_list' %}"
                     class="nav-item {% if 'category' in request.resolver_match.url_name %}active{% endif %}">
-                    <span class="nav-icon">📁</span>
-                    Categorías
+                    <span class="nav-icon" aria-hidden="true">&#128193;</span>
+                    Categorias
+                </a>
+                <a href="{% url 'admin_supplier_list' %}"
+                    class="nav-item {% if 'supplier' in request.resolver_match.url_name %}active{% endif %}">
+                    <span class="nav-icon" aria-hidden="true">&#127981;</span>
+                    Proveedores
                 </a>
 
                 <div class="nav-section">Clientes</div>
                 <a href="{% url 'admin_client_list' %}"
                     class="nav-item {% if 'client' in request.resolver_match.url_name %}active{% endif %}">
-                    <span class="nav-icon">👥</span>
+                    <span class="nav-icon" aria-hidden="true">&#128101;</span>
                     Clientes
                 </a>
                 <a href="{% url 'admin_request_list' %}"
                     class="nav-item {% if 'request' in request.resolver_match.url_name %}active{% endif %}">
-                    <span class="nav-icon">📝</span>
+                    <span class="nav-icon" aria-hidden="true">&#128221;</span>
                     Solicitudes
                 </a>
 
                 <div class="nav-section">Ventas</div>
                 <a href="{% url 'admin_order_list' %}"
                     class="nav-item {% if 'order' in request.resolver_match.url_name %}active{% endif %}">
-                    <span class="nav-icon">🛒</span>
+                    <span class="nav-icon" aria-hidden="true">&#128722;</span>
                     Pedidos
                 </a>
 
@@ -67,7 +71,7 @@
                 <div class="nav-section">Herramientas</div>
                 <a href="{% url 'admin_import_dashboard' %}"
                     class="nav-item {% if 'import' in request.resolver_match.url_name %}active{% endif %}">
-                    <span class="nav-icon">📥</span>
+                    <span class="nav-icon" aria-hidden="true">&#128228;</span>
                     Importar
                 </a>
                 {% endif %}
@@ -76,28 +80,30 @@
                 {% if user.is_superuser %}
                 <a href="{% url 'admin_settings' %}"
                     class="nav-item {% if 'settings' in request.resolver_match.url_name %}active{% endif %}">
-                    <span class="nav-icon">⚙️</span>
-                    Configuración
+                    <span class="nav-icon" aria-hidden="true">&#9881;</span>
+                    Configuracion
                 </a>
                 {% endif %}
-                <a href="{% url 'catalog' %}" class="nav-item" target="_blank">
-                    <span class="nav-icon">🌐</span>
-                    Ver Catálogo
+                <a href="{% url 'catalog' %}" class="nav-item" target="_blank" rel="noopener noreferrer">
+                    <span class="nav-icon" aria-hidden="true">&#127760;</span>
+                    Ver Catalogo
                 </a>
             </nav>
 
             <div class="sidebar-footer">
                 <a href="{% url 'logout' %}" class="nav-item logout">
-                    <span class="nav-icon">🚪</span>
-                    Cerrar Sesión
+                    <span class="nav-icon" aria-hidden="true">&#128682;</span>
+                    Cerrar sesion
                 </a>
             </div>
         </aside>
 
-        <!-- Main Content -->
         <main class="admin-main">
             <header class="admin-header">
                 <div class="header-title">
+                    <button type="button" class="left-sidebar-toggle" id="leftSidebarToggle" title="Menu">
+                        &#9776;
+                    </button>
                     <h1>{% block page_title %}Dashboard{% endblock %}</h1>
                 </div>
                 <div class="header-user">
@@ -121,12 +127,10 @@
             </div>
         </main>
 
-        <!-- Right Sidebar Toggle (Visible when collapsed) -->
         <button class="sidebar-show-btn" id="showRightSidebar" title="Mostrar actividad" onclick="toggleSidebar(false)">
-            <span>👥</span>
+            <span>&#128101;</span>
         </button>
 
-        <!-- Right Sidebar - Admin Activity -->
         <aside class="admin-right-sidebar" id="rightSidebar">
             <div class="right-sidebar-header">
                 <h2>Equipo Admin</h2>
@@ -143,17 +147,18 @@
                     </div>
                     <div class="admin-info">
                         <div class="admin-username">{{ admin.username }}</div>
-                        <div class="admin-status">{% if admin.activity.is_active %}En línea{% else %}Desconectado{% endif %}</div>
+                        <div class="admin-status">{% if admin.activity.is_active %}En linea{% else %}Desconectado{% endif %}</div>
                     </div>
                 </div>
                 {% endfor %}
             </div>
         </aside>
+
+        <div class="sidebar-overlay" id="leftSidebarOverlay"></div>
     </div>
 
     <script src="{% static 'core/js/main.js' %}?v=2"></script>
     <script>
-        // Right Sidebar Toggle Logic
         function setSidebarState(collapsed) {
             const adminLayout = document.getElementById('adminLayout');
             const rightSidebar = document.getElementById('rightSidebar');
@@ -170,36 +175,70 @@
             }
         }
 
-        // Global fallback function for onclick
         window.toggleSidebar = function(collapsed) {
             setSidebarState(collapsed);
         };
 
+        function setLeftSidebarState(opened) {
+            const adminLayout = document.getElementById('adminLayout');
+            if (!adminLayout) return;
+            if (opened) {
+                adminLayout.classList.add('left-sidebar-open');
+            } else {
+                adminLayout.classList.remove('left-sidebar-open');
+            }
+        }
+
+        window.toggleLeftSidebar = function(opened) {
+            setLeftSidebarState(opened);
+        };
+
         document.addEventListener('DOMContentLoaded', function() {
-            // Initialize from localStorage
             const isCollapsed = localStorage.getItem('adminRightSidebarCollapsed') === 'true';
             const isMobile = window.innerWidth <= 1024;
-            
-            // Collapse by default on mobile if no preference is set, or if preference is collapsed
+
             if (isCollapsed || (isMobile && localStorage.getItem('adminRightSidebarCollapsed') === null)) {
                 setSidebarState(true);
             }
 
-            // Also attach listeners via ID if preferred (backup for onclick)
             const hideBtn = document.getElementById('hideRightSidebar');
             if (hideBtn) hideBtn.addEventListener('click', (e) => {
                 e.preventDefault();
                 setSidebarState(true);
             });
-            
+
             const showBtn = document.getElementById('showRightSidebar');
             if (showBtn) showBtn.addEventListener('click', (e) => {
                 e.preventDefault();
                 setSidebarState(false);
             });
+
+            const leftToggle = document.getElementById('leftSidebarToggle');
+            if (leftToggle) {
+                leftToggle.addEventListener('click', function () {
+                    const adminLayout = document.getElementById('adminLayout');
+                    if (!adminLayout) return;
+                    const opened = adminLayout.classList.contains('left-sidebar-open');
+                    setLeftSidebarState(!opened);
+                });
+            }
+
+            const leftOverlay = document.getElementById('leftSidebarOverlay');
+            if (leftOverlay) {
+                leftOverlay.addEventListener('click', function () {
+                    setLeftSidebarState(false);
+                });
+            }
+
+            document.querySelectorAll('.admin-sidebar .nav-item').forEach((link) => {
+                link.addEventListener('click', function () {
+                    if (window.innerWidth <= 992) {
+                        setLeftSidebarState(false);
+                    }
+                });
+            });
         });
 
-        // Mark user as offline when closing/navigating away
         window.addEventListener('beforeunload', function () {
             navigator.sendBeacon('/api/go-offline/');
         });

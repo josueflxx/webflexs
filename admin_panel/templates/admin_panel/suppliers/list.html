@@ -1,0 +1,126 @@
+{% extends 'admin_panel/base.html' %}
+
+{% block page_title %}Proveedores{% endblock %}
+
+{% block extra_css %}
+<style>
+    .supplier-kpi-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+        gap: 12px;
+        margin-bottom: 14px;
+    }
+
+    .supplier-kpi-card {
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 10px;
+        padding: 12px;
+    }
+
+    .supplier-kpi-card .label {
+        color: var(--color-gray-light);
+        font-size: 0.82rem;
+        margin-bottom: 6px;
+        display: block;
+    }
+
+    .supplier-kpi-card .value {
+        font-size: 1.45rem;
+        font-weight: 700;
+        color: var(--color-white);
+    }
+
+    .supplier-table .badge {
+        min-width: 36px;
+        text-align: center;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="admin-table-container">
+    <div class="admin-toolbar">
+        <form method="get" class="toolbar-search">
+            <input type="text" name="q" value="{{ search }}" placeholder="Buscar proveedor..." class="form-input">
+            <label class="form-checkbox-label" style="display:flex;align-items:center;gap:6px;">
+                <input type="checkbox" name="only_active" value="1" {% if only_active %}checked{% endif %}>
+                Solo activos
+            </label>
+            <button type="submit" class="btn btn-primary">Filtrar</button>
+            {% if search or only_active %}
+            <a href="{% url 'admin_supplier_list' %}" class="btn btn-outline">Limpiar</a>
+            {% endif %}
+        </form>
+        <div class="toolbar-actions">
+            <a href="{% url 'admin_supplier_unassigned' %}" class="btn btn-warning-outline">Sin proveedor</a>
+        </div>
+    </div>
+
+    <div class="admin-toolbar" style="border-top: 1px solid rgba(255,255,255,0.08);">
+        <div class="supplier-kpi-grid" style="width:100%;">
+            <div class="supplier-kpi-card">
+                <span class="label">Proveedores visibles</span>
+                <span class="value">{{ total_suppliers }}</span>
+            </div>
+            <div class="supplier-kpi-card">
+                <span class="label">Productos sin proveedor</span>
+                <span class="value">{{ uncategorized_products_count }}</span>
+            </div>
+        </div>
+    </div>
+
+    <table class="admin-table supplier-table">
+        <thead>
+            <tr>
+                <th>Proveedor</th>
+                <th>Estado</th>
+                <th>Productos</th>
+                <th>Activos</th>
+                <th>Stock Total</th>
+                <th>Valor Stock</th>
+                <th>Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for supplier in page_obj %}
+            <tr>
+                <td><strong>{{ supplier.name }}</strong></td>
+                <td>
+                    {% if supplier.is_active %}
+                    <span class="badge badge-success">Activo</span>
+                    {% else %}
+                    <span class="badge badge-danger">Inactivo</span>
+                    {% endif %}
+                </td>
+                <td><span class="badge badge-info">{{ supplier.products_count|default:0 }}</span></td>
+                <td><span class="badge badge-success">{{ supplier.active_products_count|default:0 }}</span></td>
+                <td>{{ supplier.stock_total|default:0 }}</td>
+                <td>${{ supplier.inventory_value|default:0|floatformat:2 }}</td>
+                <td>
+                    <a href="{% url 'admin_supplier_detail' supplier.pk %}" class="btn btn-outline">Ver productos</a>
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="7" class="text-center text-muted">No hay proveedores cargados.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    {% if page_obj.paginator.num_pages > 1 %}
+    <div class="admin-toolbar">
+        <span>Pagina {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
+        <div class="toolbar-actions">
+            {% if page_obj.has_previous %}
+            <a href="?page={{ page_obj.previous_page_number }}&q={{ search }}{% if only_active %}&only_active=1{% endif %}" class="btn btn-outline"><- Anterior</a>
+            {% endif %}
+            {% if page_obj.has_next %}
+            <a href="?page={{ page_obj.next_page_number }}&q={{ search }}{% if only_active %}&only_active=1{% endif %}" class="btn btn-outline">Siguiente -></a>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

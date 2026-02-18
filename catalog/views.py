@@ -1,242 +1,398 @@
 """
 Catalog app views - Product listing and detail.
 """
-from django.shortcuts import render, get_object_or_404
+from django.core.cache import cache
 from django.core.paginator import Paginator
-from django.db.models import Q, Prefetch
-from .models import Product, Category, CategoryAttribute
-from core.models import SiteSettings
+from django.db.models import Count, Max, Q
+from django.shortcuts import get_object_or_404, render
+from django.urls import reverse
+
+from core.models import CatalogAnalyticsEvent, SiteSettings
+
+from .models import Category, CategoryAttribute, Product
+
+
+def build_category_tree_rows(categories):
+    """Build flattened rows for tree rendering in templates."""
+    category_list = list(categories)
+    category_map = {category.id: category for category in category_list}
+    children_map = {}
+
+    for category in category_list:
+        children_map.setdefault(category.parent_id, []).append(category)
+
+    for siblings in children_map.values():
+        siblings.sort(key=lambda cat: (cat.order, cat.name.lower(), cat.id))
+
+    roots = [cat for cat in category_list if cat.parent_id not in category_map]
+    roots.sort(key=lambda cat: (cat.order, cat.name.lower(), cat.id))
+
+    rows = []
+    visited = set()
+
+    def walk(node, depth, path_names):
+        if node.id in visited:
+            return
+        visited.add(node.id)
+
+        next_path = [*path_names, node.name]
+        children = children_map.get(node.id, [])
+        rows.append(
+            {
+                "category": node,
+                "depth": depth,
+                "full_path": " > ".join(next_path),
+                "has_children": bool(children),
+                "children_count": len(children),
+            }
+        )
+
+        for child in children:
+            walk(child, depth + 1, next_path)
+
+    for root in roots:
+        walk(root, 0, [])
+
+    remaining = sorted(
+        (cat for cat in category_list if cat.id not in visited),
+        key=lambda cat: (cat.order, cat.name.lower(), cat.id),
+    )
+    for category in remaining:
+        walk(category, 0, [])
+
+    return rows
+
+
+def get_cached_category_tree_rows():
+    """
+    Cache category tree generation to avoid rebuilding on each request.
+    """
+    aggregate = Category.objects.filter(is_active=True).aggregate(
+        total=Count("id"),
+        max_updated=Max("updated_at"),
+    )
+    total = aggregate.get("total") or 0
+    max_updated = aggregate.get("max_updated")
+    stamp = int(max_updated.timestamp()) if max_updated else 0
+    cache_key = f"catalog_tree_rows_v3:{total}:{stamp}"
+
+    rows = cache.get(cache_key)
+    if rows is not None:
+        return rows
+
+    categories = Category.objects.filter(is_active=True).select_related("parent").order_by("order", "name")
+    rows = build_category_tree_rows(categories)
+    cache.set(cache_key, rows, 300)
+    return rows
+
+
+def build_active_filter_chips(request, active_filters, category_attributes, field_labels):
+    """
+    Generate removable chips for active filters.
+    """
+    attribute_label_map = {attr.slug: attr.name for attr in category_attributes}
+    chips = []
+
+    for key, value in active_filters.items():
+        label = attribute_label_map.get(key) or field_labels.get(key) or key
+        params = request.GET.copy()
+        params.pop(key, None)
+        chips.append(
+            {
+                "label": label,
+                "value": value,
+                "remove_url": f"?{params.urlencode()}" if params else reverse("catalog"),
+            }
+        )
+
+    if request.GET.get("q", "").strip():
+        params = request.GET.copy()
+        params.pop("q", None)
+        chips.append(
+            {
+                "label": "Busqueda",
+                "value": request.GET.get("q", "").strip(),
+                "remove_url": f"?{params.urlencode()}" if params else reverse("catalog"),
+            }
+        )
+
+    return chips
+
+
+def build_category_breadcrumb(current_category):
+    if not current_category:
+        return []
+    chain = []
+    node = current_category
+    while node:
+        chain.append(node)
+        node = node.parent
+    chain.reverse()
+    return [{"name": cat.name, "url": f"{reverse('catalog')}?category={cat.slug}"} for cat in chain]
+
+
+def log_catalog_analytics(request, search_query, current_category, active_filters, results_count):
+    try:
+        user = request.user if request.user.is_authenticated else None
+        category_slug = current_category.slug if current_category else ""
+        if search_query:
+            CatalogAnalyticsEvent.objects.create(
+                event_type=CatalogAnalyticsEvent.EVENT_SEARCH,
+                query=search_query,
+                category_slug=category_slug,
+                results_count=results_count,
+                payload={"filters": active_filters},
+                user=user,
+            )
+
+        if current_category:
+            CatalogAnalyticsEvent.objects.create(
+                event_type=CatalogAnalyticsEvent.EVENT_CATEGORY_VIEW,
+                query=search_query,
+                category_slug=category_slug,
+                results_count=results_count,
+                payload={"filters": active_filters},
+                user=user,
+            )
+
+        if active_filters:
+            CatalogAnalyticsEvent.objects.create(
+                event_type=CatalogAnalyticsEvent.EVENT_FILTER,
+                query=",".join(sorted(active_filters.keys())),
+                category_slug=category_slug,
+                results_count=results_count,
+                payload=active_filters,
+                user=user,
+            )
+    except Exception:
+        # Analytics should never break the user flow.
+        return
 
 
 def catalog(request):
     """
     Public catalog view with search and filters.
-    Prices shown based on site settings.
     """
-    # Publicly visible products (product active + at least one active category).
     products = Product.catalog_visible(
-        Product.objects.select_related('category').prefetch_related('categories')
+        Product.objects.select_related("category").prefetch_related("categories")
     )
-    
-    # Search
-    search_query = request.GET.get('q', '').strip()
+
+    search_query = request.GET.get("q", "").strip()
     if search_query:
         products = products.filter(
-            Q(name__icontains=search_query) |
-            Q(sku__icontains=search_query) |
-            Q(description__icontains=search_query)
+            Q(name__icontains=search_query)
+            | Q(sku__icontains=search_query)
+            | Q(description__icontains=search_query)
         )
-    
-    # Category filter
-    category_slug = request.GET.get('category', '')
+
+    category_slug = request.GET.get("category", "")
     current_category = None
     category_attributes = []
     active_filters = {}
+    clamp_options = {}
 
     if category_slug:
-        # Use filter().first() to avoid 404 if category doesn't exist (just show empty or all)
-        # But logically if selecting a category, we want that context.
         current_category = Category.objects.filter(slug=category_slug, is_active=True).first()
         if current_category:
             category_ids = current_category.get_descendant_ids(include_self=True, only_active=True)
             products = products.filter(
                 Q(category_id__in=category_ids) | Q(categories__id__in=category_ids)
             ).distinct()
-            
-            # Get attributes for this category
+
             category_attributes = CategoryAttribute.objects.filter(category=current_category)
-            
-            # Apply dynamic filters
+
             for attr in category_attributes:
-                val = request.GET.get(attr.slug, '').strip()
-                if val:
-                    filter_kwargs = {f"attributes__{attr.slug}": val}
-                    products = products.filter(**filter_kwargs)
-                    active_filters[attr.slug] = val
-                    
-            # --- PHASE 4: Abrazaderas Special Filters ---
-            # --- PHASE 4: Abrazaderas Special Filters (Faceted) ---
-            if 'ABRAZADERA' in current_category.name.upper():
-                # Define managed fields
-                spec_fields = ['fabrication', 'diameter', 'width', 'length', 'shape']
-                
-                # Snapshot of products before specialized filters (but after generic category filters)
+                value = request.GET.get(attr.slug, "").strip()
+                if value:
+                    products = products.filter(**{f"attributes__{attr.slug}": value})
+                    active_filters[attr.slug] = value
+
+            if "ABRAZADERA" in current_category.name.upper():
+                spec_fields = ["fabrication", "diameter", "width", "length", "shape"]
                 products_before_specs = products
 
-                # 1. Apply ALL active filters to the main 'products' queryset (for display)
                 for field in spec_fields:
-                    val = request.GET.get(field, '').strip()
-                    if val:
-                        active_filters[field] = val
-                        if field in ['width', 'length']:
+                    value = request.GET.get(field, "").strip()
+                    if value:
+                        active_filters[field] = value
+                        if field in ["width", "length"]:
                             try:
-                                products = products.filter(**{f"clamp_specs__{field}": int(val)})
+                                products = products.filter(**{f"clamp_specs__{field}": int(value)})
                             except ValueError:
                                 pass
                         else:
-                            products = products.filter(**{f"clamp_specs__{field}": val})
-                
-                # 2. Calculate available options (Facets)
-                # Logic: For each field, valid options are those available in products 
-                # filtered by ALL OTHER active filters (excluding itself).
-                clamp_options = {}
-                
+                            products = products.filter(**{f"clamp_specs__{field}": value})
+
                 for field in spec_fields:
-                    # Start with base
                     facet_qs = products_before_specs
-                    
-                    # Apply other filters
                     for other_field in spec_fields:
                         if other_field == field:
-                            continue # Skip self
-                        
-                        val = request.GET.get(other_field, '').strip()
-                        if val:
-                            if other_field in ['width', 'length']:
+                            continue
+                        value = request.GET.get(other_field, "").strip()
+                        if value:
+                            if other_field in ["width", "length"]:
                                 try:
-                                    facet_qs = facet_qs.filter(**{f"clamp_specs__{other_field}": int(val)})
+                                    facet_qs = facet_qs.filter(
+                                        **{f"clamp_specs__{other_field}": int(value)}
+                                    )
                                 except ValueError:
                                     pass
                             else:
-                                facet_qs = facet_qs.filter(**{f"clamp_specs__{other_field}": val})
-                    
-                    # Extract distinct values for this field from the faceted queryset
-                    # Use values_list traversing the relation
+                                facet_qs = facet_qs.filter(
+                                    **{f"clamp_specs__{other_field}": value}
+                                )
                     field_lookup = f"clamp_specs__{field}"
-                    opts = facet_qs.values_list(field_lookup, flat=True).distinct().order_by(field_lookup)
-                    
-                    # Clean None/Empty
-                    clamp_options[field] = [o for o in opts if o]
+                    options = (
+                        facet_qs.values_list(field_lookup, flat=True)
+                        .distinct()
+                        .order_by(field_lookup)
+                    )
+                    clamp_options[field] = [option for option in options if option]
 
-                context_extra = {'clamp_options': clamp_options}
-            else:
-                context_extra = {}
-    
-    # Ordering
-    order_by = request.GET.get('order', 'name')
-    valid_orders = ['name', '-name', 'price', '-price', 'sku']
+    order_by = request.GET.get("order", "name")
+    valid_orders = ["name", "-name", "price", "-price", "sku"]
     if order_by in valid_orders:
         products = products.order_by(order_by)
-    
-    # Pagination (server-side)
-    paginator = Paginator(products, 20)  # 20 products per page
-    page_number = request.GET.get('page', 1)
-    page_obj = paginator.get_page(page_number)
-    
-    # Get categories for filter sidebar
-    categories = Category.objects.filter(is_active=True, parent__isnull=True).prefetch_related(
-        Prefetch(
-            'children',
-            queryset=Category.objects.filter(is_active=True).order_by('order', 'name')
-        )
-    )
-    
-    # Get site settings for price visibility
+
+    paginator = Paginator(products, 20)
+    page_obj = paginator.get_page(request.GET.get("page", 1))
+
+    category_tree_rows = get_cached_category_tree_rows()
+
     settings = SiteSettings.get_settings()
-    
-    # Check if user can see prices
     show_prices = settings.show_public_prices or request.user.is_authenticated
-    
-    # Get client discount if logged in
+
     discount = 0
-    if request.user.is_authenticated and hasattr(request.user, 'client_profile'):
+    if request.user.is_authenticated and hasattr(request.user, "client_profile"):
         discount = request.user.client_profile.get_discount_decimal()
 
-    # Calculate final price for each product in the current page
-    # This avoids using complex template filters that might fail parsing
     for product in page_obj.object_list:
         linked_categories = [cat for cat in product.get_linked_categories() if cat.is_active]
         product.display_categories = linked_categories[:3]
-
         if discount > 0:
-            # discount is decimal (e.g. 0.10)
-            if discount > 1: 
-                # Safety check if it's percentage (e.g. 10)
-                # But get_discount_decimal should return 0.xx
-                # core_extras check: if discount_percentage > 1: discount_percentage / 100
-                # Let's assume get_discount_decimal is correct, but safe math:
-                d = discount
-                if d > 1: d = d / 100
-                product.final_price = product.price * (1 - d)
-            else:
-                 product.final_price = product.price * (1 - discount)
+            fixed_discount = discount / 100 if discount > 1 else discount
+            product.final_price = product.price * (1 - fixed_discount)
         else:
             product.final_price = product.price
-    
-    # Calculate expanded categories for sidebar accordion
+
     expanded_category_ids = []
+    current_category_has_descendants = False
     if current_category:
-        # Always expand the current category (to show its children if any)
         expanded_category_ids.append(current_category.id)
-        
-        # Walk up the tree to expand all parents
+        current_category_has_descendants = bool(
+            current_category.get_descendant_ids(include_self=False, only_active=True)
+        )
         parent = current_category.parent
         while parent:
             expanded_category_ids.append(parent.id)
             parent = parent.parent
-            
-    # Field labels for translation
+
     field_labels = {
-        'fabrication': 'Fabricación',
-        'diameter': 'Diámetro',
-        'width': 'Ancho',
-        'length': 'Largo',
-        'shape': 'Forma',
+        "fabrication": "Fabricacion",
+        "diameter": "Diametro",
+        "width": "Ancho",
+        "length": "Largo",
+        "shape": "Forma",
     }
 
+    active_filter_chips = build_active_filter_chips(
+        request=request,
+        active_filters=active_filters,
+        category_attributes=category_attributes,
+        field_labels=field_labels,
+    )
+
+    breadcrumb_categories = build_category_breadcrumb(current_category)
+    canonical_url = request.build_absolute_uri(reverse("catalog"))
+    if current_category:
+        canonical_url = request.build_absolute_uri(f"{reverse('catalog')}?category={current_category.slug}")
+
+    if current_category:
+        seo_title = current_category.seo_title or f"{current_category.name} | Catalogo FLEXS"
+        seo_description = (
+            current_category.seo_description
+            or f"Explora productos de {current_category.name} en FLEXS."
+        )
+    else:
+        seo_title = "Catalogo FLEXS - Repuestos y Autopartes"
+        seo_description = "Catalogo de repuestos FLEXS con filtros por categoria y atributos tecnicos."
+
+    log_catalog_analytics(
+        request=request,
+        search_query=search_query,
+        current_category=current_category,
+        active_filters=active_filters,
+        results_count=paginator.count,
+    )
+
     context = {
-        'field_labels': field_labels,
-        'page_obj': page_obj,
-        'categories': categories,
-        'search_query': search_query,
-        'category_slug': category_slug,
-        'current_category': current_category,
-        'expanded_category_ids': expanded_category_ids,
-        'category_attributes': category_attributes,
-        'active_filters': active_filters,
-        'order_by': order_by,
-        'show_prices': show_prices,
-        'discount': discount,
-        'price_message': settings.public_prices_message,
-        'request_get': request.GET, # Useful for keeping other params in links
+        "field_labels": field_labels,
+        "page_obj": page_obj,
+        "category_tree_rows": category_tree_rows,
+        "search_query": search_query,
+        "category_slug": category_slug,
+        "current_category": current_category,
+        "current_category_has_descendants": current_category_has_descendants,
+        "expanded_category_ids": expanded_category_ids,
+        "category_attributes": category_attributes,
+        "active_filters": active_filters,
+        "active_filter_chips": active_filter_chips,
+        "breadcrumb_categories": breadcrumb_categories,
+        "order_by": order_by,
+        "show_prices": show_prices,
+        "discount": discount,
+        "price_message": settings.public_prices_message,
+        "request_get": request.GET,
+        "canonical_url": canonical_url,
+        "seo_title": seo_title,
+        "seo_description": seo_description,
     }
-    
-    if 'context_extra' in locals():
-        context.update(context_extra)
-    
-    return render(request, 'catalog/catalog_v3.html', context)
+
+    if clamp_options:
+        context["clamp_options"] = clamp_options
+
+    return render(request, "catalog/catalog_v3.html", context)
 
 
 def product_detail(request, sku):
     """Product detail view."""
     product = get_object_or_404(
         Product.catalog_visible(
-            Product.objects.select_related('category').prefetch_related('categories')
+            Product.objects.select_related("category").prefetch_related("categories")
         ),
         sku=sku,
     )
-    
+
     settings = SiteSettings.get_settings()
     show_prices = settings.show_public_prices or request.user.is_authenticated
-    
+
     discount = 0
-    if request.user.is_authenticated and hasattr(request.user, 'client_profile'):
+    if request.user.is_authenticated and hasattr(request.user, "client_profile"):
         discount = request.user.client_profile.get_discount_decimal()
 
-    final_price = product.price
-    if discount:
-        final_price = product.price * (1 - discount)
-    
+    final_price = product.price * (1 - discount) if discount else product.price
     linked_categories = [cat for cat in product.get_linked_categories() if cat.is_active]
+    primary_category = product.get_primary_category()
+    category_breadcrumb = build_category_breadcrumb(primary_category)
+
+    description = (product.description or "").strip()
+    seo_description = (
+        description[:155] + "..." if len(description) > 158 else description
+    ) or f"Detalle del producto {product.name} ({product.sku}) en FLEXS."
 
     context = {
-        'product': product,
-        'display_categories': linked_categories[:6],
-        'show_prices': show_prices,
-        'discount': discount,
-        'discount_percentage': discount * 100,
-        'final_price': final_price,
-        'price_message': settings.public_prices_message,
+        "product": product,
+        "display_categories": linked_categories[:6],
+        "show_prices": show_prices,
+        "discount": discount,
+        "discount_percentage": discount * 100,
+        "final_price": final_price,
+        "price_message": settings.public_prices_message,
+        "primary_category": primary_category,
+        "category_breadcrumb": category_breadcrumb,
+        "canonical_url": request.build_absolute_uri(request.path),
+        "seo_title": f"{product.name} | FLEXS",
+        "seo_description": seo_description,
     }
-    
-    return render(request, 'catalog/product_detail.html', context)
+
+    return render(request, "catalog/product_detail.html", context)

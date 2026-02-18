@@ -1,131 +1,150 @@
+from decimal import Decimal
+
+import pandas as pd
 
 from core.services.importer import BaseImporter, ImportRowResult
-from catalog.models import Product, Category, ClampSpecs
+from catalog.models import Product, ClampSpecs
 from catalog.services.clamp_parser import ClampParser
-from django.utils.text import slugify
-from decimal import Decimal
+from catalog.services.supplier_sync import ensure_supplier, clean_supplier_name
+
 
 class ProductImporter(BaseImporter):
     """
-    Importer for Products.
-    Required Headers: sku, name, price
-    Optional: description, stock, category, brand, active
+    Importer for products using this excel layout:
+    A: sku
+    B: nombre
+    C: proveedor
+    D: precio
+    E: stock
+    F..J: filtro_1..filtro_5
     """
-    
+
+    POSITIONAL_COLUMNS = [
+        "sku",
+        "nombre",
+        "proveedor",
+        "precio",
+        "stock",
+        "filtro_1",
+        "filtro_2",
+        "filtro_3",
+        "filtro_4",
+        "filtro_5",
+    ]
+
     def __init__(self, file):
         super().__init__(file)
-        self.required_columns = ['sku', 'nombre', 'precio']
+        self.required_columns = ["sku", "nombre", "proveedor", "precio", "stock"]
+
+    def load_data(self):
+        """
+        Support both exact headers and position-based A..J files.
+        """
+        super().load_data()
+        columns = list(self.df.columns)
+
+        if all(col in columns for col in self.required_columns):
+            return True
+
+        if len(columns) < 5:
+            raise ValueError(
+                "El archivo de productos necesita al menos 5 columnas (A:SKU, B:Nombre, C:Proveedor, D:Precio, E:Stock)."
+            )
+
+        remapped = []
+        for idx, col in enumerate(columns):
+            if idx < len(self.POSITIONAL_COLUMNS):
+                remapped.append(self.POSITIONAL_COLUMNS[idx])
+            else:
+                remapped.append(col)
+        self.df.columns = remapped
+        return True
+
+    @staticmethod
+    def _text(value):
+        if value is None or pd.isna(value):
+            return ""
+        return str(value).strip()
+
+    @staticmethod
+    def _int(value, default=0):
+        if value is None or pd.isna(value) or str(value).strip() == "":
+            return default
+        return int(float(value))
 
     def process_row(self, row, dry_run=True):
         result = ImportRowResult(row_number=0, data=row)
         errors = []
-        
-        # 1. Validation
-        sku = str(row.get('sku', '')).strip()
+
+        sku = self._text(row.get("sku"))
+        name = self._text(row.get("nombre"))
+        supplier = clean_supplier_name(row.get("proveedor"))
+        stock = self._int(row.get("stock"), default=0)
+
         if not sku:
             errors.append("SKU es requerido")
-            
-        name = str(row.get('nombre', '')).strip()
         if not name:
             errors.append("Nombre es requerido")
-            
+        if not supplier:
+            errors.append("Proveedor es requerido")
+
         try:
-            price = Decimal(str(row.get('precio', 0)))
-        except:
-            errors.append("Precio inválido")
+            price_raw = row.get("precio", 0)
+            if price_raw is None or pd.isna(price_raw) or str(price_raw).strip() == "":
+                raise ValueError()
+            price = Decimal(str(price_raw))
+        except Exception:
+            errors.append("Precio invalido")
             price = Decimal(0)
 
-        # Category Lookup (by Name)
-        category_name = str(row.get('categoria', '')).strip()
-        category = None
-        if category_name:
-            # Case insensitive match or create?
-            # ideally match existing, strict for now to avoid mess
-            # Logic: Try to find by name, if not assume root category or error?
-            # Let's try flexible search
-            category = Category.objects.filter(name__iexact=category_name).first()
-            if not category and not dry_run:
-                # Optional: Create category if not exists? 
-                # For safety, maybe better to error if cat doesn't exist to avoid typos?
-                # Decision: Error if not found to ensure data quality
-                pass
-                # errors.append(f"Categoría '{category_name}' no encontrada")
-                # Alternatively allow creation:
-                # category = Category.objects.create(name=category_name, slug=slugify(category_name))
-        
+        filter_1 = self._text(row.get("filtro_1"))
+        filter_2 = self._text(row.get("filtro_2"))
+        filter_3 = self._text(row.get("filtro_3"))
+        filter_4 = self._text(row.get("filtro_4"))
+        filter_5 = self._text(row.get("filtro_5"))
+
         if errors:
             result.success = False
             result.errors = errors
             result.action = "error"
             return result
 
-        # 2. Logic (Update or Create)
-        product_exists = Product.objects.filter(sku=sku).exists()
-        
+        exists = Product.objects.filter(sku=sku).exists()
         if dry_run:
             result.success = True
-            result.action = "updated" if product_exists else "created"
-            if category_name and not category:
-                 result.errors.append(f"Warning: Categoría '{category_name}' no encontrada (se creará o ignorará)")
+            result.action = "updated" if exists else "created"
             return result
-            
-        # Actual DB Operation
+
         try:
             defaults = {
-                'name': name,
-                'price': price,
-                'description': row.get('descripcion', ''),
-                'stock': int(row.get('stock', 0)),
-                # 'brand' removed as it is not a model field
-                'is_active': str(row.get('activo', 'si')).lower() in ['si', 'yes', 'true', '1'],
+                "name": name,
+                "supplier": supplier,
+                "supplier_ref": ensure_supplier(supplier) if supplier else None,
+                "price": price,
+                "stock": stock,
+                "filter_1": filter_1,
+                "filter_2": filter_2,
+                "filter_3": filter_3,
+                "filter_4": filter_4,
+                "filter_5": filter_5,
             }
-            
-            # Handle brand in attributes
-            brand = row.get('marca', '').strip()
-            
-            # Handle category creation if missing and configured to do so
-            if category_name and not category:
-                category = Category.objects.create(name=category_name, slug=slugify(category_name))
-                
+
+            active_raw = self._text(row.get("activo"))
+            if active_raw:
+                defaults["is_active"] = active_raw.lower() in ["si", "yes", "true", "1"]
+
             product, created = Product.objects.update_or_create(
                 sku=sku,
-                defaults=defaults
+                defaults=defaults,
             )
-            
-            if category:
-                product.category = category
-                product.save()
-                product.categories.add(category)
-                
-            # JSON Attributes Parsing
-            # If there's a column 'atributos' with format "Key:Val;Key2:Val2"
-            attrs_raw = row.get('atributos', '')
-            
-            # Initialize attributes if needed
-            current_attrs = product.attributes or {}
-            
-            # Add brand if exists
-            if brand:
-                current_attrs['Marca'] = brand
-                
-            if attrs_raw and isinstance(attrs_raw, str):
-                # simple parser
-                for pair in attrs_raw.split(';'):
-                    if ':' in pair:
-                        k, v = pair.split(':', 1)
-                        current_attrs[k.strip()] = v.strip()
-                product.attributes = current_attrs
-                product.save()
 
-            # --- PHASE 4: Abrazaderas Parsing ---
             self.check_and_run_parser(product, dry_run=dry_run)
 
             result.success = True
             result.action = "created" if created else "updated"
-            
-        except Exception as e:
+        except Exception as exc:
             result.success = False
-            result.errors.append(str(e))
+            result.errors.append(str(exc))
             result.action = "error"
 
         return result
@@ -137,35 +156,30 @@ class ProductImporter(BaseImporter):
         if not product or not product.name:
             return
 
-        is_clamp = product.name.upper().startswith('ABRAZADERA')
+        is_clamp = product.name.upper().startswith("ABRAZADERA")
         if not is_clamp:
             primary_category = product.get_primary_category()
             if primary_category:
-                is_clamp = 'ABRAZADERA' in primary_category.name.upper()
+                is_clamp = "ABRAZADERA" in primary_category.name.upper()
             if not is_clamp:
-                is_clamp = product.categories.filter(name__icontains='ABRAZADERA').exists()
-            
-        if is_clamp:
-            # Run parser
-            specs_data = ClampParser.parse(product.description or product.name)
-            
-            if dry_run:
-                # In strict implementation we might log what WOULD happen
-                return 
-            
-            # Get or Create Specs
-            specs, created = ClampSpecs.objects.get_or_create(product=product)
-            
-            # Check manual override
-            if specs.manual_override:
-                return # Do nothing
-                
-            # Update fields
-            specs.fabrication = specs_data.get('fabrication')
-            specs.diameter = specs_data.get('diameter')
-            specs.width = specs_data.get('width')
-            specs.length = specs_data.get('length')
-            specs.shape = specs_data.get('shape')
-            specs.parse_confidence = specs_data.get('parse_confidence', 0)
-            specs.parse_warnings = specs_data.get('parse_warnings', [])
-            specs.save()
+                is_clamp = product.categories.filter(name__icontains="ABRAZADERA").exists()
+
+        if not is_clamp:
+            return
+
+        specs_data = ClampParser.parse(product.description or product.name)
+        if dry_run:
+            return
+
+        specs, _created = ClampSpecs.objects.get_or_create(product=product)
+        if specs.manual_override:
+            return
+
+        specs.fabrication = specs_data.get("fabrication")
+        specs.diameter = specs_data.get("diameter")
+        specs.width = specs_data.get("width")
+        specs.length = specs_data.get("length")
+        specs.shape = specs_data.get("shape")
+        specs.parse_confidence = specs_data.get("parse_confidence", 0)
+        specs.parse_warnings = specs_data.get("parse_warnings", [])
+        specs.save()
