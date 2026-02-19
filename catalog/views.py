@@ -3,7 +3,7 @@ Catalog app views - Product listing and detail.
 """
 from django.core.cache import cache
 from django.core.paginator import Paginator
-from django.db.models import Count, Max, Q
+from django.db.models import Count, Max, Prefetch, Q
 from django.shortcuts import get_object_or_404, render
 from django.urls import reverse
 
@@ -11,6 +11,35 @@ from core.models import CatalogAnalyticsEvent, SiteSettings
 from orders.models import ClientFavoriteProduct
 
 from .models import Category, CategoryAttribute, Product
+
+
+def get_catalog_product_queryset():
+    """
+    Build a lean queryset for catalog listing with active categories prefetched.
+    """
+    active_category_prefetch = Prefetch(
+        "categories",
+        queryset=Category.objects.filter(is_active=True).only("id", "name", "is_active", "slug"),
+        to_attr="prefetched_active_categories",
+    )
+    return Product.catalog_visible(
+        Product.objects.select_related("category")
+        .prefetch_related(active_category_prefetch)
+        .only(
+            "id",
+            "sku",
+            "name",
+            "description",
+            "price",
+            "stock",
+            "image",
+            "category_id",
+            "category__id",
+            "category__name",
+            "category__is_active",
+            "updated_at",
+        )
+    )
 
 
 def build_category_tree_rows(categories):
@@ -174,9 +203,7 @@ def catalog(request):
     """
     Public catalog view with search and filters.
     """
-    products = Product.catalog_visible(
-        Product.objects.select_related("category").prefetch_related("categories")
-    )
+    products = get_catalog_product_queryset()
 
     search_query = request.GET.get("q", "").strip()
     if search_query:
@@ -200,7 +227,17 @@ def catalog(request):
                 Q(category_id__in=category_ids) | Q(categories__id__in=category_ids)
             ).distinct()
 
-            category_attributes = CategoryAttribute.objects.filter(category=current_category)
+            category_attributes = list(
+                CategoryAttribute.objects.filter(category=current_category).only(
+                    "id",
+                    "name",
+                    "slug",
+                    "type",
+                    "options",
+                    "required",
+                    "is_recommended",
+                )
+            )
 
             for attr in category_attributes:
                 value = request.GET.get(attr.slug, "").strip()
@@ -272,7 +309,14 @@ def catalog(request):
         )
 
     for product in page_obj.object_list:
-        linked_categories = [cat for cat in product.get_linked_categories() if cat.is_active]
+        linked_categories = list(getattr(product, "prefetched_active_categories", []))
+        if (
+            product.category_id
+            and product.category
+            and product.category.is_active
+            and all(cat.id != product.category_id for cat in linked_categories)
+        ):
+            linked_categories.append(product.category)
         product.display_categories = linked_categories[:3]
         product.is_favorite = product.id in favorite_product_ids
         if discount > 0:
@@ -362,9 +406,29 @@ def catalog(request):
 
 def product_detail(request, sku):
     """Product detail view."""
+    active_category_prefetch = Prefetch(
+        "categories",
+        queryset=Category.objects.filter(is_active=True).only("id", "name", "is_active", "slug"),
+        to_attr="prefetched_active_categories",
+    )
     product = get_object_or_404(
         Product.catalog_visible(
-            Product.objects.select_related("category").prefetch_related("categories")
+            Product.objects.select_related("category").prefetch_related(active_category_prefetch).only(
+                "id",
+                "sku",
+                "name",
+                "description",
+                "supplier",
+                "price",
+                "stock",
+                "image",
+                "attributes",
+                "category_id",
+                "category__id",
+                "category__name",
+                "category__slug",
+                "category__is_active",
+            )
         ),
         sku=sku,
     )
@@ -383,8 +447,18 @@ def product_detail(request, sku):
         ).exists()
 
     final_price = product.price * (1 - discount) if discount else product.price
-    linked_categories = [cat for cat in product.get_linked_categories() if cat.is_active]
-    primary_category = product.get_primary_category()
+    linked_categories = list(getattr(product, "prefetched_active_categories", []))
+    if (
+        product.category_id
+        and product.category
+        and product.category.is_active
+        and all(cat.id != product.category_id for cat in linked_categories)
+    ):
+        linked_categories.append(product.category)
+    if product.category_id and product.category and product.category.is_active:
+        primary_category = product.category
+    else:
+        primary_category = linked_categories[0] if linked_categories else None
     category_breadcrumb = build_category_breadcrumb(primary_category)
 
     description = (product.description or "").strip()

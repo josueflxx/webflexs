@@ -303,6 +303,7 @@ def product_list(request):
     enrich_products_with_category_state(page_obj.object_list)
     
     category_options = get_cached_category_options(only_active=True, include_inactive_suffix=False)
+    filter_chips = build_product_filter_chips(request.GET, category_options)
     
     context = {
         'page_obj': page_obj,
@@ -310,10 +311,73 @@ def product_list(request):
         'search': search,
         'current_category_id': current_category_id,
         'active_filter': active_filter,
+        'order_by': order,
+        'active_filter_chips': filter_chips,
         'total_count': products.count(),
         'pagination_count': page_obj.paginator.count,
     }
     return render(request, 'admin_panel/products/list.html', context)
+
+
+def build_product_filter_chips(query_params, category_options):
+    """Build removable chips for admin product filters."""
+    chips = []
+    category_labels = {str(cat['id']): cat['label'] for cat in category_options}
+    category_labels['__uncategorized__'] = 'Sin categorias'
+    active_labels = {'1': 'Activos', '0': 'Inactivos'}
+    order_labels = {
+        '-updated_at': 'Mas recientes',
+        'updated_at': 'Mas antiguos',
+        'name': 'Nombre A-Z',
+        '-name': 'Nombre Z-A',
+        'price': 'Menor precio',
+        '-price': 'Mayor precio',
+        'stock': 'Menor stock',
+        '-stock': 'Mayor stock',
+        'sku': 'SKU A-Z',
+        '-sku': 'SKU Z-A',
+    }
+
+    def _remove_url(param_key):
+        params = query_params.copy()
+        params.pop(param_key, None)
+        params.pop('page', None)
+        encoded = params.urlencode()
+        return f"{reverse('admin_product_list')}?{encoded}" if encoded else reverse('admin_product_list')
+
+    search = (query_params.get('q') or '').strip()
+    if search:
+        chips.append({
+            'label': 'Busqueda',
+            'value': search,
+            'remove_url': _remove_url('q'),
+        })
+
+    category = (query_params.get('category') or '').strip()
+    if category:
+        chips.append({
+            'label': 'Categoria',
+            'value': category_labels.get(category, category),
+            'remove_url': _remove_url('category'),
+        })
+
+    active = (query_params.get('active') or '').strip()
+    if active:
+        chips.append({
+            'label': 'Estado',
+            'value': active_labels.get(active, active),
+            'remove_url': _remove_url('active'),
+        })
+
+    order = (query_params.get('order') or '').strip()
+    if order:
+        chips.append({
+            'label': 'Orden',
+            'value': order_labels.get(order, order),
+            'remove_url': _remove_url('order'),
+        })
+
+    return chips
 
 
 def get_product_queryset(data):
@@ -354,6 +418,21 @@ def get_product_queryset(data):
         products = products.filter(is_active=is_active)
         
     return products, search, current_category_id, active_filter
+
+
+def _redirect_admin_product_list_with_filters(request):
+    """Redirect to product list preserving active filters."""
+    params = {}
+    for key in ('q', 'category', 'active', 'order', 'page'):
+        raw_value = request.POST.get(key, '')
+        value = str(raw_value).strip()
+        if value:
+            params[key] = value
+
+    base_url = reverse('admin_product_list')
+    if params:
+        return redirect(f"{base_url}?{urlencode(params)}")
+    return redirect(base_url)
 
 
 def enrich_products_with_category_state(products):
@@ -682,7 +761,7 @@ def product_bulk_category_update(request):
 
         if not category_id:
             messages.warning(request, 'No se selecciono una categoria.')
-            return redirect('admin_product_list')
+            return _redirect_admin_product_list_with_filters(request)
 
         if select_all_pages:
             products_to_update, _, _, _ = get_product_queryset(request.POST)
@@ -690,7 +769,7 @@ def product_bulk_category_update(request):
             product_ids = request.POST.getlist('product_ids')
             if not product_ids:
                 messages.warning(request, 'No se seleccionaron productos.')
-                return redirect('admin_product_list')
+                return _redirect_admin_product_list_with_filters(request)
             products_to_update = Product.objects.filter(id__in=product_ids)
 
         target_ids = list(products_to_update.values_list('id', flat=True))
@@ -716,7 +795,46 @@ def product_bulk_category_update(request):
     except Exception as e:
         messages.error(request, f'Error al actualizar categorias: {str(e)}')
 
-    return redirect('admin_product_list')
+    return _redirect_admin_product_list_with_filters(request)
+
+
+@staff_member_required
+@require_POST
+@superuser_required_for_modifications
+def product_bulk_status_update(request):
+    """Bulk activate/deactivate selected products."""
+    set_active_raw = str(request.POST.get('set_active', '')).strip()
+    if set_active_raw not in {'0', '1'}:
+        messages.warning(request, 'Accion de estado invalida.')
+        return _redirect_admin_product_list_with_filters(request)
+
+    set_active = set_active_raw == '1'
+    select_all_pages = request.POST.get('select_all_pages') == 'true'
+
+    if select_all_pages:
+        products_to_update, _, _, _ = get_product_queryset(request.POST)
+    else:
+        product_ids = request.POST.getlist('product_ids')
+        if not product_ids:
+            messages.warning(request, 'No se seleccionaron productos.')
+            return _redirect_admin_product_list_with_filters(request)
+        products_to_update = Product.objects.filter(id__in=product_ids)
+
+    target_ids = list(products_to_update.values_list('id', flat=True))
+    if not target_ids:
+        messages.info(request, 'No hubo productos para actualizar.')
+        return _redirect_admin_product_list_with_filters(request)
+
+    count = Product.objects.filter(id__in=target_ids).update(is_active=set_active)
+    action_label = 'activados' if set_active else 'desactivados'
+    messages.success(request, f'{count} productos {action_label}.')
+    log_admin_action(
+        request,
+        action='product_bulk_status_update',
+        target_type='product_bulk',
+        details={'count': count, 'set_active': set_active, 'select_all_pages': select_all_pages},
+    )
+    return _redirect_admin_product_list_with_filters(request)
 
 
 # ===================== SUPPLIERS =====================

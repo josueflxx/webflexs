@@ -16,6 +16,7 @@ urlpatterns = [
     path('productos/<int:pk>/eliminar/', views.product_delete, name='admin_product_delete'),
     path('productos/eliminar-todos/', views.product_delete_all, name='admin_product_delete_all'),
     path('productos/asignar-categoria/', views.product_bulk_category_update, name='admin_product_bulk_category'),
+    path('productos/estado-masivo/', views.product_bulk_status_update, name='admin_product_bulk_status'),
     path('proveedores/', views.supplier_list, name='admin_supplier_list'),
     path('proveedores/sin-proveedor/', views.supplier_unassigned, name='admin_supplier_unassigned'),
     path('proveedores/<int:supplier_id>/', views.supplier_detail, name='admin_supplier_detail'),

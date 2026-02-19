@@ -5,9 +5,9 @@
 {% block content %}
 <div class="admin-table-container">
     <div class="admin-toolbar">
-        <form method="get" class="toolbar-search">
-            <input type="text" name="q" value="{{ search }}" placeholder="Buscar SKU, nombre o proveedor..." class="form-input">
-            <select name="category" class="form-select">
+        <form method="get" class="toolbar-search" id="productFiltersForm">
+            <input type="text" name="q" id="filterQ" value="{{ search }}" placeholder="Buscar SKU, nombre o proveedor..." class="form-input">
+            <select name="category" id="filterCategory" class="form-select">
                 <option value="">Todas las categorias</option>
                 <option value="__uncategorized__" {% if current_category_id == '__uncategorized__' %}selected{% endif %}>
                     Sin categorias
@@ -20,7 +20,7 @@
                 {% endif %}
                 {% endfor %}
             </select>
-            <select name="active" class="form-select">
+            <select name="active" id="filterActive" class="form-select">
                 <option value="">Todos</option>
                 {% if active_filter == '1' %}
                 <option value="1" selected>Activos</option>
@@ -34,7 +34,22 @@
                 <option value="0">Inactivos</option>
                 {% endif %}
             </select>
+            <select name="order" id="filterOrder" class="form-select">
+                <option value="-updated_at" {% if order_by == '-updated_at' %}selected{% endif %}>Mas recientes</option>
+                <option value="updated_at" {% if order_by == 'updated_at' %}selected{% endif %}>Mas antiguos</option>
+                <option value="name" {% if order_by == 'name' %}selected{% endif %}>Nombre A-Z</option>
+                <option value="-name" {% if order_by == '-name' %}selected{% endif %}>Nombre Z-A</option>
+                <option value="price" {% if order_by == 'price' %}selected{% endif %}>Menor precio</option>
+                <option value="-price" {% if order_by == '-price' %}selected{% endif %}>Mayor precio</option>
+                <option value="stock" {% if order_by == 'stock' %}selected{% endif %}>Menor stock</option>
+                <option value="-stock" {% if order_by == '-stock' %}selected{% endif %}>Mayor stock</option>
+                <option value="sku" {% if order_by == 'sku' %}selected{% endif %}>SKU A-Z</option>
+                <option value="-sku" {% if order_by == '-sku' %}selected{% endif %}>SKU Z-A</option>
+            </select>
             <button type="submit" class="btn btn-primary">Filtrar</button>
+            <a href="{% url 'admin_product_list' %}" class="btn btn-outline">Limpiar</a>
+            <button type="button" class="btn btn-outline" onclick="saveProductFilters()">Guardar vista</button>
+            <button type="button" class="btn btn-outline" onclick="loadProductFilters()">Cargar vista</button>
         </form>
         <div class="toolbar-actions" style="display: flex; gap: 10px; align-items: center;">
             {% if user.is_superuser %}
@@ -45,6 +60,8 @@
                 <input type="hidden" name="q" value="{{ search }}">
                 <input type="hidden" name="category" value="{{ current_category_id|default:'' }}">
                 <input type="hidden" name="active" value="{{ active_filter }}">
+                <input type="hidden" name="order" value="{{ order_by }}">
+                <input type="hidden" name="page" value="{{ page_obj.number }}">
                 <input type="hidden" name="select_all_pages" id="selectAllPagesInput" value="false">
 
                 <select name="category_id" class="form-select" style="max-width: 220px;">
@@ -59,12 +76,36 @@
                 </select>
                 <button type="submit" class="btn btn-primary" id="bulkSubmitBtn" disabled>Categorizar</button>
             </form>
+            <form id="bulkStatusForm" method="post" action="{% url 'admin_product_bulk_status' %}" onsubmit="return validateBulkStatusAction()"
+                style="display: flex; gap: 5px;">
+                {% csrf_token %}
+                <input type="hidden" name="q" value="{{ search }}">
+                <input type="hidden" name="category" value="{{ current_category_id|default:'' }}">
+                <input type="hidden" name="active" value="{{ active_filter }}">
+                <input type="hidden" name="order" value="{{ order_by }}">
+                <input type="hidden" name="page" value="{{ page_obj.number }}">
+                <input type="hidden" name="select_all_pages" id="bulkStatusSelectAllPages" value="false">
+                <input type="hidden" name="set_active" id="bulkStatusActionInput" value="">
+                <button type="button" class="btn btn-info" id="bulkActivateBtn" onclick="submitBulkStatus('1')" disabled>Activar</button>
+                <button type="button" class="btn btn-warning-outline" id="bulkDeactivateBtn" onclick="submitBulkStatus('0')" disabled>Desactivar</button>
+            </form>
             <div style="width: 1px; height: 30px; background: #ddd; margin: 0 5px;"></div>
             <button type="button" class="btn btn-danger" onclick="openDeleteModal()">Eliminar Todos</button>
             <a href="{% url 'admin_product_create' %}" class="btn btn-primary">+ Nuevo Producto</a>
             {% endif %}
         </div>
     </div>
+
+    {% if active_filter_chips %}
+    <div class="active-filter-chips" style="padding: 0 var(--spacing-lg) var(--spacing-md); display: flex; gap: 8px; flex-wrap: wrap;">
+        {% for chip in active_filter_chips %}
+        <a href="{{ chip.remove_url }}" class="badge badge-info" style="text-decoration:none;">
+            {{ chip.label }}: {{ chip.value }} x
+        </a>
+        {% endfor %}
+        <a href="{% url 'admin_product_list' %}" class="badge badge-secondary" style="text-decoration:none;">Limpiar todo</a>
+    </div>
+    {% endif %}
 
     <!-- Delete Modal -->
     <div id="deleteModal" class="modal"
@@ -110,6 +151,7 @@
     <script>
         const TOTAL_COUNT = {{ total_count }};
         const PAGINATION_COUNT = {{ pagination_count }};
+        const PRODUCT_FILTERS_STORAGE_KEY = 'admin_product_filters_v1';
 
         function openDeleteModal() {
             document.getElementById('deleteModal').style.display = 'block';
@@ -124,6 +166,68 @@
             } else {
                 btn.setAttribute('disabled', 'true');
             }
+        }
+
+        function saveProductFilters() {
+            const payload = {
+                q: document.getElementById('filterQ')?.value || '',
+                category: document.getElementById('filterCategory')?.value || '',
+                active: document.getElementById('filterActive')?.value || '',
+                order: document.getElementById('filterOrder')?.value || '-updated_at',
+            };
+            localStorage.setItem(PRODUCT_FILTERS_STORAGE_KEY, JSON.stringify(payload));
+            alert('Vista de filtros guardada.');
+        }
+
+        function loadProductFilters() {
+            const raw = localStorage.getItem(PRODUCT_FILTERS_STORAGE_KEY);
+            if (!raw) {
+                alert('No hay una vista guardada.');
+                return;
+            }
+            try {
+                const payload = JSON.parse(raw);
+                if (document.getElementById('filterQ')) document.getElementById('filterQ').value = payload.q || '';
+                if (document.getElementById('filterCategory')) document.getElementById('filterCategory').value = payload.category || '';
+                if (document.getElementById('filterActive')) document.getElementById('filterActive').value = payload.active || '';
+                if (document.getElementById('filterOrder')) document.getElementById('filterOrder').value = payload.order || '-updated_at';
+                document.getElementById('productFiltersForm')?.submit();
+            } catch (error) {
+                alert('No se pudo cargar la vista guardada.');
+            }
+        }
+
+        function syncSelectionFlags() {
+            const value = document.getElementById('selectAllPagesInput')?.value || 'false';
+            const bulkStatusSelectAll = document.getElementById('bulkStatusSelectAllPages');
+            if (bulkStatusSelectAll) {
+                bulkStatusSelectAll.value = value;
+            }
+        }
+
+        function collectSelectedProductIds() {
+            const selected = [];
+            const seen = new Set();
+            document.querySelectorAll('.product-checkbox:checked').forEach((cb) => {
+                if (!seen.has(cb.value)) {
+                    selected.push(cb.value);
+                    seen.add(cb.value);
+                }
+            });
+            return selected;
+        }
+
+        function appendSelectedIdsToForm(form) {
+            form.querySelectorAll('input[name="product_ids"]').forEach((el) => el.remove());
+            const selectedIds = collectSelectedProductIds();
+            selectedIds.forEach((id) => {
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = 'product_ids';
+                input.value = id;
+                form.appendChild(input);
+            });
+            return selectedIds.length;
         }
 
         // Bulk Action Logic
@@ -153,6 +257,7 @@
                 }
             }
             updateBulkButton();
+            syncSelectionFlags();
         }
 
         function selectAllPages(e) {
@@ -173,6 +278,7 @@
             document.getElementById('selectAll').checked = true;
 
             updateBulkButton();
+            syncSelectionFlags();
         }
 
         function clearSelectAll(e) {
@@ -188,26 +294,49 @@
             document.getElementById('selectAll').checked = false;
 
             updateBulkButton();
+            syncSelectionFlags();
         }
 
         function updateBulkButton() {
-            const checkboxes = document.querySelectorAll('.product-checkbox:checked');
+            const checkedCount = collectSelectedProductIds().length;
             const selectAllGlobal = document.getElementById('selectAllPagesInput').value === 'true';
-            const btn = document.getElementById('bulkSubmitBtn');
+            const categoryBtn = document.getElementById('bulkSubmitBtn');
+            const activateBtn = document.getElementById('bulkActivateBtn');
+            const deactivateBtn = document.getElementById('bulkDeactivateBtn');
 
             let count = 0;
             if (selectAllGlobal) {
                 count = TOTAL_COUNT;
             } else {
-                count = checkboxes.length;
+                count = checkedCount;
             }
 
             if (count > 0) {
-                btn.removeAttribute('disabled');
-                btn.innerHTML = `Categorizar (${count})`;
+                if (categoryBtn) {
+                    categoryBtn.removeAttribute('disabled');
+                    categoryBtn.innerHTML = `Categorizar (${count})`;
+                }
+                if (activateBtn) {
+                    activateBtn.removeAttribute('disabled');
+                    activateBtn.innerHTML = `Activar (${count})`;
+                }
+                if (deactivateBtn) {
+                    deactivateBtn.removeAttribute('disabled');
+                    deactivateBtn.innerHTML = `Desactivar (${count})`;
+                }
             } else {
-                btn.setAttribute('disabled', 'true');
-                btn.innerHTML = `Categorizar`;
+                if (categoryBtn) {
+                    categoryBtn.setAttribute('disabled', 'true');
+                    categoryBtn.innerHTML = 'Categorizar';
+                }
+                if (activateBtn) {
+                    activateBtn.setAttribute('disabled', 'true');
+                    activateBtn.innerHTML = 'Activar';
+                }
+                if (deactivateBtn) {
+                    deactivateBtn.setAttribute('disabled', 'true');
+                    deactivateBtn.innerHTML = 'Desactivar';
+                }
             }
         }
 
@@ -216,27 +345,37 @@
             const selectAllGlobal = document.getElementById('selectAllPagesInput').value === 'true';
 
             if (!selectAllGlobal) {
-                const checkboxes = document.querySelectorAll('.product-checkbox:checked');
-
-                // Remove old hidden inputs if any (clears previous selection)
-                form.querySelectorAll('input[name="product_ids"]').forEach(el => el.remove());
-
-                if (checkboxes.length === 0) {
+                const count = appendSelectedIdsToForm(form);
+                if (count === 0) {
                     alert('Por favor selecciona al menos un producto.');
                     return false;
                 }
-
-                // Append selected IDs to the form as hidden inputs
-                checkboxes.forEach(cb => {
-                    const input = document.createElement('input');
-                    input.type = 'hidden';
-                    input.name = 'product_ids';
-                    input.value = cb.value;
-                    form.appendChild(input);
-                });
             }
 
             return true;
+        }
+
+        function validateBulkStatusAction() {
+            const form = document.getElementById('bulkStatusForm');
+            const selectAllGlobal = document.getElementById('selectAllPagesInput').value === 'true';
+            if (!selectAllGlobal) {
+                const count = appendSelectedIdsToForm(form);
+                if (count === 0) {
+                    alert('Por favor selecciona al menos un producto.');
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        function submitBulkStatus(setActiveValue) {
+            const actionInput = document.getElementById('bulkStatusActionInput');
+            if (!actionInput) return;
+            actionInput.value = setActiveValue;
+            const form = document.getElementById('bulkStatusForm');
+            if (validateBulkStatusAction()) {
+                form.submit();
+            }
         }
 
         // Close on outside click
@@ -244,84 +383,140 @@
             if (event.target == document.getElementById('deleteModal')) {
                 closeDeleteModal();
             }
-        }
+        };
+
+        document.addEventListener('DOMContentLoaded', function () {
+            syncSelectionFlags();
+            updateBulkButton();
+        });
     </script>
-    <table class="admin-table">
-        <thead>
-            <tr>
-                <th style="width: 40px;"><input type="checkbox" id="selectAll" onclick="toggleSelectAll()"></th>
-                <th>SKU</th>
-                <th>Nombre</th>
-                <th>Proveedor</th>
-                <th>Precio</th>
-                <th>Stock</th>
-                <th>Categorias</th>
-                <th>Estado</th>
-                <th>Acciones</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for product in page_obj %}
-            <tr>
-                <td><input type="checkbox" name="product_ids" value="{{ product.pk }}" class="product-checkbox"
-                        onclick="updateBulkButton()"></td>
-                <td><code>{{ product.sku }}</code></td>
-                <td>{{ product.name|truncatechars:50 }}</td>
-                <td>{{ product.supplier_ref.name|default:product.supplier|default:'-' }}</td>
-                <td>${{ product.price|floatformat:2 }}</td>
-                <td>{{ product.stock }}</td>
-                <td>
-                    {% if product.category_status_rows %}
-                    <div style="display:flex;gap:6px;flex-wrap:wrap;">
-                        {% for cat in product.category_status_rows|slice:":4" %}
-                        {% if cat.is_effective_active %}
-                        <span class="badge badge-success">{{ cat.name }} (activa)</span>
-                        {% elif cat.is_category_active %}
-                        <span class="badge badge-warning">{{ cat.name }} (prod. inactivo)</span>
+    <div class="products-table-wrapper">
+        <table class="admin-table">
+            <thead>
+                <tr>
+                    <th style="width: 40px;"><input type="checkbox" id="selectAll" onclick="toggleSelectAll()"></th>
+                    <th>SKU</th>
+                    <th>Nombre</th>
+                    <th>Proveedor</th>
+                    <th>Precio</th>
+                    <th>Stock</th>
+                    <th>Categorias</th>
+                    <th>Estado</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for product in page_obj %}
+                <tr>
+                    <td><input type="checkbox" name="product_ids" value="{{ product.pk }}" class="product-checkbox"
+                            onclick="updateBulkButton()"></td>
+                    <td><code>{{ product.sku }}</code></td>
+                    <td>{{ product.name|truncatechars:50 }}</td>
+                    <td>{{ product.supplier_ref.name|default:product.supplier|default:'-' }}</td>
+                    <td>${{ product.price|floatformat:2 }}</td>
+                    <td>{{ product.stock }}</td>
+                    <td>
+                        {% if product.category_status_rows %}
+                        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+                            {% for cat in product.category_status_rows|slice:":4" %}
+                            {% if cat.is_effective_active %}
+                            <span class="badge badge-success">{{ cat.name }} (activa)</span>
+                            {% elif cat.is_category_active %}
+                            <span class="badge badge-warning">{{ cat.name }} (prod. inactivo)</span>
+                            {% else %}
+                            <span class="badge badge-danger">{{ cat.name }} (inactiva)</span>
+                            {% endif %}
+                            {% endfor %}
+                            {% if product.category_status_rows|length > 4 %}
+                            <span class="badge badge-info">+{{ product.category_status_rows|length|add:"-4" }}</span>
+                            {% endif %}
+                        </div>
+                        <small class="text-muted">{{ product.active_category_count }} activas para este producto</small>
                         {% else %}
-                        <span class="badge badge-danger">{{ cat.name }} (inactiva)</span>
+                        <span class="badge badge-secondary">Sin categorias</span>
                         {% endif %}
-                        {% endfor %}
-                        {% if product.category_status_rows|length > 4 %}
-                        <span class="badge badge-info">+{{ product.category_status_rows|length|add:"-4" }}</span>
+                    </td>
+                    <td>
+                        {% if product.is_active %}
+                        <span class="badge badge-success">Activo</span>
+                        {% else %}
+                        <span class="badge badge-danger">Inactivo</span>
                         {% endif %}
-                    </div>
-                    <small class="text-muted">{{ product.active_category_count }} activas para este producto</small>
-                    {% else %}
-                    <span class="badge badge-secondary">Sin categorias</span>
-                    {% endif %}
-                </td>
-                <td>
-                    {% if product.is_active %}
-                    <span class="badge badge-success">Activo</span>
-                    {% else %}
-                    <span class="badge badge-danger">Inactivo</span>
-                    {% endif %}
-                    <br>
-                    {% if product.catalog_visibility %}
-                    <span class="badge badge-info">Visible en catalogo</span>
-                    {% else %}
-                    <span class="badge badge-warning">Oculto por categorias</span>
-                    {% endif %}
-                </td>
-                <td class="actions">
-                    <a href="{% url 'admin_product_edit' product.pk %}" class="btn btn-outline"
-                        title="{% if user.is_superuser %}Editar{% else %}Ver{% endif %}">
-                        {% if user.is_superuser %}Editar{% else %}Ver{% endif %}
-                    </a>
-                    {% if user.is_superuser %}
-                    <a href="{% url 'admin_product_delete' product.pk %}" class="btn btn-danger-outline"
-                        title="Eliminar">Eliminar</a>
-                    {% endif %}
-                </td>
-            </tr>
-            {% empty %}
-            <tr>
-                <td colspan="9" class="text-center text-muted">No hay productos</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+                        <br>
+                        {% if product.catalog_visibility %}
+                        <span class="badge badge-info">Visible en catalogo</span>
+                        {% else %}
+                        <span class="badge badge-warning">Oculto por categorias</span>
+                        {% endif %}
+                    </td>
+                    <td class="actions">
+                        <a href="{% url 'admin_product_edit' product.pk %}" class="btn btn-outline"
+                            title="{% if user.is_superuser %}Editar{% else %}Ver{% endif %}">
+                            {% if user.is_superuser %}Editar{% else %}Ver{% endif %}
+                        </a>
+                        {% if user.is_superuser %}
+                        <a href="{% url 'admin_product_delete' product.pk %}" class="btn btn-danger-outline"
+                            title="Eliminar">Eliminar</a>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="9" class="text-center text-muted">No hay productos</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="products-mobile-list">
+        {% for product in page_obj %}
+        <article class="mobile-product-card">
+            <div class="mobile-product-header">
+                <code>{{ product.sku }}</code>
+                {% if product.is_active %}
+                <span class="badge badge-success">Activo</span>
+                {% else %}
+                <span class="badge badge-danger">Inactivo</span>
+                {% endif %}
+            </div>
+            <h3>{{ product.name }}</h3>
+            <div class="mobile-product-meta">
+                <span>Proveedor: {{ product.supplier_ref.name|default:product.supplier|default:'-' }}</span>
+                <span>Precio: ${{ product.price|floatformat:2 }}</span>
+                <span>Stock: {{ product.stock }}</span>
+            </div>
+            <div class="mobile-product-categories">
+                {% if product.category_status_rows %}
+                {% for cat in product.category_status_rows|slice:":3" %}
+                {% if cat.is_effective_active %}
+                <span class="badge badge-success">{{ cat.name }}</span>
+                {% elif cat.is_category_active %}
+                <span class="badge badge-warning">{{ cat.name }}</span>
+                {% else %}
+                <span class="badge badge-danger">{{ cat.name }}</span>
+                {% endif %}
+                {% endfor %}
+                {% if product.category_status_rows|length > 3 %}
+                <span class="badge badge-info">+{{ product.category_status_rows|length|add:"-3" }}</span>
+                {% endif %}
+                {% else %}
+                <span class="badge badge-secondary">Sin categorias</span>
+                {% endif %}
+            </div>
+            <div class="mobile-product-actions">
+                <a href="{% url 'admin_product_edit' product.pk %}" class="btn btn-outline">
+                    {% if user.is_superuser %}Editar{% else %}Ver{% endif %}
+                </a>
+                {% if user.is_superuser %}
+                <a href="{% url 'admin_product_delete' product.pk %}" class="btn btn-danger-outline">Eliminar</a>
+                {% endif %}
+            </div>
+        </article>
+        {% empty %}
+        <div class="text-center text-muted" style="padding: 14px;">No hay productos</div>
+        {% endfor %}
+    </div>
 
     {% if page_obj.paginator.num_pages > 1 %}
     <div class="admin-toolbar">
@@ -329,11 +524,11 @@
             productos)</span>
         <div class="toolbar-actions">
             {% if page_obj.has_previous %}
-            <a href="?page={{ page_obj.previous_page_number }}&q={{ search }}&category={{ current_category_id }}&active={{ active_filter }}"
+            <a href="?page={{ page_obj.previous_page_number }}&q={{ search|urlencode }}&category={{ current_category_id|default:'' }}&active={{ active_filter }}&order={{ order_by }}"
                 class="btn btn-outline"><- Anterior</a>
             {% endif %}
             {% if page_obj.has_next %}
-            <a href="?page={{ page_obj.next_page_number }}&q={{ search }}&category={{ current_category_id }}&active={{ active_filter }}"
+            <a href="?page={{ page_obj.next_page_number }}&q={{ search|urlencode }}&category={{ current_category_id|default:'' }}&active={{ active_filter }}&order={{ order_by }}"
                 class="btn btn-outline">Siguiente -></a>
             {% endif %}
         </div>
