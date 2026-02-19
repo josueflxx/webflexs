@@ -45,9 +45,11 @@ urlpatterns = [
     path('categorias/', views.category_list, name='admin_category_list'),
     path('categorias/nueva/', views.category_create, name='admin_category_create'),
     path('categorias/<int:pk>/editar/', views.category_edit, name='admin_category_edit'),
+    path('categorias/<int:pk>/mover/', views.category_move, name='admin_category_move'),
     path('categorias/<int:pk>/eliminar/', views.category_delete, name='admin_category_delete'),
     path('categorias/eliminar-todas/', views.category_delete_all, name='admin_category_delete_all'),
     path('categorias/reordenar/', views.category_reorder, name='admin_category_reorder'),
+    path('categorias/estado-masivo/', views.category_bulk_status, name='admin_category_bulk_status'),
     path('categorias/<int:pk>/productos/', views.category_manage_products, name='admin_category_products'),
     
     # Category Attributes

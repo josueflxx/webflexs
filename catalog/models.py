@@ -59,6 +59,15 @@ class Category(models.Model):
                 .first()
             )
 
+        if self.parent_id and self.is_active:
+            parent_is_active = (
+                Category.objects.filter(pk=self.parent_id)
+                .values_list("is_active", flat=True)
+                .first()
+            )
+            if parent_is_active is False:
+                self.is_active = False
+
         if not self.slug:
             from django.utils.text import slugify
 
@@ -127,6 +136,34 @@ class Category(models.Model):
             ids.append(parent.pk)
             parent = parent.parent
         return ids
+
+    def can_move_to(self, new_parent):
+        """
+        Validate whether this category can be moved under ``new_parent``.
+        """
+        if new_parent is None:
+            return True
+        if not self.pk or not new_parent.pk:
+            return False
+        if new_parent.pk == self.pk:
+            return False
+        descendant_ids = self.get_descendant_ids(include_self=False)
+        return new_parent.pk not in descendant_ids
+
+    def move_to(self, new_parent):
+        """
+        Move this category (and therefore its subtree) to a new parent.
+        """
+        if not self.can_move_to(new_parent):
+            raise ValueError("Movimiento de categoria invalido: genera ciclo jerarquico.")
+
+        self.parent = new_parent
+
+        # Keep hierarchy state coherent: active child under inactive parent is not allowed.
+        if new_parent and not new_parent.is_active and self.is_active:
+            self.is_active = False
+
+        self.save()
 
 
 class CategoryAttribute(models.Model):

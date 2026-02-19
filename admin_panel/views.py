@@ -22,6 +22,7 @@ import json
 import os
 from datetime import timedelta
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+from urllib.parse import urlencode
 import csv
 from openpyxl import Workbook
 
@@ -1239,10 +1240,12 @@ def category_list(request):
     """Category list."""
     search = request.GET.get('q', '').strip()
     status = request.GET.get('status', 'all').strip().lower()
+    focus_raw = request.GET.get('focus', '').strip()
 
     all_categories = list(
         Category.objects.select_related('parent').order_by('order', 'name')
     )
+    all_category_map = {c.id: c for c in all_categories}
 
     if status == 'active':
         filtered_categories = [c for c in all_categories if c.is_active]
@@ -1316,6 +1319,16 @@ def category_list(request):
         category.direct_products_count = category.products_m2m.count()
 
     integrity_issues = detect_category_integrity_issues(all_categories)
+    focus_category_id = None
+    auto_expand_ids = []
+    if focus_raw.isdigit():
+        candidate_id = int(focus_raw)
+        if candidate_id in all_category_map:
+            focus_category_id = candidate_id
+            node = all_category_map[candidate_id]
+            while node and node.parent_id:
+                auto_expand_ids.append(node.parent_id)
+                node = all_category_map.get(node.parent_id)
 
     return render(request, 'admin_panel/categories/list.html', {
         'tree_rows': tree_rows,
@@ -1323,6 +1336,12 @@ def category_list(request):
         'search': search,
         'status': status,
         'integrity_issues': integrity_issues,
+        'move_parent_options': build_category_options(
+            all_categories,
+            include_inactive_suffix=True,
+        ),
+        'focus_category_id': focus_category_id,
+        'auto_expand_ids_json': json.dumps(auto_expand_ids),
     })
 
 
@@ -1363,6 +1382,137 @@ def category_reorder(request):
     except Exception as exc:
         logger.exception("Error reordering categories")
         return JsonResponse({"success": False, "error": str(exc)}, status=400)
+
+
+@staff_member_required
+@require_POST
+@superuser_required_for_modifications
+def category_bulk_status(request):
+    """
+    Bulk activate/deactivate selected categories.
+    """
+    action = request.POST.get("bulk_action", "").strip().lower()
+    selected_ids = normalize_category_ids(request.POST.getlist("category_ids"))
+    q = request.POST.get("q", "").strip()
+    status = request.POST.get("status", "all").strip().lower()
+
+    redirect_url = reverse("admin_category_list")
+    if q or status != "all":
+        params = {}
+        if q:
+            params["q"] = q
+        if status:
+            params["status"] = status
+        redirect_url = f"{redirect_url}?{urlencode(params)}"
+
+    if not selected_ids:
+        messages.warning(request, "No se seleccionaron categorias.")
+        return redirect(redirect_url)
+
+    if action not in {"activate", "deactivate"}:
+        messages.error(request, "Accion masiva invalida.")
+        return redirect(redirect_url)
+
+    categories_map = {
+        category.id: category
+        for category in Category.objects.select_related("parent").filter(id__in=selected_ids)
+    }
+    if not categories_map:
+        messages.warning(request, "No se encontraron categorias validas para actualizar.")
+        return redirect(redirect_url)
+
+    ordered_categories = sorted(
+        categories_map.values(),
+        key=lambda cat: len(cat.get_ancestor_ids(include_self=True)),
+    )
+
+    if action == "deactivate":
+        impacted_ids = set()
+        for category in ordered_categories:
+            impacted_ids.update(category.get_descendant_ids(include_self=True))
+
+        active_before_ids = set(
+            Category.objects.filter(id__in=impacted_ids, is_active=True).values_list("id", flat=True)
+        )
+
+        for category in ordered_categories:
+            if category.is_active:
+                category.is_active = False
+                category.save()
+
+        active_after_ids = set(
+            Category.objects.filter(id__in=impacted_ids, is_active=True).values_list("id", flat=True)
+        )
+        deactivated_total = len(active_before_ids - active_after_ids)
+        direct_selected = len(
+            [cid for cid in categories_map.keys() if cid in active_before_ids]
+        )
+        cascaded = max(deactivated_total - direct_selected, 0)
+
+        messages.success(
+            request,
+            f"Categorias desactivadas: {deactivated_total} en total "
+            f"({direct_selected} seleccionadas y {cascaded} por cascada).",
+        )
+        log_admin_action(
+            request,
+            action="category_bulk_deactivate",
+            target_type="category_bulk",
+            details={
+                "selected_count": len(categories_map),
+                "selected_ids": list(categories_map.keys())[:200],
+                "deactivated_total": deactivated_total,
+                "cascaded": cascaded,
+            },
+        )
+        return redirect(redirect_url)
+
+    # action == "activate"
+    selected_before_active = {
+        category.id: category.is_active for category in ordered_categories
+    }
+
+    for category in ordered_categories:
+        if not category.is_active:
+            category.is_active = True
+            category.save()
+
+    refreshed = {
+        category.id: category
+        for category in Category.objects.select_related("parent").filter(id__in=categories_map.keys())
+    }
+    activated = sum(
+        1
+        for cid, was_active in selected_before_active.items()
+        if not was_active and refreshed.get(cid) and refreshed[cid].is_active
+    )
+    blocked = sum(
+        1
+        for cid, category in refreshed.items()
+        if not category.is_active
+    )
+
+    if blocked:
+        messages.warning(
+            request,
+            f"Se activaron {activated} categorias. "
+            f"{blocked} no pudieron activarse porque tienen un padre inactivo.",
+        )
+    else:
+        messages.success(request, f"Se activaron {activated} categorias seleccionadas.")
+
+    log_admin_action(
+        request,
+        action="category_bulk_activate",
+        target_type="category_bulk",
+        details={
+            "selected_count": len(categories_map),
+            "selected_ids": list(categories_map.keys())[:200],
+            "activated": activated,
+            "blocked": blocked,
+        },
+    )
+    return redirect(redirect_url)
 
 
 @staff_member_required
@@ -1462,6 +1612,71 @@ def category_edit(request, pk):
         'category': category, # Keep category in context for attributes links
         'action': 'Editar',
     })
+
+
+@staff_member_required
+@superuser_required_for_modifications
+@require_POST
+def category_move(request, pk):
+    """
+    Move one category node to a new parent category.
+    The full subtree moves with it.
+    """
+    category = get_object_or_404(Category, pk=pk)
+    parent_raw = request.POST.get('parent_id', '').strip()
+
+    new_parent = None
+    if parent_raw:
+        if not parent_raw.isdigit():
+            messages.error(request, 'Categoria padre invalida.')
+            return redirect('admin_category_list')
+        new_parent = get_object_or_404(Category, pk=int(parent_raw))
+
+    if category.parent_id == (new_parent.pk if new_parent else None):
+        messages.info(request, f'La categoria "{category.name}" ya estaba en esa ubicacion.')
+        return redirect(f"{reverse('admin_category_list')}?focus={category.pk}")
+
+    if not category.can_move_to(new_parent):
+        messages.error(
+            request,
+            'Movimiento invalido: no puedes mover una categoria dentro de si misma o de una subcategoria suya.',
+        )
+        return redirect(f"{reverse('admin_category_list')}?focus={category.pk}")
+
+    previous_parent = category.parent
+    subtree_size = len(category.get_descendant_ids(include_self=True))
+    forced_deactivation = bool(new_parent and not new_parent.is_active and category.is_active)
+
+    category.move_to(new_parent)
+
+    log_admin_action(
+        request,
+        action='category_move',
+        target_type='category',
+        target_id=category.pk,
+        details={
+            'name': category.name,
+            'from_parent_id': previous_parent.pk if previous_parent else None,
+            'to_parent_id': new_parent.pk if new_parent else None,
+            'to_parent_name': new_parent.name if new_parent else '',
+            'subtree_size': subtree_size,
+            'forced_deactivation': forced_deactivation,
+        },
+    )
+
+    destination = new_parent.name if new_parent else 'raiz'
+    if forced_deactivation:
+        messages.success(
+            request,
+            f'Categoria "{category.name}" movida a "{destination}". '
+            'Se desactivo automaticamente junto con su arbol porque el nuevo padre esta inactivo.',
+        )
+    else:
+        messages.success(
+            request,
+            f'Categoria "{category.name}" movida a "{destination}" con {subtree_size} nodo(s) en su arbol.',
+        )
+    return redirect(f"{reverse('admin_category_list')}?focus={category.pk}")
 
 
 @staff_member_required

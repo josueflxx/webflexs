@@ -56,6 +56,23 @@
         font-size: 0.82rem;
     }
 
+    .bulk-actions-bar {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+    }
+
+    .bulk-actions-count {
+        color: var(--color-gray-light);
+        font-size: 0.85rem;
+    }
+
+    .bulk-actions-hint {
+        color: var(--color-gray-light);
+        font-size: 0.8rem;
+    }
+
     .integrity-alert {
         border: 1px solid rgba(255, 193, 7, 0.45);
         background: rgba(255, 193, 7, 0.08);
@@ -177,6 +194,23 @@
         box-shadow: inset 0 -2px 0 var(--color-info);
     }
 
+    .category-row.focused-row {
+        box-shadow: inset 0 0 0 2px rgba(23, 162, 184, 0.65);
+        background: rgba(23, 162, 184, 0.12) !important;
+    }
+
+    .category-select-cell {
+        text-align: center;
+        width: 44px;
+    }
+
+    .category-select-input {
+        width: 16px;
+        height: 16px;
+        accent-color: var(--color-primary);
+        cursor: pointer;
+    }
+
     .category-dot {
         width: 10px;
         height: 10px;
@@ -237,6 +271,18 @@
         background: rgba(23, 162, 184, 0.12);
     }
 
+    .btn-move-tree {
+        background: rgba(23, 162, 184, 0.18);
+        border-color: rgba(23, 162, 184, 0.65);
+        color: #c8f6ff;
+    }
+
+    .btn-move-tree:hover {
+        background: rgba(23, 162, 184, 0.28);
+        border-color: rgba(23, 162, 184, 0.95);
+        color: #ffffff;
+    }
+
     .category-modal {
         display: none;
         position: fixed;
@@ -282,6 +328,11 @@
         .category-filter-result {
             margin-left: 0;
         }
+
+        .bulk-actions-bar {
+            flex-direction: column;
+            align-items: stretch;
+        }
     }
 </style>
 {% endblock %}
@@ -325,6 +376,29 @@
         </form>
     </div>
 
+    {% if user.is_superuser %}
+    <div class="admin-toolbar">
+        <div class="bulk-actions-bar">
+            <strong>Acciones masivas</strong>
+            <button type="button" class="btn btn-outline btn-inline" id="bulkActivateBtn" onclick="submitBulkCategoryStatus('activate')" disabled>
+                Activar seleccionadas
+            </button>
+            <button type="button" class="btn btn-outline btn-inline btn-danger-outline" id="bulkDeactivateBtn" onclick="submitBulkCategoryStatus('deactivate')" disabled>
+                Desactivar seleccionadas
+            </button>
+            <span class="bulk-actions-count" id="bulkSelectedCount">0 seleccionadas</span>
+            <span class="bulk-actions-hint">Tip: puedes seleccionar categorias padre o subcategorias.</span>
+        </div>
+        <form method="post" id="bulkStatusForm" action="{% url 'admin_category_bulk_status' %}" style="display:none;">
+            {% csrf_token %}
+            <input type="hidden" name="bulk_action" id="bulkActionInput" value="">
+            <input type="hidden" name="q" value="{{ search }}">
+            <input type="hidden" name="status" value="{{ status }}">
+            <div id="bulkIdsContainer"></div>
+        </form>
+    </div>
+    {% endif %}
+
     {% if integrity_issues %}
     <div class="integrity-alert">
         <h4>Advertencias de integridad</h4>
@@ -360,6 +434,11 @@
         <table class="admin-table category-table">
             <thead>
                 <tr>
+                    {% if user.is_superuser %}
+                    <th class="category-select-cell">
+                        <input type="checkbox" id="selectAllCategories" class="category-select-input" title="Seleccionar visibles">
+                    </th>
+                    {% endif %}
                     <th style="width: 52px;">Orden</th>
                     <th>Nombre</th>
                     <th>Subcategorias</th>
@@ -372,9 +451,19 @@
                 {% for row in tree_rows %}
                 <tr class="category-row{% if row.has_children %} has-children{% endif %}"
                     data-category-id="{{ row.category.id }}"
+                    data-category-name="{{ row.category.name }}"
                     data-parent-id="{{ row.category.parent_id|default:'' }}"
                     data-depth="{{ row.depth }}"
+                    {% if focus_category_id and row.category.id == focus_category_id %}data-focus-row="1"{% endif %}
                     {% if user.is_superuser and not search and status == 'all' %}draggable="true"{% endif %}>
+                    {% if user.is_superuser %}
+                    <td class="category-select-cell">
+                        <input type="checkbox"
+                            class="category-select-input category-select-item"
+                            value="{{ row.category.id }}"
+                            aria-label="Seleccionar categoria {{ row.category.name }}">
+                    </td>
+                    {% endif %}
                     <td>
                         {% if user.is_superuser and not search and status == 'all' %}
                         <span class="drag-handle" title="Arrastrar para reordenar">::</span>
@@ -431,6 +520,7 @@
                             <a href="{% url 'admin_category_products' row.category.pk %}" class="btn btn-outline btn-inline" title="Gestionar productos">Productos</a>
                             <a href="{% url 'admin_category_edit' row.category.pk %}" class="btn btn-outline btn-inline" title="{% if user.is_superuser %}Editar{% else %}Ver{% endif %}">{% if user.is_superuser %}Editar{% else %}Ver{% endif %}</a>
                             {% if user.is_superuser %}
+                            <button type="button" class="btn btn-inline btn-move-tree" onclick="openMoveModal('{{ row.category.pk }}')">Mover arbol</button>
                             <a href="{% url 'admin_category_create' %}?parent={{ row.category.pk }}" class="btn btn-outline btn-inline btn-subcategory" title="Crear subcategoria">Nueva sub</a>
                             <a href="{% url 'admin_category_delete' row.category.pk %}" class="btn btn-danger-outline btn-inline" title="Eliminar">Eliminar</a>
                             {% endif %}
@@ -439,13 +529,46 @@
                 </tr>
                 {% empty %}
                 <tr>
-                    <td colspan="6" class="text-center text-muted">No hay categorias</td>
+                    <td colspan="{% if user.is_superuser %}7{% else %}6{% endif %}" class="text-center text-muted">No hay categorias</td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
     </div>
 </div>
+
+{% if user.is_superuser %}
+<div id="moveModal" class="category-modal">
+    <div class="category-modal-content">
+        <h3 style="margin-top: 0;">Mover categoria</h3>
+        <p style="margin-bottom: 8px;">
+            Categoria a mover: <strong id="moveCategoryName">-</strong>
+        </p>
+        <p class="text-muted" style="margin-bottom: 14px;">
+            Se movera toda la rama (categoria y subcategorias).
+        </p>
+
+        <form method="post" id="moveCategoryForm" action="">
+            {% csrf_token %}
+            <label for="moveParentSelect" class="form-label" style="color: #1d1d1d;">Nueva categoria padre</label>
+            <select id="moveParentSelect" name="parent_id" class="form-select" style="width: 100%; margin-bottom: 12px;">
+                <option value="">-- Sin padre (categoria raiz) --</option>
+                {% for opt in move_parent_options %}
+                <option value="{{ opt.id }}">{{ opt.label }}</option>
+                {% endfor %}
+            </select>
+            <small id="moveModalHint" class="text-muted" style="display: block; margin-bottom: 14px;">
+                No puedes mover una categoria dentro de si misma o dentro de sus subcategorias.
+            </small>
+
+            <div style="display: flex; justify-content: flex-end; gap: 10px;">
+                <button type="button" class="btn btn-outline" onclick="closeMoveModal()">Cancelar</button>
+                <button type="submit" class="btn btn-primary">Confirmar movimiento</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endif %}
 
 <script>
     function openDeleteModal() { document.getElementById('deleteModal').style.display = 'block'; }
@@ -459,8 +582,80 @@
         }
     }
 
+    function getDirectChildIds(categoryId) {
+        return Array.from(document.querySelectorAll(`.category-row[data-parent-id="${categoryId}"]`))
+            .map((row) => row.dataset.categoryId)
+            .filter(Boolean);
+    }
+
+    function getDescendantCategoryIds(categoryId) {
+        const descendants = [];
+        const pending = [String(categoryId)];
+        while (pending.length > 0) {
+            const current = pending.pop();
+            const childIds = getDirectChildIds(current);
+            childIds.forEach((childId) => {
+                if (!descendants.includes(childId)) {
+                    descendants.push(childId);
+                    pending.push(childId);
+                }
+            });
+        }
+        return descendants;
+    }
+
+    const moveUrlTemplate = "{% url 'admin_category_move' 0 %}";
+
+    function openMoveModal(categoryId) {
+        const modal = document.getElementById('moveModal');
+        if (!modal) return;
+
+        const row = document.querySelector(`.category-row[data-category-id="${categoryId}"]`);
+        if (!row) return;
+
+        const categoryName = row.dataset.categoryName || `ID ${categoryId}`;
+        const currentParentId = row.dataset.parentId || '';
+        const descendants = getDescendantCategoryIds(categoryId);
+        const blockedIds = new Set([String(categoryId), ...descendants]);
+
+        const nameNode = document.getElementById('moveCategoryName');
+        const form = document.getElementById('moveCategoryForm');
+        const select = document.getElementById('moveParentSelect');
+        const hint = document.getElementById('moveModalHint');
+        if (!nameNode || !form || !select) return;
+
+        nameNode.textContent = categoryName;
+        form.action = moveUrlTemplate.replace('/0/', `/${categoryId}/`);
+
+        Array.from(select.options).forEach((option) => {
+            if (!option.value) {
+                option.disabled = false;
+                return;
+            }
+            option.disabled = blockedIds.has(option.value);
+        });
+
+        if (currentParentId && !blockedIds.has(currentParentId)) {
+            select.value = currentParentId;
+        } else {
+            select.value = '';
+        }
+
+        if (hint) {
+            hint.textContent = `Se movera con ${descendants.length + 1} nodo(s) en total.`;
+        }
+
+        modal.style.display = 'block';
+    }
+
+    function closeMoveModal() {
+        const modal = document.getElementById('moveModal');
+        if (modal) modal.style.display = 'none';
+    }
+
     window.onclick = function (e) {
         if (e.target == document.getElementById('deleteModal')) closeDeleteModal();
+        if (e.target == document.getElementById('moveModal')) closeMoveModal();
     }
 
     function getDirectChildRows(categoryId) {
@@ -490,6 +685,7 @@
             parentRow.classList.remove('expanded');
             hideDescendants(categoryId);
         }
+        updateBulkSelectionUI();
     }
 
     function toggleCategoryChildren(event, categoryId) {
@@ -510,6 +706,7 @@
         document.querySelectorAll('.category-row.has-children').forEach((row) => {
             row.classList.add('expanded');
         });
+        updateBulkSelectionUI();
     }
 
     function collapseAllCategories() {
@@ -519,6 +716,7 @@
             }
             row.classList.remove('expanded');
         });
+        updateBulkSelectionUI();
     }
 
     function getCookie(name) {
@@ -526,6 +724,64 @@
         const parts = value.split(`; ${name}=`);
         if (parts.length === 2) return parts.pop().split(';').shift();
         return '';
+    }
+
+    function getCategorySelectionInputs() {
+        return Array.from(document.querySelectorAll('.category-select-item'));
+    }
+
+    function isRowVisible(row) {
+        if (!row) return false;
+        return window.getComputedStyle(row).display !== 'none';
+    }
+
+    function updateBulkSelectionUI() {
+        const inputs = getCategorySelectionInputs();
+        const selectedCount = inputs.filter((input) => input.checked).length;
+        const countLabel = document.getElementById('bulkSelectedCount');
+        const activateBtn = document.getElementById('bulkActivateBtn');
+        const deactivateBtn = document.getElementById('bulkDeactivateBtn');
+        const master = document.getElementById('selectAllCategories');
+
+        if (countLabel) {
+            countLabel.textContent = `${selectedCount} seleccionadas`;
+        }
+        if (activateBtn) activateBtn.disabled = selectedCount === 0;
+        if (deactivateBtn) deactivateBtn.disabled = selectedCount === 0;
+
+        if (master) {
+            const visibleInputs = inputs.filter((input) => isRowVisible(input.closest('.category-row')));
+            const visibleChecked = visibleInputs.filter((input) => input.checked).length;
+            master.checked = visibleInputs.length > 0 && visibleChecked === visibleInputs.length;
+            master.indeterminate = visibleChecked > 0 && visibleChecked < visibleInputs.length;
+        }
+    }
+
+    function submitBulkCategoryStatus(action) {
+        const form = document.getElementById('bulkStatusForm');
+        const actionInput = document.getElementById('bulkActionInput');
+        const idsContainer = document.getElementById('bulkIdsContainer');
+        if (!form || !actionInput || !idsContainer) return;
+
+        const selectedIds = getCategorySelectionInputs()
+            .filter((input) => input.checked)
+            .map((input) => input.value);
+        if (!selectedIds.length) {
+            alert('Selecciona al menos una categoria.');
+            return;
+        }
+
+        idsContainer.innerHTML = '';
+        selectedIds.forEach((id) => {
+            const hidden = document.createElement('input');
+            hidden.type = 'hidden';
+            hidden.name = 'category_ids';
+            hidden.value = id;
+            idsContainer.appendChild(hidden);
+        });
+
+        actionInput.value = action;
+        form.submit();
     }
 
     const reorderState = {
@@ -664,9 +920,40 @@
 
     document.addEventListener('DOMContentLoaded', () => {
         initDragAndDrop();
+        const masterCheckbox = document.getElementById('selectAllCategories');
+        if (masterCheckbox) {
+            masterCheckbox.addEventListener('change', (event) => {
+                const checked = event.target.checked;
+                getCategorySelectionInputs().forEach((input) => {
+                    const row = input.closest('.category-row');
+                    if (isRowVisible(row)) input.checked = checked;
+                });
+                updateBulkSelectionUI();
+            });
+        }
+        getCategorySelectionInputs().forEach((input) => {
+            input.addEventListener('change', updateBulkSelectionUI);
+        });
+
+        const autoExpandIds = {{ auto_expand_ids_json|safe }};
+        if (Array.isArray(autoExpandIds) && autoExpandIds.length) {
+            autoExpandIds.forEach((categoryId) => {
+                setCategoryExpanded(String(categoryId), true);
+            });
+        }
+
+        const focusRow = document.querySelector('.category-row[data-focus-row="1"]');
+        if (focusRow) {
+            focusRow.style.display = 'table-row';
+            focusRow.classList.add('focused-row');
+            focusRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            setTimeout(() => focusRow.classList.remove('focused-row'), 2600);
+        }
+
         {% if search %}
         expandAllCategories();
         {% endif %}
+        updateBulkSelectionUI();
     });
 </script>
 {% endblock %}
