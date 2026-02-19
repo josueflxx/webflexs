@@ -1,7 +1,9 @@
 from functools import wraps
 from django.contrib import messages
 from django.shortcuts import redirect
-from django.http import HttpResponseForbidden
+
+PRIMARY_SUPERADMIN_USERNAME = "josueflexs"
+
 
 def superuser_required_for_modifications(view_func):
     """
@@ -15,8 +17,11 @@ def superuser_required_for_modifications(view_func):
         if request.method in ['GET', 'HEAD', 'OPTIONS']:
             return view_func(request, *args, **kwargs)
         
-        # For unsafe methods (POST, DELETE, etc.), check superuser status
-        if request.user.is_superuser:
+        # For unsafe methods, allow only the designated primary superadmin account.
+        if (
+            request.user.is_superuser
+            and request.user.username.lower() == PRIMARY_SUPERADMIN_USERNAME
+        ):
             return view_func(request, *args, **kwargs)
         
         # If not superuser, deny access

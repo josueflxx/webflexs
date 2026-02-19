@@ -78,6 +78,11 @@
 
                 <div class="nav-section">Sistema</div>
                 {% if user.is_superuser %}
+                <a href="{% url 'admin_user_list' %}"
+                    class="nav-item {% if 'admin_user' in request.resolver_match.url_name %}active{% endif %}">
+                    <span class="nav-icon" aria-hidden="true">&#128274;</span>
+                    Admins
+                </a>
                 <a href="{% url 'admin_settings' %}"
                     class="nav-item {% if 'settings' in request.resolver_match.url_name %}active{% endif %}">
                     <span class="nav-icon" aria-hidden="true">&#9881;</span>

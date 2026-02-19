@@ -1,0 +1,63 @@
+{% extends 'admin_panel/base.html' %}
+
+{% block page_title %}Permisos Admin{% endblock %}
+
+{% block content %}
+<div class="admin-form-container" style="max-width: 720px;">
+    <h2>Permisos: {{ admin_user.username }}</h2>
+
+    <div class="card" style="margin-bottom: 16px;">
+        <p style="margin: 0;">
+            <strong>Nombre:</strong> {{ admin_user.first_name }} {{ admin_user.last_name }}<br>
+            <strong>Email:</strong> {{ admin_user.email|default:"-" }}<br>
+            <strong>Ultimo acceso:</strong> {{ admin_user.last_login|date:"d/m/Y H:i"|default:"-" }}
+        </p>
+    </div>
+
+    <form method="post">
+        {% csrf_token %}
+
+        <div class="form-group">
+            <label class="form-label">
+                <input type="checkbox" name="is_active" {% if admin_user.is_active %}checked{% endif %}>
+                Cuenta activa
+            </label>
+            <small class="text-muted">Si esta desactivada, no puede iniciar sesion.</small>
+        </div>
+
+        <div class="form-group">
+            <label class="form-label">
+                <input type="checkbox" name="is_staff" {% if admin_user.is_staff %}checked{% endif %}>
+                Acceso al panel admin
+            </label>
+            <small class="text-muted">Controla si puede entrar a /admin-panel/.</small>
+        </div>
+
+        <div class="form-group">
+            <label class="form-label">
+                <input
+                    type="checkbox"
+                    name="is_superuser"
+                    {% if admin_user.is_superuser %}checked{% endif %}
+                    {% if admin_user.username|lower != 'josueflexs' %}disabled{% endif %}
+                >
+                Superadmin (permisos totales)
+            </label>
+            <small class="text-muted">
+                Solo la cuenta "josueflexs" puede tener este rol.
+            </small>
+        </div>
+
+        {% if admin_user.pk == request.user.pk %}
+        <div class="alert alert-warning">
+            Estás editando tu propia cuenta. No se permite quitarte permisos criticos por seguridad.
+        </div>
+        {% endif %}
+
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary">Guardar permisos</button>
+            <a href="{% url 'admin_user_list' %}" class="btn btn-outline">Cancelar</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

@@ -53,6 +53,16 @@ import logging
 from core.decorators import superuser_required_for_modifications
 
 logger = logging.getLogger(__name__)
+PRIMARY_SUPERADMIN_USERNAME = "josueflexs"
+
+
+def is_primary_superadmin(user):
+    """Allow only the designated primary superadmin account."""
+    return bool(
+        getattr(user, "is_authenticated", False)
+        and user.is_superuser
+        and user.username.lower() == PRIMARY_SUPERADMIN_USERNAME
+    )
 
 
 def build_category_tree_rows(categories):
@@ -1174,7 +1184,6 @@ def client_list(request):
 
 
 @staff_member_required
-@superuser_required_for_modifications
 def client_edit(request, pk):
     """Edit client profile."""
     client = get_object_or_404(ClientProfile, pk=pk)
@@ -1197,7 +1206,6 @@ def client_edit(request, pk):
 
 
 @staff_member_required
-@superuser_required_for_modifications
 def client_password_change(request, pk):
     """Change client password."""
     client = get_object_or_404(ClientProfile, pk=pk)
@@ -1221,7 +1229,6 @@ def client_password_change(request, pk):
 
 
 @staff_member_required
-@superuser_required_for_modifications
 def client_delete(request, pk):
     """Delete single client."""
     client = get_object_or_404(ClientProfile, pk=pk)
@@ -1262,7 +1269,6 @@ def request_list(request):
 
 
 @staff_member_required
-@superuser_required_for_modifications
 def request_approve(request, pk):
     """Approve account request and create user."""
     account_request = get_object_or_404(AccountRequest, pk=pk)
@@ -1313,7 +1319,6 @@ def request_approve(request, pk):
 
 @staff_member_required
 @require_POST
-@superuser_required_for_modifications
 def request_reject(request, pk):
     """Reject account request."""
     account_request = get_object_or_404(AccountRequest, pk=pk)
@@ -1356,7 +1361,6 @@ def order_list(request):
 
 
 @staff_member_required
-@superuser_required_for_modifications
 def order_detail(request, pk):
     """Order detail and status management."""
     order = get_object_or_404(Order.objects.prefetch_related('items', 'status_history__changed_by'), pk=pk)
@@ -1398,7 +1402,6 @@ def order_detail(request, pk):
 
 
 @staff_member_required
-@superuser_required_for_modifications
 def order_delete(request, pk):
     """Delete single order."""
     order = get_object_or_404(Order, pk=pk)
@@ -1417,7 +1420,7 @@ def order_delete(request, pk):
 
 # ===================== SETTINGS =====================
 
-@user_passes_test(lambda u: u.is_superuser)
+@user_passes_test(is_primary_superadmin)
 def settings_view(request):
     """Site settings management."""
     settings = SiteSettings.get_settings()
@@ -1448,6 +1451,104 @@ def settings_view(request):
         messages.success(request, 'Configuración guardada.')
     
     return render(request, 'admin_panel/settings.html', {'settings': settings})
+
+
+@user_passes_test(is_primary_superadmin)
+def admin_user_list(request):
+    """
+    Superadmin-only list to manage admin accounts and permissions.
+    """
+    search = request.GET.get('q', '').strip()
+    admins = User.objects.filter(is_staff=True).order_by('username')
+    if search:
+        admins = admins.filter(
+            Q(username__icontains=search)
+            | Q(first_name__icontains=search)
+            | Q(last_name__icontains=search)
+            | Q(email__icontains=search)
+        )
+
+    return render(
+        request,
+        'admin_panel/admin_users/list.html',
+        {
+            'admins': admins,
+            'search': search,
+            'total_admins': admins.count(),
+        },
+    )
+
+
+@user_passes_test(is_primary_superadmin)
+def admin_user_permissions(request, user_id):
+    """
+    Superadmin-only edit for core admin flags.
+    """
+    admin_user = get_object_or_404(User, pk=user_id)
+
+    if request.method == 'POST':
+        new_is_active = request.POST.get('is_active') == 'on'
+        new_is_staff = request.POST.get('is_staff') == 'on'
+        new_is_superuser = request.POST.get('is_superuser') == 'on'
+
+        if new_is_superuser and admin_user.username.lower() != PRIMARY_SUPERADMIN_USERNAME:
+            messages.error(
+                request,
+                f'Solo "{PRIMARY_SUPERADMIN_USERNAME}" puede tener permisos de superadmin.',
+            )
+            return redirect('admin_user_permissions', user_id=admin_user.pk)
+
+        if admin_user.username.lower() == PRIMARY_SUPERADMIN_USERNAME:
+            if not new_is_superuser or not new_is_staff or not new_is_active:
+                messages.warning(
+                    request,
+                    f'La cuenta "{PRIMARY_SUPERADMIN_USERNAME}" debe mantenerse activa, con acceso al panel y superadmin.',
+                )
+            new_is_superuser = True
+            new_is_staff = True
+            new_is_active = True
+        else:
+            new_is_superuser = False
+
+        # Prevent locking out own account accidentally.
+        if admin_user.pk == request.user.pk:
+            if not new_is_staff:
+                messages.error(request, 'No puedes quitarte el acceso al panel a ti mismo.')
+                return redirect('admin_user_permissions', user_id=admin_user.pk)
+            if not new_is_superuser:
+                messages.error(request, 'No puedes quitarte permisos de superadmin a ti mismo.')
+                return redirect('admin_user_permissions', user_id=admin_user.pk)
+            if not new_is_active:
+                messages.error(request, 'No puedes desactivar tu propia cuenta.')
+                return redirect('admin_user_permissions', user_id=admin_user.pk)
+
+        admin_user.is_active = new_is_active
+        admin_user.is_staff = new_is_staff
+        admin_user.is_superuser = new_is_superuser
+        admin_user.save(update_fields=['is_active', 'is_staff', 'is_superuser'])
+
+        log_admin_action(
+            request,
+            action='admin_user_permissions_update',
+            target_type='auth_user',
+            target_id=admin_user.pk,
+            details={
+                'username': admin_user.username,
+                'is_active': admin_user.is_active,
+                'is_staff': admin_user.is_staff,
+                'is_superuser': admin_user.is_superuser,
+            },
+        )
+        messages.success(request, f'Permisos actualizados para "{admin_user.username}".')
+        return redirect('admin_user_list')
+
+    return render(
+        request,
+        'admin_panel/admin_users/form.html',
+        {
+            'admin_user': admin_user,
+        },
+    )
 
 
 # ===================== CATEGORIES =====================
@@ -2283,7 +2384,7 @@ def import_status(request, task_id):
     return JsonResponse({'status': 'unknown', 'message': 'No se encontro el estado de la importacion.'}, status=404)
 
 
-@user_passes_test(lambda u: u.is_superuser)
+@user_passes_test(is_primary_superadmin)
 def import_dashboard(request):
     """Import dashboard / hub."""
     executions = ImportExecution.objects.select_related('user').order_by('-created_at')[:40]
@@ -2294,7 +2395,7 @@ def import_dashboard(request):
     )
 
 
-@user_passes_test(lambda u: u.is_superuser)
+@user_passes_test(is_primary_superadmin)
 def import_process(request, import_type):
     """Handle file upload and processing for imports."""
     if import_type == 'products':
@@ -2408,7 +2509,7 @@ def import_process(request, import_type):
     )
 
 
-@user_passes_test(lambda u: u.is_superuser)
+@user_passes_test(is_primary_superadmin)
 @require_POST
 @superuser_required_for_modifications
 def import_rollback(request, execution_id):

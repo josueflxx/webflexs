@@ -1,0 +1,71 @@
+{% extends 'admin_panel/base.html' %}
+
+{% block page_title %}Admins{% endblock %}
+
+{% block content %}
+<div class="admin-table-container">
+    <div class="admin-toolbar">
+        <form method="get" class="toolbar-search">
+            <input type="text" name="q" value="{{ search }}" placeholder="Buscar admin por usuario, nombre o email..." class="form-input">
+            <button type="submit" class="btn btn-primary">Buscar</button>
+            <a href="{% url 'admin_user_list' %}" class="btn btn-outline">Limpiar</a>
+        </form>
+        <div class="toolbar-actions">
+            <span class="badge badge-info">{{ total_admins }} admins visibles</span>
+        </div>
+    </div>
+
+    <table class="admin-table">
+        <thead>
+            <tr>
+                <th>Usuario</th>
+                <th>Nombre</th>
+                <th>Email</th>
+                <th>Estado</th>
+                <th>Panel</th>
+                <th>Superadmin</th>
+                <th>Ultimo acceso</th>
+                <th>Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for admin_user in admins %}
+            <tr>
+                <td><strong>{{ admin_user.username }}</strong></td>
+                <td>{{ admin_user.first_name }} {{ admin_user.last_name }}</td>
+                <td>{{ admin_user.email|default:"-" }}</td>
+                <td>
+                    {% if admin_user.is_active %}
+                    <span class="badge badge-success">Activo</span>
+                    {% else %}
+                    <span class="badge badge-danger">Inactivo</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if admin_user.is_staff %}
+                    <span class="badge badge-info">Si</span>
+                    {% else %}
+                    <span class="badge badge-warning">No</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if admin_user.is_superuser %}
+                    <span class="badge badge-primary">Si</span>
+                    {% else %}
+                    <span class="badge badge-secondary">No</span>
+                    {% endif %}
+                </td>
+                <td>{{ admin_user.last_login|date:"d/m/Y H:i"|default:"-" }}</td>
+                <td class="actions">
+                    <a href="{% url 'admin_user_permissions' admin_user.pk %}" class="btn btn-outline">Permisos</a>
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="8" class="text-center text-muted">No hay cuentas admin.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

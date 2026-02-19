@@ -60,6 +60,8 @@ urlpatterns = [
     
     # Settings
     path('configuracion/', views.settings_view, name='admin_settings'),
+    path('admins/', views.admin_user_list, name='admin_user_list'),
+    path('admins/<int:user_id>/permisos/', views.admin_user_permissions, name='admin_user_permissions'),
     
     # API
     path('api/category-attributes/<int:category_id>/', views.get_category_attributes, name='api_category_attributes'),

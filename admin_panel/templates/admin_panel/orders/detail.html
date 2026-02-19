@@ -71,7 +71,7 @@
         </tbody>
     </table>
 
-    {% if user.is_superuser %}
+    {% if user.is_staff %}
     <h4>Workflow del pedido</h4>
     <form method="post" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:end;margin-bottom:1.5rem;">
         {% csrf_token %}
@@ -125,7 +125,7 @@
 
     <div class="form-actions" style="display: flex; justify-content: space-between; align-items: center; margin-top: 2rem;">
         <a href="{% url 'admin_order_list' %}" class="btn btn-outline"><- Volver a Pedidos</a>
-        {% if user.is_superuser %}
+        {% if user.is_staff %}
         <form method="post" action="{% url 'admin_order_delete' order.pk %}" onsubmit="return confirm('Eliminar pedido? Esta accion no se puede deshacer.');">
             {% csrf_token %}
             <button type="submit" class="btn btn-danger">Eliminar Pedido</button>
