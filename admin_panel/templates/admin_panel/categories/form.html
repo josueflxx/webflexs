@@ -269,6 +269,7 @@
                         <th>Slug</th>
                         <th>Tipo</th>
                         <th>Requerido</th>
+                        <th>Recomendado</th>
                         <th>Acciones</th>
                     </tr>
                 </thead>
@@ -281,6 +282,13 @@
                         <td>
                             {% if attr.required %}
                             <span class="badge badge-success">Si</span>
+                            {% else %}
+                            <span class="badge badge-secondary">No</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if attr.is_recommended %}
+                            <span class="badge badge-info">Si</span>
                             {% else %}
                             <span class="badge badge-secondary">No</span>
                             {% endif %}

@@ -7,30 +7,43 @@
     <div class="container">
         <h1>Mis Pedidos</h1>
 
+        <form method="get" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;">
+            <select name="status" class="form-select" style="max-width:240px;">
+                <option value="">Todos los estados</option>
+                {% for value, label in status_choices %}
+                <option value="{{ value }}" {% if status == value %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+            <button type="submit" class="btn btn-primary">Filtrar</button>
+        </form>
+
         {% if orders %}
         <div class="orders-list">
             {% for order in orders %}
             <div class="order-card">
                 <div class="order-header">
                     <span class="order-number">Pedido #{{ order.pk }}</span>
-                    <span
-                        class="badge badge-{% if order.status == 'pending' %}warning{% elif order.status == 'confirmed' %}info{% elif order.status == 'cancelled' %}danger{% else %}success{% endif %}">
-                        {{ order.get_status_display }}
-                    </span>
+                    <span class="badge badge-info">{{ order.get_status_display }}</span>
                 </div>
                 <div class="order-info">
                     <span>{{ order.created_at|date:"d/m/Y H:i" }}</span>
                     <span>{{ order.get_item_count }} productos</span>
                     <span class="order-total">${{ order.total|floatformat:2 }}</span>
                 </div>
-                <a href="{% url 'order_detail' order.pk %}" class="btn btn-outline">Ver Detalles</a>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                    <a href="{% url 'order_detail' order.pk %}" class="btn btn-outline">Ver Detalles</a>
+                    <form method="post" action="{% url 'reorder_to_cart' order.pk %}">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-primary">Recomprar</button>
+                    </form>
+                </div>
             </div>
             {% endfor %}
         </div>
         {% else %}
         <div class="empty-orders">
-            <p>No tenés pedidos todavía</p>
-            <a href="{% url 'catalog' %}" class="btn btn-primary">Ver Catálogo</a>
+            <p>No tenes pedidos todavia</p>
+            <a href="{% url 'catalog' %}" class="btn btn-primary">Ver Catalogo</a>
         </div>
         {% endif %}
     </div>
@@ -42,7 +55,7 @@
     }
 
     .orders-page h1 {
-        margin-bottom: var(--spacing-2xl);
+        margin-bottom: var(--spacing-lg);
     }
 
     .orders-list {
@@ -58,13 +71,14 @@
         display: flex;
         align-items: center;
         gap: var(--spacing-xl);
+        flex-wrap: wrap;
     }
 
     .order-header {
         display: flex;
         flex-direction: column;
         gap: var(--spacing-xs);
-        min-width: 150px;
+        min-width: 180px;
     }
 
     .order-number {
@@ -77,6 +91,7 @@
         display: flex;
         gap: var(--spacing-xl);
         color: var(--color-gray-light);
+        flex-wrap: wrap;
     }
 
     .order-total {
@@ -87,23 +102,6 @@
     .empty-orders {
         text-align: center;
         padding: var(--spacing-3xl);
-    }
-
-    .empty-orders p {
-        margin-bottom: var(--spacing-xl);
-        color: var(--color-gray-light);
-    }
-
-    @media (max-width: 768px) {
-        .order-card {
-            flex-direction: column;
-            align-items: flex-start;
-        }
-
-        .order-info {
-            flex-direction: column;
-            gap: var(--spacing-sm);
-        }
     }
 </style>
 {% endblock %}

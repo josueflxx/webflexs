@@ -198,6 +198,11 @@ class CategoryAttribute(models.Model):
         verbose_name="Opciones",
     )
     required = models.BooleanField(default=False, verbose_name="Requerido")
+    is_recommended = models.BooleanField(
+        default=True,
+        verbose_name="Recomendado",
+        help_text="Si esta activo, se sugiere completar este atributo aunque no sea obligatorio.",
+    )
     regex_pattern = models.CharField(
         max_length=255,
         blank=True,

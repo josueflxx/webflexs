@@ -47,104 +47,26 @@
                 <button type="submit" class="btn btn-primary btn-lg btn-block">
                     Confirmar Pedido
                 </button>
-                <a href="{% url 'cart' %}" class="btn btn-outline btn-block">
-                    Volver al Carrito
-                </a>
+                <a href="{% url 'cart' %}" class="btn btn-outline btn-block">Volver al Carrito</a>
             </div>
         </form>
     </div>
 </div>
 
 <style>
-    .checkout-page {
-        padding: var(--spacing-2xl) 0;
-    }
-
-    .checkout-page h1 {
-        margin-bottom: var(--spacing-2xl);
-    }
-
-    .checkout-layout {
-        display: grid;
-        grid-template-columns: 1fr 350px;
-        gap: var(--spacing-2xl);
-    }
-
-    .checkout-items {
-        background: var(--color-dark-light);
-        padding: var(--spacing-xl);
-        border-radius: var(--radius-lg);
-    }
-
-    .checkout-items h3 {
-        margin-bottom: var(--spacing-lg);
-    }
-
-    .checkout-item {
-        display: flex;
-        gap: var(--spacing-md);
-        padding: var(--spacing-md) 0;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-    }
-
-    .checkout-item .item-qty {
-        font-weight: 600;
-        color: var(--color-primary);
-        min-width: 40px;
-    }
-
-    .checkout-item .item-name {
-        flex: 1;
-    }
-
-    .checkout-item .item-price {
-        font-weight: 600;
-    }
-
-    .checkout-summary {
-        background: var(--color-dark-light);
-        padding: var(--spacing-xl);
-        border-radius: var(--radius-lg);
-        height: fit-content;
-        position: sticky;
-        top: 120px;
-    }
-
-    .checkout-summary h3 {
-        margin-bottom: var(--spacing-lg);
-    }
-
-    .summary-row {
-        display: flex;
-        justify-content: space-between;
-        padding: var(--spacing-md) 0;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-    }
-
-    .summary-row.discount {
-        color: var(--color-success);
-    }
-
-    .summary-row.total {
-        font-size: var(--font-size-xl);
-        font-weight: 700;
-        color: var(--color-primary);
-        border-bottom: none;
-    }
-
-    .checkout-summary .btn {
-        margin-top: var(--spacing-md);
-    }
-
-    .btn-block {
-        width: 100%;
-        text-align: center;
-    }
-
-    @media (max-width: 768px) {
-        .checkout-layout {
-            grid-template-columns: 1fr;
-        }
-    }
+    .checkout-page { padding: var(--spacing-2xl) 0; }
+    .checkout-page h1 { margin-bottom: var(--spacing-2xl); }
+    .checkout-layout { display: grid; grid-template-columns: 1fr 350px; gap: var(--spacing-2xl); }
+    .checkout-items { background: var(--color-dark-light); padding: var(--spacing-xl); border-radius: var(--radius-lg); }
+    .checkout-item { display: flex; gap: var(--spacing-md); padding: var(--spacing-md) 0; border-bottom: 1px solid rgba(255, 255, 255, 0.1); }
+    .checkout-item .item-qty { font-weight: 600; color: var(--color-primary); min-width: 40px; }
+    .checkout-item .item-name { flex: 1; }
+    .checkout-summary { background: var(--color-dark-light); padding: var(--spacing-xl); border-radius: var(--radius-lg); height: fit-content; position: sticky; top: 120px; }
+    .summary-row { display: flex; justify-content: space-between; padding: var(--spacing-md) 0; border-bottom: 1px solid rgba(255, 255, 255, 0.1); }
+    .summary-row.discount { color: var(--color-success); }
+    .summary-row.total { font-size: var(--font-size-xl); font-weight: 700; color: var(--color-primary); border-bottom: none; }
+    .checkout-summary .btn { margin-top: var(--spacing-md); }
+    .btn-block { width: 100%; text-align: center; }
+    @media (max-width: 768px) { .checkout-layout { grid-template-columns: 1fr; } }
 </style>
 {% endblock %}

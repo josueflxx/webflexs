@@ -7,15 +7,14 @@
     <div class="container">
         <div class="order-header">
             <h1>Pedido #{{ order.pk }}</h1>
-            <span
-                class="badge badge-{% if order.status == 'pending' %}warning{% elif order.status == 'confirmed' %}info{% elif order.status == 'cancelled' %}danger{% else %}success{% endif %}"
-                style="font-size: 1rem; padding: 0.5rem 1rem;">
+            <span class="badge badge-info" style="font-size: 1rem; padding: 0.5rem 1rem;">
                 {{ order.get_status_display }}
             </span>
         </div>
 
         <div class="order-meta">
             <p>Fecha: {{ order.created_at|date:"d/m/Y H:i" }}</p>
+            <p>Ultimo cambio de estado: {{ order.status_updated_at|date:"d/m/Y H:i" }}</p>
         </div>
 
         <div class="order-items">
@@ -61,6 +60,17 @@
             </div>
         </div>
 
+        {% if order.status_history.all %}
+        <div class="order-notes" style="margin-bottom: 1.2rem;">
+            <h4>Historial de estados</h4>
+            <ul style="margin:0;padding-left:18px;">
+                {% for row in order.status_history.all|slice:":12" %}
+                <li>{{ row.created_at|date:"d/m/Y H:i" }} - {{ row.to_status }}{% if row.note %} ({{ row.note }}){% endif %}</li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+
         {% if order.notes %}
         <div class="order-notes">
             <h4>Notas</h4>
@@ -68,7 +78,13 @@
         </div>
         {% endif %}
 
-        <a href="{% url 'order_list' %}" class="btn btn-outline">← Volver a Mis Pedidos</a>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;">
+            <a href="{% url 'order_list' %}" class="btn btn-outline"><- Volver a Mis Pedidos</a>
+            <form method="post" action="{% url 'reorder_to_cart' order.pk %}">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-primary">Recomprar este pedido</button>
+            </form>
+        </div>
     </div>
 </div>
 
@@ -96,10 +112,6 @@
         margin-bottom: var(--spacing-xl);
     }
 
-    .order-items h3 {
-        margin-bottom: var(--spacing-lg);
-    }
-
     .items-table {
         width: 100%;
         border-collapse: collapse;
@@ -110,11 +122,6 @@
         padding: var(--spacing-md);
         text-align: left;
         border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-    }
-
-    .items-table th {
-        font-weight: 600;
-        color: var(--color-gray-light);
     }
 
     .order-totals {
@@ -149,10 +156,6 @@
         padding: var(--spacing-lg);
         border-radius: var(--radius-md);
         margin-bottom: var(--spacing-xl);
-    }
-
-    .order-notes h4 {
-        margin-bottom: var(--spacing-sm);
     }
 </style>
 {% endblock %}

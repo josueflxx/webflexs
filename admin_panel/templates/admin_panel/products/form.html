@@ -211,7 +211,11 @@
         // Intercept form submission to collect JSON
         const form = document.querySelector('form');
         form.addEventListener('submit', function(e) {
-            collectAttributes();
+            try {
+                collectAttributes();
+            } catch (err) {
+                e.preventDefault();
+            }
         });
     });
 
@@ -256,12 +260,14 @@
 
                 data.attributes.forEach(attr => {
                     const existingValue = currentAttributes[attr.slug] || '';
-                    let fieldHtml = `<div class="form-group" style="margin-bottom: 10px;">
-                        <label class="form-label" style="font-size: 0.9em;">${attr.name}</label>`;
+                    const requiredBadge = attr.required ? '<span style="color:#ff6b35;"> *obligatorio</span>' : '';
+                    const recommendedBadge = (!attr.required && attr.is_recommended) ? '<span style=\"color:#20c997;\"> recomendado</span>' : '';
+                    let fieldHtml = `<div class=\"form-group\" style=\"margin-bottom: 10px;\">
+                        <label class=\"form-label\" style=\"font-size: 0.9em;\">${attr.name}${requiredBadge}${recommendedBadge}</label>`;
 
                     if (attr.type === 'select') {
                         const options = attr.options.split(',').map(o => o.trim());
-                        fieldHtml += `<select name="attr_${attr.slug}" class="form-select attr-field" data-slug="${attr.slug}" ${isReadOnly ? 'disabled' : ''}>
+                        fieldHtml += `<select name=\"attr_${attr.slug}\" class=\"form-select attr-field\" data-slug=\"${attr.slug}\" ${attr.required ? 'data-required=\"1\"' : ''} ${attr.is_recommended ? 'data-recommended=\"1\"' : ''} ${isReadOnly ? 'disabled' : ''}>
                             <option value="">- Seleccionar -</option>`;
                         options.forEach(opt => {
                             const selected = existingValue === opt ? 'selected' : '';
@@ -269,8 +275,8 @@
                         });
                         fieldHtml += `</select>`;
                     } else {
-                        fieldHtml += `<input type="text" name="attr_${attr.slug}" class="form-input attr-field" 
-                            data-slug="${attr.slug}" value="${existingValue}" ${isReadOnly ? 'disabled' : ''}>`;
+                        fieldHtml += `<input type=\"text\" name=\"attr_${attr.slug}\" class=\"form-input attr-field\" 
+                            data-slug=\"${attr.slug}\" ${attr.required ? 'data-required=\"1\"' : ''} ${attr.is_recommended ? 'data-recommended=\"1\"' : ''} value=\"${existingValue}\" ${isReadOnly ? 'disabled' : ''}>`;
                     }
 
                     if (attr.regex_pattern) {
@@ -353,12 +359,28 @@
     function collectAttributes() {
         const fields = document.querySelectorAll('.attr-field');
         const attributes = {};
+        const missingRequired = [];
+        const missingRecommended = [];
 
         fields.forEach(field => {
             if (field.value) {
                 attributes[field.dataset.slug] = field.value;
+            } else {
+                if (field.dataset.required === '1') {
+                    missingRequired.push(field.dataset.slug);
+                } else if (field.dataset.recommended === '1') {
+                    missingRecommended.push(field.dataset.slug);
+                }
             }
         });
+
+        if (missingRequired.length > 0) {
+            alert(`Faltan atributos obligatorios: ${missingRequired.join(', ')}`);
+            throw new Error('Atributos obligatorios incompletos');
+        }
+        if (missingRecommended.length > 0) {
+            console.warn('Atributos recomendados faltantes:', missingRecommended.join(', '));
+        }
 
         document.getElementById('attributes_json').value = JSON.stringify(attributes);
     }

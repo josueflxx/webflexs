@@ -38,10 +38,19 @@
                 <td>{{ order.get_item_count }}</td>
                 <td>${{ order.total|floatformat:2 }}</td>
                 <td>
-                    <span
-                        class="badge badge-{% if order.status == 'pending' %}warning{% elif order.status == 'confirmed' %}info{% elif order.status == 'cancelled' %}danger{% else %}success{% endif %}">
-                        {{ order.get_status_display }}
-                    </span>
+                    {% if order.status == 'delivered' %}
+                    <span class="badge badge-success">Entregado</span>
+                    {% elif order.status == 'cancelled' %}
+                    <span class="badge badge-danger">Cancelado</span>
+                    {% elif order.status == 'shipped' %}
+                    <span class="badge badge-info">Enviado</span>
+                    {% elif order.status == 'preparing' %}
+                    <span class="badge badge-warning">En preparacion</span>
+                    {% elif order.status == 'confirmed' %}
+                    <span class="badge badge-primary">Confirmado</span>
+                    {% else %}
+                    <span class="badge badge-secondary">Borrador</span>
+                    {% endif %}
                 </td>
                 <td class="actions">
                     <a href="{% url 'admin_order_detail' order.pk %}" class="btn btn-outline">Ver</a>
@@ -57,13 +66,13 @@
 
     {% if page_obj.paginator.num_pages > 1 %}
     <div class="admin-toolbar">
-        <span>Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
+        <span>Pagina {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
         <div class="toolbar-actions">
             {% if page_obj.has_previous %}
-            <a href="?page={{ page_obj.previous_page_number }}" class="btn btn-outline">← Anterior</a>
+            <a href="?page={{ page_obj.previous_page_number }}&client={{ client }}&status={{ status }}" class="btn btn-outline"><- Anterior</a>
             {% endif %}
             {% if page_obj.has_next %}
-            <a href="?page={{ page_obj.next_page_number }}" class="btn btn-outline">Siguiente →</a>
+            <a href="?page={{ page_obj.next_page_number }}&client={{ client }}&status={{ status }}" class="btn btn-outline">Siguiente -></a>
             {% endif %}
         </div>
     </div>

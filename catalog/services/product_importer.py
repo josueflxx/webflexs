@@ -35,6 +35,7 @@ class ProductImporter(BaseImporter):
     def __init__(self, file):
         super().__init__(file)
         self.required_columns = ["sku", "nombre", "proveedor", "precio", "stock"]
+        self._seen_skus = set()
 
     def load_data(self):
         """
@@ -83,6 +84,10 @@ class ProductImporter(BaseImporter):
 
         if not sku:
             errors.append("SKU es requerido")
+        elif sku in self._seen_skus:
+            errors.append("SKU duplicado dentro del archivo")
+        else:
+            self._seen_skus.add(sku)
         if not name:
             errors.append("Nombre es requerido")
         if not supplier:
@@ -93,9 +98,14 @@ class ProductImporter(BaseImporter):
             if price_raw is None or pd.isna(price_raw) or str(price_raw).strip() == "":
                 raise ValueError()
             price = Decimal(str(price_raw))
+            if price < 0:
+                raise ValueError()
         except Exception:
             errors.append("Precio invalido")
             price = Decimal(0)
+
+        if stock < 0:
+            errors.append("Stock invalido")
 
         filter_1 = self._text(row.get("filtro_1"))
         filter_2 = self._text(row.get("filtro_2"))

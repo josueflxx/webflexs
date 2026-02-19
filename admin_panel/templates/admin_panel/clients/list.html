@@ -6,8 +6,7 @@
 <div class="admin-table-container">
     <div class="admin-toolbar">
         <form method="get" class="toolbar-search">
-            <input type="text" name="q" value="{{ search }}" placeholder="Buscar empresa, usuario o CUIT..."
-                class="form-input">
+            <input type="text" name="q" value="{{ search }}" placeholder="Buscar empresa, usuario o CUIT..." class="form-input">
             <button type="submit" class="btn btn-primary">Buscar</button>
         </form>
         <div class="toolbar-actions">
@@ -17,14 +16,12 @@
         </div>
     </div>
 
-    <!-- Delete Modal -->
     <div id="deleteModal" class="modal"
         style="display:none; position:fixed; z-index:1000; left:0; top:0; width:100%; height:100%; background-color:rgba(0,0,0,0.5);">
         <div class="modal-content"
             style="background-color:#fff; margin:15% auto; padding:20px; border:1px solid #888; width:400px; border-radius:5px;">
-            <h3 style="color: #dc3545; margin-top: 0;">⚠️ Peligro: Borrado Masivo</h3>
-            <p>Estás a punto de eliminar <strong>TODOS</strong> los perfiles de clientes. Esta acción no se puede
-                deshacer.</p>
+            <h3 style="color: #dc3545; margin-top: 0;">Peligro: Borrado Masivo</h3>
+            <p>Estas a punto de eliminar <strong>TODOS</strong> los perfiles de clientes. Esta accion no se puede deshacer.</p>
             <p>Para confirmar, escribe: <code>delete clientes</code></p>
 
             <form method="post" action="{% url 'admin_client_delete_all' %}">
@@ -35,8 +32,7 @@
 
                 <div style="display: flex; justify-content: flex-end; gap: 10px;">
                     <button type="button" class="btn btn-outline" onclick="closeDeleteModal()">Cancelar</button>
-                    <button type="submit" id="deleteSubmitBtn" class="btn btn-danger" disabled>Confirmar
-                        Borrado</button>
+                    <button type="submit" id="deleteSubmitBtn" class="btn btn-danger" disabled>Confirmar Borrado</button>
                 </div>
             </form>
         </div>
@@ -80,15 +76,14 @@
                 <td class="actions">
                     <a href="{% url 'admin_client_edit' client.pk %}" class="btn btn-outline"
                         title="{% if user.is_superuser %}Editar{% else %}Ver{% endif %}">
-                        {% if user.is_superuser %}✏️{% else %}👁️{% endif %}
+                        {% if user.is_superuser %}Editar{% else %}Ver{% endif %}
                     </a>
                     {% if user.is_superuser %}
                     {% if client.user %}
                     <a href="{% url 'admin_client_password' client.pk %}" class="btn btn-warning-outline"
-                        title="Cambiar Contraseña">🔑</a>
+                        title="Cambiar Contrasena">Clave</a>
                     {% endif %}
-                    <a href="{% url 'admin_client_delete' client.pk %}" class="btn btn-danger-outline"
-                        title="Eliminar">🗑️</a>
+                    <a href="{% url 'admin_client_delete' client.pk %}" class="btn btn-danger-outline" title="Eliminar">Eliminar</a>
                     {% endif %}
                 </td>
             </tr>
@@ -103,17 +98,16 @@
     {% if page_obj.paginator.num_pages > 1 %}
     <div class="pagination-container">
         <div class="pagination-info">
-            Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}
+            Pagina {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}
         </div>
 
         <div class="pagination-controls">
             {% if page_obj.has_previous %}
-            <a href="?page=1{% if search %}&q={{ search }}{% endif %}" class="btn btn-outline btn-sm">&laquo;
-                Primera</a>
+            <a href="?page=1{% if search %}&q={{ search }}{% endif %}" class="btn btn-outline btn-sm"><< Primera</a>
             <a href="?page={{ page_obj.previous_page_number }}{% if search %}&q={{ search }}{% endif %}"
                 class="btn btn-outline btn-sm">Anterior</a>
             {% else %}
-            <button class="btn btn-outline btn-sm" disabled>&laquo; Primera</button>
+            <button class="btn btn-outline btn-sm" disabled><< Primera</button>
             <button class="btn btn-outline btn-sm" disabled>Anterior</button>
             {% endif %}
 
@@ -121,10 +115,10 @@
             <a href="?page={{ page_obj.next_page_number }}{% if search %}&q={{ search }}{% endif %}"
                 class="btn btn-outline btn-sm">Siguiente</a>
             <a href="?page={{ page_obj.paginator.num_pages }}{% if search %}&q={{ search }}{% endif %}"
-                class="btn btn-outline btn-sm">Última &raquo;</a>
+                class="btn btn-outline btn-sm">Ultima >></a>
             {% else %}
             <button class="btn btn-outline btn-sm" disabled>Siguiente</button>
-            <button class="btn btn-outline btn-sm" disabled>Última &raquo;</button>
+            <button class="btn btn-outline btn-sm" disabled>Ultima >></button>
             {% endif %}
         </div>
     </div>

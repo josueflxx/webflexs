@@ -28,7 +28,7 @@ from openpyxl import Workbook
 
 from catalog.models import Product, Category, CategoryAttribute, Supplier
 from accounts.models import ClientProfile, AccountRequest
-from orders.models import Order
+from orders.models import Order, OrderStatusHistory
 from core.models import SiteSettings, CatalogAnalyticsEvent, AdminAuditLog, ImportExecution
 from django.contrib.auth.models import User
 from admin_panel.forms.import_forms import ProductImportForm, ClientImportForm, CategoryImportForm
@@ -268,9 +268,11 @@ def dashboard(request):
     context = {
         'product_count': Product.objects.count(),
         'active_product_count': Product.objects.filter(is_active=True).count(),
+        'category_count': Category.objects.count(),
+        'supplier_count': Supplier.objects.count(),
         'client_count': ClientProfile.objects.count(),
         'pending_requests': AccountRequest.objects.filter(status='pending').count(),
-        'pending_orders': Order.objects.filter(status='pending').count(),
+        'pending_orders': Order.objects.filter(status__in=[Order.STATUS_DRAFT, Order.STATUS_CONFIRMED, Order.STATUS_PREPARING]).count(),
         'recent_orders': Order.objects.order_by('-created_at')[:5],
         'recent_requests': AccountRequest.objects.filter(status='pending').order_by('-created_at')[:5],
         'top_zero_result_searches': top_zero_result_searches,
@@ -329,9 +331,11 @@ def get_product_queryset(data):
         )
     
     # Category filter
-    category_id = data.get('category', '')
-    current_category_id = None
-    if category_id:
+    category_id = (data.get('category', '') or '').strip()
+    current_category_id = category_id or None
+    if category_id == '__uncategorized__':
+        products = products.filter(category__isnull=True, categories__isnull=True).distinct()
+    elif category_id:
         try:
             current_category_id = int(category_id)
             selected_category = Category.objects.filter(pk=current_category_id).first()
@@ -341,7 +345,7 @@ def get_product_queryset(data):
                     Q(category_id__in=descendant_ids) | Q(categories__id__in=descendant_ids)
                 ).distinct()
         except (ValueError, TypeError):
-            pass
+            current_category_id = None
         
     # Active filter
     active_filter = data.get('active', '')
@@ -384,6 +388,27 @@ def enrich_products_with_category_state(products):
         )
 
 
+def validate_attributes_for_category(primary_category_id, attributes_dict):
+    """
+    Validate required/recommended attributes from category templates.
+    """
+    if not str(primary_category_id).isdigit():
+        return [], []
+
+    attributes = attributes_dict or {}
+    cat_attrs = CategoryAttribute.objects.filter(category_id=int(primary_category_id))
+    missing_required = []
+    missing_recommended = []
+    for attr in cat_attrs:
+        value = attributes.get(attr.slug)
+        has_value = bool(str(value).strip()) if value is not None else False
+        if attr.required and not has_value:
+            missing_required.append(attr.name)
+        elif attr.is_recommended and not has_value:
+            missing_recommended.append(attr.name)
+    return missing_required, missing_recommended
+
+
 @staff_member_required
 @superuser_required_for_modifications
 def product_create(request):
@@ -402,7 +427,13 @@ def product_create(request):
             primary_category_id = request.POST.get('category', '')
             selected_category_ids = normalize_category_ids(request.POST.getlist('categories'))
             description = request.POST.get('description', '').strip()
+            attributes_payload = request.POST.get('attributes_json', '{}')
             settings = SiteSettings.get_settings()
+
+            try:
+                attributes_data = json.loads(attributes_payload or '{}')
+            except json.JSONDecodeError:
+                attributes_data = {}
 
             if (
                 settings.require_primary_category_for_multicategory
@@ -417,8 +448,29 @@ def product_create(request):
                     'category_options': category_options,
                     'selected_category_ids': selected_category_ids,
                     'supplier_suggestions': supplier_suggestions,
+                        'action': 'Crear',
+                    })
+
+            missing_required, missing_recommended = validate_attributes_for_category(
+                primary_category_id,
+                attributes_data,
+            )
+            if missing_required:
+                messages.error(
+                    request,
+                    f'Faltan atributos obligatorios para la categoria principal: {", ".join(missing_required)}.',
+                )
+                return render(request, 'admin_panel/products/form.html', {
+                    'category_options': category_options,
+                    'selected_category_ids': selected_category_ids,
+                    'supplier_suggestions': supplier_suggestions,
                     'action': 'Crear',
                 })
+            if missing_recommended:
+                messages.warning(
+                    request,
+                    f'Atributos recomendados sin completar: {", ".join(missing_recommended)}.',
+                )
             
             if Product.objects.filter(sku=sku).exists():
                 messages.error(request, f'Ya existe un producto con SKU "{sku}"')
@@ -432,7 +484,7 @@ def product_create(request):
                     stock=int(stock),
                     category_id=int(primary_category_id) if str(primary_category_id).isdigit() else None,
                     description=description,
-                    attributes=json.loads(request.POST.get('attributes_json', '{}')),
+                    attributes=attributes_data,
                 )
                 assign_categories_to_product(product, selected_category_ids, primary_category_id)
                 log_admin_action(
@@ -501,12 +553,37 @@ def product_edit(request, pk):
             product.category_id = int(primary_category_id) if str(primary_category_id).isdigit() else None
             
             # Update attributes
+            attributes_data = product.attributes or {}
             attributes_json = request.POST.get('attributes_json', '{}')
             if attributes_json:
                 try:
-                    product.attributes = json.loads(attributes_json)
+                    attributes_data = json.loads(attributes_json)
                 except json.JSONDecodeError:
-                    pass
+                    attributes_data = product.attributes or {}
+
+            missing_required, missing_recommended = validate_attributes_for_category(
+                primary_category_id,
+                attributes_data,
+            )
+            if missing_required:
+                messages.error(
+                    request,
+                    f'Faltan atributos obligatorios para la categoria principal: {", ".join(missing_required)}.',
+                )
+                return render(request, 'admin_panel/products/form.html', {
+                    'product': product,
+                    'category_options': category_options,
+                    'selected_category_ids': selected_category_ids,
+                    'supplier_suggestions': supplier_suggestions,
+                    'action': 'Editar',
+                })
+            if missing_recommended:
+                messages.warning(
+                    request,
+                    f'Atributos recomendados sin completar: {", ".join(missing_recommended)}.',
+                )
+
+            product.attributes = attributes_data
             
             product.save()
             assign_categories_to_product(product, selected_category_ids, primary_category_id)
@@ -1164,19 +1241,41 @@ def order_list(request):
 @superuser_required_for_modifications
 def order_detail(request, pk):
     """Order detail and status management."""
-    order = get_object_or_404(Order.objects.prefetch_related('items'), pk=pk)
+    order = get_object_or_404(Order.objects.prefetch_related('items', 'status_history__changed_by'), pk=pk)
     
     if request.method == 'POST':
         new_status = request.POST.get('status', '')
         if new_status:
-            order.status = new_status
             order.admin_notes = request.POST.get('admin_notes', '')
-            order.save()
-            messages.success(request, f'Estado del pedido #{order.pk} actualizado.')
+            status_note = request.POST.get('status_note', '').strip()
+            try:
+                changed = order.change_status(
+                    new_status=new_status,
+                    changed_by=request.user,
+                    note=status_note or f"Actualizacion desde panel por {request.user.username}",
+                )
+                order.save(update_fields=['admin_notes', 'updated_at'])
+                if changed:
+                    messages.success(request, f'Estado del pedido #{order.pk} actualizado.')
+                    log_admin_action(
+                        request,
+                        action='order_status_change',
+                        target_type='order',
+                        target_id=order.pk,
+                        details={
+                            'status': order.status,
+                            'note': status_note,
+                        },
+                    )
+                else:
+                    messages.info(request, f'El pedido #{order.pk} ya estaba en ese estado.')
+            except ValueError as exc:
+                messages.error(request, str(exc))
     
     return render(request, 'admin_panel/orders/detail.html', {
         'order': order,
         'status_choices': Order.STATUS_CHOICES,
+        'status_history': order.status_history.all()[:20],
     })
 
 
@@ -1718,6 +1817,7 @@ def category_attribute_create(request, category_id):
             attr_type = request.POST.get('type', 'text')
             options = request.POST.get('options', '')
             required = request.POST.get('required') == 'on'
+            is_recommended = request.POST.get('is_recommended') == 'on'
             regex_pattern = request.POST.get('regex_pattern', '').strip()
             
             # Simple validation for slug
@@ -1731,6 +1831,7 @@ def category_attribute_create(request, category_id):
                     type=attr_type,
                     options=options,
                     required=required,
+                    is_recommended=is_recommended,
                     regex_pattern=regex_pattern
                 )
                 messages.success(request, f'Atributo "{name}" agregado.')
@@ -1764,6 +1865,7 @@ def category_attribute_edit(request, category_id, attribute_id):
             attribute.type = request.POST.get('type', 'text')
             attribute.options = request.POST.get('options', '')
             attribute.required = request.POST.get('required') == 'on'
+            attribute.is_recommended = request.POST.get('is_recommended') == 'on'
             attribute.regex_pattern = request.POST.get('regex_pattern', '').strip()
             attribute.save()
             
@@ -1879,7 +1981,7 @@ def category_manage_products(request, pk):
 def get_category_attributes(request, category_id):
     """API: Get attributes for a category."""
     attributes = CategoryAttribute.objects.filter(category_id=category_id).values(
-        'name', 'slug', 'type', 'options', 'required', 'regex_pattern'
+        'name', 'slug', 'type', 'options', 'required', 'is_recommended', 'regex_pattern'
     )
     return JsonResponse({'attributes': list(attributes)})
 
@@ -1913,6 +2015,34 @@ def run_background_import(task_id, execution_id, import_type, ImporterClass, fil
     """Function to run in a separate thread."""
     execution = ImportExecution.objects.filter(pk=execution_id).first()
     try:
+        preflight_errors = []
+        if not dry_run:
+            preflight_importer = ImporterClass(file_path)
+            preflight_result = preflight_importer.run(dry_run=True)
+            preflight_errors = [
+                {'row': r.row_number, 'message': str(r.errors)}
+                for r in preflight_result.row_results if not r.success
+            ][:50]
+            if preflight_result.has_errors:
+                result_data = {
+                    'created': 0,
+                    'updated': 0,
+                    'errors': preflight_result.errors,
+                    'has_errors': True,
+                    'row_errors': preflight_errors,
+                    'execution_id': execution_id,
+                    'import_type': import_type,
+                    'message': 'Validacion previa fallida. No se aplicaron cambios.',
+                }
+                ImportTaskManager.fail_task(task_id, 'La validacion previa detecto errores.')
+                if execution:
+                    execution.status = ImportExecution.STATUS_FAILED
+                    execution.result_summary = result_data
+                    execution.error_count = preflight_result.errors
+                    execution.finished_at = timezone.now()
+                    execution.save(update_fields=['status', 'result_summary', 'error_count', 'finished_at'])
+                return
+
         def progress_callback(current, total):
             ImportTaskManager.update_progress(task_id, current, total, f"Procesando fila {current} de {total}")
 
@@ -1929,6 +2059,7 @@ def run_background_import(task_id, execution_id, import_type, ImporterClass, fil
                 {'row': r.row_number, 'message': str(r.errors)}
                 for r in result.row_results if not r.success
             ][:50],
+            'preflight_errors': preflight_errors,
             'execution_id': execution_id,
             'import_type': import_type,
         }
@@ -2073,6 +2204,7 @@ def import_process(request, import_type):
         if form.is_valid():
             try:
                 uploaded_file = request.FILES['file']
+                preview_only = request.POST.get('preview_only') == '1'
                 temp_dir = os.path.join(settings.BASE_DIR, 'media', 'temp_imports')
                 os.makedirs(temp_dir, exist_ok=True)
 
@@ -2082,6 +2214,30 @@ def import_process(request, import_type):
                 with open(file_path, 'wb+') as destination:
                     for chunk in uploaded_file.chunks():
                         destination.write(chunk)
+
+                if preview_only:
+                    importer = ImporterClass(file_path)
+                    preview = importer.run(dry_run=True)
+                    try:
+                        if os.path.exists(file_path):
+                            os.remove(file_path)
+                    except OSError:
+                        pass
+
+                    return JsonResponse({
+                        'success': True,
+                        'preview': {
+                            'total_rows': preview.total_rows,
+                            'created': preview.created,
+                            'updated': preview.updated,
+                            'errors': preview.errors,
+                            'has_errors': preview.has_errors,
+                            'row_errors': [
+                                {'row': r.row_number, 'message': str(r.errors)}
+                                for r in preview.row_results if not r.success
+                            ][:50],
+                        },
+                    })
 
                 dry_run = form.cleaned_data.get('dry_run', True)
                 task_id = ImportTaskManager.start_task()

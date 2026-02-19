@@ -17,6 +17,14 @@
         <span class="number">{{ client_count }}</span>
     </div>
     <div class="stat-card">
+        <h3>Categorias</h3>
+        <span class="number">{{ category_count }}</span>
+    </div>
+    <div class="stat-card">
+        <h3>Proveedores</h3>
+        <span class="number">{{ supplier_count }}</span>
+    </div>
+    <div class="stat-card">
         <h3>Pedidos pendientes</h3>
         <span class="number">{{ pending_orders }}</span>
     </div>
@@ -61,7 +69,7 @@
                     <strong>Pedido #{{ order.pk }}</strong><br>
                     <small>{{ order.user.username }} - ${{ order.total }}</small>
                 </span>
-                <span class="badge badge-{% if order.status == 'pending' %}warning{% elif order.status == 'confirmed' %}info{% else %}success{% endif %}">
+                <span class="badge badge-{% if order.status == 'draft' %}warning{% elif order.status == 'confirmed' %}info{% elif order.status == 'preparing' %}primary{% elif order.status == 'cancelled' %}danger{% else %}success{% endif %}">
                     {{ order.get_status_display }}
                 </span>
             </li>

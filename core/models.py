@@ -2,6 +2,7 @@
 Core app models - site-wide settings, analytics, and operation logs.
 """
 from django.db import models
+from django.conf import settings
 
 
 class SiteSettings(models.Model):
@@ -93,8 +94,12 @@ class UserActivity(models.Model):
 
         if not self.is_online:
             return False
+        window_seconds = max(
+            int(getattr(settings, "ADMIN_ONLINE_WINDOW_SECONDS", 300)),
+            30,
+        )
         time_diff = timezone.now() - self.last_activity
-        return time_diff.total_seconds() < 300
+        return time_diff.total_seconds() < window_seconds
 
 
 class CatalogAnalyticsEvent(models.Model):

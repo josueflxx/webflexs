@@ -86,10 +86,17 @@
         {% endif %}
 
         <div class="form-actions">
+            <button type="button" id="btnPreview" class="btn btn-info">Vista previa</button>
             <button type="submit" id="btnSubmit" class="btn btn-primary">Subir y procesar</button>
             <a href="{% url 'admin_import_dashboard' %}" class="btn btn-outline">Cancelar</a>
         </div>
     </form>
+
+    <div id="previewContainer" class="result-shell" style="display:none; margin-top:16px;">
+        <h4>Vista previa de validacion</h4>
+        <p id="previewSummary"></p>
+        <div id="previewErrors" class="error-zone"></div>
+    </div>
 
     <div id="progressContainer" style="display: none; margin-top: 24px;">
         <h4 id="progressStatus">Iniciando...</h4>
@@ -111,6 +118,48 @@
 
 <script>
     const statusUrlTemplate = "{% url 'admin_import_status' '__TASK_ID__' %}";
+
+    document.getElementById('btnPreview').addEventListener('click', async function (e) {
+        e.preventDefault();
+        const form = document.getElementById('importForm');
+        const formData = new FormData(form);
+        formData.append('preview_only', '1');
+        const previewContainer = document.getElementById('previewContainer');
+        const previewSummary = document.getElementById('previewSummary');
+        const previewErrors = document.getElementById('previewErrors');
+
+        try {
+            const response = await fetch(window.location.href, {
+                method: 'POST',
+                body: formData,
+                credentials: 'same-origin',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            });
+            const data = await response.json();
+            if (!response.ok || !data.success) {
+                throw new Error((data && data.error) || 'No se pudo validar el archivo.');
+            }
+            const preview = data.preview || {};
+            previewContainer.style.display = 'block';
+            previewSummary.innerHTML = `
+                <strong>Filas:</strong> ${preview.total_rows || 0}<br>
+                <strong>Creados (simulado):</strong> ${preview.created || 0}<br>
+                <strong>Actualizados (simulado):</strong> ${preview.updated || 0}<br>
+                <strong>Errores:</strong> ${preview.errors || 0}
+            `;
+            if (preview.row_errors && preview.row_errors.length > 0) {
+                previewErrors.innerHTML = '<h5>Errores detectados:</h5><ul>' +
+                    preview.row_errors.map((err) => `<li>Fila ${err.row}: ${err.message}</li>`).join('') +
+                    '</ul>';
+            } else {
+                previewErrors.innerHTML = '<span style=\"color:var(--color-success)\">Sin errores de validacion.</span>';
+            }
+        } catch (error) {
+            alert(error.message || 'No se pudo ejecutar vista previa.');
+        }
+    });
 
     document.getElementById('importForm').addEventListener('submit', async function (e) {
         e.preventDefault();

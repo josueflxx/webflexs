@@ -328,6 +328,13 @@
                                 </a>
                                 {% if user.is_authenticated %}
                                 <button
+                                    class="btn btn-outline"
+                                    onclick="toggleFavorite({{ product.id }}, this)"
+                                    data-favorite="{% if product.is_favorite %}1{% else %}0{% endif %}"
+                                >
+                                    {% if product.is_favorite %}Favorito{% else %}Guardar{% endif %}
+                                </button>
+                                <button
                                     class="btn btn-primary btn-add-cart"
                                     onclick="addToCart({{ product.id }})"
                                     {% if product.stock <= 0 %}disabled{% endif %}
@@ -401,6 +408,28 @@
         } catch (error) {
             console.error(error);
             alert('Error al agregar al carrito');
+        }
+    }
+
+    async function toggleFavorite(productId, btn) {
+        try {
+            const response = await fetch('/pedidos/favoritos/toggle/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+                },
+                body: JSON.stringify({ product_id: productId })
+            });
+            const data = await response.json();
+            if (!data.success) {
+                return;
+            }
+            const isFavorite = !!data.is_favorite;
+            btn.dataset.favorite = isFavorite ? '1' : '0';
+            btn.textContent = isFavorite ? 'Favorito' : 'Guardar';
+        } catch (error) {
+            console.error(error);
         }
     }
 

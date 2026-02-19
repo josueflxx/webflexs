@@ -1,0 +1,141 @@
+{% extends 'base.html' %}
+
+{% block title %}Portal Cliente - FLEXS{% endblock %}
+
+{% block content %}
+<div class="orders-page">
+    <div class="container">
+        <h1>Portal Cliente</h1>
+
+        <div class="portal-grid">
+            <div class="portal-card">
+                <h3>Pedidos en curso</h3>
+                <p class="portal-number">{{ active_orders_count }}</p>
+                <a href="{% url 'order_list' %}" class="btn btn-outline">Ver pedidos</a>
+            </div>
+            <div class="portal-card">
+                <h3>Pedidos totales</h3>
+                <p class="portal-number">{{ total_orders_count }}</p>
+                <a href="{% url 'order_list' %}" class="btn btn-outline">Historial</a>
+            </div>
+            <div class="portal-card">
+                <h3>Favoritos</h3>
+                <p class="portal-number">{{ favorites|length }}</p>
+                <a href="{% url 'catalog' %}" class="btn btn-outline">Ver catalogo</a>
+            </div>
+        </div>
+
+        <div class="portal-sections">
+            <section class="portal-panel">
+                <h2>Recompras rapidas</h2>
+                {% if recent_orders %}
+                <ul class="portal-list">
+                    {% for order in recent_orders %}
+                    <li>
+                        <div>
+                            <strong>Pedido #{{ order.pk }}</strong>
+                            <small>{{ order.created_at|date:"d/m/Y H:i" }} - {{ order.get_status_display }}</small>
+                        </div>
+                        <form method="post" action="{% url 'reorder_to_cart' order.pk %}">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-primary btn-sm">Recomprar</button>
+                        </form>
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <p class="text-muted">Todavia no hay pedidos para recompra.</p>
+                {% endif %}
+            </section>
+
+            <section class="portal-panel">
+                <h2>Favoritos</h2>
+                {% if favorites %}
+                <ul class="portal-list">
+                    {% for favorite in favorites %}
+                    <li>
+                        <div>
+                            <strong>{{ favorite.product.sku }}</strong>
+                            <small>{{ favorite.product.name }}</small>
+                        </div>
+                        <a href="{% url 'product_detail' favorite.product.sku %}" class="btn btn-outline btn-sm">Ver</a>
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <p class="text-muted">Aun no tenes productos favoritos.</p>
+                {% endif %}
+            </section>
+
+        </div>
+    </div>
+</div>
+
+<style>
+    .orders-page {
+        padding: var(--spacing-2xl) 0;
+    }
+    .portal-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(160px, 1fr));
+        gap: 12px;
+        margin-bottom: 16px;
+    }
+    .portal-card {
+        background: var(--color-dark-light);
+        border-radius: 12px;
+        padding: 14px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    .portal-card h3 {
+        margin: 0 0 6px;
+        font-size: 0.95rem;
+    }
+    .portal-number {
+        margin: 0 0 10px;
+        font-size: 1.4rem;
+        font-weight: 700;
+        color: var(--color-primary);
+    }
+    .portal-sections {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(260px, 1fr));
+        gap: 14px;
+    }
+    .portal-panel {
+        background: var(--color-dark-light);
+        border-radius: 12px;
+        padding: 14px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    .portal-panel h2 {
+        margin: 0 0 10px;
+        font-size: 1rem;
+    }
+    .portal-list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+    }
+    .portal-list li {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 0;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    }
+    .portal-list small {
+        display: block;
+        color: var(--color-gray-light);
+    }
+    @media (max-width: 900px) {
+        .portal-grid {
+            grid-template-columns: repeat(2, minmax(140px, 1fr));
+        }
+        .portal-sections {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+{% endblock %}

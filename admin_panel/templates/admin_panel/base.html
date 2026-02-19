@@ -138,16 +138,27 @@
                     <span>&times;</span>
                 </button>
             </div>
-            <div class="admin-profiles">
+            <div class="admin-profiles" id="adminProfilesList">
                 {% for admin in active_admins %}
-                <div class="admin-profile {% if admin.activity.is_active %}active{% else %}inactive{% endif %}">
+                <div class="admin-profile {% if admin.is_online %}active{% else %}inactive{% endif %}">
                     <div class="admin-avatar">
-                        <span class="avatar-text">{{ admin.username|slice:":2"|upper }}</span>
+                        <span class="avatar-text">{{ admin.initials }}</span>
                         <span class="status-dot"></span>
                     </div>
                     <div class="admin-info">
                         <div class="admin-username">{{ admin.username }}</div>
-                        <div class="admin-status">{% if admin.activity.is_active %}En linea{% else %}Desconectado{% endif %}</div>
+                        <div class="admin-status">{% if admin.is_online %}En linea{% else %}Desconectado{% endif %}</div>
+                    </div>
+                </div>
+                {% empty %}
+                <div class="admin-profile inactive">
+                    <div class="admin-avatar">
+                        <span class="avatar-text">--</span>
+                        <span class="status-dot"></span>
+                    </div>
+                    <div class="admin-info">
+                        <div class="admin-username">Sin usuarios</div>
+                        <div class="admin-status">Desconectado</div>
                     </div>
                 </div>
                 {% endfor %}
@@ -193,6 +204,103 @@
             setLeftSidebarState(opened);
         };
 
+        function getCookie(name) {
+            const value = `; ${document.cookie}`;
+            const parts = value.split(`; ${name}=`);
+            if (parts.length === 2) return parts.pop().split(';').shift();
+            return '';
+        }
+
+        function escapeHtml(value) {
+            return String(value || '')
+                .replaceAll('&', '&amp;')
+                .replaceAll('<', '&lt;')
+                .replaceAll('>', '&gt;')
+                .replaceAll('"', '&quot;')
+                .replaceAll("'", '&#39;');
+        }
+
+        function renderAdminProfiles(admins) {
+            const container = document.getElementById('adminProfilesList');
+            if (!container) return;
+
+            if (!Array.isArray(admins) || admins.length === 0) {
+                container.innerHTML = `
+                    <div class="admin-profile inactive">
+                        <div class="admin-avatar">
+                            <span class="avatar-text">--</span>
+                            <span class="status-dot"></span>
+                        </div>
+                        <div class="admin-info">
+                            <div class="admin-username">Sin usuarios</div>
+                            <div class="admin-status">Desconectado</div>
+                        </div>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = admins.map((admin) => {
+                const statusClass = admin.is_online ? 'active' : 'inactive';
+                const statusText = admin.is_online ? 'En linea' : 'Desconectado';
+                const initials = escapeHtml(admin.initials || (admin.username || '').slice(0, 2).toUpperCase());
+                const username = escapeHtml(admin.username || '');
+                return `
+                    <div class="admin-profile ${statusClass}">
+                        <div class="admin-avatar">
+                            <span class="avatar-text">${initials}</span>
+                            <span class="status-dot"></span>
+                        </div>
+                        <div class="admin-info">
+                            <div class="admin-username">${username}</div>
+                            <div class="admin-status">${statusText}</div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        async function refreshAdminPresence() {
+            try {
+                const response = await fetch('{% url "admin_presence" %}', {
+                    method: 'GET',
+                    credentials: 'same-origin',
+                    cache: 'no-store',
+                    headers: { 'Accept': 'application/json' },
+                });
+                if (!response.ok) return;
+                const data = await response.json();
+                if (Array.isArray(data.admins)) {
+                    renderAdminProfiles(data.admins);
+                }
+            } catch (error) {
+                // Ignore network hiccups; next poll will retry.
+            }
+        }
+
+        function sendOfflineBeacon() {
+            if (window.__adminOfflineSent) return;
+            window.__adminOfflineSent = true;
+
+            const token = getCookie('csrftoken');
+            const payload = new FormData();
+            if (token) payload.append('csrfmiddlewaretoken', token);
+
+            if (navigator.sendBeacon) {
+                const ok = navigator.sendBeacon('{% url "go_offline" %}', payload);
+                if (ok) return;
+            }
+
+            fetch('{% url "go_offline" %}', {
+                method: 'POST',
+                credentials: 'same-origin',
+                keepalive: true,
+                headers: {
+                    'X-CSRFToken': token,
+                },
+            }).catch(() => {});
+        }
+
         document.addEventListener('DOMContentLoaded', function() {
             const isCollapsed = localStorage.getItem('adminRightSidebarCollapsed') === 'true';
             const isMobile = window.innerWidth <= 1024;
@@ -237,11 +345,17 @@
                     }
                 });
             });
+
+            const refreshSeconds = Math.max(
+                Number('{{ admin_presence_refresh_seconds|default:30 }}') || 30,
+                10
+            );
+            refreshAdminPresence();
+            window.__presenceTimer = setInterval(refreshAdminPresence, refreshSeconds * 1000);
         });
 
-        window.addEventListener('beforeunload', function () {
-            navigator.sendBeacon('/api/go-offline/');
-        });
+        window.addEventListener('beforeunload', sendOfflineBeacon);
+        window.addEventListener('pagehide', sendOfflineBeacon);
     </script>
     {% block extra_js %}{% endblock %}
 </body>

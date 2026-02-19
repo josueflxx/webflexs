@@ -57,7 +57,8 @@
                             🛒 <span class="cart-badge" id="cartBadge">0</span>
                         </a>
                     </li>
-                    <li><a href="{% url 'order_list' %}">📋 Mis Pedidos</a></li>
+                    <li><a href="{% url 'client_portal' %}">Portal Cliente</a></li>
+                    <li><a href="{% url 'order_list' %}">Pedidos</a></li>
                     {% if user.is_staff %}
                     <li><a href="{% url 'admin_dashboard' %}" class="btn btn-primary">Panel Admin</a></li>
                     {% endif %}
@@ -147,3 +148,4 @@
 </body>
 
 </html>
+

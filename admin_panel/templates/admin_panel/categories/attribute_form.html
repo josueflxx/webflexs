@@ -11,52 +11,51 @@
 
         <div class="form-group">
             <label for="name" class="form-label">Nombre *</label>
-            <input type="text" name="name" id="name" class="form-input" required value="{{ attribute.name|default:'' }}"
-                placeholder="Ej: Diámetro">
+            <input type="text" name="name" id="name" class="form-input" required value="{{ attribute.name|default:'' }}" placeholder="Ej: Diametro">
         </div>
 
         <div class="form-group">
-            <label for="slug" class="form-label">Slug (Código)</label>
-            <input type="text" name="slug" id="slug" class="form-input" value="{{ form.instance.slug|default:'' }}">
-            <small class="text-muted">Debe ser único dentro de la categoría. Solo letras minúsculas, números y
-                guiones.</small>
-            {% if form.slug.errors %}
-            <div class="error-feedback">{{ form.slug.errors.0 }}</div>
-            {% endif %}
+            <label for="slug" class="form-label">Slug (codigo)</label>
+            <input type="text" name="slug" id="slug" class="form-input" value="{{ attribute.slug|default:'' }}">
+            <small class="text-muted">Debe ser unico dentro de la categoria. Solo letras minusculas, numeros y guiones.</small>
         </div>
 
         <div class="form-group">
             <label for="type" class="form-label">Tipo de Dato</label>
             <select name="type" id="type" class="form-select">
-                {% for value, label in form.fields.type.choices %}
-                <option value="{{ value }}" {% if form.instance.type == value %}selected{% endif %}>{{ label }}</option>
-                {% endfor %}
+                <option value="text" {% if attribute.type == 'text' or not attribute %}selected{% endif %}>Texto</option>
+                <option value="number" {% if attribute.type == 'number' %}selected{% endif %}>Numero</option>
+                <option value="select" {% if attribute.type == 'select' %}selected{% endif %}>Seleccion</option>
             </select>
         </div>
 
         <div class="form-group checkbox-group">
-            <label class="form-label" style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
-                <input type="checkbox" name="required" id="required" {% if form.instance.required %}checked{% endif %}>
+            <label class="form-label" style="display:flex;align-items:center;gap:10px;cursor:pointer;">
+                <input type="checkbox" name="required" id="required" {% if attribute.required %}checked{% endif %}>
                 <span>Es obligatorio</span>
             </label>
-            <small class="text-muted" style="display: block; margin-top: 5px;">Si se marca, este atributo será
-                obligatorio al editar productos de esta categoría.</small>
-        </div> 
-        
+            <small class="text-muted">Si se marca, este atributo sera obligatorio al guardar productos de esta categoria.</small>
+        </div>
+
+        <div class="form-group checkbox-group">
+            <label class="form-label" style="display:flex;align-items:center;gap:10px;cursor:pointer;">
+                <input type="checkbox" name="is_recommended" id="is_recommended" {% if attribute.is_recommended or not attribute %}checked{% endif %}>
+                <span>Es recomendado</span>
+            </label>
+            <small class="text-muted">Si no es obligatorio, igual aparecera como sugerido para mejorar filtros.</small>
+        </div>
+
         <div class="form-group" id="options-group" style="display:none;">
             <label for="options" class="form-label">Opciones</label>
-            <textarea name="options" id="options" class="form-textarea"
-                placeholder="Opción 1, Opción 2, Opción 3">{{ attribute.options|default:'' }}</textarea>
+            <textarea name="options" id="options" class="form-textarea" placeholder="Opcion 1, Opcion 2, Opcion 3">{{ attribute.options|default:'' }}</textarea>
             <small class="text-muted">Separa las opciones por comas.</small>
         </div>
 
-        <div class="form-group"
-            style="background: rgba(255, 107, 53, 0.05); padding: 1rem; border-radius: 8px; border: 1px dashed var(--color-primary);">
-            <label for="regex_pattern" class="form-label">Patrón Regex (Para Auto-detección)</label>
+        <div class="form-group" style="background: rgba(255, 107, 53, 0.05); padding: 1rem; border-radius: 8px; border: 1px dashed var(--color-primary);">
+            <label for="regex_pattern" class="form-label">Patron Regex (auto-deteccion)</label>
             <input type="text" name="regex_pattern" id="regex_pattern" class="form-input"
-                value="{{ attribute.regex_pattern|default:'' }}" placeholder="Ej: Di[áa]metro:\s*([\d/]+(?:mm)?)">
+                value="{{ attribute.regex_pattern|default:'' }}" placeholder="Ej: Diametro:\s*([\d/]+(?:mm)?)">
             <small class="text-muted">
-                <a href="https://regex101.com/" target="_blank" style="color: var(--color-primary);">Probar Regex</a>.
                 Usa un grupo de captura <code>()</code> para extraer el valor exacto.
             </small>
         </div>
@@ -72,27 +71,21 @@
     function toggleOptions() {
         const typeSelect = document.getElementById('type');
         const optionsGroup = document.getElementById('options-group');
-        if (typeSelect.value === 'select') {
-            optionsGroup.style.display = 'block';
-        } else {
-            optionsGroup.style.display = 'none';
-        } }
+        optionsGroup.style.display = typeSelect.value === 'select' ? 'block' : 'none';
+    }
 
-    // Run on load
     document.addEventListener('DOMContentLoaded', toggleOptions);
-    // Add event listener
     document.getElementById('type').addEventListener('change', toggleOptions);
 
-    // Auto-slugify
     document.getElementById('name').addEventListener('input', function () {
-        // Check if we are creating a new attribute (no instance slug yet or empty)
         const slugField = document.getElementById('slug');
-        if (!slugField.value) { 
+        if (!slugField.value) {
             const slug = this.value.toLowerCase()
                 .replace(/[^\w\s-]/g, '')
                 .replace(/[\s_-]+/g, '-')
                 .replace(/^-+|-+$/g, '');
             slugField.value = slug;
-        } });
+        }
+    });
 </script>
 {% endblock %}

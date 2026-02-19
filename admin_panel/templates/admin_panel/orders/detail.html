@@ -3,14 +3,10 @@
 {% block page_title %}Pedido #{{ order.pk }}{% endblock %}
 
 {% block content %}
-<div class="admin-form-container" style="max-width: 900px;">
+<div class="admin-form-container" style="max-width: 980px;">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
         <h2 style="margin: 0;">Pedido #{{ order.pk }}</h2>
-        <span
-            class="badge badge-{% if order.status == 'pending' %}warning{% elif order.status == 'confirmed' %}info{% elif order.status == 'cancelled' %}danger{% else %}success{% endif %}"
-            style="font-size: 1rem; padding: 0.5rem 1rem;">
-            {{ order.get_status_display }}
-        </span>
+        <span class="badge badge-info" style="font-size: 1rem; padding: 0.5rem 1rem;">{{ order.get_status_display }}</span>
     </div>
 
     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; margin-bottom: 2rem;">
@@ -19,14 +15,15 @@
             <p>
                 <strong>{{ order.client_company|default:order.user.username }}</strong><br>
                 {% if order.client_cuit %}CUIT: {{ order.client_cuit }}<br>{% endif %}
-                {{ order.client_address }}<br>
-                {{ order.client_phone }}
+                {{ order.client_address|default:'-' }}<br>
+                {{ order.client_phone|default:'-' }}
             </p>
         </div>
         <div>
-            <h4>Información</h4>
+            <h4>Informacion</h4>
             <p>
                 <strong>Fecha:</strong> {{ order.created_at|date:"d/m/Y H:i" }}<br>
+                <strong>Ultimo estado:</strong> {{ order.status_updated_at|date:"d/m/Y H:i" }}<br>
                 <strong>Subtotal:</strong> ${{ order.subtotal|floatformat:2 }}<br>
                 {% if order.discount_percentage %}
                 <strong>Descuento ({{ order.discount_percentage|floatformat:0 }}%):</strong> -${{ order.discount_amount|floatformat:2 }}<br>
@@ -37,9 +34,16 @@
     </div>
 
     {% if order.notes %}
-    <div style="background: var(--color-dark); padding: 1rem; border-radius: 8px; margin-bottom: 2rem;">
+    <div style="background: var(--color-dark); padding: 1rem; border-radius: 8px; margin-bottom: 1rem;">
         <strong>Notas del cliente:</strong>
         <p>{{ order.notes }}</p>
+    </div>
+    {% endif %}
+
+    {% if order.admin_notes %}
+    <div style="background: rgba(255,255,255,.04); padding: 1rem; border-radius: 8px; margin-bottom: 1.5rem;">
+        <strong>Notas internas:</strong>
+        <p>{{ order.admin_notes }}</p>
     </div>
     {% endif %}
 
@@ -67,35 +71,67 @@
         </tbody>
     </table>
 
-    <h4>Cambiar Estado</h4>
     {% if user.is_superuser %}
-    <form method="post" style="display: flex; gap: 1rem; align-items: flex-end;">
+    <h4>Workflow del pedido</h4>
+    <form method="post" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:end;margin-bottom:1.5rem;">
         {% csrf_token %}
-        <div class="form-group" style="margin: 0; flex: 1;">
-            <label for="status_select" class="form-label">Estado:</label>
+        <div class="form-group" style="margin: 0;">
+            <label for="status_select" class="form-label">Estado</label>
             <select name="status" id="status_select" class="form-select">
                 {% for value, label in status_choices %}
                 <option value="{{ value }}" {% if order.status == value %}selected{% endif %}>{{ label }}</option>
                 {% endfor %}
             </select>
         </div>
+        <div class="form-group" style="margin: 0;">
+            <label for="status_note" class="form-label">Nota de cambio</label>
+            <input type="text" name="status_note" id="status_note" class="form-input" placeholder="Motivo del cambio de estado">
+        </div>
+        <div class="form-group" style="margin: 0; grid-column: 1 / -1;">
+            <label for="admin_notes" class="form-label">Notas internas</label>
+            <textarea name="admin_notes" id="admin_notes" class="form-textarea" rows="2">{{ order.admin_notes }}</textarea>
+        </div>
         <button type="submit" class="btn btn-primary">Actualizar Estado</button>
     </form>
-    {% else %}
-    <div class="alert alert-info">
-        Estado actual: <strong>{{ order.get_status_display }}</strong>. Solo el administrador principal puede cambiar el
-        estado.
-    </div>
     {% endif %}
 
+    <h4>Historial de estados</h4>
+    <table class="admin-table" style="margin-bottom: 1.5rem;">
+        <thead>
+            <tr>
+                <th>Fecha</th>
+                <th>Desde</th>
+                <th>Hacia</th>
+                <th>Usuario</th>
+                <th>Nota</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in status_history %}
+            <tr>
+                <td>{{ row.created_at|date:"d/m/Y H:i" }}</td>
+                <td>{{ row.from_status|default:"-" }}</td>
+                <td>{{ row.to_status }}</td>
+                <td>{{ row.changed_by.username|default:"Sistema" }}</td>
+                <td>{{ row.note|default:"-" }}</td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="5" class="text-center text-muted">Sin historial de estados</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
     <div class="form-actions" style="display: flex; justify-content: space-between; align-items: center; margin-top: 2rem;">
-        <a href="{% url 'admin_order_list' %}" class="btn btn-outline">← Volver a Pedidos</a>
+        <a href="{% url 'admin_order_list' %}" class="btn btn-outline"><- Volver a Pedidos</a>
         {% if user.is_superuser %}
-        <form method="post" action="{% url 'admin_order_delete' order.pk %}" onsubmit="return confirm('¿Estás seguro de que deseas eliminar este pedido? Esta acción no se puede deshacer.');">
-             {% csrf_token %}
-            <button type="submit" class="btn btn-danger" style="background-color: #dc3545; color: white; border: none;">Eliminar Pedido</button>
+        <form method="post" action="{% url 'admin_order_delete' order.pk %}" onsubmit="return confirm('Eliminar pedido? Esta accion no se puede deshacer.');">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-danger">Eliminar Pedido</button>
         </form>
         {% endif %}
     </div>
 </div>
 {% endblock %}
+

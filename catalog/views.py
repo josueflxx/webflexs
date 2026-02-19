@@ -8,6 +8,7 @@ from django.shortcuts import get_object_or_404, render
 from django.urls import reverse
 
 from core.models import CatalogAnalyticsEvent, SiteSettings
+from orders.models import ClientFavoriteProduct
 
 from .models import Category, CategoryAttribute, Product
 
@@ -263,12 +264,17 @@ def catalog(request):
     show_prices = settings.show_public_prices or request.user.is_authenticated
 
     discount = 0
+    favorite_product_ids = set()
     if request.user.is_authenticated and hasattr(request.user, "client_profile"):
         discount = request.user.client_profile.get_discount_decimal()
+        favorite_product_ids = set(
+            ClientFavoriteProduct.objects.filter(user=request.user).values_list("product_id", flat=True)
+        )
 
     for product in page_obj.object_list:
         linked_categories = [cat for cat in product.get_linked_categories() if cat.is_active]
         product.display_categories = linked_categories[:3]
+        product.is_favorite = product.id in favorite_product_ids
         if discount > 0:
             fixed_discount = discount / 100 if discount > 1 else discount
             product.final_price = product.price * (1 - fixed_discount)
@@ -369,6 +375,12 @@ def product_detail(request, sku):
     discount = 0
     if request.user.is_authenticated and hasattr(request.user, "client_profile"):
         discount = request.user.client_profile.get_discount_decimal()
+    is_favorite = False
+    if request.user.is_authenticated:
+        is_favorite = ClientFavoriteProduct.objects.filter(
+            user=request.user,
+            product_id=product.id,
+        ).exists()
 
     final_price = product.price * (1 - discount) if discount else product.price
     linked_categories = [cat for cat in product.get_linked_categories() if cat.is_active]
@@ -393,6 +405,7 @@ def product_detail(request, sku):
         "canonical_url": request.build_absolute_uri(request.path),
         "seo_title": f"{product.name} | FLEXS",
         "seo_description": seo_description,
+        "is_favorite": is_favorite,
     }
 
     return render(request, "catalog/product_detail.html", context)

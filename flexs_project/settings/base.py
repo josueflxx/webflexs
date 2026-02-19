@@ -10,6 +10,16 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
 
+
+def _env_int(name, default):
+    value = os.getenv(name, "")
+    if value == "":
+        return default
+    try:
+        return int(value)
+    except ValueError:
+        return default
+
 # Build paths inside the project
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
@@ -45,6 +55,8 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'core.middleware.AuditRequestContextMiddleware',
+    'core.middleware.AuthSessionIsolationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'core.middleware.UserActivityMiddleware',
@@ -121,3 +133,35 @@ DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'ventas@flexs.com.ar')
 
 # CORS settings
 CORS_ALLOW_ALL_ORIGINS = DEBUG
+
+# Presence / activity tuning
+ADMIN_ONLINE_WINDOW_SECONDS = max(_env_int("ADMIN_ONLINE_WINDOW_SECONDS", 300), 30)
+ADMIN_PRESENCE_TOUCH_INTERVAL_SECONDS = max(
+    _env_int("ADMIN_PRESENCE_TOUCH_INTERVAL_SECONDS", 30),
+    5,
+)
+ADMIN_PRESENCE_REFRESH_SECONDS = max(_env_int("ADMIN_PRESENCE_REFRESH_SECONDS", 30), 10)
+ADMIN_PRESENCE_EXCLUDED_USERS = tuple(
+    username.strip()
+    for username in os.getenv("ADMIN_PRESENCE_EXCLUDED_USERS", "admin,admin_tester").split(",")
+    if username.strip()
+)
+
+# Optional shared cache (recommended in production with multiple workers)
+REDIS_URL = os.getenv("REDIS_URL", "").strip()
+if REDIS_URL:
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.redis.RedisCache",
+            "LOCATION": REDIS_URL,
+            "TIMEOUT": 300,
+        }
+    }
+else:
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+            "LOCATION": "flexs-local-cache",
+            "TIMEOUT": 300,
+        }
+    }

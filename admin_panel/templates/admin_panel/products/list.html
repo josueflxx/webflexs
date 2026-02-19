@@ -9,6 +9,9 @@
             <input type="text" name="q" value="{{ search }}" placeholder="Buscar SKU, nombre o proveedor..." class="form-input">
             <select name="category" class="form-select">
                 <option value="">Todas las categorias</option>
+                <option value="__uncategorized__" {% if current_category_id == '__uncategorized__' %}selected{% endif %}>
+                    Sin categorias
+                </option>
                 {% for cat in category_options %}
                 {% if current_category_id == cat.id %}
                 <option value="{{ cat.id }}" selected>{{ cat.label }}</option>
