@@ -17,17 +17,18 @@ from django.http import JsonResponse, HttpResponse
 from django.views.decorators.csrf import csrf_protect
 from django.views.decorators.http import require_POST
 from django.utils import timezone
+from django.utils.dateparse import parse_date, parse_datetime
 from django.utils.text import slugify
 import json
 import os
-from datetime import timedelta
+from datetime import datetime, time, timedelta
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from urllib.parse import urlencode
 import csv
 from openpyxl import Workbook
 
 from catalog.models import Product, Category, CategoryAttribute, Supplier
-from accounts.models import ClientProfile, AccountRequest
+from accounts.models import AccountRequest, ClientPayment, ClientProfile
 from orders.models import Order, OrderStatusHistory
 from core.models import SiteSettings, CatalogAnalyticsEvent, AdminAuditLog, ImportExecution
 from django.contrib.auth.models import User
@@ -1158,6 +1159,238 @@ def supplier_toggle_active(request, supplier_id):
     return redirect('admin_supplier_detail', supplier_id=supplier.pk)
 
 
+# ===================== PAYMENTS =====================
+
+def _parse_payment_amount(raw_amount):
+    raw = str(raw_amount or '').strip().replace(',', '.')
+    if not raw:
+        raise ValueError('Ingresa un monto para el pago.')
+    try:
+        amount = Decimal(raw)
+    except (InvalidOperation, ValueError):
+        raise ValueError('Monto de pago invalido.')
+    if amount <= 0:
+        raise ValueError('El monto del pago debe ser mayor a 0.')
+    return amount
+
+
+def _parse_paid_at(raw_paid_at):
+    raw = str(raw_paid_at or '').strip()
+    if not raw:
+        return timezone.now()
+
+    parsed_datetime = parse_datetime(raw)
+    if parsed_datetime:
+        if timezone.is_naive(parsed_datetime):
+            return timezone.make_aware(parsed_datetime, timezone.get_current_timezone())
+        return timezone.localtime(parsed_datetime, timezone.get_current_timezone())
+
+    parsed_date = parse_date(raw)
+    if parsed_date:
+        combined = datetime.combine(parsed_date, time.min)
+        return timezone.make_aware(combined, timezone.get_current_timezone())
+
+    raise ValueError('Fecha/hora de pago invalida.')
+
+
+@staff_member_required
+def payment_list(request):
+    """Payments control panel with search and order assignment."""
+    if request.method == 'POST':
+        action = request.POST.get('action', 'create').strip()
+
+        if action == 'cancel':
+            payment_id = request.POST.get('payment_id', '').strip()
+            cancel_reason = request.POST.get('cancel_reason', '').strip()
+            payment = get_object_or_404(ClientPayment, pk=payment_id)
+            if payment.is_cancelled:
+                messages.info(request, 'Ese pago ya estaba anulado.')
+                return redirect('admin_payment_list')
+
+            payment.is_cancelled = True
+            payment.cancelled_at = timezone.now()
+            payment.cancel_reason = cancel_reason
+            payment.save(update_fields=['is_cancelled', 'cancelled_at', 'cancel_reason', 'updated_at'])
+            log_admin_action(
+                request,
+                action='payment_cancel',
+                target_type='client_payment',
+                target_id=payment.pk,
+                details={
+                    'client': payment.client_profile.company_name,
+                    'order_id': payment.order_id,
+                    'amount': f'{payment.amount:.2f}',
+                },
+            )
+            messages.success(request, 'Pago anulado correctamente.')
+            return redirect('admin_payment_list')
+
+        client_id = request.POST.get('client_profile_id', '').strip()
+        order_id = request.POST.get('order_id', '').strip().replace('#', '')
+        amount_raw = request.POST.get('amount', '').strip()
+        method = request.POST.get('method', '').strip()
+        paid_at_raw = request.POST.get('paid_at', '').strip()
+        reference = request.POST.get('reference', '').strip()
+        notes = request.POST.get('notes', '').strip()
+
+        order = None
+        if order_id:
+            if not order_id.isdigit():
+                messages.error(request, 'Pedido invalido.')
+                return redirect('admin_payment_list')
+            order = Order.objects.select_related('user').filter(pk=order_id).first()
+            if not order:
+                messages.error(request, 'El pedido indicado no existe.')
+                return redirect('admin_payment_list')
+
+        client_profile = None
+        if client_id.isdigit():
+            client_profile = ClientProfile.objects.select_related('user').filter(pk=int(client_id)).first()
+        if not client_profile and order and order.user_id:
+            client_profile = ClientProfile.objects.select_related('user').filter(user_id=order.user_id).first()
+
+        if not client_profile:
+            messages.error(request, 'Selecciona un cliente valido o un pedido asociado a un cliente.')
+            return redirect('admin_payment_list')
+
+        if order and order.user_id and order.user_id != client_profile.user_id:
+            messages.error(request, 'El pedido no corresponde al cliente seleccionado.')
+            return redirect('admin_payment_list')
+
+        allowed_methods = {value for value, _ in ClientPayment.METHOD_CHOICES}
+        if method not in allowed_methods:
+            messages.error(request, 'Medio de pago invalido.')
+            return redirect('admin_payment_list')
+
+        try:
+            amount = _parse_payment_amount(amount_raw)
+            paid_at = _parse_paid_at(paid_at_raw)
+        except ValueError as exc:
+            messages.error(request, str(exc))
+            return redirect('admin_payment_list')
+
+        payment = ClientPayment.objects.create(
+            client_profile=client_profile,
+            order=order,
+            amount=amount,
+            method=method,
+            paid_at=paid_at,
+            reference=reference,
+            notes=notes,
+            created_by=request.user if request.user.is_authenticated else None,
+        )
+
+        log_admin_action(
+            request,
+            action='payment_create',
+            target_type='client_payment',
+            target_id=payment.pk,
+            details={
+                'client': client_profile.company_name,
+                'order_id': order.pk if order else None,
+                'amount': f'{amount:.2f}',
+                'method': method,
+            },
+        )
+
+        if order:
+            paid_amount = order.get_paid_amount()
+            pending_amount = order.get_pending_amount()
+            if pending_amount <= 0:
+                messages.success(
+                    request,
+                    f'Pago registrado. Pedido #{order.pk} ya esta pago y se puede confirmar.',
+                )
+            else:
+                messages.success(
+                    request,
+                    f'Pago registrado. Pedido #{order.pk}: pagado ${paid_amount:.2f}, pendiente ${pending_amount:.2f}.',
+                )
+        else:
+            messages.success(request, 'Pago registrado correctamente.')
+
+        return redirect('admin_payment_list')
+
+    q = request.GET.get('q', '').strip()
+    client_id = request.GET.get('client_id', '').strip()
+    order_id = request.GET.get('order_id', '').strip().replace('#', '')
+
+    if order_id.isdigit() and not client_id:
+        order_for_prefill = Order.objects.select_related('user').filter(pk=order_id).first()
+        if order_for_prefill and order_for_prefill.user_id:
+            profile = ClientProfile.objects.filter(user_id=order_for_prefill.user_id).first()
+            if profile:
+                client_id = str(profile.pk)
+
+    payments = ClientPayment.objects.select_related(
+        'client_profile',
+        'client_profile__user',
+        'order',
+        'created_by',
+    ).all()
+
+    if client_id.isdigit():
+        payments = payments.filter(client_profile_id=int(client_id))
+    if order_id.isdigit():
+        payments = payments.filter(order_id=int(order_id))
+    if q:
+        q_filter = (
+            Q(client_profile__company_name__icontains=q)
+            | Q(client_profile__user__username__icontains=q)
+            | Q(client_profile__cuit_dni__icontains=q)
+            | Q(reference__icontains=q)
+            | Q(notes__icontains=q)
+        )
+        if q.isdigit():
+            q_filter |= Q(order__id=int(q))
+            q_filter |= Q(id=int(q))
+        payments = payments.filter(q_filter)
+
+    summary = payments.filter(is_cancelled=False).aggregate(
+        total=Sum('amount'),
+        count=Count('id'),
+    )
+
+    paginator = Paginator(payments.order_by('-paid_at'), 40)
+    page = request.GET.get('page', 1)
+    page_obj = paginator.get_page(page)
+
+    clients = ClientProfile.objects.select_related('user').order_by('company_name')
+    selected_order = Order.objects.select_related('user').filter(pk=order_id).first() if order_id.isdigit() else None
+    selected_client = (
+        ClientProfile.objects.select_related('user').filter(pk=client_id).first()
+        if client_id.isdigit()
+        else None
+    )
+    if not selected_client and selected_order and selected_order.user_id:
+        selected_client = ClientProfile.objects.select_related('user').filter(user_id=selected_order.user_id).first()
+    selected_client_id = str(selected_client.pk) if selected_client else client_id
+    selected_client_metrics = None
+    if selected_client:
+        orders_total = selected_client.get_total_orders_for_balance()
+        total_paid = selected_client.get_total_paid()
+        selected_client_metrics = {
+            'orders_total': orders_total,
+            'total_paid': total_paid,
+            'current_balance': orders_total - total_paid,
+        }
+
+    return render(request, 'admin_panel/payments/list.html', {
+        'page_obj': page_obj,
+        'search': q,
+        'client_id': client_id,
+        'selected_client_id': selected_client_id,
+        'order_id': order_id,
+        'clients': clients,
+        'selected_client': selected_client,
+        'selected_client_metrics': selected_client_metrics,
+        'selected_order': selected_order,
+        'payment_methods': ClientPayment.METHOD_CHOICES,
+        'summary_total': summary.get('total') or Decimal('0.00'),
+        'summary_count': summary.get('count') or 0,
+    })
+
+
 # ===================== CLIENTS =====================
 
 @staff_member_required
@@ -1203,6 +1436,76 @@ def client_edit(request, pk):
         return redirect('admin_client_list')
     
     return render(request, 'admin_panel/clients/form.html', {'client': client})
+
+
+@staff_member_required
+def client_order_history(request, pk):
+    """Show order history for one client profile."""
+    client = get_object_or_404(ClientProfile.objects.select_related('user'), pk=pk)
+
+    orders = (
+        Order.objects.select_related('user')
+        .prefetch_related('items')
+        .filter(user=client.user)
+    )
+
+    status = request.GET.get('status', '').strip()
+    if status:
+        orders = orders.filter(status=status)
+
+    summary = orders.aggregate(
+        orders_count=Count('id'),
+        total_amount=Sum('total'),
+        avg_ticket=Avg('total'),
+        last_order_at=Max('created_at'),
+    )
+
+    balance_orders_qs = client.get_orders_queryset_for_balance()
+    balance_orders_summary = balance_orders_qs.aggregate(
+        orders_count=Count('id'),
+        total_amount=Sum('total'),
+        last_order_at=Max('created_at'),
+    )
+
+    paginator = Paginator(orders.order_by('-created_at'), 30)
+    page = request.GET.get('page', 1)
+    page_obj = paginator.get_page(page)
+
+    payments_qs = ClientPayment.objects.select_related('order', 'created_by').filter(
+        client_profile=client,
+        is_cancelled=False,
+    )
+    payments_summary = payments_qs.aggregate(
+        total_paid=Sum('amount'),
+        payments_count=Count('id'),
+        last_payment_at=Max('paid_at'),
+    )
+
+    return render(request, 'admin_panel/clients/order_history.html', {
+        'client': client,
+        'page_obj': page_obj,
+        'status': status,
+        'status_choices': Order.STATUS_CHOICES,
+        'summary': {
+            'orders_count': summary.get('orders_count') or 0,
+            'total_amount': summary.get('total_amount') or Decimal('0.00'),
+            'avg_ticket': summary.get('avg_ticket') or Decimal('0.00'),
+            'last_order_at': summary.get('last_order_at'),
+        },
+        'balance_summary': {
+            'orders_count': balance_orders_summary.get('orders_count') or 0,
+            'orders_total': balance_orders_summary.get('total_amount') or Decimal('0.00'),
+            'last_order_at': balance_orders_summary.get('last_order_at'),
+            'total_paid': payments_summary.get('total_paid') or Decimal('0.00'),
+            'current_balance': client.get_current_balance(),
+        },
+        'payments_recent': payments_qs.order_by('-paid_at')[:20],
+        'payments_summary': {
+            'total_paid': payments_summary.get('total_paid') or Decimal('0.00'),
+            'payments_count': payments_summary.get('payments_count') or 0,
+            'last_payment_at': payments_summary.get('last_payment_at'),
+        },
+    })
 
 
 @staff_member_required
@@ -1364,6 +1667,24 @@ def order_list(request):
 def order_detail(request, pk):
     """Order detail and status management."""
     order = get_object_or_404(Order.objects.prefetch_related('items', 'status_history__changed_by'), pk=pk)
+    order_items = list(order.items.all())
+    order_discount_percentage = (order.discount_percentage or Decimal('0')).quantize(
+        Decimal('0.01'),
+        rounding=ROUND_HALF_UP,
+    )
+    for item in order_items:
+        unit_discount_amount = Decimal('0.00')
+        if order_discount_percentage > 0:
+            unit_discount_amount = (
+                item.price_at_purchase * order_discount_percentage / Decimal('100')
+            ).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+        item.unit_discount_amount = unit_discount_amount
+
+    order_client_profile = (
+        ClientProfile.objects.only('id').filter(user_id=order.user_id).first()
+        if order.user_id
+        else None
+    )
     
     if request.method == 'POST':
         new_status = request.POST.get('status', '')
@@ -1396,8 +1717,13 @@ def order_detail(request, pk):
     
     return render(request, 'admin_panel/orders/detail.html', {
         'order': order,
+        'order_items': order_items,
         'status_choices': Order.STATUS_CHOICES,
         'status_history': order.status_history.all()[:20],
+        'order_paid_amount': order.get_paid_amount(),
+        'order_pending_amount': order.get_pending_amount(),
+        'order_is_paid': order.is_paid(),
+        'order_client_profile_id': order_client_profile.pk if order_client_profile else '',
     })
 
 

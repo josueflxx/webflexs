@@ -70,6 +70,9 @@ TEMPLATES = [
         'DIRS': [BASE_DIR / 'templates'],
         'APP_DIRS': True,
         'OPTIONS': {
+            'builtins': [
+                'core.templatetags.global_number_format',
+            ],
             'context_processors': [
                 'django.template.context_processors.debug',
                 'django.template.context_processors.request',
@@ -97,6 +100,10 @@ LANGUAGE_CODE = 'es-ar'
 TIME_ZONE = 'America/Argentina/Buenos_Aires'
 USE_I18N = True
 USE_TZ = True
+USE_THOUSAND_SEPARATOR = True
+THOUSAND_SEPARATOR = '.'
+DECIMAL_SEPARATOR = ','
+NUMBER_GROUPING = 3
 
 # Static files (CSS, JavaScript, Images)
 STATIC_URL = '/static/'

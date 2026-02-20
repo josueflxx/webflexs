@@ -1,0 +1,212 @@
+{% extends 'admin_panel/base.html' %}
+
+{% block page_title %}Pagos{% endblock %}
+
+{% block content %}
+<div class="admin-table-container">
+    <div class="admin-toolbar">
+        <form method="get" class="toolbar-search">
+            <input type="text" name="q" value="{{ search }}" placeholder="Buscar cliente, CUIT, referencia o pedido..." class="form-input">
+            <select name="client_id" class="form-select">
+                <option value="">Todos los clientes</option>
+                {% for client in clients %}
+                <option value="{{ client.pk }}" {% if selected_client_id == client.pk|stringformat:'s' %}selected{% endif %}>
+                    {{ client.company_name }} ({{ client.user.username }})
+                </option>
+                {% endfor %}
+            </select>
+            <input type="text" name="order_id" value="{{ order_id }}" placeholder="Pedido # (opcional)" class="form-input" style="max-width:180px;">
+            <button type="submit" class="btn btn-primary">Filtrar</button>
+            <a href="{% url 'admin_payment_list' %}" class="btn btn-outline">Limpiar</a>
+        </form>
+    </div>
+
+    <div class="admin-toolbar" style="border-top:1px solid rgba(255,255,255,.08);">
+        <div class="toolbar-actions" style="flex-wrap:wrap;">
+            <span class="badge badge-info">Pagos: {{ summary_count }}</span>
+            <span class="badge badge-success">Total registrado: ${{ summary_total|floatformat:2 }}</span>
+            {% if selected_order %}
+            <span class="badge badge-warning">
+                Pedido #{{ selected_order.pk }} pendiente: ${{ selected_order.get_pending_amount|floatformat:2 }}
+            </span>
+            {% endif %}
+            {% if selected_client %}
+            <span class="badge badge-info">
+                Cliente: {{ selected_client.company_name }}
+            </span>
+            <span class="badge badge-warning">
+                Pedidos confirmados+: ${{ selected_client_metrics.orders_total|floatformat:2 }}
+            </span>
+            <span class="badge badge-success">
+                Pagado: ${{ selected_client_metrics.total_paid|floatformat:2 }}
+            </span>
+            {% if selected_client_metrics.current_balance > 0 %}
+            <span class="badge badge-danger">
+                Saldo pendiente: ${{ selected_client_metrics.current_balance|floatformat:2 }}
+            </span>
+            {% else %}
+            <span class="badge badge-success">
+                Saldo al dia: $0.00
+            </span>
+            {% endif %}
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="admin-toolbar" style="border-top:1px solid rgba(255,255,255,.08);">
+        <form method="post" style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px;align-items:end;width:100%;">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="create">
+
+            <div class="form-group" style="margin:0;">
+                <label for="client_profile_id" class="form-label">Cliente</label>
+                <select name="client_profile_id" id="client_profile_id" class="form-select" required>
+                    <option value="">-- Seleccionar --</option>
+                    {% for client in clients %}
+                    <option value="{{ client.pk }}" {% if selected_client_id == client.pk|stringformat:'s' %}selected{% endif %}>
+                        {{ client.company_name }} ({{ client.user.username }})
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="form-group" style="margin:0;">
+                <label for="order_id_input" class="form-label">Pedido (opcional)</label>
+                <input id="order_id_input" type="text" name="order_id" class="form-input" value="{{ order_id }}" placeholder="Ej: 245">
+            </div>
+
+            <div class="form-group" style="margin:0;">
+                <label for="amount" class="form-label">Monto</label>
+                <input id="amount" type="text" name="amount" class="form-input" required placeholder="Ej: 15000.50">
+            </div>
+
+            <div class="form-group" style="margin:0;">
+                <label for="method" class="form-label">Medio</label>
+                <select id="method" name="method" class="form-select" required>
+                    {% for value, label in payment_methods %}
+                    <option value="{{ value }}">{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="form-group" style="margin:0;">
+                <label for="paid_at" class="form-label">Fecha/Hora</label>
+                <input id="paid_at" type="datetime-local" name="paid_at" class="form-input">
+            </div>
+
+            <div class="form-group" style="margin:0;">
+                <label for="reference" class="form-label">Referencia</label>
+                <input id="reference" type="text" name="reference" class="form-input" placeholder="Nro transferencia/recibo">
+            </div>
+
+            <div class="form-group" style="margin:0; grid-column: span 2;">
+                <label for="notes" class="form-label">Notas</label>
+                <input id="notes" type="text" name="notes" class="form-input" placeholder="Observaciones del pago">
+            </div>
+
+            <div class="form-group" style="margin:0; grid-column: 1 / -1;">
+                <button type="submit" class="btn btn-primary">Registrar Pago</button>
+            </div>
+        </form>
+    </div>
+
+    <table class="admin-table">
+        <thead>
+            <tr>
+                <th>Fecha</th>
+                <th>Cliente</th>
+                <th>Pedido</th>
+                <th>Monto</th>
+                <th>Medio</th>
+                <th>Referencia</th>
+                <th>Estado</th>
+                <th>Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for payment in page_obj %}
+            <tr>
+                <td>{{ payment.paid_at|date:"d/m/Y H:i" }}</td>
+                <td>
+                    <strong>{{ payment.client_profile.company_name }}</strong><br>
+                    <small class="text-muted">{{ payment.client_profile.user.username }}</small>
+                </td>
+                <td>
+                    {% if payment.order_id %}
+                    <a href="{% url 'admin_order_detail' payment.order_id %}" class="btn btn-outline btn-sm">
+                        #{{ payment.order_id }}
+                    </a>
+                    {% else %}
+                    -
+                    {% endif %}
+                </td>
+                <td><strong>${{ payment.amount|floatformat:2 }}</strong></td>
+                <td>{{ payment.get_method_display }}</td>
+                <td>{{ payment.reference|default:"-" }}</td>
+                <td>
+                    {% if payment.is_cancelled %}
+                    <span class="badge badge-danger">Anulado</span>
+                    {% else %}
+                    <span class="badge badge-success">Activo</span>
+                    {% endif %}
+                </td>
+                <td class="actions">
+                    <a href="{% url 'admin_client_order_history' payment.client_profile_id %}" class="btn btn-outline btn-sm">Historial</a>
+                    {% if not payment.is_cancelled %}
+                    <form method="post" class="cancel-payment-form" style="display:inline;">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="cancel">
+                        <input type="hidden" name="payment_id" value="{{ payment.pk }}">
+                        <input type="hidden" name="cancel_reason" value="">
+                        <button type="submit" class="btn btn-danger-outline btn-sm">Anular</button>
+                    </form>
+                    {% endif %}
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="8" class="text-center text-muted">No hay pagos registrados.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    {% if page_obj.paginator.num_pages > 1 %}
+    <div class="admin-toolbar">
+        <span>Pagina {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
+        <div class="toolbar-actions">
+            {% if page_obj.has_previous %}
+            <a href="?page={{ page_obj.previous_page_number }}&q={{ search }}&client_id={{ client_id }}&order_id={{ order_id }}" class="btn btn-outline"><- Anterior</a>
+            {% endif %}
+            {% if page_obj.has_next %}
+            <a href="?page={{ page_obj.next_page_number }}&q={{ search }}&client_id={{ client_id }}&order_id={{ order_id }}" class="btn btn-outline">Siguiente -></a>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    (function() {
+        const paidAtInput = document.getElementById('paid_at');
+        if (paidAtInput && !paidAtInput.value) {
+            const now = new Date();
+            const pad = (value) => String(value).padStart(2, '0');
+            paidAtInput.value = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
+        }
+
+        document.querySelectorAll('.cancel-payment-form').forEach((form) => {
+            form.addEventListener('submit', (event) => {
+                const reason = window.prompt('Motivo de anulacion (opcional):', '') || '';
+                const input = form.querySelector('input[name=\"cancel_reason\"]');
+                if (input) input.value = reason.trim();
+                if (!window.confirm('Este pago se marcara como anulado. Continuar?')) {
+                    event.preventDefault();
+                }
+            });
+        });
+    })();
+</script>
+{% endblock %}

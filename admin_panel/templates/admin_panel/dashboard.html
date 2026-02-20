@@ -3,6 +3,7 @@
 {% block page_title %}Dashboard{% endblock %}
 
 {% block content %}
+<div class="dashboard-compact">
 <div class="dashboard-grid">
     <div class="stat-card">
         <h3>Productos activos</h3>
@@ -82,7 +83,7 @@
     </div>
 </div>
 
-<div class="dashboard-sections" style="margin-top: 20px;">
+<div class="dashboard-sections compact-top-gap">
     <div class="dashboard-section">
         <h2>Busquedas sin resultados (30 dias)</h2>
         {% if top_zero_result_searches %}
@@ -160,13 +161,14 @@
     </div>
 </div>
 
-<div class="dashboard-section mt-4" style="max-width: 100%;">
+<div class="dashboard-section mt-4 compact-full-width">
     <h2>Acciones rapidas</h2>
-    <div class="flex gap-3" style="flex-wrap: wrap;">
+    <div class="flex gap-3 dashboard-actions-wrap">
         <a href="{% url 'admin_product_create' %}" class="btn btn-primary">+ Nuevo producto</a>
         <a href="{% url 'admin_category_create' %}" class="btn btn-outline">+ Nueva categoria</a>
         <a href="{% url 'admin_import_dashboard' %}" class="btn btn-outline">Importaciones</a>
         <a href="{% url 'admin_settings' %}" class="btn btn-outline">Configuracion</a>
     </div>
+</div>
 </div>
 {% endblock %}

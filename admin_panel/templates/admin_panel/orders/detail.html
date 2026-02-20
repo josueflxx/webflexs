@@ -28,7 +28,22 @@
                 {% if order.discount_percentage %}
                 <strong>Descuento ({{ order.discount_percentage|floatformat:0 }}%):</strong> -${{ order.discount_amount|floatformat:2 }}<br>
                 {% endif %}
-                <strong>Total:</strong> <span style="font-size: 1.25rem; color: var(--color-primary);">${{ order.total|floatformat:2 }}</span>
+                <strong>Total:</strong> <span style="font-size: 1.25rem; color: var(--color-primary);">${{ order.total|floatformat:2 }}</span><br>
+                <strong>Pagado:</strong> ${{ order_paid_amount|floatformat:2 }}<br>
+                <strong>Pendiente:</strong>
+                {% if order_pending_amount > 0 %}
+                <span class="badge badge-warning">${{ order_pending_amount|floatformat:2 }}</span>
+                {% else %}
+                <span class="badge badge-success">$0.00</span>
+                {% endif %}
+                <br>
+                <a
+                    href="{% url 'admin_payment_list' %}?order_id={{ order.pk }}{% if order_client_profile_id %}&client_id={{ order_client_profile_id }}{% endif %}"
+                    class="btn btn-outline btn-sm"
+                    style="margin-top:6px;"
+                >
+                    Registrar pago de este pedido
+                </a>
             </p>
         </div>
     </div>
@@ -59,12 +74,19 @@
             </tr>
         </thead>
         <tbody>
-            {% for item in order.items.all %}
+            {% for item in order_items %}
             <tr>
                 <td><code>{{ item.product_sku }}</code></td>
                 <td>{{ item.product_name }}</td>
                 <td>{{ item.quantity }}</td>
-                <td>${{ item.price_at_purchase|floatformat:2 }}</td>
+                <td>
+                    <span>${{ item.price_at_purchase|floatformat:2 }}</span>
+                    {% if order.discount_percentage %}
+                    <span class="badge badge-warning" style="margin-left:6px;">
+                        Desc {{ order.discount_percentage|floatformat:0 }}%: -${{ item.unit_discount_amount|floatformat:2 }}
+                    </span>
+                    {% endif %}
+                </td>
                 <td>${{ item.subtotal|floatformat:2 }}</td>
             </tr>
             {% endfor %}
@@ -91,6 +113,9 @@
             <label for="admin_notes" class="form-label">Notas internas</label>
             <textarea name="admin_notes" id="admin_notes" class="form-textarea" rows="2">{{ order.admin_notes }}</textarea>
         </div>
+        <small class="text-muted" style="grid-column: 1 / -1;">
+            Podes confirmar el pedido y luego registrar los pagos desde el panel de pagos.
+        </small>
         <button type="submit" class="btn btn-primary">Actualizar Estado</button>
     </form>
     {% endif %}

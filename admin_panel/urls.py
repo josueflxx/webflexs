@@ -27,6 +27,7 @@ urlpatterns = [
     
     # Clients
     path('clientes/', views.client_list, name='admin_client_list'),
+    path('clientes/<int:pk>/pedidos/', views.client_order_history, name='admin_client_order_history'),
     path('clientes/<int:pk>/editar/', views.client_edit, name='admin_client_edit'),
     path('clientes/<int:pk>/password/', views.client_password_change, name='admin_client_password'),
     path('clientes/<int:pk>/eliminar/', views.client_delete, name='admin_client_delete'),
@@ -41,6 +42,7 @@ urlpatterns = [
     path('pedidos/', views.order_list, name='admin_order_list'),
     path('pedidos/<int:pk>/', views.order_detail, name='admin_order_detail'),
     path('pedidos/<int:pk>/eliminar/', views.order_delete, name='admin_order_delete'),
+    path('pagos/', views.payment_list, name='admin_payment_list'),
     
     # Categories
     path('categorias/', views.category_list, name='admin_category_list'),

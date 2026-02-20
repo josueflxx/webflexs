@@ -4,106 +4,119 @@
 
 {% block content %}
 <div class="admin-table-container">
-    <div class="admin-toolbar">
-        <form method="get" class="toolbar-search" id="productFiltersForm">
-            <input type="text" name="q" id="filterQ" value="{{ search }}" placeholder="Buscar SKU, nombre o proveedor..." class="form-input">
-            <select name="category" id="filterCategory" class="form-select">
-                <option value="">Todas las categorias</option>
-                <option value="__uncategorized__" {% if current_category_id == '__uncategorized__' %}selected{% endif %}>
-                    Sin categorias
-                </option>
-                {% for cat in category_options %}
-                {% if current_category_id == cat.id %}
-                <option value="{{ cat.id }}" selected>{{ cat.label }}</option>
-                {% else %}
-                <option value="{{ cat.id }}">{{ cat.label }}</option>
-                {% endif %}
-                {% endfor %}
-            </select>
-            <select name="active" id="filterActive" class="form-select">
-                <option value="">Todos</option>
-                {% if active_filter == '1' %}
-                <option value="1" selected>Activos</option>
-                {% else %}
-                <option value="1">Activos</option>
-                {% endif %}
-
-                {% if active_filter == '0' %}
-                <option value="0" selected>Inactivos</option>
-                {% else %}
-                <option value="0">Inactivos</option>
-                {% endif %}
-            </select>
-            <select name="order" id="filterOrder" class="form-select">
-                <option value="-updated_at" {% if order_by == '-updated_at' %}selected{% endif %}>Mas recientes</option>
-                <option value="updated_at" {% if order_by == 'updated_at' %}selected{% endif %}>Mas antiguos</option>
-                <option value="name" {% if order_by == 'name' %}selected{% endif %}>Nombre A-Z</option>
-                <option value="-name" {% if order_by == '-name' %}selected{% endif %}>Nombre Z-A</option>
-                <option value="price" {% if order_by == 'price' %}selected{% endif %}>Menor precio</option>
-                <option value="-price" {% if order_by == '-price' %}selected{% endif %}>Mayor precio</option>
-                <option value="stock" {% if order_by == 'stock' %}selected{% endif %}>Menor stock</option>
-                <option value="-stock" {% if order_by == '-stock' %}selected{% endif %}>Mayor stock</option>
-                <option value="sku" {% if order_by == 'sku' %}selected{% endif %}>SKU A-Z</option>
-                <option value="-sku" {% if order_by == '-sku' %}selected{% endif %}>SKU Z-A</option>
-            </select>
-            <button type="submit" class="btn btn-primary">Filtrar</button>
-            <a href="{% url 'admin_product_list' %}" class="btn btn-outline">Limpiar</a>
-            <button type="button" class="btn btn-outline" onclick="saveProductFilters()">Guardar vista</button>
-            <button type="button" class="btn btn-outline" onclick="loadProductFilters()">Cargar vista</button>
-        </form>
-        <div class="toolbar-actions" style="display: flex; gap: 10px; align-items: center;">
-            {% if user.is_superuser %}
-            <form id="bulkCategoryForm" method="post" action="{% url 'admin_product_bulk_category' %}"
-                style="display: flex; gap: 5px;" onsubmit="return validateBulkAction()">
-                {% csrf_token %}
-                <!-- Hidden inputs for global selection -->
-                <input type="hidden" name="q" value="{{ search }}">
-                <input type="hidden" name="category" value="{{ current_category_id|default:'' }}">
-                <input type="hidden" name="active" value="{{ active_filter }}">
-                <input type="hidden" name="order" value="{{ order_by }}">
-                <input type="hidden" name="page" value="{{ page_obj.number }}">
-                <input type="hidden" name="select_all_pages" id="selectAllPagesInput" value="false">
-
-                <select name="category_id" class="form-select" style="max-width: 220px;">
-                    <option value="">Categoria destino...</option>
+    <div class="products-control-board">
+        <div class="admin-toolbar products-toolbar products-toolbar-main">
+            <form method="get" class="toolbar-search product-filters-grid" id="productFiltersForm">
+                <input type="text" name="q" id="filterQ" value="{{ search }}" placeholder="Buscar SKU, nombre o proveedor..." class="form-input">
+                <select name="category" id="filterCategory" class="form-select">
+                    <option value="">Todas las categorias</option>
+                    <option value="__uncategorized__" {% if current_category_id == '__uncategorized__' %}selected{% endif %}>
+                        Sin categorias
+                    </option>
                     {% for cat in category_options %}
+                    {% if current_category_id == cat.id %}
+                    <option value="{{ cat.id }}" selected>{{ cat.label }}</option>
+                    {% else %}
                     <option value="{{ cat.id }}">{{ cat.label }}</option>
+                    {% endif %}
                     {% endfor %}
                 </select>
-                <select name="mode" class="form-select" style="max-width: 180px;">
-                    <option value="append">Agregar categoria</option>
-                    <option value="replace">Reemplazar categorias</option>
+                <select name="active" id="filterActive" class="form-select">
+                    <option value="">Todos</option>
+                    {% if active_filter == '1' %}
+                    <option value="1" selected>Activos</option>
+                    {% else %}
+                    <option value="1">Activos</option>
+                    {% endif %}
+
+                    {% if active_filter == '0' %}
+                    <option value="0" selected>Inactivos</option>
+                    {% else %}
+                    <option value="0">Inactivos</option>
+                    {% endif %}
                 </select>
-                <button type="submit" class="btn btn-primary" id="bulkSubmitBtn" disabled>Categorizar</button>
+                <select name="order" id="filterOrder" class="form-select">
+                    <option value="-updated_at" {% if order_by == '-updated_at' %}selected{% endif %}>Mas recientes</option>
+                    <option value="updated_at" {% if order_by == 'updated_at' %}selected{% endif %}>Mas antiguos</option>
+                    <option value="name" {% if order_by == 'name' %}selected{% endif %}>Nombre A-Z</option>
+                    <option value="-name" {% if order_by == '-name' %}selected{% endif %}>Nombre Z-A</option>
+                    <option value="price" {% if order_by == 'price' %}selected{% endif %}>Menor precio</option>
+                    <option value="-price" {% if order_by == '-price' %}selected{% endif %}>Mayor precio</option>
+                    <option value="stock" {% if order_by == 'stock' %}selected{% endif %}>Menor stock</option>
+                    <option value="-stock" {% if order_by == '-stock' %}selected{% endif %}>Mayor stock</option>
+                    <option value="sku" {% if order_by == 'sku' %}selected{% endif %}>SKU A-Z</option>
+                    <option value="-sku" {% if order_by == '-sku' %}selected{% endif %}>SKU Z-A</option>
+                </select>
+                <button type="submit" class="btn btn-primary">Filtrar</button>
+                <a href="{% url 'admin_product_list' %}" class="btn btn-outline">Limpiar</a>
             </form>
-            <form id="bulkStatusForm" method="post" action="{% url 'admin_product_bulk_status' %}" onsubmit="return validateBulkStatusAction()"
-                style="display: flex; gap: 5px;">
-                {% csrf_token %}
-                <input type="hidden" name="q" value="{{ search }}">
-                <input type="hidden" name="category" value="{{ current_category_id|default:'' }}">
-                <input type="hidden" name="active" value="{{ active_filter }}">
-                <input type="hidden" name="order" value="{{ order_by }}">
-                <input type="hidden" name="page" value="{{ page_obj.number }}">
-                <input type="hidden" name="select_all_pages" id="bulkStatusSelectAllPages" value="false">
-                <input type="hidden" name="set_active" id="bulkStatusActionInput" value="">
-                <button type="button" class="btn btn-info" id="bulkActivateBtn" onclick="submitBulkStatus('1')" disabled>Activar</button>
-                <button type="button" class="btn btn-warning-outline" id="bulkDeactivateBtn" onclick="submitBulkStatus('0')" disabled>Desactivar</button>
-            </form>
-            <div style="width: 1px; height: 30px; background: #ddd; margin: 0 5px;"></div>
-            <button type="button" class="btn btn-danger" onclick="openDeleteModal()">Eliminar Todos</button>
-            <a href="{% url 'admin_product_create' %}" class="btn btn-primary">+ Nuevo Producto</a>
-            {% endif %}
+            <div class="toolbar-actions products-quick-actions">
+                <button type="button" class="btn btn-outline btn-sm" onclick="saveProductFilters()">Guardar vista</button>
+                <button type="button" class="btn btn-outline btn-sm" onclick="loadProductFilters()">Cargar vista</button>
+                {% if user.is_superuser %}
+                <a href="{% url 'admin_product_create' %}" class="btn btn-primary">+ Nuevo Producto</a>
+                {% endif %}
+            </div>
         </div>
+
+        {% if user.is_superuser %}
+        <details class="products-bulk-panel">
+            <summary>
+                <span>Acciones masivas</span>
+                <span class="badge badge-info" id="bulkSelectedCount">0 seleccionados</span>
+            </summary>
+            <div class="products-bulk-content">
+                <form id="bulkCategoryForm" method="post" action="{% url 'admin_product_bulk_category' %}"
+                    class="products-bulk-form" onsubmit="return validateBulkAction()">
+                    {% csrf_token %}
+                    <!-- Hidden inputs for global selection -->
+                    <input type="hidden" name="q" value="{{ search }}">
+                    <input type="hidden" name="category" value="{{ current_category_id|default:'' }}">
+                    <input type="hidden" name="active" value="{{ active_filter }}">
+                    <input type="hidden" name="order" value="{{ order_by }}">
+                    <input type="hidden" name="page" value="{{ page_obj.number }}">
+                    <input type="hidden" name="select_all_pages" id="selectAllPagesInput" value="false">
+
+                    <select name="category_id" class="form-select">
+                        <option value="">Categoria destino...</option>
+                        {% for cat in category_options %}
+                        <option value="{{ cat.id }}">{{ cat.label }}</option>
+                        {% endfor %}
+                    </select>
+                    <select name="mode" class="form-select">
+                        <option value="append">Agregar categoria</option>
+                        <option value="replace">Reemplazar categorias</option>
+                    </select>
+                    <button type="submit" class="btn btn-primary" id="bulkSubmitBtn" disabled>Categorizar</button>
+                </form>
+
+                <form id="bulkStatusForm" method="post" action="{% url 'admin_product_bulk_status' %}" class="products-bulk-form"
+                    onsubmit="return validateBulkStatusAction()">
+                    {% csrf_token %}
+                    <input type="hidden" name="q" value="{{ search }}">
+                    <input type="hidden" name="category" value="{{ current_category_id|default:'' }}">
+                    <input type="hidden" name="active" value="{{ active_filter }}">
+                    <input type="hidden" name="order" value="{{ order_by }}">
+                    <input type="hidden" name="page" value="{{ page_obj.number }}">
+                    <input type="hidden" name="select_all_pages" id="bulkStatusSelectAllPages" value="false">
+                    <input type="hidden" name="set_active" id="bulkStatusActionInput" value="">
+                    <button type="button" class="btn btn-info" id="bulkActivateBtn" onclick="submitBulkStatus('1')" disabled>Activar</button>
+                    <button type="button" class="btn btn-warning-outline" id="bulkDeactivateBtn" onclick="submitBulkStatus('0')" disabled>Desactivar</button>
+                    <button type="button" class="btn btn-danger-outline" onclick="openDeleteModal()">Eliminar Todos</button>
+                </form>
+            </div>
+        </details>
+        {% endif %}
     </div>
 
     {% if active_filter_chips %}
-    <div class="active-filter-chips" style="padding: 0 var(--spacing-lg) var(--spacing-md); display: flex; gap: 8px; flex-wrap: wrap;">
+    <div class="active-filter-chips">
         {% for chip in active_filter_chips %}
-        <a href="{{ chip.remove_url }}" class="badge badge-info" style="text-decoration:none;">
+        <a href="{{ chip.remove_url }}" class="badge badge-info">
             {{ chip.label }}: {{ chip.value }} x
         </a>
         {% endfor %}
-        <a href="{% url 'admin_product_list' %}" class="badge badge-secondary" style="text-decoration:none;">Limpiar todo</a>
+        <a href="{% url 'admin_product_list' %}" class="badge badge-secondary">Limpiar todo</a>
     </div>
     {% endif %}
 
@@ -262,7 +275,8 @@
 
         function selectAllPages(e) {
             e.preventDefault();
-            document.getElementById('selectAllPagesInput').value = 'true';
+            const globalInput = document.getElementById('selectAllPagesInput');
+            if (globalInput) globalInput.value = 'true';
 
             // UI Updates
             document.getElementById('selectAllMessage').style.display = 'none';
@@ -283,7 +297,8 @@
 
         function clearSelectAll(e) {
             if (e) e.preventDefault();
-            document.getElementById('selectAllPagesInput').value = 'false';
+            const globalInput = document.getElementById('selectAllPagesInput');
+            if (globalInput) globalInput.value = 'false';
 
             document.getElementById('selectAllContainer').style.display = 'none';
 
@@ -299,10 +314,12 @@
 
         function updateBulkButton() {
             const checkedCount = collectSelectedProductIds().length;
-            const selectAllGlobal = document.getElementById('selectAllPagesInput').value === 'true';
+            const globalInput = document.getElementById('selectAllPagesInput');
+            const selectAllGlobal = globalInput ? globalInput.value === 'true' : false;
             const categoryBtn = document.getElementById('bulkSubmitBtn');
             const activateBtn = document.getElementById('bulkActivateBtn');
             const deactivateBtn = document.getElementById('bulkDeactivateBtn');
+            const selectedLabel = document.getElementById('bulkSelectedCount');
 
             let count = 0;
             if (selectAllGlobal) {
@@ -312,6 +329,7 @@
             }
 
             if (count > 0) {
+                if (selectedLabel) selectedLabel.textContent = `${count} seleccionados`;
                 if (categoryBtn) {
                     categoryBtn.removeAttribute('disabled');
                     categoryBtn.innerHTML = `Categorizar (${count})`;
@@ -325,6 +343,7 @@
                     deactivateBtn.innerHTML = `Desactivar (${count})`;
                 }
             } else {
+                if (selectedLabel) selectedLabel.textContent = '0 seleccionados';
                 if (categoryBtn) {
                     categoryBtn.setAttribute('disabled', 'true');
                     categoryBtn.innerHTML = 'Categorizar';
@@ -342,7 +361,8 @@
 
         function validateBulkAction() {
             const form = document.getElementById('bulkCategoryForm');
-            const selectAllGlobal = document.getElementById('selectAllPagesInput').value === 'true';
+            const globalInput = document.getElementById('selectAllPagesInput');
+            const selectAllGlobal = globalInput ? globalInput.value === 'true' : false;
 
             if (!selectAllGlobal) {
                 const count = appendSelectedIdsToForm(form);
@@ -357,7 +377,8 @@
 
         function validateBulkStatusAction() {
             const form = document.getElementById('bulkStatusForm');
-            const selectAllGlobal = document.getElementById('selectAllPagesInput').value === 'true';
+            const globalInput = document.getElementById('selectAllPagesInput');
+            const selectAllGlobal = globalInput ? globalInput.value === 'true' : false;
             if (!selectAllGlobal) {
                 const count = appendSelectedIdsToForm(form);
                 if (count === 0) {
@@ -395,14 +416,14 @@
             <thead>
                 <tr>
                     <th style="width: 40px;"><input type="checkbox" id="selectAll" onclick="toggleSelectAll()"></th>
-                    <th>SKU</th>
-                    <th>Nombre</th>
-                    <th>Proveedor</th>
-                    <th>Precio</th>
-                    <th>Stock</th>
-                    <th>Categorias</th>
-                    <th>Estado</th>
-                    <th>Acciones</th>
+                    <th class="col-sku">SKU</th>
+                    <th class="col-name">Nombre</th>
+                    <th class="col-provider">Proveedor</th>
+                    <th class="col-price">Precio</th>
+                    <th class="col-stock">Stock</th>
+                    <th class="col-categories">Categorias</th>
+                    <th class="col-status">Estado</th>
+                    <th class="col-actions">Acciones</th>
                 </tr>
             </thead>
             <tbody>
@@ -411,14 +432,16 @@
                     <td><input type="checkbox" name="product_ids" value="{{ product.pk }}" class="product-checkbox"
                             onclick="updateBulkButton()"></td>
                     <td><code>{{ product.sku }}</code></td>
-                    <td>{{ product.name|truncatechars:50 }}</td>
-                    <td>{{ product.supplier_ref.name|default:product.supplier|default:'-' }}</td>
+                    <td class="product-name-cell" title="{{ product.name }}">{{ product.name|truncatechars:52 }}</td>
+                    <td class="product-provider-cell" title="{{ product.supplier_ref.name|default:product.supplier|default:'-' }}">
+                        {{ product.supplier_ref.name|default:product.supplier|default:'-' }}
+                    </td>
                     <td>${{ product.price|floatformat:2 }}</td>
                     <td>{{ product.stock }}</td>
                     <td>
                         {% if product.category_status_rows %}
-                        <div style="display:flex;gap:6px;flex-wrap:wrap;">
-                            {% for cat in product.category_status_rows|slice:":4" %}
+                        <div class="category-summary">
+                            {% for cat in product.category_status_rows|slice:":3" %}
                             {% if cat.is_effective_active %}
                             <span class="badge badge-success">{{ cat.name }} (activa)</span>
                             {% elif cat.is_category_active %}
@@ -427,27 +450,28 @@
                             <span class="badge badge-danger">{{ cat.name }} (inactiva)</span>
                             {% endif %}
                             {% endfor %}
-                            {% if product.category_status_rows|length > 4 %}
-                            <span class="badge badge-info">+{{ product.category_status_rows|length|add:"-4" }}</span>
+                            {% if product.category_status_rows|length > 3 %}
+                            <span class="badge badge-info">+{{ product.category_status_rows|length|add:"-3" }}</span>
                             {% endif %}
                         </div>
-                        <small class="text-muted">{{ product.active_category_count }} activas para este producto</small>
+                        <small class="text-muted category-hint">{{ product.active_category_count }} activas para este producto</small>
                         {% else %}
                         <span class="badge badge-secondary">Sin categorias</span>
                         {% endif %}
                     </td>
                     <td>
-                        {% if product.is_active %}
-                        <span class="badge badge-success">Activo</span>
-                        {% else %}
-                        <span class="badge badge-danger">Inactivo</span>
-                        {% endif %}
-                        <br>
-                        {% if product.catalog_visibility %}
-                        <span class="badge badge-info">Visible en catalogo</span>
-                        {% else %}
-                        <span class="badge badge-warning">Oculto por categorias</span>
-                        {% endif %}
+                        <div class="product-status-stack">
+                            {% if product.is_active %}
+                            <span class="badge badge-success">Activo</span>
+                            {% else %}
+                            <span class="badge badge-danger">Inactivo</span>
+                            {% endif %}
+                            {% if product.catalog_visibility %}
+                            <span class="badge badge-info">Visible en catalogo</span>
+                            {% else %}
+                            <span class="badge badge-warning">Oculto por categorias</span>
+                            {% endif %}
+                        </div>
                     </td>
                     <td class="actions">
                         <a href="{% url 'admin_product_edit' product.pk %}" class="btn btn-outline"

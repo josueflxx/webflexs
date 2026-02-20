@@ -68,6 +68,8 @@
 
         <div class="form-actions">
             <button type="submit" class="btn btn-primary">Guardar</button>
+            <a href="{% url 'admin_client_order_history' client.pk %}" class="btn btn-warning-outline">Ver Pedidos</a>
+            <a href="{% url 'admin_payment_list' %}?client_id={{ client.pk }}" class="btn btn-primary">Ver Pagos</a>
             <a href="{% url 'admin_client_list' %}" class="btn btn-outline">Cancelar</a>
         </div>
     </form>

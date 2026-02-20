@@ -1,8 +1,12 @@
 """
 Orders app models - Cart, Orders, and client portal helpers.
 """
+from decimal import Decimal
+
+from django.apps import apps
 from django.contrib.auth.models import User
 from django.db import models
+from django.db.models import Sum
 from django.utils import timezone
 
 from catalog.models import Product
@@ -170,6 +174,22 @@ class Order(models.Model):
 
     def normalized_status(self):
         return self.LEGACY_STATUS_MAP.get(self.status, self.status)
+
+    def get_paid_amount(self):
+        """Total non-cancelled payments allocated to this order."""
+        ClientPayment = apps.get_model('accounts', 'ClientPayment')
+        total = ClientPayment.objects.filter(
+            order_id=self.pk,
+            is_cancelled=False,
+        ).aggregate(total=Sum('amount'))['total']
+        return total or Decimal('0.00')
+
+    def get_pending_amount(self):
+        pending = (self.total or Decimal('0.00')) - self.get_paid_amount()
+        return pending if pending > 0 else Decimal('0.00')
+
+    def is_paid(self):
+        return self.get_pending_amount() <= Decimal('0.00')
 
     def can_transition_to(self, new_status):
         normalized_current = self.normalized_status()

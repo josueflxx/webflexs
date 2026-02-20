@@ -66,6 +66,11 @@
                     <span class="nav-icon" aria-hidden="true">&#128722;</span>
                     Pedidos
                 </a>
+                <a href="{% url 'admin_payment_list' %}"
+                    class="nav-item {% if 'payment' in request.resolver_match.url_name %}active{% endif %}">
+                    <span class="nav-icon" aria-hidden="true">&#128179;</span>
+                    Pagos
+                </a>
 
                 {% if user.is_superuser %}
                 <div class="nav-section">Herramientas</div>

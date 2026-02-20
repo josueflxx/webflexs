@@ -1,0 +1,259 @@
+{% extends 'admin_panel/base.html' %}
+
+{% block page_title %}Historial de Pedidos{% endblock %}
+
+{% block content %}
+<div class="admin-table-container">
+    <div class="admin-toolbar" style="align-items:flex-start; gap:14px; flex-wrap:wrap;">
+        <div>
+            <h2 style="margin:0;">Historial de Pedidos</h2>
+            <p class="text-muted" style="margin:6px 0 0;">
+                <strong>{{ client.company_name }}</strong>
+                {% if client.user %} ({{ client.user.username }}){% endif %}
+                {% if client.cuit_dni %} - CUIT {{ client.cuit_dni }}{% endif %}
+            </p>
+        </div>
+        <div class="toolbar-actions">
+            <a href="{% url 'admin_payment_list' %}?client_id={{ client.pk }}" class="btn btn-primary">Registrar Pago</a>
+            <a href="{% url 'admin_client_edit' client.pk %}" class="btn btn-outline">Editar Cliente</a>
+            <a href="{% url 'admin_client_list' %}" class="btn btn-outline">Volver a Clientes</a>
+        </div>
+    </div>
+
+    <div class="admin-toolbar client-history-toolbar">
+        <div class="client-history-metrics">
+            <article class="history-metric-card is-info">
+                <span class="history-metric-label">Pedidos</span>
+                <strong class="history-metric-value">{{ summary.orders_count }}</strong>
+            </article>
+            <article class="history-metric-card is-primary">
+                <span class="history-metric-label">Total comprado</span>
+                <strong class="history-metric-value">${{ summary.total_amount|floatformat:2 }}</strong>
+            </article>
+            <article class="history-metric-card is-warning">
+                <span class="history-metric-label">Ticket promedio</span>
+                <strong class="history-metric-value">${{ summary.avg_ticket|floatformat:2 }}</strong>
+            </article>
+            {% if summary.last_order_at %}
+            <article class="history-metric-card is-success">
+                <span class="history-metric-label">Ultimo pedido</span>
+                <strong class="history-metric-value">{{ summary.last_order_at|date:"d/m/Y H:i" }}</strong>
+            </article>
+            {% else %}
+            <article class="history-metric-card is-secondary">
+                <span class="history-metric-label">Estado</span>
+                <strong class="history-metric-value">Sin pedidos registrados</strong>
+            </article>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="admin-toolbar client-history-toolbar">
+        <div class="client-history-metrics">
+            <article class="history-metric-card is-success">
+                <span class="history-metric-label">Pagos registrados</span>
+                <strong class="history-metric-value">{{ payments_summary.payments_count }}</strong>
+            </article>
+            <article class="history-metric-card is-primary">
+                <span class="history-metric-label">Total pagado</span>
+                <strong class="history-metric-value">${{ payments_summary.total_paid|floatformat:2 }}</strong>
+            </article>
+            {% if payments_summary.last_payment_at %}
+            <article class="history-metric-card is-info">
+                <span class="history-metric-label">Ultimo pago</span>
+                <strong class="history-metric-value">{{ payments_summary.last_payment_at|date:"d/m/Y H:i" }}</strong>
+            </article>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="admin-toolbar" style="border-top:1px solid rgba(255,255,255,.08);">
+        <form method="get" class="toolbar-search">
+            <select name="status" class="form-select">
+                <option value="">Todos los estados</option>
+                {% for value, label in status_choices %}
+                <option value="{{ value }}" {% if status == value %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+            <button type="submit" class="btn btn-primary">Filtrar</button>
+            <a href="{% url 'admin_client_order_history' client.pk %}" class="btn btn-outline">Limpiar</a>
+        </form>
+    </div>
+
+    <table class="admin-table">
+        <thead>
+            <tr>
+                <th>#</th>
+                <th>Fecha</th>
+                <th>Items</th>
+                <th>Subtotal</th>
+                <th>Descuento</th>
+                <th>Total</th>
+                <th>Estado</th>
+                <th>Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for order in page_obj %}
+            <tr>
+                <td><strong>{{ order.pk }}</strong></td>
+                <td>{{ order.created_at|date:"d/m/Y H:i" }}</td>
+                <td>{{ order.get_item_count }}</td>
+                <td>${{ order.subtotal|floatformat:2 }}</td>
+                <td>
+                    {% if order.discount_amount %}
+                    -${{ order.discount_amount|floatformat:2 }}
+                    {% else %}
+                    -
+                    {% endif %}
+                </td>
+                <td><strong>${{ order.total|floatformat:2 }}</strong></td>
+                <td>
+                    {% if order.status == 'delivered' %}
+                    <span class="badge badge-success">Entregado</span>
+                    {% elif order.status == 'cancelled' %}
+                    <span class="badge badge-danger">Cancelado</span>
+                    {% elif order.status == 'shipped' %}
+                    <span class="badge badge-info">Enviado</span>
+                    {% elif order.status == 'preparing' %}
+                    <span class="badge badge-warning">En preparacion</span>
+                    {% elif order.status == 'confirmed' %}
+                    <span class="badge badge-primary">Confirmado</span>
+                    {% else %}
+                    <span class="badge badge-secondary">Borrador</span>
+                    {% endif %}
+                </td>
+                <td class="actions">
+                    <a href="{% url 'admin_order_detail' order.pk %}" class="btn btn-outline">Ver pedido</a>
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="8" class="text-center text-muted">Este cliente no tiene pedidos cargados.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <h3 style="margin: 1.2rem 0 .8rem;">Pagos del Cliente</h3>
+    <table class="admin-table" style="margin-bottom: 1rem;">
+        <thead>
+            <tr>
+                <th>Fecha</th>
+                <th>Pedido</th>
+                <th>Monto</th>
+                <th>Medio</th>
+                <th>Referencia</th>
+                <th>Estado</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for payment in payments_recent %}
+            <tr>
+                <td>{{ payment.paid_at|date:"d/m/Y H:i" }}</td>
+                <td>
+                    {% if payment.order_id %}
+                    <a href="{% url 'admin_order_detail' payment.order_id %}" class="btn btn-outline btn-sm">#{{ payment.order_id }}</a>
+                    {% else %}
+                    -
+                    {% endif %}
+                </td>
+                <td>${{ payment.amount|floatformat:2 }}</td>
+                <td>{{ payment.get_method_display }}</td>
+                <td>{{ payment.reference|default:"-" }}</td>
+                <td>
+                    {% if payment.is_cancelled %}
+                    <span class="badge badge-danger">Anulado</span>
+                    {% else %}
+                    <span class="badge badge-success">Activo</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="6" class="text-center text-muted">No hay pagos para este cliente.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <div class="admin-toolbar" style="border-top:1px solid rgba(255,255,255,.08); margin-top: 1rem;">
+        <h3 style="margin:0;">Libro Diario de Cuenta Corriente</h3>
+    </div>
+
+    <div style="padding: 1rem; border-top: 1px solid rgba(255,255,255,.08);">
+        <div style="display:grid;grid-template-columns:repeat(3,minmax(220px,1fr));gap:12px;margin-bottom:14px;">
+            <div style="border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:14px;background:rgba(0,0,0,.2);">
+                <small class="text-muted" style="display:block;margin-bottom:4px;">Debe (Pedidos confirmados+)</small>
+                <strong style="font-size:1.35rem;color:#ff8c42;">${{ balance_summary.orders_total|floatformat:2 }}</strong>
+                <small class="text-muted" style="display:block;margin-top:6px;">{{ balance_summary.orders_count }} pedidos contabilizados</small>
+            </div>
+            <div style="border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:14px;background:rgba(0,0,0,.2);">
+                <small class="text-muted" style="display:block;margin-bottom:4px;">Haber (Pagos registrados)</small>
+                <strong style="font-size:1.35rem;color:#19d17f;">${{ balance_summary.total_paid|floatformat:2 }}</strong>
+                <small class="text-muted" style="display:block;margin-top:6px;">Aplicado a cuenta corriente</small>
+            </div>
+            <div style="border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:14px;background:rgba(0,0,0,.2);">
+                <small class="text-muted" style="display:block;margin-bottom:4px;">Saldo Actual</small>
+                {% if balance_summary.current_balance > 0 %}
+                <strong style="font-size:1.35rem;color:#ff5e5e;">${{ balance_summary.current_balance|floatformat:2 }}</strong>
+                <small class="text-muted" style="display:block;margin-top:6px;">Pendiente de cobro</small>
+                {% elif balance_summary.current_balance < 0 %}
+                <strong style="font-size:1.35rem;color:#19d17f;">${{ balance_summary.current_balance|floatformat:2 }}</strong>
+                <small class="text-muted" style="display:block;margin-top:6px;">Saldo a favor del cliente</small>
+                {% else %}
+                <strong style="font-size:1.35rem;color:#19d17f;">$0.00</strong>
+                <small class="text-muted" style="display:block;margin-top:6px;">Cuenta al dia</small>
+                {% endif %}
+            </div>
+        </div>
+
+        <table class="admin-table">
+            <thead>
+                <tr>
+                    <th style="width: 65%;">Concepto</th>
+                    <th>Monto</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Total pedidos en cuenta (confirmado, preparacion, enviado, entregado)</td>
+                    <td>${{ balance_summary.orders_total|floatformat:2 }}</td>
+                </tr>
+                <tr>
+                    <td>Total pagos registrados (activos)</td>
+                    <td>-${{ balance_summary.total_paid|floatformat:2 }}</td>
+                </tr>
+                <tr>
+                    <td><strong>Saldo final de cuenta corriente</strong></td>
+                    <td>
+                        <strong>
+                            {% if balance_summary.current_balance > 0 %}
+                            ${{ balance_summary.current_balance|floatformat:2 }}
+                            {% elif balance_summary.current_balance < 0 %}
+                            ${{ balance_summary.current_balance|floatformat:2 }}
+                            {% else %}
+                            $0.00
+                            {% endif %}
+                        </strong>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    {% if page_obj.paginator.num_pages > 1 %}
+    <div class="admin-toolbar">
+        <span>Pagina {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
+        <div class="toolbar-actions">
+            {% if page_obj.has_previous %}
+            <a href="?page={{ page_obj.previous_page_number }}&status={{ status }}" class="btn btn-outline"><- Anterior</a>
+            {% endif %}
+            {% if page_obj.has_next %}
+            <a href="?page={{ page_obj.next_page_number }}&status={{ status }}" class="btn btn-outline">Siguiente -></a>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
