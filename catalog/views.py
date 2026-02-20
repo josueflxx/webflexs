@@ -1,16 +1,31 @@
 """
 Catalog app views - Product listing and detail.
 """
+import json
+from decimal import Decimal
+
+from django.contrib import messages
 from django.core.cache import cache
 from django.core.paginator import Paginator
 from django.db.models import Count, Max, Prefetch, Q
-from django.shortcuts import get_object_or_404, render
+from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 
 from core.models import CatalogAnalyticsEvent, SiteSettings
 from orders.models import ClientFavoriteProduct
 
-from .models import Category, CategoryAttribute, Product
+from catalog.services.clamp_quoter import (
+    CLAMP_LAMINATED_ALLOWED_DIAMETERS,
+    calculate_clamp_quote,
+    get_allowed_diameter_options,
+)
+from .models import Category, CategoryAttribute, ClampMeasureRequest, Product
+
+
+CLAMP_REQUEST_DEFAULT_DOLLAR_RATE = Decimal("1300")
+CLAMP_REQUEST_DEFAULT_STEEL_PRICE_USD = Decimal("1450")
+CLAMP_REQUEST_DEFAULT_SUPPLIER_DISCOUNT = Decimal("0")
+CLAMP_REQUEST_DEFAULT_GENERAL_INCREASE = Decimal("40")
 
 
 def get_catalog_product_queryset():
@@ -483,3 +498,225 @@ def product_detail(request, sku):
     }
 
     return render(request, "catalog/product_detail.html", context)
+
+
+def _find_matching_clamp_products(inputs, limit=12):
+    """Find existing catalog products with same clamp technical dimensions."""
+    clamp_type = str(inputs.get("clamp_type", "")).strip().upper()
+    diameter = str(inputs.get("diameter", "")).strip()
+    width_mm = inputs.get("width_mm")
+    length_mm = inputs.get("length_mm")
+    profile_type = str(inputs.get("profile_type", "")).strip().upper()
+
+    if not all([clamp_type, diameter, width_mm, length_mm, profile_type]):
+        return []
+
+    queryset = Product.catalog_visible(
+        Product.objects.select_related("category")
+        .prefetch_related("categories")
+        .filter(
+            clamp_specs__fabrication=clamp_type,
+            clamp_specs__diameter=diameter,
+            clamp_specs__width=width_mm,
+            clamp_specs__length=length_mm,
+            clamp_specs__shape=profile_type,
+            is_active=True,
+        )
+        .distinct()
+        .order_by("name")
+    )
+    return list(queryset[:limit])
+
+
+def clamp_measure_request(request):
+    """
+    Client flow:
+    1) Search whether the measure already exists.
+    2) If not found, submit "consultar precio" request.
+    3) Admin confirms a price and client can later see it in this page.
+    """
+    default_form = {
+        "client_name": "",
+        "client_email": "",
+        "client_phone": "",
+        "client_note": "",
+        "quantity": "1",
+        "clamp_type": "trefilada",
+        "is_zincated": False,
+        "diameter": "7/16",
+        "width_mm": "",
+        "length_mm": "",
+        "profile_type": "PLANA",
+    }
+
+    if request.user.is_authenticated:
+        profile = getattr(request.user, "client_profile", None)
+        default_form["client_name"] = (
+            getattr(profile, "company_name", "")
+            or request.user.get_full_name()
+            or request.user.username
+        )
+        default_form["client_email"] = request.user.email or ""
+        default_form["client_phone"] = getattr(profile, "phone", "")
+
+    form_values = default_form.copy()
+    check_performed = False
+    matching_products = []
+    has_matches = False
+    generated_description = ""
+    generated_code = ""
+    created_request = None
+
+    feedback_ids = request.session.get("clamp_request_feedback_ids", [])
+    allowed_feedback_ids = {int(item) for item in feedback_ids if str(item).isdigit()}
+    request_id = str(request.GET.get("request_id", "")).strip()
+    if request_id.isdigit():
+        candidate = ClampMeasureRequest.objects.filter(pk=int(request_id)).first()
+        if candidate:
+            is_allowed = bool(request.user.is_authenticated and request.user.is_staff)
+            if not is_allowed and request.user.is_authenticated and candidate.client_user_id == request.user.pk:
+                is_allowed = True
+            if not is_allowed and int(request_id) in allowed_feedback_ids:
+                is_allowed = True
+            if is_allowed:
+                created_request = candidate
+
+    if request.user.is_authenticated:
+        client_requests = ClampMeasureRequest.objects.filter(client_user=request.user).order_by("-created_at")[:25]
+    else:
+        client_requests = (
+            ClampMeasureRequest.objects.filter(pk__in=allowed_feedback_ids).order_by("-created_at")[:25]
+            if allowed_feedback_ids
+            else []
+        )
+
+    if request.method == "POST":
+        form_values.update(
+            {
+                "client_name": str(request.POST.get("client_name", "")).strip(),
+                "client_email": str(request.POST.get("client_email", "")).strip(),
+                "client_phone": str(request.POST.get("client_phone", "")).strip(),
+                "client_note": str(request.POST.get("client_note", "")).strip(),
+                "quantity": str(request.POST.get("quantity", "1")).strip() or "1",
+                "clamp_type": str(request.POST.get("clamp_type", "trefilada")).strip().lower(),
+                "is_zincated": str(request.POST.get("is_zincated", "")).strip().lower()
+                in {"1", "true", "on", "yes"},
+                "diameter": str(request.POST.get("diameter", "7/16")).strip(),
+                "width_mm": str(request.POST.get("width_mm", "")).strip(),
+                "length_mm": str(request.POST.get("length_mm", "")).strip(),
+                "profile_type": str(request.POST.get("profile_type", "PLANA")).strip().upper(),
+            }
+        )
+        if (
+            form_values["clamp_type"] == "laminada"
+            and form_values["diameter"] not in CLAMP_LAMINATED_ALLOWED_DIAMETERS
+        ):
+            form_values["diameter"] = CLAMP_LAMINATED_ALLOWED_DIAMETERS[0]
+        action = str(request.POST.get("action", "check_exists")).strip().lower()
+        check_performed = True
+
+        try:
+            internal_quote_payload = {
+                "client_name": form_values["client_name"],
+                "dollar_rate": CLAMP_REQUEST_DEFAULT_DOLLAR_RATE,
+                "steel_price_usd": CLAMP_REQUEST_DEFAULT_STEEL_PRICE_USD,
+                "supplier_discount_pct": CLAMP_REQUEST_DEFAULT_SUPPLIER_DISCOUNT,
+                "general_increase_pct": CLAMP_REQUEST_DEFAULT_GENERAL_INCREASE,
+                "clamp_type": form_values["clamp_type"],
+                "is_zincated": "1" if form_values["is_zincated"] else "0",
+                "diameter": form_values["diameter"],
+                "width_mm": form_values["width_mm"],
+                "length_mm": form_values["length_mm"],
+                "profile_type": form_values["profile_type"],
+            }
+            quote_result = calculate_clamp_quote(internal_quote_payload)
+            generated_description = quote_result["description"]
+            generated_code = quote_result.get("generated_code", "")
+
+            matching_products = _find_matching_clamp_products(quote_result["inputs"])
+            has_matches = bool(matching_products)
+
+            if action == "submit_request":
+                if has_matches:
+                    messages.info(
+                        request,
+                        "La medida ya existe en el catalogo. No se envio solicitud de precio.",
+                    )
+                else:
+                    try:
+                        quantity = int(form_values.get("quantity", "1"))
+                    except (TypeError, ValueError):
+                        quantity = 0
+                    if quantity <= 0:
+                        raise ValueError("La cantidad debe ser mayor a cero.")
+
+                    client_name = form_values["client_name"]
+                    if not client_name and request.user.is_authenticated:
+                        profile = getattr(request.user, "client_profile", None)
+                        client_name = (
+                            getattr(profile, "company_name", "")
+                            or request.user.get_full_name()
+                            or request.user.username
+                        )
+                    if not client_name:
+                        raise ValueError("Ingresa un nombre de cliente para consultar precio.")
+
+                    profile = getattr(request.user, "client_profile", None) if request.user.is_authenticated else None
+                    client_email = form_values["client_email"] or (request.user.email if request.user.is_authenticated else "")
+                    client_phone = form_values["client_phone"] or (getattr(profile, "phone", "") if profile else "")
+                    price_map = {row["key"]: row for row in quote_result["price_rows"]}
+                    default_row = price_map.get("lista_1") or quote_result["price_rows"][0]
+
+                    created = ClampMeasureRequest.objects.create(
+                        client_user=request.user if request.user.is_authenticated else None,
+                        client_name=client_name,
+                        client_email=client_email,
+                        client_phone=client_phone,
+                        clamp_type=quote_result["inputs"]["clamp_type"],
+                        is_zincated=quote_result["inputs"]["is_zincated"],
+                        diameter=quote_result["inputs"]["diameter"],
+                        width_mm=quote_result["inputs"]["width_mm"],
+                        length_mm=quote_result["inputs"]["length_mm"],
+                        profile_type=quote_result["inputs"]["profile_type"],
+                        quantity=quantity,
+                        description=quote_result["description"],
+                        generated_code=generated_code,
+                        dollar_rate=quote_result["inputs"]["dollar_rate"],
+                        steel_price_usd=quote_result["inputs"]["steel_price_usd"],
+                        supplier_discount_pct=quote_result["inputs"]["supplier_discount_pct"],
+                        general_increase_pct=quote_result["inputs"]["general_increase_pct"],
+                        base_cost=quote_result["base_cost"],
+                        selected_price_list=default_row["key"],
+                        estimated_final_price=default_row["final_price"],
+                        exists_in_catalog=False,
+                        client_note=form_values["client_note"],
+                    )
+                    messages.success(
+                        request,
+                        f"Solicitud enviada. Numero de seguimiento: #{created.pk}.",
+                    )
+                    feedback_ids = request.session.get("clamp_request_feedback_ids", [])
+                    feedback_ids.append(created.pk)
+                    request.session["clamp_request_feedback_ids"] = feedback_ids[-20:]
+                    return redirect(f"{reverse('catalog_clamp_request')}?request_id={created.pk}")
+        except ValueError as exc:
+            messages.error(request, str(exc))
+
+    context = {
+        "form_values": form_values,
+        "diameter_options": get_allowed_diameter_options(form_values.get("clamp_type")),
+        "profile_options": ["PLANA", "SEMICURVA", "CURVA"],
+        "check_performed": check_performed,
+        "matching_products": matching_products,
+        "has_matches": has_matches,
+        "generated_description": generated_description,
+        "generated_code": generated_code,
+        "created_request": created_request,
+        "client_requests": client_requests,
+        "all_diameter_options_json": json.dumps(get_allowed_diameter_options()),
+        "laminated_diameter_options_json": json.dumps(list(CLAMP_LAMINATED_ALLOWED_DIAMETERS)),
+        "canonical_url": request.build_absolute_uri(reverse("catalog_clamp_request")),
+        "seo_title": "Abrazaderas a Medida | FLEXS",
+        "seo_description": "Consulta existencia y solicita cotizacion de abrazaderas a medida.",
+    }
+    return render(request, "catalog/clamp_request.html", context)

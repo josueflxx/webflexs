@@ -1,0 +1,213 @@
+{% extends 'admin_panel/base.html' %}
+
+{% block page_title %}Solicitud #{{ clamp_request.pk }}{% endblock %}
+
+{% block content %}
+<div class="admin-table-container">
+    <div class="admin-toolbar">
+        <div>
+            <h2 style="margin:0;">Solicitud #{{ clamp_request.pk }}</h2>
+            <p class="text-muted" style="margin:6px 0 0;">{{ clamp_request.description }}</p>
+        </div>
+        <div class="toolbar-actions">
+            <a href="{% url 'admin_clamp_request_list' %}" class="btn btn-outline">Volver al listado</a>
+        </div>
+    </div>
+
+    <div class="dashboard-sections" style="margin-bottom: 16px;">
+        <section class="dashboard-section">
+            <h2>Cliente y estado</h2>
+            <div style="display:grid; gap:8px;">
+                <div><strong>Cliente:</strong> {{ clamp_request.client_name|default:"-" }}</div>
+                <div><strong>Email:</strong> {{ clamp_request.client_email|default:"-" }}</div>
+                <div><strong>Telefono:</strong> {{ clamp_request.client_phone|default:"-" }}</div>
+                <div><strong>Cantidad:</strong> {{ clamp_request.quantity }}</div>
+                <div>
+                    <strong>Estado:</strong>
+                    {% if clamp_request.status == 'pending' %}
+                    <span class="badge badge-warning">{{ clamp_request.get_status_display }}</span>
+                    {% elif clamp_request.status == 'in_review' %}
+                    <span class="badge badge-info">{{ clamp_request.get_status_display }}</span>
+                    {% elif clamp_request.status == 'quoted' or clamp_request.status == 'completed' %}
+                    <span class="badge badge-success">{{ clamp_request.get_status_display }}</span>
+                    {% else %}
+                    <span class="badge badge-danger">{{ clamp_request.get_status_display }}</span>
+                    {% endif %}
+                </div>
+                <div>
+                    <strong>Procesado por:</strong>
+                    {{ clamp_request.processed_by.username|default:"-" }}
+                    {% if clamp_request.processed_at %}
+                    <small class="text-muted">({{ clamp_request.processed_at|date:"d/m/Y H:i" }})</small>
+                    {% endif %}
+                </div>
+                <div>
+                    <strong>Precio confirmado:</strong>
+                    {% if clamp_request.confirmed_price %}
+                    <span class="badge badge-success">${{ clamp_request.confirmed_price|floatformat:2 }}</span>
+                    {% if clamp_request.confirmed_price_list %}
+                    <small class="text-muted">({{ clamp_request.get_confirmed_price_list_display }})</small>
+                    {% endif %}
+                    {% else %}
+                    <span class="text-muted">Pendiente de confirmacion</span>
+                    {% endif %}
+                </div>
+                {% if clamp_request.client_note %}
+                <div>
+                    <strong>Nota cliente:</strong>
+                    <div class="text-muted">{{ clamp_request.client_note }}</div>
+                </div>
+                {% endif %}
+                {% if clamp_request.client_response_note %}
+                <div>
+                    <strong>Respuesta visible para cliente:</strong>
+                    <div class="text-muted">{{ clamp_request.client_response_note }}</div>
+                </div>
+                {% endif %}
+            </div>
+        </section>
+
+        <section class="dashboard-section">
+            <h2>Datos tecnicos y costo</h2>
+            <div style="display:grid; gap:8px;">
+                <div>
+                    <strong>Medida:</strong>
+                    {{ clamp_request.get_clamp_type_display|upper }}
+                    {% if clamp_request.is_zincated %}ZINCADA{% endif %}
+                    {{ clamp_request.diameter }} x {{ clamp_request.width_mm }} x {{ clamp_request.length_mm }} {{ clamp_request.profile_type }}
+                </div>
+                <div><strong>Codigo sugerido:</strong> <code>{{ clamp_request.generated_code|default:"-" }}</code></div>
+                <div><strong>Dolar:</strong> {{ clamp_request.dollar_rate|floatformat:2 }}</div>
+                <div><strong>Acero USD:</strong> {{ clamp_request.steel_price_usd|floatformat:4 }}</div>
+                <div><strong>Desc. proveedor:</strong> {{ clamp_request.supplier_discount_pct|floatformat:2 }}%</div>
+                <div><strong>Aumento gral.:</strong> {{ clamp_request.general_increase_pct|floatformat:2 }}%</div>
+                <div><strong>Costo base:</strong> ${{ clamp_request.base_cost|floatformat:2 }}</div>
+                <div>
+                    <strong>Precio solicitado:</strong>
+                    <span class="badge badge-primary">{{ clamp_request.get_selected_price_list_display }}</span>
+                    <strong>${{ clamp_request.estimated_final_price|floatformat:2 }}</strong>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    {% if quote_preview %}
+    <section class="dashboard-section" style="margin-bottom: 16px;">
+        <h2>Listas calculadas</h2>
+        <div class="clamp-price-grid">
+            {% for row in quote_preview.price_rows %}
+            <article class="clamp-price-card">
+                <h4>{{ row.label }}</h4>
+                <small>x{{ row.multiplier }}</small>
+                <strong>${{ row.final_price|floatformat:2 }}</strong>
+                {% if row.key == clamp_request.confirmed_price_list %}
+                <span class="badge badge-success">Confirmada</span>
+                {% elif row.key == clamp_request.selected_price_list %}
+                <span class="badge badge-success">Seleccionada</span>
+                {% endif %}
+            </article>
+            {% endfor %}
+        </div>
+    </section>
+    {% endif %}
+
+    <section class="dashboard-section" style="margin-bottom: 16px;">
+        <h2>Coincidencias de catalogo</h2>
+        {% if matching_products %}
+        <div class="products-table-wrapper">
+            <table class="admin-table">
+                <thead>
+                    <tr>
+                        <th>SKU</th>
+                        <th>Nombre</th>
+                        <th>Estado producto</th>
+                        <th>Catalogo</th>
+                        <th>Accion</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for product in matching_products %}
+                    <tr>
+                        <td><code>{{ product.sku }}</code></td>
+                        <td>{{ product.name }}</td>
+                        <td>
+                            {% if product.is_active %}
+                            <span class="badge badge-success">Activo</span>
+                            {% else %}
+                            <span class="badge badge-danger">Inactivo</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if product.is_visible_in_catalog %}
+                            <span class="badge badge-success">Visible</span>
+                            {% else %}
+                            <span class="badge badge-secondary">No visible</span>
+                            {% endif %}
+                        </td>
+                        <td><a href="{% url 'admin_product_edit' product.pk %}" class="btn btn-outline btn-sm">Abrir</a></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="text-muted">No se encontraron coincidencias tecnicas en el catalogo actual.</p>
+        {% endif %}
+    </section>
+
+    <section class="admin-form-container">
+        <h2>Gestion interna</h2>
+        <form method="post">
+            {% csrf_token %}
+            <div class="form-group">
+                <label class="form-label" for="status">Estado</label>
+                <select id="status" name="status" class="form-select">
+                    {% for value, label in status_choices %}
+                    <option value="{{ value }}" {% if clamp_request.status == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="admin_note">Nota admin</label>
+                <textarea id="admin_note" name="admin_note" class="form-textarea" rows="4" placeholder="Seguimiento interno de esta solicitud">{{ clamp_request.admin_note }}</textarea>
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="confirmed_price_list">Lista confirmada</label>
+                <select id="confirmed_price_list" name="confirmed_price_list" class="form-select">
+                    <option value="">Sin definir</option>
+                    {% for value, label in price_list_choices %}
+                    <option value="{{ value }}" {% if clamp_request.confirmed_price_list == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="confirmed_price">Precio confirmado (opcional)</label>
+                <input
+                    id="confirmed_price"
+                    name="confirmed_price"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value="{{ clamp_request.confirmed_price|default:'' }}"
+                    class="form-input"
+                    placeholder="Si lo dejas vacio, se usa la lista confirmada"
+                >
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="client_response_note">Mensaje para cliente</label>
+                <textarea
+                    id="client_response_note"
+                    name="client_response_note"
+                    class="form-textarea"
+                    rows="3"
+                    placeholder="Mensaje que va a ver el cliente cuando revisa su solicitud"
+                >{{ clamp_request.client_response_note }}</textarea>
+            </div>
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary">Guardar cambios</button>
+                <a href="{% url 'admin_clamp_request_list' %}" class="btn btn-outline">Volver</a>
+            </div>
+        </form>
+    </section>
+</div>
+{% endblock %}

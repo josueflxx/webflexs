@@ -1,5 +1,6 @@
 {% extends 'base.html' %}
 {% load static %}
+{% load l10n %}
 
 {% block title %}{{ seo_title|default:product.name }}{% endblock %}
 {% block meta_description %}{{ seo_description }}{% endblock %}
@@ -72,13 +73,13 @@
 
                 {% if user.is_authenticated %}
                 <div style="display:flex;gap:10px;flex-wrap:wrap;">
-                    <button class="btn btn-primary" onclick="addToCart({{ product.id }})" {% if product.stock <= 0 %}disabled{% endif %}>
+                    <button class="btn btn-primary" onclick="addToCart({{ product.id|unlocalize }})" {% if product.stock <= 0 %}disabled{% endif %}>
                         Agregar al carrito
                     </button>
                     <button
                         class="btn btn-outline"
                         id="favoriteBtn"
-                        onclick="toggleFavorite({{ product.id }}, this)"
+                        onclick="toggleFavorite({{ product.id|unlocalize }}, this)"
                         data-favorite="{% if is_favorite %}1{% else %}0{% endif %}"
                     >
                         {% if is_favorite %}Favorito{% else %}Guardar favorito{% endif %}

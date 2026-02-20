@@ -426,6 +426,306 @@
     font-size: 0.82rem;
 }
 
+/* Clamp quoter */
+.clamp-quoter-layout {
+    padding: 14px 16px 10px;
+    display: block;
+}
+
+.clamp-quoter-card {
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: 10px;
+    padding: 14px;
+}
+
+.clamp-quoter-card-form {
+    max-width: 760px;
+}
+
+.clamp-form-title {
+    margin: 0 0 12px;
+    text-align: center;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 4px;
+    padding: 4px 8px;
+    font-size: 1.05rem;
+    line-height: 1.15;
+    font-weight: 600;
+}
+
+.clamp-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.clamp-row {
+    display: grid;
+    grid-template-columns: 170px 1fr;
+    gap: 10px;
+    align-items: center;
+}
+
+.clamp-row-label {
+    font-size: 1.02rem;
+    font-weight: 500;
+    color: #f2f5f7;
+}
+
+.clamp-row-control {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.clamp-row-control .form-input,
+.clamp-row-control .form-select {
+    width: 100%;
+}
+
+.clamp-controls-inline {
+    gap: 16px;
+}
+
+.clamp-radio-inline {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--color-white);
+    font-size: 0.98rem;
+}
+
+.clamp-radio-inline input[type="radio"] {
+    width: 20px;
+    height: 20px;
+    accent-color: #1f77c8;
+}
+
+.clamp-checkbox-inline {
+    display: inline-flex;
+    gap: 8px;
+    align-items: center;
+    color: var(--color-gray-light);
+    font-size: 0.98rem;
+}
+
+.clamp-zinc-inline input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+}
+
+.clamp-hidden-select {
+    position: absolute;
+    opacity: 0;
+    width: 1px;
+    height: 1px;
+    pointer-events: none;
+}
+
+.clamp-select-highlight {
+    background: rgba(33, 119, 189, 0.95);
+    color: #ffffff;
+    border-color: rgba(33, 119, 189, 0.95);
+}
+
+.clamp-select-highlight:focus {
+    border-color: rgba(74, 164, 255, 0.95);
+    box-shadow: 0 0 0 2px rgba(41, 139, 218, 0.35);
+}
+
+.clamp-actions {
+    margin-top: 12px;
+    padding-top: 0;
+    border-top: none;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.clamp-code-logic-card {
+    margin-top: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 8px;
+    background: rgba(0, 0, 0, 0.22);
+    padding: 10px;
+}
+
+.clamp-code-logic-card h4 {
+    margin: 0 0 6px;
+    font-size: 0.95rem;
+}
+
+.clamp-code-parts {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.clamp-code-pill {
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.04);
+    padding: 6px 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.clamp-code-pill small {
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    color: var(--color-gray-light);
+    letter-spacing: 0.4px;
+}
+
+.clamp-code-pill strong {
+    font-size: 0.9rem;
+    color: #f4f8fb;
+}
+
+.clamp-code-final-line {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    color: var(--color-gray-light);
+    font-size: 0.86rem;
+}
+
+.clamp-code-final-line code {
+    font-size: 0.95rem;
+    padding: 3px 8px;
+    border-radius: 6px;
+    background: rgba(33, 119, 189, 0.24);
+    border: 1px solid rgba(33, 119, 189, 0.58);
+    color: #d9efff;
+}
+
+.clamp-btn-calc {
+    width: 100%;
+    background: #00a30a;
+    border: 1px solid #008e08;
+    color: #fff;
+    font-size: 1.05rem;
+    font-weight: 800;
+    letter-spacing: 0.3px;
+    padding: 13px 16px;
+}
+
+.clamp-btn-calc:hover {
+    background: #00b30b;
+    border-color: #00a30a;
+}
+
+.clamp-error {
+    color: var(--color-warning);
+    font-size: 1.05rem;
+}
+
+.clamp-results-card {
+    margin: 0 16px 14px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: 10px;
+    padding: 14px;
+}
+
+.clamp-results-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.clamp-result-description {
+    font-weight: 700;
+    color: var(--color-white);
+    margin: 0 0 10px;
+    line-height: 1.35;
+}
+
+.clamp-result-code-line {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin: 0 0 10px;
+    color: var(--color-gray-light);
+    font-size: 0.9rem;
+}
+
+.clamp-result-code-line code {
+    font-size: 0.95rem;
+    padding: 3px 8px;
+    border-radius: 6px;
+    background: rgba(0, 0, 0, 0.35);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: #f1f5f9;
+}
+
+.clamp-result-metrics {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.clamp-result-metrics .metric {
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 8px;
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.clamp-result-metrics .metric span {
+    font-size: var(--font-size-xs);
+    color: var(--color-gray-light);
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+}
+
+.clamp-result-metrics .metric strong {
+    font-size: 1.05rem;
+    color: var(--color-primary);
+}
+
+.clamp-price-grid {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.clamp-price-card {
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 8px;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.clamp-price-card h4 {
+    margin: 0;
+    font-size: 0.95rem;
+}
+
+.clamp-price-card small {
+    color: var(--color-gray-light);
+    font-size: 0.75rem;
+}
+
+.clamp-price-card strong {
+    font-size: 1.05rem;
+    color: var(--color-success);
+}
+
 /* Client order history metric cards */
 .client-history-toolbar {
     border-top: 1px solid rgba(255, 255, 255, 0.08);
@@ -886,6 +1186,10 @@
         grid-template-columns: repeat(2, 1fr);
     }
 
+    .clamp-price-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
     .client-history-metrics {
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
@@ -985,6 +1289,35 @@
     .toolbar-actions {
         width: 100%;
         flex-wrap: wrap;
+    }
+
+    .clamp-quoter-layout {
+        padding: 12px;
+    }
+
+    .clamp-results-card {
+        margin: 0 12px 12px;
+    }
+
+    .clamp-result-metrics {
+        grid-template-columns: 1fr;
+    }
+
+    .clamp-price-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .clamp-code-parts {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .clamp-row {
+        grid-template-columns: 1fr;
+        gap: 6px;
+    }
+
+    .clamp-row-label {
+        font-size: 0.95rem;
     }
 
     .client-history-metrics {

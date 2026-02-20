@@ -24,6 +24,8 @@ urlpatterns = [
     path('proveedores/<int:supplier_id>/acciones/', views.supplier_bulk_action, name='admin_supplier_bulk_action'),
     path('proveedores/<int:supplier_id>/exportar/', views.supplier_export, name='admin_supplier_export'),
     path('proveedores/<int:supplier_id>/imprimir/', views.supplier_print, name='admin_supplier_print'),
+    path('abrazaderas-a-medida/', views.clamp_request_list, name='admin_clamp_request_list'),
+    path('abrazaderas-a-medida/<int:pk>/', views.clamp_request_detail, name='admin_clamp_request_detail'),
     
     # Clients
     path('clientes/', views.client_list, name='admin_client_list'),
@@ -43,6 +45,7 @@ urlpatterns = [
     path('pedidos/<int:pk>/', views.order_detail, name='admin_order_detail'),
     path('pedidos/<int:pk>/eliminar/', views.order_delete, name='admin_order_delete'),
     path('pagos/', views.payment_list, name='admin_payment_list'),
+    path('cotizador/', views.clamp_quoter, name='admin_clamp_quoter'),
     
     # Categories
     path('categorias/', views.category_list, name='admin_category_list'),
@@ -68,6 +71,8 @@ urlpatterns = [
     # API
     path('api/category-attributes/<int:category_id>/', views.get_category_attributes, name='api_category_attributes'),
     path('api/parse-description/', views.parse_product_description, name='api_parse_description'),
+    path('api/clamp-code/parse/', views.parse_clamp_code_api, name='api_clamp_code_parse'),
+    path('api/clamp-code/generate/', views.generate_clamp_code_api, name='api_clamp_code_generate'),
     
     # Importers
     path('importar/', views.import_dashboard, name='admin_import_dashboard'),

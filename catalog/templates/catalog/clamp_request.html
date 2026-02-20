@@ -1,0 +1,274 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Abrazaderas a Medida | FLEXS{% endblock %}
+{% block meta_description %}Consulta existencia de medidas y solicita cotizacion de abrazaderas especiales.{% endblock %}
+{% block extra_head %}
+<link rel="canonical" href="{{ canonical_url }}">
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    const ALL_DIAMETER_OPTIONS = {{ all_diameter_options_json|safe }};
+    const LAMINATED_DIAMETER_OPTIONS = {{ laminated_diameter_options_json|safe }};
+
+    function getCurrentClampType() {
+        return (document.querySelector('input[name="clamp_type"]:checked')?.value || 'trefilada').toLowerCase();
+    }
+
+    function getAllowedDiameters(clampType) {
+        return clampType === 'laminada'
+            ? LAMINATED_DIAMETER_OPTIONS.slice()
+            : ALL_DIAMETER_OPTIONS.slice();
+    }
+
+    function syncDiameterOptions() {
+        const clampType = getCurrentClampType();
+        const select = document.getElementById('diameter');
+        if (!select) return;
+
+        const allowed = getAllowedDiameters(clampType);
+        const previousValue = select.value;
+        select.innerHTML = allowed
+            .map((diameter) => `<option value="${diameter}">${diameter}</option>`)
+            .join('');
+
+        if (allowed.includes(previousValue)) {
+            select.value = previousValue;
+        } else if (allowed.length > 0) {
+            select.value = allowed[0];
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+        document.querySelectorAll('input[name="clamp_type"]').forEach((radio) => {
+            radio.addEventListener('change', syncDiameterOptions);
+        });
+        syncDiameterOptions();
+    });
+</script>
+{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'core/css/catalog.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="catalog-page clamp-request-page">
+    <div class="container">
+        <div class="catalog-header clamp-request-header">
+            <div class="catalog-header-main">
+                <h1>Abrazaderas a medida</h1>
+                <p class="catalog-subtitle">
+                    Busca por tipo, medidas y forma. Si no existe, envia "Consultar precio".
+                </p>
+            </div>
+            <div class="catalog-header-stats">
+                <span class="header-stat">
+                    <a href="{% url 'catalog' %}" class="btn btn-outline btn-sm">Volver al catalogo</a>
+                </span>
+            </div>
+        </div>
+
+        {% if created_request %}
+        <section class="clamp-request-feedback clamp-request-feedback-success">
+            <h3>Solicitud #{{ created_request.pk }}</h3>
+            <p>
+                Estado: <strong>{{ created_request.get_status_display }}</strong>
+                {% if created_request.confirmed_price %}
+                | Precio confirmado: <strong>${{ created_request.confirmed_price|floatformat:2 }}</strong>
+                {% endif %}
+            </p>
+            {% if created_request.client_response_note %}
+            <p class="text-muted">{{ created_request.client_response_note }}</p>
+            {% endif %}
+        </section>
+        {% endif %}
+
+        <form method="post" class="clamp-request-layout">
+            {% csrf_token %}
+
+            <section class="clamp-request-card">
+                <div class="clamp-request-card-title">Buscar medida</div>
+
+                <div class="clamp-form-grid">
+                    <label class="clamp-form-label">Tipo abrazadera</label>
+                    <div class="clamp-form-control clamp-inline-controls">
+                        <label class="clamp-radio-inline">
+                            <input type="radio" name="clamp_type" value="trefilada" {% if form_values.clamp_type == 'trefilada' %}checked{% endif %}>
+                            Trefilada
+                        </label>
+                        <label class="clamp-radio-inline">
+                            <input type="radio" name="clamp_type" value="laminada" {% if form_values.clamp_type == 'laminada' %}checked{% endif %}>
+                            Laminada
+                        </label>
+                        <label class="clamp-checkbox-inline">
+                            <input type="checkbox" name="is_zincated" {% if form_values.is_zincated %}checked{% endif %}>
+                            Zincado
+                        </label>
+                    </div>
+
+                    <label class="clamp-form-label" for="diameter">Diametro</label>
+                    <div class="clamp-form-control">
+                        <select id="diameter" name="diameter" class="form-select" required>
+                            {% for diameter in diameter_options %}
+                            <option value="{{ diameter }}" {% if form_values.diameter == diameter %}selected{% endif %}>{{ diameter }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <label class="clamp-form-label" for="width_mm">Ancho (mm)</label>
+                    <div class="clamp-form-control">
+                        <input id="width_mm" name="width_mm" type="number" min="1" step="1" value="{{ form_values.width_mm }}" class="form-input" required>
+                    </div>
+
+                    <label class="clamp-form-label" for="length_mm">Largo (mm)</label>
+                    <div class="clamp-form-control">
+                        <input id="length_mm" name="length_mm" type="number" min="1" step="1" value="{{ form_values.length_mm }}" class="form-input" required>
+                    </div>
+
+                    <label class="clamp-form-label" for="profile_type">Forma</label>
+                    <div class="clamp-form-control">
+                        <select id="profile_type" name="profile_type" class="form-select" required>
+                            {% for profile in profile_options %}
+                            <option value="{{ profile }}" {% if form_values.profile_type == profile %}selected{% endif %}>{{ profile }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <label class="clamp-form-label" for="quantity">Cantidad</label>
+                    <div class="clamp-form-control">
+                        <input id="quantity" name="quantity" type="number" min="1" step="1" value="{{ form_values.quantity|default:'1' }}" class="form-input" required>
+                    </div>
+
+                    <label class="clamp-form-label" for="client_name">Cliente</label>
+                    <div class="clamp-form-control">
+                        <input id="client_name" name="client_name" type="text" value="{{ form_values.client_name }}" class="form-input" placeholder="Nombre o razon social" required>
+                    </div>
+
+                    <label class="clamp-form-label" for="client_email">Email</label>
+                    <div class="clamp-form-control">
+                        <input id="client_email" name="client_email" type="email" value="{{ form_values.client_email }}" class="form-input" placeholder="Opcional">
+                    </div>
+
+                    <label class="clamp-form-label" for="client_phone">Telefono</label>
+                    <div class="clamp-form-control">
+                        <input id="client_phone" name="client_phone" type="text" value="{{ form_values.client_phone }}" class="form-input" placeholder="Opcional">
+                    </div>
+
+                    <label class="clamp-form-label" for="client_note">Detalle</label>
+                    <div class="clamp-form-control">
+                        <textarea id="client_note" name="client_note" class="form-input" rows="3" placeholder="Notas adicionales para tu solicitud">{{ form_values.client_note }}</textarea>
+                    </div>
+                </div>
+
+                <div class="form-actions">
+                    <button type="submit" name="action" value="check_exists" class="btn btn-primary">Buscar medida</button>
+                </div>
+            </section>
+
+            <section class="clamp-request-card">
+                <div class="clamp-request-card-title">Resultado de busqueda</div>
+
+                {% if check_performed %}
+                <div class="clamp-result-summary">
+                    <p class="clamp-result-description">{{ generated_description }}</p>
+                    <p class="clamp-result-code">Codigo sugerido: <code>{{ generated_code|default:"-" }}</code></p>
+                </div>
+
+                <div class="clamp-existing-check {% if has_matches %}has-matches{% else %}no-matches{% endif %}">
+                    {% if has_matches %}
+                    <h4>La medida ya existe en catalogo</h4>
+                    <p>Podes comprar directamente alguno de estos productos:</p>
+                    <div class="clamp-match-table-wrap">
+                        <table class="clamp-match-table">
+                            <thead>
+                                <tr>
+                                    <th>SKU</th>
+                                    <th>Nombre</th>
+                                    <th>Accion</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for product in matching_products %}
+                                <tr>
+                                    <td><code>{{ product.sku }}</code></td>
+                                    <td>{{ product.name }}</td>
+                                    <td>
+                                        <a href="{% url 'product_detail' product.sku %}" class="btn btn-outline btn-sm">Ver producto</a>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <h4>No encontramos esta medida</h4>
+                    <p>Presiona "Consultar precio" para enviarla al equipo de admin.</p>
+                    <button type="submit" name="action" value="submit_request" class="btn btn-primary">
+                        Consultar precio
+                    </button>
+                    {% endif %}
+                </div>
+                {% else %}
+                <p class="text-muted">
+                    Completa los datos y presiona <strong>Buscar medida</strong>.
+                </p>
+                {% endif %}
+            </section>
+        </form>
+
+        <section class="clamp-request-card" style="margin-top:16px;">
+            <div class="clamp-request-card-title">Mis solicitudes</div>
+            {% if client_requests %}
+            <div class="clamp-match-table-wrap">
+                <table class="clamp-match-table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Fecha</th>
+                            <th>Medida</th>
+                            <th>Estado</th>
+                            <th>Precio confirmado</th>
+                            <th>Respuesta admin</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for req in client_requests %}
+                        <tr>
+                            <td>#{{ req.pk }}</td>
+                            <td>{{ req.created_at|date:"d/m/Y H:i" }}</td>
+                            <td>{{ req.get_clamp_type_display|upper }} {{ req.diameter }} x {{ req.width_mm }} x {{ req.length_mm }} {{ req.profile_type }}</td>
+                            <td>
+                                {% if req.status == 'pending' %}
+                                <span class="badge badge-warning">{{ req.get_status_display }}</span>
+                                {% elif req.status == 'in_review' %}
+                                <span class="badge badge-info">{{ req.get_status_display }}</span>
+                                {% elif req.status == 'quoted' or req.status == 'completed' %}
+                                <span class="badge badge-success">{{ req.get_status_display }}</span>
+                                {% else %}
+                                <span class="badge badge-danger">{{ req.get_status_display }}</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if req.confirmed_price %}
+                                <strong>${{ req.confirmed_price|floatformat:2 }}</strong>
+                                {% if req.confirmed_price_list %}
+                                <div><small class="text-muted">{{ req.get_confirmed_price_list_display }}</small></div>
+                                {% endif %}
+                                {% else %}
+                                <span class="text-muted">Pendiente</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ req.client_response_note|default:"-" }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="text-muted">Todavia no hay solicitudes registradas.</p>
+            {% endif %}
+        </section>
+    </div>
+</div>
+{% endblock %}

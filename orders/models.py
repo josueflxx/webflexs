@@ -293,6 +293,88 @@ class OrderItem(models.Model):
         super().save(*args, **kwargs)
 
 
+class ClampQuotation(models.Model):
+    """Stored result for clamp calculator price lists."""
+
+    CLAMP_TREFILADA = "trefilada"
+    CLAMP_LAMINADA = "laminada"
+    CLAMP_TYPE_CHOICES = [
+        (CLAMP_TREFILADA, "Trefilada"),
+        (CLAMP_LAMINADA, "Laminada"),
+    ]
+
+    PROFILE_PLANA = "PLANA"
+    PROFILE_SEMICURVA = "SEMICURVA"
+    PROFILE_CURVA = "CURVA"
+    PROFILE_TYPE_CHOICES = [
+        (PROFILE_PLANA, "PLANA"),
+        (PROFILE_SEMICURVA, "SEMICURVA"),
+        (PROFILE_CURVA, "CURVA"),
+    ]
+
+    PRICE_LIST_1 = "lista_1"
+    PRICE_LIST_2 = "lista_2"
+    PRICE_LIST_3 = "lista_3"
+    PRICE_LIST_4 = "lista_4"
+    PRICE_LIST_FACT = "facturacion"
+    PRICE_LIST_CHOICES = [
+        (PRICE_LIST_1, "Lista 1"),
+        (PRICE_LIST_2, "Lista 2"),
+        (PRICE_LIST_3, "Lista 3"),
+        (PRICE_LIST_4, "Lista 4"),
+        (PRICE_LIST_FACT, "Facturacion"),
+    ]
+
+    client_name = models.CharField(max_length=200, blank=True, verbose_name="Cliente")
+    dollar_rate = models.DecimalField(max_digits=12, decimal_places=4, verbose_name="Dolar")
+    steel_price_usd = models.DecimalField(max_digits=12, decimal_places=4, verbose_name="Precio acero USD")
+    supplier_discount_pct = models.DecimalField(
+        max_digits=6,
+        decimal_places=2,
+        default=0,
+        verbose_name="Desc. proveedor (%)",
+    )
+    general_increase_pct = models.DecimalField(
+        max_digits=6,
+        decimal_places=2,
+        default=23,
+        verbose_name="Aumento general (%)",
+    )
+    clamp_type = models.CharField(max_length=20, choices=CLAMP_TYPE_CHOICES, verbose_name="Tipo abrazadera")
+    is_zincated = models.BooleanField(default=False, verbose_name="Zincado")
+    diameter = models.CharField(max_length=20, verbose_name="Diametro")
+    width_mm = models.PositiveIntegerField(verbose_name="Ancho (mm)")
+    length_mm = models.PositiveIntegerField(verbose_name="Largo (mm)")
+    profile_type = models.CharField(max_length=20, choices=PROFILE_TYPE_CHOICES, verbose_name="Tipo")
+    description = models.CharField(max_length=300, verbose_name="Descripcion")
+    base_cost = models.DecimalField(max_digits=14, decimal_places=2, verbose_name="Costo base")
+    price_list = models.CharField(max_length=20, choices=PRICE_LIST_CHOICES, verbose_name="Lista")
+    final_price = models.DecimalField(max_digits=14, decimal_places=2, verbose_name="Precio final")
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="clamp_quotations_created",
+        verbose_name="Creado por",
+    )
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        verbose_name = "Cotizacion de Abrazadera"
+        verbose_name_plural = "Cotizaciones de Abrazadera"
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["created_at"]),
+            models.Index(fields=["client_name"]),
+            models.Index(fields=["price_list"]),
+        ]
+
+    def __str__(self):
+        list_display = dict(self.PRICE_LIST_CHOICES).get(self.price_list, self.price_list)
+        return f"{self.description} [{list_display}]"
+
+
 class ClientFavoriteProduct(models.Model):
     """Favorite products for client portal quick reorders."""
 

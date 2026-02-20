@@ -488,3 +488,122 @@ class ClampSpecs(models.Model):
 
     def __str__(self):
         return f"Spec for {self.product.sku}"
+
+
+class ClampMeasureRequest(models.Model):
+    """Client request for custom clamp dimensions."""
+
+    STATUS_PENDING = "pending"
+    STATUS_REVIEW = "in_review"
+    STATUS_QUOTED = "quoted"
+    STATUS_REJECTED = "rejected"
+    STATUS_COMPLETED = "completed"
+
+    STATUS_CHOICES = [
+        (STATUS_PENDING, "Pendiente"),
+        (STATUS_REVIEW, "En revision"),
+        (STATUS_QUOTED, "Cotizada"),
+        (STATUS_REJECTED, "Rechazada"),
+        (STATUS_COMPLETED, "Completada"),
+    ]
+
+    CLAMP_TYPE_CHOICES = [
+        ("trefilada", "Trefilada"),
+        ("laminada", "Laminada"),
+    ]
+
+    PROFILE_TYPE_CHOICES = [
+        ("PLANA", "PLANA"),
+        ("SEMICURVA", "SEMICURVA"),
+        ("CURVA", "CURVA"),
+    ]
+
+    PRICE_LIST_CHOICES = [
+        ("lista_1", "Lista 1"),
+        ("lista_2", "Lista 2"),
+        ("lista_3", "Lista 3"),
+        ("lista_4", "Lista 4"),
+        ("facturacion", "Facturacion"),
+    ]
+
+    client_user = models.ForeignKey(
+        "auth.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="clamp_measure_requests",
+        verbose_name="Cliente usuario",
+    )
+    client_name = models.CharField(max_length=200, blank=True, verbose_name="Cliente")
+    client_email = models.EmailField(blank=True, verbose_name="Email cliente")
+    client_phone = models.CharField(max_length=120, blank=True, verbose_name="Telefono cliente")
+
+    clamp_type = models.CharField(max_length=20, choices=CLAMP_TYPE_CHOICES, verbose_name="Tipo abrazadera")
+    is_zincated = models.BooleanField(default=False, verbose_name="Zincado")
+    diameter = models.CharField(max_length=20, verbose_name="Diametro")
+    width_mm = models.PositiveIntegerField(verbose_name="Ancho (mm)")
+    length_mm = models.PositiveIntegerField(verbose_name="Largo (mm)")
+    profile_type = models.CharField(max_length=20, choices=PROFILE_TYPE_CHOICES, verbose_name="Tipo")
+    quantity = models.PositiveIntegerField(default=1, verbose_name="Cantidad")
+
+    description = models.CharField(max_length=320, verbose_name="Descripcion generada")
+    generated_code = models.CharField(max_length=80, blank=True, verbose_name="Codigo sugerido")
+
+    dollar_rate = models.DecimalField(max_digits=12, decimal_places=4, verbose_name="Dolar")
+    steel_price_usd = models.DecimalField(max_digits=12, decimal_places=4, verbose_name="Precio acero USD")
+    supplier_discount_pct = models.DecimalField(max_digits=6, decimal_places=2, default=0, verbose_name="Desc. proveedor (%)")
+    general_increase_pct = models.DecimalField(max_digits=6, decimal_places=2, default=23, verbose_name="Aumento gral. (%)")
+
+    base_cost = models.DecimalField(max_digits=14, decimal_places=2, verbose_name="Costo base")
+    selected_price_list = models.CharField(
+        max_length=20,
+        choices=PRICE_LIST_CHOICES,
+        default="lista_1",
+        verbose_name="Lista seleccionada",
+    )
+    estimated_final_price = models.DecimalField(max_digits=14, decimal_places=2, verbose_name="Precio estimado")
+    confirmed_price_list = models.CharField(
+        max_length=20,
+        choices=PRICE_LIST_CHOICES,
+        blank=True,
+        verbose_name="Lista confirmada",
+    )
+    confirmed_price = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        verbose_name="Precio confirmado",
+    )
+
+    exists_in_catalog = models.BooleanField(default=False, verbose_name="Existe en catalogo")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_PENDING, verbose_name="Estado")
+    client_note = models.TextField(blank=True, verbose_name="Nota cliente")
+    admin_note = models.TextField(blank=True, verbose_name="Nota admin")
+    client_response_note = models.TextField(blank=True, verbose_name="Respuesta visible para cliente")
+
+    processed_by = models.ForeignKey(
+        "auth.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="processed_clamp_measure_requests",
+        verbose_name="Procesado por",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    processed_at = models.DateTimeField(null=True, blank=True, verbose_name="Fecha procesamiento")
+    quoted_at = models.DateTimeField(null=True, blank=True, verbose_name="Fecha precio confirmado")
+
+    class Meta:
+        verbose_name = "Solicitud de abrazadera a medida"
+        verbose_name_plural = "Solicitudes de abrazaderas a medida"
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["status", "created_at"]),
+            models.Index(fields=["client_user", "created_at"]),
+            models.Index(fields=["clamp_type", "diameter", "width_mm", "length_mm", "profile_type"]),
+        ]
+
+    def __str__(self):
+        return f"{self.client_name or '-'} | {self.generated_code or self.description}"

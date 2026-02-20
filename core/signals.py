@@ -4,6 +4,7 @@ Automatic entity-level audit logging for key ERP models.
 from decimal import Decimal
 from threading import local
 
+from django.db.models.fields.files import FieldFile
 from django.db.models.signals import post_delete, post_save, pre_save
 from django.dispatch import receiver
 
@@ -21,6 +22,8 @@ _cache = local()
 def _normalize_value(value):
     if value is None:
         return None
+    if isinstance(value, FieldFile):
+        return value.name or ""
     if isinstance(value, Decimal):
         return str(value)
     if hasattr(value, "isoformat"):

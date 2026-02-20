@@ -47,6 +47,11 @@
                     <span class="nav-icon" aria-hidden="true">&#127981;</span>
                     Proveedores
                 </a>
+                <a href="{% url 'admin_clamp_request_list' %}"
+                    class="nav-item {% if 'clamp_request' in request.resolver_match.url_name %}active{% endif %}">
+                    <span class="nav-icon" aria-hidden="true">&#128203;</span>
+                    Solicitudes Medida
+                </a>
 
                 <div class="nav-section">Clientes</div>
                 <a href="{% url 'admin_client_list' %}"
@@ -55,7 +60,7 @@
                     Clientes
                 </a>
                 <a href="{% url 'admin_request_list' %}"
-                    class="nav-item {% if 'request' in request.resolver_match.url_name %}active{% endif %}">
+                    class="nav-item {% if 'admin_request' in request.resolver_match.url_name %}active{% endif %}">
                     <span class="nav-icon" aria-hidden="true">&#128221;</span>
                     Solicitudes
                 </a>
@@ -70,6 +75,11 @@
                     class="nav-item {% if 'payment' in request.resolver_match.url_name %}active{% endif %}">
                     <span class="nav-icon" aria-hidden="true">&#128179;</span>
                     Pagos
+                </a>
+                <a href="{% url 'admin_clamp_quoter' %}"
+                    class="nav-item {% if 'clamp_quoter' in request.resolver_match.url_name %}active{% endif %}">
+                    <span class="nav-icon" aria-hidden="true">&#128208;</span>
+                    Cotizador
                 </a>
 
                 {% if user.is_superuser %}

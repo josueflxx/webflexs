@@ -1,0 +1,119 @@
+{% extends 'admin_panel/base.html' %}
+{% load core_extras %}
+
+{% block page_title %}Solicitudes a Medida{% endblock %}
+
+{% block content %}
+<div class="admin-table-container">
+    <div class="admin-toolbar">
+        <form method="get" class="toolbar-search">
+            <input
+                type="text"
+                name="q"
+                value="{{ search }}"
+                class="form-input"
+                placeholder="Buscar por cliente, codigo o descripcion..."
+            >
+            <select name="status" class="form-select">
+                <option value="all" {% if status_filter == 'all' %}selected{% endif %}>Todos los estados</option>
+                {% for value, label in status_choices %}
+                <option value="{{ value }}" {% if status_filter == value %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+            <button type="submit" class="btn btn-primary">Filtrar</button>
+            <a href="{% url 'admin_clamp_request_list' %}" class="btn btn-outline">Limpiar</a>
+        </form>
+    </div>
+
+    <div class="active-filter-chips" style="margin-bottom:12px;">
+        {% for value, label in status_choices %}
+        <span class="badge badge-info">
+            {{ label }}: {{ summary_map|get_item:value|default:0 }}
+        </span>
+        {% endfor %}
+    </div>
+
+    <div class="products-table-wrapper">
+        <table class="admin-table">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Fecha</th>
+                    <th>Cliente</th>
+                    <th>Medida solicitada</th>
+                    <th>Precio</th>
+                    <th>Estado</th>
+                    <th>Catalogo</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for req in page_obj %}
+                <tr>
+                    <td><strong>#{{ req.pk }}</strong></td>
+                    <td>{{ req.created_at|date:"d/m/Y H:i" }}</td>
+                    <td>
+                        <div>{{ req.client_name|default:"-" }}</div>
+                        {% if req.client_email %}
+                        <small class="text-muted">{{ req.client_email }}</small>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <div>{{ req.get_clamp_type_display|upper }} {{ req.diameter }} x {{ req.width_mm }} x {{ req.length_mm }} {{ req.profile_type }}</div>
+                        <small class="text-muted">{{ req.generated_code|default:req.description }}</small>
+                    </td>
+                    <td>
+                        {% if req.confirmed_price %}
+                        <strong>${{ req.confirmed_price|floatformat:2 }}</strong>
+                        <div><small class="text-muted">Confirmado {% if req.confirmed_price_list %}- {{ req.get_confirmed_price_list_display }}{% endif %}</small></div>
+                        {% else %}
+                        <strong>${{ req.estimated_final_price|floatformat:2 }}</strong>
+                        <div><small class="text-muted">Estimado - {{ req.get_selected_price_list_display }}</small></div>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if req.status == 'pending' %}
+                        <span class="badge badge-warning">{{ req.get_status_display }}</span>
+                        {% elif req.status == 'in_review' %}
+                        <span class="badge badge-info">{{ req.get_status_display }}</span>
+                        {% elif req.status == 'quoted' or req.status == 'completed' %}
+                        <span class="badge badge-success">{{ req.get_status_display }}</span>
+                        {% else %}
+                        <span class="badge badge-danger">{{ req.get_status_display }}</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if req.exists_in_catalog %}
+                        <span class="badge badge-success">Existe</span>
+                        {% else %}
+                        <span class="badge badge-secondary">No existe</span>
+                        {% endif %}
+                    </td>
+                    <td class="actions">
+                        <a href="{% url 'admin_clamp_request_detail' req.pk %}" class="btn btn-outline btn-sm">Gestionar</a>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="8" class="text-center text-muted">No hay solicitudes de medidas.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    {% if page_obj.paginator.num_pages > 1 %}
+    <div class="admin-toolbar">
+        <span>Pagina {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
+        <div class="toolbar-actions">
+            {% if page_obj.has_previous %}
+            <a href="?page={{ page_obj.previous_page_number }}&q={{ search|urlencode }}&status={{ status_filter }}" class="btn btn-outline"><- Anterior</a>
+            {% endif %}
+            {% if page_obj.has_next %}
+            <a href="?page={{ page_obj.next_page_number }}&q={{ search|urlencode }}&status={{ status_filter }}" class="btn btn-outline">Siguiente -></a>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

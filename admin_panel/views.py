@@ -27,9 +27,9 @@ from urllib.parse import urlencode
 import csv
 from openpyxl import Workbook
 
-from catalog.models import Product, Category, CategoryAttribute, Supplier
+from catalog.models import Product, Category, CategoryAttribute, ClampMeasureRequest, Supplier
 from accounts.models import AccountRequest, ClientPayment, ClientProfile
-from orders.models import Order, OrderStatusHistory
+from orders.models import ClampQuotation, Order, OrderStatusHistory
 from core.models import SiteSettings, CatalogAnalyticsEvent, AdminAuditLog, ImportExecution
 from django.contrib.auth.models import User
 from admin_panel.forms.import_forms import ProductImportForm, ClientImportForm, CategoryImportForm
@@ -39,6 +39,18 @@ from accounts.services.client_importer import ClientImporter
 from catalog.services.category_importer import CategoryImporter
 from catalog.services.abrazadera_importer import AbrazaderaImporter
 from catalog.services.supplier_sync import ensure_supplier, clean_supplier_name
+from catalog.services.clamp_code import (
+    DIAMETER_HUMAN_TO_COMPACT_DEFAULT,
+    generarCodigo,
+    parsearCodigo,
+)
+from catalog.services.clamp_quoter import (
+    CLAMP_LAMINATED_ALLOWED_DIAMETERS,
+    CLAMP_PRICE_LISTS,
+    CLAMP_WEIGHT_MAP,
+    calculate_clamp_quote,
+    get_allowed_diameter_options,
+)
 from catalog.services.category_assignment import (
     normalize_category_ids,
     assign_categories_to_product,
@@ -1391,6 +1403,329 @@ def payment_list(request):
     })
 
 
+# ===================== CLAMP QUOTER =====================
+
+@staff_member_required
+def clamp_quoter(request):
+    """Mini cotizador de abrazaderas."""
+    default_form = {
+        "client_name": "",
+        "dollar_rate": "",
+        "dollar_mode": "manual",
+        "steel_price_usd": "1450",
+        "supplier_discount_pct": "0",
+        "general_increase_pct": "40",
+        "clamp_type": "trefilada",
+        "is_zincated": False,
+        "diameter": "7/16",
+        "width_mm": "",
+        "length_mm": "",
+        "profile_type": "PLANA",
+    }
+
+    form_values = default_form.copy()
+    if request.method == "POST":
+        form_values.update({
+            "client_name": str(request.POST.get("client_name", "")).strip(),
+            "dollar_rate": str(request.POST.get("dollar_rate", "")).strip(),
+            "dollar_mode": str(request.POST.get("dollar_mode", "manual")).strip().lower(),
+            "steel_price_usd": str(request.POST.get("steel_price_usd", "1450")).strip(),
+            "supplier_discount_pct": str(request.POST.get("supplier_discount_pct", "0")).strip(),
+            "general_increase_pct": str(request.POST.get("general_increase_pct", "40")).strip(),
+            "clamp_type": str(request.POST.get("clamp_type", "trefilada")).strip().lower(),
+            "is_zincated": str(request.POST.get("is_zincated", "")).strip().lower() in {"1", "true", "on", "yes"},
+            "diameter": str(request.POST.get("diameter", "7/16")).strip(),
+            "width_mm": str(request.POST.get("width_mm", "")).strip(),
+            "length_mm": str(request.POST.get("length_mm", "")).strip(),
+            "profile_type": str(request.POST.get("profile_type", "PLANA")).strip().upper(),
+        })
+        if (
+            form_values["clamp_type"] == "laminada"
+            and form_values["diameter"] not in CLAMP_LAMINATED_ALLOWED_DIAMETERS
+        ):
+            form_values["diameter"] = CLAMP_LAMINATED_ALLOWED_DIAMETERS[0]
+
+        if request.POST.get("action") == "save_quote":
+            try:
+                result = calculate_clamp_quote(request.POST)
+                selected_key = str(request.POST.get("price_list_key", "")).strip()
+                selected_map = {row["key"]: row for row in result["price_rows"]}
+                selected_price = selected_map.get(selected_key)
+                if not selected_price:
+                    raise ValueError("Selecciona una lista valida para guardar.")
+
+                saved_quote = ClampQuotation.objects.create(
+                    client_name=result["inputs"]["client_name"],
+                    dollar_rate=result["inputs"]["dollar_rate"],
+                    steel_price_usd=result["inputs"]["steel_price_usd"],
+                    supplier_discount_pct=result["inputs"]["supplier_discount_pct"],
+                    general_increase_pct=result["inputs"]["general_increase_pct"],
+                    clamp_type=result["inputs"]["clamp_type"],
+                    is_zincated=result["inputs"]["is_zincated"],
+                    diameter=result["inputs"]["diameter"],
+                    width_mm=result["inputs"]["width_mm"],
+                    length_mm=result["inputs"]["length_mm"],
+                    profile_type=result["inputs"]["profile_type"],
+                    description=result["description"],
+                    base_cost=result["base_cost"],
+                    price_list=selected_price["key"],
+                    final_price=selected_price["final_price"],
+                    created_by=request.user if request.user.is_authenticated else None,
+                )
+                log_admin_action(
+                    request,
+                    action="clamp_quote_saved",
+                    target_type="clamp_quotation",
+                    target_id=saved_quote.pk,
+                    details={
+                        "price_list": selected_price["label"],
+                        "final_price": f"{selected_price['final_price']:.2f}",
+                        "description": result["description"],
+                        "generated_code": result.get("generated_code", ""),
+                        "client_name": result["inputs"]["client_name"],
+                    },
+                )
+                messages.success(request, f"Cotizacion guardada en {selected_price['label']}.")
+                return redirect("admin_clamp_quoter")
+            except ValueError as exc:
+                messages.error(request, str(exc))
+
+    saved_quotes = ClampQuotation.objects.select_related("created_by").all()[:30]
+    weight_map_json = json.dumps({key: float(value) for key, value in CLAMP_WEIGHT_MAP.items()})
+    diameter_code_map_json = json.dumps(DIAMETER_HUMAN_TO_COMPACT_DEFAULT)
+    all_diameter_options_json = json.dumps(get_allowed_diameter_options())
+    laminated_diameter_options_json = json.dumps(list(CLAMP_LAMINATED_ALLOWED_DIAMETERS))
+    price_lists_json = json.dumps([
+        {"key": key, "label": label, "multiplier": float(multiplier)}
+        for key, label, multiplier in CLAMP_PRICE_LISTS
+    ])
+
+    return render(request, "admin_panel/tools/clamp_quoter.html", {
+        "form_values": form_values,
+        "diameter_options": get_allowed_diameter_options(form_values.get("clamp_type")),
+        "profile_options": ["PLANA", "SEMICURVA", "CURVA"],
+        "price_lists": CLAMP_PRICE_LISTS,
+        "weight_map_json": weight_map_json,
+        "diameter_code_map_json": diameter_code_map_json,
+        "all_diameter_options_json": all_diameter_options_json,
+        "laminated_diameter_options_json": laminated_diameter_options_json,
+        "price_lists_json": price_lists_json,
+        "saved_quotes": saved_quotes,
+    })
+
+
+def _find_admin_clamp_request_matches(clamp_request, limit=20):
+    """Find products with same technical clamp dimensions for admin review."""
+    queryset = (
+        Product.objects.select_related("category")
+        .prefetch_related("categories")
+        .filter(
+            clamp_specs__fabrication=clamp_request.clamp_type.upper(),
+            clamp_specs__diameter=clamp_request.diameter,
+            clamp_specs__width=clamp_request.width_mm,
+            clamp_specs__length=clamp_request.length_mm,
+            clamp_specs__shape=clamp_request.profile_type,
+        )
+        .distinct()
+        .order_by("name")
+    )
+    return list(queryset[:limit])
+
+
+@staff_member_required
+def clamp_request_list(request):
+    """Admin queue for client custom clamp requests."""
+    status_filter = str(request.GET.get("status", ClampMeasureRequest.STATUS_PENDING)).strip().lower()
+    search = str(request.GET.get("q", "")).strip()
+
+    queryset = ClampMeasureRequest.objects.select_related("client_user", "processed_by")
+
+    valid_statuses = {value for value, _ in ClampMeasureRequest.STATUS_CHOICES}
+    if status_filter in valid_statuses:
+        queryset = queryset.filter(status=status_filter)
+    elif status_filter == "all":
+        pass
+    else:
+        status_filter = "all"
+
+    if search:
+        queryset = queryset.filter(
+            Q(client_name__icontains=search)
+            | Q(client_email__icontains=search)
+            | Q(client_phone__icontains=search)
+            | Q(description__icontains=search)
+            | Q(generated_code__icontains=search)
+        )
+
+    status_summary = (
+        ClampMeasureRequest.objects.values("status")
+        .annotate(total=Count("id"))
+        .order_by("status")
+    )
+    summary_map = {row["status"]: row["total"] for row in status_summary}
+
+    paginator = Paginator(queryset, 30)
+    page_obj = paginator.get_page(request.GET.get("page", 1))
+
+    return render(
+        request,
+        "admin_panel/clamp_requests/list.html",
+        {
+            "page_obj": page_obj,
+            "search": search,
+            "status_filter": status_filter,
+            "status_choices": ClampMeasureRequest.STATUS_CHOICES,
+            "summary_map": summary_map,
+        },
+    )
+
+
+@staff_member_required
+def clamp_request_detail(request, pk):
+    """Detail and workflow actions for one custom clamp request."""
+    clamp_request = get_object_or_404(
+        ClampMeasureRequest.objects.select_related("client_user", "processed_by"),
+        pk=pk,
+    )
+
+    quote_preview = None
+    selected_price_row = None
+    price_map = {}
+    try:
+        quote_preview = calculate_clamp_quote(
+            {
+                "client_name": clamp_request.client_name,
+                "dollar_rate": clamp_request.dollar_rate,
+                "steel_price_usd": clamp_request.steel_price_usd,
+                "supplier_discount_pct": clamp_request.supplier_discount_pct,
+                "general_increase_pct": clamp_request.general_increase_pct,
+                "clamp_type": clamp_request.clamp_type,
+                "is_zincated": clamp_request.is_zincated,
+                "diameter": clamp_request.diameter,
+                "width_mm": clamp_request.width_mm,
+                "length_mm": clamp_request.length_mm,
+                "profile_type": clamp_request.profile_type,
+            }
+        )
+        price_map = {row["key"]: row for row in quote_preview["price_rows"]}
+        selected_price_row = price_map.get(clamp_request.selected_price_list)
+    except ValueError:
+        quote_preview = None
+        price_map = {}
+
+    if request.method == "POST":
+        new_status = str(request.POST.get("status", "")).strip().lower()
+        admin_note = str(request.POST.get("admin_note", "")).strip()
+        client_response_note = str(request.POST.get("client_response_note", "")).strip()
+        confirmed_price_list = str(request.POST.get("confirmed_price_list", "")).strip()
+        confirmed_price_raw = str(request.POST.get("confirmed_price", "")).strip().replace(",", ".")
+
+        valid_statuses = {value for value, _ in ClampMeasureRequest.STATUS_CHOICES}
+        valid_price_lists = {value for value, _ in ClampMeasureRequest.PRICE_LIST_CHOICES}
+        if new_status not in valid_statuses:
+            messages.error(request, "Estado invalido.")
+            return redirect("admin_clamp_request_detail", pk=clamp_request.pk)
+        if confirmed_price_list and confirmed_price_list not in valid_price_lists:
+            messages.error(request, "Lista confirmada invalida.")
+            return redirect("admin_clamp_request_detail", pk=clamp_request.pk)
+
+        confirmed_price = clamp_request.confirmed_price
+        if confirmed_price_raw:
+            try:
+                confirmed_price = Decimal(confirmed_price_raw)
+            except (InvalidOperation, ValueError):
+                messages.error(request, "Precio confirmado invalido.")
+                return redirect("admin_clamp_request_detail", pk=clamp_request.pk)
+            if confirmed_price <= 0:
+                messages.error(request, "El precio confirmado debe ser mayor a cero.")
+                return redirect("admin_clamp_request_detail", pk=clamp_request.pk)
+        elif confirmed_price_list and confirmed_price_list in price_map:
+            confirmed_price = price_map[confirmed_price_list]["final_price"]
+
+        if new_status in {ClampMeasureRequest.STATUS_QUOTED, ClampMeasureRequest.STATUS_COMPLETED}:
+            if confirmed_price is None:
+                if clamp_request.estimated_final_price:
+                    confirmed_price = clamp_request.estimated_final_price
+                else:
+                    messages.error(request, "Confirma un precio para marcar la solicitud como cotizada/completada.")
+                    return redirect("admin_clamp_request_detail", pk=clamp_request.pk)
+            if not confirmed_price_list:
+                confirmed_price_list = clamp_request.confirmed_price_list or clamp_request.selected_price_list
+
+        changed = False
+        if clamp_request.admin_note != admin_note:
+            clamp_request.admin_note = admin_note
+            changed = True
+        if clamp_request.client_response_note != client_response_note:
+            clamp_request.client_response_note = client_response_note
+            changed = True
+        if clamp_request.status != new_status:
+            clamp_request.status = new_status
+            changed = True
+        if clamp_request.confirmed_price_list != confirmed_price_list:
+            clamp_request.confirmed_price_list = confirmed_price_list
+            changed = True
+        if clamp_request.confirmed_price != confirmed_price:
+            clamp_request.confirmed_price = confirmed_price
+            changed = True
+
+        if (
+            clamp_request.status in {ClampMeasureRequest.STATUS_QUOTED, ClampMeasureRequest.STATUS_COMPLETED}
+            and clamp_request.confirmed_price is not None
+            and not clamp_request.quoted_at
+        ):
+            clamp_request.quoted_at = timezone.now()
+            changed = True
+
+        if changed:
+            clamp_request.processed_by = request.user
+            clamp_request.processed_at = timezone.now()
+            update_fields = [
+                "status",
+                "admin_note",
+                "client_response_note",
+                "confirmed_price_list",
+                "confirmed_price",
+                "quoted_at",
+                "processed_by",
+                "processed_at",
+                "updated_at",
+            ]
+            clamp_request.save(update_fields=update_fields)
+            log_admin_action(
+                request,
+                action="clamp_request_updated",
+                target_type="clamp_measure_request",
+                target_id=clamp_request.pk,
+                details={
+                    "status": clamp_request.status,
+                    "confirmed_price_list": clamp_request.confirmed_price_list,
+                    "confirmed_price": str(clamp_request.confirmed_price or ""),
+                    "client_response_note": clamp_request.client_response_note[:200],
+                    "admin_note": clamp_request.admin_note[:200],
+                },
+            )
+            messages.success(request, "Solicitud actualizada.")
+        else:
+            messages.info(request, "No hubo cambios para guardar.")
+        return redirect("admin_clamp_request_detail", pk=clamp_request.pk)
+
+    matching_products = _find_admin_clamp_request_matches(clamp_request)
+
+    return render(
+        request,
+        "admin_panel/clamp_requests/detail.html",
+        {
+            "clamp_request": clamp_request,
+            "status_choices": ClampMeasureRequest.STATUS_CHOICES,
+            "price_list_choices": ClampMeasureRequest.PRICE_LIST_CHOICES,
+            "quote_preview": quote_preview,
+            "selected_price_row": selected_price_row,
+            "matching_products": matching_products,
+        },
+    )
+
+
 # ===================== CLIENTS =====================
 
 @staff_member_required
@@ -2552,6 +2887,54 @@ def parse_product_description(request):
     except Exception as e:
         logger.exception("Error parsing product description")
         return JsonResponse({'success': False, 'error': 'No se pudo procesar la descripción.'}, status=400)
+
+
+@staff_member_required
+@require_POST
+def parse_clamp_code_api(request):
+    """API: Parse ABL/ABT code into attributes."""
+    try:
+        data = json.loads(request.body)
+        code = str(data.get("code", "")).strip()
+        known_widths = data.get("known_widths") or None
+        known_lengths = data.get("known_lengths") or None
+
+        if not code:
+            return JsonResponse({"success": False, "error": "code es obligatorio."}, status=400)
+
+        parsed = parsearCodigo(
+            code,
+            known_widths=known_widths,
+            known_lengths=known_lengths,
+        )
+        return JsonResponse({"success": True, "result": parsed})
+    except ValueError as exc:
+        return JsonResponse({"success": False, "error": str(exc)}, status=400)
+    except Exception:
+        logger.exception("Error parsing clamp code")
+        return JsonResponse({"success": False, "error": "No se pudo parsear el codigo."}, status=500)
+
+
+@staff_member_required
+@require_POST
+def generate_clamp_code_api(request):
+    """API: Generate ABL/ABT code from attributes."""
+    try:
+        data = json.loads(request.body)
+        result = generarCodigo(
+            tipo=data.get("tipo"),
+            diametro=data.get("diametro"),
+            ancho=data.get("ancho"),
+            largo=data.get("largo"),
+            forma=data.get("forma"),
+            with_metadata=True,
+        )
+        return JsonResponse({"success": True, "result": result})
+    except ValueError as exc:
+        return JsonResponse({"success": False, "error": str(exc)}, status=400)
+    except Exception:
+        logger.exception("Error generating clamp code")
+        return JsonResponse({"success": False, "error": "No se pudo generar el codigo."}, status=500)
 
 
 # ===================== IMPORTERS =====================
