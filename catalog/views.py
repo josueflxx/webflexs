@@ -569,6 +569,9 @@ def clamp_measure_request(request):
     has_matches = False
     generated_description = ""
     generated_code = ""
+    generated_base_cost = None
+    generated_total_weight_kg = None
+    generated_development_meters = None
     created_request = None
 
     feedback_ids = request.session.get("clamp_request_feedback_ids", [])
@@ -636,6 +639,9 @@ def clamp_measure_request(request):
             quote_result = calculate_clamp_quote(internal_quote_payload)
             generated_description = quote_result["description"]
             generated_code = quote_result.get("generated_code", "")
+            generated_base_cost = quote_result.get("base_cost")
+            generated_total_weight_kg = quote_result.get("total_weight_kg")
+            generated_development_meters = quote_result.get("development_meters")
 
             matching_products = _find_matching_clamp_products(quote_result["inputs"])
             has_matches = bool(matching_products)
@@ -715,6 +721,9 @@ def clamp_measure_request(request):
         "has_matches": has_matches,
         "generated_description": generated_description,
         "generated_code": generated_code,
+        "generated_base_cost": generated_base_cost,
+        "generated_total_weight_kg": generated_total_weight_kg,
+        "generated_development_meters": generated_development_meters,
         "created_request": created_request,
         "client_requests": client_requests,
         "all_diameter_options_json": json.dumps(get_allowed_diameter_options()),

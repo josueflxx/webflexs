@@ -180,6 +180,19 @@
                 <div class="clamp-result-summary">
                     <p class="clamp-result-description">{{ generated_description }}</p>
                     <p class="clamp-result-code">Codigo sugerido: <code>{{ generated_code|default:"-" }}</code></p>
+                    {% if generated_total_weight_kg or generated_base_cost %}
+                    <div class="clamp-result-metrics">
+                        {% if generated_total_weight_kg %}
+                        <span class="badge badge-info">Peso: {{ generated_total_weight_kg|floatformat:4 }} kg</span>
+                        {% endif %}
+                        {% if generated_development_meters %}
+                        <span class="badge badge-secondary">Desarrollo: {{ generated_development_meters|floatformat:4 }} m</span>
+                        {% endif %}
+                        {% if generated_base_cost %}
+                        <span class="badge badge-warning">Costo base: ${{ generated_base_cost|floatformat:2 }}</span>
+                        {% endif %}
+                    </div>
+                    {% endif %}
                 </div>
 
                 <div class="clamp-existing-check {% if has_matches %}has-matches{% else %}no-matches{% endif %}">

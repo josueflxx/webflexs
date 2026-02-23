@@ -262,6 +262,10 @@
                 <div><strong>Medida:</strong> {{ clamp_request.get_clamp_type_display|upper }} {% if clamp_request.is_zincated %}ZINCADA{% endif %} {{ clamp_request.diameter }} x {{ clamp_request.width_mm }} x {{ clamp_request.length_mm }} {{ clamp_request.profile_type }}</div>
                 <div><strong>Codigo sugerido:</strong> <code>{{ clamp_request.generated_code|default:"-" }}</code></div>
                 <div><strong>Costo base:</strong> ${{ clamp_request.base_cost|floatformat:2 }}</div>
+                {% if quote_preview %}
+                <div><strong>Peso teorico:</strong> {{ quote_preview.total_weight_kg|floatformat:4 }} kg</div>
+                <div><strong>Desarrollo:</strong> {{ quote_preview.development_meters|floatformat:4 }} m</div>
+                {% endif %}
                 <div>
                     <strong>Precio solicitado:</strong>
                     <span class="badge badge-primary">{{ clamp_request.get_selected_price_list_display }}</span>
@@ -283,6 +287,8 @@
                 <h4>{{ row.label }}</h4>
                 <small>x{{ row.multiplier }}</small>
                 <strong>${{ row.final_price|floatformat:2 }}</strong>
+                <small>Peso: {{ quote_preview.total_weight_kg|floatformat:4 }} kg</small>
+                <small>Costo base: ${{ quote_preview.base_cost|floatformat:2 }}</small>
                 {% if row.key == clamp_request.confirmed_price_list %}
                 <span class="badge badge-success">Confirmada</span>
                 {% elif row.key == clamp_request.selected_price_list %}

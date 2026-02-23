@@ -11,7 +11,7 @@ from django.conf import settings
 from django.core.cache import cache
 from django.core.paginator import Paginator
 from django.db import transaction
-from django.db import DatabaseError
+from django.db import DatabaseError, IntegrityError, connection
 from django.db.models import Q, Count, Sum, Max, Avg, F, DecimalField, ExpressionWrapper
 from django.http import JsonResponse, HttpResponse
 from django.views.decorators.csrf import csrf_protect
@@ -53,7 +53,10 @@ from catalog.services.clamp_quoter import (
     parse_decimal_value,
     parse_int_value,
 )
-from catalog.services.clamp_request_products import publish_clamp_request_product
+from catalog.services.clamp_request_products import (
+    create_or_update_quote_product,
+    publish_clamp_request_product,
+)
 from catalog.services.category_assignment import (
     normalize_category_ids,
     assign_categories_to_product,
@@ -1424,6 +1427,7 @@ def clamp_quoter(request):
         "width_mm": "",
         "length_mm": "",
         "profile_type": "PLANA",
+        "product_stock": "1",
     }
 
     form_values = default_form.copy()
@@ -1441,6 +1445,7 @@ def clamp_quoter(request):
             "width_mm": str(request.POST.get("width_mm", "")).strip(),
             "length_mm": str(request.POST.get("length_mm", "")).strip(),
             "profile_type": str(request.POST.get("profile_type", "PLANA")).strip().upper(),
+            "product_stock": str(request.POST.get("product_stock", "1")).strip() or "1",
         })
         if (
             form_values["clamp_type"] == "laminada"
@@ -1448,7 +1453,8 @@ def clamp_quoter(request):
         ):
             form_values["diameter"] = CLAMP_LAMINATED_ALLOWED_DIAMETERS[0]
 
-        if request.POST.get("action") == "save_quote":
+        action = str(request.POST.get("action", "save_quote")).strip().lower()
+        if action in {"save_quote", "create_product"}:
             try:
                 result = calculate_clamp_quote(request.POST)
                 selected_key = str(request.POST.get("price_list_key", "")).strip()
@@ -1456,44 +1462,106 @@ def clamp_quoter(request):
                 selected_price = selected_map.get(selected_key)
                 if not selected_price:
                     raise ValueError("Selecciona una lista valida para guardar.")
+                if action == "save_quote":
+                    saved_quote = ClampQuotation.objects.create(
+                        client_name=result["inputs"]["client_name"],
+                        dollar_rate=result["inputs"]["dollar_rate"],
+                        steel_price_usd=result["inputs"]["steel_price_usd"],
+                        supplier_discount_pct=result["inputs"]["supplier_discount_pct"],
+                        general_increase_pct=result["inputs"]["general_increase_pct"],
+                        clamp_type=result["inputs"]["clamp_type"],
+                        is_zincated=result["inputs"]["is_zincated"],
+                        diameter=result["inputs"]["diameter"],
+                        width_mm=result["inputs"]["width_mm"],
+                        length_mm=result["inputs"]["length_mm"],
+                        profile_type=result["inputs"]["profile_type"],
+                        description=result["description"],
+                        base_cost=result["base_cost"],
+                        price_list=selected_price["key"],
+                        final_price=selected_price["final_price"],
+                        created_by=request.user if request.user.is_authenticated else None,
+                    )
+                    log_admin_action(
+                        request,
+                        action="clamp_quote_saved",
+                        target_type="clamp_quotation",
+                        target_id=saved_quote.pk,
+                        details={
+                            "price_list": selected_price["label"],
+                            "final_price": f"{selected_price['final_price']:.2f}",
+                            "description": result["description"],
+                            "generated_code": result.get("generated_code", ""),
+                            "client_name": result["inputs"]["client_name"],
+                        },
+                    )
+                    messages.success(request, f"Cotizacion guardada en {selected_price['label']}.")
+                    return redirect("admin_clamp_quoter")
 
-                saved_quote = ClampQuotation.objects.create(
-                    client_name=result["inputs"]["client_name"],
-                    dollar_rate=result["inputs"]["dollar_rate"],
-                    steel_price_usd=result["inputs"]["steel_price_usd"],
-                    supplier_discount_pct=result["inputs"]["supplier_discount_pct"],
-                    general_increase_pct=result["inputs"]["general_increase_pct"],
-                    clamp_type=result["inputs"]["clamp_type"],
-                    is_zincated=result["inputs"]["is_zincated"],
-                    diameter=result["inputs"]["diameter"],
-                    width_mm=result["inputs"]["width_mm"],
-                    length_mm=result["inputs"]["length_mm"],
-                    profile_type=result["inputs"]["profile_type"],
-                    description=result["description"],
-                    base_cost=result["base_cost"],
-                    price_list=selected_price["key"],
-                    final_price=selected_price["final_price"],
-                    created_by=request.user if request.user.is_authenticated else None,
+                product_stock = parse_int_value(
+                    request.POST.get("product_stock", "1"),
+                    "Stock inicial",
+                    min_value=1,
+                )
+                product, created, price_row = create_or_update_quote_product(
+                    quote_result=result,
+                    price_list_key=selected_price["key"],
+                    stock=product_stock,
+                    activate_product=True,
                 )
                 log_admin_action(
                     request,
-                    action="clamp_quote_saved",
-                    target_type="clamp_quotation",
-                    target_id=saved_quote.pk,
+                    action="clamp_quote_publish_product",
+                    target_type="product",
+                    target_id=product.pk,
                     details={
-                        "price_list": selected_price["label"],
+                        "created": created,
+                        "sku": product.sku,
+                        "price_list": price_row.get("label", selected_price["label"]),
                         "final_price": f"{selected_price['final_price']:.2f}",
-                        "description": result["description"],
+                        "base_cost": f"{result['base_cost']:.2f}",
                         "generated_code": result.get("generated_code", ""),
-                        "client_name": result["inputs"]["client_name"],
                     },
                 )
-                messages.success(request, f"Cotizacion guardada en {selected_price['label']}.")
-                return redirect("admin_clamp_quoter")
+                if created:
+                    messages.success(
+                        request,
+                        f"Producto creado desde cotizador: {product.sku}.",
+                    )
+                else:
+                    messages.success(
+                        request,
+                        f"Producto existente actualizado desde cotizador: {product.sku}.",
+                    )
+                return redirect("admin_product_edit", pk=product.pk)
             except ValueError as exc:
                 messages.error(request, str(exc))
 
-    saved_quotes = ClampQuotation.objects.select_related("created_by").all()[:30]
+    saved_quotes = list(ClampQuotation.objects.select_related("created_by").all()[:30])
+    for quote in saved_quotes:
+        quote.calculated_weight_kg = None
+        quote.calculated_development_meters = None
+        try:
+            preview = calculate_clamp_quote(
+                {
+                    "client_name": quote.client_name,
+                    "dollar_rate": quote.dollar_rate,
+                    "steel_price_usd": quote.steel_price_usd,
+                    "supplier_discount_pct": quote.supplier_discount_pct,
+                    "general_increase_pct": quote.general_increase_pct,
+                    "clamp_type": quote.clamp_type,
+                    "is_zincated": quote.is_zincated,
+                    "diameter": quote.diameter,
+                    "width_mm": quote.width_mm,
+                    "length_mm": quote.length_mm,
+                    "profile_type": quote.profile_type,
+                }
+            )
+            quote.calculated_weight_kg = preview.get("total_weight_kg")
+            quote.calculated_development_meters = preview.get("development_meters")
+        except ValueError:
+            # Keep legacy rows visible even if inputs are no longer valid.
+            pass
+
     weight_map_json = json.dumps({key: float(value) for key, value in CLAMP_WEIGHT_MAP.items()})
     diameter_code_map_json = json.dumps(DIAMETER_HUMAN_TO_COMPACT_DEFAULT)
     all_diameter_options_json = json.dumps(get_allowed_diameter_options())
@@ -2358,10 +2426,36 @@ def order_item_publish_clamp(request, pk, item_id):
 def order_delete(request, pk):
     """Delete single order."""
     order = get_object_or_404(Order, pk=pk)
-    
+
     if request.method == 'POST':
         pk_display = order.pk
-        order.delete()
+        try:
+            with transaction.atomic():
+                # Detach nullable references before deleting the order row.
+                ClientPayment.objects.filter(order_id=pk_display).update(order=None)
+
+                # Legacy table kept in some databases for account statements.
+                # It is not managed by current ORM models but may still hold FKs.
+                if "accounts_clientaccountdocument" in connection.introspection.table_names():
+                    with connection.cursor() as cursor:
+                        cursor.execute(
+                            "UPDATE accounts_clientaccountdocument SET order_id = NULL WHERE order_id = %s",
+                            [pk_display],
+                        )
+
+                # Remove mandatory children that can block delete when DB constraints
+                # are NO ACTION instead of CASCADE.
+                OrderStatusHistory.objects.filter(order_id=pk_display).delete()
+                OrderItem.objects.filter(order_id=pk_display).delete()
+
+                order.delete()
+        except IntegrityError:
+            messages.error(
+                request,
+                f"No se pudo eliminar el pedido #{pk_display} porque tiene referencias activas.",
+            )
+            return redirect('admin_order_detail', pk=pk_display)
+
         messages.success(request, f'Pedido #{pk_display} eliminado.')
         return redirect('admin_order_list')
         

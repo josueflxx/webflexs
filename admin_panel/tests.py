@@ -4,11 +4,13 @@ from decimal import Decimal
 from django.contrib.auth.models import User
 from django.test import TestCase
 from django.urls import reverse
+from django.db import connection
+from django.utils import timezone
 
 from accounts.models import ClientPayment, ClientProfile
 from catalog.models import Category, ClampMeasureRequest, Product
 from catalog.services.clamp_quoter import calculate_clamp_quote
-from orders.models import ClampQuotation, Order, OrderItem
+from orders.models import ClampQuotation, Order, OrderItem, OrderStatusHistory
 
 
 class ClientOrderHistoryViewTests(TestCase):
@@ -209,6 +211,55 @@ class ClampQuoterTests(TestCase):
         self.assertIsNotNone(saved)
         self.assertEqual(saved.price_list, ClampQuotation.PRICE_LIST_2)
         self.assertGreater(saved.final_price, Decimal('0.00'))
+
+    def test_staff_can_create_product_from_clamp_quoter_result(self):
+        self.client.force_login(self.staff)
+        response = self.client.post(
+            reverse('admin_clamp_quoter'),
+            data={
+                'action': 'create_product',
+                'price_list_key': 'facturacion',
+                'client_name': 'Cliente Producto',
+                'dollar_rate': '1000',
+                'steel_price_usd': '1.2',
+                'supplier_discount_pct': '5',
+                'general_increase_pct': '23',
+                'clamp_type': 'trefilada',
+                'is_zincated': '0',
+                'diameter': '3/4',
+                'width_mm': '80',
+                'length_mm': '220',
+                'profile_type': 'SEMICURVA',
+                'product_stock': '3',
+            },
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        product = Product.objects.filter(name__icontains='ABRAZADERA TREFILADA DE 3/4 X 80 X 220 SEMICURVA').first()
+        self.assertIsNotNone(product)
+        self.assertEqual(product.stock, 3)
+        self.assertTrue(product.is_active)
+        self.assertEqual(product.supplier, 'COTIZADOR')
+        self.assertTrue(product.categories.filter(name__icontains='ABRAZADERA').exists())
+        self.assertIsNotNone(getattr(product, 'clamp_specs', None))
+
+        expected = calculate_clamp_quote({
+            'client_name': 'Cliente Producto',
+            'dollar_rate': '1000',
+            'steel_price_usd': '1.2',
+            'supplier_discount_pct': '5',
+            'general_increase_pct': '23',
+            'clamp_type': 'trefilada',
+            'is_zincated': '0',
+            'diameter': '3/4',
+            'width_mm': '80',
+            'length_mm': '220',
+            'profile_type': 'SEMICURVA',
+        })
+        expected_price_map = {row['key']: row['final_price'] for row in expected['price_rows']}
+        self.assertEqual(product.cost, expected['base_cost'])
+        self.assertEqual(product.price, expected_price_map['facturacion'])
 
     def test_clamp_code_parse_api(self):
         self.client.force_login(self.staff)
@@ -516,3 +567,113 @@ class OrderClampPublishTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.product.refresh_from_db()
         self.assertEqual(self.product.price, Decimal('2278.54'))
+
+
+class OrderDeleteTests(TestCase):
+    def setUp(self):
+        self.staff = User.objects.create_user(
+            username='staff_order_delete',
+            password='secret123',
+            is_staff=True,
+        )
+        self.client_user = User.objects.create_user(
+            username='cliente_order_delete',
+            password='secret123',
+        )
+        self.client_profile = ClientProfile.objects.create(
+            user=self.client_user,
+            company_name='Cliente Delete',
+        )
+        self.product = Product.objects.create(
+            sku='DEL-001',
+            name='Producto Delete',
+            price=Decimal('100.00'),
+            cost=Decimal('50.00'),
+            stock=10,
+            is_active=True,
+        )
+        self.order = Order.objects.create(
+            user=self.client_user,
+            status=Order.STATUS_DRAFT,
+            subtotal=Decimal('100.00'),
+            total=Decimal('100.00'),
+            client_company='Cliente Delete',
+        )
+        OrderItem.objects.create(
+            order=self.order,
+            product=self.product,
+            product_sku=self.product.sku,
+            product_name=self.product.name,
+            quantity=1,
+            price_at_purchase=Decimal('100.00'),
+            subtotal=Decimal('100.00'),
+        )
+        OrderStatusHistory.objects.create(
+            order=self.order,
+            from_status=Order.STATUS_DRAFT,
+            to_status=Order.STATUS_DRAFT,
+            note='Creado para test',
+            changed_by=self.staff,
+        )
+        ClientPayment.objects.create(
+            client_profile=self.client_profile,
+            order=self.order,
+            amount=Decimal('20.00'),
+            method=ClientPayment.METHOD_TRANSFER,
+            created_by=self.staff,
+        )
+
+        # Legacy row that used to block deletion through NO ACTION FK.
+        if "accounts_clientaccountdocument" in connection.introspection.table_names():
+            now = timezone.now()
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    INSERT INTO accounts_clientaccountdocument (
+                        document_type, document_number, issue_date, due_date, total_amount,
+                        notes, is_cancelled, cancelled_at, cancel_reason, created_at, updated_at,
+                        client_profile_id, created_by_id, order_id
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    """,
+                    [
+                        'factura',
+                        'TST-001',
+                        now.date().isoformat(),
+                        None,
+                        '100.00',
+                        'doc test',
+                        0,
+                        None,
+                        '',
+                        now,
+                        now,
+                        self.client_profile.pk,
+                        self.staff.pk,
+                        self.order.pk,
+                    ],
+                )
+
+    def test_order_delete_cleans_references_and_deletes_order(self):
+        self.client.force_login(self.staff)
+        response = self.client.post(
+            reverse('admin_order_delete', args=[self.order.pk]),
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(Order.objects.filter(pk=self.order.pk).exists())
+        self.assertFalse(OrderItem.objects.filter(order_id=self.order.pk).exists())
+        self.assertFalse(OrderStatusHistory.objects.filter(order_id=self.order.pk).exists())
+
+        payment = ClientPayment.objects.first()
+        self.assertIsNotNone(payment)
+        self.assertIsNone(payment.order_id)
+
+        if "accounts_clientaccountdocument" in connection.introspection.table_names():
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    "SELECT COUNT(1) FROM accounts_clientaccountdocument WHERE order_id = %s",
+                    [self.order.pk],
+                )
+                linked_count = cursor.fetchone()[0]
+            self.assertEqual(linked_count, 0)

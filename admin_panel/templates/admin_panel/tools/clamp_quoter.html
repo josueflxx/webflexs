@@ -130,6 +130,13 @@
                         <input id="client_name" type="text" class="form-input" value="{{ form_values.client_name }}">
                     </div>
                 </div>
+
+                <div class="clamp-row">
+                    <label class="clamp-row-label" for="product_stock">Stock inicial:</label>
+                    <div class="clamp-row-control">
+                        <input id="product_stock" type="number" step="1" min="1" class="form-input" value="{{ form_values.product_stock|default:'1' }}">
+                    </div>
+                </div>
             </div>
 
             <div class="clamp-code-logic-card">
@@ -196,6 +203,7 @@
                         <th>Descripcion</th>
                         <th>Lista</th>
                         <th>Costo base</th>
+                        <th>Peso (kg)</th>
                         <th>Precio final</th>
                         <th>Usuario</th>
                     </tr>
@@ -208,12 +216,19 @@
                         <td>{{ quote.description }}</td>
                         <td>{{ quote.get_price_list_display }}</td>
                         <td>${{ quote.base_cost|floatformat:2 }}</td>
+                        <td>
+                            {% if quote.calculated_weight_kg %}
+                            {{ quote.calculated_weight_kg|floatformat:4 }}
+                            {% else %}
+                            -
+                            {% endif %}
+                        </td>
                         <td><strong>${{ quote.final_price|floatformat:2 }}</strong></td>
                         <td>{{ quote.created_by.username|default:"sistema" }}</td>
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="7" class="text-center text-muted">Todavia no hay cotizaciones guardadas.</td>
+                        <td colspan="8" class="text-center text-muted">Todavia no hay cotizaciones guardadas.</td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -224,7 +239,7 @@
 
 <form id="saveQuoteForm" method="post" style="display:none;">
     {% csrf_token %}
-    <input type="hidden" name="action" value="save_quote">
+    <input type="hidden" name="action" id="form_action" value="save_quote">
     <input type="hidden" name="price_list_key" id="save_price_list_key">
     <input type="hidden" name="client_name" id="save_client_name">
     <input type="hidden" name="dollar_mode" id="save_dollar_mode">
@@ -238,6 +253,7 @@
     <input type="hidden" name="width_mm" id="save_width_mm">
     <input type="hidden" name="length_mm" id="save_length_mm">
     <input type="hidden" name="profile_type" id="save_profile_type">
+    <input type="hidden" name="product_stock" id="save_product_stock">
 </form>
 
 <script>
@@ -499,8 +515,13 @@
                 <h4>${item.label}</h4>
                 <small>x${item.multiplier.toFixed(1)}</small>
                 <strong>$${formatMoney(item.finalPrice)}</strong>
-                <button type="button" class="btn btn-primary btn-sm" onclick="saveClampQuote('${item.key}')">
+                <small>Peso: ${result.totalWeightKg.toFixed(4)} kg</small>
+                <small>Costo base: $${formatMoney(result.baseCost)}</small>
+                <button type="button" class="btn btn-primary btn-sm" onclick="submitClampAction('${item.key}', 'save_quote')">
                     Guardar cotizacion
+                </button>
+                <button type="button" class="btn btn-outline btn-sm" onclick="submitClampAction('${item.key}', 'create_product')">
+                    Agregar a productos
                 </button>
             </article>
         `).join('');
@@ -530,7 +551,7 @@
         target.value = value;
     }
 
-    function saveClampQuote(priceListKey) {
+    function submitClampAction(priceListKey, actionName) {
         try {
             // Validate state before submit.
             calculateClampQuote();
@@ -558,6 +579,7 @@
         copyInputToHidden('width_mm', 'save_width_mm');
         copyInputToHidden('length_mm', 'save_length_mm');
         copyInputToHidden('profile_type', 'save_profile_type');
+        copyInputToHidden('product_stock', 'save_product_stock');
 
         const zincSource = document.getElementById('is_zincated');
         const zincTarget = document.getElementById('save_is_zincated');
@@ -568,6 +590,11 @@
         const priceListInput = document.getElementById('save_price_list_key');
         if (priceListInput) {
             priceListInput.value = priceListKey;
+        }
+
+        const actionInput = document.getElementById('form_action');
+        if (actionInput) {
+            actionInput.value = actionName || 'save_quote';
         }
 
         document.getElementById('saveQuoteForm')?.submit();

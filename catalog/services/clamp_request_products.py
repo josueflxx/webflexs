@@ -58,15 +58,23 @@ def _is_generated_from_request(product, clamp_request_id):
     )
 
 
-def _ensure_clamp_specs(product, clamp_request):
+def _ensure_clamp_specs_values(
+    product,
+    *,
+    clamp_type,
+    diameter,
+    width_mm,
+    length_mm,
+    profile_type,
+):
     specs, created = ClampSpecs.objects.get_or_create(
         product=product,
         defaults={
-            "fabrication": clamp_request.clamp_type.upper(),
-            "diameter": clamp_request.diameter,
-            "width": clamp_request.width_mm,
-            "length": clamp_request.length_mm,
-            "shape": clamp_request.profile_type,
+            "fabrication": str(clamp_type or "").upper(),
+            "diameter": diameter,
+            "width": width_mm,
+            "length": length_mm,
+            "shape": profile_type,
             "parse_confidence": 100,
             "parse_warnings": [],
             "manual_override": True,
@@ -78,11 +86,11 @@ def _ensure_clamp_specs(product, clamp_request):
 
     changed = False
     target_values = {
-        "fabrication": clamp_request.clamp_type.upper(),
-        "diameter": clamp_request.diameter,
-        "width": clamp_request.width_mm,
-        "length": clamp_request.length_mm,
-        "shape": clamp_request.profile_type,
+        "fabrication": str(clamp_type or "").upper(),
+        "diameter": diameter,
+        "width": width_mm,
+        "length": length_mm,
+        "shape": profile_type,
         "manual_override": True,
     }
     for field, expected in target_values.items():
@@ -93,6 +101,17 @@ def _ensure_clamp_specs(product, clamp_request):
     if changed:
         specs.save(update_fields=list(target_values.keys()) + ["updated_at"])
     return specs
+
+
+def _ensure_clamp_specs(product, clamp_request):
+    return _ensure_clamp_specs_values(
+        product,
+        clamp_type=clamp_request.clamp_type,
+        diameter=clamp_request.diameter,
+        width_mm=clamp_request.width_mm,
+        length_mm=clamp_request.length_mm,
+        profile_type=clamp_request.profile_type,
+    )
 
 
 def _ensure_abrazaderas_category():
@@ -138,6 +157,29 @@ def _find_exact_match_by_specs(clamp_request):
     )
 
 
+def _find_exact_match_by_values(
+    *,
+    clamp_type,
+    diameter,
+    width_mm,
+    length_mm,
+    profile_type,
+):
+    return (
+        Product.objects.select_related("category")
+        .prefetch_related("categories")
+        .filter(
+            clamp_specs__fabrication=str(clamp_type or "").upper(),
+            clamp_specs__diameter=diameter,
+            clamp_specs__width=width_mm,
+            clamp_specs__length=length_mm,
+            clamp_specs__shape=profile_type,
+        )
+        .order_by("-is_active", "name", "id")
+        .first()
+    )
+
+
 def _build_generated_product_payload(clamp_request):
     base_cost = _safe_decimal(clamp_request.base_cost).quantize(Decimal("0.01"))
     confirmed_price = _safe_decimal(
@@ -160,6 +202,37 @@ def _build_generated_product_payload(clamp_request):
             f"Cliente: {clamp_request.client_name or '-'}."
         ),
         "attributes": attrs,
+    }
+
+
+def _build_quote_product_payload(
+    *,
+    quote_result,
+    final_price,
+    stock,
+):
+    inputs = quote_result.get("inputs") or {}
+    generated_code = str(quote_result.get("generated_code") or "").strip().upper()
+    return {
+        "name": str(quote_result.get("description") or "ABRAZADERA A MEDIDA")[:255],
+        "cost": _safe_decimal(quote_result.get("base_cost")).quantize(Decimal("0.01")),
+        "price": _safe_decimal(final_price).quantize(Decimal("0.01")),
+        "stock": max(int(stock or 1), 1),
+        "description": (
+            "Generado desde cotizador de abrazaderas. "
+            f"Tipo: {str(inputs.get('clamp_type') or '').upper()} "
+            f"{inputs.get('diameter')} x {inputs.get('width_mm')} x {inputs.get('length_mm')} {inputs.get('profile_type')}."
+        ),
+        "attributes": {
+            "source": "clamp_quoter",
+            "generated_code": generated_code,
+            "clamp_type": inputs.get("clamp_type"),
+            "diameter": inputs.get("diameter"),
+            "width_mm": inputs.get("width_mm"),
+            "length_mm": inputs.get("length_mm"),
+            "profile_type": inputs.get("profile_type"),
+            "is_zincated": bool(inputs.get("is_zincated")),
+        },
     }
 
 
@@ -206,6 +279,126 @@ def _calculate_facturacion_price(clamp_request):
         return _safe_decimal(quote.get("base_cost", fallback_base)).quantize(Decimal("0.01")), facturacion_price
     except Exception:
         return fallback_base, fallback_price
+
+
+@transaction.atomic
+def create_or_update_quote_product(
+    *,
+    quote_result,
+    price_list_key="facturacion",
+    supplier_name="COTIZADOR",
+    stock=1,
+    activate_product=True,
+):
+    """
+    Create/update a catalog product directly from cotizador output.
+    Returns (product, created, selected_price_row).
+    """
+    if not isinstance(quote_result, dict):
+        raise ValueError("No se pudo leer el resultado del cotizador.")
+
+    inputs = quote_result.get("inputs") or {}
+    clamp_type = str(inputs.get("clamp_type", "")).strip().lower()
+    diameter = str(inputs.get("diameter", "")).strip()
+    profile_type = str(inputs.get("profile_type", "")).strip().upper()
+    try:
+        width_mm = int(inputs.get("width_mm"))
+        length_mm = int(inputs.get("length_mm"))
+    except (TypeError, ValueError):
+        raise ValueError("No se pudieron leer las medidas de la abrazadera.")
+
+    if clamp_type not in {"trefilada", "laminada"}:
+        raise ValueError("Tipo de abrazadera invalido para crear producto.")
+    if not diameter:
+        raise ValueError("Diametro invalido para crear producto.")
+    if profile_type not in {"PLANA", "SEMICURVA", "CURVA"}:
+        raise ValueError("Forma invalida para crear producto.")
+
+    row_map = {str(row.get("key", "")).strip(): row for row in quote_result.get("price_rows", [])}
+    selected_row = row_map.get(str(price_list_key or "").strip()) or row_map.get("facturacion")
+    if not selected_row:
+        raise ValueError("No se encontro la lista seleccionada para crear el producto.")
+
+    payload = _build_quote_product_payload(
+        quote_result=quote_result,
+        final_price=selected_row.get("final_price"),
+        stock=stock,
+    )
+
+    category = _ensure_abrazaderas_category()
+    product = _find_exact_match_by_values(
+        clamp_type=clamp_type,
+        diameter=diameter,
+        width_mm=width_mm,
+        length_mm=length_mm,
+        profile_type=profile_type,
+    )
+    created = False
+
+    if not product:
+        generated_code = str(quote_result.get("generated_code", "")).strip().upper()
+        fallback_code = f"{'ABT' if clamp_type == 'trefilada' else 'ABL'}Q{width_mm}{length_mm}{profile_type[:1]}"
+        sku = _build_unique_sku(generated_code or fallback_code)
+        product = Product.objects.create(
+            sku=sku,
+            name=payload["name"],
+            supplier=supplier_name,
+            description=payload["description"],
+            cost=payload["cost"],
+            price=payload["price"],
+            stock=payload["stock"],
+            is_active=bool(activate_product),
+            category=category,
+            attributes=payload["attributes"],
+        )
+        created = True
+    else:
+        update_fields = []
+        existing_attrs = product.attributes if isinstance(product.attributes, dict) else {}
+        merged_attrs = dict(existing_attrs)
+        merged_attrs.update(payload["attributes"])
+        if product.name != payload["name"]:
+            product.name = payload["name"]
+            update_fields.append("name")
+        if product.supplier != supplier_name:
+            product.supplier = supplier_name
+            update_fields.append("supplier")
+        if product.description != payload["description"]:
+            product.description = payload["description"]
+            update_fields.append("description")
+        if product.cost != payload["cost"]:
+            product.cost = payload["cost"]
+            update_fields.append("cost")
+        if product.price != payload["price"]:
+            product.price = payload["price"]
+            update_fields.append("price")
+        if product.stock != payload["stock"]:
+            product.stock = payload["stock"]
+            update_fields.append("stock")
+        if activate_product and not product.is_active:
+            product.is_active = True
+            update_fields.append("is_active")
+        if not product.category_id:
+            product.category = category
+            update_fields.append("category")
+        if product.attributes != merged_attrs:
+            product.attributes = merged_attrs
+            update_fields.append("attributes")
+        if update_fields:
+            product.save(update_fields=update_fields + ["updated_at"])
+
+    if not product.categories.filter(pk=category.pk).exists():
+        product.categories.add(category)
+
+    _ensure_clamp_specs_values(
+        product,
+        clamp_type=clamp_type,
+        diameter=diameter,
+        width_mm=width_mm,
+        length_mm=length_mm,
+        profile_type=profile_type,
+    )
+    return product, created, selected_row
 
 
 @transaction.atomic
