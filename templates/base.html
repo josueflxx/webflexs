@@ -36,7 +36,11 @@
         <nav class="navbar">
             <div class="container navbar-content">
                 <a href="{% url 'home' %}" class="logo">
-                    <span class="logo-text">FLEXS</span>
+                    <img
+                        src="{% static 'core/img/flexs-logo.png' %}"
+                        alt="FLEXS Elasticos"
+                        class="brand-logo public-brand-logo"
+                    >
                 </a>
                 <button class="mobile-menu-toggle" id="mobileMenuToggle" aria-label="Abrir menú">
                     <span></span>

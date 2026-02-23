@@ -39,11 +39,28 @@
     text-decoration: none;
 }
 
+.sidebar-header {
+    padding: var(--spacing-xl);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
 .sidebar-logo span {
     font-size: var(--font-size-2xl);
     font-weight: 800;
     color: var(--color-primary);
 }
+
+.sidebar-brand-logo {
+    width: min(200px, 100%);
+    height: auto;
+    display: block;
+    margin-bottom: 6px;
+    padding: 6px 10px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+}
+
 
 .sidebar-logo small {
     font-size: var(--font-size-sm);
