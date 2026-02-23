@@ -6,7 +6,6 @@ from django.http import JsonResponse
 from django.views.decorators.http import require_POST
 from django.views.decorators.http import require_GET
 from django.utils import timezone
-
 from core.models import UserActivity
 from core.services.presence import build_admin_presence_payload, get_presence_config
 
