@@ -1,6 +1,50 @@
 {% extends 'admin_panel/base.html' %}
+{% load l10n %}
 
 {% block page_title %}Solicitud #{{ clamp_request.pk }}{% endblock %}
+{% block extra_js %}
+<script>
+    const ALL_DIAMETER_OPTIONS = {{ all_diameter_options_json|safe }};
+    const LAMINATED_DIAMETER_OPTIONS = {{ laminated_diameter_options_json|safe }};
+
+    function getCurrentClampType() {
+        const select = document.getElementById('clamp_type');
+        return (select?.value || 'trefilada').toLowerCase();
+    }
+
+    function getAllowedDiameters(clampType) {
+        return clampType === 'laminada'
+            ? LAMINATED_DIAMETER_OPTIONS.slice()
+            : ALL_DIAMETER_OPTIONS.slice();
+    }
+
+    function syncAdminDiameterOptions() {
+        const clampType = getCurrentClampType();
+        const select = document.getElementById('diameter');
+        if (!select) return;
+
+        const allowed = getAllowedDiameters(clampType);
+        const previousValue = select.value;
+        select.innerHTML = allowed
+            .map((diameter) => `<option value="${diameter}">${diameter}</option>`)
+            .join('');
+
+        if (allowed.includes(previousValue)) {
+            select.value = previousValue;
+        } else if (allowed.length) {
+            select.value = allowed[0];
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        const clampTypeSelect = document.getElementById('clamp_type');
+        if (clampTypeSelect) {
+            clampTypeSelect.addEventListener('change', syncAdminDiameterOptions);
+        }
+        syncAdminDiameterOptions();
+    });
+</script>
+{% endblock %}
 
 {% block content %}
 <div class="admin-table-container">
@@ -69,23 +113,162 @@
 
         <section class="dashboard-section">
             <h2>Datos tecnicos y costo</h2>
-            <div style="display:grid; gap:8px;">
-                <div>
-                    <strong>Medida:</strong>
-                    {{ clamp_request.get_clamp_type_display|upper }}
-                    {% if clamp_request.is_zincated %}ZINCADA{% endif %}
-                    {{ clamp_request.diameter }} x {{ clamp_request.width_mm }} x {{ clamp_request.length_mm }} {{ clamp_request.profile_type }}
+            <div style="display:grid; gap:12px;">
+                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px;">
+                    <div class="form-group" style="margin:0;">
+                        <label class="form-label" for="clamp_type">Tipo abrazadera</label>
+                        <select id="clamp_type" name="clamp_type" class="form-select" form="clampRequestForm">
+                            {% for value, label in clamp_type_choices %}
+                            <option value="{{ value }}" {% if clamp_request.clamp_type == value %}selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-group" style="margin:0;">
+                        <label class="form-label" for="diameter">Diametro</label>
+                        <select id="diameter" name="diameter" class="form-select" form="clampRequestForm">
+                            {% for diameter in diameter_options %}
+                            <option value="{{ diameter }}" {% if clamp_request.diameter == diameter %}selected{% endif %}>{{ diameter }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-group" style="margin:0;">
+                        <label class="form-label" for="width_mm">Ancho (mm)</label>
+                        <input
+                            id="width_mm"
+                            name="width_mm"
+                            type="number"
+                            min="1"
+                            step="1"
+                            value="{{ clamp_request.width_mm }}"
+                            class="form-input"
+                            form="clampRequestForm"
+                            required
+                        >
+                    </div>
+                    <div class="form-group" style="margin:0;">
+                        <label class="form-label" for="length_mm">Largo (mm)</label>
+                        <input
+                            id="length_mm"
+                            name="length_mm"
+                            type="number"
+                            min="1"
+                            step="1"
+                            value="{{ clamp_request.length_mm }}"
+                            class="form-input"
+                            form="clampRequestForm"
+                            required
+                        >
+                    </div>
+                    <div class="form-group" style="margin:0;">
+                        <label class="form-label" for="profile_type">Forma</label>
+                        <select id="profile_type" name="profile_type" class="form-select" form="clampRequestForm">
+                            {% for value, label in profile_type_choices %}
+                            <option value="{{ value }}" {% if clamp_request.profile_type == value %}selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-group" style="margin:0;">
+                        <label class="form-label" for="quantity">Cantidad</label>
+                        <input
+                            id="quantity"
+                            name="quantity"
+                            type="number"
+                            min="1"
+                            step="1"
+                            value="{{ clamp_request.quantity }}"
+                            class="form-input"
+                            form="clampRequestForm"
+                            required
+                        >
+                    </div>
+                    <div class="form-group" style="margin:0;">
+                        <label class="form-label" for="dollar_rate">Dolar</label>
+                        <input
+                            id="dollar_rate"
+                            name="dollar_rate"
+                            type="number"
+                            step="0.0001"
+                            min="0.0001"
+                            value="{{ clamp_request.dollar_rate|unlocalize }}"
+                            class="form-input"
+                            form="clampRequestForm"
+                            required
+                        >
+                    </div>
+                    <div class="form-group" style="margin:0;">
+                        <label class="form-label" for="steel_price_usd">Acero USD</label>
+                        <input
+                            id="steel_price_usd"
+                            name="steel_price_usd"
+                            type="number"
+                            step="0.0001"
+                            min="0.0001"
+                            value="{{ clamp_request.steel_price_usd|unlocalize }}"
+                            class="form-input"
+                            form="clampRequestForm"
+                            required
+                        >
+                    </div>
+                    <div class="form-group" style="margin:0;">
+                        <label class="form-label" for="supplier_discount_pct">Desc. proveedor (%)</label>
+                        <input
+                            id="supplier_discount_pct"
+                            name="supplier_discount_pct"
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value="{{ clamp_request.supplier_discount_pct|unlocalize }}"
+                            class="form-input"
+                            form="clampRequestForm"
+                            required
+                        >
+                    </div>
+                    <div class="form-group" style="margin:0;">
+                        <label class="form-label" for="general_increase_pct">Aumento gral. (%)</label>
+                        <input
+                            id="general_increase_pct"
+                            name="general_increase_pct"
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value="{{ clamp_request.general_increase_pct|unlocalize }}"
+                            class="form-input"
+                            form="clampRequestForm"
+                            required
+                        >
+                    </div>
+                    <div class="form-group" style="margin:0;">
+                        <label class="form-label" for="selected_price_list">Lista para calculo</label>
+                        <select id="selected_price_list" name="selected_price_list" class="form-select" form="clampRequestForm">
+                            {% for value, label in price_list_choices %}
+                            <option value="{{ value }}" {% if clamp_request.selected_price_list == value %}selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-group" style="margin:0;display:flex;align-items:flex-end;">
+                        <label class="form-label" style="display:flex;align-items:center;gap:8px;margin:0 0 4px;">
+                            <input
+                                type="checkbox"
+                                id="is_zincated"
+                                name="is_zincated"
+                                value="1"
+                                form="clampRequestForm"
+                                {% if clamp_request.is_zincated %}checked{% endif %}
+                            >
+                            Zincado (+20%)
+                        </label>
+                    </div>
                 </div>
+                <div><strong>Medida:</strong> {{ clamp_request.get_clamp_type_display|upper }} {% if clamp_request.is_zincated %}ZINCADA{% endif %} {{ clamp_request.diameter }} x {{ clamp_request.width_mm }} x {{ clamp_request.length_mm }} {{ clamp_request.profile_type }}</div>
                 <div><strong>Codigo sugerido:</strong> <code>{{ clamp_request.generated_code|default:"-" }}</code></div>
-                <div><strong>Dolar:</strong> {{ clamp_request.dollar_rate|floatformat:2 }}</div>
-                <div><strong>Acero USD:</strong> {{ clamp_request.steel_price_usd|floatformat:4 }}</div>
-                <div><strong>Desc. proveedor:</strong> {{ clamp_request.supplier_discount_pct|floatformat:2 }}%</div>
-                <div><strong>Aumento gral.:</strong> {{ clamp_request.general_increase_pct|floatformat:2 }}%</div>
                 <div><strong>Costo base:</strong> ${{ clamp_request.base_cost|floatformat:2 }}</div>
                 <div>
                     <strong>Precio solicitado:</strong>
                     <span class="badge badge-primary">{{ clamp_request.get_selected_price_list_display }}</span>
                     <strong>${{ clamp_request.estimated_final_price|floatformat:2 }}</strong>
+                </div>
+                <div class="form-actions" style="justify-content:flex-start;">
+                    <button type="submit" class="btn btn-primary" form="clampRequestForm">Aplicar cambios tecnicos y de costo</button>
                 </div>
             </div>
         </section>
@@ -157,7 +340,7 @@
 
     <section class="admin-form-container">
         <h2>Gestion interna</h2>
-        <form method="post">
+        <form method="post" id="clampRequestForm">
             {% csrf_token %}
             <div class="form-group">
                 <label class="form-label" for="status">Estado</label>
@@ -188,7 +371,7 @@
                     type="number"
                     step="0.01"
                     min="0"
-                    value="{{ clamp_request.confirmed_price|default:'' }}"
+                    value="{% if clamp_request.confirmed_price %}{{ clamp_request.confirmed_price|unlocalize }}{% endif %}"
                     class="form-input"
                     placeholder="Si lo dejas vacio, se usa la lista confirmada"
                 >

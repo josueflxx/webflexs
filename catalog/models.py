@@ -292,6 +292,12 @@ class Product(models.Model):
         verbose_name="Proveedor normalizado",
     )
     description = models.TextField(blank=True, verbose_name="Descripcion")
+    cost = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=0,
+        verbose_name="Costo",
+    )
     price = models.DecimalField(max_digits=12, decimal_places=2, verbose_name="Precio")
     stock = models.IntegerField(default=0, verbose_name="Stock")
     # Legacy single category (kept for backward compatibility and as primary category)
@@ -334,6 +340,7 @@ class Product(models.Model):
             models.Index(fields=["supplier"]),
             models.Index(fields=["supplier_ref"]),
             models.Index(fields=["category"]),
+            models.Index(fields=["cost"]),
             models.Index(fields=["is_active"]),
             models.Index(fields=["updated_at"]),
             models.Index(fields=["filter_1"]),
@@ -548,6 +555,14 @@ class ClampMeasureRequest(models.Model):
 
     description = models.CharField(max_length=320, verbose_name="Descripcion generada")
     generated_code = models.CharField(max_length=80, blank=True, verbose_name="Codigo sugerido")
+    linked_product = models.ForeignKey(
+        Product,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="linked_clamp_requests",
+        verbose_name="Producto vinculado",
+    )
 
     dollar_rate = models.DecimalField(max_digits=12, decimal_places=4, verbose_name="Dolar")
     steel_price_usd = models.DecimalField(max_digits=12, decimal_places=4, verbose_name="Precio acero USD")
@@ -594,6 +609,13 @@ class ClampMeasureRequest(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     processed_at = models.DateTimeField(null=True, blank=True, verbose_name="Fecha procesamiento")
     quoted_at = models.DateTimeField(null=True, blank=True, verbose_name="Fecha precio confirmado")
+    added_to_cart_at = models.DateTimeField(null=True, blank=True, verbose_name="Fecha agregado al carrito")
+    ordered_at = models.DateTimeField(null=True, blank=True, verbose_name="Fecha incorporado a pedido")
+    published_to_catalog_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="Fecha publicado en catalogo",
+    )
 
     class Meta:
         verbose_name = "Solicitud de abrazadera a medida"

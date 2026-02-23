@@ -7,6 +7,7 @@ from decimal import Decimal
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.apps import apps
 from django.db import transaction
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -44,6 +45,7 @@ def _build_order_from_cart(cart, user, notes="", status=Order.STATUS_CONFIRMED):
     order = Order.objects.create(
         user=user,
         status=status,
+        priority=Order.PRIORITY_NORMAL,
         notes=(notes or "").strip(),
         subtotal=subtotal,
         discount_percentage=discount_decimal * 100,
@@ -53,6 +55,10 @@ def _build_order_from_cart(cart, user, notes="", status=Order.STATUS_CONFIRMED):
         client_cuit=client_profile.cuit_dni if client_profile else "",
         client_address=client_profile.address if client_profile else "",
         client_phone=client_profile.phone if client_profile else "",
+        saas_document_type="",
+        saas_document_number="",
+        saas_document_cae="",
+        follow_up_note="",
     )
     OrderStatusHistory.objects.create(
         order=order,
@@ -61,15 +67,47 @@ def _build_order_from_cart(cart, user, notes="", status=Order.STATUS_CONFIRMED):
         changed_by=user if user.is_authenticated else None,
         note="Pedido creado por cliente",
     )
-    for cart_item in cart.items.select_related("product"):
+    clamp_summary_lines = []
+    clamp_request_ids = set()
+
+    for cart_item in cart.items.select_related("product", "clamp_request"):
         OrderItem.objects.create(
             order=order,
             product=cart_item.product,
+            clamp_request=cart_item.clamp_request,
             product_sku=cart_item.product.sku,
             product_name=cart_item.product.name,
             quantity=cart_item.quantity,
             price_at_purchase=cart_item.product.price,
         )
+
+        if cart_item.clamp_request_id:
+            clamp_request_ids.add(cart_item.clamp_request_id)
+            clamp_summary_lines.append(
+                (
+                    f"- Solicitud #{cart_item.clamp_request_id}: "
+                    f"{cart_item.product.name} | "
+                    f"cant. {cart_item.quantity} | "
+                    f"${cart_item.product.price:.2f} c/u"
+                )
+            )
+
+    if clamp_summary_lines:
+        clamp_summary = "Abrazaderas a medida agregadas por cliente:\n" + "\n".join(clamp_summary_lines)
+        order.admin_notes = (order.admin_notes or "").strip()
+        if order.admin_notes:
+            order.admin_notes = f"{order.admin_notes}\n\n{clamp_summary}"
+        else:
+            order.admin_notes = clamp_summary
+        order.save(update_fields=["admin_notes", "updated_at"])
+
+    if clamp_request_ids:
+        ClampMeasureRequest = apps.get_model("catalog", "ClampMeasureRequest")
+        ClampMeasureRequest.objects.filter(id__in=clamp_request_ids).update(
+            ordered_at=timezone.now(),
+            updated_at=timezone.now(),
+        )
+
     return order
 
 
@@ -251,17 +289,24 @@ def reorder_to_cart(request, order_id):
     order = get_object_or_404(Order.objects.prefetch_related("items"), pk=order_id, user=request.user)
     cart, _ = Cart.objects.get_or_create(user=request.user)
     added = 0
-    for item in order.items.all():
+    for item in order.items.select_related("clamp_request"):
         if not item.product_id or not item.product:
             continue
         cart_item, created = CartItem.objects.get_or_create(
             cart=cart,
             product=item.product,
-            defaults={"quantity": item.quantity},
+            defaults={
+                "quantity": item.quantity,
+                "clamp_request": item.clamp_request,
+            },
         )
         if not created:
             cart_item.quantity += item.quantity
-            cart_item.save(update_fields=["quantity"])
+            if item.clamp_request_id and cart_item.clamp_request_id != item.clamp_request_id:
+                cart_item.clamp_request = item.clamp_request
+                cart_item.save(update_fields=["quantity", "clamp_request"])
+            else:
+                cart_item.save(update_fields=["quantity"])
         added += 1
     messages.success(request, f"Se agregaron {added} productos al carrito para recompra.")
     return redirect("cart")

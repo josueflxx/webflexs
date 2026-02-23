@@ -1,4 +1,5 @@
 {% extends 'admin_panel/base.html' %}
+{% load l10n %}
 
 {% block page_title %}{{ action }} Producto{% endblock %}
 
@@ -55,7 +56,7 @@
                    id="price" 
                    class="form-input" 
                    required 
-                   value="{{ product.price|default:'0' }}" 
+                   value="{% if product %}{{ product.price|unlocalize }}{% else %}0{% endif %}" 
                    {% if not user.is_superuser %}disabled{% endif %}>
         </div>
 

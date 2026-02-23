@@ -68,9 +68,11 @@
             <tr>
                 <th>SKU</th>
                 <th>Producto</th>
+                <th>Solicitud medida</th>
                 <th>Cant.</th>
                 <th>Precio Unit.</th>
                 <th>Subtotal</th>
+                <th>Accion</th>
             </tr>
         </thead>
         <tbody>
@@ -78,6 +80,25 @@
             <tr>
                 <td><code>{{ item.product_sku }}</code></td>
                 <td>{{ item.product_name }}</td>
+                <td>
+                    {% if item.clamp_request_id %}
+                    <div>
+                        <span class="badge badge-info">#{{ item.clamp_request_id }}</span>
+                        <small class="text-muted">
+                            {{ item.clamp_request.get_clamp_type_display|upper }}
+                            {{ item.clamp_request.diameter }} x {{ item.clamp_request.width_mm }} x {{ item.clamp_request.length_mm }}
+                            {{ item.clamp_request.profile_type }}
+                        </small>
+                    </div>
+                    {% if item.published_to_catalog %}
+                    <div style="margin-top:6px;">
+                        <span class="badge badge-success">Ya publicada en catalogo</span>
+                    </div>
+                    {% endif %}
+                    {% else %}
+                    <span class="text-muted">-</span>
+                    {% endif %}
+                </td>
                 <td>{{ item.quantity }}</td>
                 <td>
                     <span>${{ item.price_at_purchase|floatformat:2 }}</span>
@@ -88,6 +109,24 @@
                     {% endif %}
                 </td>
                 <td>${{ item.subtotal|floatformat:2 }}</td>
+                <td>
+                    {% if item.clamp_request_id and item.can_publish_to_catalog %}
+                    <form method="post" action="{% url 'admin_order_item_publish_clamp' order.pk item.pk %}">
+                        {% csrf_token %}
+                        <button
+                            type="submit"
+                            class="btn btn-primary btn-sm"
+                            onclick="return confirm('Publicar esta abrazadera como producto del catalogo?');"
+                        >
+                            Añadir abrazadera a productos
+                        </button>
+                    </form>
+                    {% elif item.clamp_request_id %}
+                    <span class="text-muted">Publicada</span>
+                    {% else %}
+                    <span class="text-muted">-</span>
+                    {% endif %}
+                </td>
             </tr>
             {% endfor %}
         </tbody>

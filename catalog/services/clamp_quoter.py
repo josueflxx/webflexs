@@ -134,7 +134,8 @@ def calculate_clamp_quote(payload):
     if is_zincated:
         base_cost = base_cost * Decimal("1.20")
     if clamp_type == "laminada":
-        base_cost = base_cost * Decimal("2.0")
+        # Business rule: laminated clamps cost half compared to trefiladas.
+        base_cost = base_cost / Decimal("2.0")
 
     base_cost = base_cost.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
     description = build_clamp_description(

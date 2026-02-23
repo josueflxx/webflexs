@@ -81,6 +81,13 @@
             {% if created_request.client_response_note %}
             <p class="text-muted">{{ created_request.client_response_note }}</p>
             {% endif %}
+            {% if user.is_authenticated and created_request.status == 'completed' and created_request.confirmed_price %}
+            <form method="post" action="{% url 'catalog_clamp_request_add_to_cart' created_request.pk %}" style="margin-top:10px;">
+                {% csrf_token %}
+                <input type="hidden" name="quantity" value="{{ created_request.quantity|default:1 }}">
+                <button type="submit" class="btn btn-primary btn-sm">Agregar medida al carrito</button>
+            </form>
+            {% endif %}
         </section>
         {% endif %}
 
@@ -230,6 +237,7 @@
                             <th>Estado</th>
                             <th>Precio confirmado</th>
                             <th>Respuesta admin</th>
+                            <th>Accion</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -260,6 +268,30 @@
                                 {% endif %}
                             </td>
                             <td>{{ req.client_response_note|default:"-" }}</td>
+                            <td>
+                                {% if req.status == 'completed' and req.confirmed_price %}
+                                    {% if user.is_authenticated %}
+                                    <form method="post" action="{% url 'catalog_clamp_request_add_to_cart' req.pk %}">
+                                        {% csrf_token %}
+                                        <input
+                                            type="number"
+                                            name="quantity"
+                                            min="1"
+                                            value="{{ req.quantity|default:1 }}"
+                                            class="form-input"
+                                            style="max-width: 88px; margin-bottom: 6px;"
+                                        >
+                                        <button type="submit" class="btn btn-primary btn-sm">Agregar al carrito</button>
+                                    </form>
+                                    {% else %}
+                                    <span class="text-muted">Inicia sesion para agregar</span>
+                                    {% endif %}
+                                {% elif req.status == 'quoted' %}
+                                <span class="text-muted">Esperando cierre de admin</span>
+                                {% else %}
+                                <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
                         </tr>
                         {% endfor %}
                     </tbody>

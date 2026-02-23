@@ -5,15 +5,19 @@ import json
 from decimal import Decimal
 
 from django.contrib import messages
+from django.contrib.auth.decorators import login_required
 from django.core.cache import cache
 from django.core.paginator import Paginator
 from django.db.models import Count, Max, Prefetch, Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.utils import timezone
+from django.views.decorators.http import require_POST
 
 from core.models import CatalogAnalyticsEvent, SiteSettings
-from orders.models import ClientFavoriteProduct
+from orders.models import Cart, CartItem, ClientFavoriteProduct
 
+from catalog.services.clamp_request_products import get_or_create_request_product
 from catalog.services.clamp_quoter import (
     CLAMP_LAMINATED_ALLOWED_DIAMETERS,
     calculate_clamp_quote,
@@ -22,8 +26,8 @@ from catalog.services.clamp_quoter import (
 from .models import Category, CategoryAttribute, ClampMeasureRequest, Product
 
 
-CLAMP_REQUEST_DEFAULT_DOLLAR_RATE = Decimal("1300")
-CLAMP_REQUEST_DEFAULT_STEEL_PRICE_USD = Decimal("1450")
+CLAMP_REQUEST_DEFAULT_DOLLAR_RATE = Decimal("1450")
+CLAMP_REQUEST_DEFAULT_STEEL_PRICE_USD = Decimal("1.45")
 CLAMP_REQUEST_DEFAULT_SUPPLIER_DISCOUNT = Decimal("0")
 CLAMP_REQUEST_DEFAULT_GENERAL_INCREASE = Decimal("40")
 
@@ -720,3 +724,66 @@ def clamp_measure_request(request):
         "seo_description": "Consulta existencia y solicita cotizacion de abrazaderas a medida.",
     }
     return render(request, "catalog/clamp_request.html", context)
+
+
+@login_required
+@require_POST
+def clamp_request_add_to_cart(request, pk):
+    """Add a completed custom clamp request into client cart."""
+    clamp_request = get_object_or_404(
+        ClampMeasureRequest.objects.select_related("linked_product"),
+        pk=pk,
+        client_user=request.user,
+    )
+
+    if clamp_request.status != ClampMeasureRequest.STATUS_COMPLETED:
+        messages.error(
+            request,
+            "Solo puedes agregar al carrito solicitudes con estado Completada.",
+        )
+        return redirect(f"{reverse('catalog_clamp_request')}?request_id={clamp_request.pk}")
+
+    if not clamp_request.confirmed_price or clamp_request.confirmed_price <= 0:
+        messages.error(
+            request,
+            "Esta solicitud todavia no tiene un precio confirmado valido.",
+        )
+        return redirect(f"{reverse('catalog_clamp_request')}?request_id={clamp_request.pk}")
+
+    try:
+        quantity = int(str(request.POST.get("quantity", "")).strip() or clamp_request.quantity or 1)
+    except (TypeError, ValueError):
+        quantity = 1
+    quantity = max(quantity, 1)
+
+    product, _ = get_or_create_request_product(clamp_request)
+    if product.price != clamp_request.confirmed_price:
+        product.price = clamp_request.confirmed_price
+        product.save(update_fields=["price", "updated_at"])
+
+    cart, _ = Cart.objects.get_or_create(user=request.user)
+    cart_item, created = CartItem.objects.get_or_create(
+        cart=cart,
+        product=product,
+        defaults={
+            "quantity": quantity,
+            "clamp_request": clamp_request,
+        },
+    )
+    if not created:
+        cart_item.quantity += quantity
+        if cart_item.clamp_request_id != clamp_request.pk:
+            cart_item.clamp_request = clamp_request
+            cart_item.save(update_fields=["quantity", "clamp_request"])
+        else:
+            cart_item.save(update_fields=["quantity"])
+
+    if not clamp_request.added_to_cart_at:
+        clamp_request.added_to_cart_at = timezone.now()
+        clamp_request.save(update_fields=["added_to_cart_at", "updated_at"])
+
+    messages.success(
+        request,
+        f"Se agrego la medida solicitada (#{clamp_request.pk}) al carrito.",
+    )
+    return redirect("cart")

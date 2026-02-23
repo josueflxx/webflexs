@@ -29,7 +29,7 @@ from openpyxl import Workbook
 
 from catalog.models import Product, Category, CategoryAttribute, ClampMeasureRequest, Supplier
 from accounts.models import AccountRequest, ClientPayment, ClientProfile
-from orders.models import ClampQuotation, Order, OrderStatusHistory
+from orders.models import ClampQuotation, Order, OrderItem, OrderStatusHistory
 from core.models import SiteSettings, CatalogAnalyticsEvent, AdminAuditLog, ImportExecution
 from django.contrib.auth.models import User
 from admin_panel.forms.import_forms import ProductImportForm, ClientImportForm, CategoryImportForm
@@ -50,7 +50,10 @@ from catalog.services.clamp_quoter import (
     CLAMP_WEIGHT_MAP,
     calculate_clamp_quote,
     get_allowed_diameter_options,
+    parse_decimal_value,
+    parse_int_value,
 )
+from catalog.services.clamp_request_products import publish_clamp_request_product
 from catalog.services.category_assignment import (
     normalize_category_ids,
     assign_categories_to_product,
@@ -1410,9 +1413,9 @@ def clamp_quoter(request):
     """Mini cotizador de abrazaderas."""
     default_form = {
         "client_name": "",
-        "dollar_rate": "",
+        "dollar_rate": "1450",
         "dollar_mode": "manual",
-        "steel_price_usd": "1450",
+        "steel_price_usd": "1.45",
         "supplier_discount_pct": "0",
         "general_increase_pct": "40",
         "clamp_type": "trefilada",
@@ -1427,9 +1430,9 @@ def clamp_quoter(request):
     if request.method == "POST":
         form_values.update({
             "client_name": str(request.POST.get("client_name", "")).strip(),
-            "dollar_rate": str(request.POST.get("dollar_rate", "")).strip(),
+            "dollar_rate": str(request.POST.get("dollar_rate", "1450")).strip(),
             "dollar_mode": str(request.POST.get("dollar_mode", "manual")).strip().lower(),
-            "steel_price_usd": str(request.POST.get("steel_price_usd", "1450")).strip(),
+            "steel_price_usd": str(request.POST.get("steel_price_usd", "1.45")).strip(),
             "supplier_discount_pct": str(request.POST.get("supplier_discount_pct", "0")).strip(),
             "general_increase_pct": str(request.POST.get("general_increase_pct", "40")).strip(),
             "clamp_type": str(request.POST.get("clamp_type", "trefilada")).strip().lower(),
@@ -1588,24 +1591,50 @@ def clamp_request_detail(request, pk):
         pk=pk,
     )
 
+    def _build_quote_preview(
+        *,
+        clamp_type,
+        is_zincated,
+        diameter,
+        width_mm,
+        length_mm,
+        profile_type,
+        dollar_rate,
+        steel_price_usd,
+        supplier_discount_pct,
+        general_increase_pct,
+    ):
+        return calculate_clamp_quote(
+            {
+                "client_name": clamp_request.client_name,
+                "dollar_rate": dollar_rate,
+                "steel_price_usd": steel_price_usd,
+                "supplier_discount_pct": supplier_discount_pct,
+                "general_increase_pct": general_increase_pct,
+                "clamp_type": clamp_type,
+                "is_zincated": is_zincated,
+                "diameter": diameter,
+                "width_mm": width_mm,
+                "length_mm": length_mm,
+                "profile_type": profile_type,
+            }
+        )
+
     quote_preview = None
     selected_price_row = None
     price_map = {}
     try:
-        quote_preview = calculate_clamp_quote(
-            {
-                "client_name": clamp_request.client_name,
-                "dollar_rate": clamp_request.dollar_rate,
-                "steel_price_usd": clamp_request.steel_price_usd,
-                "supplier_discount_pct": clamp_request.supplier_discount_pct,
-                "general_increase_pct": clamp_request.general_increase_pct,
-                "clamp_type": clamp_request.clamp_type,
-                "is_zincated": clamp_request.is_zincated,
-                "diameter": clamp_request.diameter,
-                "width_mm": clamp_request.width_mm,
-                "length_mm": clamp_request.length_mm,
-                "profile_type": clamp_request.profile_type,
-            }
+        quote_preview = _build_quote_preview(
+            clamp_type=clamp_request.clamp_type,
+            is_zincated=clamp_request.is_zincated,
+            diameter=clamp_request.diameter,
+            width_mm=clamp_request.width_mm,
+            length_mm=clamp_request.length_mm,
+            profile_type=clamp_request.profile_type,
+            dollar_rate=clamp_request.dollar_rate,
+            steel_price_usd=clamp_request.steel_price_usd,
+            supplier_discount_pct=clamp_request.supplier_discount_pct,
+            general_increase_pct=clamp_request.general_increase_pct,
         )
         price_map = {row["key"]: row for row in quote_preview["price_rows"]}
         selected_price_row = price_map.get(clamp_request.selected_price_list)
@@ -1617,17 +1646,96 @@ def clamp_request_detail(request, pk):
         new_status = str(request.POST.get("status", "")).strip().lower()
         admin_note = str(request.POST.get("admin_note", "")).strip()
         client_response_note = str(request.POST.get("client_response_note", "")).strip()
+        selected_price_list = str(request.POST.get("selected_price_list", "")).strip()
         confirmed_price_list = str(request.POST.get("confirmed_price_list", "")).strip()
         confirmed_price_raw = str(request.POST.get("confirmed_price", "")).strip().replace(",", ".")
+        clamp_type = str(request.POST.get("clamp_type", clamp_request.clamp_type)).strip().lower()
+        is_zincated = str(request.POST.get("is_zincated", "")).strip().lower() in {"1", "true", "on", "yes"}
+        diameter = str(request.POST.get("diameter", clamp_request.diameter)).strip()
+        profile_type = str(request.POST.get("profile_type", clamp_request.profile_type)).strip().upper()
+        width_mm_raw = str(request.POST.get("width_mm", clamp_request.width_mm)).strip()
+        length_mm_raw = str(request.POST.get("length_mm", clamp_request.length_mm)).strip()
+        quantity_raw = str(request.POST.get("quantity", clamp_request.quantity)).strip()
+        dollar_rate_raw = str(request.POST.get("dollar_rate", "")).strip()
+        steel_price_usd_raw = str(request.POST.get("steel_price_usd", "")).strip()
+        supplier_discount_pct_raw = str(request.POST.get("supplier_discount_pct", "")).strip()
+        general_increase_pct_raw = str(request.POST.get("general_increase_pct", "")).strip()
 
         valid_statuses = {value for value, _ in ClampMeasureRequest.STATUS_CHOICES}
         valid_price_lists = {value for value, _ in ClampMeasureRequest.PRICE_LIST_CHOICES}
+        valid_clamp_types = {value for value, _ in ClampMeasureRequest.CLAMP_TYPE_CHOICES}
+        valid_profile_types = {value for value, _ in ClampMeasureRequest.PROFILE_TYPE_CHOICES}
         if new_status not in valid_statuses:
             messages.error(request, "Estado invalido.")
+            return redirect("admin_clamp_request_detail", pk=clamp_request.pk)
+        if selected_price_list and selected_price_list not in valid_price_lists:
+            messages.error(request, "Lista de estimacion invalida.")
             return redirect("admin_clamp_request_detail", pk=clamp_request.pk)
         if confirmed_price_list and confirmed_price_list not in valid_price_lists:
             messages.error(request, "Lista confirmada invalida.")
             return redirect("admin_clamp_request_detail", pk=clamp_request.pk)
+        if clamp_type not in valid_clamp_types:
+            messages.error(request, "Tipo de abrazadera invalido.")
+            return redirect("admin_clamp_request_detail", pk=clamp_request.pk)
+        if profile_type not in valid_profile_types:
+            messages.error(request, "Forma invalida.")
+            return redirect("admin_clamp_request_detail", pk=clamp_request.pk)
+        if clamp_type == "laminada" and diameter not in CLAMP_LAMINATED_ALLOWED_DIAMETERS:
+            messages.error(request, "Para laminada solo se permiten diametros 3/4, 1 y 7/8.")
+            return redirect("admin_clamp_request_detail", pk=clamp_request.pk)
+
+        try:
+            width_mm = parse_int_value(width_mm_raw, "Ancho (mm)", min_value=1)
+            length_mm = parse_int_value(length_mm_raw, "Largo (mm)", min_value=1)
+            quantity = parse_int_value(quantity_raw, "Cantidad", min_value=1)
+            dollar_rate = parse_decimal_value(
+                dollar_rate_raw or clamp_request.dollar_rate,
+                "Dolar",
+                min_value=Decimal("0.0001"),
+            )
+            steel_price_usd = parse_decimal_value(
+                steel_price_usd_raw or clamp_request.steel_price_usd,
+                "Precio acero USD",
+                min_value=Decimal("0.0001"),
+            )
+            supplier_discount_pct = parse_decimal_value(
+                supplier_discount_pct_raw or clamp_request.supplier_discount_pct,
+                "Desc. proveedor (%)",
+                min_value=Decimal("0"),
+            )
+            general_increase_pct = parse_decimal_value(
+                general_increase_pct_raw or clamp_request.general_increase_pct,
+                "Aumento gral. (%)",
+                min_value=Decimal("0"),
+            )
+            quote_preview = _build_quote_preview(
+                clamp_type=clamp_type,
+                is_zincated=is_zincated,
+                diameter=diameter,
+                width_mm=width_mm,
+                length_mm=length_mm,
+                profile_type=profile_type,
+                dollar_rate=dollar_rate,
+                steel_price_usd=steel_price_usd,
+                supplier_discount_pct=supplier_discount_pct,
+                general_increase_pct=general_increase_pct,
+            )
+            price_map = {row["key"]: row for row in quote_preview["price_rows"]}
+        except ValueError as exc:
+            messages.error(request, str(exc))
+            return redirect("admin_clamp_request_detail", pk=clamp_request.pk)
+
+        if not selected_price_list:
+            selected_price_list = clamp_request.selected_price_list
+        selected_row = price_map.get(selected_price_list)
+        if not selected_row:
+            messages.error(request, "No se pudo calcular la lista seleccionada.")
+            return redirect("admin_clamp_request_detail", pk=clamp_request.pk)
+
+        estimated_final_price = selected_row["final_price"]
+        recalculated_base_cost = quote_preview["base_cost"]
+        recalculated_description = quote_preview["description"]
+        recalculated_code = quote_preview.get("generated_code", "")
 
         confirmed_price = clamp_request.confirmed_price
         if confirmed_price_raw:
@@ -1644,15 +1752,25 @@ def clamp_request_detail(request, pk):
 
         if new_status in {ClampMeasureRequest.STATUS_QUOTED, ClampMeasureRequest.STATUS_COMPLETED}:
             if confirmed_price is None:
-                if clamp_request.estimated_final_price:
-                    confirmed_price = clamp_request.estimated_final_price
+                if estimated_final_price:
+                    confirmed_price = estimated_final_price
                 else:
                     messages.error(request, "Confirma un precio para marcar la solicitud como cotizada/completada.")
                     return redirect("admin_clamp_request_detail", pk=clamp_request.pk)
             if not confirmed_price_list:
-                confirmed_price_list = clamp_request.confirmed_price_list or clamp_request.selected_price_list
+                confirmed_price_list = clamp_request.confirmed_price_list or selected_price_list
 
         changed = False
+        technical_shape_changed = any(
+            [
+                clamp_request.clamp_type != clamp_type,
+                clamp_request.is_zincated != is_zincated,
+                clamp_request.diameter != diameter,
+                clamp_request.width_mm != width_mm,
+                clamp_request.length_mm != length_mm,
+                clamp_request.profile_type != profile_type,
+            ]
+        )
         if clamp_request.admin_note != admin_note:
             clamp_request.admin_note = admin_note
             changed = True
@@ -1667,6 +1785,72 @@ def clamp_request_detail(request, pk):
             changed = True
         if clamp_request.confirmed_price != confirmed_price:
             clamp_request.confirmed_price = confirmed_price
+            changed = True
+        if clamp_request.clamp_type != clamp_type:
+            clamp_request.clamp_type = clamp_type
+            changed = True
+        if clamp_request.is_zincated != is_zincated:
+            clamp_request.is_zincated = is_zincated
+            changed = True
+        if clamp_request.diameter != diameter:
+            clamp_request.diameter = diameter
+            changed = True
+        if clamp_request.width_mm != width_mm:
+            clamp_request.width_mm = width_mm
+            changed = True
+        if clamp_request.length_mm != length_mm:
+            clamp_request.length_mm = length_mm
+            changed = True
+        if clamp_request.profile_type != profile_type:
+            clamp_request.profile_type = profile_type
+            changed = True
+        if clamp_request.quantity != quantity:
+            clamp_request.quantity = quantity
+            changed = True
+        if clamp_request.description != recalculated_description:
+            clamp_request.description = recalculated_description
+            changed = True
+        if clamp_request.generated_code != recalculated_code:
+            clamp_request.generated_code = recalculated_code
+            changed = True
+        if clamp_request.selected_price_list != selected_price_list:
+            clamp_request.selected_price_list = selected_price_list
+            changed = True
+        if clamp_request.estimated_final_price != estimated_final_price:
+            clamp_request.estimated_final_price = estimated_final_price
+            changed = True
+        if clamp_request.base_cost != recalculated_base_cost:
+            clamp_request.base_cost = recalculated_base_cost
+            changed = True
+        if clamp_request.dollar_rate != dollar_rate:
+            clamp_request.dollar_rate = dollar_rate
+            changed = True
+        if clamp_request.steel_price_usd != steel_price_usd:
+            clamp_request.steel_price_usd = steel_price_usd
+            changed = True
+        if clamp_request.supplier_discount_pct != supplier_discount_pct:
+            clamp_request.supplier_discount_pct = supplier_discount_pct
+            changed = True
+        if clamp_request.general_increase_pct != general_increase_pct:
+            clamp_request.general_increase_pct = general_increase_pct
+            changed = True
+
+        matching_exists = Product.objects.filter(
+            clamp_specs__fabrication=clamp_type.upper(),
+            clamp_specs__diameter=diameter,
+            clamp_specs__width=width_mm,
+            clamp_specs__length=length_mm,
+            clamp_specs__shape=profile_type,
+        ).exists()
+        if clamp_request.exists_in_catalog != matching_exists:
+            clamp_request.exists_in_catalog = matching_exists
+            changed = True
+
+        technical_unlinked = False
+        if technical_shape_changed and clamp_request.linked_product_id:
+            clamp_request.linked_product = None
+            clamp_request.published_to_catalog_at = None
+            technical_unlinked = True
             changed = True
 
         if (
@@ -1684,8 +1868,27 @@ def clamp_request_detail(request, pk):
                 "status",
                 "admin_note",
                 "client_response_note",
+                "clamp_type",
+                "is_zincated",
+                "diameter",
+                "width_mm",
+                "length_mm",
+                "profile_type",
+                "quantity",
+                "description",
+                "generated_code",
+                "selected_price_list",
+                "estimated_final_price",
+                "base_cost",
+                "dollar_rate",
+                "steel_price_usd",
+                "supplier_discount_pct",
+                "general_increase_pct",
                 "confirmed_price_list",
                 "confirmed_price",
+                "exists_in_catalog",
+                "linked_product",
+                "published_to_catalog_at",
                 "quoted_at",
                 "processed_by",
                 "processed_at",
@@ -1699,12 +1902,22 @@ def clamp_request_detail(request, pk):
                 target_id=clamp_request.pk,
                 details={
                     "status": clamp_request.status,
+                    "clamp_type": clamp_request.clamp_type,
+                    "diameter": clamp_request.diameter,
+                    "width_mm": clamp_request.width_mm,
+                    "length_mm": clamp_request.length_mm,
+                    "profile_type": clamp_request.profile_type,
                     "confirmed_price_list": clamp_request.confirmed_price_list,
                     "confirmed_price": str(clamp_request.confirmed_price or ""),
                     "client_response_note": clamp_request.client_response_note[:200],
                     "admin_note": clamp_request.admin_note[:200],
                 },
             )
+            if technical_unlinked:
+                messages.warning(
+                    request,
+                    "Se desvinculo el producto asociado porque cambiaste las medidas tecnicas.",
+                )
             messages.success(request, "Solicitud actualizada.")
         else:
             messages.info(request, "No hubo cambios para guardar.")
@@ -1719,6 +1932,11 @@ def clamp_request_detail(request, pk):
             "clamp_request": clamp_request,
             "status_choices": ClampMeasureRequest.STATUS_CHOICES,
             "price_list_choices": ClampMeasureRequest.PRICE_LIST_CHOICES,
+            "clamp_type_choices": ClampMeasureRequest.CLAMP_TYPE_CHOICES,
+            "profile_type_choices": ClampMeasureRequest.PROFILE_TYPE_CHOICES,
+            "diameter_options": get_allowed_diameter_options(clamp_request.clamp_type),
+            "all_diameter_options_json": json.dumps(get_allowed_diameter_options()),
+            "laminated_diameter_options_json": json.dumps(list(CLAMP_LAMINATED_ALLOWED_DIAMETERS)),
             "quote_preview": quote_preview,
             "selected_price_row": selected_price_row,
             "matching_products": matching_products,
@@ -2001,8 +2219,14 @@ def order_list(request):
 @staff_member_required
 def order_detail(request, pk):
     """Order detail and status management."""
-    order = get_object_or_404(Order.objects.prefetch_related('items', 'status_history__changed_by'), pk=pk)
-    order_items = list(order.items.all())
+    order = get_object_or_404(Order.objects.prefetch_related('status_history__changed_by'), pk=pk)
+    order_items = list(
+        order.items.select_related(
+            'product',
+            'clamp_request',
+            'clamp_request__linked_product',
+        )
+    )
     order_discount_percentage = (order.discount_percentage or Decimal('0')).quantize(
         Decimal('0.01'),
         rounding=ROUND_HALF_UP,
@@ -2014,6 +2238,16 @@ def order_detail(request, pk):
                 item.price_at_purchase * order_discount_percentage / Decimal('100')
             ).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
         item.unit_discount_amount = unit_discount_amount
+
+        clamp_request = getattr(item, 'clamp_request', None)
+        linked_product = getattr(clamp_request, 'linked_product', None) if clamp_request else None
+        published_to_catalog = bool(
+            clamp_request
+            and linked_product
+            and linked_product.is_visible_in_catalog(include_uncategorized=False)
+        )
+        item.published_to_catalog = published_to_catalog
+        item.can_publish_to_catalog = bool(clamp_request) and not published_to_catalog
 
     order_client_profile = (
         ClientProfile.objects.only('id').filter(user_id=order.user_id).first()
@@ -2060,6 +2294,64 @@ def order_detail(request, pk):
         'order_is_paid': order.is_paid(),
         'order_client_profile_id': order_client_profile.pk if order_client_profile else '',
     })
+
+
+@staff_member_required
+@require_POST
+def order_item_publish_clamp(request, pk, item_id):
+    """Publish a clamp measure item from order detail into catalog products."""
+    order = get_object_or_404(Order, pk=pk)
+    order_item = get_object_or_404(
+        OrderItem.objects.select_related('clamp_request'),
+        pk=item_id,
+        order_id=order.pk,
+    )
+
+    if not order_item.clamp_request_id:
+        messages.error(request, 'Este item no proviene de una solicitud de abrazadera a medida.')
+        return redirect('admin_order_detail', pk=order.pk)
+
+    clamp_request = order_item.clamp_request
+    if clamp_request.status != ClampMeasureRequest.STATUS_COMPLETED:
+        messages.error(
+            request,
+            'La solicitud debe estar Completada antes de publicarla en el catalogo.',
+        )
+        return redirect('admin_order_detail', pk=order.pk)
+
+    product, created, published_now = publish_clamp_request_product(clamp_request)
+
+    order_item.product = product
+    order_item.product_sku = product.sku
+    order_item.product_name = product.name
+    order_item.save(update_fields=['product', 'product_sku', 'product_name'])
+
+    log_admin_action(
+        request,
+        action='order_item_publish_clamp',
+        target_type='order_item',
+        target_id=order_item.pk,
+        details={
+            'order_id': order.pk,
+            'clamp_request_id': clamp_request.pk,
+            'product_id': product.pk,
+            'product_sku': product.sku,
+            'created_product': created,
+            'published_now': published_now,
+        },
+    )
+
+    if published_now:
+        messages.success(
+            request,
+            f'Abrazadera publicada como producto {product.sku} y visible en catalogo.',
+        )
+    else:
+        messages.success(
+            request,
+            f'Item vinculado al producto {product.sku}.',
+        )
+    return redirect('admin_order_detail', pk=order.pk)
 
 
 @staff_member_required

@@ -43,6 +43,11 @@ urlpatterns = [
     # Orders
     path('pedidos/', views.order_list, name='admin_order_list'),
     path('pedidos/<int:pk>/', views.order_detail, name='admin_order_detail'),
+    path(
+        'pedidos/<int:pk>/items/<int:item_id>/publicar-abrazadera/',
+        views.order_item_publish_clamp,
+        name='admin_order_item_publish_clamp',
+    ),
     path('pedidos/<int:pk>/eliminar/', views.order_delete, name='admin_order_delete'),
     path('pagos/', views.payment_list, name='admin_payment_list'),
     path('cotizador/', views.clamp_quoter, name='admin_clamp_quoter'),

@@ -6,9 +6,9 @@ from django.test import TestCase
 from django.urls import reverse
 
 from accounts.models import ClientPayment, ClientProfile
-from catalog.models import ClampMeasureRequest
-from orders.models import ClampQuotation, Order
-from admin_panel.views import calculate_clamp_quote
+from catalog.models import Category, ClampMeasureRequest, Product
+from catalog.services.clamp_quoter import calculate_clamp_quote
+from orders.models import ClampQuotation, Order, OrderItem
 
 
 class ClientOrderHistoryViewTests(TestCase):
@@ -297,3 +297,222 @@ class ClampMeasureRequestAdminTests(TestCase):
         self.assertEqual(self.clamp_request.confirmed_price_list, 'lista_2')
         self.assertIsNotNone(self.clamp_request.confirmed_price)
         self.assertEqual(self.clamp_request.client_response_note, 'Precio confirmado para entrega inmediata.')
+
+    def test_staff_can_modify_quote_criteria_and_recalculate_price(self):
+        self.client.force_login(self.staff)
+        response = self.client.post(
+            reverse('admin_clamp_request_detail', args=[self.clamp_request.pk]),
+            data={
+                'status': ClampMeasureRequest.STATUS_COMPLETED,
+                'dollar_rate': '1200.00',
+                'steel_price_usd': '1550.00',
+                'supplier_discount_pct': '5.00',
+                'general_increase_pct': '35.00',
+                'selected_price_list': 'lista_3',
+                'confirmed_price_list': 'lista_3',
+                'client_response_note': 'Precio actualizado con nuevos criterios.',
+                'admin_note': 'Ajuste de criterios economicos.',
+            },
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.clamp_request.refresh_from_db()
+        self.assertEqual(self.clamp_request.status, ClampMeasureRequest.STATUS_COMPLETED)
+        self.assertEqual(self.clamp_request.dollar_rate, Decimal('1200.00'))
+        self.assertEqual(self.clamp_request.steel_price_usd, Decimal('1550.00'))
+        self.assertEqual(self.clamp_request.supplier_discount_pct, Decimal('5.00'))
+        self.assertEqual(self.clamp_request.general_increase_pct, Decimal('35.00'))
+        self.assertEqual(self.clamp_request.selected_price_list, 'lista_3')
+        self.assertEqual(self.clamp_request.confirmed_price_list, 'lista_3')
+
+        expected = calculate_clamp_quote({
+            'client_name': self.clamp_request.client_name,
+            'dollar_rate': '1200.00',
+            'steel_price_usd': '1550.00',
+            'supplier_discount_pct': '5.00',
+            'general_increase_pct': '35.00',
+            'clamp_type': self.clamp_request.clamp_type,
+            'is_zincated': self.clamp_request.is_zincated,
+            'diameter': self.clamp_request.diameter,
+            'width_mm': str(self.clamp_request.width_mm),
+            'length_mm': str(self.clamp_request.length_mm),
+            'profile_type': self.clamp_request.profile_type,
+        })
+        price_map = {row['key']: row['final_price'] for row in expected['price_rows']}
+        self.assertEqual(self.clamp_request.estimated_final_price, price_map['lista_3'])
+        self.assertEqual(self.clamp_request.confirmed_price, price_map['lista_3'])
+
+    def test_staff_can_modify_technical_data_and_refresh_all_outputs(self):
+        self.client.force_login(self.staff)
+        response = self.client.post(
+            reverse('admin_clamp_request_detail', args=[self.clamp_request.pk]),
+            data={
+                'status': ClampMeasureRequest.STATUS_PENDING,
+                'clamp_type': 'laminada',
+                'is_zincated': '1',
+                'diameter': '3/4',
+                'width_mm': '95',
+                'length_mm': '260',
+                'profile_type': 'CURVA',
+                'quantity': '5',
+                'dollar_rate': '1300.00',
+                'steel_price_usd': '1450.00',
+                'supplier_discount_pct': '0.00',
+                'general_increase_pct': '40.00',
+                'selected_price_list': 'lista_2',
+                'confirmed_price_list': '',
+                'confirmed_price': '',
+                'admin_note': 'Ajuste tecnico por nueva medida.',
+                'client_response_note': '',
+            },
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.clamp_request.refresh_from_db()
+        self.assertEqual(self.clamp_request.clamp_type, 'laminada')
+        self.assertTrue(self.clamp_request.is_zincated)
+        self.assertEqual(self.clamp_request.diameter, '3/4')
+        self.assertEqual(self.clamp_request.width_mm, 95)
+        self.assertEqual(self.clamp_request.length_mm, 260)
+        self.assertEqual(self.clamp_request.profile_type, 'CURVA')
+        self.assertEqual(self.clamp_request.quantity, 5)
+        self.assertIn('LAMINADA', self.clamp_request.description)
+        self.assertIn('95 X 260 CURVA', self.clamp_request.description)
+        self.assertTrue(self.clamp_request.generated_code.startswith('ABL'))
+
+        expected = calculate_clamp_quote({
+            'client_name': self.clamp_request.client_name,
+            'dollar_rate': '1300.00',
+            'steel_price_usd': '1450.00',
+            'supplier_discount_pct': '0.00',
+            'general_increase_pct': '40.00',
+            'clamp_type': 'laminada',
+            'is_zincated': '1',
+            'diameter': '3/4',
+            'width_mm': '95',
+            'length_mm': '260',
+            'profile_type': 'CURVA',
+        })
+        price_map = {row['key']: row['final_price'] for row in expected['price_rows']}
+        self.assertEqual(self.clamp_request.base_cost, expected['base_cost'])
+        self.assertEqual(self.clamp_request.estimated_final_price, price_map['lista_2'])
+
+
+class OrderClampPublishTests(TestCase):
+    def setUp(self):
+        self.staff = User.objects.create_user(
+            username='staff_publish_clamp',
+            password='secret123',
+            is_staff=True,
+        )
+        self.client_user = User.objects.create_user(
+            username='cliente_publish_clamp',
+            password='secret123',
+        )
+        self.order = Order.objects.create(
+            user=self.client_user,
+            status=Order.STATUS_CONFIRMED,
+            subtotal=Decimal('1500.00'),
+            total=Decimal('1500.00'),
+            client_company='Cliente Publish Clamp',
+        )
+        self.product = Product.objects.create(
+            sku='ABT3481220S-R1',
+            name='ABRAZADERA TREFILADA DE 3/4 X 81 X 220 SEMICURVA',
+            price=Decimal('1500.00'),
+            stock=2,
+            is_active=False,
+            attributes={
+                'source': 'clamp_request',
+                'clamp_request_id': 0,
+            },
+        )
+        self.clamp_request = ClampMeasureRequest.objects.create(
+            client_user=self.client_user,
+            client_name='Cliente Publish Clamp',
+            clamp_type='trefilada',
+            is_zincated=False,
+            diameter='3/4',
+            width_mm=81,
+            length_mm=220,
+            profile_type='SEMICURVA',
+            quantity=2,
+            description='ABRAZADERA TREFILADA DE 3/4 X 81 X 220 SEMICURVA',
+            generated_code='ABT3481220S',
+            linked_product=self.product,
+            dollar_rate=Decimal('1300.00'),
+            steel_price_usd=Decimal('1450.00'),
+            supplier_discount_pct=Decimal('0.00'),
+            general_increase_pct=Decimal('40.00'),
+            base_cost=Decimal('1000.00'),
+            selected_price_list='lista_1',
+            estimated_final_price=Decimal('1400.00'),
+            confirmed_price_list='lista_2',
+            confirmed_price=Decimal('1500.00'),
+            status=ClampMeasureRequest.STATUS_COMPLETED,
+            exists_in_catalog=False,
+        )
+        self.order_item = OrderItem.objects.create(
+            order=self.order,
+            product=self.product,
+            clamp_request=self.clamp_request,
+            product_sku=self.product.sku,
+            product_name=self.product.name,
+            quantity=1,
+            price_at_purchase=Decimal('1500.00'),
+            subtotal=Decimal('1500.00'),
+        )
+
+    def test_staff_can_publish_clamp_order_item_to_catalog(self):
+        self.client.force_login(self.staff)
+        response = self.client.post(
+            reverse('admin_order_item_publish_clamp', args=[self.order.pk, self.order_item.pk]),
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.product.refresh_from_db()
+        self.clamp_request.refresh_from_db()
+        self.order_item.refresh_from_db()
+
+        self.assertTrue(self.product.is_active)
+        self.assertIsNotNone(self.clamp_request.published_to_catalog_at)
+        self.assertTrue(
+            self.product.categories.filter(name__icontains='ABRAZADERA').exists()
+        )
+        self.assertEqual(self.order_item.product_id, self.product.pk)
+        self.assertTrue(
+            Category.objects.filter(name__icontains='ABRAZADERA').exists()
+        )
+        expected = calculate_clamp_quote({
+            'client_name': self.clamp_request.client_name,
+            'dollar_rate': str(self.clamp_request.dollar_rate),
+            'steel_price_usd': str(self.clamp_request.steel_price_usd),
+            'supplier_discount_pct': str(self.clamp_request.supplier_discount_pct),
+            'general_increase_pct': str(self.clamp_request.general_increase_pct),
+            'clamp_type': self.clamp_request.clamp_type,
+            'is_zincated': self.clamp_request.is_zincated,
+            'diameter': self.clamp_request.diameter,
+            'width_mm': str(self.clamp_request.width_mm),
+            'length_mm': str(self.clamp_request.length_mm),
+            'profile_type': self.clamp_request.profile_type,
+        })
+        fact_map = {row['key']: row['final_price'] for row in expected['price_rows']}
+        self.assertEqual(self.product.price, fact_map['facturacion'])
+
+    def test_publish_uses_confirmed_facturacion_price_when_present(self):
+        self.clamp_request.confirmed_price_list = 'facturacion'
+        self.clamp_request.confirmed_price = Decimal('2278.54')
+        self.clamp_request.save(update_fields=['confirmed_price_list', 'confirmed_price'])
+
+        self.client.force_login(self.staff)
+        response = self.client.post(
+            reverse('admin_order_item_publish_clamp', args=[self.order.pk, self.order_item.pk]),
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.product.refresh_from_db()
+        self.assertEqual(self.product.price, Decimal('2278.54'))

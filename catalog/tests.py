@@ -6,6 +6,7 @@ from django.urls import reverse
 
 from catalog.services.clamp_code import generarCodigo, parsearCodigo
 from catalog.models import Category, ClampMeasureRequest, ClampSpecs, Product
+from orders.models import CartItem
 
 
 class ClampCodeTests(SimpleTestCase):
@@ -191,6 +192,81 @@ class ClampMeasureRequestFlowTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Precio confirmado por ventas.")
         self.assertEqual(response.context["client_requests"][0].confirmed_price, Decimal("1600.00"))
+
+    def test_client_can_add_completed_request_to_cart(self):
+        user = User.objects.create_user(username="cliente_add_carrito", password="secret123")
+        clamp_request = ClampMeasureRequest.objects.create(
+            client_user=user,
+            client_name="Cliente Carrito",
+            clamp_type="trefilada",
+            is_zincated=False,
+            diameter="3/4",
+            width_mm=81,
+            length_mm=220,
+            profile_type="SEMICURVA",
+            quantity=2,
+            description="ABRAZADERA TREFILADA DE 3/4 X 81 X 220 SEMICURVA",
+            generated_code="ABT3481220S",
+            dollar_rate=Decimal("1300.00"),
+            steel_price_usd=Decimal("1450.00"),
+            supplier_discount_pct=Decimal("0.00"),
+            general_increase_pct=Decimal("40.00"),
+            base_cost=Decimal("1000.00"),
+            selected_price_list="lista_1",
+            estimated_final_price=Decimal("1400.00"),
+            confirmed_price_list="lista_2",
+            confirmed_price=Decimal("1500.00"),
+            status=ClampMeasureRequest.STATUS_COMPLETED,
+        )
+
+        self.client.force_login(user)
+        response = self.client.post(
+            reverse("catalog_clamp_request_add_to_cart", args=[clamp_request.pk]),
+            data={"quantity": "3"},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        cart_item = CartItem.objects.select_related("product").get(cart__user=user)
+        self.assertEqual(cart_item.quantity, 3)
+        self.assertEqual(cart_item.clamp_request_id, clamp_request.pk)
+        self.assertFalse(cart_item.product.is_active)
+
+        clamp_request.refresh_from_db()
+        self.assertIsNotNone(clamp_request.linked_product_id)
+        self.assertEqual(clamp_request.linked_product_id, cart_item.product_id)
+        self.assertIsNotNone(clamp_request.added_to_cart_at)
+
+    def test_client_cannot_add_non_completed_request_to_cart(self):
+        user = User.objects.create_user(username="cliente_no_completada", password="secret123")
+        clamp_request = ClampMeasureRequest.objects.create(
+            client_user=user,
+            client_name="Cliente No Completada",
+            clamp_type="trefilada",
+            is_zincated=False,
+            diameter="3/4",
+            width_mm=81,
+            length_mm=220,
+            profile_type="SEMICURVA",
+            quantity=1,
+            description="ABRAZADERA TREFILADA DE 3/4 X 81 X 220 SEMICURVA",
+            generated_code="ABT3481220S",
+            dollar_rate=Decimal("1300.00"),
+            steel_price_usd=Decimal("1450.00"),
+            supplier_discount_pct=Decimal("0.00"),
+            general_increase_pct=Decimal("40.00"),
+            base_cost=Decimal("1000.00"),
+            selected_price_list="lista_1",
+            estimated_final_price=Decimal("1400.00"),
+            status=ClampMeasureRequest.STATUS_QUOTED,
+        )
+
+        self.client.force_login(user)
+        response = self.client.post(
+            reverse("catalog_clamp_request_add_to_cart", args=[clamp_request.pk]),
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(CartItem.objects.filter(cart__user=user).exists())
 
 
 class ProductDetailTemplateTests(TestCase):

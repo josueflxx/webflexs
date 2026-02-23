@@ -69,6 +69,14 @@ class CartItem(models.Model):
         on_delete=models.CASCADE,
         verbose_name="Producto",
     )
+    clamp_request = models.ForeignKey(
+        "catalog.ClampMeasureRequest",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="cart_items",
+        verbose_name="Solicitud de medida",
+    )
     quantity = models.PositiveIntegerField(default=1, verbose_name="Cantidad")
     added_at = models.DateTimeField(auto_now_add=True)
 
@@ -104,6 +112,17 @@ class Order(models.Model):
         (STATUS_SHIPPED, "Enviado"),
         (STATUS_DELIVERED, "Entregado"),
         (STATUS_CANCELLED, "Cancelado"),
+    ]
+
+    PRIORITY_LOW = "low"
+    PRIORITY_NORMAL = "normal"
+    PRIORITY_HIGH = "high"
+    PRIORITY_URGENT = "urgent"
+    PRIORITY_CHOICES = [
+        (PRIORITY_LOW, "Baja"),
+        (PRIORITY_NORMAL, "Normal"),
+        (PRIORITY_HIGH, "Alta"),
+        (PRIORITY_URGENT, "Urgente"),
     ]
 
     LEGACY_STATUS_MAP = {
@@ -150,6 +169,72 @@ class Order(models.Model):
     client_cuit = models.CharField(max_length=20, blank=True)
     client_address = models.TextField(blank=True)
     client_phone = models.CharField(max_length=100, blank=True)
+    assigned_to = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="assigned_orders",
+        verbose_name="Asignado a",
+    )
+    priority = models.CharField(
+        max_length=16,
+        choices=PRIORITY_CHOICES,
+        default=PRIORITY_NORMAL,
+        verbose_name="Prioridad",
+    )
+    saas_document_type = models.CharField(
+        max_length=24,
+        blank=True,
+        default="",
+        verbose_name="Tipo comprobante SaaS",
+    )
+    saas_document_number = models.CharField(
+        max_length=60,
+        blank=True,
+        default="",
+        verbose_name="Numero comprobante SaaS",
+    )
+    saas_document_date = models.DateField(
+        null=True,
+        blank=True,
+        verbose_name="Fecha comprobante SaaS",
+    )
+    saas_document_cae = models.CharField(
+        max_length=40,
+        blank=True,
+        default="",
+        verbose_name="CAE SaaS",
+    )
+    saas_document_pdf = models.FileField(
+        upload_to="orders/saas/",
+        null=True,
+        blank=True,
+        verbose_name="PDF comprobante SaaS",
+    )
+    saas_document_total = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        verbose_name="Total comprobante SaaS",
+    )
+    follow_up_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="Seguimiento para",
+    )
+    follow_up_done_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="Seguimiento resuelto",
+    )
+    follow_up_note = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        verbose_name="Nota seguimiento",
+    )
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
     updated_at = models.DateTimeField(auto_now=True)
     status_updated_at = models.DateTimeField(default=timezone.now, verbose_name="Ultimo cambio de estado")
@@ -274,6 +359,14 @@ class OrderItem(models.Model):
         on_delete=models.SET_NULL,
         null=True,
         verbose_name="Producto",
+    )
+    clamp_request = models.ForeignKey(
+        "catalog.ClampMeasureRequest",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="order_items",
+        verbose_name="Solicitud de medida",
     )
     product_sku = models.CharField(max_length=50, verbose_name="SKU")
     product_name = models.CharField(max_length=255, verbose_name="Nombre")
