@@ -23,7 +23,7 @@ import json
 import os
 from datetime import datetime, time, timedelta
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
-from urllib.parse import urlencode
+from urllib.parse import urlencode, parse_qs
 import csv
 from openpyxl import Workbook
 
@@ -470,7 +470,7 @@ def get_product_queryset(data):
     return products, search, current_category_id, active_filter
 
 
-def extract_target_product_ids_from_post(post_data):
+def extract_target_product_ids_from_post(post_data, raw_body=b""):
     """
     Accept multiple input formats for bulk product selection.
     """
@@ -479,9 +479,30 @@ def extract_target_product_ids_from_post(post_data):
     raw_ids.extend(post_data.getlist('product_ids[]'))
     raw_ids.extend(post_data.getlist('ids'))
 
+    # Extra tolerance for indexed/nested names (e.g. product_ids[0], product_ids.0)
+    if hasattr(post_data, "lists"):
+        for key, values in post_data.lists():
+            if key.startswith("product_ids"):
+                raw_ids.extend(values)
+
     csv_raw = (post_data.get('product_ids_csv', '') or '').strip()
     if csv_raw:
         raw_ids.extend([part.strip() for part in csv_raw.split(',') if part.strip()])
+
+    # Last-resort fallback from raw request body.
+    if not raw_ids and raw_body:
+        try:
+            decoded = raw_body.decode("utf-8", errors="ignore")
+            parsed = parse_qs(decoded, keep_blank_values=False)
+            for key, values in parsed.items():
+                if key in ("product_ids", "product_ids[]", "ids", "product_ids_csv") or key.startswith("product_ids"):
+                    if key == "product_ids_csv":
+                        for value in values:
+                            raw_ids.extend([part.strip() for part in str(value).split(",") if part.strip()])
+                    else:
+                        raw_ids.extend(values)
+        except Exception:
+            pass
 
     return normalize_category_ids(raw_ids)
 

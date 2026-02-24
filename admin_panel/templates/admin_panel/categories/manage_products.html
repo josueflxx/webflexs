@@ -5,17 +5,14 @@
 {% block content %}
 <div class="admin-table-container">
     <div class="admin-toolbar" style="flex-wrap: wrap; gap: 15px;">
-        <!-- Filters Form -->
         <form method="get" class="toolbar-search" style="flex-grow: 1;">
             <input type="text" name="q" value="{{ search }}" placeholder="Buscar SKU o nombre..." class="form-input">
 
             <select name="category_filter" class="form-select" onchange="this.form.submit()">
-                <option value="current" {% if category_filter == 'current' %}selected{% endif %}>En esta categoría
-                </option>
-                <option value="none" {% if category_filter == 'none' %}selected{% endif %}>Sin vínculos de categoría
-                </option>
+                <option value="current" {% if category_filter == 'current' %}selected{% endif %}>En esta categoria</option>
+                <option value="none" {% if category_filter == 'none' %}selected{% endif %}>Sin vinculos de categoria</option>
                 <option value="all" {% if category_filter == 'all' %}selected{% endif %}>Todos los productos</option>
-                <optgroup label="Otras categorías">
+                <optgroup label="Otras categorias">
                     {% for cat in all_category_options %}
                     <option value="{{ cat.id }}" {% if category_filter == cat.id|stringformat:"s" %}selected{% endif %}>{{ cat.label }}</option>
                     {% endfor %}
@@ -29,73 +26,140 @@
             </select>
 
             <button type="submit" class="btn btn-primary">Filtrar</button>
-            <a href="{% url 'admin_category_products' category.pk %}" class="btn btn-outline"
-                title="Limpiar filtros">↺</a>
-        </form>
-
-        <!-- Bulk Actions Form -->
-        <form id="bulkActionForm" method="post" class="toolbar-actions"
-            style="display: flex; gap: 10px; align-items: center;">
-            {% csrf_token %}
-            <!-- Flags for filtering in bulk action (re-filter on backend) -->
-            <input type="hidden" name="q" value="{{ search }}">
-            <input type="hidden" name="category_filter" value="{{ category_filter }}">
-            <input type="hidden" name="status" value="{{ status }}">
-            <input type="hidden" name="select_all_pages" id="selectAllPagesInput" value="false">
-            <input type="hidden" name="product_ids_csv" id="selectedProductIdsCsv" value="">
-
-            <button type="submit" name="action" value="assign" class="btn btn-success" id="btnAssign" disabled>
-                Vincular a "{{ category.name }}"
-            </button>
-
-            {% if category_filter == 'current' %}
-            <button type="submit" name="action" value="remove" class="btn btn-danger-outline" id="btnRemove" disabled>
-                📤 Desvincular
-            </button>
-            {% endif %}
-
-            <a href="{% url 'admin_category_list' %}" class="btn btn-outline">Volver</a>
+            <a href="{% url 'admin_category_products' category.pk %}" class="btn btn-outline" title="Limpiar filtros">↻</a>
         </form>
     </div>
 
-    <!-- Explicit Select All Results Button (Only if > 50 results) -->
-    {% if total_count > 50 %}
-    <div style="margin-bottom: 10px;">
-        <button type="button" id="btnSelectAllResults" class="btn btn-info btn-sm" onclick="selectAllPages(event)">
-            ✅ Seleccionar los {{ total_count }} resultados de la búsqueda
-        </button>
-    </div>
-    {% endif %}
+    <form id="bulkActionForm" method="post">
+        {% csrf_token %}
+        <input type="hidden" name="q" value="{{ search }}">
+        <input type="hidden" name="category_filter" value="{{ category_filter }}">
+        <input type="hidden" name="status" value="{{ status }}">
+        <input type="hidden" name="select_all_pages" id="selectAllPagesInput" value="false">
+        <input type="hidden" name="product_ids_csv" id="selectedProductIdsCsv" value="">
 
-    <!-- Select All Warning/Option -->
-    <div id="selectAllContainer" class="alert alert-info" style="display: none; margin-bottom: 15px;">
-        <span id="selectAllMessage">Has seleccionado los {{ page_obj.object_list|length }} productos de esta
-            página.</span>
-        <a href="#" id="selectAllLink" onclick="selectAllPages(event)" class="alert-link"
-            style="font-weight: bold; text-decoration: underline;">
-            Seleccionar los {{ total_count }} productos de la búsqueda.
-        </a>
-        <span id="allSelectedMessage" style="display: none; font-weight: bold;">
-            ✅ Se han seleccionado todos los {{ total_count }} productos.
-            <a href="#" onclick="clearSelectAll(event)"
-                style="font-weight: normal; font-size: 0.9em; margin-left: 10px;">(Cancelar selección masiva)</a>
-        </span>
-    </div>
+        <div class="admin-toolbar" style="margin-bottom: 12px;">
+            <div class="toolbar-actions" style="display: flex; gap: 10px; align-items: center; margin-left: auto;">
+                <select name="action" id="bulkActionSelect" class="form-select" style="max-width: 240px;">
+                    <option value="assign">Vincular seleccionados</option>
+                    {% if category_filter == 'current' %}
+                    <option value="remove">Desvincular seleccionados</option>
+                    {% endif %}
+                </select>
+                <button type="submit" class="btn btn-success" id="bulkActionSubmit" disabled>Vincular seleccionados</button>
+                <a href="{% url 'admin_category_list' %}" class="btn btn-outline">Volver</a>
+            </div>
+        </div>
+
+        {% if total_count > 50 %}
+        <div style="margin-bottom: 10px;">
+            <button type="button" id="btnSelectAllResults" class="btn btn-info btn-sm" onclick="selectAllPages(event)">
+                Seleccionar los {{ total_count }} resultados de la busqueda
+            </button>
+        </div>
+        {% endif %}
+
+        <div id="selectAllContainer" class="alert alert-info" style="display: none; margin-bottom: 15px;">
+            <span id="selectAllMessage">Has seleccionado los {{ page_obj.object_list|length }} productos de esta pagina.</span>
+            <a href="#" id="selectAllLink" onclick="selectAllPages(event)" class="alert-link" style="font-weight: bold; text-decoration: underline;">
+                Seleccionar los {{ total_count }} productos de la busqueda.
+            </a>
+            <span id="allSelectedMessage" style="display: none; font-weight: bold;">
+                Se han seleccionado todos los {{ total_count }} productos.
+                <a href="#" onclick="clearSelectAll(event)" style="font-weight: normal; font-size: 0.9em; margin-left: 10px;">(Cancelar seleccion masiva)</a>
+            </span>
+        </div>
+
+        <div style="overflow-x: auto;">
+            <table class="admin-table">
+                <thead>
+                    <tr>
+                        <th style="width: 40px;"><input type="checkbox" id="selectAll" onclick="toggleSelectAll()"></th>
+                        <th>SKU</th>
+                        <th>Nombre</th>
+                        <th>Categorias vinculadas</th>
+                        <th>Precio</th>
+                        <th>Estado</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for product in page_obj %}
+                    <tr class="{% if product.is_linked_to_current %}bg-light-success{% endif %}">
+                        <td>
+                            <input type="checkbox" name="product_ids" value="{{ product.pk }}" class="product-checkbox" onclick="updateBulkButtons()">
+                        </td>
+                        <td><code>{{ product.sku }}</code></td>
+                        <td>{{ product.name|truncatechars:60 }}</td>
+                        <td>
+                            {% if product.category_status_rows %}
+                            {% if product.is_linked_to_current %}
+                            <span class="badge badge-success">En esta categoria</span>
+                            {% endif %}
+                            <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;">
+                                {% for cat in product.category_status_rows|slice:":4" %}
+                                {% if cat.is_effective_active %}
+                                <span class="badge badge-success">{{ cat.name }} (activa)</span>
+                                {% elif cat.is_category_active %}
+                                <span class="badge badge-warning">{{ cat.name }} (prod. inactivo)</span>
+                                {% else %}
+                                <span class="badge badge-danger">{{ cat.name }} (inactiva)</span>
+                                {% endif %}
+                                {% endfor %}
+                                {% if product.category_status_rows|length > 4 %}
+                                <span class="badge badge-info">+{{ product.category_status_rows|length|add:"-4" }}</span>
+                                {% endif %}
+                            </div>
+                            {% else %}
+                            <span class="badge badge-warning">Sin categoria</span>
+                            {% endif %}
+                        </td>
+                        <td>${{ product.price|floatformat:2 }}</td>
+                        <td>
+                            {% if product.is_active %}
+                            <span class="badge badge-success">Activo</span>
+                            {% else %}
+                            <span class="badge badge-danger">Inactivo</span>
+                            {% endif %}
+                            <br>
+                            {% if product.catalog_visibility %}
+                            <span class="badge badge-info">Visible en catalogo</span>
+                            {% else %}
+                            <span class="badge badge-warning">Oculto por categorias</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="6" class="text-center text-muted">No se encontraron productos con estos filtros.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        {% if page_obj.paginator.num_pages > 1 %}
+        <div class="admin-toolbar" style="margin-top: 20px;">
+            <span>Pagina {{ page_obj.number }} de {{ page_obj.paginator.num_pages }} ({{ page_obj.paginator.count }} items)</span>
+            <div class="toolbar-actions">
+                {% if page_obj.has_previous %}
+                <a href="?page={{ page_obj.previous_page_number }}&q={{ search }}&category_filter={{ category_filter }}&status={{ status }}" class="btn btn-outline">← Anterior</a>
+                {% endif %}
+                {% if page_obj.has_next %}
+                <a href="?page={{ page_obj.next_page_number }}&q={{ search }}&category_filter={{ category_filter }}&status={{ status }}" class="btn btn-outline">Siguiente →</a>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+    </form>
 
     <script>
-        // Use context variables directly
         const TOTAL_COUNT = {{ total_count }};
-        const PAGINATION_COUNT = {{ pagination_count }};
 
         function toggleSelectAll() {
-            // DEBUG: Alert to confirm execution
-            // alert('Toggle Select All Clicked! Total: ' + TOTAL_COUNT);
-
             const checkboxes = document.querySelectorAll('.product-checkbox');
             const selectAll = document.getElementById('selectAll');
-
-            // If we have globally selected all, clicking header checkbox clears it
             const selectAllInput = document.getElementById('selectAllPagesInput');
+
             if (selectAllInput.value === 'true') {
                 clearSelectAll(new Event('click'));
                 checkboxes.forEach(cb => cb.checked = false);
@@ -103,10 +167,7 @@
             } else {
                 checkboxes.forEach(cb => cb.checked = selectAll.checked);
 
-                // Show "Select all pages" option only if checking all and there are more pages
                 const linkContainer = document.getElementById('selectAllContainer');
-
-                // Show if checked AND total results > current page items
                 if (selectAll.checked && TOTAL_COUNT > checkboxes.length) {
                     linkContainer.style.display = 'block';
                     document.getElementById('selectAllMessage').style.display = 'inline';
@@ -120,16 +181,13 @@
             updateBulkButtons();
         }
 
-        function selectAllPages(e) {
-            e.preventDefault();
+        function selectAllPages(event) {
+            event.preventDefault();
             document.getElementById('selectAllPagesInput').value = 'true';
-
-            // UI Updates
             document.getElementById('selectAllMessage').style.display = 'none';
             document.getElementById('selectAllLink').style.display = 'none';
             document.getElementById('allSelectedMessage').style.display = 'inline';
 
-            // Check and disable all visible checkboxes
             document.querySelectorAll('.product-checkbox').forEach(cb => {
                 cb.checked = true;
                 cb.disabled = true;
@@ -139,19 +197,13 @@
             updateBulkButtons();
         }
 
-        function clearSelectAll(e) {
-            if (e) e.preventDefault();
+        function clearSelectAll(event) {
+            if (event) event.preventDefault();
             document.getElementById('selectAllPagesInput').value = 'false';
-
-            // Reset UI
             document.getElementById('selectAllContainer').style.display = 'none';
 
-            // Reset Checkboxes
             document.querySelectorAll('.product-checkbox').forEach(cb => {
                 cb.disabled = false;
-                // keep them checked if they were checked manually, or uncheck? 
-                // Usually clearing "select all pages" implies going back to manual selection or clearing all.
-                // Let's clear all for simplicity
                 cb.checked = false;
             });
             document.getElementById('selectAll').checked = false;
@@ -160,153 +212,59 @@
         }
 
         function updateBulkButtons() {
-            const checkboxes = document.querySelectorAll('.product-checkbox:checked');
+            const checked = document.querySelectorAll('.product-checkbox:checked').length;
             const selectAllGlobal = document.getElementById('selectAllPagesInput').value === 'true';
+            const count = selectAllGlobal ? TOTAL_COUNT : checked;
+            const csvInput = document.getElementById('selectedProductIdsCsv');
 
-            // DEBUG
-            console.log('Update buttons. Global:', selectAllGlobal, 'Checkboxes:', checkboxes.length, 'Total:', TOTAL_COUNT);
+            const actionSelect = document.getElementById('bulkActionSelect');
+            const bulkButton = document.getElementById('bulkActionSubmit');
+            const actionLabel = actionSelect && actionSelect.value === 'remove' ? 'Desvincular' : 'Vincular';
 
-            const btnAssign = document.getElementById('btnAssign');
-            const btnRemove = document.getElementById('btnRemove');
-
-            let count = 0;
-            if (selectAllGlobal) {
-                count = TOTAL_COUNT;
-            } else {
-                // Only count non-disabled checkboxes if we are in manual mode? 
-                // Actually checkboxes are disabled when global is active.
-                // If global is false, we count checked boxes.
-                count = checkboxes.length;
+            if (csvInput) {
+                if (selectAllGlobal) {
+                    csvInput.value = '';
+                } else {
+                    const selected = Array.from(document.querySelectorAll('.product-checkbox:checked')).map(cb => cb.value);
+                    csvInput.value = selected.join(',');
+                }
             }
 
-            // Render buttons
             if (count > 0) {
-                if (btnAssign) {
-                    btnAssign.removeAttribute('disabled');
-                    btnAssign.innerHTML = `Vincular (${count})`;
-                }
-                if (btnRemove) {
-                    btnRemove.removeAttribute('disabled');
-                    btnRemove.innerHTML = `📤 Desvincular (${count})`;
-                }
+                bulkButton.removeAttribute('disabled');
+                bulkButton.textContent = `${actionLabel} (${count})`;
             } else {
-                if (btnAssign) {
-                    btnAssign.setAttribute('disabled', 'true');
-                    btnAssign.innerHTML = `Vincular a "{{ category.name }}"`;
-                }
-                if (btnRemove) {
-                    btnRemove.setAttribute('disabled', 'true');
-                    btnRemove.innerHTML = `📤 Desvincular`;
-                }
+                bulkButton.setAttribute('disabled', 'true');
+                bulkButton.textContent = `${actionLabel} seleccionados`;
             }
         }
 
-        // Intercept form submission only to validate selection
-        document.getElementById('bulkActionForm').addEventListener('submit', function (e) {
+        document.getElementById('bulkActionForm').addEventListener('submit', function(event) {
             const selectAllGlobal = document.getElementById('selectAllPagesInput').value === 'true';
             const csvInput = document.getElementById('selectedProductIdsCsv');
 
             if (!selectAllGlobal) {
-                const checkboxes = document.querySelectorAll('.product-checkbox:checked');
-                const selectedIds = Array.from(checkboxes).map((cb) => cb.value);
-                csvInput.value = selectedIds.join(',');
+                const selected = Array.from(document.querySelectorAll('.product-checkbox:checked')).map(cb => cb.value);
+                csvInput.value = selected.join(',');
 
-                if (checkboxes.length === 0) {
-                    e.preventDefault();
+                if (selected.length === 0) {
+                    event.preventDefault();
                     alert('Selecciona al menos un producto.');
-                    return;
                 }
-            } else if (csvInput) {
-                csvInput.value = '';
+                return;
             }
+
+            csvInput.value = '';
+        });
+
+        document.addEventListener('DOMContentLoaded', function() {
+            const actionSelect = document.getElementById('bulkActionSelect');
+            if (actionSelect) {
+                actionSelect.addEventListener('change', updateBulkButtons);
+            }
+            updateBulkButtons();
         });
     </script>
-
-    <div style="overflow-x: auto;">
-        <table class="admin-table">
-            <thead>
-                <tr>
-                    <th style="width: 40px;"><input type="checkbox" id="selectAll" onclick="toggleSelectAll()"></th>
-                    <th>SKU</th>
-                    <th>Nombre</th>
-                    <th>Categorías vinculadas</th>
-                    <th>Precio</th>
-                    <th>Estado</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for product in page_obj %}
-                <tr class="{% if product.is_linked_to_current %}bg-light-success{% endif %}">
-                    <td>
-                        <input type="checkbox" name="product_ids" form="bulkActionForm" value="{{ product.pk }}" class="product-checkbox"
-                            onclick="updateBulkButtons()">
-                    </td>
-                    <td><code>{{ product.sku }}</code></td>
-                    <td>{{ product.name|truncatechars:60 }}</td>
-                    <td>
-                        {% if product.category_status_rows %}
-                        {% if product.is_linked_to_current %}
-                        <span class="badge badge-success">En esta categoria</span>
-                        {% endif %}
-                        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;">
-                            {% for cat in product.category_status_rows|slice:":4" %}
-                            {% if cat.is_effective_active %}
-                            <span class="badge badge-success">{{ cat.name }} (activa)</span>
-                            {% elif cat.is_category_active %}
-                            <span class="badge badge-warning">{{ cat.name }} (prod. inactivo)</span>
-                            {% else %}
-                            <span class="badge badge-danger">{{ cat.name }} (inactiva)</span>
-                            {% endif %}
-                            {% endfor %}
-                            {% if product.category_status_rows|length > 4 %}
-                            <span class="badge badge-info">+{{ product.category_status_rows|length|add:"-4" }}</span>
-                            {% endif %}
-                        </div>
-                        {% else %}
-                        <span class="badge badge-warning">Sin categoria</span>
-                        {% endif %}
-                    </td>
-                    <td>${{ product.price|floatformat:2 }}</td>
-                    <td>
-                        {% if product.is_active %}
-                        <span class="badge badge-success">Activo</span>
-                        {% else %}
-                        <span class="badge badge-danger">Inactivo</span>
-                        {% endif %}
-                        <br>
-                        {% if product.catalog_visibility %}
-                        <span class="badge badge-info">Visible en catalogo</span>
-                        {% else %}
-                        <span class="badge badge-warning">Oculto por categorias</span>
-                        {% endif %}
-                    </td>
-                </tr>
-                {% empty %}
-                <tr>
-                    <td colspan="6" class="text-center text-muted">No se encontraron productos con estos filtros.</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-
-    <!-- Pagination -->
-    {% if page_obj.paginator.num_pages > 1 %}
-    <div class="admin-toolbar" style="margin-top: 20px;">
-        <span>Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }} ({{ page_obj.paginator.count }}
-            items)</span>
-        <div class="toolbar-actions">
-            {% if page_obj.has_previous %}
-            <a href="?page={{ page_obj.previous_page_number }}&q={{ search }}&category_filter={{ category_filter }}&status={{ status }}"
-                class="btn btn-outline">← Anterior</a>
-            {% endif %}
-            {% if page_obj.has_next %}
-            <a href="?page={{ page_obj.next_page_number }}&q={{ search }}&category_filter={{ category_filter }}&status={{ status }}"
-                class="btn btn-outline">Siguiente →</a>
-            {% endif %}
-        </div>
-    </div>
-    {% endif %}
 
     <style>
         .bg-light-success {
