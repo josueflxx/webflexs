@@ -32,6 +32,20 @@ CLAMP_REQUEST_DEFAULT_SUPPLIER_DISCOUNT = Decimal("0")
 CLAMP_REQUEST_DEFAULT_GENERAL_INCREASE = Decimal("40")
 
 
+def can_use_clamp_measure_feature(user):
+    """
+    Clamp custom measure feature is available only for:
+    - Admin users
+    - Approved client accounts
+    """
+    if not user or not user.is_authenticated:
+        return False
+    if user.is_staff:
+        return True
+    profile = getattr(user, "client_profile", None)
+    return bool(profile and getattr(profile, "is_approved", False))
+
+
 def get_catalog_product_queryset():
     """
     Build a lean queryset for catalog listing with active categories prefetched.
@@ -532,6 +546,7 @@ def _find_matching_clamp_products(inputs, limit=12):
     return list(queryset[:limit])
 
 
+@login_required
 def clamp_measure_request(request):
     """
     Client flow:
@@ -539,6 +554,13 @@ def clamp_measure_request(request):
     2) If not found, submit "consultar precio" request.
     3) Admin confirms a price and client can later see it in this page.
     """
+    if not can_use_clamp_measure_feature(request.user):
+        messages.error(
+            request,
+            "Esta opcion esta disponible solo para clientes aprobados o administradores.",
+        )
+        return redirect("catalog")
+
     default_form = {
         "client_name": "",
         "client_email": "",
@@ -739,6 +761,13 @@ def clamp_measure_request(request):
 @require_POST
 def clamp_request_add_to_cart(request, pk):
     """Add a completed custom clamp request into client cart."""
+    if not can_use_clamp_measure_feature(request.user):
+        messages.error(
+            request,
+            "Esta opcion esta disponible solo para clientes aprobados o administradores.",
+        )
+        return redirect("catalog")
+
     clamp_request = get_object_or_404(
         ClampMeasureRequest.objects.select_related("linked_product"),
         pk=pk,

@@ -4,6 +4,7 @@ from django.contrib.auth.models import User
 from django.test import SimpleTestCase, TestCase
 from django.urls import reverse
 
+from accounts.models import ClientProfile
 from catalog.services.clamp_code import generarCodigo, parsearCodigo
 from catalog.models import Category, ClampMeasureRequest, ClampSpecs, Product
 from orders.models import CartItem
@@ -99,6 +100,14 @@ class ClampCodeTests(SimpleTestCase):
 
 class ClampMeasureRequestFlowTests(TestCase):
     def setUp(self):
+        self.client_user = User.objects.create_user(username="cliente_medidas", password="secret123")
+        ClientProfile.objects.create(
+            user=self.client_user,
+            company_name="Cliente Medidas",
+            is_approved=True,
+        )
+        self.client.force_login(self.client_user)
+
         self.category = Category.objects.create(name="Abrazaderas", is_active=True)
         self.product = Product.objects.create(
             sku="ABT3480220S",
@@ -159,8 +168,22 @@ class ClampMeasureRequestFlowTests(TestCase):
         self.assertEqual(request_obj.selected_price_list, "lista_1")
         self.assertFalse(request_obj.exists_in_catalog)
 
+    def test_non_client_non_admin_cannot_access_clamp_measure_page(self):
+        user = User.objects.create_user(username="usuario_sin_perfil", password="secret123")
+        self.client.force_login(user)
+
+        response = self.client.get(reverse("catalog_clamp_request"), follow=True)
+
+        self.assertRedirects(response, reverse("catalog"))
+        self.assertContains(response, "solo para clientes aprobados o administradores")
+
     def test_authenticated_client_sees_confirmed_price_in_history(self):
         user = User.objects.create_user(username="cliente_medida", password="secret123")
+        ClientProfile.objects.create(
+            user=user,
+            company_name="Cliente Medida",
+            is_approved=True,
+        )
         ClampMeasureRequest.objects.create(
             client_user=user,
             client_name="Cliente Medida",
@@ -195,6 +218,11 @@ class ClampMeasureRequestFlowTests(TestCase):
 
     def test_client_can_add_completed_request_to_cart(self):
         user = User.objects.create_user(username="cliente_add_carrito", password="secret123")
+        ClientProfile.objects.create(
+            user=user,
+            company_name="Cliente Carrito",
+            is_approved=True,
+        )
         clamp_request = ClampMeasureRequest.objects.create(
             client_user=user,
             client_name="Cliente Carrito",
@@ -238,6 +266,11 @@ class ClampMeasureRequestFlowTests(TestCase):
 
     def test_client_cannot_add_non_completed_request_to_cart(self):
         user = User.objects.create_user(username="cliente_no_completada", password="secret123")
+        ClientProfile.objects.create(
+            user=user,
+            company_name="Cliente No Completada",
+            is_approved=True,
+        )
         clamp_request = ClampMeasureRequest.objects.create(
             client_user=user,
             client_name="Cliente No Completada",

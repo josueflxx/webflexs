@@ -61,7 +61,9 @@
                     <li class="nav-divider"></li>
                     {% if user.is_authenticated %}
                     <li><a href="{% url 'catalog' %}" class="btn btn-outline">Ver Catálogo</a></li>
+                    {% if can_use_clamp_measure %}
                     <li><a href="{% url 'catalog_clamp_request' %}" class="btn btn-outline">Abrazaderas a medida</a></li>
+                    {% endif %}
                     <li>
                         <a href="{% url 'cart' %}" class="cart-link" id="cartLink">
                             🛒 <span class="cart-badge" id="cartBadge">0</span>
@@ -75,7 +77,6 @@
                     <li><a href="{% url 'logout' %}" class="btn btn-ghost">Salir</a></li>
                     {% else %}
                     <li><a href="{% url 'catalog' %}" class="btn btn-outline">Ver Catálogo</a></li>
-                    <li><a href="{% url 'catalog_clamp_request' %}" class="btn btn-outline">Abrazaderas a medida</a></li>
                     <li><a href="{% url 'login' %}" class="btn btn-primary">Iniciar Sesión</a></li>
                     {% endif %}
                 </ul>

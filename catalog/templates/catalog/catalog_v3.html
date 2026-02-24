@@ -93,9 +93,19 @@
                     <p class="text-muted" style="margin:0 0 8px;">
                         Si no encontras la medida, calcula y envia una solicitud personalizada.
                     </p>
+                    {% if can_use_clamp_measure %}
                     <a href="{% url 'catalog_clamp_request' %}" class="btn btn-outline" style="width:100%;">
                         Cotizar medida especial
                     </a>
+                    {% elif user.is_authenticated %}
+                    <p class="text-muted" style="margin:0;">
+                        Disponible solo para clientes aprobados y administradores.
+                    </p>
+                    {% else %}
+                    <a href="{% url 'login' %}?next={% url 'catalog_clamp_request' %}" class="btn btn-outline" style="width:100%;">
+                        Iniciar sesion para cotizar
+                    </a>
+                    {% endif %}
                 </div>
 
                 <div class="filter-section">
