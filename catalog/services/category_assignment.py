@@ -9,13 +9,50 @@ from catalog.models import Category, Product
 def normalize_category_ids(raw_ids):
     """Convert mixed values to a clean list of int category IDs."""
     clean_ids = []
-    for raw in raw_ids or []:
+
+    def _push_if_valid(value):
         try:
-            cid = int(raw)
+            cid = int(value)
         except (TypeError, ValueError):
-            continue
+            return False
         if cid > 0:
             clean_ids.append(cid)
+            return True
+        return False
+
+    for raw in raw_ids or []:
+        if raw is None:
+            continue
+
+        raw_text = str(raw).strip()
+        if not raw_text:
+            continue
+
+        # Strict fast path.
+        if _push_if_valid(raw_text):
+            continue
+
+        # Tolerant path for serialized lists or comma-separated payloads.
+        normalized = (
+            raw_text
+            .replace('[', ' ')
+            .replace(']', ' ')
+            .replace('(', ' ')
+            .replace(')', ' ')
+            .replace('{', ' ')
+            .replace('}', ' ')
+            .replace(';', ',')
+            .replace('|', ',')
+        )
+
+        for part in normalized.split(','):
+            token = part.strip().strip("'\"")
+            if not token:
+                continue
+            # Handle accidental space-joined values ("1 2 3").
+            for chunk in token.split():
+                _push_if_valid(chunk)
+
     return list(dict.fromkeys(clean_ids))
 
 

@@ -857,9 +857,11 @@ def product_bulk_category_update(request):
             product_ids = extract_target_product_ids_from_post(request.POST, raw_post_body)
             if not product_ids:
                 logger.warning(
-                    "product_bulk_category_update without selected products | user=%s | keys=%s",
+                    "product_bulk_category_update without selected products | user=%s | keys=%s | product_ids=%s | product_ids_csv=%s",
                     getattr(request.user, "username", "unknown"),
                     list(request.POST.keys()),
+                    request.POST.getlist("product_ids"),
+                    request.POST.get("product_ids_csv", ""),
                 )
                 messages.warning(request, 'No se seleccionaron productos.')
                 return _redirect_admin_product_list_with_filters(request)
@@ -911,9 +913,11 @@ def product_bulk_status_update(request):
         product_ids = extract_target_product_ids_from_post(request.POST, raw_post_body)
         if not product_ids:
             logger.warning(
-                "product_bulk_status_update without selected products | user=%s | keys=%s",
+                "product_bulk_status_update without selected products | user=%s | keys=%s | product_ids=%s | product_ids_csv=%s",
                 getattr(request.user, "username", "unknown"),
                 list(request.POST.keys()),
+                request.POST.getlist("product_ids"),
+                request.POST.get("product_ids_csv", ""),
             )
             messages.warning(request, 'No se seleccionaron productos.')
             return _redirect_admin_product_list_with_filters(request)
@@ -3439,11 +3443,13 @@ def category_manage_products(request, pk):
             target_ids = extract_target_product_ids_from_post(request.POST, raw_post_body)
             if not target_ids:
                 logger.warning(
-                    "category_manage_products without selected products | user=%s | category=%s | keys=%s | action=%s",
+                    "category_manage_products without selected products | user=%s | category=%s | keys=%s | action=%s | product_ids=%s | product_ids_csv=%s",
                     getattr(request.user, "username", "unknown"),
                     pk,
                     list(request.POST.keys()),
                     action,
+                    request.POST.getlist("product_ids"),
+                    request.POST.get("product_ids_csv", ""),
                 )
                 messages.warning(request, 'No se seleccionaron productos.')
                 return redirect('admin_category_products', pk=pk)
