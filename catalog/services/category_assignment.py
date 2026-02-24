@@ -1,6 +1,8 @@
 """
 Category assignment helpers for flexible product categorization.
 """
+import re
+
 from django.db.models import Min
 
 from catalog.models import Category, Product
@@ -51,7 +53,14 @@ def normalize_category_ids(raw_ids):
                 continue
             # Handle accidental space-joined values ("1 2 3").
             for chunk in token.split():
-                _push_if_valid(chunk)
+                if _push_if_valid(chunk):
+                    continue
+
+                # Locale-safe fallback: "9.353" / "9 353" / "9_353" -> 9353
+                if re.fullmatch(r"[\d\.\s_]+", chunk):
+                    collapsed = re.sub(r"[^\d]", "", chunk)
+                    if collapsed:
+                        _push_if_valid(collapsed)
 
     return list(dict.fromkeys(clean_ids))
 

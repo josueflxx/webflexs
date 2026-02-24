@@ -1,4 +1,5 @@
 {% extends 'admin_panel/base.html' %}
+{% load l10n %}
 
 {% block page_title %}Gestionar Productos: {{ category.name }}{% endblock %}
 
@@ -86,7 +87,7 @@
                     {% for product in page_obj %}
                     <tr class="{% if product.is_linked_to_current %}bg-light-success{% endif %}">
                         <td>
-                            <input type="checkbox" name="product_ids" value="{{ product.pk }}" class="product-checkbox" onclick="updateBulkButtons()">
+                            <input type="checkbox" name="product_ids" value="{{ product.pk|unlocalize }}" class="product-checkbox" onclick="updateBulkButtons()">
                         </td>
                         <td><code>{{ product.sku }}</code></td>
                         <td>{{ product.name|truncatechars:60 }}</td>
@@ -153,7 +154,7 @@
     </form>
 
     <script>
-        const TOTAL_COUNT = {{ total_count }};
+        const TOTAL_COUNT = Number('{{ total_count|unlocalize }}') || 0;
 
         function toggleSelectAll() {
             const checkboxes = document.querySelectorAll('.product-checkbox');

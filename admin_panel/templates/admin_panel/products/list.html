@@ -1,4 +1,5 @@
 {% extends 'admin_panel/base.html' %}
+{% load l10n %}
 
 {% block page_title %}Productos{% endblock %}
 
@@ -164,7 +165,7 @@
     </div>
 
     <script>
-        const TOTAL_COUNT = {{ total_count }};
+        const TOTAL_COUNT = Number('{{ total_count|unlocalize }}') || 0;
         const PAGINATION_COUNT = {{ pagination_count }};
         const PRODUCT_FILTERS_STORAGE_KEY = 'admin_product_filters_v1';
 
@@ -436,7 +437,7 @@
             <tbody>
                 {% for product in page_obj %}
                 <tr>
-                    <td><input type="checkbox" name="product_ids" form="bulkCategoryForm" value="{{ product.pk }}" class="product-checkbox"
+                    <td><input type="checkbox" name="product_ids" form="bulkCategoryForm" value="{{ product.pk|unlocalize }}" class="product-checkbox"
                             onclick="updateBulkButton()"></td>
                     <td><code>{{ product.sku }}</code></td>
                     <td class="product-name-cell" title="{{ product.name }}">{{ product.name|truncatechars:52 }}</td>
