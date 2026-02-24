@@ -190,9 +190,9 @@
     <div class="form-actions" style="display: flex; justify-content: space-between; align-items: center; margin-top: 2rem;">
         <a href="{% url 'admin_order_list' %}" class="btn btn-outline"><- Volver a Pedidos</a>
         {% if user.is_staff %}
-        <form method="post" action="{% url 'admin_order_delete' order.pk %}" onsubmit="return confirm('Eliminar pedido? Esta accion no se puede deshacer.');">
+        <form method="post" action="{% url 'admin_order_delete' order.pk %}" onsubmit="return confirm('Cancelar pedido? El historial se conserva.');">
             {% csrf_token %}
-            <button type="submit" class="btn btn-danger">Eliminar Pedido</button>
+            <button type="submit" class="btn btn-danger">Cancelar Pedido</button>
         </form>
         {% endif %}
     </div>

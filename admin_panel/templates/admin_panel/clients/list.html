@@ -11,7 +11,7 @@
         </form>
         <div class="toolbar-actions">
             {% if user.is_superuser %}
-            <button type="button" class="btn btn-danger" onclick="openDeleteModal()">Eliminar Todos</button>
+            <button type="button" class="btn btn-danger" onclick="openDeleteModal()">Desactivar Todos</button>
             {% endif %}
         </div>
     </div>
@@ -20,9 +20,9 @@
         style="display:none; position:fixed; z-index:1000; left:0; top:0; width:100%; height:100%; background-color:rgba(0,0,0,0.5);">
         <div class="modal-content"
             style="background-color:#fff; margin:15% auto; padding:20px; border:1px solid #888; width:400px; border-radius:5px;">
-            <h3 style="color: #dc3545; margin-top: 0;">Peligro: Borrado Masivo</h3>
-            <p>Estas a punto de eliminar <strong>TODOS</strong> los perfiles de clientes. Esta accion no se puede deshacer.</p>
-            <p>Para confirmar, escribe: <code>delete clientes</code></p>
+            <h3 style="color: #dc3545; margin-top: 0;">Accion Masiva</h3>
+            <p>Estas a punto de desactivar <strong>TODOS</strong> los perfiles de clientes y sus usuarios.</p>
+            <p>No se borra historial. Para confirmar, escribe: <code>delete clientes</code></p>
 
             <form method="post" action="{% url 'admin_client_delete_all' %}">
                 {% csrf_token %}
@@ -32,7 +32,7 @@
 
                 <div style="display: flex; justify-content: flex-end; gap: 10px;">
                     <button type="button" class="btn btn-outline" onclick="closeDeleteModal()">Cancelar</button>
-                    <button type="submit" id="deleteSubmitBtn" class="btn btn-danger" disabled>Confirmar Borrado</button>
+                    <button type="submit" id="deleteSubmitBtn" class="btn btn-danger" disabled>Confirmar Desactivacion</button>
                 </div>
             </form>
         </div>
@@ -92,7 +92,7 @@
                         title="Cambiar Contrasena">Clave</a>
                     {% endif %}
                     {% if can_delete_client_record %}
-                    <a href="{% url 'admin_client_delete' client.pk %}" class="btn btn-danger-outline" title="Eliminar">Eliminar</a>
+                    <a href="{% url 'admin_client_delete' client.pk %}" class="btn btn-danger-outline" title="Desactivar">Desactivar</a>
                     {% endif %}
                     {% endif %}
                 </td>

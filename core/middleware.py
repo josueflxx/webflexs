@@ -1,13 +1,48 @@
 """
 User activity tracking middleware.
 """
+from urllib.parse import urlencode
+
+from django.contrib import messages
+from django.contrib.auth import logout
 from django.conf import settings
 from django.utils import timezone
 from django.utils.cache import patch_vary_headers
 from django.core.cache import cache
 from django.db import DatabaseError
+from django.shortcuts import redirect
+from django.urls import reverse
 from core.models import UserActivity
 from core.services.audit_context import clear_request_context, set_request_context
+
+
+class SessionIdleTimeoutMiddleware:
+    """
+    Expire authenticated sessions after inactivity timeout.
+    """
+
+    SESSION_TS_KEY = "_last_activity_ts"
+    EXCLUDED_PREFIXES = ("/accounts/login/", "/accounts/logout/", "/static/", "/media/")
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        if request.user.is_authenticated and not request.path.startswith(self.EXCLUDED_PREFIXES):
+            now_ts = int(timezone.now().timestamp())
+            timeout_seconds = max(int(getattr(settings, "SESSION_IDLE_TIMEOUT_SECONDS", 2700)), 300)
+            last_activity_ts = int(request.session.get(self.SESSION_TS_KEY, now_ts))
+
+            if now_ts - last_activity_ts > timeout_seconds:
+                logout(request)
+                messages.info(request, "Tu sesion expiro por inactividad. Inicia sesion nuevamente.")
+                login_url = reverse("login")
+                params = urlencode({"next": request.get_full_path()})
+                return redirect(f"{login_url}?{params}")
+
+            request.session[self.SESSION_TS_KEY] = now_ts
+
+        return self.get_response(request)
 
 
 class UserActivityMiddleware:

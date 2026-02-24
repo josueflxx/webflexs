@@ -1,4 +1,4 @@
-"""
+﻿"""
 Admin Panel views - Custom admin interface.
 """
 from django.shortcuts import render, redirect, get_object_or_404
@@ -11,7 +11,7 @@ from django.conf import settings
 from django.core.cache import cache
 from django.core.paginator import Paginator
 from django.db import transaction
-from django.db import DatabaseError, IntegrityError, connection
+from django.db import DatabaseError
 from django.db.models import Q, Count, Sum, Max, Avg, F, DecimalField, ExpressionWrapper
 from django.http import JsonResponse, HttpResponse
 from django.views.decorators.csrf import csrf_protect
@@ -65,7 +65,7 @@ from catalog.services.category_assignment import (
     remove_category_from_products,
 )
 from core.services.import_manager import ImportTaskManager
-from core.services.audit import log_admin_action
+from core.services.audit import log_admin_action, log_admin_change, model_snapshot
 import threading
 import traceback
 import logging
@@ -1246,16 +1246,26 @@ def payment_list(request):
                 messages.info(request, 'Ese pago ya estaba anulado.')
                 return redirect('admin_payment_list')
 
+            before = model_snapshot(
+                payment,
+                ['is_cancelled', 'cancelled_at', 'cancel_reason', 'amount', 'order_id', 'client_profile_id'],
+            )
             payment.is_cancelled = True
             payment.cancelled_at = timezone.now()
             payment.cancel_reason = cancel_reason
             payment.save(update_fields=['is_cancelled', 'cancelled_at', 'cancel_reason', 'updated_at'])
-            log_admin_action(
+            after = model_snapshot(
+                payment,
+                ['is_cancelled', 'cancelled_at', 'cancel_reason', 'amount', 'order_id', 'client_profile_id'],
+            )
+            log_admin_change(
                 request,
                 action='payment_cancel',
                 target_type='client_payment',
                 target_id=payment.pk,
-                details={
+                before=before,
+                after=after,
+                extra={
                     'client': payment.client_profile.company_name,
                     'order_id': payment.order_id,
                     'amount': f'{payment.amount:.2f}',
@@ -1319,12 +1329,26 @@ def payment_list(request):
             created_by=request.user if request.user.is_authenticated else None,
         )
 
-        log_admin_action(
+        log_admin_change(
             request,
             action='payment_create',
             target_type='client_payment',
             target_id=payment.pk,
-            details={
+            before={},
+            after=model_snapshot(
+                payment,
+                [
+                    'client_profile_id',
+                    'order_id',
+                    'amount',
+                    'method',
+                    'paid_at',
+                    'reference',
+                    'notes',
+                    'is_cancelled',
+                ],
+            ),
+            extra={
                 'client': client_profile.company_name,
                 'order_id': order.pk if order else None,
                 'amount': f'{amount:.2f}',
@@ -2074,6 +2098,10 @@ def client_edit(request, pk):
         return redirect('admin_client_order_history', pk=client.pk)
     
     if request.method == 'POST':
+        before = model_snapshot(
+            client,
+            ['company_name', 'cuit_dni', 'province', 'address', 'phone', 'discount', 'client_type', 'iva_condition'],
+        )
         client.company_name = request.POST.get('company_name', '').strip()
         client.cuit_dni = request.POST.get('cuit_dni', '').strip()
         client.province = request.POST.get('province', '').strip()
@@ -2083,6 +2111,21 @@ def client_edit(request, pk):
         client.client_type = request.POST.get('client_type', '')
         client.iva_condition = request.POST.get('iva_condition', '')
         client.save()
+        after = model_snapshot(
+            client,
+            ['company_name', 'cuit_dni', 'province', 'address', 'phone', 'discount', 'client_type', 'iva_condition'],
+        )
+        log_admin_change(
+            request,
+            action='client_update',
+            target_type='client_profile',
+            target_id=client.pk,
+            before=before,
+            after=after,
+            extra={
+                'username': client.user.username if client.user_id else '',
+            },
+        )
         
         messages.success(request, f'Cliente "{client.company_name}" actualizado.')
         return redirect('admin_client_list')
@@ -2178,16 +2221,26 @@ def client_password_change(request, pk):
     if not client.user:
         messages.error(request, 'Este cliente no tiene un usuario asociado.')
         return redirect('admin_client_edit', pk=pk)
-        
+
     if request.method == 'POST':
         form = SetPasswordForm(client.user, request.POST)
         if form.is_valid():
             form.save()
-            messages.success(request, f'Contraseña actualizada para el usuario "{client.user.username}".')
+            log_admin_action(
+                request,
+                action='client_password_reset',
+                target_type='user',
+                target_id=client.user.pk,
+                details={
+                    'client_profile_id': client.pk,
+                    'username': client.user.username,
+                },
+            )
+            messages.success(request, f'Contrasena actualizada para el usuario "{client.user.username}".')
             return redirect('admin_client_list')
     else:
         form = SetPasswordForm(client.user)
-        
+
     return render(request, 'admin_panel/clients/password_form.html', {
         'form': form,
         'client': client
@@ -2196,27 +2249,67 @@ def client_password_change(request, pk):
 
 @staff_member_required
 def client_delete(request, pk):
-    """Delete single client."""
+    """Deactivate single client without hard delete."""
     client = get_object_or_404(ClientProfile, pk=pk)
 
     if not can_delete_client_record(request.user):
         messages.error(
             request,
-            f'Solo "{PRIMARY_SUPERADMIN_USERNAME}" puede eliminar clientes.',
+            f'Solo "{PRIMARY_SUPERADMIN_USERNAME}" puede desactivar clientes.',
         )
         return redirect('admin_client_order_history', pk=client.pk)
-    
+
     if request.method == 'POST':
-        name = client.company_name
-        # Delete user reference will cascade delete profile usually, but here profile is main view
+        reason = request.POST.get('cancel_reason', '').strip()
         user = client.user
-        user.delete() # This deletes the client profile too via cascade
-        messages.success(request, f'Cliente "{name}" eliminado.')
+        before = {
+            'client': model_snapshot(client, ['is_approved', 'notes']),
+            'user': {'is_active': getattr(user, 'is_active', None)},
+        }
+
+        if user and user.is_active:
+            user.is_active = False
+            user.save(update_fields=['is_active'])
+
+        client.is_approved = False
+        if reason:
+            stamp = timezone.localtime().strftime('%d/%m/%Y %H:%M')
+            note_line = f"[{stamp}] Cliente desactivado por {request.user.username}: {reason}"
+            client.notes = f"{client.notes}\n{note_line}".strip() if client.notes else note_line
+            client.save(update_fields=['is_approved', 'notes', 'updated_at'])
+        else:
+            client.save(update_fields=['is_approved', 'updated_at'])
+
+        after = {
+            'client': model_snapshot(client, ['is_approved', 'notes']),
+            'user': {'is_active': getattr(user, 'is_active', None)},
+        }
+        log_admin_change(
+            request,
+            action='client_deactivate',
+            target_type='client_profile',
+            target_id=client.pk,
+            before=before,
+            after=after,
+            extra={
+                'reason': reason,
+                'username': user.username if user else '',
+            },
+        )
+
+        messages.success(request, f'Cliente "{client.company_name}" desactivado sin borrar historial.')
         return redirect('admin_client_list')
-        
+
     return render(request, 'admin_panel/delete_confirm.html', {
         'object': f"{client.company_name} (Usuario: {client.user.username if client.user else 'Sin usuario'})",
-        'cancel_url': reverse('admin_client_list')
+        'cancel_url': reverse('admin_client_list'),
+        'title': 'Confirmar Desactivacion',
+        'question': 'Estas por desactivar este cliente.',
+        'warning': 'No se borraran pedidos, pagos ni historial. El usuario quedara inactivo.',
+        'confirm_label': 'Confirmar Desactivacion',
+        'show_reason_input': True,
+        'reason_label': 'Motivo (opcional)',
+        'reason_name': 'cancel_reason',
     })
 
 
@@ -2250,6 +2343,7 @@ def request_approve(request, pk):
         username = request.POST.get('username', '').strip()
         password = request.POST.get('password', '').strip()
         discount = float(request.POST.get('discount', '0'))
+        before = model_snapshot(account_request, ['status', 'admin_notes', 'processed_at', 'created_user_id'])
         
         if User.objects.filter(username=username).exists():
             messages.error(request, f'El usuario "{username}" ya existe.')
@@ -2278,10 +2372,23 @@ def request_approve(request, pk):
             account_request.created_user = user
             account_request.processed_at = timezone.now()
             account_request.save()
+            after = model_snapshot(account_request, ['status', 'admin_notes', 'processed_at', 'created_user_id'])
+            log_admin_change(
+                request,
+                action='account_request_approve',
+                target_type='account_request',
+                target_id=account_request.pk,
+                before=before,
+                after=after,
+                extra={
+                    'created_username': username,
+                    'discount': str(discount),
+                },
+            )
             
             messages.success(
                 request, 
-                f'Cuenta aprobada. Usuario "{username}" creado con contraseña: {password}'
+                f'Cuenta aprobada. Usuario "{username}" creado correctamente.'
             )
             return redirect('admin_request_list')
     
@@ -2295,10 +2402,20 @@ def request_approve(request, pk):
 def request_reject(request, pk):
     """Reject account request."""
     account_request = get_object_or_404(AccountRequest, pk=pk)
+    before = model_snapshot(account_request, ['status', 'admin_notes', 'processed_at', 'created_user_id'])
     account_request.status = 'rejected'
     account_request.processed_at = timezone.now()
     account_request.admin_notes = request.POST.get('notes', '')
     account_request.save()
+    after = model_snapshot(account_request, ['status', 'admin_notes', 'processed_at', 'created_user_id'])
+    log_admin_change(
+        request,
+        action='account_request_reject',
+        target_type='account_request',
+        target_id=account_request.pk,
+        before=before,
+        after=after,
+    )
     
     messages.info(request, 'Solicitud rechazada.')
     return redirect('admin_request_list')
@@ -2375,6 +2492,7 @@ def order_detail(request, pk):
     if request.method == 'POST':
         new_status = request.POST.get('status', '')
         if new_status:
+            before = model_snapshot(order, ['status', 'admin_notes', 'status_updated_at'])
             order.admin_notes = request.POST.get('admin_notes', '')
             status_note = request.POST.get('status_note', '').strip()
             try:
@@ -2386,12 +2504,14 @@ def order_detail(request, pk):
                 order.save(update_fields=['admin_notes', 'updated_at'])
                 if changed:
                     messages.success(request, f'Estado del pedido #{order.pk} actualizado.')
-                    log_admin_action(
+                    log_admin_change(
                         request,
                         action='order_status_change',
                         target_type='order',
                         target_id=order.pk,
-                        details={
+                        before=before,
+                        after=model_snapshot(order, ['status', 'admin_notes', 'status_updated_at']),
+                        extra={
                             'status': order.status,
                             'note': status_note,
                         },
@@ -2473,44 +2593,59 @@ def order_item_publish_clamp(request, pk, item_id):
 
 @staff_member_required
 def order_delete(request, pk):
-    """Delete single order."""
+    """Cancel order preserving full history (no hard delete)."""
     order = get_object_or_404(Order, pk=pk)
 
     if request.method == 'POST':
-        pk_display = order.pk
+        before = model_snapshot(order, ['status', 'admin_notes', 'status_updated_at'])
+        cancel_reason = request.POST.get('cancel_reason', '').strip()
+        status_note = cancel_reason or f"Pedido cancelado desde panel por {request.user.username}"
         try:
-            with transaction.atomic():
-                # Detach nullable references before deleting the order row.
-                ClientPayment.objects.filter(order_id=pk_display).update(order=None)
-
-                # Legacy table kept in some databases for account statements.
-                # It is not managed by current ORM models but may still hold FKs.
-                if "accounts_clientaccountdocument" in connection.introspection.table_names():
-                    with connection.cursor() as cursor:
-                        cursor.execute(
-                            "UPDATE accounts_clientaccountdocument SET order_id = NULL WHERE order_id = %s",
-                            [pk_display],
-                        )
-
-                # Remove mandatory children that can block delete when DB constraints
-                # are NO ACTION instead of CASCADE.
-                OrderStatusHistory.objects.filter(order_id=pk_display).delete()
-                OrderItem.objects.filter(order_id=pk_display).delete()
-
-                order.delete()
-        except IntegrityError:
+            changed = order.change_status(
+                new_status=Order.STATUS_CANCELLED,
+                changed_by=request.user,
+                note=status_note,
+            )
+            if cancel_reason:
+                stamp = timezone.localtime().strftime('%d/%m/%Y %H:%M')
+                reason_line = f"[{stamp}] Cancelacion: {cancel_reason}"
+                order.admin_notes = f"{order.admin_notes}\n{reason_line}".strip() if order.admin_notes else reason_line
+                order.save(update_fields=['admin_notes', 'updated_at'])
+        except ValueError as exc:
             messages.error(
                 request,
-                f"No se pudo eliminar el pedido #{pk_display} porque tiene referencias activas.",
+                str(exc),
             )
-            return redirect('admin_order_detail', pk=pk_display)
+            return redirect('admin_order_detail', pk=order.pk)
 
-        messages.success(request, f'Pedido #{pk_display} eliminado.')
-        return redirect('admin_order_list')
-        
+        log_admin_change(
+            request,
+            action='order_cancel',
+            target_type='order',
+            target_id=order.pk,
+            before=before,
+            after=model_snapshot(order, ['status', 'admin_notes', 'status_updated_at']),
+            extra={
+                'changed': changed,
+                'cancel_reason': cancel_reason,
+            },
+        )
+        if changed:
+            messages.success(request, f'Pedido #{order.pk} cancelado correctamente.')
+        else:
+            messages.info(request, f'El pedido #{order.pk} ya estaba cancelado.')
+        return redirect('admin_order_detail', pk=order.pk)
+
     return render(request, 'admin_panel/delete_confirm.html', {
         'object': f"Pedido #{order.pk} (Cliente: {order.user.username if order.user else 'Anonimo'})",
-        'cancel_url': reverse('admin_order_detail', args=[pk])
+        'cancel_url': reverse('admin_order_detail', args=[pk]),
+        'title': 'Confirmar Cancelacion',
+        'question': 'Estas por cancelar este pedido.',
+        'warning': 'No se borraran items, pagos ni historial del pedido.',
+        'confirm_label': 'Confirmar Cancelacion',
+        'show_reason_input': True,
+        'reason_label': 'Motivo (opcional)',
+        'reason_name': 'cancel_reason',
     })
 
 
@@ -2544,7 +2679,7 @@ def settings_view(request):
             },
         )
         
-        messages.success(request, 'Configuración guardada.')
+        messages.success(request, 'ConfiguraciÃ³n guardada.')
     
     return render(request, 'admin_panel/settings.html', {'settings': settings})
 
@@ -2999,7 +3134,7 @@ def category_edit(request, pk):
                     "is_active": updated.is_active,
                 },
             )
-            messages.success(request, f'Categoría "{category.name}" actualizada.')
+            messages.success(request, f'CategorÃ­a "{category.name}" actualizada.')
             return redirect('admin_category_list')
     else:
         form = CategoryForm(instance=category)
@@ -3110,11 +3245,11 @@ def category_delete(request, pk):
             target_id=category_id,
             details={"name": name},
         )
-        messages.success(request, f'Categoría "{name}" eliminada.')
+        messages.success(request, f'CategorÃ­a "{name}" eliminada.')
         return redirect('admin_category_list')
         
     return render(request, 'admin_panel/delete_confirm.html', {
-        'object': f"Categoría: {category.name}",
+        'object': f"CategorÃ­a: {category.name}",
         'cancel_url': reverse('admin_category_list')
     })
 
@@ -3137,7 +3272,7 @@ def category_attribute_create(request, category_id):
             
             # Simple validation for slug
             if CategoryAttribute.objects.filter(category=category, slug=slug).exists():
-                messages.error(request, f'El slug "{slug}" ya existe en esta categoría.')
+                messages.error(request, f'El slug "{slug}" ya existe en esta categorÃ­a.')
             else:
                 CategoryAttribute.objects.create(
                     category=category,
@@ -3321,7 +3456,7 @@ def parse_product_description(request):
         return JsonResponse({'success': True, 'attributes': extracted})
     except Exception as e:
         logger.exception("Error parsing product description")
-        return JsonResponse({'success': False, 'error': 'No se pudo procesar la descripción.'}, status=400)
+        return JsonResponse({'success': False, 'error': 'No se pudo procesar la descripciÃ³n.'}, status=400)
 
 
 @staff_member_required
@@ -3728,7 +3863,7 @@ def product_delete_all(request):
     expected = "delete productos"
     
     if confirmation != expected:
-        messages.error(request, f'Frase de confirmación incorrecta. Debe escribir: "{expected}"')
+        messages.error(request, f'Frase de confirmaciÃ³n incorrecta. Debe escribir: "{expected}"')
         return redirect('admin_product_list')
     
     count, _ = Product.objects.all().delete()
@@ -3745,23 +3880,34 @@ def product_delete_all(request):
 @require_POST
 @superuser_required_for_modifications
 def client_delete_all(request):
-    """Deletes ALL clients if confirmation is correct."""
+    """Deactivate ALL clients without hard delete."""
     confirmation = request.POST.get('confirmation', '').strip().lower()
     expected = "delete clientes"
     
     if confirmation != expected:
-        messages.error(request, f'Frase de confirmación incorrecta. Debe escribir: "{expected}"')
+        messages.error(request, f'Frase de confirmaciÃ³n incorrecta. Debe escribir: "{expected}"')
         return redirect('admin_client_list')
-    
-    # Safe fallback: Delete ClientProfile objects.
-    count, _ = ClientProfile.objects.all().delete()
-    log_admin_action(
-        request,
-        action='client_delete_all',
-        target_type='client_bulk',
-        details={'deleted_count': count},
+
+    active_user_ids = list(
+        ClientProfile.objects.filter(user_id__isnull=False).values_list('user_id', flat=True)
     )
-    messages.success(request, f'Se eliminaron {count} perfiles de cliente.')
+    deactivated_users = User.objects.filter(id__in=active_user_ids, is_active=True).update(is_active=False)
+    deactivated_profiles = ClientProfile.objects.filter(is_approved=True).update(is_approved=False)
+
+    log_admin_change(
+        request,
+        action='client_deactivate_all',
+        target_type='client_bulk',
+        before={},
+        after={
+            'deactivated_users': deactivated_users,
+            'deactivated_profiles': deactivated_profiles,
+        },
+    )
+    messages.success(
+        request,
+        f'Se desactivaron {deactivated_profiles} perfiles y {deactivated_users} usuarios de clientes.',
+    )
     return redirect('admin_client_list')
 
 @staff_member_required
@@ -3773,7 +3919,7 @@ def category_delete_all(request):
     expected = "delete categorias"
     
     if confirmation != expected:
-        messages.error(request, f'Frase de confirmación incorrecta. Debe escribir: "{expected}"')
+        messages.error(request, f'Frase de confirmaciÃ³n incorrecta. Debe escribir: "{expected}"')
         return redirect('admin_category_list')
     
     count, _ = Category.objects.all().delete()
@@ -3783,7 +3929,8 @@ def category_delete_all(request):
         target_type='category_bulk',
         details={'deleted_count': count},
     )
-    messages.success(request, f'Se eliminaron {count} categorías correctamente.')
+    messages.success(request, f'Se eliminaron {count} categorÃ­as correctamente.')
     return redirect('admin_category_list')
+
 
 

@@ -16,7 +16,7 @@
 
                 <div class="form-group">
                     <label for="username" class="form-label">Usuario</label>
-                    <input type="text" name="username" id="username" class="form-input" required autofocus>
+                    <input type="text" name="username" id="username" class="form-input" value="{{ username_prefill|default:'' }}" required autofocus>
                 </div>
 
                 <div class="form-group">

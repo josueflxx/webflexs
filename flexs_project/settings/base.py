@@ -55,6 +55,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'core.middleware.SessionIdleTimeoutMiddleware',
     'core.middleware.AuditRequestContextMiddleware',
     'core.middleware.AuthSessionIsolationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
@@ -122,6 +123,26 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 LOGIN_URL = '/accounts/login/'
 LOGIN_REDIRECT_URL = '/accounts/redirect/'
 LOGOUT_REDIRECT_URL = '/'
+
+# Session/cookie security defaults
+SESSION_COOKIE_HTTPONLY = os.getenv('DJANGO_SESSION_COOKIE_HTTPONLY', 'True').lower() == 'true'
+CSRF_COOKIE_HTTPONLY = os.getenv('DJANGO_CSRF_COOKIE_HTTPONLY', 'False').lower() == 'true'
+SESSION_COOKIE_SAMESITE = os.getenv('DJANGO_SESSION_COOKIE_SAMESITE', 'Lax')
+CSRF_COOKIE_SAMESITE = os.getenv('DJANGO_CSRF_COOKIE_SAMESITE', 'Lax')
+SESSION_COOKIE_SECURE = os.getenv('DJANGO_SESSION_COOKIE_SECURE', str(not DEBUG)).lower() == 'true'
+CSRF_COOKIE_SECURE = os.getenv('DJANGO_CSRF_COOKIE_SECURE', str(not DEBUG)).lower() == 'true'
+SESSION_COOKIE_AGE = max(_env_int('DJANGO_SESSION_COOKIE_AGE', 60 * 60 * 8), 300)
+SECURE_CONTENT_TYPE_NOSNIFF = True
+X_FRAME_OPTIONS = os.getenv('DJANGO_X_FRAME_OPTIONS', 'DENY')
+SECURE_REFERRER_POLICY = os.getenv('DJANGO_SECURE_REFERRER_POLICY', 'strict-origin-when-cross-origin')
+SECURE_CROSS_ORIGIN_OPENER_POLICY = os.getenv('DJANGO_SECURE_COOP', 'same-origin')
+SECURE_CROSS_ORIGIN_RESOURCE_POLICY = os.getenv('DJANGO_SECURE_CORP', 'same-origin')
+
+# Session idle timeout / login lockout controls
+SESSION_IDLE_TIMEOUT_SECONDS = max(_env_int('DJANGO_SESSION_IDLE_TIMEOUT_SECONDS', 60 * 45), 300)
+LOGIN_MAX_FAILED_ATTEMPTS = max(_env_int('DJANGO_LOGIN_MAX_FAILED_ATTEMPTS', 5), 3)
+LOGIN_LOCKOUT_SECONDS = max(_env_int('DJANGO_LOGIN_LOCKOUT_SECONDS', 15 * 60), 60)
+LOGIN_ATTEMPT_WINDOW_SECONDS = max(_env_int('DJANGO_LOGIN_ATTEMPT_WINDOW_SECONDS', 15 * 60), 60)
 
 # Django REST Framework
 REST_FRAMEWORK = {

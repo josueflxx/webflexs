@@ -137,6 +137,20 @@ class ClientCorePermissionsTests(TestCase):
         response = self.client.get(reverse('admin_client_edit', args=[self.client_profile.pk]))
         self.assertEqual(response.status_code, 200)
 
+    def test_primary_superadmin_client_delete_deactivates_only(self):
+        self.client.force_login(self.primary_superadmin)
+        response = self.client.post(
+            reverse('admin_client_delete', args=[self.client_profile.pk]),
+            data={'cancel_reason': 'Baja administrativa'},
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.client_profile.refresh_from_db()
+        self.client_user.refresh_from_db()
+        self.assertFalse(self.client_profile.is_approved)
+        self.assertFalse(self.client_user.is_active)
+        self.assertTrue(ClientProfile.objects.filter(pk=self.client_profile.pk).exists())
+
 
 class PaymentPanelTests(TestCase):
     def setUp(self):
@@ -727,21 +741,24 @@ class OrderDeleteTests(TestCase):
                     ],
                 )
 
-    def test_order_delete_cleans_references_and_deletes_order(self):
+    def test_order_delete_endpoint_cancels_order_without_deleting(self):
         self.client.force_login(self.staff)
         response = self.client.post(
             reverse('admin_order_delete', args=[self.order.pk]),
+            data={'cancel_reason': 'Cancelacion de prueba'},
             follow=True,
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertFalse(Order.objects.filter(pk=self.order.pk).exists())
-        self.assertFalse(OrderItem.objects.filter(order_id=self.order.pk).exists())
-        self.assertFalse(OrderStatusHistory.objects.filter(order_id=self.order.pk).exists())
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.status, Order.STATUS_CANCELLED)
+        self.assertTrue(Order.objects.filter(pk=self.order.pk).exists())
+        self.assertTrue(OrderItem.objects.filter(order_id=self.order.pk).exists())
+        self.assertTrue(OrderStatusHistory.objects.filter(order_id=self.order.pk).exists())
 
         payment = ClientPayment.objects.first()
         self.assertIsNotNone(payment)
-        self.assertIsNone(payment.order_id)
+        self.assertEqual(payment.order_id, self.order.pk)
 
         if "accounts_clientaccountdocument" in connection.introspection.table_names():
             with connection.cursor() as cursor:
@@ -750,4 +767,4 @@ class OrderDeleteTests(TestCase):
                     [self.order.pk],
                 )
                 linked_count = cursor.fetchone()[0]
-            self.assertEqual(linked_count, 0)
+            self.assertEqual(linked_count, 1)

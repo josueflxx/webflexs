@@ -1,26 +1,37 @@
-{% extends 'admin_panel/base.html' %}
+﻿{% extends 'admin_panel/base.html' %}
 
-{% block page_title %}Confirmar Eliminación{% endblock %}
+{% block page_title %}{{ title|default:"Confirmar Eliminacion" }}{% endblock %}
 
 {% block content %}
 <div class="admin-form-container" style="max-width: 500px; margin: 50px auto; text-align: center;">
     <h2 style="color: var(--color-danger); border-bottom: none;">
-        ⚠️ Confirmar Eliminación
+        {{ title|default:"Confirmar Eliminacion" }}
     </h2>
 
     <div style="margin: 30px 0; font-size: 1.1rem;">
-        <p>¿Estás seguro que deseas eliminar:</p>
+        <p>{{ question|default:"Estas seguro que deseas eliminar:" }}</p>
         <div style="background: rgba(0,0,0,0.2); padding: 15px; border-radius: 5px; margin: 15px 0;">
             <strong>{{ object }}</strong>
         </div>
-        <p>Esta acción <strong style="color: var(--color-danger);">NO SE PUEDE DESHACER</strong>.</p>
+        <p>{{ warning|default:"Esta accion NO SE PUEDE DESHACER." }}</p>
     </div>
 
     <form method="post">
         {% csrf_token %}
+        {% if show_reason_input %}
+        <div class="form-group" style="text-align:left; margin-bottom: 18px;">
+            <label for="reasonInput" class="form-label">{{ reason_label|default:"Motivo (opcional)" }}</label>
+            <textarea
+                id="reasonInput"
+                name="{{ reason_name|default:'cancel_reason' }}"
+                class="form-textarea"
+                rows="3"
+                placeholder="Deja una nota para auditoria interna"></textarea>
+        </div>
+        {% endif %}
         <div class="form-actions" style="justify-content: center; border-top: none; padding-top: 0;">
             <a href="{{ cancel_url }}" class="btn btn-outline">Cancelar</a>
-            <button type="submit" class="btn btn-danger">Confirmar Eliminación</button>
+            <button type="submit" class="btn btn-danger">{{ confirm_label|default:"Confirmar Eliminacion" }}</button>
         </div>
     </form>
 </div>
