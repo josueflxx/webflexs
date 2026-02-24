@@ -42,6 +42,7 @@
             <input type="hidden" name="category_filter" value="{{ category_filter }}">
             <input type="hidden" name="status" value="{{ status }}">
             <input type="hidden" name="select_all_pages" id="selectAllPagesInput" value="false">
+            <input type="hidden" name="product_ids_csv" id="selectedProductIdsCsv" value="">
 
             <button type="submit" name="action" value="assign" class="btn btn-success" id="btnAssign" disabled>
                 Vincular a "{{ category.name }}"
@@ -200,31 +201,23 @@
             }
         }
 
-        // Intercept form submission to add selected IDs
+        // Intercept form submission only to validate selection
         document.getElementById('bulkActionForm').addEventListener('submit', function (e) {
-            const form = this;
             const selectAllGlobal = document.getElementById('selectAllPagesInput').value === 'true';
+            const csvInput = document.getElementById('selectedProductIdsCsv');
 
             if (!selectAllGlobal) {
                 const checkboxes = document.querySelectorAll('.product-checkbox:checked');
+                const selectedIds = Array.from(checkboxes).map((cb) => cb.value);
+                csvInput.value = selectedIds.join(',');
 
                 if (checkboxes.length === 0) {
                     e.preventDefault();
                     alert('Selecciona al menos un producto.');
                     return;
                 }
-
-                // Clean old inputs
-                form.querySelectorAll('input[name="product_ids"]').forEach(el => el.remove());
-
-                // Add new inputs
-                checkboxes.forEach(cb => {
-                    const input = document.createElement('input');
-                    input.type = 'hidden';
-                    input.name = 'product_ids';
-                    input.value = cb.value;
-                    form.appendChild(input);
-                });
+            } else if (csvInput) {
+                csvInput.value = '';
             }
         });
     </script>
@@ -245,7 +238,7 @@
                 {% for product in page_obj %}
                 <tr class="{% if product.is_linked_to_current %}bg-light-success{% endif %}">
                     <td>
-                        <input type="checkbox" value="{{ product.pk }}" class="product-checkbox"
+                        <input type="checkbox" name="product_ids" form="bulkActionForm" value="{{ product.pk }}" class="product-checkbox"
                             onclick="updateBulkButtons()">
                     </td>
                     <td><code>{{ product.sku }}</code></td>

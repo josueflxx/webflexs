@@ -76,6 +76,7 @@
                     <input type="hidden" name="order" value="{{ order_by }}">
                     <input type="hidden" name="page" value="{{ page_obj.number }}">
                     <input type="hidden" name="select_all_pages" id="selectAllPagesInput" value="false">
+                    <input type="hidden" name="product_ids_csv" id="bulkCategoryProductIdsCsv" value="">
 
                     <select name="category_id" class="form-select">
                         <option value="">Categoria destino...</option>
@@ -99,6 +100,7 @@
                     <input type="hidden" name="order" value="{{ order_by }}">
                     <input type="hidden" name="page" value="{{ page_obj.number }}">
                     <input type="hidden" name="select_all_pages" id="bulkStatusSelectAllPages" value="false">
+                    <input type="hidden" name="product_ids_csv" id="bulkStatusProductIdsCsv" value="">
                     <input type="hidden" name="set_active" id="bulkStatusActionInput" value="">
                     <button type="button" class="btn btn-info" id="bulkActivateBtn" onclick="submitBulkStatus('1')" disabled>Activar</button>
                     <button type="button" class="btn btn-warning-outline" id="bulkDeactivateBtn" onclick="submitBulkStatus('0')" disabled>Desactivar</button>
@@ -240,6 +242,11 @@
                 input.value = id;
                 form.appendChild(input);
             });
+            const csv = selectedIds.join(',');
+            const categoryCsv = document.getElementById('bulkCategoryProductIdsCsv');
+            if (categoryCsv) categoryCsv.value = csv;
+            const statusCsv = document.getElementById('bulkStatusProductIdsCsv');
+            if (statusCsv) statusCsv.value = csv;
             return selectedIds.length;
         }
 
@@ -429,7 +436,7 @@
             <tbody>
                 {% for product in page_obj %}
                 <tr>
-                    <td><input type="checkbox" name="product_ids" value="{{ product.pk }}" class="product-checkbox"
+                    <td><input type="checkbox" name="product_ids" form="bulkCategoryForm" value="{{ product.pk }}" class="product-checkbox"
                             onclick="updateBulkButton()"></td>
                     <td><code>{{ product.sku }}</code></td>
                     <td class="product-name-cell" title="{{ product.name }}">{{ product.name|truncatechars:52 }}</td>

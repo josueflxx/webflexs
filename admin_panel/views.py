@@ -470,6 +470,22 @@ def get_product_queryset(data):
     return products, search, current_category_id, active_filter
 
 
+def extract_target_product_ids_from_post(post_data):
+    """
+    Accept multiple input formats for bulk product selection.
+    """
+    raw_ids = []
+    raw_ids.extend(post_data.getlist('product_ids'))
+    raw_ids.extend(post_data.getlist('product_ids[]'))
+    raw_ids.extend(post_data.getlist('ids'))
+
+    csv_raw = (post_data.get('product_ids_csv', '') or '').strip()
+    if csv_raw:
+        raw_ids.extend([part.strip() for part in csv_raw.split(',') if part.strip()])
+
+    return normalize_category_ids(raw_ids)
+
+
 def _redirect_admin_product_list_with_filters(request):
     """Redirect to product list preserving active filters."""
     params = {}
@@ -816,7 +832,7 @@ def product_bulk_category_update(request):
         if select_all_pages:
             products_to_update, _, _, _ = get_product_queryset(request.POST)
         else:
-            product_ids = request.POST.getlist('product_ids')
+            product_ids = extract_target_product_ids_from_post(request.POST)
             if not product_ids:
                 messages.warning(request, 'No se seleccionaron productos.')
                 return _redirect_admin_product_list_with_filters(request)
@@ -864,7 +880,7 @@ def product_bulk_status_update(request):
     if select_all_pages:
         products_to_update, _, _, _ = get_product_queryset(request.POST)
     else:
-        product_ids = request.POST.getlist('product_ids')
+        product_ids = extract_target_product_ids_from_post(request.POST)
         if not product_ids:
             messages.warning(request, 'No se seleccionaron productos.')
             return _redirect_admin_product_list_with_filters(request)
@@ -3379,14 +3395,14 @@ def category_manage_products(request, pk):
         return qs.distinct(), search, status, cat_filter
 
     if request.method == 'POST':
-        action = request.POST.get('action')
+        action = request.POST.get('action', 'assign').strip()
         select_all_pages = request.POST.get('select_all_pages') == 'true'
 
         if select_all_pages:
             products_to_update, _, _, _ = get_filtered_queryset(request.POST)
             target_ids = list(products_to_update.values_list('id', flat=True))
         else:
-            target_ids = normalize_category_ids(request.POST.getlist('product_ids'))
+            target_ids = extract_target_product_ids_from_post(request.POST)
             if not target_ids:
                 messages.warning(request, 'No se seleccionaron productos.')
                 return redirect('admin_category_products', pk=pk)

@@ -768,3 +768,87 @@ class OrderDeleteTests(TestCase):
                 )
                 linked_count = cursor.fetchone()[0]
             self.assertEqual(linked_count, 1)
+
+
+class CategoryManageProductsTests(TestCase):
+    def setUp(self):
+        self.superadmin = User.objects.create_superuser(
+            username='josueflexs',
+            email='josue@example.com',
+            password='secret123',
+        )
+        self.category = Category.objects.create(name='Categoria Test', slug='categoria-test')
+        self.product = Product.objects.create(
+            sku='CAT-TEST-001',
+            name='Producto Categoria Test',
+            price=Decimal('100.00'),
+            cost=Decimal('50.00'),
+            stock=5,
+            is_active=True,
+        )
+
+    def test_assign_selected_products_to_category(self):
+        self.client.force_login(self.superadmin)
+        response = self.client.post(
+            reverse('admin_category_products', args=[self.category.pk]),
+            data={
+                'action': 'assign',
+                'select_all_pages': 'false',
+                'product_ids': [str(self.product.pk)],
+            },
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.product.refresh_from_db()
+        self.assertTrue(self.product.categories.filter(pk=self.category.pk).exists())
+
+
+class ProductBulkCategoryFallbackTests(TestCase):
+    def setUp(self):
+        self.superadmin = User.objects.create_superuser(
+            username='josueflexs',
+            email='josue@example.com',
+            password='secret123',
+        )
+        self.category = Category.objects.create(name='Categoria Bulk', slug='categoria-bulk')
+        self.product = Product.objects.create(
+            sku='BULK-TEST-001',
+            name='Producto Bulk Test',
+            price=Decimal('100.00'),
+            cost=Decimal('50.00'),
+            stock=2,
+            is_active=True,
+        )
+
+    def test_bulk_category_assign_accepts_csv_fallback(self):
+        self.client.force_login(self.superadmin)
+        response = self.client.post(
+            reverse('admin_product_bulk_category'),
+            data={
+                'category_id': str(self.category.pk),
+                'mode': 'append',
+                'select_all_pages': 'false',
+                'product_ids_csv': str(self.product.pk),
+            },
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.product.refresh_from_db()
+        self.assertTrue(self.product.categories.filter(pk=self.category.pk).exists())
+
+    def test_assign_selected_products_to_category_using_csv_fallback(self):
+        self.client.force_login(self.superadmin)
+        response = self.client.post(
+            reverse('admin_category_products', args=[self.category.pk]),
+            data={
+                'action': 'assign',
+                'select_all_pages': 'false',
+                'product_ids_csv': str(self.product.pk),
+            },
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.product.refresh_from_db()
+        self.assertTrue(self.product.categories.filter(pk=self.category.pk).exists())
