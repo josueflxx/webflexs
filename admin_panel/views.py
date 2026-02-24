@@ -842,6 +842,7 @@ def product_toggle_active(request):
 def product_bulk_category_update(request):
     """Bulk categorize selected products."""
     try:
+        raw_post_body = request.body
         category_id = request.POST.get('category_id')
         mode = request.POST.get('mode', 'append')
         select_all_pages = request.POST.get('select_all_pages') == 'true'
@@ -853,8 +854,13 @@ def product_bulk_category_update(request):
         if select_all_pages:
             products_to_update, _, _, _ = get_product_queryset(request.POST)
         else:
-            product_ids = extract_target_product_ids_from_post(request.POST)
+            product_ids = extract_target_product_ids_from_post(request.POST, raw_post_body)
             if not product_ids:
+                logger.warning(
+                    "product_bulk_category_update without selected products | user=%s | keys=%s",
+                    getattr(request.user, "username", "unknown"),
+                    list(request.POST.keys()),
+                )
                 messages.warning(request, 'No se seleccionaron productos.')
                 return _redirect_admin_product_list_with_filters(request)
             products_to_update = Product.objects.filter(id__in=product_ids)
@@ -890,6 +896,7 @@ def product_bulk_category_update(request):
 @superuser_required_for_modifications
 def product_bulk_status_update(request):
     """Bulk activate/deactivate selected products."""
+    raw_post_body = request.body
     set_active_raw = str(request.POST.get('set_active', '')).strip()
     if set_active_raw not in {'0', '1'}:
         messages.warning(request, 'Accion de estado invalida.')
@@ -901,8 +908,13 @@ def product_bulk_status_update(request):
     if select_all_pages:
         products_to_update, _, _, _ = get_product_queryset(request.POST)
     else:
-        product_ids = extract_target_product_ids_from_post(request.POST)
+        product_ids = extract_target_product_ids_from_post(request.POST, raw_post_body)
         if not product_ids:
+            logger.warning(
+                "product_bulk_status_update without selected products | user=%s | keys=%s",
+                getattr(request.user, "username", "unknown"),
+                list(request.POST.keys()),
+            )
             messages.warning(request, 'No se seleccionaron productos.')
             return _redirect_admin_product_list_with_filters(request)
         products_to_update = Product.objects.filter(id__in=product_ids)
@@ -3416,6 +3428,7 @@ def category_manage_products(request, pk):
         return qs.distinct(), search, status, cat_filter
 
     if request.method == 'POST':
+        raw_post_body = request.body
         action = request.POST.get('action', 'assign').strip()
         select_all_pages = request.POST.get('select_all_pages') == 'true'
 
@@ -3423,8 +3436,15 @@ def category_manage_products(request, pk):
             products_to_update, _, _, _ = get_filtered_queryset(request.POST)
             target_ids = list(products_to_update.values_list('id', flat=True))
         else:
-            target_ids = extract_target_product_ids_from_post(request.POST)
+            target_ids = extract_target_product_ids_from_post(request.POST, raw_post_body)
             if not target_ids:
+                logger.warning(
+                    "category_manage_products without selected products | user=%s | category=%s | keys=%s | action=%s",
+                    getattr(request.user, "username", "unknown"),
+                    pk,
+                    list(request.POST.keys()),
+                    action,
+                )
                 messages.warning(request, 'No se seleccionaron productos.')
                 return redirect('admin_category_products', pk=pk)
 
