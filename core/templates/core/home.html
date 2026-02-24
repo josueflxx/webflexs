@@ -247,7 +247,8 @@
                 id="contactMap"
                 class="contact-map-frame"
                 data-address="{{ site_settings.company_address }}"
-                data-company="FLEXS">
+                data-company="FLEXS"
+                style="height: 360px; min-height: 360px;">
             </div>
             <p id="contactMapStatus" class="contact-map-hint">Cargando mapa interactivo...</p>
             <div class="contact-map-links">
@@ -284,6 +285,9 @@
             scrollWheelZoom: true,
             zoomControl: true,
         }).setView(fallbackCoords, 13);
+        setTimeout(function () {
+            map.invalidateSize();
+        }, 100);
 
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             maxZoom: 19,
@@ -318,6 +322,9 @@
                 map.setView(realCoords, 16);
                 marker.setLatLng(realCoords);
                 marker.bindPopup('<strong>' + company + '</strong><br>' + address).openPopup();
+                setTimeout(function () {
+                    map.invalidateSize();
+                }, 100);
                 setStatus('Ubicación exacta encontrada.');
             })
             .catch(function () {
