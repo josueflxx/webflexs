@@ -64,6 +64,80 @@ class ClientOrderHistoryViewTests(TestCase):
         self.assertEqual(response.context['summary']['orders_count'], 1)
 
 
+class ClientCorePermissionsTests(TestCase):
+    def setUp(self):
+        self.staff = User.objects.create_user(
+            username='staff_clients_ops',
+            password='secret123',
+            is_staff=True,
+            is_superuser=False,
+        )
+        self.primary_superadmin = User.objects.create_superuser(
+            username='josueflexs',
+            email='josue@example.com',
+            password='secret123',
+        )
+        self.client_user = User.objects.create_user(
+            username='cliente_permiso',
+            password='secret123',
+        )
+        self.client_profile = ClientProfile.objects.create(
+            user=self.client_user,
+            company_name='Cliente Permisos',
+        )
+
+    def test_non_superadmin_staff_can_open_client_edit(self):
+        self.client.force_login(self.staff)
+        response = self.client.get(reverse('admin_client_edit', args=[self.client_profile.pk]))
+        self.assertEqual(response.status_code, 200)
+
+    def test_non_superadmin_staff_can_update_client_profile(self):
+        self.client.force_login(self.staff)
+        response = self.client.post(
+            reverse('admin_client_edit', args=[self.client_profile.pk]),
+            data={
+                'company_name': 'Cliente Editado Staff',
+                'cuit_dni': '20-11111111-1',
+                'province': 'Buenos Aires',
+                'address': 'Calle 123',
+                'phone': '1111-2222',
+                'discount': '7.5',
+                'client_type': 'taller',
+                'iva_condition': 'responsable_inscripto',
+            },
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.client_profile.refresh_from_db()
+        self.assertEqual(self.client_profile.company_name, 'Cliente Editado Staff')
+        self.assertEqual(self.client_profile.discount, Decimal('7.5'))
+
+    def test_non_superadmin_staff_cannot_change_client_password(self):
+        self.client.force_login(self.staff)
+        response = self.client.post(
+            reverse('admin_client_password', args=[self.client_profile.pk]),
+            data={'new_password1': 'nuevaClave123', 'new_password2': 'nuevaClave123'},
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.client_user.refresh_from_db()
+        self.assertTrue(self.client_user.check_password('secret123'))
+
+    def test_non_superadmin_staff_cannot_delete_client(self):
+        self.client.force_login(self.staff)
+        response = self.client.post(
+            reverse('admin_client_delete', args=[self.client_profile.pk]),
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(ClientProfile.objects.filter(pk=self.client_profile.pk).exists())
+
+    def test_primary_superadmin_can_open_client_edit(self):
+        self.client.force_login(self.primary_superadmin)
+        response = self.client.get(reverse('admin_client_edit', args=[self.client_profile.pk]))
+        self.assertEqual(response.status_code, 200)
+
+
 class PaymentPanelTests(TestCase):
     def setUp(self):
         self.staff = User.objects.create_user(

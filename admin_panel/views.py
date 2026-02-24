@@ -84,6 +84,27 @@ def is_primary_superadmin(user):
     )
 
 
+def can_edit_client_profile(user):
+    """
+    Any staff admin can operate the client panel and update client profile data.
+    """
+    return bool(getattr(user, "is_authenticated", False) and user.is_staff)
+
+
+def can_manage_client_credentials(user):
+    """
+    Credentials are sensitive and remain restricted to primary superadmin.
+    """
+    return is_primary_superadmin(user)
+
+
+def can_delete_client_record(user):
+    """
+    Client deletion is restricted to primary superadmin.
+    """
+    return is_primary_superadmin(user)
+
+
 def build_category_tree_rows(categories):
     """
     Build a stable flattened tree for an arbitrary category queryset/list.
@@ -2034,6 +2055,9 @@ def client_list(request):
     return render(request, 'admin_panel/clients/list.html', {
         'page_obj': page_obj,
         'search': search,
+        'can_edit_client_profile': can_edit_client_profile(request.user),
+        'can_manage_client_credentials': can_manage_client_credentials(request.user),
+        'can_delete_client_record': can_delete_client_record(request.user),
     })
 
 
@@ -2041,6 +2065,13 @@ def client_list(request):
 def client_edit(request, pk):
     """Edit client profile."""
     client = get_object_or_404(ClientProfile, pk=pk)
+
+    if not can_edit_client_profile(request.user):
+        messages.error(
+            request,
+            'No tienes permisos para editar clientes.',
+        )
+        return redirect('admin_client_order_history', pk=client.pk)
     
     if request.method == 'POST':
         client.company_name = request.POST.get('company_name', '').strip()
@@ -2106,6 +2137,9 @@ def client_order_history(request, pk):
         'client': client,
         'page_obj': page_obj,
         'status': status,
+        'can_edit_client_profile': can_edit_client_profile(request.user),
+        'can_manage_client_credentials': can_manage_client_credentials(request.user),
+        'can_delete_client_record': can_delete_client_record(request.user),
         'status_choices': Order.STATUS_CHOICES,
         'summary': {
             'orders_count': summary.get('orders_count') or 0,
@@ -2133,6 +2167,14 @@ def client_order_history(request, pk):
 def client_password_change(request, pk):
     """Change client password."""
     client = get_object_or_404(ClientProfile, pk=pk)
+
+    if not can_manage_client_credentials(request.user):
+        messages.error(
+            request,
+            f'Solo "{PRIMARY_SUPERADMIN_USERNAME}" puede cambiar credenciales de clientes.',
+        )
+        return redirect('admin_client_order_history', pk=client.pk)
+
     if not client.user:
         messages.error(request, 'Este cliente no tiene un usuario asociado.')
         return redirect('admin_client_edit', pk=pk)
@@ -2156,6 +2198,13 @@ def client_password_change(request, pk):
 def client_delete(request, pk):
     """Delete single client."""
     client = get_object_or_404(ClientProfile, pk=pk)
+
+    if not can_delete_client_record(request.user):
+        messages.error(
+            request,
+            f'Solo "{PRIMARY_SUPERADMIN_USERNAME}" puede eliminar clientes.',
+        )
+        return redirect('admin_client_order_history', pk=client.pk)
     
     if request.method == 'POST':
         name = client.company_name

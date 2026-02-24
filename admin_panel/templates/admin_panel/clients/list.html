@@ -78,20 +78,22 @@
                     <a href="{% url 'admin_client_order_history' client.pk %}" class="btn btn-outline btn-sm">Ver historial</a>
                 </td>
                 <td class="actions">
-                    <a href="{% url 'admin_client_edit' client.pk %}" class="btn btn-outline"
-                        title="Editar">
-                        Editar
-                    </a>
                     <a href="{% url 'admin_payment_list' %}?client_id={{ client.pk }}" class="btn btn-primary btn-sm"
                         title="Pagos">
                         Pagos
                     </a>
-                    {% if user.is_staff %}
-                    {% if client.user %}
+                    {% if can_edit_client_profile %}
+                    <a href="{% url 'admin_client_edit' client.pk %}" class="btn btn-outline"
+                        title="Editar">
+                        Editar
+                    </a>
+                    {% if can_manage_client_credentials and client.user %}
                     <a href="{% url 'admin_client_password' client.pk %}" class="btn btn-warning-outline"
                         title="Cambiar Contrasena">Clave</a>
                     {% endif %}
+                    {% if can_delete_client_record %}
                     <a href="{% url 'admin_client_delete' client.pk %}" class="btn btn-danger-outline" title="Eliminar">Eliminar</a>
+                    {% endif %}
                     {% endif %}
                 </td>
             </tr>

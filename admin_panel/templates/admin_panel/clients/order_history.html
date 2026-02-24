@@ -15,7 +15,9 @@
         </div>
         <div class="toolbar-actions">
             <a href="{% url 'admin_payment_list' %}?client_id={{ client.pk }}" class="btn btn-primary">Registrar Pago</a>
+            {% if can_edit_client_profile %}
             <a href="{% url 'admin_client_edit' client.pk %}" class="btn btn-outline">Editar Cliente</a>
+            {% endif %}
             <a href="{% url 'admin_client_list' %}" class="btn btn-outline">Volver a Clientes</a>
         </div>
     </div>
