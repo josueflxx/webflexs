@@ -199,6 +199,9 @@
 
     <script src="{% static 'core/js/main.js' %}?v=2"></script>
     <script>
+        const RIGHT_SIDEBAR_AUTO_BREAKPOINT = 1360;
+        let rightSidebarAutoMode = false;
+
         function setSidebarState(collapsed) {
             const adminLayout = document.getElementById('adminLayout');
             const rightSidebar = document.getElementById('rightSidebar');
@@ -207,16 +210,28 @@
             if (collapsed) {
                 adminLayout.classList.add('sidebar-collapsed');
                 rightSidebar.classList.add('collapsed');
-                localStorage.setItem('adminRightSidebarCollapsed', 'true');
             } else {
                 adminLayout.classList.remove('sidebar-collapsed');
                 rightSidebar.classList.remove('collapsed');
-                localStorage.setItem('adminRightSidebarCollapsed', 'false');
             }
         }
 
-        window.toggleSidebar = function(collapsed) {
+        function setSidebarStateWithPersist(collapsed, persist = true) {
             setSidebarState(collapsed);
+            if (persist) {
+                localStorage.setItem('adminRightSidebarCollapsed', collapsed ? 'true' : 'false');
+            }
+        }
+
+        function applyResponsiveRightSidebarState() {
+            if (!rightSidebarAutoMode) return;
+            const shouldCollapse = window.innerWidth <= RIGHT_SIDEBAR_AUTO_BREAKPOINT;
+            setSidebarStateWithPersist(shouldCollapse, false);
+        }
+
+        window.toggleSidebar = function(collapsed) {
+            rightSidebarAutoMode = false;
+            setSidebarStateWithPersist(collapsed, true);
         };
 
         function setLeftSidebarState(opened) {
@@ -331,23 +346,27 @@
         }
 
         document.addEventListener('DOMContentLoaded', function() {
-            const isCollapsed = localStorage.getItem('adminRightSidebarCollapsed') === 'true';
-            const isMobile = window.innerWidth <= 1024;
-
-            if (isCollapsed || (isMobile && localStorage.getItem('adminRightSidebarCollapsed') === null)) {
-                setSidebarState(true);
+            const storedState = localStorage.getItem('adminRightSidebarCollapsed');
+            if (storedState === null) {
+                rightSidebarAutoMode = true;
+                applyResponsiveRightSidebarState();
+            } else {
+                rightSidebarAutoMode = false;
+                setSidebarStateWithPersist(storedState === 'true', false);
             }
 
             const hideBtn = document.getElementById('hideRightSidebar');
             if (hideBtn) hideBtn.addEventListener('click', (e) => {
                 e.preventDefault();
-                setSidebarState(true);
+                rightSidebarAutoMode = false;
+                setSidebarStateWithPersist(true, true);
             });
 
             const showBtn = document.getElementById('showRightSidebar');
             if (showBtn) showBtn.addEventListener('click', (e) => {
                 e.preventDefault();
-                setSidebarState(false);
+                rightSidebarAutoMode = false;
+                setSidebarStateWithPersist(false, true);
             });
 
             const leftToggle = document.getElementById('leftSidebarToggle');
@@ -373,6 +392,13 @@
                         setLeftSidebarState(false);
                     }
                 });
+            });
+
+            window.addEventListener('resize', function () {
+                applyResponsiveRightSidebarState();
+                if (window.innerWidth > 992) {
+                    setLeftSidebarState(false);
+                }
             });
 
             const refreshSeconds = Math.max(

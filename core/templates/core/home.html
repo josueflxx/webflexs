@@ -3,6 +3,15 @@
 
 {% block title %}FLEXS - Repuestos de Elásticos en Argentina{% endblock %}
 
+{% block extra_head %}
+<link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+    crossorigin=""
+>
+{% endblock %}
+
 {% block extra_css %}
 <link rel="stylesheet" href="{% static 'core/css/home.css' %}">
 {% endblock %}
@@ -232,6 +241,88 @@
                 </div>
             </div>
         </div>
+        <div class="contact-map-wrapper">
+            <h3 class="contact-map-title">Ubicacion</h3>
+            <div
+                id="contactMap"
+                class="contact-map-frame"
+                data-address="{{ site_settings.company_address }}"
+                data-company="FLEXS">
+            </div>
+            <p id="contactMapStatus" class="contact-map-hint">Cargando mapa interactivo...</p>
+            <div class="contact-map-links">
+                <a
+                    class="contact-map-link"
+                    href="https://www.google.com/maps/search/?api=1&query={{ site_settings.company_address|urlencode }}"
+                    target="_blank"
+                    rel="noopener noreferrer">
+                    Abrir en Google Maps
+                </a>
+            </div>
+        </div>
     </div>
 </section>
+{% endblock %}
+
+{% block extra_js %}
+<script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+    crossorigin="">
+</script>
+<script>
+    (function () {
+        const mapElement = document.getElementById('contactMap');
+        const statusElement = document.getElementById('contactMapStatus');
+        if (!mapElement || typeof L === 'undefined') return;
+
+        const address = (mapElement.dataset.address || '').trim() || 'San Martin, Buenos Aires, Argentina';
+        const company = (mapElement.dataset.company || 'FLEXS').trim();
+        const fallbackCoords = [-34.5745, -58.5348];
+
+        const map = L.map(mapElement, {
+            scrollWheelZoom: true,
+            zoomControl: true,
+        }).setView(fallbackCoords, 13);
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '&copy; OpenStreetMap',
+        }).addTo(map);
+
+        const marker = L.marker(fallbackCoords).addTo(map);
+        marker.bindPopup('<strong>' + company + '</strong><br>' + address).openPopup();
+
+        function setStatus(text, hasError) {
+            if (!statusElement) return;
+            statusElement.textContent = text;
+            statusElement.classList.toggle('is-error', Boolean(hasError));
+        }
+
+        setStatus('Mostrando ubicación aproximada. Ajustando ubicación exacta...');
+
+        fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&q=' + encodeURIComponent(address), {
+            headers: { 'Accept': 'application/json' },
+        })
+            .then(function (response) {
+                if (!response.ok) throw new Error('geocode_failed');
+                return response.json();
+            })
+            .then(function (results) {
+                if (!Array.isArray(results) || !results.length) throw new Error('no_results');
+                const lat = Number(results[0].lat);
+                const lon = Number(results[0].lon);
+                if (!Number.isFinite(lat) || !Number.isFinite(lon)) throw new Error('invalid_coords');
+
+                const realCoords = [lat, lon];
+                map.setView(realCoords, 16);
+                marker.setLatLng(realCoords);
+                marker.bindPopup('<strong>' + company + '</strong><br>' + address).openPopup();
+                setStatus('Ubicación exacta encontrada.');
+            })
+            .catch(function () {
+                setStatus('No se pudo obtener ubicación exacta. Mostrando aproximada.', true);
+            });
+    })();
+</script>
 {% endblock %}

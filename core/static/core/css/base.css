@@ -87,6 +87,7 @@ body {
     min-height: 100vh;
     display: flex;
     flex-direction: column;
+    overflow-x: hidden;
 }
 
 a {
@@ -161,6 +162,7 @@ img {
     justify-content: space-between;
     align-items: center;
     gap: 18px;
+    min-width: 0;
 }
 
 .logo {
@@ -199,6 +201,11 @@ img {
     align-items: center;
     gap: var(--spacing-lg);
     list-style: none;
+    min-width: 0;
+}
+
+.nav-menu>li {
+    flex: 0 0 auto;
 }
 
 .nav-menu a {
@@ -279,9 +286,22 @@ img {
     transition: var(--transition-fast);
 }
 
-@media (max-width: 992px) {
+@media (max-width: 1240px) {
+    .header-top {
+        display: none;
+    }
+
+    .navbar {
+        padding: 12px 0;
+    }
+
+    .logo {
+        padding: 6px 10px;
+        border-radius: 10px;
+    }
+
     .brand-logo.public-brand-logo {
-        height: 48px;
+        height: 44px;
         width: auto;
     }
 
@@ -291,16 +311,19 @@ img {
 
     .nav-menu {
         position: fixed;
-        top: 100px;
+        top: 82px;
         left: 0;
         right: 0;
         background: var(--color-dark);
         flex-direction: column;
         padding: var(--spacing-xl);
         gap: var(--spacing-md);
+        max-height: calc(100vh - 82px);
+        overflow-y: auto;
         transform: translateY(-150%);
         opacity: 0;
         transition: var(--transition-normal);
+        z-index: 999;
     }
 
     .nav-menu.active {
@@ -311,6 +334,47 @@ img {
     .nav-divider {
         width: 100%;
         height: 1px;
+    }
+
+    .nav-menu .btn {
+        width: 100%;
+        justify-content: center;
+    }
+
+    .messages-container {
+        padding-top: 95px;
+    }
+
+    .main-content {
+        padding-top: 82px;
+    }
+}
+
+@media (max-width: 576px) {
+    :root {
+        --container-padding: 1rem;
+    }
+
+    .brand-logo.public-brand-logo {
+        height: 38px;
+    }
+
+    .logo {
+        padding: 5px 8px;
+    }
+
+    .nav-menu {
+        top: 74px;
+        max-height: calc(100vh - 74px);
+        padding: 14px;
+    }
+
+    .messages-container {
+        padding-top: 86px;
+    }
+
+    .main-content {
+        padding-top: 74px;
     }
 }
 

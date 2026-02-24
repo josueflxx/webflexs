@@ -3,7 +3,7 @@
     position: fixed;
     top: 0;
     right: 0;
-    width: 280px;
+    width: clamp(240px, 24vw, 280px);
     height: 100vh;
     background: var(--color-secondary);
     border-left: 1px solid rgba(255, 255, 255, 0.1);
@@ -187,12 +187,12 @@
 
 /* Adjust main content for right sidebar */
 .admin-main {
-    margin-right: 280px;
+    margin-right: clamp(240px, 24vw, 280px);
     transition: margin-right 0.3s ease;
 }
 
 /* Mobile Adjustments */
-@media (max-width: 1024px) {
+@media (max-width: 1360px) {
     .admin-main {
         margin-right: 0;
     }
@@ -211,6 +211,12 @@
     /* Ensure show button is visible if logic dictates (collapsed) */
     .admin-layout.sidebar-collapsed .sidebar-show-btn {
         display: block;
+    }
+}
+
+@media (max-width: 576px) {
+    .admin-right-sidebar {
+        width: 100vw;
     }
 }
 

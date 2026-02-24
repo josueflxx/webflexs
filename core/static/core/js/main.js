@@ -20,6 +20,14 @@ document.addEventListener('DOMContentLoaded', function () {
                 mobileMenuToggle.classList.remove('active');
             });
         });
+
+        // Keep layout consistent when resizing between mobile/desktop breakpoints.
+        window.addEventListener('resize', () => {
+            if (window.innerWidth > 1240) {
+                navMenu.classList.remove('active');
+                mobileMenuToggle.classList.remove('active');
+            }
+        });
     }
 
     // Smooth scroll for anchor links
