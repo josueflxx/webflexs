@@ -2,9 +2,11 @@ from decimal import Decimal
 
 from django.contrib.auth.models import User
 from django.test import TestCase
+from django.urls import reverse
 
 from accounts.models import ClientPayment, ClientProfile
-from orders.models import Order
+from catalog.models import ClampMeasureRequest, Product
+from orders.models import Cart, CartItem, Order
 
 
 class OrderPaymentWorkflowTests(TestCase):
@@ -62,3 +64,68 @@ class OrderPaymentWorkflowTests(TestCase):
         self.assertEqual(order.get_paid_amount(), Decimal('100.00'))
         self.assertEqual(order.get_pending_amount(), Decimal('0.00'))
         self.assertTrue(order.is_paid())
+
+
+class CheckoutClampRequestFlowTests(TestCase):
+    def setUp(self):
+        self.client_user = User.objects.create_user(
+            username='cliente_checkout_clamp',
+            password='secret123',
+        )
+        ClientProfile.objects.create(
+            user=self.client_user,
+            company_name='Cliente Checkout Clamp',
+            discount=Decimal('0.00'),
+        )
+        self.product = Product.objects.create(
+            sku='TEST-CLAMP-CHK-01',
+            name='Producto prueba abrazadera',
+            price=Decimal('150.00'),
+            cost=Decimal('90.00'),
+            stock=3,
+            is_active=True,
+        )
+        self.clamp_request = ClampMeasureRequest.objects.create(
+            client_user=self.client_user,
+            client_name='Cliente Checkout Clamp',
+            client_email='checkoutclamp@example.com',
+            clamp_type='TREFILADA',
+            is_zincated=False,
+            diameter='7/16',
+            width_mm=60,
+            length_mm=120,
+            profile_type='PLANA',
+            quantity=1,
+            description='ABRAZADERA TREFILADA DE 7/16 X 60 X 120 PLANA',
+            generated_code='ABT71660120P',
+            dollar_rate=Decimal('1450'),
+            steel_price_usd=Decimal('1.45'),
+            supplier_discount_pct=Decimal('0'),
+            general_increase_pct=Decimal('40'),
+            base_cost=Decimal('100.00'),
+            selected_price_list='lista_1',
+            estimated_final_price=Decimal('140.00'),
+            status=ClampMeasureRequest.STATUS_COMPLETED,
+            confirmed_price=Decimal('140.00'),
+        )
+        self.cart = Cart.objects.create(user=self.client_user)
+        CartItem.objects.create(
+            cart=self.cart,
+            product=self.product,
+            clamp_request=self.clamp_request,
+            quantity=1,
+        )
+
+    def test_checkout_with_clamp_request_sets_ordered_at(self):
+        self.client.force_login(self.client_user)
+        response = self.client.post(
+            reverse('checkout'),
+            data={'notes': 'Pedido con abrazadera a medida'},
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        order = Order.objects.filter(user=self.client_user).order_by('-id').first()
+        self.assertIsNotNone(order)
+        self.clamp_request.refresh_from_db()
+        self.assertIsNotNone(self.clamp_request.ordered_at)

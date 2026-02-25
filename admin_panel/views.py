@@ -6,9 +6,11 @@ from django.urls import reverse
 from django.contrib.admin.views.decorators import staff_member_required
 from django.contrib.auth.decorators import user_passes_test
 from django.contrib.auth.forms import SetPasswordForm
+from django.contrib.auth.password_validation import validate_password
 from django.contrib import messages
 from django.conf import settings
 from django.core.cache import cache
+from django.core.exceptions import ValidationError
 from django.core.paginator import Paginator
 from django.db import transaction
 from django.db import DatabaseError
@@ -103,6 +105,29 @@ def can_delete_client_record(user):
     Client deletion is restricted to primary superadmin.
     """
     return is_primary_superadmin(user)
+
+
+def parse_admin_decimal_input(raw_value, field_label, min_value=None, max_value=None):
+    """
+    Parse decimal input supporting both comma and dot separators.
+    """
+    raw = str(raw_value or "").strip().replace(",", ".")
+    if raw == "":
+        raise ValueError(f"{field_label} es obligatorio.")
+    try:
+        value = Decimal(raw)
+    except (InvalidOperation, ValueError):
+        raise ValueError(f"{field_label} invalido.")
+
+    if min_value is not None:
+        min_decimal = Decimal(str(min_value))
+        if value < min_decimal:
+            raise ValueError(f"{field_label} no puede ser menor a {min_decimal}.")
+    if max_value is not None:
+        max_decimal = Decimal(str(max_value))
+        if value > max_decimal:
+            raise ValueError(f"{field_label} no puede ser mayor a {max_decimal}.")
+    return value
 
 
 def build_category_tree_rows(categories):
@@ -590,6 +615,8 @@ def product_create(request):
             supplier_obj = ensure_supplier(supplier_name) if supplier_name else None
             price = request.POST.get('price', '0')
             stock = request.POST.get('stock', '0')
+            price_value = parse_admin_decimal_input(price, 'Precio', min_value='0')
+            stock_value = parse_int_value(stock, 'Stock', min_value=0)
             primary_category_id = request.POST.get('category', '')
             selected_category_ids = normalize_category_ids(request.POST.getlist('categories'))
             description = request.POST.get('description', '').strip()
@@ -646,8 +673,8 @@ def product_create(request):
                     name=name,
                     supplier=supplier_name,
                     supplier_ref=supplier_obj,
-                    price=float(price),
-                    stock=int(stock),
+                    price=price_value,
+                    stock=stock_value,
                     category_id=int(primary_category_id) if str(primary_category_id).isdigit() else None,
                     description=description,
                     attributes=attributes_data,
@@ -691,8 +718,8 @@ def product_edit(request, pk):
             product.name = request.POST.get('name', '').strip()
             product.supplier = clean_supplier_name(request.POST.get('supplier', ''))
             product.supplier_ref = ensure_supplier(product.supplier) if product.supplier else None
-            product.price = float(request.POST.get('price', '0'))
-            product.stock = int(request.POST.get('stock', '0'))
+            product.price = parse_admin_decimal_input(request.POST.get('price', '0'), 'Precio', min_value='0')
+            product.stock = parse_int_value(request.POST.get('stock', '0'), 'Stock', min_value=0)
             product.description = request.POST.get('description', '').strip()
             product.is_active = request.POST.get('is_active') == 'on'
             
@@ -2151,6 +2178,17 @@ def client_edit(request, pk):
         return redirect('admin_client_order_history', pk=client.pk)
     
     if request.method == 'POST':
+        try:
+            discount_value = parse_admin_decimal_input(
+                request.POST.get('discount', '0'),
+                'Descuento (%)',
+                min_value='0',
+                max_value='100',
+            )
+        except ValueError as exc:
+            messages.error(request, str(exc))
+            return render(request, 'admin_panel/clients/form.html', {'client': client})
+
         before = model_snapshot(
             client,
             ['company_name', 'cuit_dni', 'province', 'address', 'phone', 'discount', 'client_type', 'iva_condition'],
@@ -2160,7 +2198,7 @@ def client_edit(request, pk):
         client.province = request.POST.get('province', '').strip()
         client.address = request.POST.get('address', '').strip()
         client.phone = request.POST.get('phone', '').strip()
-        client.discount = float(request.POST.get('discount', '0'))
+        client.discount = discount_value
         client.client_type = request.POST.get('client_type', '')
         client.iva_condition = request.POST.get('iva_condition', '')
         client.save()
@@ -2395,11 +2433,47 @@ def request_approve(request, pk):
     if request.method == 'POST':
         username = request.POST.get('username', '').strip()
         password = request.POST.get('password', '').strip()
-        discount = float(request.POST.get('discount', '0'))
+        try:
+            discount = parse_admin_decimal_input(
+                request.POST.get('discount', '0'),
+                'Descuento (%)',
+                min_value='0',
+                max_value='100',
+            )
+        except ValueError as exc:
+            messages.error(request, str(exc))
+            return render(request, 'admin_panel/requests/approve.html', {
+                'account_request': account_request,
+            })
         before = model_snapshot(account_request, ['status', 'admin_notes', 'processed_at', 'created_user_id'])
-        
+
+        if not username:
+            messages.error(request, 'El nombre de usuario es obligatorio.')
+            return render(request, 'admin_panel/requests/approve.html', {
+                'account_request': account_request,
+            })
+
         if User.objects.filter(username=username).exists():
             messages.error(request, f'El usuario "{username}" ya existe.')
+            return render(request, 'admin_panel/requests/approve.html', {
+                'account_request': account_request,
+            })
+
+        if not password:
+            messages.error(request, 'La contrasena es obligatoria.')
+            return render(request, 'admin_panel/requests/approve.html', {
+                'account_request': account_request,
+            })
+
+        try:
+            validate_password(password)
+        except ValidationError as exc:
+            for error in exc.messages:
+                messages.error(request, error)
+            return render(request, 'admin_panel/requests/approve.html', {
+                'account_request': account_request,
+            })
+
         else:
             # Create user
             user = User.objects.create_user(
@@ -2408,7 +2482,7 @@ def request_approve(request, pk):
                 password=password,
                 first_name=account_request.contact_name,
             )
-            
+
             # Create client profile
             ClientProfile.objects.create(
                 user=user,
@@ -2419,7 +2493,7 @@ def request_approve(request, pk):
                 phone=account_request.phone,
                 discount=discount,
             )
-            
+
             # Update request
             account_request.status = 'approved'
             account_request.created_user = user
@@ -2438,9 +2512,9 @@ def request_approve(request, pk):
                     'discount': str(discount),
                 },
             )
-            
+
             messages.success(
-                request, 
+                request,
                 f'Cuenta aprobada. Usuario "{username}" creado correctamente.'
             )
             return redirect('admin_request_list')

@@ -7,7 +7,7 @@ from django.urls import reverse
 from django.db import connection
 from django.utils import timezone
 
-from accounts.models import ClientPayment, ClientProfile
+from accounts.models import AccountRequest, ClientPayment, ClientProfile
 from catalog.models import Category, ClampMeasureRequest, Product
 from catalog.services.clamp_quoter import calculate_clamp_quote
 from orders.models import ClampQuotation, Order, OrderItem, OrderStatusHistory
@@ -852,3 +852,95 @@ class ProductBulkCategoryFallbackTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.product.refresh_from_db()
         self.assertTrue(self.product.categories.filter(pk=self.category.pk).exists())
+
+
+class AdminInputValidationTests(TestCase):
+    def setUp(self):
+        self.staff = User.objects.create_user(
+            username='staff_validation',
+            password='secret123',
+            is_staff=True,
+        )
+        self.client_user = User.objects.create_user(
+            username='cliente_validation',
+            password='secret123',
+        )
+        self.client_profile = ClientProfile.objects.create(
+            user=self.client_user,
+            company_name='Cliente Validacion',
+            discount=Decimal('0.00'),
+        )
+
+    def test_client_edit_accepts_discount_with_comma(self):
+        self.client.force_login(self.staff)
+        response = self.client.post(
+            reverse('admin_client_edit', args=[self.client_profile.pk]),
+            data={
+                'company_name': 'Cliente Validacion',
+                'cuit_dni': '',
+                'province': '',
+                'address': '',
+                'phone': '',
+                'discount': '10,5',
+                'client_type': '',
+                'iva_condition': '',
+            },
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.client_profile.refresh_from_db()
+        self.assertEqual(self.client_profile.discount, Decimal('10.5'))
+
+    def test_request_approve_rejects_blank_password(self):
+        self.client.force_login(self.staff)
+        request_row = AccountRequest.objects.create(
+            company_name='Empresa Sin Password',
+            contact_name='Contacto',
+            email='sinpass@example.com',
+            phone='1234',
+            status='pending',
+        )
+
+        response = self.client.post(
+            reverse('admin_request_approve', args=[request_row.pk]),
+            data={
+                'username': 'usuario_sin_password',
+                'password': '',
+                'discount': '0',
+            },
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(User.objects.filter(username='usuario_sin_password').exists())
+        request_row.refresh_from_db()
+        self.assertEqual(request_row.status, 'pending')
+
+    def test_request_approve_accepts_discount_with_comma(self):
+        self.client.force_login(self.staff)
+        request_row = AccountRequest.objects.create(
+            company_name='Empresa Decimal',
+            contact_name='Contacto Decimal',
+            email='decimal@example.com',
+            phone='1234',
+            status='pending',
+        )
+
+        response = self.client.post(
+            reverse('admin_request_approve', args=[request_row.pk]),
+            data={
+                'username': 'usuario_decimal_ok',
+                'password': 'ClaveSegura123!',
+                'discount': '10,5',
+            },
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        user = User.objects.filter(username='usuario_decimal_ok').first()
+        self.assertIsNotNone(user)
+        profile = ClientProfile.objects.get(user=user)
+        self.assertEqual(profile.discount, Decimal('10.5'))
+        request_row.refresh_from_db()
+        self.assertEqual(request_row.status, 'approved')
