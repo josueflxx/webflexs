@@ -8,7 +8,7 @@
     <div class="products-control-board">
         <div class="admin-toolbar products-toolbar products-toolbar-main">
             <form method="get" class="toolbar-search product-filters-grid" id="productFiltersForm">
-                <input type="text" name="q" id="filterQ" value="{{ search }}" placeholder="Buscar SKU, nombre o proveedor..." class="form-input">
+                <input type="text" name="q" id="filterQ" value="{{ search }}" placeholder="Buscar SKU, nombre o proveedor..." class="form-input" data-suggest="1" data-suggest-scope="admin_products" autocomplete="off">
                 <select name="category" id="filterCategory" class="form-select">
                     <option value="">Todas las categorias</option>
                     <option value="__uncategorized__" {% if current_category_id == '__uncategorized__' %}selected{% endif %}>
