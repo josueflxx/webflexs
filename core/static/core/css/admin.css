@@ -1368,3 +1368,13 @@
         grid-template-columns: 1fr;
     }
 }
+
+.admin-body.admin-drag-scroll-lock,
+.admin-body.admin-drag-scroll-lock * {
+    user-select: none !important;
+}
+
+.admin-body .drag-scroll-active,
+.admin-body .drag-scroll-active * {
+    cursor: grabbing !important;
+}
