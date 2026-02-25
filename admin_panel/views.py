@@ -364,7 +364,7 @@ def product_list(request):
         'order_by': order,
         'active_filter_chips': filter_chips,
         'total_count': products.count(),
-        'pagination_count': page_obj.paginator.count,
+        'pagination_count': len(page_obj.object_list),
     }
     return render(request, 'admin_panel/products/list.html', context)
 
@@ -3485,7 +3485,7 @@ def category_manage_products(request, pk):
         'category_filter': cat_filter,
         'all_category_options': all_category_options,
         'total_count': products.count(),
-        'pagination_count': page_obj.paginator.count,
+        'pagination_count': len(page_obj.object_list),
     })
 
 # ===================== API =====================

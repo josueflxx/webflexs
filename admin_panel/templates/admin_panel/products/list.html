@@ -107,6 +107,21 @@
                     <button type="button" class="btn btn-warning-outline" id="bulkDeactivateBtn" onclick="submitBulkStatus('0')" disabled>Desactivar</button>
                     <button type="button" class="btn btn-danger-outline" onclick="openDeleteModal()">Eliminar Todos</button>
                 </form>
+
+                <div class="products-bulk-form" style="align-items: center;">
+                    <button type="button" class="btn btn-outline btn-sm" onclick="selectCurrentPage()">
+                        Seleccionar pagina ({{ pagination_count }})
+                    </button>
+                    {% if total_count > page_obj.object_list|length %}
+                    <button type="button" class="btn btn-info btn-sm" onclick="selectAllFiltered()">
+                        Seleccionar todos los filtrados ({{ total_count }})
+                    </button>
+                    {% endif %}
+                    <button type="button" class="btn btn-outline btn-sm" onclick="clearSelectAll()">
+                        Limpiar seleccion
+                    </button>
+                    <span class="badge badge-info" id="bulkSelectedCountInline">0 seleccionados</span>
+                </div>
             </div>
         </details>
         {% endif %}
@@ -149,16 +164,15 @@
 
     <!-- Select All Warning/Option -->
     <div id="selectAllContainer" class="alert alert-info" style="display: none; margin-bottom: 15px;">
-        <span id="selectAllMessage">Has seleccionado los {{ page_obj.object_list|length }} productos de esta
-            pagina.</span>
-        {% if total_count > 50 %}
+        <span id="selectAllMessage"></span>
+        {% if total_count > page_obj.object_list|length %}
         <a href="#" id="selectAllLink" onclick="selectAllPages(event)" class="alert-link"
-            style="font-weight: bold; text-decoration: underline;">
-            Seleccionar los {{ total_count }} productos de la busqueda.
+            style="font-weight: bold; text-decoration: underline; display: none;">
+            Seleccionar los {{ total_count }} productos filtrados.
         </a>
         {% endif %}
         <span id="allSelectedMessage" style="display: none; font-weight: bold;">
-            Se han seleccionado todos los {{ total_count }} productos.
+            Se seleccionaron todos los {{ total_count }} productos filtrados.
             <a href="#" onclick="clearSelectAll(event)"
                 style="font-weight: normal; font-size: 0.9em; margin-left: 10px;">(Cancelar seleccion masiva)</a>
         </span>
@@ -264,33 +278,63 @@
                 selectAll.checked = false;
             } else {
                 checkboxes.forEach(cb => cb.checked = selectAll.checked);
-
-                // Show "Select all pages" option if > 50 items and checking all
-                const linkContainer = document.getElementById('selectAllContainer');
-                if (selectAll.checked && TOTAL_COUNT > checkboxes.length) {
-                    linkContainer.style.display = 'block';
-                    document.getElementById('selectAllMessage').style.display = 'inline';
-                    const link = document.getElementById('selectAllLink');
-                    if (link) link.style.display = 'inline';
-                    document.getElementById('allSelectedMessage').style.display = 'none';
-                } else {
-                    linkContainer.style.display = 'none';
-                }
             }
             updateBulkButton();
             syncSelectionFlags();
         }
 
+        function refreshSelectionInfo() {
+            const container = document.getElementById('selectAllContainer');
+            const infoMessage = document.getElementById('selectAllMessage');
+            const selectAllLink = document.getElementById('selectAllLink');
+            const allSelectedMessage = document.getElementById('allSelectedMessage');
+            const globalInput = document.getElementById('selectAllPagesInput');
+            const isGlobal = globalInput ? globalInput.value === 'true' : false;
+            const selectedOnPage = collectSelectedProductIds().length;
+            const pageCount = Number(PAGINATION_COUNT) || document.querySelectorAll('.product-checkbox').length || 0;
+            const canSelectFiltered = TOTAL_COUNT > pageCount;
+
+            if (!container) return;
+
+            if (isGlobal) {
+                container.style.display = 'block';
+                if (infoMessage) infoMessage.style.display = 'none';
+                if (selectAllLink) selectAllLink.style.display = 'none';
+                if (allSelectedMessage) allSelectedMessage.style.display = 'inline';
+                return;
+            }
+
+            if (selectedOnPage <= 0) {
+                container.style.display = 'none';
+                if (infoMessage) infoMessage.style.display = 'none';
+                if (selectAllLink) selectAllLink.style.display = 'none';
+                if (allSelectedMessage) allSelectedMessage.style.display = 'none';
+                return;
+            }
+
+            container.style.display = 'block';
+            if (allSelectedMessage) allSelectedMessage.style.display = 'none';
+
+            if (infoMessage) {
+                const plural = selectedOnPage === 1 ? '' : 's';
+                infoMessage.style.display = 'inline';
+                infoMessage.textContent = `Seleccionaste ${selectedOnPage} producto${plural} de esta pagina.`;
+            }
+
+            if (selectAllLink) {
+                if (canSelectFiltered && selectedOnPage === pageCount) {
+                    selectAllLink.style.display = 'inline';
+                    selectAllLink.textContent = `Seleccionar los ${TOTAL_COUNT} productos filtrados.`;
+                } else {
+                    selectAllLink.style.display = 'none';
+                }
+            }
+        }
+
         function selectAllPages(e) {
-            e.preventDefault();
+            if (e) e.preventDefault();
             const globalInput = document.getElementById('selectAllPagesInput');
             if (globalInput) globalInput.value = 'true';
-
-            // UI Updates
-            document.getElementById('selectAllMessage').style.display = 'none';
-            const link = document.getElementById('selectAllLink');
-            if (link) link.style.display = 'none';
-            document.getElementById('allSelectedMessage').style.display = 'inline';
 
             // Disable individual checkboxes
             document.querySelectorAll('.product-checkbox').forEach(cb => {
@@ -303,12 +347,33 @@
             syncSelectionFlags();
         }
 
+        function selectAllFiltered() {
+            selectAllPages();
+        }
+
+        function selectCurrentPage() {
+            const globalInput = document.getElementById('selectAllPagesInput');
+            if (globalInput && globalInput.value === 'true') {
+                clearSelectAll();
+            }
+
+            document.querySelectorAll('.product-checkbox').forEach(cb => {
+                cb.disabled = false;
+                cb.checked = true;
+            });
+            const selectAllCheckbox = document.getElementById('selectAll');
+            if (selectAllCheckbox) {
+                selectAllCheckbox.checked = true;
+            }
+
+            updateBulkButton();
+            syncSelectionFlags();
+        }
+
         function clearSelectAll(e) {
             if (e) e.preventDefault();
             const globalInput = document.getElementById('selectAllPagesInput');
             if (globalInput) globalInput.value = 'false';
-
-            document.getElementById('selectAllContainer').style.display = 'none';
 
             document.querySelectorAll('.product-checkbox').forEach(cb => {
                 cb.disabled = false;
@@ -328,6 +393,7 @@
             const activateBtn = document.getElementById('bulkActivateBtn');
             const deactivateBtn = document.getElementById('bulkDeactivateBtn');
             const selectedLabel = document.getElementById('bulkSelectedCount');
+            const selectedInlineLabel = document.getElementById('bulkSelectedCountInline');
 
             let count = 0;
             if (selectAllGlobal) {
@@ -337,7 +403,16 @@
             }
 
             if (count > 0) {
-                if (selectedLabel) selectedLabel.textContent = `${count} seleccionados`;
+                if (selectedLabel) {
+                    selectedLabel.textContent = selectAllGlobal
+                        ? `${count} filtrados seleccionados`
+                        : `${count} seleccionados`;
+                }
+                if (selectedInlineLabel) {
+                    selectedInlineLabel.textContent = selectAllGlobal
+                        ? `${count} filtrados seleccionados`
+                        : `${count} seleccionados`;
+                }
                 if (categoryBtn) {
                     categoryBtn.removeAttribute('disabled');
                     categoryBtn.innerHTML = `Categorizar (${count})`;
@@ -352,6 +427,7 @@
                 }
             } else {
                 if (selectedLabel) selectedLabel.textContent = '0 seleccionados';
+                if (selectedInlineLabel) selectedInlineLabel.textContent = '0 seleccionados';
                 if (categoryBtn) {
                     categoryBtn.setAttribute('disabled', 'true');
                     categoryBtn.innerHTML = 'Categorizar';
@@ -365,6 +441,8 @@
                     deactivateBtn.innerHTML = 'Desactivar';
                 }
             }
+
+            refreshSelectionInfo();
         }
 
         function validateBulkAction() {
@@ -417,6 +495,7 @@
         document.addEventListener('DOMContentLoaded', function () {
             syncSelectionFlags();
             updateBulkButton();
+            refreshSelectionInfo();
         });
     </script>
     <div class="products-table-wrapper">
