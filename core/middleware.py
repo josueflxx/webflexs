@@ -1,6 +1,7 @@
 """
 User activity tracking middleware.
 """
+import uuid
 from urllib.parse import urlencode
 
 from django.contrib import messages
@@ -14,6 +15,26 @@ from django.shortcuts import redirect
 from django.urls import reverse
 from core.models import UserActivity
 from core.services.audit_context import clear_request_context, set_request_context
+
+
+class RequestIDMiddleware:
+    """
+    Inject stable request id for tracing across logs/responses.
+    """
+
+    HEADER_NAME = "X-Request-ID"
+    META_KEY = "HTTP_X_REQUEST_ID"
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        incoming = str(request.META.get(self.META_KEY, "")).strip()
+        request_id = incoming or str(uuid.uuid4())
+        request.request_id = request_id
+        response = self.get_response(request)
+        response[self.HEADER_NAME] = request_id
+        return response
 
 
 class SessionIdleTimeoutMiddleware:

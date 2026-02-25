@@ -156,3 +156,27 @@ class ApiV1Tests(TestCase):
         self.assertIn(self.order_client.id, order_ids)
         self.assertNotIn(self.order_other.id, order_ids)
 
+    def test_orders_queue_staff_only(self):
+        self.client.force_login(self.client_user)
+        forbidden = self.client.get(reverse("api_v1:orders_queue"))
+        self.assertIn(forbidden.status_code, (401, 403))
+
+        self.client.force_login(self.staff_user)
+        response = self.client.get(reverse("api_v1:orders_queue"))
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload.get("role"), "admin")
+        self.assertIn("results", payload)
+
+    def test_order_workflow_endpoint_visibility(self):
+        self.client.force_login(self.client_user)
+        own = self.client.get(
+            reverse("api_v1:orders_workflow", kwargs={"order_id": self.order_client.id})
+        )
+        self.assertEqual(own.status_code, 200)
+        self.assertEqual(own.json().get("order_id"), self.order_client.id)
+
+        other = self.client.get(
+            reverse("api_v1:orders_workflow", kwargs={"order_id": self.order_other.id})
+        )
+        self.assertEqual(other.status_code, 403)

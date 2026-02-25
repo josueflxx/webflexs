@@ -1,6 +1,7 @@
 """API v1 read-only endpoints."""
 
 from django.conf import settings
+from django.db import connection
 from django.db.models import Q
 from rest_framework import generics, permissions
 from rest_framework.response import Response
@@ -18,6 +19,12 @@ from core.api_v1.serializers import (
     ProductStaffSerializer,
 )
 from orders.models import Order
+from orders.services.workflow import (
+    get_allowed_next_statuses_for_user,
+    get_order_queue_queryset_for_user,
+    get_role_queue_statuses,
+    resolve_user_order_role,
+)
 
 
 def _parse_bool_param(raw_value):
@@ -47,11 +54,20 @@ class ApiHealthView(APIView):
     throttle_scope = "api_v1_admin"
 
     def get(self, request):
+        db_ok = True
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT 1")
+                cursor.fetchone()
+        except Exception:
+            db_ok = False
+
         return Response(
             {
                 "ok": True,
                 "api_version": "v1",
                 "feature_api_v1_enabled": bool(getattr(settings, "FEATURE_API_V1_ENABLED", False)),
+                "db_ok": db_ok,
             }
         )
 
@@ -208,3 +224,70 @@ class ApiOrderListView(ApiV1BaseListView):
                 queryset = queryset.filter(user_id=int(user_id))
 
         return queryset
+
+
+class ApiOrderQueueView(ApiV1BaseListView):
+    permission_classes = [IsStaffUser]
+    serializer_class = OrderListSerializer
+    throttle_scope = "api_v1_admin"
+
+    def get_queryset(self):
+        queryset = Order.objects.select_related("user").prefetch_related("items").order_by("-updated_at")
+        filtered_qs, role = get_order_queue_queryset_for_user(queryset, self.request.user)
+        self._resolved_role = role
+
+        status = (self.request.query_params.get("status") or "").strip().lower()
+        if status:
+            filtered_qs = filtered_qs.filter(status=status)
+        return filtered_qs
+
+    def list(self, request, *args, **kwargs):
+        queryset = self.filter_queryset(self.get_queryset())
+        page = self.paginate_queryset(queryset)
+        serializer = self.get_serializer(page if page is not None else queryset, many=True)
+
+        role = getattr(self, "_resolved_role", None) or resolve_user_order_role(request.user)
+        queue_statuses = get_role_queue_statuses(role)
+        counts = {
+            status: queryset.filter(status=status).count()
+            for status in queue_statuses
+        }
+
+        payload = {
+            "role": role,
+            "queue_statuses": queue_statuses,
+            "counts": counts,
+            "results": serializer.data,
+        }
+
+        if page is not None:
+            paginated = self.get_paginated_response(serializer.data)
+            paginated.data["role"] = role
+            paginated.data["queue_statuses"] = queue_statuses
+            paginated.data["counts"] = counts
+            return paginated
+        return Response(payload)
+
+
+class ApiOrderWorkflowView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "api_v1_default"
+
+    def get(self, request, order_id):
+        order = Order.objects.filter(pk=order_id).first()
+        if not order:
+            return Response({"detail": "Pedido no encontrado."}, status=404)
+
+        if not request.user.is_staff and order.user_id != request.user.id:
+            return Response({"detail": "No autorizado."}, status=403)
+
+        allowed_statuses = get_allowed_next_statuses_for_user(request.user, order)
+        return Response(
+            {
+                "order_id": order.id,
+                "current_status": order.status,
+                "allowed_next_statuses": allowed_statuses,
+                "resolved_role": resolve_user_order_role(request.user),
+            }
+        )

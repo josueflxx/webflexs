@@ -13,6 +13,7 @@ from accounts.models import ClientProfile, ClientPayment
 from catalog.models import Category, ClampMeasureRequest, Product, Supplier
 from orders.models import Order
 from core.models import UserActivity
+from core.services.advanced_search import apply_text_search
 from core.services.presence import build_admin_presence_payload, get_presence_config
 
 
@@ -94,8 +95,11 @@ def _suggest_catalog(query):
     items = []
 
     product_rows = (
-        Product.catalog_visible()
-        .filter(Q(sku__icontains=query) | Q(name__icontains=query))
+        apply_text_search(
+            Product.catalog_visible(),
+            query,
+            ["sku", "name"],
+        )
         .values_list("sku", "name")
         .order_by("name")[:6]
     )
@@ -116,11 +120,10 @@ def _suggest_catalog(query):
 def _suggest_admin_products(query):
     items = []
     rows = (
-        Product.objects.filter(
-            Q(sku__icontains=query)
-            | Q(name__icontains=query)
-            | Q(supplier__icontains=query)
-            | Q(supplier_ref__name__icontains=query)
+        apply_text_search(
+            Product.objects.all(),
+            query,
+            ["sku", "name", "supplier", "supplier_ref__name"],
         )
         .select_related("supplier_ref")
         .values_list("sku", "name", "supplier", "supplier_ref__name")

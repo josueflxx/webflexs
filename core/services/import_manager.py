@@ -19,10 +19,23 @@ class ImportTaskManager:
             'current': 0,
             'total': 0,
             'message': 'Iniciando...',
-            'result': None
+            'result': None,
+            'backend': 'thread',
+            'job_id': '',
         }
         cache.set(f'import_task_{task_id}', state, ImportTaskManager.CACHE_TIMEOUT)
         return task_id
+
+    @staticmethod
+    def set_backend(task_id, backend, job_id=""):
+        """Attach backend metadata (thread/celery) to a task state."""
+        key = f'import_task_{task_id}'
+        state = cache.get(key) or {}
+        state.update({
+            'backend': str(backend or 'thread'),
+            'job_id': str(job_id or ''),
+        })
+        cache.set(key, state, ImportTaskManager.CACHE_TIMEOUT)
 
     @staticmethod
     def update_progress(task_id, current, total, message=None):

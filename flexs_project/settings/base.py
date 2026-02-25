@@ -54,6 +54,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
+    'core.middleware.RequestIDMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -152,6 +153,7 @@ FEATURE_API_V1_ENABLED = os.getenv('FEATURE_API_V1_ENABLED', 'True').lower() == 
 FEATURE_BACKGROUND_JOBS_ENABLED = os.getenv('FEATURE_BACKGROUND_JOBS_ENABLED', 'False').lower() == 'true'
 FEATURE_ADVANCED_SEARCH_ENABLED = os.getenv('FEATURE_ADVANCED_SEARCH_ENABLED', 'False').lower() == 'true'
 FEATURE_OBSERVABILITY_ENABLED = os.getenv('FEATURE_OBSERVABILITY_ENABLED', 'False').lower() == 'true'
+ORDER_REQUIRE_PAYMENT_FOR_CONFIRMATION = os.getenv('ORDER_REQUIRE_PAYMENT_FOR_CONFIRMATION', 'False').lower() == 'true'
 
 # Django REST Framework
 REST_FRAMEWORK = {
@@ -221,3 +223,53 @@ else:
             "TIMEOUT": 300,
         }
     }
+
+# Background jobs (Phase 2)
+CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", REDIS_URL or "redis://127.0.0.1:6379/0")
+CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", CELERY_BROKER_URL)
+CELERY_TASK_DEFAULT_QUEUE = os.getenv("CELERY_TASK_DEFAULT_QUEUE", "flexs-default")
+CELERY_TASK_ALWAYS_EAGER = os.getenv("CELERY_TASK_ALWAYS_EAGER", "False").lower() == "true"
+CELERY_TASK_EAGER_PROPAGATES = os.getenv("CELERY_TASK_EAGER_PROPAGATES", "False").lower() == "true"
+
+# Logging / observability (Phase 5)
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "verbose": {
+            "format": "[%(asctime)s] %(levelname)s %(name)s %(message)s",
+        },
+        "simple": {
+            "format": "%(levelname)s %(name)s %(message)s",
+        },
+    },
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": "verbose" if not DEBUG else "simple",
+        },
+    },
+    "root": {
+        "handlers": ["console"],
+        "level": LOG_LEVEL,
+    },
+}
+
+if FEATURE_OBSERVABILITY_ENABLED:
+    sentry_dsn = os.getenv("SENTRY_DSN", "").strip()
+    if sentry_dsn:
+        try:
+            import sentry_sdk
+            from sentry_sdk.integrations.django import DjangoIntegration
+
+            sentry_sdk.init(
+                dsn=sentry_dsn,
+                integrations=[DjangoIntegration()],
+                traces_sample_rate=float(os.getenv("SENTRY_TRACES_SAMPLE_RATE", "0.05")),
+                send_default_pii=False,
+                environment=os.getenv("SENTRY_ENVIRONMENT", "local" if DEBUG else "production"),
+            )
+        except Exception:
+            # Never fail startup because of optional observability integration.
+            pass

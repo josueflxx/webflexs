@@ -32,6 +32,7 @@ from openpyxl import Workbook
 from catalog.models import Product, Category, CategoryAttribute, ClampMeasureRequest, Supplier
 from accounts.models import AccountRequest, ClientPayment, ClientProfile
 from orders.models import ClampQuotation, Order, OrderItem, OrderStatusHistory
+from orders.services.workflow import can_user_transition_order
 from core.models import SiteSettings, CatalogAnalyticsEvent, AdminAuditLog, ImportExecution
 from django.contrib.auth.models import User
 from admin_panel.forms.import_forms import ProductImportForm, ClientImportForm, CategoryImportForm
@@ -67,8 +68,9 @@ from catalog.services.category_assignment import (
     remove_category_from_products,
 )
 from core.services.import_manager import ImportTaskManager
+from core.services.background_jobs import dispatch_import_job
+from core.services.advanced_search import apply_text_search
 from core.services.audit import log_admin_action, log_admin_change, model_snapshot
-import threading
 import traceback
 import logging
 from core.decorators import superuser_required_for_modifications
@@ -462,11 +464,10 @@ def get_product_queryset(data):
     # Search
     search = data.get('q', '').strip()
     if search:
-        products = products.filter(
-            Q(sku__icontains=search) |
-            Q(name__icontains=search) |
-            Q(supplier__icontains=search) |
-            Q(supplier_ref__name__icontains=search)
+        products = apply_text_search(
+            products,
+            search,
+            ["sku", "name", "supplier", "supplier_ref__name"],
         )
     
     # Category filter
@@ -2623,6 +2624,10 @@ def order_detail(request, pk):
             order.admin_notes = request.POST.get('admin_notes', '')
             status_note = request.POST.get('status_note', '').strip()
             try:
+                allowed, reason = can_user_transition_order(request.user, order, new_status)
+                if not allowed:
+                    raise ValueError(reason)
+
                 changed = order.change_status(
                     new_status=new_status,
                     changed_by=request.user,
@@ -3884,12 +3889,15 @@ def import_process(request, import_type):
                     status=ImportExecution.STATUS_PROCESSING,
                 )
 
-                thread = threading.Thread(
-                    target=run_background_import,
-                    args=(task_id, execution.pk, import_type, ImporterClass, file_path, dry_run),
+                importer_class_path = f"{ImporterClass.__module__}.{ImporterClass.__name__}"
+                dispatch_result = dispatch_import_job(
+                    task_id=task_id,
+                    execution_id=execution.pk,
+                    import_type=import_type,
+                    importer_class_path=importer_class_path,
+                    file_path=file_path,
+                    dry_run=dry_run,
                 )
-                thread.daemon = True
-                thread.start()
 
                 log_admin_action(
                     request,
@@ -3900,6 +3908,7 @@ def import_process(request, import_type):
                         'import_type': import_type,
                         'dry_run': dry_run,
                         'file_name': file_basename,
+                        'backend': dispatch_result.get('backend', 'thread'),
                     },
                 )
 

@@ -13,5 +13,6 @@ urlpatterns = [
     path("clients/", views.ApiClientListView.as_view(), name="clients"),
     path("clients/me/", views.ApiMyClientProfileView.as_view(), name="clients_me"),
     path("orders/", views.ApiOrderListView.as_view(), name="orders"),
+    path("orders/queue/", views.ApiOrderQueueView.as_view(), name="orders_queue"),
+    path("orders/<int:order_id>/workflow/", views.ApiOrderWorkflowView.as_view(), name="orders_workflow"),
 ]
-

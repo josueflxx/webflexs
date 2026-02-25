@@ -2,19 +2,21 @@
 Catalog app views - Product listing and detail.
 """
 import json
+import re
 from decimal import Decimal
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.cache import cache
 from django.core.paginator import Paginator
-from django.db.models import Count, Max, Prefetch, Q
+from django.db.models import Case, Count, IntegerField, Max, Prefetch, Q, Value, When
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from core.models import CatalogAnalyticsEvent, SiteSettings
+from core.services.advanced_search import apply_text_search, build_text_query
 from orders.models import Cart, CartItem, ClientFavoriteProduct
 
 from catalog.services.clamp_request_products import get_or_create_request_product
@@ -31,6 +33,54 @@ CLAMP_REQUEST_DEFAULT_STEEL_PRICE_USD = Decimal("1.45")
 CLAMP_REQUEST_DEFAULT_SUPPLIER_DISCOUNT = Decimal("0")
 CLAMP_REQUEST_DEFAULT_GENERAL_INCREASE = Decimal("40")
 
+SEARCH_TOKEN_PATTERN = re.compile(r'"([^"]+)"|(\S+)')
+DIMENSIONS_PATTERN = re.compile(
+    r"(?P<diam>\d+(?:\s+\d+/\d+|/\d+)?)\s*[xX]\s*(?P<width>\d{1,4})\s*[xX]\s*(?P<length>\d{1,4})"
+)
+SKU_CODE_PATTERN = re.compile(r"^AB[LT][A-Z0-9/\-]+$", re.IGNORECASE)
+
+CLAMP_TYPE_ALIASES = {
+    "t": "TREFILADA",
+    "tref": "TREFILADA",
+    "trefilada": "TREFILADA",
+    "l": "LAMINADA",
+    "lam": "LAMINADA",
+    "laminada": "LAMINADA",
+}
+
+CLAMP_SHAPE_ALIASES = {
+    "p": "PLANA",
+    "plana": "PLANA",
+    "plano": "PLANA",
+    "s": "SEMICURVA",
+    "semi": "SEMICURVA",
+    "semicurva": "SEMICURVA",
+    "sc": "SEMICURVA",
+    "c": "CURVA",
+    "curva": "CURVA",
+}
+
+ADVANCED_KEY_ALIASES = {
+    "sku": "sku",
+    "codigo": "sku",
+    "code": "sku",
+    "proveedor": "supplier",
+    "supplier": "supplier",
+    "prov": "supplier",
+    "cat": "category",
+    "categoria": "category",
+    "tipo": "type",
+    "diam": "diameter",
+    "diametro": "diameter",
+    "ancho": "width",
+    "width": "width",
+    "largo": "length",
+    "length": "length",
+    "forma": "shape",
+    "perfil": "shape",
+    "shape": "shape",
+}
+
 
 def can_use_clamp_measure_feature(user):
     """
@@ -44,6 +94,301 @@ def can_use_clamp_measure_feature(user):
         return True
     profile = getattr(user, "client_profile", None)
     return bool(profile and getattr(profile, "is_approved", False))
+
+
+def normalize_diameter_value(value):
+    raw = str(value or "").strip().lower()
+    if not raw:
+        return ""
+
+    raw = raw.replace("-", "/")
+    raw = re.sub(r"\s+", "", raw)
+    if "/" in raw:
+        parts = raw.split("/")
+        if len(parts) == 2 and all(part.isdigit() for part in parts):
+            return f"{int(parts[0])}/{int(parts[1])}"
+    if raw.isdigit():
+        return str(int(raw))
+    return str(value or "").strip()
+
+
+def normalize_shape_value(value):
+    token = str(value or "").strip().lower()
+    if not token:
+        return ""
+    return CLAMP_SHAPE_ALIASES.get(token, token.upper())
+
+
+def normalize_type_value(value):
+    token = str(value or "").strip().lower()
+    if not token:
+        return ""
+    return CLAMP_TYPE_ALIASES.get(token, token.upper())
+
+
+def extract_search_tokens(raw_query):
+    tokens = []
+    for match in SEARCH_TOKEN_PATTERN.finditer(str(raw_query or "")):
+        token = (match.group(1) or match.group(2) or "").strip()
+        if token:
+            tokens.append((token, bool(match.group(1))))
+    return tokens
+
+
+def parse_catalog_search_query(raw_query):
+    """
+    Parse user search text into structured, reusable filters.
+    Supports:
+    - quoted phrases: "buje trasero"
+    - exclusions: -ford
+    - key:value expressions: sku:ABT..., tipo:trefilada, diametro:7/16, ancho:80...
+    - compact dimensions: 7/16x80x220
+    """
+    parsed = {
+        "raw": str(raw_query or "").strip(),
+        "phrases": [],
+        "include_terms": [],
+        "exclude_terms": [],
+        "sku": "",
+        "supplier_terms": [],
+        "category_terms": [],
+        "clamp_type": "",
+        "clamp_shape": "",
+        "clamp_diameter": "",
+        "clamp_width": None,
+        "clamp_length": None,
+    }
+    if not parsed["raw"]:
+        return parsed
+
+    for token, is_phrase in extract_search_tokens(parsed["raw"]):
+        cleaned = token.strip()
+        if not cleaned:
+            continue
+
+        is_exclusion = cleaned.startswith("-") and len(cleaned) > 1
+        if is_exclusion:
+            cleaned = cleaned[1:].strip()
+            if not cleaned:
+                continue
+
+        key = ""
+        value = cleaned
+        if ":" in cleaned:
+            maybe_key, maybe_value = cleaned.split(":", 1)
+            alias = ADVANCED_KEY_ALIASES.get(maybe_key.strip().lower())
+            if alias:
+                key = alias
+                value = maybe_value.strip()
+
+        if key:
+            if key == "sku" and value:
+                parsed["sku"] = value
+                continue
+            if key == "supplier" and value:
+                parsed["supplier_terms"].append(value)
+                continue
+            if key == "category" and value:
+                parsed["category_terms"].append(value)
+                continue
+            if key == "type" and value:
+                parsed["clamp_type"] = normalize_type_value(value)
+                continue
+            if key == "shape" and value:
+                parsed["clamp_shape"] = normalize_shape_value(value)
+                continue
+            if key == "diameter" and value:
+                parsed["clamp_diameter"] = normalize_diameter_value(value)
+                continue
+            if key == "width" and value.isdigit():
+                parsed["clamp_width"] = int(value)
+                continue
+            if key == "length" and value.isdigit():
+                parsed["clamp_length"] = int(value)
+                continue
+
+        dimensions_match = DIMENSIONS_PATTERN.search(cleaned)
+        if dimensions_match:
+            parsed["clamp_diameter"] = normalize_diameter_value(dimensions_match.group("diam"))
+            parsed["clamp_width"] = int(dimensions_match.group("width"))
+            parsed["clamp_length"] = int(dimensions_match.group("length"))
+            continue
+
+        maybe_type = normalize_type_value(cleaned)
+        if maybe_type in {"TREFILADA", "LAMINADA"}:
+            parsed["clamp_type"] = maybe_type
+            continue
+
+        maybe_shape = normalize_shape_value(cleaned)
+        if maybe_shape in {"PLANA", "SEMICURVA", "CURVA"}:
+            parsed["clamp_shape"] = maybe_shape
+            continue
+
+        normalized_diameter = normalize_diameter_value(cleaned)
+        if normalized_diameter in get_allowed_diameter_options():
+            parsed["clamp_diameter"] = normalized_diameter
+            continue
+
+        if not parsed["sku"] and SKU_CODE_PATTERN.match(cleaned):
+            parsed["sku"] = cleaned
+            continue
+
+        if is_phrase:
+            parsed["phrases"].append(cleaned)
+        elif is_exclusion:
+            parsed["exclude_terms"].append(cleaned)
+        else:
+            parsed["include_terms"].append(cleaned)
+
+    parsed["include_terms"] = parsed["include_terms"][:8]
+    parsed["exclude_terms"] = parsed["exclude_terms"][:8]
+    parsed["phrases"] = parsed["phrases"][:4]
+    parsed["supplier_terms"] = parsed["supplier_terms"][:4]
+    parsed["category_terms"] = parsed["category_terms"][:4]
+    return parsed
+
+
+def apply_catalog_text_search(products, parsed_search):
+    search_fields = ["name", "sku", "description", "supplier"]
+
+    if parsed_search["sku"]:
+        products = products.filter(sku__icontains=parsed_search["sku"])
+
+    for phrase in parsed_search["phrases"]:
+        products = apply_text_search(products, phrase, search_fields)
+
+    for term in parsed_search["include_terms"]:
+        products = apply_text_search(products, term, search_fields)
+
+    for term in parsed_search["exclude_terms"]:
+        products = products.exclude(build_text_query(search_fields, term))
+
+    for term in parsed_search["supplier_terms"]:
+        products = apply_text_search(products, term, ["supplier"])
+
+    for term in parsed_search["category_terms"]:
+        products = products.filter(
+            Q(category__name__icontains=term)
+            | Q(category__slug__icontains=term)
+            | Q(categories__name__icontains=term)
+            | Q(categories__slug__icontains=term)
+        ).distinct()
+
+    clamp_filters = {}
+    if parsed_search["clamp_type"] in {"TREFILADA", "LAMINADA"}:
+        clamp_filters["clamp_specs__fabrication"] = parsed_search["clamp_type"]
+    if parsed_search["clamp_shape"] in {"PLANA", "SEMICURVA", "CURVA"}:
+        clamp_filters["clamp_specs__shape"] = parsed_search["clamp_shape"]
+    if parsed_search["clamp_diameter"]:
+        clamp_filters["clamp_specs__diameter"] = parsed_search["clamp_diameter"]
+    if parsed_search["clamp_width"] is not None:
+        clamp_filters["clamp_specs__width"] = parsed_search["clamp_width"]
+    if parsed_search["clamp_length"] is not None:
+        clamp_filters["clamp_specs__length"] = parsed_search["clamp_length"]
+    if clamp_filters:
+        products = products.filter(**clamp_filters)
+
+    return products
+
+
+def annotate_catalog_search_rank(products, parsed_search):
+    if not parsed_search["raw"]:
+        return products
+
+    rank_expr = Value(0, output_field=IntegerField())
+    rank_expr += Case(
+        When(sku__iexact=parsed_search["raw"], then=Value(400)),
+        default=Value(0),
+        output_field=IntegerField(),
+    )
+    rank_expr += Case(
+        When(sku__istartswith=parsed_search["raw"], then=Value(180)),
+        default=Value(0),
+        output_field=IntegerField(),
+    )
+    rank_expr += Case(
+        When(name__icontains=parsed_search["raw"], then=Value(120)),
+        default=Value(0),
+        output_field=IntegerField(),
+    )
+    rank_expr += Case(
+        When(description__icontains=parsed_search["raw"], then=Value(45)),
+        default=Value(0),
+        output_field=IntegerField(),
+    )
+
+    for phrase in parsed_search["phrases"]:
+        rank_expr += Case(
+            When(name__icontains=phrase, then=Value(70)),
+            default=Value(0),
+            output_field=IntegerField(),
+        )
+        rank_expr += Case(
+            When(description__icontains=phrase, then=Value(25)),
+            default=Value(0),
+            output_field=IntegerField(),
+        )
+
+    for term in parsed_search["include_terms"]:
+        rank_expr += Case(
+            When(sku__iexact=term, then=Value(90)),
+            default=Value(0),
+            output_field=IntegerField(),
+        )
+        rank_expr += Case(
+            When(sku__icontains=term, then=Value(45)),
+            default=Value(0),
+            output_field=IntegerField(),
+        )
+        rank_expr += Case(
+            When(name__icontains=term, then=Value(28)),
+            default=Value(0),
+            output_field=IntegerField(),
+        )
+        rank_expr += Case(
+            When(description__icontains=term, then=Value(12)),
+            default=Value(0),
+            output_field=IntegerField(),
+        )
+        rank_expr += Case(
+            When(supplier__icontains=term, then=Value(8)),
+            default=Value(0),
+            output_field=IntegerField(),
+        )
+
+    if parsed_search["sku"]:
+        rank_expr += Case(
+            When(sku__iexact=parsed_search["sku"], then=Value(300)),
+            default=Value(0),
+            output_field=IntegerField(),
+        )
+
+    return products.annotate(search_rank=rank_expr)
+
+
+def build_search_summary(parsed_search):
+    summary = []
+    if parsed_search.get("sku"):
+        summary.append(f"SKU: {parsed_search['sku']}")
+    if parsed_search.get("clamp_type"):
+        summary.append(f"Tipo: {parsed_search['clamp_type'].title()}")
+    if parsed_search.get("clamp_diameter"):
+        summary.append(f"Diametro: {parsed_search['clamp_diameter']}")
+    if parsed_search.get("clamp_width") is not None:
+        summary.append(f"Ancho: {parsed_search['clamp_width']}")
+    if parsed_search.get("clamp_length") is not None:
+        summary.append(f"Largo: {parsed_search['clamp_length']}")
+    if parsed_search.get("clamp_shape"):
+        summary.append(f"Forma: {parsed_search['clamp_shape'].title()}")
+    for term in parsed_search.get("supplier_terms", []):
+        summary.append(f"Proveedor: {term}")
+    for term in parsed_search.get("category_terms", []):
+        summary.append(f"Categoria: {term}")
+    for phrase in parsed_search.get("phrases", []):
+        summary.append(f'"{phrase}"')
+    for term in parsed_search.get("exclude_terms", []):
+        summary.append(f"Excluye: {term}")
+    return summary[:10]
 
 
 def get_catalog_product_queryset():
@@ -239,12 +584,9 @@ def catalog(request):
     products = get_catalog_product_queryset()
 
     search_query = request.GET.get("q", "").strip()
+    parsed_search = parse_catalog_search_query(search_query)
     if search_query:
-        products = products.filter(
-            Q(name__icontains=search_query)
-            | Q(sku__icontains=search_query)
-            | Q(description__icontains=search_query)
-        )
+        products = apply_catalog_text_search(products, parsed_search)
 
     category_slug = request.GET.get("category", "")
     current_category = None
@@ -320,9 +662,22 @@ def catalog(request):
                     )
                     clamp_options[field] = [option for option in options if option]
 
-    order_by = request.GET.get("order", "name")
-    valid_orders = ["name", "-name", "price", "-price", "sku"]
-    if order_by in valid_orders:
+    order_by_default = "relevance" if search_query else "name"
+    order_by = request.GET.get("order", order_by_default)
+    valid_orders = {"name", "-name", "price", "-price", "sku", "relevance"}
+
+    if order_by not in valid_orders:
+        order_by = order_by_default
+
+    if search_query:
+        products = annotate_catalog_search_rank(products, parsed_search)
+        if order_by == "relevance":
+            products = products.order_by("-search_rank", "name")
+        else:
+            products = products.order_by(order_by)
+    else:
+        if order_by == "relevance":
+            order_by = "name"
         products = products.order_by(order_by)
 
     paginator = Paginator(products, 20)
@@ -429,6 +784,8 @@ def catalog(request):
         "canonical_url": canonical_url,
         "seo_title": seo_title,
         "seo_description": seo_description,
+        "search_summary": build_search_summary(parsed_search),
+        "parsed_search": parsed_search,
     }
 
     if clamp_options:

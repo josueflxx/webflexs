@@ -73,3 +73,11 @@ class SearchSuggestionsTests(TestCase):
         payload = response.json()
         values = [item["value"] for item in payload["suggestions"]]
         self.assertIn("ZZ-ADMIN-01", values)
+
+
+class ObservabilityMiddlewareTests(TestCase):
+    def test_request_id_header_is_present(self):
+        response = self.client.get(reverse("home"))
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("X-Request-ID", response)
+        self.assertTrue(str(response["X-Request-ID"]).strip())

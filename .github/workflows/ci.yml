@@ -1,0 +1,43 @@
+name: Django CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: [ "3.12" ]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Prepare env
+        run: |
+          cp .env.example .env
+          echo "DJANGO_SECRET_KEY=ci-secret-key" >> .env
+          echo "DJANGO_DEBUG=True" >> .env
+          echo "DJANGO_SETTINGS_MODULE=flexs_project.settings.local" >> .env
+          echo "DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1" >> .env
+
+      - name: Django checks
+        run: python manage.py check
+
+      - name: Run tests
+        run: python manage.py test -v 2
+
