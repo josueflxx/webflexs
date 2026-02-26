@@ -1,8 +1,10 @@
 """
 Core app models - site-wide settings, analytics, and operation logs.
 """
-from django.db import models
+from django.db import models, transaction
 from django.conf import settings
+from django.core.cache import cache
+from django.utils.text import slugify
 
 
 class SiteSettings(models.Model):
@@ -54,17 +56,25 @@ class SiteSettings(models.Model):
         verbose_name = "Configuracion del Sitio"
         verbose_name_plural = "Configuracion del Sitio"
 
+    CACHE_KEY = "site_settings_singleton_v1"
+    CACHE_TTL = 300
+
     def save(self, *args, **kwargs):
         self.pk = 1
         super().save(*args, **kwargs)
+        cache.set(self.CACHE_KEY, self, self.CACHE_TTL)
 
     def delete(self, *args, **kwargs):
         pass
 
     @classmethod
     def get_settings(cls):
-        settings, _ = cls.objects.get_or_create(pk=1)
-        return settings
+        cached = cache.get(cls.CACHE_KEY)
+        if cached:
+            return cached
+        settings_obj, _ = cls.objects.get_or_create(pk=1)
+        cache.set(cls.CACHE_KEY, settings_obj, cls.CACHE_TTL)
+        return settings_obj
 
     def __str__(self):
         return "Configuracion del Sitio"
@@ -215,3 +225,217 @@ class ImportExecution(models.Model):
 
     def __str__(self):
         return f"{self.import_type} - {self.status} - {self.created_at:%Y-%m-%d %H:%M}"
+
+
+CATALOG_EXPORT_COLUMN_CHOICES = [
+    ("sku", "SKU"),
+    ("name", "Nombre"),
+    ("description", "Descripcion"),
+    ("supplier", "Proveedor"),
+    ("supplier_normalized", "Proveedor normalizado"),
+    ("price", "Precio"),
+    ("cost", "Costo"),
+    ("stock", "Stock"),
+    ("is_active", "Producto activo"),
+    ("is_visible_in_catalog", "Visible en catalogo"),
+    ("primary_category", "Categoria principal"),
+    ("categories", "Categorias vinculadas"),
+    ("filter_1", "Filtro 1"),
+    ("filter_2", "Filtro 2"),
+    ("filter_3", "Filtro 3"),
+    ("filter_4", "Filtro 4"),
+    ("filter_5", "Filtro 5"),
+    ("created_at", "Creado"),
+    ("updated_at", "Actualizado"),
+    ("attributes_json", "Atributos JSON"),
+]
+
+CATALOG_EXPORT_SORT_CHOICES = [
+    ("name_asc", "Nombre A-Z"),
+    ("name_desc", "Nombre Z-A"),
+    ("sku_asc", "SKU A-Z"),
+    ("sku_desc", "SKU Z-A"),
+    ("updated_desc", "Mas recientes"),
+    ("price_desc", "Precio mayor a menor"),
+    ("price_asc", "Precio menor a mayor"),
+]
+
+
+class CatalogExcelTemplate(models.Model):
+    """Workbook template to export the product catalog."""
+
+    name = models.CharField(max_length=120, unique=True, verbose_name="Nombre")
+    slug = models.SlugField(max_length=140, unique=True, blank=True)
+    description = models.CharField(max_length=255, blank=True, verbose_name="Descripcion")
+    is_active = models.BooleanField(default=True, verbose_name="Activa")
+    is_client_download_enabled = models.BooleanField(
+        default=False,
+        verbose_name="Disponible para clientes",
+        help_text="Si esta activo, esta plantilla se publica para descarga en cuentas de cliente.",
+    )
+    client_download_label = models.CharField(
+        max_length=120,
+        blank=True,
+        default="Descargar catalogo Excel",
+        verbose_name="Texto boton cliente",
+        help_text="Texto del boton que vera el cliente para descargar esta plantilla.",
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="catalog_excel_templates_created",
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="catalog_excel_templates_updated",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Plantilla Excel de Catalogo"
+        verbose_name_plural = "Plantillas Excel de Catalogo"
+        ordering = ["name"]
+        indexes = [
+            models.Index(fields=["slug"]),
+            models.Index(fields=["is_active"]),
+            models.Index(fields=["created_at"]),
+        ]
+
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            base_slug = slugify(self.name) or "plantilla-catalogo"
+            slug = base_slug
+            counter = 1
+            while CatalogExcelTemplate.objects.filter(slug=slug).exclude(pk=self.pk).exists():
+                slug = f"{base_slug}-{counter}"
+                counter += 1
+            self.slug = slug
+        if not (self.client_download_label or "").strip():
+            self.client_download_label = "Descargar catalogo Excel"
+        with transaction.atomic():
+            super().save(*args, **kwargs)
+            if self.is_client_download_enabled:
+                CatalogExcelTemplate.objects.filter(
+                    is_client_download_enabled=True
+                ).exclude(pk=self.pk).update(is_client_download_enabled=False)
+
+    def __str__(self):
+        return self.name
+
+    @classmethod
+    def get_client_download_template(cls):
+        return (
+            cls.objects.filter(is_active=True, is_client_download_enabled=True)
+            .order_by("-updated_at", "id")
+            .first()
+        )
+
+
+class CatalogExcelTemplateSheet(models.Model):
+    """One worksheet configuration inside a catalog export template."""
+
+    template = models.ForeignKey(
+        CatalogExcelTemplate,
+        on_delete=models.CASCADE,
+        related_name="sheets",
+        verbose_name="Plantilla",
+    )
+    name = models.CharField(max_length=80, verbose_name="Nombre hoja")
+    order = models.PositiveIntegerField(default=0, verbose_name="Orden")
+    include_header = models.BooleanField(default=True, verbose_name="Incluir encabezado")
+    only_active_products = models.BooleanField(default=True, verbose_name="Solo productos activos")
+    only_catalog_visible = models.BooleanField(default=False, verbose_name="Solo visibles en catalogo")
+    include_descendant_categories = models.BooleanField(
+        default=True,
+        verbose_name="Incluir subcategorias",
+    )
+    categories = models.ManyToManyField(
+        "catalog.Category",
+        blank=True,
+        related_name="catalog_excel_template_sheets",
+        verbose_name="Categorias",
+    )
+    suppliers = models.ManyToManyField(
+        "catalog.Supplier",
+        blank=True,
+        related_name="catalog_excel_template_sheets",
+        verbose_name="Proveedores",
+    )
+    search_query = models.CharField(max_length=120, blank=True, verbose_name="Busqueda interna")
+    max_rows = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        verbose_name="Limite de filas",
+        help_text="Opcional. Dejar vacio para exportar todo.",
+    )
+    sort_by = models.CharField(
+        max_length=30,
+        choices=CATALOG_EXPORT_SORT_CHOICES,
+        default="name_asc",
+        verbose_name="Orden",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Hoja de plantilla Excel"
+        verbose_name_plural = "Hojas de plantilla Excel"
+        ordering = ["template_id", "order", "id"]
+        indexes = [
+            models.Index(fields=["template", "order"]),
+            models.Index(fields=["only_active_products"]),
+            models.Index(fields=["only_catalog_visible"]),
+        ]
+        unique_together = [("template", "name")]
+
+    def __str__(self):
+        return f"{self.template.name} / {self.name}"
+
+
+class CatalogExcelTemplateColumn(models.Model):
+    """Column definition for one worksheet."""
+
+    sheet = models.ForeignKey(
+        CatalogExcelTemplateSheet,
+        on_delete=models.CASCADE,
+        related_name="columns",
+        verbose_name="Hoja",
+    )
+    key = models.CharField(
+        max_length=40,
+        choices=CATALOG_EXPORT_COLUMN_CHOICES,
+        verbose_name="Campo",
+    )
+    header = models.CharField(
+        max_length=120,
+        blank=True,
+        verbose_name="Encabezado",
+        help_text="Opcional. Si se deja vacio, se usa el nombre por defecto del campo.",
+    )
+    order = models.PositiveIntegerField(default=0, verbose_name="Orden")
+    is_active = models.BooleanField(default=True, verbose_name="Activa")
+
+    class Meta:
+        verbose_name = "Columna de plantilla Excel"
+        verbose_name_plural = "Columnas de plantilla Excel"
+        ordering = ["sheet_id", "order", "id"]
+        indexes = [
+            models.Index(fields=["sheet", "order"]),
+            models.Index(fields=["key"]),
+            models.Index(fields=["is_active"]),
+        ]
+        unique_together = [("sheet", "key")]
+
+    def __str__(self):
+        return f"{self.sheet} / {self.key}"
+
+    def get_effective_header(self):
+        if self.header:
+            return self.header
+        return dict(CATALOG_EXPORT_COLUMN_CHOICES).get(self.key, self.key)

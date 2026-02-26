@@ -59,6 +59,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'core.middleware.ReadOnlyModeMiddleware',
     'core.middleware.SessionIdleTimeoutMiddleware',
     'core.middleware.AuditRequestContextMiddleware',
     'core.middleware.AuthSessionIsolationMiddleware',
@@ -147,12 +148,16 @@ SESSION_IDLE_TIMEOUT_SECONDS = max(_env_int('DJANGO_SESSION_IDLE_TIMEOUT_SECONDS
 LOGIN_MAX_FAILED_ATTEMPTS = max(_env_int('DJANGO_LOGIN_MAX_FAILED_ATTEMPTS', 5), 3)
 LOGIN_LOCKOUT_SECONDS = max(_env_int('DJANGO_LOGIN_LOCKOUT_SECONDS', 15 * 60), 60)
 LOGIN_ATTEMPT_WINDOW_SECONDS = max(_env_int('DJANGO_LOGIN_ATTEMPT_WINDOW_SECONDS', 15 * 60), 60)
+ALERT_PREPARING_STALE_DAYS = max(_env_int('ALERT_PREPARING_STALE_DAYS', 3), 1)
+ALERT_HIGH_DEBT_THRESHOLD = _env_int('ALERT_HIGH_DEBT_THRESHOLD', 500000)
+ALERT_IMPORT_ERROR_RATE_PERCENT = max(_env_int('ALERT_IMPORT_ERROR_RATE_PERCENT', 30), 1)
 
 # Feature flags (incremental rollout, no-breaking deployments)
 FEATURE_API_V1_ENABLED = os.getenv('FEATURE_API_V1_ENABLED', 'True').lower() == 'true'
 FEATURE_BACKGROUND_JOBS_ENABLED = os.getenv('FEATURE_BACKGROUND_JOBS_ENABLED', 'False').lower() == 'true'
 FEATURE_ADVANCED_SEARCH_ENABLED = os.getenv('FEATURE_ADVANCED_SEARCH_ENABLED', 'False').lower() == 'true'
 FEATURE_OBSERVABILITY_ENABLED = os.getenv('FEATURE_OBSERVABILITY_ENABLED', 'False').lower() == 'true'
+FEATURE_READ_ONLY_MODE = os.getenv('FEATURE_READ_ONLY_MODE', 'False').lower() == 'true'
 ORDER_REQUIRE_PAYMENT_FOR_CONFIRMATION = os.getenv('ORDER_REQUIRE_PAYMENT_FOR_CONFIRMATION', 'False').lower() == 'true'
 
 # Django REST Framework

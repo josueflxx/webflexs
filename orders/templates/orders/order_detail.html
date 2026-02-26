@@ -58,6 +58,14 @@
                 <span>Total</span>
                 <span>${{ order.total|floatformat:2 }}</span>
             </div>
+            <div class="total-row">
+                <span>Total pagado</span>
+                <span>${{ order_paid_amount|floatformat:2 }}</span>
+            </div>
+            <div class="total-row {% if order_pending_amount > 0 %}pending{% endif %}">
+                <span>Saldo pendiente</span>
+                <span>${{ order_pending_amount|floatformat:2 }}</span>
+            </div>
         </div>
 
         {% if order.status_history.all %}
@@ -77,6 +85,34 @@
             <p>{{ order.notes }}</p>
         </div>
         {% endif %}
+
+        <div class="order-notes">
+            <h4>Pagos aplicados a este pedido</h4>
+            {% if payments %}
+            <table class="items-table">
+                <thead>
+                    <tr>
+                        <th>Fecha</th>
+                        <th>Monto</th>
+                        <th>Medio</th>
+                        <th>Referencia</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for payment in payments %}
+                    <tr>
+                        <td>{{ payment.paid_at|date:"d/m/Y H:i" }}</td>
+                        <td>${{ payment.amount|floatformat:2 }}</td>
+                        <td>{{ payment.get_method_display }}</td>
+                        <td>{{ payment.reference|default:"-" }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <p class="text-muted">Aun no hay pagos aplicados a este pedido.</p>
+            {% endif %}
+        </div>
 
         <div style="display:flex;gap:10px;flex-wrap:wrap;">
             <a href="{% url 'order_list' %}" class="btn btn-outline"><- Volver a Mis Pedidos</a>
@@ -149,6 +185,11 @@
         color: var(--color-primary);
         padding-top: var(--spacing-md);
         border-top: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .total-row.pending {
+        color: var(--color-danger);
+        font-weight: 600;
     }
 
     .order-notes {

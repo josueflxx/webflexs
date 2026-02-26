@@ -3,6 +3,7 @@
 import importlib
 import os
 import traceback
+from math import ceil
 
 from django.contrib.auth.models import User
 from django.utils import timezone
@@ -117,6 +118,16 @@ def _run_preflight(import_type, importer_class, file_path):
     return preflight_errors
 
 
+def _build_batch_meta(total_rows, batch_size=500):
+    total = int(total_rows or 0)
+    if total <= 0:
+        return {"batch_size": int(batch_size), "total_batches": 0}
+    return {
+        "batch_size": int(batch_size),
+        "total_batches": int(ceil(total / float(batch_size))),
+    }
+
+
 def run_import_execution(task_id, execution_id, import_type, importer_class_path, file_path, dry_run):
     """
     Execute one import job and persist progress/status.
@@ -168,6 +179,8 @@ def run_import_execution(task_id, execution_id, import_type, importer_class_path
             "preflight_errors": preflight_errors,
             "execution_id": execution_id,
             "import_type": import_type,
+            "total_rows": result.total_rows,
+            "batch_meta": _build_batch_meta(result.total_rows),
         }
 
         ImportTaskManager.complete_task(task_id, result_data)
@@ -205,4 +218,3 @@ def run_import_execution(task_id, execution_id, import_type, importer_class_path
                 os.remove(file_path)
         except OSError:
             pass
-

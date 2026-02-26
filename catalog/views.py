@@ -10,13 +10,15 @@ from django.contrib.auth.decorators import login_required
 from django.core.cache import cache
 from django.core.paginator import Paginator
 from django.db.models import Case, Count, IntegerField, Max, Prefetch, Q, Value, When
+from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from core.models import CatalogAnalyticsEvent, SiteSettings
+from core.models import CatalogAnalyticsEvent, CatalogExcelTemplate, SiteSettings
 from core.services.advanced_search import apply_text_search, build_text_query
+from core.services.catalog_excel_exporter import build_catalog_workbook, build_export_filename
 from orders.models import Cart, CartItem, ClientFavoriteProduct
 
 from catalog.services.clamp_request_products import get_or_create_request_product
@@ -873,6 +875,46 @@ def product_detail(request, sku):
     }
 
     return render(request, "catalog/product_detail.html", context)
+
+
+@login_required
+def client_catalog_excel_download(request):
+    """Download the published catalog Excel template for approved clients/admins."""
+    if not request.user.is_staff:
+        profile = getattr(request.user, "client_profile", None)
+        if not profile or not getattr(profile, "is_approved", False):
+            messages.warning(
+                request,
+                "La descarga de Excel esta disponible solo para clientes aprobados.",
+            )
+            return redirect("catalog")
+
+    template = (
+        CatalogExcelTemplate.objects.prefetch_related(
+            "sheets__columns",
+            "sheets__categories",
+            "sheets__suppliers",
+        )
+        .filter(is_active=True, is_client_download_enabled=True)
+        .order_by("-updated_at", "id")
+        .first()
+    )
+
+    if not template:
+        messages.warning(
+            request,
+            "No hay una plantilla de Excel publicada para clientes en este momento.",
+        )
+        return redirect("catalog")
+
+    workbook, _stats = build_catalog_workbook(template)
+    file_name = build_export_filename(template)
+    response = HttpResponse(
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+    response["Content-Disposition"] = f'attachment; filename="{file_name}"'
+    workbook.save(response)
+    return response
 
 
 def _find_matching_clamp_products(inputs, limit=12):

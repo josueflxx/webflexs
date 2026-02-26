@@ -103,6 +103,13 @@ class ClientProfile(models.Model):
         total = self.payments.filter(is_cancelled=False).aggregate(total=Sum('amount'))['total']
         return total or Decimal('0.00')
 
+    def get_ledger_queryset(self):
+        return self.transactions.select_related('order', 'payment', 'created_by').order_by('occurred_at', 'id')
+
+    def get_ledger_balance(self):
+        total = self.transactions.aggregate(total=Sum('amount'))['total']
+        return total or Decimal('0.00')
+
     def get_orders_queryset_for_balance(self):
         """
         Orders that impact client debt/saldo:
@@ -124,6 +131,9 @@ class ClientProfile(models.Model):
         return total or Decimal('0.00')
 
     def get_current_balance(self):
+        # Prefer ledger when available (auditable + robust to adjustments/reversals).
+        if self.transactions.exists():
+            return self.get_ledger_balance()
         return self.get_total_orders_for_balance() - self.get_total_paid()
 
 
@@ -265,6 +275,7 @@ class ClientPayment(models.Model):
         ordering = ['-paid_at', '-id']
         indexes = [
             models.Index(fields=['client_profile', 'paid_at']),
+            models.Index(fields=['client_profile', 'is_cancelled', 'paid_at']),
             models.Index(fields=['order', 'paid_at']),
             models.Index(fields=['is_cancelled']),
         ]
@@ -272,3 +283,94 @@ class ClientPayment(models.Model):
     def __str__(self):
         company = self.client_profile.company_name if self.client_profile_id else '-'
         return f"{company} - ${self.amount}"
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+
+        # Keep client ledger in sync on create/update/cancel.
+        from accounts.services.ledger import sync_payment_transaction
+        sync_payment_transaction(
+            payment=self,
+            actor=self.created_by if self.created_by_id else None,
+        )
+
+
+class ClientTransaction(models.Model):
+    """Auditable ledger row for client current-account balance."""
+
+    TYPE_ORDER_CHARGE = 'order_charge'
+    TYPE_PAYMENT = 'payment'
+    TYPE_ADJUSTMENT = 'adjustment'
+
+    TYPE_CHOICES = [
+        (TYPE_ORDER_CHARGE, 'Cargo por pedido'),
+        (TYPE_PAYMENT, 'Pago'),
+        (TYPE_ADJUSTMENT, 'Ajuste manual'),
+    ]
+
+    client_profile = models.ForeignKey(
+        ClientProfile,
+        on_delete=models.CASCADE,
+        related_name='transactions',
+        verbose_name='Cliente',
+    )
+    order = models.ForeignKey(
+        'orders.Order',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='client_transactions',
+        verbose_name='Pedido asociado',
+    )
+    payment = models.ForeignKey(
+        ClientPayment,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='ledger_transactions',
+        verbose_name='Pago asociado',
+    )
+    transaction_type = models.CharField(
+        max_length=24,
+        choices=TYPE_CHOICES,
+        verbose_name='Tipo',
+    )
+    amount = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        verbose_name='Monto (+/-)',
+        help_text='Positivo suma deuda; negativo reduce deuda.',
+    )
+    description = models.CharField(max_length=255, blank=True, verbose_name='Descripcion')
+    source_key = models.CharField(
+        max_length=120,
+        unique=True,
+        db_index=True,
+        verbose_name='Clave de origen',
+        help_text='Clave idempotente para evitar duplicados.',
+    )
+    occurred_at = models.DateTimeField(default=timezone.now, db_index=True, verbose_name='Fecha operativa')
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='client_transactions_created',
+        verbose_name='Generado por',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Movimiento de Cuenta Corriente'
+        verbose_name_plural = 'Movimientos de Cuenta Corriente'
+        ordering = ['occurred_at', 'id']
+        indexes = [
+            models.Index(fields=['client_profile', 'occurred_at']),
+            models.Index(fields=['transaction_type', 'occurred_at']),
+            models.Index(fields=['order']),
+            models.Index(fields=['payment']),
+        ]
+
+    def __str__(self):
+        return f'{self.client_profile.company_name} | {self.transaction_type} | {self.amount}'

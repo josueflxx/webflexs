@@ -99,6 +99,11 @@
                     <span class="nav-icon" aria-hidden="true">&#128228;</span>
                     Importar
                 </a>
+                <a href="{% url 'admin_catalog_excel_template_list' %}"
+                    class="nav-item {% if 'catalog_excel' in request.resolver_match.url_name %}active{% endif %}">
+                    <span class="nav-icon" aria-hidden="true">&#128202;</span>
+                    Exportar Excel
+                </a>
                 {% endif %}
 
                 <div class="nav-section">Sistema</div>
@@ -149,6 +154,14 @@
                     <button class="alert-close" onclick="this.parentElement.remove()">&times;</button>
                 </div>
                 {% endfor %}
+            </div>
+            {% endif %}
+
+            {% if feature_read_only_mode %}
+            <div class="admin-messages">
+                <div class="alert alert-warning">
+                    Modo solo lectura activo: las operaciones de escritura estan temporalmente bloqueadas.
+                </div>
             </div>
             {% endif %}
 

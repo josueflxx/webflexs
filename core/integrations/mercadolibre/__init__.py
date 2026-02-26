@@ -1,0 +1,2 @@
+"""MercadoLibre integration placeholder."""
+

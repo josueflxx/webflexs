@@ -1,0 +1,191 @@
+{% extends 'admin_panel/base.html' %}
+
+{% block page_title %}Plantilla Excel{% endblock %}
+
+{% block extra_css %}
+<style>
+    .sheet-card {
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 10px;
+        background: rgba(255, 255, 255, 0.02);
+        padding: 14px;
+        margin-bottom: 14px;
+    }
+
+    .sheet-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin: 8px 0 12px;
+    }
+
+    .sheet-columns {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    .sheet-columns th,
+    .sheet-columns td {
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        padding: 8px;
+        text-align: left;
+        font-size: 0.92rem;
+    }
+
+    .sheet-columns th {
+        color: var(--color-gray-light);
+        font-size: 0.78rem;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="admin-table-container">
+    <div class="admin-toolbar">
+        <div>
+            <h2 style="margin:0;">{{ template.name }}</h2>
+            <small class="text-muted">{{ template.description|default:"Sin descripcion" }}</small>
+            <div class="sheet-meta" style="margin-top:8px;">
+                {% if template.is_active %}
+                <span class="badge badge-success">Activa</span>
+                {% else %}
+                <span class="badge badge-danger">Inactiva</span>
+                {% endif %}
+                {% if template.is_client_download_enabled and template.is_active %}
+                <span class="badge badge-success">Publicada para clientes</span>
+                <span class="badge badge-info">{{ template.client_download_label }}</span>
+                {% elif template.is_client_download_enabled %}
+                <span class="badge badge-warning">Marcada para clientes, pero inactiva</span>
+                {% else %}
+                <span class="badge badge-info">No publicada para clientes</span>
+                {% endif %}
+            </div>
+        </div>
+        <div class="toolbar-actions">
+            <a href="{% url 'admin_catalog_excel_template_download' template.pk %}" class="btn btn-primary">Descargar XLSX</a>
+            {% if user.is_superuser %}
+            <a href="{% url 'admin_catalog_excel_template_edit' template.pk %}" class="btn btn-outline">Editar plantilla</a>
+            <a href="{% url 'admin_catalog_excel_template_delete' template.pk %}" class="btn btn-danger">Eliminar</a>
+            {% endif %}
+            <a href="{% url 'admin_catalog_excel_template_list' %}" class="btn btn-outline">Volver</a>
+        </div>
+    </div>
+
+    {% if user.is_superuser %}
+    <div class="admin-toolbar">
+        <div class="toolbar-actions">
+            <a href="{% url 'admin_catalog_excel_sheet_create' template.pk %}" class="btn btn-primary">+ Nueva hoja</a>
+            <form method="post" action="{% url 'admin_catalog_excel_template_autogenerate_main_category_sheets' template.pk %}" style="display:inline;">
+                {% csrf_token %}
+                <label style="margin-right: 10px; display: inline-flex; align-items: center; gap: 6px; color: var(--color-gray-light);">
+                    <input type="checkbox" name="include_inactive_categories" value="1">
+                    Incluir categorias inactivas
+                </label>
+                <button
+                    type="submit"
+                    class="btn btn-outline"
+                    title="Genera/actualiza hojas por categoria principal. Puedes incluir inactivas y subcategorias.">
+                    Auto-hojas por categorias
+                </button>
+            </form>
+        </div>
+    </div>
+    {% endif %}
+
+    {% for sheet in sheets %}
+    <div class="sheet-card">
+        <div class="admin-toolbar" style="padding:0; border:0; margin-bottom: 8px;">
+            <div>
+                <h3 style="margin:0;">{{ sheet.name }}</h3>
+                <small class="text-muted">
+                    Orden {{ sheet.order }} | {{ sheet.get_sort_by_display }}
+                </small>
+            </div>
+            <div class="toolbar-actions">
+                {% if user.is_superuser %}
+                <a href="{% url 'admin_catalog_excel_sheet_edit' sheet.pk %}" class="btn btn-outline">Editar hoja</a>
+                <a href="{% url 'admin_catalog_excel_column_create' sheet.pk %}" class="btn btn-outline">+ Columna</a>
+                <a href="{% url 'admin_catalog_excel_sheet_delete' sheet.pk %}" class="btn btn-danger">Eliminar hoja</a>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="sheet-meta">
+            <span class="badge badge-info">Encabezado: {% if sheet.include_header %}Si{% else %}No{% endif %}</span>
+            <span class="badge badge-info">Solo activos: {% if sheet.only_active_products %}Si{% else %}No{% endif %}</span>
+            <span class="badge badge-info">Solo visible catalogo: {% if sheet.only_catalog_visible %}Si{% else %}No{% endif %}</span>
+            <span class="badge badge-info">Incluye subcategorias: {% if sheet.include_descendant_categories %}Si{% else %}No{% endif %}</span>
+            {% if sheet.max_rows %}
+            <span class="badge badge-warning">Limite: {{ sheet.max_rows }}</span>
+            {% else %}
+            <span class="badge badge-success">Sin limite</span>
+            {% endif %}
+            {% if sheet.search_query %}
+            <span class="badge badge-warning">Busqueda: {{ sheet.search_query }}</span>
+            {% endif %}
+        </div>
+
+        <div class="sheet-meta">
+            {% for category in sheet.categories.all %}
+            <span class="badge badge-info">{{ category.name }}</span>
+            {% empty %}
+            <span class="text-muted">Todas las categorias</span>
+            {% endfor %}
+        </div>
+        <div class="sheet-meta">
+            {% for supplier in sheet.suppliers.all %}
+            <span class="badge badge-success">{{ supplier.name }}</span>
+            {% empty %}
+            <span class="text-muted">Todos los proveedores</span>
+            {% endfor %}
+        </div>
+
+        <table class="sheet-columns">
+            <thead>
+                <tr>
+                    <th>Orden</th>
+                    <th>Campo</th>
+                    <th>Encabezado</th>
+                    <th>Estado</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for column in sheet.columns.all %}
+                <tr>
+                    <td>{{ column.order }}</td>
+                    <td>{{ column.get_key_display }}</td>
+                    <td>{{ column.get_effective_header }}</td>
+                    <td>
+                        {% if column.is_active %}
+                        <span class="badge badge-success">Activa</span>
+                        {% else %}
+                        <span class="badge badge-danger">Inactiva</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if user.is_superuser %}
+                        <a href="{% url 'admin_catalog_excel_column_edit' column.pk %}" class="btn btn-outline">Editar</a>
+                        <a href="{% url 'admin_catalog_excel_column_delete' column.pk %}" class="btn btn-danger">Eliminar</a>
+                        {% else %}
+                        <span class="text-muted">Solo lectura</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="5" class="text-muted">No hay columnas configuradas.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% empty %}
+    <div class="sheet-card">
+        <p class="text-muted" style="margin:0;">La plantilla aun no tiene hojas configuradas.</p>
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}

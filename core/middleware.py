@@ -11,6 +11,7 @@ from django.utils import timezone
 from django.utils.cache import patch_vary_headers
 from django.core.cache import cache
 from django.db import DatabaseError
+from django.http import JsonResponse
 from django.shortcuts import redirect
 from django.urls import reverse
 from core.models import UserActivity
@@ -35,6 +36,49 @@ class RequestIDMiddleware:
         response = self.get_response(request)
         response[self.HEADER_NAME] = request_id
         return response
+
+
+class ReadOnlyModeMiddleware:
+    """
+    Global read-only maintenance mode for unsafe HTTP methods.
+    """
+
+    SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
+    ALLOWED_PREFIXES = (
+        "/accounts/login/",
+        "/accounts/logout/",
+        "/accounts/redirect/",
+        "/api/go-offline/",
+        "/static/",
+        "/media/",
+    )
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        if (
+            getattr(settings, "FEATURE_READ_ONLY_MODE", False)
+            and request.method not in self.SAFE_METHODS
+            and not request.path.startswith(self.ALLOWED_PREFIXES)
+        ):
+            accepts_json = "application/json" in request.headers.get("Accept", "")
+            payload = {
+                "detail": "Sistema en modo solo lectura por mantenimiento. Intenta nuevamente en unos minutos.",
+                "read_only_mode": True,
+            }
+            if accepts_json or request.path.startswith("/api/"):
+                return JsonResponse(payload, status=503)
+
+            messages.warning(
+                request,
+                "Sistema temporalmente en modo solo lectura por mantenimiento.",
+            )
+            referer = request.META.get("HTTP_REFERER")
+            if referer:
+                return redirect(referer)
+            return redirect("home")
+        return self.get_response(request)
 
 
 class SessionIdleTimeoutMiddleware:

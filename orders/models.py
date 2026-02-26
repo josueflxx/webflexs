@@ -7,6 +7,7 @@ from django.apps import apps
 from django.contrib.auth.models import User
 from django.db import models
 from django.db.models import Sum
+from django.core.exceptions import ValidationError
 from django.utils import timezone
 
 from catalog.models import Product
@@ -247,11 +248,40 @@ class Order(models.Model):
             models.Index(fields=["status"]),
             models.Index(fields=["user"]),
             models.Index(fields=["created_at"]),
+            models.Index(fields=["status", "created_at"]),
             models.Index(fields=["status", "updated_at"]),
         ]
 
     def __str__(self):
         return f"Pedido #{self.pk} - {self.user.username if self.user else 'N/A'}"
+
+    def save(self, *args, **kwargs):
+        """
+        Keep ledger charge rows in sync when order key financial fields change.
+        """
+        is_new = self._state.adding
+        update_fields = kwargs.get("update_fields")
+        tracked_fields = {"status", "total", "user", "status_updated_at"}
+        should_sync_ledger = (
+            is_new
+            or update_fields is None
+            or bool(tracked_fields.intersection(set(update_fields)))
+        )
+
+        super().save(*args, **kwargs)
+
+        if kwargs.get("raw"):
+            return
+        if not should_sync_ledger:
+            return
+
+        try:
+            from accounts.services.ledger import sync_order_charge_transaction
+
+            sync_order_charge_transaction(order=self, actor=None)
+        except Exception:
+            # Ledger sync should never block persisting the order.
+            pass
 
     def get_item_count(self):
         """Total number of items in order."""
@@ -283,6 +313,9 @@ class Order(models.Model):
             return True
         return normalized_target in self.WORKFLOW_TRANSITIONS.get(normalized_current, set())
 
+    def is_mutable_for_items(self):
+        return self.normalized_status() == self.STATUS_DRAFT
+
     def change_status(self, new_status, changed_by=None, note=""):
         normalized_target = self.LEGACY_STATUS_MAP.get(new_status, new_status)
         if normalized_target not in dict(self.STATUS_CHOICES):
@@ -304,6 +337,16 @@ class Order(models.Model):
             changed_by=changed_by if getattr(changed_by, "is_authenticated", False) else None,
             note=(note or "").strip(),
         )
+        try:
+            from accounts.services.ledger import sync_order_charge_transaction
+
+            sync_order_charge_transaction(
+                order=self,
+                actor=changed_by if getattr(changed_by, "is_authenticated", False) else None,
+            )
+        except Exception:
+            # Ledger sync should never block the core status workflow.
+            pass
         return True
 
 
@@ -382,8 +425,28 @@ class OrderItem(models.Model):
         return f"{self.quantity}x {self.product_name}"
 
     def save(self, *args, **kwargs):
+        if (
+            self.order_id
+            and not self._state.adding
+            and not getattr(self, "_force_item_write", False)
+            and not self.order.is_mutable_for_items()
+        ):
+            raise ValidationError(
+                "No se pueden editar items en pedidos confirmados o en estados posteriores."
+            )
         self.subtotal = self.price_at_purchase * self.quantity
         super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        if (
+            self.order_id
+            and not getattr(self, "_force_item_write", False)
+            and not self.order.is_mutable_for_items()
+        ):
+            raise ValidationError(
+                "No se pueden eliminar items en pedidos confirmados o en estados posteriores."
+            )
+        return super().delete(*args, **kwargs)
 
 
 class ClampQuotation(models.Model):

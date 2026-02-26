@@ -1,7 +1,9 @@
 """
 Context processors for site-wide data.
 """
-from .models import SiteSettings
+from django.conf import settings
+
+from .models import CatalogExcelTemplate, SiteSettings
 from core.services.presence import build_admin_presence_payload, get_presence_config
 
 
@@ -17,9 +19,33 @@ def _can_use_clamp_measure_feature(request):
 
 def site_settings(request):
     """Add site settings to all template contexts."""
+    user = getattr(request, "user", None)
+    client_catalog_excel_download_enabled = False
+    client_catalog_excel_download_label = "Descargar catalogo Excel"
+
+    if user and user.is_authenticated:
+        can_access_client_export = False
+        if user.is_staff:
+            can_access_client_export = True
+        else:
+            profile = getattr(user, "client_profile", None)
+            can_access_client_export = bool(profile and getattr(profile, "is_approved", False))
+
+        if can_access_client_export:
+            published_template = CatalogExcelTemplate.get_client_download_template()
+            if published_template:
+                client_catalog_excel_download_enabled = True
+                client_catalog_excel_download_label = (
+                    (published_template.client_download_label or "").strip()
+                    or "Descargar catalogo Excel"
+                )
+
     return {
         'site_settings': SiteSettings.get_settings(),
         'can_use_clamp_measure': _can_use_clamp_measure_feature(request),
+        'feature_read_only_mode': bool(getattr(settings, 'FEATURE_READ_ONLY_MODE', False)),
+        'client_catalog_excel_download_enabled': client_catalog_excel_download_enabled,
+        'client_catalog_excel_download_label': client_catalog_excel_download_label,
     }
 
 

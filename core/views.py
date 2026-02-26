@@ -2,6 +2,7 @@
 Core app views.
 """
 from django.contrib.auth.models import User
+from django.core.cache import cache
 from django.db.models import Q
 from django.shortcuts import render
 from django.http import JsonResponse
@@ -263,29 +264,35 @@ def search_suggestions(request):
     if is_admin_scope and (not request.user.is_authenticated or not request.user.is_staff):
         return JsonResponse({"suggestions": []}, status=403)
 
-    if scope == "catalog":
-        suggestions = _suggest_catalog(query)
-    elif scope in {"admin_products", "admin_supplier_products"}:
-        suggestions = _suggest_admin_products(query)
-    elif scope == "admin_categories":
-        suggestions = _suggest_admin_categories(query)
-    elif scope == "admin_clients":
-        suggestions = _suggest_admin_clients(query)
-    elif scope == "admin_orders":
-        suggestions = _suggest_admin_orders(query)
-    elif scope == "admin_suppliers":
-        suggestions = _suggest_admin_suppliers(query)
-    elif scope == "admin_payments":
-        suggestions = _suggest_admin_payments(query)
-    elif scope == "admin_clamp_requests":
-        suggestions = _suggest_admin_clamp_requests(query)
-    elif scope == "admin_admins":
-        suggestions = _suggest_admin_users(query)
-    else:
-        # Safe fallback by context.
-        if request.user.is_authenticated and request.user.is_staff:
-            suggestions = _suggest_admin_products(query)
-        else:
+    cache_scope = scope or ("admin_fallback" if is_admin_scope else "catalog_fallback")
+    cache_key = f"search_suggest:{cache_scope}:{query.lower()[:80]}"
+    suggestions = cache.get(cache_key)
+
+    if suggestions is None:
+        if scope == "catalog":
             suggestions = _suggest_catalog(query)
+        elif scope in {"admin_products", "admin_supplier_products"}:
+            suggestions = _suggest_admin_products(query)
+        elif scope == "admin_categories":
+            suggestions = _suggest_admin_categories(query)
+        elif scope == "admin_clients":
+            suggestions = _suggest_admin_clients(query)
+        elif scope == "admin_orders":
+            suggestions = _suggest_admin_orders(query)
+        elif scope == "admin_suppliers":
+            suggestions = _suggest_admin_suppliers(query)
+        elif scope == "admin_payments":
+            suggestions = _suggest_admin_payments(query)
+        elif scope == "admin_clamp_requests":
+            suggestions = _suggest_admin_clamp_requests(query)
+        elif scope == "admin_admins":
+            suggestions = _suggest_admin_users(query)
+        else:
+            # Safe fallback by context.
+            if request.user.is_authenticated and request.user.is_staff:
+                suggestions = _suggest_admin_products(query)
+            else:
+                suggestions = _suggest_catalog(query)
+        cache.set(cache_key, suggestions, 90)
 
     return JsonResponse({"suggestions": suggestions})

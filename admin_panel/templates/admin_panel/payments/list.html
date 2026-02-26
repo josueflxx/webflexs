@@ -56,7 +56,7 @@
     <div class="admin-toolbar" style="border-top:1px solid rgba(255,255,255,.08);">
         <form method="post" style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px;align-items:end;width:100%;">
             {% csrf_token %}
-            <input type="hidden" name="action" value="create">
+            <input type="hidden" id="paymentActionInput" name="action" value="create">
 
             <div class="form-group" style="margin:0;">
                 <label for="client_profile_id" class="form-label">Cliente</label>
@@ -77,7 +77,7 @@
 
             <div class="form-group" style="margin:0;">
                 <label for="amount" class="form-label">Monto</label>
-                <input id="amount" type="text" name="amount" class="form-input" required placeholder="Ej: 15000.50">
+                <input id="amount" type="text" name="amount" class="form-input" required placeholder="Ej: 15000.50 (ajuste: usar negativo)">
             </div>
 
             <div class="form-group" style="margin:0;">
@@ -105,7 +105,10 @@
             </div>
 
             <div class="form-group" style="margin:0; grid-column: 1 / -1;">
-                <button type="submit" class="btn btn-primary">Registrar Pago</button>
+                <button type="submit" class="btn btn-primary" onclick="document.querySelector('#paymentActionInput').value='create';">Registrar Pago</button>
+                <button type="submit" class="btn btn-outline" onclick="document.querySelector('#paymentActionInput').value='adjust';">
+                    Registrar Ajuste (+/-)
+                </button>
             </div>
         </form>
     </div>

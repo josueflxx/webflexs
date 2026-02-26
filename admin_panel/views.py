@@ -14,7 +14,8 @@ from django.core.exceptions import ValidationError
 from django.core.paginator import Paginator
 from django.db import transaction
 from django.db import DatabaseError
-from django.db.models import Q, Count, Sum, Max, Avg, F, DecimalField, ExpressionWrapper
+from django.db.models import Q, Count, Sum, Max, Avg, F, DecimalField, ExpressionWrapper, Value
+from django.db.models.functions import Coalesce
 from django.http import JsonResponse, HttpResponse
 from django.views.decorators.csrf import csrf_protect
 from django.views.decorators.http import require_POST
@@ -23,6 +24,7 @@ from django.utils.dateparse import parse_date, parse_datetime
 from django.utils.text import slugify
 import json
 import os
+import re
 from datetime import datetime, time, timedelta
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from urllib.parse import urlencode, parse_qs
@@ -30,13 +32,30 @@ import csv
 from openpyxl import Workbook
 
 from catalog.models import Product, Category, CategoryAttribute, ClampMeasureRequest, Supplier
-from accounts.models import AccountRequest, ClientPayment, ClientProfile
+from accounts.models import AccountRequest, ClientPayment, ClientProfile, ClientTransaction
+from accounts.services.ledger import (
+    create_adjustment_transaction,
+    sync_order_charge_transaction,
+)
 from orders.models import ClampQuotation, Order, OrderItem, OrderStatusHistory
 from orders.services.workflow import can_user_transition_order
-from core.models import SiteSettings, CatalogAnalyticsEvent, AdminAuditLog, ImportExecution
+from core.models import (
+    SiteSettings,
+    CatalogAnalyticsEvent,
+    AdminAuditLog,
+    ImportExecution,
+    CatalogExcelTemplate,
+    CatalogExcelTemplateSheet,
+    CatalogExcelTemplateColumn,
+)
 from django.contrib.auth.models import User
 from admin_panel.forms.import_forms import ProductImportForm, ClientImportForm, CategoryImportForm
 from admin_panel.forms.category_forms import CategoryForm
+from admin_panel.forms.export_forms import (
+    CatalogExcelTemplateForm,
+    CatalogExcelTemplateSheetForm,
+    CatalogExcelTemplateColumnForm,
+)
 from catalog.services.product_importer import ProductImporter
 from accounts.services.client_importer import ClientImporter
 from catalog.services.category_importer import CategoryImporter
@@ -70,6 +89,7 @@ from catalog.services.category_assignment import (
 from core.services.import_manager import ImportTaskManager
 from core.services.background_jobs import dispatch_import_job
 from core.services.advanced_search import apply_text_search
+from core.services.catalog_excel_exporter import build_catalog_workbook, build_export_filename
 from core.services.audit import log_admin_action, log_admin_change, model_snapshot
 import traceback
 import logging
@@ -342,6 +362,144 @@ def dashboard(request):
         .order_by("-total")[:5]
     )
 
+    recent_orders = list(
+        Order.objects.select_related('user').order_by('-created_at')[:5]
+    )
+    today_start = timezone.localtime().replace(hour=0, minute=0, second=0, microsecond=0)
+    orders_today_qs = Order.objects.filter(created_at__gte=today_start)
+    orders_today_summary = orders_today_qs.aggregate(
+        count=Count('id'),
+        total=Sum('total'),
+    )
+
+    active_clients_30d = set(
+        Order.objects.filter(
+            created_at__gte=last_30_days,
+            user_id__isnull=False,
+        ).values_list('user_id', flat=True)
+    )
+    active_clients_30d.update(
+        ClientPayment.objects.filter(
+            paid_at__gte=last_30_days,
+            is_cancelled=False,
+            client_profile__user_id__isnull=False,
+        ).values_list('client_profile__user_id', flat=True)
+    )
+
+    top_products_30d = (
+        OrderItem.objects.filter(order__created_at__gte=last_30_days)
+        .values('product_sku', 'product_name')
+        .annotate(total_qty=Sum('quantity'), total_amount=Sum('subtotal'))
+        .order_by('-total_qty', '-total_amount')[:5]
+    )
+
+    # Delivery cycle estimation (hours) from status history.
+    delivered_candidates = (
+        Order.objects.filter(status=Order.STATUS_DELIVERED, created_at__gte=last_30_days)
+        .prefetch_related('status_history')
+        .order_by('-created_at')[:120]
+    )
+    cycle_hours = []
+    for order in delivered_candidates:
+        history = list(order.status_history.all())
+        confirmed_at = None
+        delivered_at = None
+        for event in sorted(history, key=lambda item: item.created_at):
+            if event.to_status == Order.STATUS_CONFIRMED and confirmed_at is None:
+                confirmed_at = event.created_at
+            if event.to_status == Order.STATUS_DELIVERED:
+                delivered_at = event.created_at
+        if confirmed_at and delivered_at and delivered_at > confirmed_at:
+            cycle_hours.append((delivered_at - confirmed_at).total_seconds() / 3600)
+    avg_delivery_cycle_hours = (
+        Decimal(str(sum(cycle_hours) / len(cycle_hours))).quantize(Decimal('0.01'))
+        if cycle_hours
+        else None
+    )
+
+    # Internal alerts.
+    stale_days = int(getattr(settings, 'ALERT_PREPARING_STALE_DAYS', 3) or 3)
+    stale_threshold = timezone.now() - timedelta(days=stale_days)
+    stale_preparing_orders = list(
+        Order.objects.select_related('user')
+        .filter(status=Order.STATUS_PREPARING, status_updated_at__lt=stale_threshold)
+        .order_by('status_updated_at')[:10]
+    )
+
+    high_debt_threshold = Decimal(str(getattr(settings, 'ALERT_HIGH_DEBT_THRESHOLD', 500000)))
+    high_debt_items = []
+    high_debt_raw = (
+        ClientTransaction.objects.values('client_profile_id')
+        .annotate(balance=Coalesce(Sum('amount'), Value(Decimal('0.00'))))
+        .filter(balance__gt=high_debt_threshold)
+        .order_by('-balance')[:10]
+    )
+    if high_debt_raw:
+        profiles_map = {
+            profile.id: profile
+            for profile in ClientProfile.objects.select_related('user').filter(
+                id__in=[row['client_profile_id'] for row in high_debt_raw]
+            )
+        }
+        for row in high_debt_raw:
+            profile = profiles_map.get(row['client_profile_id'])
+            if not profile:
+                continue
+            high_debt_items.append({
+                'client': profile,
+                'balance': row['balance'],
+            })
+
+    products_without_active_category = Product.objects.filter(is_active=True).filter(
+        ~Q(category__is_active=True),
+        ~Q(categories__is_active=True),
+    ).distinct()
+    products_without_active_category_count = products_without_active_category.count()
+    products_without_active_category_sample = list(
+        products_without_active_category.only('id', 'sku', 'name').order_by('name')[:8]
+    )
+
+    import_error_threshold = int(getattr(settings, 'ALERT_IMPORT_ERROR_RATE_PERCENT', 30) or 30)
+    high_error_imports = []
+    for execution in ImportExecution.objects.filter(
+        created_at__gte=last_30_days
+    ).exclude(status=ImportExecution.STATUS_PROCESSING).order_by('-created_at')[:40]:
+        total = (execution.created_count or 0) + (execution.updated_count or 0) + (execution.error_count or 0)
+        if total <= 0:
+            continue
+        error_rate = (execution.error_count * 100.0) / float(total)
+        if execution.error_count > 0 and error_rate >= import_error_threshold:
+            high_error_imports.append({
+                'execution': execution,
+                'error_rate': round(error_rate, 2),
+            })
+
+    internal_alerts = []
+    if stale_preparing_orders:
+        internal_alerts.append({
+            'title': f'Pedidos trabados en preparacion (> {stale_days} dias)',
+            'kind': 'warning',
+            'count': len(stale_preparing_orders),
+        })
+    if high_debt_items:
+        internal_alerts.append({
+            'title': f'Clientes con deuda alta (> ${high_debt_threshold:.2f})',
+            'kind': 'danger',
+            'count': len(high_debt_items),
+        })
+    if products_without_active_category_count:
+        internal_alerts.append({
+            'title': 'Productos activos sin categoria activa',
+            'kind': 'warning',
+            'count': products_without_active_category_count,
+        })
+    if high_error_imports:
+        internal_alerts.append({
+            'title': f'Importaciones con tasa de error >= {import_error_threshold}%',
+            'kind': 'danger',
+            'count': len(high_error_imports),
+        })
+
     context = {
         'product_count': Product.objects.count(),
         'active_product_count': Product.objects.filter(is_active=True).count(),
@@ -350,13 +508,24 @@ def dashboard(request):
         'client_count': ClientProfile.objects.count(),
         'pending_requests': AccountRequest.objects.filter(status='pending').count(),
         'pending_orders': Order.objects.filter(status__in=[Order.STATUS_DRAFT, Order.STATUS_CONFIRMED, Order.STATUS_PREPARING]).count(),
-        'recent_orders': Order.objects.order_by('-created_at')[:5],
+        'recent_orders': recent_orders,
         'recent_requests': AccountRequest.objects.filter(status='pending').order_by('-created_at')[:5],
         'top_zero_result_searches': top_zero_result_searches,
         'top_category_views': top_category_views,
         'top_filter_sets': top_filter_sets,
         'audit_count_last_30': AdminAuditLog.objects.filter(created_at__gte=last_30_days).count(),
         'recent_audit_logs': AdminAuditLog.objects.select_related('user').order_by('-created_at')[:8],
+        'kpi_orders_today_count': orders_today_summary.get('count') or 0,
+        'kpi_orders_today_total': orders_today_summary.get('total') or Decimal('0.00'),
+        'kpi_active_clients_30d': len(active_clients_30d),
+        'kpi_avg_delivery_cycle_hours': avg_delivery_cycle_hours,
+        'top_products_30d': top_products_30d,
+        'internal_alerts': internal_alerts,
+        'stale_preparing_orders': stale_preparing_orders,
+        'high_debt_items': high_debt_items,
+        'products_without_active_category_count': products_without_active_category_count,
+        'products_without_active_category_sample': products_without_active_category_sample,
+        'high_error_imports': high_error_imports,
     }
     return render(request, 'admin_panel/dashboard.html', context)
 
@@ -1229,6 +1398,633 @@ def supplier_print(request, supplier_id):
     )
 
 
+# ===================== CATALOG EXCEL EXPORT =====================
+
+def _export_template_detail_url(template_id):
+    return reverse("admin_catalog_excel_template_detail", args=[template_id])
+
+
+CATALOG_EXCEL_TEMPLATE_SNAPSHOT_FIELDS = [
+    "name",
+    "slug",
+    "description",
+    "is_active",
+    "is_client_download_enabled",
+    "client_download_label",
+    "updated_by_id",
+]
+CATALOG_EXCEL_SHEET_SNAPSHOT_FIELDS = [
+    "name",
+    "order",
+    "include_header",
+    "only_active_products",
+    "only_catalog_visible",
+    "include_descendant_categories",
+    "search_query",
+    "max_rows",
+    "sort_by",
+]
+CATALOG_EXCEL_COLUMN_SNAPSHOT_FIELDS = [
+    "key",
+    "header",
+    "order",
+    "is_active",
+]
+CATALOG_EXCEL_AUTO_DEFAULT_COLUMNS = [
+    ("sku", "SKU"),
+    ("name", "Nombre"),
+    ("supplier", "Proveedor"),
+    ("price", "Precio"),
+    ("stock", "Stock"),
+    ("primary_category", "Categoria principal"),
+    ("categories", "Categorias"),
+]
+
+
+def _build_excel_sheet_base_name(value):
+    cleaned = re.sub(r"[\[\]\*\:/\\\?]", " ", str(value or "")).strip()
+    cleaned = re.sub(r"\s+", " ", cleaned)
+    return (cleaned[:31] or "Hoja")
+
+
+def _build_unique_excel_sheet_name(base_name, used_names):
+    if base_name not in used_names:
+        return base_name
+
+    counter = 2
+    while True:
+        suffix = f" ({counter})"
+        trimmed = base_name[: max(1, 31 - len(suffix))]
+        candidate = f"{trimmed}{suffix}"
+        if candidate not in used_names:
+            return candidate
+        counter += 1
+
+
+def _resolve_auto_columns_from_template(template):
+    first_sheet = (
+        template.sheets.prefetch_related("columns")
+        .order_by("order", "id")
+        .first()
+    )
+    if first_sheet:
+        current_columns = list(
+            first_sheet.columns.filter(is_active=True).order_by("order", "id")
+        )
+        if current_columns:
+            return [
+                (column.key, column.header or "")
+                for column in current_columns
+            ]
+    return CATALOG_EXCEL_AUTO_DEFAULT_COLUMNS
+
+
+def _replace_sheet_columns(sheet, columns_spec):
+    sheet.columns.all().delete()
+    for idx, (key, header) in enumerate(columns_spec):
+        CatalogExcelTemplateColumn.objects.create(
+            sheet=sheet,
+            key=key,
+            header=header or "",
+            order=idx,
+            is_active=True,
+        )
+
+
+@staff_member_required
+def catalog_excel_template_list(request):
+    search = request.GET.get("q", "").strip()
+    only_active = request.GET.get("only_active") == "1"
+
+    templates_qs = CatalogExcelTemplate.objects.all().order_by("name")
+    if search:
+        templates_qs = templates_qs.filter(
+            Q(name__icontains=search) | Q(description__icontains=search)
+        )
+    if only_active:
+        templates_qs = templates_qs.filter(is_active=True)
+
+    templates = list(
+        templates_qs.prefetch_related("sheets__columns")
+    )
+    for template in templates:
+        template.sheet_count = len(template.sheets.all())
+        template.column_count = sum(
+            sheet.columns.filter(is_active=True).count()
+            for sheet in template.sheets.all()
+        )
+
+    return render(
+        request,
+        "admin_panel/exports/templates_list.html",
+        {
+            "templates": templates,
+            "search": search,
+            "only_active": only_active,
+        },
+    )
+
+
+@staff_member_required
+def catalog_excel_template_detail(request, template_id):
+    template = get_object_or_404(
+        CatalogExcelTemplate.objects.prefetch_related(
+            "sheets__columns",
+            "sheets__categories",
+            "sheets__suppliers",
+        ),
+        pk=template_id,
+    )
+    sheets = list(template.sheets.all().order_by("order", "id"))
+    for sheet in sheets:
+        sheet.active_columns = list(sheet.columns.filter(is_active=True).order_by("order", "id"))
+
+    return render(
+        request,
+        "admin_panel/exports/template_detail.html",
+        {
+            "template": template,
+            "sheets": sheets,
+        },
+    )
+
+
+@staff_member_required
+@superuser_required_for_modifications
+def catalog_excel_template_create(request):
+    if request.method == "POST":
+        form = CatalogExcelTemplateForm(request.POST)
+        if form.is_valid():
+            template = form.save(commit=False)
+            template.created_by = request.user
+            template.updated_by = request.user
+            template.save()
+            log_admin_action(
+                request,
+                action="catalog_excel_template_create",
+                target_type="catalog_excel_template",
+                target_id=template.pk,
+                details={"name": template.name},
+            )
+            messages.success(request, "Plantilla creada correctamente.")
+            return redirect(_export_template_detail_url(template.pk))
+    else:
+        form = CatalogExcelTemplateForm()
+
+    return render(
+        request,
+        "admin_panel/exports/template_form.html",
+        {
+            "form": form,
+            "action": "Nueva",
+            "template_obj": None,
+        },
+    )
+
+
+@staff_member_required
+@superuser_required_for_modifications
+def catalog_excel_template_edit(request, template_id):
+    template = get_object_or_404(CatalogExcelTemplate, pk=template_id)
+    before = model_snapshot(template, CATALOG_EXCEL_TEMPLATE_SNAPSHOT_FIELDS)
+
+    if request.method == "POST":
+        form = CatalogExcelTemplateForm(request.POST, instance=template)
+        if form.is_valid():
+            template = form.save(commit=False)
+            template.updated_by = request.user
+            template.save()
+            after = model_snapshot(template, CATALOG_EXCEL_TEMPLATE_SNAPSHOT_FIELDS)
+            log_admin_change(
+                request=request,
+                action="catalog_excel_template_edit",
+                target_type="catalog_excel_template",
+                target_id=template.pk,
+                before=before,
+                after=after,
+            )
+            messages.success(request, "Plantilla actualizada.")
+            return redirect(_export_template_detail_url(template.pk))
+    else:
+        form = CatalogExcelTemplateForm(instance=template)
+
+    return render(
+        request,
+        "admin_panel/exports/template_form.html",
+        {
+            "form": form,
+            "action": "Editar",
+            "template_obj": template,
+        },
+    )
+
+
+@staff_member_required
+@superuser_required_for_modifications
+def catalog_excel_template_delete(request, template_id):
+    template = get_object_or_404(CatalogExcelTemplate, pk=template_id)
+    if request.method == "POST":
+        deleted_id = template.pk
+        deleted_name = template.name
+        template.delete()
+        log_admin_action(
+            request,
+            action="catalog_excel_template_delete",
+            target_type="catalog_excel_template",
+            target_id=deleted_id,
+            details={"name": deleted_name},
+        )
+        messages.success(request, "Plantilla eliminada.")
+        return redirect("admin_catalog_excel_template_list")
+
+    return render(
+        request,
+        "admin_panel/delete_confirm.html",
+        {
+            "title": "Eliminar Plantilla Excel",
+            "object": template.name,
+            "question": "Se eliminara la plantilla con todas sus hojas y columnas:",
+            "warning": "Esta accion no se puede deshacer.",
+            "cancel_url": _export_template_detail_url(template.pk),
+            "confirm_label": "Eliminar plantilla",
+        },
+    )
+
+
+@staff_member_required
+def catalog_excel_template_download(request, template_id):
+    template = get_object_or_404(
+        CatalogExcelTemplate.objects.prefetch_related("sheets__columns", "sheets__categories", "sheets__suppliers"),
+        pk=template_id,
+    )
+    workbook, stats = build_catalog_workbook(template)
+    file_name = build_export_filename(template)
+    response = HttpResponse(
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+    response["Content-Disposition"] = f'attachment; filename="{file_name}"'
+    workbook.save(response)
+
+    log_admin_action(
+        request,
+        action="catalog_excel_template_download",
+        target_type="catalog_excel_template",
+        target_id=template.pk,
+        details={
+            "name": template.name,
+            "file_name": file_name,
+            "total_rows": stats.get("total_rows", 0),
+            "rows_by_sheet": stats.get("rows_by_sheet", {}),
+        },
+    )
+    return response
+
+
+@staff_member_required
+@superuser_required_for_modifications
+@require_POST
+def catalog_excel_template_autogenerate_main_category_sheets(request, template_id):
+    template = get_object_or_404(
+        CatalogExcelTemplate.objects.prefetch_related("sheets__columns", "sheets__categories"),
+        pk=template_id,
+    )
+
+    include_inactive_categories = str(
+        request.POST.get("include_inactive_categories", "")
+    ).strip().lower() in {"1", "true", "on", "yes"}
+
+    root_categories_qs = Category.objects.filter(parent__isnull=True)
+    if not include_inactive_categories:
+        root_categories_qs = root_categories_qs.filter(is_active=True)
+
+    root_categories = list(root_categories_qs.order_by("order", "name", "id"))
+    if not root_categories:
+        if include_inactive_categories:
+            messages.warning(request, "No hay categorias principales para generar hojas.")
+        else:
+            messages.warning(request, "No hay categorias principales activas para generar hojas.")
+        return redirect(_export_template_detail_url(template.pk))
+
+    base_columns = _resolve_auto_columns_from_template(template)
+    existing_sheets = {
+        sheet.name: sheet
+        for sheet in template.sheets.all()
+    }
+    used_names = set(existing_sheets.keys())
+    created_count = 0
+    updated_count = 0
+
+    with transaction.atomic():
+        for position, category in enumerate(root_categories, start=1):
+            base_name = _build_excel_sheet_base_name(category.name)
+            target_sheet = existing_sheets.get(base_name)
+
+            if target_sheet is None:
+                unique_name = _build_unique_excel_sheet_name(base_name, used_names)
+                target_sheet = CatalogExcelTemplateSheet.objects.create(
+                    template=template,
+                    name=unique_name,
+                    order=position,
+                    include_header=True,
+                    only_active_products=True,
+                    only_catalog_visible=not include_inactive_categories,
+                    include_descendant_categories=True,
+                    search_query="",
+                    max_rows=None,
+                    sort_by="name_asc",
+                )
+                existing_sheets[unique_name] = target_sheet
+                used_names.add(unique_name)
+                created_count += 1
+            else:
+                target_sheet.order = position
+                target_sheet.include_header = True
+                target_sheet.only_active_products = True
+                target_sheet.only_catalog_visible = not include_inactive_categories
+                target_sheet.include_descendant_categories = True
+                target_sheet.search_query = ""
+                target_sheet.max_rows = None
+                target_sheet.sort_by = "name_asc"
+                target_sheet.save(
+                    update_fields=[
+                        "order",
+                        "include_header",
+                        "only_active_products",
+                        "only_catalog_visible",
+                        "include_descendant_categories",
+                        "search_query",
+                        "max_rows",
+                        "sort_by",
+                        "updated_at",
+                    ]
+                )
+                updated_count += 1
+
+            target_sheet.categories.set([category])
+            target_sheet.suppliers.clear()
+            _replace_sheet_columns(target_sheet, base_columns)
+
+    log_admin_action(
+        request,
+        action="catalog_excel_template_autogenerate_main_category_sheets",
+        target_type="catalog_excel_template",
+        target_id=template.pk,
+        details={
+            "created_count": created_count,
+            "updated_count": updated_count,
+            "roots_count": len(root_categories),
+            "include_inactive_categories": include_inactive_categories,
+            "base_columns": [key for key, _ in base_columns],
+        },
+    )
+    messages.success(
+        request,
+        (
+            f"Hojas generadas por categorias principales ({'activas e inactivas' if include_inactive_categories else 'solo activas'}): "
+            f"{created_count} nuevas, {updated_count} actualizadas."
+        ),
+    )
+    return redirect(_export_template_detail_url(template.pk))
+
+
+@staff_member_required
+@superuser_required_for_modifications
+def catalog_excel_sheet_create(request, template_id):
+    template = get_object_or_404(CatalogExcelTemplate, pk=template_id)
+    if request.method == "POST":
+        form = CatalogExcelTemplateSheetForm(request.POST)
+        if form.is_valid():
+            sheet = form.save(commit=False)
+            sheet.template = template
+            sheet.save()
+            form.save_m2m()
+            if sheet.columns.count() == 0:
+                default_keys = ["sku", "name", "price", "stock"]
+                for idx, key in enumerate(default_keys):
+                    CatalogExcelTemplateColumn.objects.create(
+                        sheet=sheet,
+                        key=key,
+                        order=idx,
+                        is_active=True,
+                    )
+            log_admin_action(
+                request,
+                action="catalog_excel_sheet_create",
+                target_type="catalog_excel_template_sheet",
+                target_id=sheet.pk,
+                details={"template_id": template.pk, "sheet_name": sheet.name},
+            )
+            messages.success(request, "Hoja creada.")
+            return redirect(_export_template_detail_url(template.pk))
+    else:
+        form = CatalogExcelTemplateSheetForm()
+
+    return render(
+        request,
+        "admin_panel/exports/sheet_form.html",
+        {
+            "form": form,
+            "action": "Nueva",
+            "template": template,
+            "sheet_obj": None,
+        },
+    )
+
+
+@staff_member_required
+@superuser_required_for_modifications
+def catalog_excel_sheet_edit(request, sheet_id):
+    sheet = get_object_or_404(
+        CatalogExcelTemplateSheet.objects.select_related("template"), pk=sheet_id
+    )
+    before = model_snapshot(sheet, CATALOG_EXCEL_SHEET_SNAPSHOT_FIELDS)
+    before_extra = {
+        "categories": list(sheet.categories.values_list("id", flat=True)),
+        "suppliers": list(sheet.suppliers.values_list("id", flat=True)),
+    }
+    if request.method == "POST":
+        form = CatalogExcelTemplateSheetForm(request.POST, instance=sheet)
+        if form.is_valid():
+            sheet = form.save()
+            after = model_snapshot(sheet, CATALOG_EXCEL_SHEET_SNAPSHOT_FIELDS)
+            after_extra = {
+                "categories": list(sheet.categories.values_list("id", flat=True)),
+                "suppliers": list(sheet.suppliers.values_list("id", flat=True)),
+            }
+            log_admin_change(
+                request=request,
+                action="catalog_excel_sheet_edit",
+                target_type="catalog_excel_template_sheet",
+                target_id=sheet.pk,
+                before=before,
+                after=after,
+                extra={
+                    "before_relations": before_extra,
+                    "after_relations": after_extra,
+                },
+            )
+            messages.success(request, "Hoja actualizada.")
+            return redirect(_export_template_detail_url(sheet.template_id))
+    else:
+        form = CatalogExcelTemplateSheetForm(instance=sheet)
+
+    return render(
+        request,
+        "admin_panel/exports/sheet_form.html",
+        {
+            "form": form,
+            "action": "Editar",
+            "template": sheet.template,
+            "sheet_obj": sheet,
+        },
+    )
+
+
+@staff_member_required
+@superuser_required_for_modifications
+def catalog_excel_sheet_delete(request, sheet_id):
+    sheet = get_object_or_404(
+        CatalogExcelTemplateSheet.objects.select_related("template"), pk=sheet_id
+    )
+    template_id = sheet.template_id
+    if request.method == "POST":
+        sheet_name = sheet.name
+        deleted_id = sheet.pk
+        sheet.delete()
+        log_admin_action(
+            request,
+            action="catalog_excel_sheet_delete",
+            target_type="catalog_excel_template_sheet",
+            target_id=deleted_id,
+            details={"template_id": template_id, "sheet_name": sheet_name},
+        )
+        messages.success(request, "Hoja eliminada.")
+        return redirect(_export_template_detail_url(template_id))
+
+    return render(
+        request,
+        "admin_panel/delete_confirm.html",
+        {
+            "title": "Eliminar Hoja",
+            "object": sheet.name,
+            "question": "Se eliminara esta hoja con todas sus columnas:",
+            "warning": "Esta accion no se puede deshacer.",
+            "cancel_url": _export_template_detail_url(template_id),
+            "confirm_label": "Eliminar hoja",
+        },
+    )
+
+
+@staff_member_required
+@superuser_required_for_modifications
+def catalog_excel_column_create(request, sheet_id):
+    sheet = get_object_or_404(
+        CatalogExcelTemplateSheet.objects.select_related("template"), pk=sheet_id
+    )
+    if request.method == "POST":
+        form = CatalogExcelTemplateColumnForm(request.POST)
+        if form.is_valid():
+            column = form.save(commit=False)
+            column.sheet = sheet
+            column.save()
+            log_admin_action(
+                request,
+                action="catalog_excel_column_create",
+                target_type="catalog_excel_template_column",
+                target_id=column.pk,
+                details={"sheet_id": sheet.pk, "key": column.key},
+            )
+            messages.success(request, "Columna agregada.")
+            return redirect(_export_template_detail_url(sheet.template_id))
+    else:
+        form = CatalogExcelTemplateColumnForm()
+
+    return render(
+        request,
+        "admin_panel/exports/column_form.html",
+        {
+            "form": form,
+            "action": "Nueva",
+            "template": sheet.template,
+            "sheet": sheet,
+            "column_obj": None,
+        },
+    )
+
+
+@staff_member_required
+@superuser_required_for_modifications
+def catalog_excel_column_edit(request, column_id):
+    column = get_object_or_404(
+        CatalogExcelTemplateColumn.objects.select_related("sheet__template"), pk=column_id
+    )
+    before = model_snapshot(column, CATALOG_EXCEL_COLUMN_SNAPSHOT_FIELDS)
+    if request.method == "POST":
+        form = CatalogExcelTemplateColumnForm(request.POST, instance=column)
+        if form.is_valid():
+            column = form.save()
+            after = model_snapshot(column, CATALOG_EXCEL_COLUMN_SNAPSHOT_FIELDS)
+            log_admin_change(
+                request=request,
+                action="catalog_excel_column_edit",
+                target_type="catalog_excel_template_column",
+                target_id=column.pk,
+                before=before,
+                after=after,
+            )
+            messages.success(request, "Columna actualizada.")
+            return redirect(_export_template_detail_url(column.sheet.template_id))
+    else:
+        form = CatalogExcelTemplateColumnForm(instance=column)
+
+    return render(
+        request,
+        "admin_panel/exports/column_form.html",
+        {
+            "form": form,
+            "action": "Editar",
+            "template": column.sheet.template,
+            "sheet": column.sheet,
+            "column_obj": column,
+        },
+    )
+
+
+@staff_member_required
+@superuser_required_for_modifications
+def catalog_excel_column_delete(request, column_id):
+    column = get_object_or_404(
+        CatalogExcelTemplateColumn.objects.select_related("sheet__template"), pk=column_id
+    )
+    template_id = column.sheet.template_id
+    if request.method == "POST":
+        column_key = column.key
+        deleted_id = column.pk
+        column.delete()
+        log_admin_action(
+            request,
+            action="catalog_excel_column_delete",
+            target_type="catalog_excel_template_column",
+            target_id=deleted_id,
+            details={"template_id": template_id, "key": column_key},
+        )
+        messages.success(request, "Columna eliminada.")
+        return redirect(_export_template_detail_url(template_id))
+
+    return render(
+        request,
+        "admin_panel/delete_confirm.html",
+        {
+            "title": "Eliminar Columna",
+            "object": column.get_effective_header(),
+            "question": "Se eliminara esta columna de la hoja:",
+            "warning": "Esta accion no se puede deshacer.",
+            "cancel_url": _export_template_detail_url(template_id),
+            "confirm_label": "Eliminar columna",
+        },
+    )
+
+
 @staff_member_required
 def supplier_unassigned(request):
     """
@@ -1294,6 +2090,19 @@ def _parse_payment_amount(raw_amount):
     return amount
 
 
+def _parse_adjustment_amount(raw_amount):
+    raw = str(raw_amount or '').strip().replace(',', '.')
+    if not raw:
+        raise ValueError('Ingresa un monto para el ajuste.')
+    try:
+        amount = Decimal(raw)
+    except (InvalidOperation, ValueError):
+        raise ValueError('Monto de ajuste invalido.')
+    if amount == 0:
+        raise ValueError('El ajuste no puede ser 0.')
+    return amount
+
+
 def _parse_paid_at(raw_paid_at):
     raw = str(raw_paid_at or '').strip()
     if not raw:
@@ -1322,23 +2131,27 @@ def payment_list(request):
         if action == 'cancel':
             payment_id = request.POST.get('payment_id', '').strip()
             cancel_reason = request.POST.get('cancel_reason', '').strip()
-            payment = get_object_or_404(ClientPayment, pk=payment_id)
-            if payment.is_cancelled:
-                messages.info(request, 'Ese pago ya estaba anulado.')
-                return redirect('admin_payment_list')
+            with transaction.atomic():
+                payment = get_object_or_404(
+                    ClientPayment.objects.select_related('order', 'client_profile').select_for_update(),
+                    pk=payment_id,
+                )
+                if payment.is_cancelled:
+                    messages.info(request, 'Ese pago ya estaba anulado.')
+                    return redirect('admin_payment_list')
 
-            before = model_snapshot(
-                payment,
-                ['is_cancelled', 'cancelled_at', 'cancel_reason', 'amount', 'order_id', 'client_profile_id'],
-            )
-            payment.is_cancelled = True
-            payment.cancelled_at = timezone.now()
-            payment.cancel_reason = cancel_reason
-            payment.save(update_fields=['is_cancelled', 'cancelled_at', 'cancel_reason', 'updated_at'])
-            after = model_snapshot(
-                payment,
-                ['is_cancelled', 'cancelled_at', 'cancel_reason', 'amount', 'order_id', 'client_profile_id'],
-            )
+                before = model_snapshot(
+                    payment,
+                    ['is_cancelled', 'cancelled_at', 'cancel_reason', 'amount', 'order_id', 'client_profile_id'],
+                )
+                payment.is_cancelled = True
+                payment.cancelled_at = timezone.now()
+                payment.cancel_reason = cancel_reason
+                payment.save(update_fields=['is_cancelled', 'cancelled_at', 'cancel_reason', 'updated_at'])
+                after = model_snapshot(
+                    payment,
+                    ['is_cancelled', 'cancelled_at', 'cancel_reason', 'amount', 'order_id', 'client_profile_id'],
+                )
             log_admin_change(
                 request,
                 action='payment_cancel',
@@ -1353,6 +2166,44 @@ def payment_list(request):
                 },
             )
             messages.success(request, 'Pago anulado correctamente.')
+            return redirect('admin_payment_list')
+
+        if action == 'adjust':
+            client_id = request.POST.get('client_profile_id', '').strip()
+            amount_raw = request.POST.get('amount', '').strip()
+            notes = request.POST.get('notes', '').strip()
+
+            client_profile = None
+            if client_id.isdigit():
+                client_profile = ClientProfile.objects.select_related('user').filter(pk=int(client_id)).first()
+            if not client_profile:
+                messages.error(request, 'Selecciona un cliente valido para registrar ajuste.')
+                return redirect('admin_payment_list')
+
+            try:
+                amount = _parse_adjustment_amount(amount_raw)
+            except ValueError as exc:
+                messages.error(request, str(exc))
+                return redirect('admin_payment_list')
+
+            tx = create_adjustment_transaction(
+                client_profile=client_profile,
+                amount=amount,
+                reason=notes or 'Ajuste manual de cuenta corriente',
+                actor=request.user,
+            )
+            log_admin_action(
+                request,
+                action='client_adjustment_create',
+                target_type='client_transaction',
+                target_id=tx.pk,
+                details={
+                    'client_profile_id': client_profile.pk,
+                    'amount': f'{amount:.2f}',
+                    'notes': notes,
+                },
+            )
+            messages.success(request, 'Ajuste de cuenta corriente registrado.')
             return redirect('admin_payment_list')
 
         client_id = request.POST.get('client_profile_id', '').strip()
@@ -1399,16 +2250,22 @@ def payment_list(request):
             messages.error(request, str(exc))
             return redirect('admin_payment_list')
 
-        payment = ClientPayment.objects.create(
-            client_profile=client_profile,
-            order=order,
-            amount=amount,
-            method=method,
-            paid_at=paid_at,
-            reference=reference,
-            notes=notes,
-            created_by=request.user if request.user.is_authenticated else None,
-        )
+        with transaction.atomic():
+            locked_order = None
+            if order:
+                locked_order = Order.objects.select_for_update().select_related('user').get(pk=order.pk)
+                order = locked_order
+
+            payment = ClientPayment.objects.create(
+                client_profile=client_profile,
+                order=order,
+                amount=amount,
+                method=method,
+                paid_at=paid_at,
+                reference=reference,
+                notes=notes,
+                created_by=request.user if request.user.is_authenticated else None,
+            )
 
         log_admin_change(
             request,
@@ -1513,10 +2370,11 @@ def payment_list(request):
     if selected_client:
         orders_total = selected_client.get_total_orders_for_balance()
         total_paid = selected_client.get_total_paid()
+        ledger_balance = selected_client.get_current_balance()
         selected_client_metrics = {
             'orders_total': orders_total,
             'total_paid': total_paid,
-            'current_balance': orders_total - total_paid,
+            'current_balance': ledger_balance,
         }
 
     return render(request, 'admin_panel/payments/list.html', {
@@ -2268,6 +3126,23 @@ def client_order_history(request, pk):
         last_payment_at=Max('paid_at'),
     )
 
+    ledger_rows = []
+    running_balance = Decimal('0.00')
+    ledger_qs = (
+        client.get_ledger_queryset()
+        .select_related('order', 'payment', 'created_by')
+    )
+    for tx in ledger_qs:
+        running_balance += tx.amount
+        debit = tx.amount if tx.amount > 0 else Decimal('0.00')
+        credit = abs(tx.amount) if tx.amount < 0 else Decimal('0.00')
+        ledger_rows.append({
+            'tx': tx,
+            'debit': debit,
+            'credit': credit,
+            'running_balance': running_balance,
+        })
+
     return render(request, 'admin_panel/clients/order_history.html', {
         'client': client,
         'page_obj': page_obj,
@@ -2295,6 +3170,7 @@ def client_order_history(request, pk):
             'payments_count': payments_summary.get('payments_count') or 0,
             'last_payment_at': payments_summary.get('last_payment_at'),
         },
+        'ledger_rows': ledger_rows,
     })
 
 
@@ -2620,20 +3496,27 @@ def order_detail(request, pk):
     if request.method == 'POST':
         new_status = request.POST.get('status', '')
         if new_status:
-            before = model_snapshot(order, ['status', 'admin_notes', 'status_updated_at'])
-            order.admin_notes = request.POST.get('admin_notes', '')
             status_note = request.POST.get('status_note', '').strip()
+            admin_notes_input = request.POST.get('admin_notes', '')
             try:
-                allowed, reason = can_user_transition_order(request.user, order, new_status)
-                if not allowed:
-                    raise ValueError(reason)
+                with transaction.atomic():
+                    locked_order = Order.objects.select_for_update().get(pk=order.pk)
+                    before = model_snapshot(locked_order, ['status', 'admin_notes', 'status_updated_at'])
+                    locked_order.admin_notes = admin_notes_input
 
-                changed = order.change_status(
-                    new_status=new_status,
-                    changed_by=request.user,
-                    note=status_note or f"Actualizacion desde panel por {request.user.username}",
-                )
-                order.save(update_fields=['admin_notes', 'updated_at'])
+                    allowed, reason = can_user_transition_order(request.user, locked_order, new_status)
+                    if not allowed:
+                        raise ValueError(reason)
+
+                    changed = locked_order.change_status(
+                        new_status=new_status,
+                        changed_by=request.user,
+                        note=status_note or f"Actualizacion desde panel por {request.user.username}",
+                    )
+                    locked_order.save(update_fields=['admin_notes', 'updated_at'])
+                    sync_order_charge_transaction(order=locked_order, actor=request.user)
+                    order = locked_order
+
                 if changed:
                     messages.success(request, f'Estado del pedido #{order.pk} actualizado.')
                     log_admin_change(
@@ -2642,9 +3525,9 @@ def order_detail(request, pk):
                         target_type='order',
                         target_id=order.pk,
                         before=before,
-                        after=model_snapshot(order, ['status', 'admin_notes', 'status_updated_at']),
+                        after=model_snapshot(locked_order, ['status', 'admin_notes', 'status_updated_at']),
                         extra={
-                            'status': order.status,
+                            'status': locked_order.status,
                             'note': status_note,
                         },
                     )
@@ -2693,7 +3576,12 @@ def order_item_publish_clamp(request, pk, item_id):
     order_item.product = product
     order_item.product_sku = product.sku
     order_item.product_name = product.name
-    order_item.save(update_fields=['product', 'product_sku', 'product_name'])
+    order_item._force_item_write = True
+    try:
+        order_item.save(update_fields=['product', 'product_sku', 'product_name'])
+    finally:
+        if hasattr(order_item, "_force_item_write"):
+            delattr(order_item, "_force_item_write")
 
     log_admin_action(
         request,
@@ -2729,20 +3617,28 @@ def order_delete(request, pk):
     order = get_object_or_404(Order, pk=pk)
 
     if request.method == 'POST':
-        before = model_snapshot(order, ['status', 'admin_notes', 'status_updated_at'])
         cancel_reason = request.POST.get('cancel_reason', '').strip()
         status_note = cancel_reason or f"Pedido cancelado desde panel por {request.user.username}"
         try:
-            changed = order.change_status(
-                new_status=Order.STATUS_CANCELLED,
-                changed_by=request.user,
-                note=status_note,
-            )
-            if cancel_reason:
-                stamp = timezone.localtime().strftime('%d/%m/%Y %H:%M')
-                reason_line = f"[{stamp}] Cancelacion: {cancel_reason}"
-                order.admin_notes = f"{order.admin_notes}\n{reason_line}".strip() if order.admin_notes else reason_line
-                order.save(update_fields=['admin_notes', 'updated_at'])
+            with transaction.atomic():
+                locked_order = Order.objects.select_for_update().get(pk=order.pk)
+                before = model_snapshot(locked_order, ['status', 'admin_notes', 'status_updated_at'])
+                changed = locked_order.change_status(
+                    new_status=Order.STATUS_CANCELLED,
+                    changed_by=request.user,
+                    note=status_note,
+                )
+                if cancel_reason:
+                    stamp = timezone.localtime().strftime('%d/%m/%Y %H:%M')
+                    reason_line = f"[{stamp}] Cancelacion: {cancel_reason}"
+                    locked_order.admin_notes = (
+                        f"{locked_order.admin_notes}\n{reason_line}".strip()
+                        if locked_order.admin_notes
+                        else reason_line
+                    )
+                    locked_order.save(update_fields=['admin_notes', 'updated_at'])
+                sync_order_charge_transaction(order=locked_order, actor=request.user)
+                order = locked_order
         except ValueError as exc:
             messages.error(
                 request,
@@ -3880,6 +4776,15 @@ def import_process(request, import_type):
                     })
 
                 dry_run = form.cleaned_data.get('dry_run', True)
+                confirm_apply = form.cleaned_data.get('confirm_apply', False)
+                if not dry_run and not confirm_apply:
+                    return JsonResponse(
+                        {
+                            'success': False,
+                            'error': 'Debes confirmar explicitamente la aplicacion real antes de ejecutar.',
+                        },
+                        status=400,
+                    )
                 task_id = ImportTaskManager.start_task()
                 execution = ImportExecution.objects.create(
                     user=request.user if request.user.is_authenticated else None,
@@ -3907,6 +4812,7 @@ def import_process(request, import_type):
                     details={
                         'import_type': import_type,
                         'dry_run': dry_run,
+                        'confirm_apply': bool(confirm_apply),
                         'file_name': file_basename,
                         'backend': dispatch_result.get('backend', 'thread'),
                     },

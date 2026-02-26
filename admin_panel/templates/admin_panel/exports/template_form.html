@@ -1,0 +1,41 @@
+{% extends 'admin_panel/base.html' %}
+
+{% block page_title %}{{ action }} Plantilla Excel{% endblock %}
+
+{% block content %}
+<div class="admin-form-container">
+    <h2>{{ action }} Plantilla Excel</h2>
+    <form method="post">
+        {% csrf_token %}
+        {% for field in form %}
+        <div class="form-group">
+            <label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
+            {{ field }}
+            {% if field.help_text %}
+            <small class="text-muted">{{ field.help_text }}</small>
+            {% endif %}
+            {% for error in field.errors %}
+            <small class="text-danger">{{ error }}</small>
+            {% endfor %}
+        </div>
+        {% endfor %}
+
+        {% if form.non_field_errors %}
+        <div class="form-group">
+            {% for error in form.non_field_errors %}
+            <small class="text-danger">{{ error }}</small>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary">Guardar</button>
+            {% if template_obj %}
+            <a href="{% url 'admin_catalog_excel_template_detail' template_obj.pk %}" class="btn btn-outline">Cancelar</a>
+            {% else %}
+            <a href="{% url 'admin_catalog_excel_template_list' %}" class="btn btn-outline">Cancelar</a>
+            {% endif %}
+        </div>
+    </form>
+</div>
+{% endblock %}

@@ -1,12 +1,13 @@
 from decimal import Decimal
 
 from django.contrib.auth.models import User
+from django.core.exceptions import ValidationError
 from django.test import TestCase
 from django.urls import reverse
 
 from accounts.models import ClientPayment, ClientProfile
 from catalog.models import ClampMeasureRequest, Product
-from orders.models import Cart, CartItem, Order
+from orders.models import Cart, CartItem, Order, OrderItem
 
 
 class OrderPaymentWorkflowTests(TestCase):
@@ -129,3 +130,62 @@ class CheckoutClampRequestFlowTests(TestCase):
         self.assertIsNotNone(order)
         self.clamp_request.refresh_from_db()
         self.assertIsNotNone(self.clamp_request.ordered_at)
+
+
+class OrderItemMutationGuardTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username='order_item_guard_user',
+            password='secret123',
+        )
+        self.product = Product.objects.create(
+            sku='GUARD-ITEM-01',
+            name='Producto Guard',
+            price=Decimal('100.00'),
+            cost=Decimal('50.00'),
+            stock=3,
+            is_active=True,
+        )
+
+    def test_edit_item_blocked_when_order_confirmed(self):
+        order = Order.objects.create(
+            user=self.user,
+            status=Order.STATUS_CONFIRMED,
+            subtotal=Decimal('100.00'),
+            total=Decimal('100.00'),
+            client_company='Guard Co',
+        )
+        item = OrderItem.objects.create(
+            order=order,
+            product=self.product,
+            product_sku=self.product.sku,
+            product_name=self.product.name,
+            quantity=1,
+            price_at_purchase=Decimal('100.00'),
+            subtotal=Decimal('100.00'),
+        )
+        item.quantity = 2
+        with self.assertRaises(ValidationError):
+            item.save()
+
+    def test_edit_item_allowed_when_order_draft(self):
+        order = Order.objects.create(
+            user=self.user,
+            status=Order.STATUS_DRAFT,
+            subtotal=Decimal('100.00'),
+            total=Decimal('100.00'),
+            client_company='Guard Co',
+        )
+        item = OrderItem.objects.create(
+            order=order,
+            product=self.product,
+            product_sku=self.product.sku,
+            product_name=self.product.name,
+            quantity=1,
+            price_at_purchase=Decimal('100.00'),
+            subtotal=Decimal('100.00'),
+        )
+        item.quantity = 2
+        item.save()
+        item.refresh_from_db()
+        self.assertEqual(item.quantity, 2)

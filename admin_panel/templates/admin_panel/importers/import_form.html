@@ -79,6 +79,16 @@
             <small class="text-muted" style="display: block; margin-top: 5px; margin-left: 1.5rem;">{{ form.dry_run.help_text }}</small>
         </div>
 
+        <div class="form-group">
+            <div class="flex items-center gap-2">
+                {{ form.confirm_apply }}
+                <label for="{{ form.confirm_apply.id_for_label }}" style="margin-bottom: 0; cursor: pointer;">{{ form.confirm_apply.label }}</label>
+            </div>
+            <small class="text-muted" style="display: block; margin-top: 5px; margin-left: 1.5rem;">
+                {{ form.confirm_apply.help_text }}
+            </small>
+        </div>
+
         {% if form.update_existing %}
         <div class="form-group">
             {{ form.update_existing }} {{ form.update_existing.label }}
@@ -118,6 +128,24 @@
 
 <script>
     const statusUrlTemplate = "{% url 'admin_import_status' '__TASK_ID__' %}";
+    const dryRunCheckbox = document.getElementById('{{ form.dry_run.id_for_label }}');
+    const confirmApplyCheckbox = document.getElementById('{{ form.confirm_apply.id_for_label }}');
+
+    function syncConfirmApplyVisibility() {
+        if (!dryRunCheckbox || !confirmApplyCheckbox) return;
+        const wrapper = confirmApplyCheckbox.closest('.form-group');
+        if (!wrapper) return;
+        const isDryRun = !!dryRunCheckbox.checked;
+        wrapper.style.opacity = isDryRun ? '0.55' : '1';
+        confirmApplyCheckbox.disabled = isDryRun;
+        if (isDryRun) {
+            confirmApplyCheckbox.checked = false;
+        }
+    }
+    if (dryRunCheckbox) {
+        dryRunCheckbox.addEventListener('change', syncConfirmApplyVisibility);
+    }
+    syncConfirmApplyVisibility();
 
     document.getElementById('btnPreview').addEventListener('click', async function (e) {
         e.preventDefault();
@@ -163,6 +191,13 @@
 
     document.getElementById('importForm').addEventListener('submit', async function (e) {
         e.preventDefault();
+
+        if (dryRunCheckbox && !dryRunCheckbox.checked) {
+            if (!confirmApplyCheckbox || !confirmApplyCheckbox.checked) {
+                alert('Para aplicar una importacion real, debes confirmar explicitamente la aplicacion.');
+                return;
+            }
+        }
 
         const form = e.target;
         const formData = new FormData(form);

@@ -39,6 +39,48 @@
     </div>
 </div>
 
+<div class="dashboard-grid" style="margin-top: 12px;">
+    <div class="stat-card">
+        <h3>Pedidos hoy</h3>
+        <span class="number">{{ kpi_orders_today_count }}</span>
+    </div>
+    <div class="stat-card">
+        <h3>Venta estimada hoy</h3>
+        <span class="number">${{ kpi_orders_today_total|floatformat:2 }}</span>
+    </div>
+    <div class="stat-card">
+        <h3>Clientes activos (30 dias)</h3>
+        <span class="number">{{ kpi_active_clients_30d }}</span>
+    </div>
+    <div class="stat-card">
+        <h3>Ciclo prom. entrega (h)</h3>
+        <span class="number">
+            {% if kpi_avg_delivery_cycle_hours %}{{ kpi_avg_delivery_cycle_hours|floatformat:2 }}{% else %}-{% endif %}
+        </span>
+    </div>
+</div>
+
+<div class="dashboard-section" style="margin-top:14px;">
+    <h2>Alertas internas</h2>
+    {% if internal_alerts %}
+    <ul class="quick-list">
+        {% for alert in internal_alerts %}
+        <li>
+            <span>
+                <strong>{{ alert.title }}</strong><br>
+                <small>Detectadas: {{ alert.count }}</small>
+            </span>
+            <span class="badge badge-{% if alert.kind == 'danger' %}danger{% elif alert.kind == 'warning' %}warning{% else %}info{% endif %}">
+                {{ alert.count }}
+            </span>
+        </li>
+        {% endfor %}
+    </ul>
+    {% else %}
+    <p class="text-muted">No hay alertas internas activas.</p>
+    {% endif %}
+</div>
+
 <div class="dashboard-sections">
     <div class="dashboard-section">
         <h2>Solicitudes pendientes ({{ pending_requests }})</h2>
@@ -81,6 +123,108 @@
         <p class="text-muted">No hay pedidos recientes.</p>
         {% endif %}
     </div>
+</div>
+
+<div class="dashboard-sections compact-top-gap">
+    <div class="dashboard-section">
+        <h2>Top productos vendidos (30 dias)</h2>
+        {% if top_products_30d %}
+        <ul class="quick-list">
+            {% for item in top_products_30d %}
+            <li>
+                <span>
+                    <strong>{{ item.product_sku }}</strong><br>
+                    <small>{{ item.product_name|default:"-" }}</small>
+                </span>
+                <span class="badge badge-success">{{ item.total_qty }}</span>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="text-muted">Sin datos por ahora.</p>
+        {% endif %}
+    </div>
+
+    <div class="dashboard-section">
+        <h2>Pedidos trabados en preparacion</h2>
+        {% if stale_preparing_orders %}
+        <ul class="quick-list">
+            {% for order in stale_preparing_orders %}
+            <li>
+                <span>
+                    <strong>Pedido #{{ order.pk }}</strong><br>
+                    <small>{{ order.user.username|default:"-" }} - {{ order.status_updated_at|date:'d/m/Y H:i' }}</small>
+                </span>
+                <a href="{% url 'admin_order_detail' order.pk %}" class="btn btn-outline">Abrir</a>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="text-muted">No hay pedidos trabados.</p>
+        {% endif %}
+    </div>
+</div>
+
+<div class="dashboard-sections compact-top-gap">
+    <div class="dashboard-section">
+        <h2>Clientes con deuda alta</h2>
+        {% if high_debt_items %}
+        <ul class="quick-list">
+            {% for item in high_debt_items %}
+            <li>
+                <span>
+                    <strong>{{ item.client.company_name }}</strong><br>
+                    <small>{{ item.client.user.username|default:"-" }}</small>
+                </span>
+                <span class="badge badge-danger">${{ item.balance|floatformat:2 }}</span>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="text-muted">Sin clientes sobre umbral de deuda.</p>
+        {% endif %}
+    </div>
+
+    <div class="dashboard-section">
+        <h2>Productos sin categoria activa</h2>
+        {% if products_without_active_category_count %}
+        <p style="margin-top:0;">
+            Total detectado: <strong>{{ products_without_active_category_count }}</strong>
+        </p>
+        <ul class="quick-list">
+            {% for product in products_without_active_category_sample %}
+            <li>
+                <span>
+                    <strong>{{ product.sku }}</strong><br>
+                    <small>{{ product.name }}</small>
+                </span>
+                <a href="{% url 'admin_product_edit' product.pk %}" class="btn btn-outline">Abrir</a>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="text-muted">No hay productos activos fuera de categoria activa.</p>
+        {% endif %}
+    </div>
+</div>
+
+<div class="dashboard-section compact-top-gap">
+    <h2>Importaciones con alto error</h2>
+    {% if high_error_imports %}
+    <ul class="quick-list">
+        {% for item in high_error_imports %}
+        <li>
+            <span>
+                <strong>{{ item.execution.import_type }} - {{ item.execution.file_name|default:"-" }}</strong><br>
+                <small>{{ item.execution.created_at|date:'d/m/Y H:i' }}</small>
+            </span>
+            <span class="badge badge-danger">{{ item.error_rate }}%</span>
+        </li>
+        {% endfor %}
+    </ul>
+    {% else %}
+    <p class="text-muted">No hay lotes recientes con error alto.</p>
+    {% endif %}
 </div>
 
 <div class="dashboard-sections compact-top-gap">

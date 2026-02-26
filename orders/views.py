@@ -9,11 +9,13 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.apps import apps
 from django.db import transaction
+from django.db.models import Prefetch
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
+from accounts.models import ClientPayment
 from catalog.models import Product
 
 from .models import Cart, CartItem, ClientFavoriteProduct, Order, OrderItem, OrderStatusHistory
@@ -92,6 +94,17 @@ def _build_order_from_cart(cart, user, notes="", status=Order.STATUS_CONFIRMED):
                     f"${cart_item.product.price:.2f} c/u"
                 )
             )
+
+    # Keep client current-account ledger synchronized from order creation.
+    try:
+        from accounts.services.ledger import sync_order_charge_transaction
+
+        sync_order_charge_transaction(
+            order=order,
+            actor=user if getattr(user, "is_authenticated", False) else None,
+        )
+    except Exception:
+        logger.exception("Could not sync ledger for order %s", order.pk)
 
     if clamp_summary_lines:
         clamp_summary = "Abrazaderas a medida agregadas por cliente:\n" + "\n".join(clamp_summary_lines)
@@ -236,6 +249,7 @@ def checkout(request):
     if request.method == "POST":
         notes = request.POST.get("notes", "").strip()
         with transaction.atomic():
+            cart = Cart.objects.select_for_update().get(pk=cart.pk)
             order = _build_order_from_cart(
                 cart=cart,
                 user=request.user,
@@ -279,8 +293,29 @@ def order_list(request):
 @login_required
 def order_detail(request, order_id):
     """Order detail view."""
-    order = get_object_or_404(Order.objects.prefetch_related("items", "status_history"), pk=order_id, user=request.user)
-    return render(request, "orders/order_detail.html", {"order": order})
+    order = get_object_or_404(
+        Order.objects.prefetch_related(
+            Prefetch("items", queryset=OrderItem.objects.select_related("product", "clamp_request")),
+            Prefetch("status_history", queryset=OrderStatusHistory.objects.select_related("changed_by")),
+        ),
+        pk=order_id,
+        user=request.user,
+    )
+    payments = list(
+        ClientPayment.objects.filter(order_id=order.pk, is_cancelled=False)
+        .select_related("created_by")
+        .order_by("-paid_at")
+    )
+    return render(
+        request,
+        "orders/order_detail.html",
+        {
+            "order": order,
+            "order_paid_amount": order.get_paid_amount(),
+            "order_pending_amount": order.get_pending_amount(),
+            "payments": payments,
+        },
+    )
 
 
 @login_required
@@ -317,11 +352,19 @@ def reorder_to_cart(request, order_id):
 def client_portal(request):
     """B2B client portal dashboard."""
     orders_qs = Order.objects.filter(user=request.user)
+    client_profile = _get_client_profile(request.user)
     favorites = (
         ClientFavoriteProduct.objects.filter(user=request.user)
         .select_related("product")
         .order_by("-created_at")[:10]
     )
+    recent_payments = []
+    if client_profile:
+        recent_payments = list(
+            ClientPayment.objects.filter(client_profile=client_profile, is_cancelled=False)
+            .select_related("order")
+            .order_by("-paid_at")[:8]
+        )
 
     context = {
         "active_orders_count": orders_qs.exclude(
@@ -330,6 +373,9 @@ def client_portal(request):
         "total_orders_count": orders_qs.count(),
         "recent_orders": orders_qs.order_by("-created_at")[:8],
         "favorites": favorites,
+        "client_profile": client_profile,
+        "recent_payments": recent_payments,
+        "current_balance": client_profile.get_current_balance() if client_profile else Decimal("0.00"),
     }
     return render(request, "orders/client_portal.html", context)
 

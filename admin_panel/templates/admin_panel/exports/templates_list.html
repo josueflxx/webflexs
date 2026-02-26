@@ -1,0 +1,78 @@
+{% extends 'admin_panel/base.html' %}
+
+{% block page_title %}Exportar Catalogo Excel{% endblock %}
+
+{% block content %}
+<div class="admin-table-container">
+    <div class="admin-toolbar">
+        <form method="get" class="toolbar-search">
+            <input type="text" name="q" value="{{ search }}" placeholder="Buscar plantilla..." class="form-input">
+            <label class="form-checkbox-label" style="display:flex;align-items:center;gap:6px;">
+                <input type="checkbox" name="only_active" value="1" {% if only_active %}checked{% endif %}>
+                Solo activas
+            </label>
+            <button type="submit" class="btn btn-primary">Filtrar</button>
+            {% if search or only_active %}
+            <a href="{% url 'admin_catalog_excel_template_list' %}" class="btn btn-outline">Limpiar</a>
+            {% endif %}
+        </form>
+        <div class="toolbar-actions">
+            {% if user.is_superuser %}
+            <a href="{% url 'admin_catalog_excel_template_create' %}" class="btn btn-primary">+ Nueva plantilla</a>
+            {% endif %}
+        </div>
+    </div>
+
+    <table class="admin-table">
+        <thead>
+            <tr>
+                <th>Plantilla</th>
+                <th>Estado</th>
+                <th>Cliente</th>
+                <th>Hojas</th>
+                <th>Columnas activas</th>
+                <th>Actualizada</th>
+                <th>Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for template in templates %}
+            <tr>
+                <td>
+                    <strong>{{ template.name }}</strong><br>
+                    <small class="text-muted">{{ template.description|default:"Sin descripcion" }}</small>
+                </td>
+                <td>
+                    {% if template.is_active %}
+                    <span class="badge badge-success">Activa</span>
+                    {% else %}
+                    <span class="badge badge-danger">Inactiva</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if template.is_client_download_enabled and template.is_active %}
+                    <span class="badge badge-success">Publicada</span>
+                    <small class="text-muted" style="display:block;">{{ template.client_download_label }}</small>
+                    {% elif template.is_client_download_enabled %}
+                    <span class="badge badge-warning">Marcada (inactiva)</span>
+                    {% else %}
+                    <span class="text-muted">No</span>
+                    {% endif %}
+                </td>
+                <td>{{ template.sheet_count }}</td>
+                <td>{{ template.column_count }}</td>
+                <td>{{ template.updated_at|date:"d/m/Y H:i" }}</td>
+                <td>
+                    <a href="{% url 'admin_catalog_excel_template_detail' template.pk %}" class="btn btn-outline">Abrir</a>
+                    <a href="{% url 'admin_catalog_excel_template_download' template.pk %}" class="btn btn-outline">Descargar</a>
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="7" class="text-center text-muted">No hay plantillas cargadas.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

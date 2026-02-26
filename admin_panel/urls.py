@@ -51,6 +51,21 @@ urlpatterns = [
     path('pedidos/<int:pk>/eliminar/', views.order_delete, name='admin_order_delete'),
     path('pagos/', views.payment_list, name='admin_payment_list'),
     path('cotizador/', views.clamp_quoter, name='admin_clamp_quoter'),
+
+    # Catalog Excel templates
+    path('exportar-catalogo/', views.catalog_excel_template_list, name='admin_catalog_excel_template_list'),
+    path('exportar-catalogo/nueva/', views.catalog_excel_template_create, name='admin_catalog_excel_template_create'),
+    path('exportar-catalogo/<int:template_id>/', views.catalog_excel_template_detail, name='admin_catalog_excel_template_detail'),
+    path('exportar-catalogo/<int:template_id>/editar/', views.catalog_excel_template_edit, name='admin_catalog_excel_template_edit'),
+    path('exportar-catalogo/<int:template_id>/eliminar/', views.catalog_excel_template_delete, name='admin_catalog_excel_template_delete'),
+    path('exportar-catalogo/<int:template_id>/descargar/', views.catalog_excel_template_download, name='admin_catalog_excel_template_download'),
+    path('exportar-catalogo/<int:template_id>/auto-hojas-principales/', views.catalog_excel_template_autogenerate_main_category_sheets, name='admin_catalog_excel_template_autogenerate_main_category_sheets'),
+    path('exportar-catalogo/<int:template_id>/hojas/nueva/', views.catalog_excel_sheet_create, name='admin_catalog_excel_sheet_create'),
+    path('exportar-catalogo/hojas/<int:sheet_id>/editar/', views.catalog_excel_sheet_edit, name='admin_catalog_excel_sheet_edit'),
+    path('exportar-catalogo/hojas/<int:sheet_id>/eliminar/', views.catalog_excel_sheet_delete, name='admin_catalog_excel_sheet_delete'),
+    path('exportar-catalogo/hojas/<int:sheet_id>/columnas/nueva/', views.catalog_excel_column_create, name='admin_catalog_excel_column_create'),
+    path('exportar-catalogo/columnas/<int:column_id>/editar/', views.catalog_excel_column_edit, name='admin_catalog_excel_column_edit'),
+    path('exportar-catalogo/columnas/<int:column_id>/eliminar/', views.catalog_excel_column_delete, name='admin_catalog_excel_column_delete'),
     
     # Categories
     path('categorias/', views.category_list, name='admin_category_list'),

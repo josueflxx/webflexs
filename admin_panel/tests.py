@@ -1,15 +1,22 @@
 import json
 from decimal import Decimal
+from io import BytesIO
 
 from django.contrib.auth.models import User
 from django.test import TestCase
 from django.urls import reverse
 from django.db import connection
 from django.utils import timezone
+from openpyxl import load_workbook
 
 from accounts.models import AccountRequest, ClientPayment, ClientProfile
-from catalog.models import Category, ClampMeasureRequest, Product
+from catalog.models import Category, ClampMeasureRequest, Product, Supplier
 from catalog.services.clamp_quoter import calculate_clamp_quote
+from core.models import (
+    CatalogExcelTemplate,
+    CatalogExcelTemplateSheet,
+    CatalogExcelTemplateColumn,
+)
 from orders.models import ClampQuotation, Order, OrderItem, OrderStatusHistory
 
 
@@ -944,3 +951,181 @@ class AdminInputValidationTests(TestCase):
         self.assertEqual(profile.discount, Decimal('10.5'))
         request_row.refresh_from_db()
         self.assertEqual(request_row.status, 'approved')
+
+
+class CatalogExcelTemplateExportTests(TestCase):
+    def setUp(self):
+        self.primary_superadmin = User.objects.create_superuser(
+            username='josueflexs',
+            email='josue@example.com',
+            password='secret123',
+        )
+        self.staff = User.objects.create_user(
+            username='staff_export_excel',
+            password='secret123',
+            is_staff=True,
+        )
+
+        self.category = Category.objects.create(name='Export Categoria', slug='export-categoria')
+        self.supplier = Supplier.objects.create(name='Proveedor Export')
+        self.product = Product.objects.create(
+            sku='EXP-001',
+            name='Producto Exportable',
+            supplier='Proveedor Export',
+            supplier_ref=self.supplier,
+            price=Decimal('1234.50'),
+            cost=Decimal('900.00'),
+            stock=7,
+            category=self.category,
+            is_active=True,
+        )
+        self.product.categories.add(self.category)
+
+        self.template = CatalogExcelTemplate.objects.create(
+            name='Plantilla Test Excel',
+            slug='plantilla-test-excel',
+            is_active=True,
+            created_by=self.primary_superadmin,
+            updated_by=self.primary_superadmin,
+        )
+        self.sheet = CatalogExcelTemplateSheet.objects.create(
+            template=self.template,
+            name='Productos',
+            include_header=True,
+            only_active_products=True,
+            sort_by='name_asc',
+        )
+        CatalogExcelTemplateColumn.objects.create(sheet=self.sheet, key='sku', order=1)
+        CatalogExcelTemplateColumn.objects.create(sheet=self.sheet, key='name', order=2)
+        CatalogExcelTemplateColumn.objects.create(sheet=self.sheet, key='price', order=3)
+
+    def test_staff_can_download_catalog_template_excel(self):
+        self.client.force_login(self.staff)
+        response = self.client.get(
+            reverse('admin_catalog_excel_template_download', args=[self.template.pk])
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('spreadsheetml.sheet', response['Content-Type'])
+
+        wb = load_workbook(BytesIO(response.content))
+        ws = wb['Productos']
+        self.assertEqual(ws['A1'].value, 'SKU')
+        self.assertEqual(ws['B1'].value, 'Nombre')
+        self.assertEqual(ws['A2'].value, 'EXP-001')
+        self.assertEqual(ws['B2'].value, 'Producto Exportable')
+
+    def test_non_primary_superadmin_cannot_create_template(self):
+        other_superadmin = User.objects.create_superuser(
+            username='otroadmin',
+            email='otro@example.com',
+            password='secret123',
+        )
+        self.client.force_login(other_superadmin)
+        response = self.client.post(
+            reverse('admin_catalog_excel_template_create'),
+            data={
+                'name': 'Plantilla Bloqueada',
+                'description': 'No deberia crearse',
+                'is_active': 'on',
+            },
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(
+            CatalogExcelTemplate.objects.filter(name='Plantilla Bloqueada').exists()
+        )
+
+    def test_staff_can_open_export_templates_pages(self):
+        self.client.force_login(self.staff)
+        list_response = self.client.get(reverse('admin_catalog_excel_template_list'))
+        detail_response = self.client.get(
+            reverse('admin_catalog_excel_template_detail', args=[self.template.pk])
+        )
+        self.assertEqual(list_response.status_code, 200)
+        self.assertEqual(detail_response.status_code, 200)
+
+    def test_primary_superadmin_can_autogenerate_sheets_by_root_categories(self):
+        root_a = Category.objects.create(name='Abrazaderas Auto', slug='abrazaderas-auto')
+        Category.objects.create(name='Sub A', slug='sub-a', parent=root_a)
+        root_b = Category.objects.create(name='Bujes Auto', slug='bujes-auto')
+        Category.objects.create(name='Inactiva Auto', slug='inactiva-auto', is_active=False)
+
+        self.client.force_login(self.primary_superadmin)
+        response = self.client.post(
+            reverse(
+                'admin_catalog_excel_template_autogenerate_main_category_sheets',
+                args=[self.template.pk],
+            ),
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+
+        active_roots = list(
+            Category.objects.filter(parent__isnull=True, is_active=True).order_by('id')
+        )
+        for root in active_roots:
+            sheet = (
+                CatalogExcelTemplateSheet.objects.filter(
+                    template=self.template,
+                    categories=root,
+                )
+                .order_by('id')
+                .first()
+            )
+            self.assertIsNotNone(sheet)
+            self.assertTrue(sheet.include_descendant_categories)
+            self.assertTrue(sheet.only_active_products)
+            self.assertTrue(sheet.only_catalog_visible)
+            keys = list(sheet.columns.filter(is_active=True).order_by('order').values_list('key', flat=True))
+            self.assertEqual(keys, ['sku', 'name', 'price'])
+
+        inactive_root = Category.objects.filter(slug='inactiva-auto').first()
+        self.assertFalse(
+            CatalogExcelTemplateSheet.objects.filter(
+                template=self.template,
+                categories=inactive_root,
+            ).exists()
+        )
+
+    def test_autogenerate_can_include_inactive_root_categories(self):
+        inactive_root = Category.objects.create(
+            name='Inactiva Incluida',
+            slug='inactiva-incluida',
+            is_active=False,
+        )
+        self.client.force_login(self.primary_superadmin)
+        response = self.client.post(
+            reverse(
+                'admin_catalog_excel_template_autogenerate_main_category_sheets',
+                args=[self.template.pk],
+            ),
+            data={'include_inactive_categories': '1'},
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+
+        generated_sheet = (
+            CatalogExcelTemplateSheet.objects.filter(
+                template=self.template,
+                categories=inactive_root,
+            )
+            .order_by('id')
+            .first()
+        )
+        self.assertIsNotNone(generated_sheet)
+        self.assertFalse(generated_sheet.only_catalog_visible)
+
+    def test_only_one_template_is_published_for_clients(self):
+        second_template = CatalogExcelTemplate.objects.create(
+            name='Plantilla Cliente 2',
+            slug='plantilla-cliente-2',
+            is_active=True,
+            is_client_download_enabled=True,
+            created_by=self.primary_superadmin,
+            updated_by=self.primary_superadmin,
+        )
+        self.template.refresh_from_db()
+        second_template.refresh_from_db()
+
+        self.assertFalse(self.template.is_client_download_enabled)
+        self.assertTrue(second_template.is_client_download_enabled)

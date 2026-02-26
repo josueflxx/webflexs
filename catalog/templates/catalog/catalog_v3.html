@@ -81,7 +81,7 @@
                             type="text"
                             name="q"
                             value="{{ search_query }}"
-                            placeholder="SKU o nombre..."
+                            placeholder='SKU, nombre, "frase", tipo:trefilada, 7/16x80x220, -termino'
                             class="form-input"
                         >
                         <button type="submit" class="btn btn-primary">Buscar</button>
@@ -107,6 +107,18 @@
                     </a>
                     {% endif %}
                 </div>
+
+                {% if client_catalog_excel_download_enabled %}
+                <div class="filter-section">
+                    <h3>Catalogo Excel</h3>
+                    <p class="text-muted" style="margin:0 0 8px;">
+                        Descarga la version publicada del catalogo en formato XLSX.
+                    </p>
+                    <a href="{% url 'catalog_client_excel_download' %}" class="btn btn-outline" style="width:100%;">
+                        {{ client_catalog_excel_download_label|default:"Descargar catalogo Excel" }}
+                    </a>
+                </div>
+                {% endif %}
 
                 <div class="filter-section">
                     <div class="category-filter-header">
@@ -245,6 +257,9 @@
                     </div>
                     <div class="toolbar-actions">
                         <select name="order" class="form-select order-select" onchange="updateOrder(this.value)">
+                            {% if search_query %}
+                            <option value="relevance" {% if order_by == 'relevance' %}selected{% endif %}>Mejor coincidencia</option>
+                            {% endif %}
                             <option value="name" {% if order_by == 'name' %}selected{% endif %}>Nombre A-Z</option>
                             <option value="-name" {% if order_by == '-name' %}selected{% endif %}>Nombre Z-A</option>
                             <option value="price" {% if order_by == 'price' %}selected{% endif %}>Menor precio</option>
@@ -275,6 +290,14 @@
                         <span>{{ chip.label }}: {{ chip.value }}</span>
                         <span class="chip-remove">x</span>
                     </a>
+                    {% endfor %}
+                </div>
+                {% endif %}
+
+                {% if search_summary %}
+                <div class="search-summary-chips">
+                    {% for item in search_summary %}
+                    <span class="search-summary-chip">{{ item }}</span>
                     {% endfor %}
                 </div>
                 {% endif %}

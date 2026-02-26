@@ -23,6 +23,22 @@
                 <p class="portal-number">{{ favorites|length }}</p>
                 <a href="{% url 'catalog' %}" class="btn btn-outline">Ver catalogo</a>
             </div>
+            <div class="portal-card">
+                <h3>Saldo actual</h3>
+                <p class="portal-number {% if current_balance > 0 %}is-danger{% endif %}">
+                    ${{ current_balance|floatformat:2 }}
+                </p>
+                <small class="text-muted">Cuenta corriente</small>
+            </div>
+            {% if client_catalog_excel_download_enabled %}
+            <div class="portal-card">
+                <h3>Catalogo Excel</h3>
+                <p class="portal-number">XLSX</p>
+                <a href="{% url 'catalog_client_excel_download' %}" class="btn btn-outline">
+                    {{ client_catalog_excel_download_label|default:"Descargar catalogo Excel" }}
+                </a>
+            </div>
+            {% endif %}
         </div>
 
         <div class="portal-sections">
@@ -67,6 +83,29 @@
                 {% endif %}
             </section>
 
+            <section class="portal-panel">
+                <h2>Pagos recientes</h2>
+                {% if recent_payments %}
+                <ul class="portal-list">
+                    {% for payment in recent_payments %}
+                    <li>
+                        <div>
+                            <strong>${{ payment.amount|floatformat:2 }}</strong>
+                            <small>{{ payment.paid_at|date:"d/m/Y H:i" }} - {{ payment.get_method_display }}</small>
+                        </div>
+                        {% if payment.order_id %}
+                        <a href="{% url 'order_detail' payment.order_id %}" class="btn btn-outline btn-sm">Pedido #{{ payment.order_id }}</a>
+                        {% else %}
+                        <span class="text-muted">Pago general</span>
+                        {% endif %}
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <p class="text-muted">Todavia no hay pagos registrados en tu cuenta.</p>
+                {% endif %}
+            </section>
+
         </div>
     </div>
 </div>
@@ -77,7 +116,7 @@
     }
     .portal-grid {
         display: grid;
-        grid-template-columns: repeat(3, minmax(160px, 1fr));
+        grid-template-columns: repeat(4, minmax(160px, 1fr));
         gap: 12px;
         margin-bottom: 16px;
     }
@@ -96,6 +135,9 @@
         font-size: 1.4rem;
         font-weight: 700;
         color: var(--color-primary);
+    }
+    .portal-number.is-danger {
+        color: #ff5e5e;
     }
     .portal-sections {
         display: grid;

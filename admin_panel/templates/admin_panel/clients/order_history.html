@@ -242,6 +242,56 @@
                 </tr>
             </tbody>
         </table>
+
+        <h3 style="margin: 1.2rem 0 .8rem;">Movimientos de Cuenta Corriente</h3>
+        <table class="admin-table">
+            <thead>
+                <tr>
+                    <th>Fecha</th>
+                    <th>Tipo</th>
+                    <th>Referencia</th>
+                    <th>Debe</th>
+                    <th>Haber</th>
+                    <th>Saldo acumulado</th>
+                    <th>Usuario</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in ledger_rows %}
+                <tr>
+                    <td>{{ row.tx.occurred_at|date:"d/m/Y H:i" }}</td>
+                    <td>{{ row.tx.get_transaction_type_display }}</td>
+                    <td>
+                        {% if row.tx.order_id %}
+                        Pedido #{{ row.tx.order_id }}
+                        {% elif row.tx.payment_id %}
+                        Pago #{{ row.tx.payment_id }}
+                        {% else %}
+                        {{ row.tx.description|default:"-" }}
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if row.debit > 0 %}
+                        ${{ row.debit|floatformat:2 }}
+                        {% else %}-{% endif %}
+                    </td>
+                    <td>
+                        {% if row.credit > 0 %}
+                        ${{ row.credit|floatformat:2 }}
+                        {% else %}-{% endif %}
+                    </td>
+                    <td>
+                        <strong>${{ row.running_balance|floatformat:2 }}</strong>
+                    </td>
+                    <td>{{ row.tx.created_by.username|default:"sistema" }}</td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="7" class="text-center text-muted">No hay movimientos en el libro diario.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
     </div>
 
     {% if page_obj.paginator.num_pages > 1 %}

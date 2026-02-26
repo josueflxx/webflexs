@@ -132,6 +132,9 @@
                                 Creados: {{ execution.created_count }}<br>
                                 Actualizados: {{ execution.updated_count }}<br>
                                 Errores: {{ execution.error_count }}
+                                {% if execution.result_summary.batch_meta %}
+                                <br>Lotes: {{ execution.result_summary.batch_meta.total_batches }} ({{ execution.result_summary.batch_meta.batch_size }} c/u)
+                                {% endif %}
                             </div>
                         </td>
                         <td>

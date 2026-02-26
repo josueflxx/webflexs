@@ -1,12 +1,15 @@
 from decimal import Decimal
+from io import BytesIO
 
 from django.contrib.auth.models import User
 from django.test import SimpleTestCase, TestCase
 from django.urls import reverse
+from openpyxl import load_workbook
 
 from accounts.models import ClientProfile
 from catalog.services.clamp_code import generarCodigo, parsearCodigo
 from catalog.models import Category, ClampMeasureRequest, ClampSpecs, Product
+from core.models import CatalogExcelTemplate, CatalogExcelTemplateColumn, CatalogExcelTemplateSheet
 from orders.models import CartItem
 
 
@@ -302,6 +305,83 @@ class ClampMeasureRequestFlowTests(TestCase):
         self.assertFalse(CartItem.objects.filter(cart__user=user).exists())
 
 
+class CatalogAdvancedSearchTests(TestCase):
+    def setUp(self):
+        self.category = Category.objects.create(name="Abrazaderas", slug="abrazaderas", is_active=True)
+
+        self.product_exact = Product.objects.create(
+            sku="ABT3480220S",
+            name="ABRAZADERA TREFILADA DE 3/4 X 80 X 220 SEMICURVA",
+            description="Uso suspension trasera",
+            supplier="MOVIGOM",
+            price=Decimal("100.00"),
+            stock=5,
+            is_active=True,
+            category=self.category,
+        )
+        self.product_exact.categories.add(self.category)
+        ClampSpecs.objects.create(
+            product=self.product_exact,
+            fabrication="TREFILADA",
+            diameter="3/4",
+            width=80,
+            length=220,
+            shape="SEMICURVA",
+        )
+
+        self.product_other = Product.objects.create(
+            sku="ABT3485220P",
+            name="ABRAZADERA TREFILADA DE 3/4 X 85 X 220 PLANA",
+            description="Aplicacion delantera",
+            supplier="ROCES",
+            price=Decimal("110.00"),
+            stock=4,
+            is_active=True,
+            category=self.category,
+        )
+        self.product_other.categories.add(self.category)
+        ClampSpecs.objects.create(
+            product=self.product_other,
+            fabrication="TREFILADA",
+            diameter="3/4",
+            width=85,
+            length=220,
+            shape="PLANA",
+        )
+
+    def test_search_parses_dimensions_and_type(self):
+        response = self.client.get(
+            reverse("catalog"),
+            {"q": "tipo:trefilada 3/4x80x220 semicurva"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        page_items = list(response.context["page_obj"].object_list)
+        self.assertEqual(len(page_items), 1)
+        self.assertEqual(page_items[0].sku, "ABT3480220S")
+
+    def test_search_supports_exclusion_term(self):
+        response = self.client.get(
+            reverse("catalog"),
+            {"q": "abrazadera -delantera"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        skus = [product.sku for product in response.context["page_obj"].object_list]
+        self.assertIn("ABT3480220S", skus)
+        self.assertNotIn("ABT3485220P", skus)
+
+    def test_search_relevance_prioritizes_exact_sku(self):
+        response = self.client.get(
+            reverse("catalog"),
+            {"q": "ABT3480220S", "order": "relevance"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        first_product = response.context["page_obj"].object_list[0]
+        self.assertEqual(first_product.sku, "ABT3480220S")
+
+
 class ProductDetailTemplateTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(username="cliente_template", password="secret123")
@@ -324,3 +404,78 @@ class ProductDetailTemplateTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "addToCart(24950)")
         self.assertContains(response, "toggleFavorite(24950, this)")
+
+
+class CatalogClientExcelDownloadTests(TestCase):
+    def setUp(self):
+        self.category = Category.objects.create(name="Categoria XLSX", slug="categoria-xlsx", is_active=True)
+        self.product = Product.objects.create(
+            sku="XLSX-001",
+            name="Producto XLSX",
+            supplier="Proveedor XLSX",
+            price=Decimal("1234.56"),
+            cost=Decimal("900.00"),
+            stock=10,
+            is_active=True,
+            category=self.category,
+        )
+        self.product.categories.add(self.category)
+
+        self.approved_user = User.objects.create_user(username="cliente_xlsx_ok", password="secret123")
+        ClientProfile.objects.create(
+            user=self.approved_user,
+            company_name="Cliente XLSX",
+            is_approved=True,
+        )
+        self.unapproved_user = User.objects.create_user(username="cliente_xlsx_no", password="secret123")
+        ClientProfile.objects.create(
+            user=self.unapproved_user,
+            company_name="Cliente XLSX No",
+            is_approved=False,
+        )
+
+        self.template = CatalogExcelTemplate.objects.create(
+            name="Plantilla Cliente XLSX",
+            is_active=True,
+            is_client_download_enabled=True,
+            client_download_label="Descargar version clientes",
+        )
+        self.sheet = CatalogExcelTemplateSheet.objects.create(
+            template=self.template,
+            name="Catalogo",
+            include_header=True,
+            only_active_products=True,
+            sort_by="name_asc",
+        )
+        self.sheet.categories.add(self.category)
+        CatalogExcelTemplateColumn.objects.create(sheet=self.sheet, key="sku", order=1, is_active=True)
+        CatalogExcelTemplateColumn.objects.create(sheet=self.sheet, key="name", order=2, is_active=True)
+        CatalogExcelTemplateColumn.objects.create(sheet=self.sheet, key="price", order=3, is_active=True)
+
+    def test_approved_client_can_download_published_catalog_excel(self):
+        self.client.force_login(self.approved_user)
+        response = self.client.get(reverse("catalog_client_excel_download"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("spreadsheetml.sheet", response["Content-Type"])
+        workbook = load_workbook(BytesIO(response.content))
+        worksheet = workbook["Catalogo"]
+        self.assertEqual(worksheet["A1"].value, "SKU")
+        self.assertEqual(worksheet["B2"].value, "Producto XLSX")
+
+    def test_unapproved_client_cannot_download_catalog_excel(self):
+        self.client.force_login(self.unapproved_user)
+        response = self.client.get(reverse("catalog_client_excel_download"), follow=True)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "solo para clientes aprobados")
+
+    def test_download_warns_when_no_template_published(self):
+        self.template.is_client_download_enabled = False
+        self.template.save(update_fields=["is_client_download_enabled", "updated_at"])
+
+        self.client.force_login(self.approved_user)
+        response = self.client.get(reverse("catalog_client_excel_download"), follow=True)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "No hay una plantilla de Excel publicada para clientes")
