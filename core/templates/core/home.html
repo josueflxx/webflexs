@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 {% load static %}
 
-{% block title %}FLEXS - Repuestos de Elásticos en Argentina{% endblock %}
+{% block title %}FLEXS - Repuestos de El&aacute;sticos en Argentina{% endblock %}
 
 {% block extra_head %}
 <link
@@ -26,14 +26,14 @@
                 <span class="hero-title-line">Descubra la gama de</span>
                 <span class="hero-title-line text-primary">productos FLEXS</span>
             </h1>
-            <h2 class="hero-subtitle">Optimice el rendimiento de sus vehículos</h2>
+            <h2 class="hero-subtitle">Optimice el rendimiento de sus veh&iacute;culos</h2>
             <p class="hero-description">
                 Expertos en repuestos para industrias de transporte.<br>
                 Ayudando a empresas a mantenerse en movimiento.
             </p>
             <div class="hero-buttons">
                 <a href="{% url 'catalog' %}" class="btn btn-primary btn-lg">
-                    Ver Catálogo
+                    Ver Cat&aacute;logo
                 </a>
                 {% if not user.is_authenticated %}
                 <a href="{% url 'account_request' %}" class="btn btn-outline btn-lg">
@@ -49,7 +49,7 @@
     <div class="hero-scroll">
         <a href="#nosotros">
             <span class="scroll-text">Scroll</span>
-            <span class="scroll-arrow">↓</span>
+            <span class="scroll-arrow">&darr;</span>
         </a>
     </div>
 </section>
@@ -65,13 +65,13 @@
             <div class="about-content">
                 <h3>Expertos en Repuestos para Industrias de Transporte</h3>
                 <p>
-                    En <strong>Flexs</strong>, nos dedicamos a ofrecer repuestos de elástico de alta calidad
-                    para camiones y acoplados. Nuestro amplio catálogo y nuestro compromiso con el servicio
-                    al cliente nos convierten en la opción ideal para talleres, empresas con flotas de
-                    vehículos y distribuidoras.
+                    En <strong>Flexs</strong>, nos dedicamos a ofrecer repuestos de el&aacute;stico de alta calidad
+                    para camiones y acoplados. Nuestro amplio cat&aacute;logo y nuestro compromiso con el servicio
+                    al cliente nos convierten en la opci&oacute;n ideal para talleres, empresas con flotas de
+                    veh&iacute;culos y distribuidoras.
                 </p>
                 <p>
-                    Nuestro equipo dedicado está siempre disponible para ayudarte a encontrar las piezas
+                    Nuestro equipo dedicado est&aacute; siempre disponible para ayudarte a encontrar las piezas
                     adecuadas y garantizar una experiencia de compra sin problemas, desde el pedido hasta
                     la entrega.
                 </p>
@@ -94,7 +94,7 @@
                 </div>
                 <div class="stat-card">
                     <span class="stat-number">30+</span>
-                    <span class="stat-label">Años de experiencia</span>
+                    <span class="stat-label">A&ntilde;os de experiencia</span>
                 </div>
             </div>
         </div>
@@ -106,33 +106,33 @@
     <div class="container">
         <div class="section-header">
             <span class="section-number">02</span>
-            <h2 class="section-title">Cómo podemos ayudarlo?</h2>
+            <h2 class="section-title">&iquest;C&oacute;mo podemos ayudarlo?</h2>
         </div>
         <div class="services-grid">
             <div class="service-card">
-                <div class="service-icon">📦</div>
-                <h3>Amplio Catálogo, Amplio Stock</h3>
+                <div class="service-icon">&#128230;</div>
+                <h3>Amplio Cat&aacute;logo, Amplio Stock</h3>
                 <p>
-                    Más de 8.000 productos disponibles con stock permanente para satisfacer
+                    M&aacute;s de 8.000 productos disponibles con stock permanente para satisfacer
                     todas sus necesidades de repuestos.
                 </p>
             </div>
             <div class="service-card">
-                <div class="service-icon">🔧</div>
-                <h3>Fabricación Propia</h3>
+                <div class="service-icon">&#128295;</div>
+                <h3>Fabricaci&oacute;n Propia</h3>
                 <p>
-                    Producimos nuestras propias abrazaderas U-bolt con la más alta calidad
+                    Producimos nuestras propias abrazaderas U-bolt con la m&aacute;s alta calidad
                     y especificaciones precisas.
                 </p>
                 <a href="https://www.ubolt.com.ar" target="_blank" class="service-link">
-                    Ver ubolt.com.ar →
+                    Ver ubolt.com.ar &rarr;
                 </a>
             </div>
             <div class="service-card">
-                <div class="service-icon">🚚</div>
-                <h3>Entregas Rápidas y Atención Personalizada</h3>
+                <div class="service-icon">&#128666;</div>
+                <h3>Entregas R&aacute;pidas y Atenci&oacute;n Personalizada</h3>
                 <p>
-                    Envíos a todo el país con rapidez y un equipo dedicado a resolver
+                    Env&iacute;os a todo el pa&iacute;s con rapidez y un equipo dedicado a resolver
                     todas sus consultas.
                 </p>
             </div>
@@ -149,45 +149,45 @@
         </div>
         <div class="products-grid">
             <div class="product-category-card">
-                <div class="category-icon">🔩</div>
-                <h4>Elásticos</h4>
+                <div class="category-icon">&#128297;</div>
+                <h4>El&aacute;sticos</h4>
             </div>
             <div class="product-category-card">
-                <div class="category-icon">⚙️</div>
+                <div class="category-icon">&#9881;&#65039;</div>
                 <h4>Bujes</h4>
             </div>
             <div class="product-category-card">
-                <div class="category-icon">🏭</div>
-                <h4>Fundición</h4>
+                <div class="category-icon">&#127981;</div>
+                <h4>Fundici&oacute;n</h4>
             </div>
             <div class="product-category-card">
-                <div class="category-icon">🔗</div>
+                <div class="category-icon">&#128279;</div>
                 <h4>Pernos</h4>
             </div>
             <div class="product-category-card">
-                <div class="category-icon">🔧</div>
-                <h4>Bulonería</h4>
+                <div class="category-icon">&#128295;</div>
+                <h4>Buloner&iacute;a</h4>
             </div>
             <div class="product-category-card featured">
-                <div class="category-icon">🔨</div>
+                <div class="category-icon">&#128296;</div>
                 <h4>Abrazaderas</h4>
-                <span class="featured-badge">Fabricación propia</span>
+                <span class="featured-badge">Fabricaci&oacute;n propia</span>
             </div>
             <div class="product-category-card">
-                <div class="category-icon">💨</div>
-                <h4>Suspensión Neumática</h4>
+                <div class="category-icon">&#128168;</div>
+                <h4>Suspensi&oacute;n Neum&aacute;tica</h4>
             </div>
             <div class="product-category-card">
-                <div class="category-icon">📎</div>
-                <h4>Insertos de Elástico</h4>
+                <div class="category-icon">&#128206;</div>
+                <h4>Insertos de El&aacute;stico</h4>
             </div>
             <div class="product-category-card">
-                <div class="category-icon">⚖️</div>
+                <div class="category-icon">&#9878;&#65039;</div>
                 <h4>Balancines</h4>
             </div>
         </div>
         <div class="products-cta">
-            <a href="{% url 'catalog' %}" class="btn btn-primary btn-lg">Ver Catálogo Completo</a>
+            <a href="{% url 'catalog' %}" class="btn btn-primary btn-lg">Ver Cat&aacute;logo Completo</a>
         </div>
     </div>
 </section>
@@ -202,16 +202,16 @@
         <div class="contact-grid">
             <div class="contact-info">
                 <div class="contact-item">
-                    <span class="contact-icon">📍</span>
+                    <span class="contact-icon">&#128205;</span>
                     <div>
-                        <h4>Dirección</h4>
+                        <h4>Direcci&oacute;n</h4>
                         <p>{{ site_settings.company_address }}</p>
                     </div>
                 </div>
                 <div class="contact-item">
-                    <span class="contact-icon">📞</span>
+                    <span class="contact-icon">&#128222;</span>
                     <div>
-                        <h4>Teléfonos</h4>
+                        <h4>Tel&eacute;fonos</h4>
                         <p>
                             <a href="tel:{{ site_settings.company_phone }}">{{ site_settings.company_phone }}</a><br>
                             {% if site_settings.company_phone_2 %}
@@ -221,7 +221,7 @@
                     </div>
                 </div>
                 <div class="contact-item">
-                    <span class="contact-icon">✉️</span>
+                    <span class="contact-icon">&#9993;&#65039;</span>
                     <div>
                         <h4>Email</h4>
                         <p><a href="mailto:{{ site_settings.company_email }}">{{ site_settings.company_email }}</a></p>
@@ -229,20 +229,20 @@
                 </div>
             </div>
             <div class="contact-actions">
-                <h3>¿Listo para empezar?</h3>
-                <p>Solicitá tu cuenta y accedé a precios especiales para tu negocio.</p>
+                <h3>&iquest;Listo para empezar?</h3>
+                <p>Solicit&aacute; tu cuenta y acced&eacute; a precios especiales para tu negocio.</p>
                 <div class="contact-buttons">
                     {% if user.is_authenticated %}
-                    <a href="{% url 'catalog' %}" class="btn btn-primary btn-lg">Ir al Catálogo</a>
+                    <a href="{% url 'catalog' %}" class="btn btn-primary btn-lg">Ir al Cat&aacute;logo</a>
                     {% else %}
                     <a href="{% url 'account_request' %}" class="btn btn-primary btn-lg">Solicitar Cuenta</a>
-                    <a href="{% url 'login' %}" class="btn btn-outline btn-lg">Iniciar Sesión</a>
+                    <a href="{% url 'login' %}" class="btn btn-outline btn-lg">Iniciar Sesi&oacute;n</a>
                     {% endif %}
                 </div>
             </div>
         </div>
         <div class="contact-map-wrapper">
-            <h3 class="contact-map-title">Ubicacion</h3>
+            <h3 class="contact-map-title">Ubicaci&oacute;n</h3>
             <div
                 id="contactMap"
                 class="contact-map-frame"
@@ -277,14 +277,67 @@
         const statusElement = document.getElementById('contactMapStatus');
         if (!mapElement || typeof L === 'undefined') return;
 
-        const address = (mapElement.dataset.address || '').trim() || 'San Martin, Buenos Aires, Argentina';
+        const rawAddress = (mapElement.dataset.address || '').trim();
         const company = (mapElement.dataset.company || 'FLEXS').trim();
         const fallbackCoords = [-34.5745, -58.5348];
+
+        function normalizeAddress(addressValue) {
+            let normalized = String(addressValue || '').trim();
+            if (!normalized) {
+                return 'San Martin, Buenos Aires, Argentina';
+            }
+            normalized = normalized
+                .replace(/\bargentin\b/gi, 'Argentina')
+                .replace(/\bbs\.?\s*as\.?\b/gi, 'Buenos Aires')
+                .replace(/\s+/g, ' ')
+                .trim();
+
+            if (!/argentina/i.test(normalized)) {
+                normalized += ', Argentina';
+            }
+            return normalized;
+        }
+
+        function buildAddressVariants(addressValue) {
+            const variants = [];
+
+            function addVariant(value) {
+                const clean = String(value || '')
+                    .replace(/\s+/g, ' ')
+                    .replace(/\s+,/g, ',')
+                    .replace(/,+/g, ',')
+                    .trim()
+                    .replace(/^,|,$/g, '');
+                if (clean && !variants.includes(clean)) {
+                    variants.push(clean);
+                }
+            }
+
+            const base = normalizeAddress(addressValue);
+            addVariant(base);
+            addVariant(base.replace(/\([^)]*\)/g, ' '));
+            addVariant(base.replace(/\./g, ' ').replace(/\([^)]*\)/g, ' '));
+            addVariant(base.replace(/,\s*argentina\b/i, '') + ', Argentina');
+
+            if (/indalecio\s+gomez\s*4215/i.test(base)) {
+                addVariant('Indalecio Gomez 4215, Villa Lynch, San Martin, Buenos Aires, Argentina');
+                addVariant('Indalecio Gomez 4215, San Martin, Buenos Aires, Argentina');
+                addVariant('Indalecio Gomez 4215, General San Martin, Buenos Aires, Argentina');
+                addVariant('Indalecio Gomez 4215, Villa Lynch, Partido de General San Martin, Buenos Aires, Argentina');
+                addVariant('Indalecio Gomez 4215, Villa Lynch, Buenos Aires, Argentina');
+            }
+
+            return variants.slice(0, 8);
+        }
+
+        const address = normalizeAddress(rawAddress);
+        const addressVariants = buildAddressVariants(rawAddress);
 
         const map = L.map(mapElement, {
             scrollWheelZoom: true,
             zoomControl: true,
         }).setView(fallbackCoords, 13);
+
         setTimeout(function () {
             map.invalidateSize();
         }, 100);
@@ -303,33 +356,100 @@
             statusElement.classList.toggle('is-error', Boolean(hasError));
         }
 
-        setStatus('Mostrando ubicación aproximada. Ajustando ubicación exacta...');
+        function extractNominatimCoords(results) {
+            if (!Array.isArray(results) || !results.length) return null;
+            const lat = Number(results[0].lat);
+            const lon = Number(results[0].lon);
+            if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+            return [lat, lon];
+        }
 
-        fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&q=' + encodeURIComponent(address), {
-            headers: { 'Accept': 'application/json' },
-        })
-            .then(function (response) {
-                if (!response.ok) throw new Error('geocode_failed');
-                return response.json();
-            })
-            .then(function (results) {
-                if (!Array.isArray(results) || !results.length) throw new Error('no_results');
-                const lat = Number(results[0].lat);
-                const lon = Number(results[0].lon);
-                if (!Number.isFinite(lat) || !Number.isFinite(lon)) throw new Error('invalid_coords');
+        function extractPhotonCoords(payload) {
+            const features = payload && payload.features;
+            if (!Array.isArray(features) || !features.length) return null;
+            const coords = features[0] && features[0].geometry && features[0].geometry.coordinates;
+            if (!Array.isArray(coords) || coords.length < 2) return null;
+            const lon = Number(coords[0]);
+            const lat = Number(coords[1]);
+            if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+            return [lat, lon];
+        }
 
-                const realCoords = [lat, lon];
-                map.setView(realCoords, 16);
-                marker.setLatLng(realCoords);
-                marker.bindPopup('<strong>' + company + '</strong><br>' + address).openPopup();
-                setTimeout(function () {
-                    map.invalidateSize();
-                }, 100);
-                setStatus('Ubicación exacta encontrada.');
-            })
-            .catch(function () {
-                setStatus('No se pudo obtener ubicación exacta. Mostrando aproximada.', true);
-            });
+        function applyResolvedLocation(coords) {
+            map.setView(coords, 16);
+            marker.setLatLng(coords);
+            marker.bindPopup('<strong>' + company + '</strong><br>' + address).openPopup();
+            setTimeout(function () {
+                map.invalidateSize();
+            }, 100);
+            setStatus('Ubicacion exacta encontrada.');
+        }
+
+        function getKnownAddressCoords(addressValue) {
+            const normalized = String(addressValue || '').toLowerCase();
+            if (/indalecio\s+g[oó]mez/.test(normalized) && /\b4215\b/.test(normalized)) {
+                return [-34.5953311, -58.5255660];
+            }
+            return null;
+        }
+
+        function geocodeWithNominatim(query) {
+            return fetch(
+                'https://nominatim.openstreetmap.org/search?format=json&limit=1&addressdetails=1&countrycodes=ar&q=' + encodeURIComponent(query),
+                { headers: { 'Accept': 'application/json' } }
+            )
+                .then(function (response) {
+                    if (!response.ok) return null;
+                    return response.json();
+                })
+                .then(extractNominatimCoords)
+                .catch(function () {
+                    return null;
+                });
+        }
+
+        function geocodeWithPhoton(query) {
+            return fetch(
+                'https://photon.komoot.io/api/?limit=1&lang=es&q=' + encodeURIComponent(query),
+                { headers: { 'Accept': 'application/json' } }
+            )
+                .then(function (response) {
+                    if (!response.ok) return null;
+                    return response.json();
+                })
+                .then(extractPhotonCoords)
+                .catch(function () {
+                    return null;
+                });
+        }
+
+        setStatus('Mostrando ubicacion aproximada. Buscando ubicacion exacta...');
+
+        (async function resolveExactLocation() {
+            const knownCoords = getKnownAddressCoords(address);
+            if (knownCoords) {
+                applyResolvedLocation(knownCoords);
+                return;
+            }
+
+            for (const candidate of addressVariants) {
+                const coords = await geocodeWithNominatim(candidate);
+                if (coords) {
+                    applyResolvedLocation(coords);
+                    return;
+                }
+            }
+
+            for (const candidate of addressVariants) {
+                const coords = await geocodeWithPhoton(candidate);
+                if (coords) {
+                    applyResolvedLocation(coords);
+                    return;
+                }
+            }
+
+            setStatus('No se pudo obtener ubicacion exacta. Mostrando aproximada.', true);
+        })();
     })();
 </script>
 {% endblock %}
