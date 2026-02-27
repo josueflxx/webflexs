@@ -29,12 +29,8 @@ def seed_default_template(apps, schema_editor):
     )
     default_columns = [
         ("sku", "SKU"),
-        ("name", "Nombre"),
-        ("supplier", "Proveedor"),
+        ("name", "Articulo"),
         ("price", "Precio"),
-        ("stock", "Stock"),
-        ("primary_category", "Categoria principal"),
-        ("categories", "Categorias"),
     ]
     for index, (key, header) in enumerate(default_columns):
         Column.objects.create(

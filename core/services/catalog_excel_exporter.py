@@ -247,10 +247,14 @@ def build_catalog_workbook(template):
             sheet_config.columns.filter(is_active=True).order_by("order", "id")
         )
         if not columns:
-            fallback_keys = ["sku", "name", "price", "stock"]
+            fallback_columns = [
+                ("sku", "SKU"),
+                ("name", "Articulo"),
+                ("price", "Precio"),
+            ]
             columns = [
-                type("TmpColumn", (), {"key": key, "header": export_columns_map.get(key, key)})
-                for key in fallback_keys
+                type("TmpColumn", (), {"key": key, "header": header})
+                for key, header in fallback_columns
             ]
 
         headers = [

@@ -1432,12 +1432,8 @@ CATALOG_EXCEL_COLUMN_SNAPSHOT_FIELDS = [
 ]
 CATALOG_EXCEL_AUTO_DEFAULT_COLUMNS = [
     ("sku", "SKU"),
-    ("name", "Nombre"),
-    ("supplier", "Proveedor"),
+    ("name", "Articulo"),
     ("price", "Precio"),
-    ("stock", "Stock"),
-    ("primary_category", "Categoria principal"),
-    ("categories", "Categorias"),
 ]
 
 
@@ -1799,11 +1795,11 @@ def catalog_excel_sheet_create(request, template_id):
             sheet.save()
             form.save_m2m()
             if sheet.columns.count() == 0:
-                default_keys = ["sku", "name", "price", "stock"]
-                for idx, key in enumerate(default_keys):
+                for idx, (key, header) in enumerate(CATALOG_EXCEL_AUTO_DEFAULT_COLUMNS):
                     CatalogExcelTemplateColumn.objects.create(
                         sheet=sheet,
                         key=key,
+                        header=header,
                         order=idx,
                         is_active=True,
                     )
