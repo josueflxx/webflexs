@@ -5,7 +5,7 @@ from django.template import Context, Template
 from django.test import TestCase
 from django.urls import reverse
 
-from catalog.models import Product
+from catalog.models import Category, Product
 
 
 class GlobalNumberFormatTests(TestCase):
@@ -26,6 +26,7 @@ class GlobalNumberFormatTests(TestCase):
 
 class SearchSuggestionsTests(TestCase):
     def test_catalog_scope_returns_suggestions(self):
+        Category.objects.create(name="ABT716 Bujes", slug="abt716-bujes", is_active=True)
         Product.objects.create(
             sku="ABT71665100P",
             name="ABRAZADERA TREFILADA DE 7/16 X 65 X 100 PLANA",
@@ -44,6 +45,7 @@ class SearchSuggestionsTests(TestCase):
         payload = response.json()
         values = [item["value"] for item in payload["suggestions"]]
         self.assertIn("ABT71665100P", values)
+        self.assertIn("cat:abt716-bujes", values)
 
     def test_admin_scope_requires_staff(self):
         response = self.client.get(

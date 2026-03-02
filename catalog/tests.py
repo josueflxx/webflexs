@@ -381,6 +381,27 @@ class CatalogAdvancedSearchTests(TestCase):
         first_product = response.context["page_obj"].object_list[0]
         self.assertEqual(first_product.sku, "ABT3480220S")
 
+    def test_search_accepts_compact_diameter_with_unicode_separator(self):
+        response = self.client.get(
+            reverse("catalog"),
+            {"q": "tipo:t 34×80×220"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        page_items = list(response.context["page_obj"].object_list)
+        self.assertEqual(len(page_items), 1)
+        self.assertEqual(page_items[0].sku, "ABT3480220S")
+
+    def test_search_ignores_trailing_token_punctuation(self):
+        response = self.client.get(
+            reverse("catalog"),
+            {"q": "abrazadera, semicurva;"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        skus = [product.sku for product in response.context["page_obj"].object_list]
+        self.assertIn("ABT3480220S", skus)
+
 
 class ProductDetailTemplateTests(TestCase):
     def setUp(self):

@@ -1,5 +1,7 @@
 """Advanced search helpers with safe fallback on non-PostgreSQL backends."""
 
+import re
+
 from django.conf import settings
 from django.db import DatabaseError, connection
 from django.db.models import F, Q
@@ -10,12 +12,125 @@ except Exception:  # pragma: no cover - backend optional
     TrigramSimilarity = None
 
 
+SEARCH_TOKEN_PATTERN = re.compile(r'"([^"]+)"|(\S+)')
+TOKEN_EDGE_TRIM_PATTERN = re.compile(r"^[,;|]+|[,;|]+$")
+
+
 def build_text_query(fields, term):
     """Build OR query for icontains over many fields."""
     query = Q()
     for field in fields:
         query |= Q(**{f"{field}__icontains": term})
     return query
+
+
+def sanitize_search_token(value):
+    """
+    Normalize free-text search token:
+    - trim spaces and trailing punctuation noise
+    - normalize unicode multiply sign used in dimensions
+    """
+    cleaned = str(value or "").strip()
+    if not cleaned:
+        return ""
+    cleaned = TOKEN_EDGE_TRIM_PATTERN.sub("", cleaned).strip()
+    cleaned = cleaned.replace("×", "x")
+    cleaned = re.sub(r"\s+", " ", cleaned)
+    return cleaned
+
+
+def extract_search_tokens(raw_query):
+    tokens = []
+    for match in SEARCH_TOKEN_PATTERN.finditer(str(raw_query or "")):
+        token = sanitize_search_token(match.group(1) or match.group(2) or "")
+        if token:
+            tokens.append((token, bool(match.group(1))))
+    return tokens
+
+
+def parse_text_search_query(
+    raw_query,
+    *,
+    max_include=8,
+    max_exclude=8,
+    max_phrases=4,
+):
+    """
+    Generic parser used by admin/catalog-like search bars.
+    Supports:
+    - "quoted phrases"
+    - exclusions via -term
+    """
+    raw = sanitize_search_token(raw_query)
+    parsed = {
+        "raw": raw,
+        "phrases": [],
+        "include_terms": [],
+        "exclude_terms": [],
+    }
+    if not raw:
+        return parsed
+
+    for token, is_phrase in extract_search_tokens(raw):
+        cleaned = sanitize_search_token(token)
+        if not cleaned:
+            continue
+
+        is_exclusion = cleaned.startswith("-") and len(cleaned) > 1
+        if is_exclusion:
+            cleaned = sanitize_search_token(cleaned[1:])
+            if not cleaned:
+                continue
+
+        if is_phrase:
+            parsed["phrases"].append(cleaned)
+        elif is_exclusion:
+            parsed["exclude_terms"].append(cleaned)
+        else:
+            parsed["include_terms"].append(cleaned)
+
+    parsed["include_terms"] = parsed["include_terms"][:max_include]
+    parsed["exclude_terms"] = parsed["exclude_terms"][:max_exclude]
+    parsed["phrases"] = parsed["phrases"][:max_phrases]
+    return parsed
+
+
+def apply_parsed_text_search(
+    queryset,
+    parsed_query,
+    fields,
+    *,
+    order_by_similarity=False,
+    similarity_threshold=0.20,
+):
+    """
+    Apply parsed query over a set of fields:
+    - all include terms and phrases must match (AND across terms, OR across fields)
+    - exclude terms are removed
+    """
+    if not parsed_query or not parsed_query.get("raw"):
+        return queryset
+
+    result = queryset
+    for phrase in parsed_query.get("phrases", []):
+        result = apply_text_search(
+            result,
+            phrase,
+            fields,
+            order_by_similarity=order_by_similarity,
+            similarity_threshold=similarity_threshold,
+        )
+    for term in parsed_query.get("include_terms", []):
+        result = apply_text_search(
+            result,
+            term,
+            fields,
+            order_by_similarity=order_by_similarity,
+            similarity_threshold=similarity_threshold,
+        )
+    for term in parsed_query.get("exclude_terms", []):
+        result = result.exclude(build_text_query(fields, term))
+    return result
 
 
 def _can_use_trigram():
@@ -26,7 +141,14 @@ def _can_use_trigram():
     )
 
 
-def apply_text_search(queryset, term, fields):
+def apply_text_search(
+    queryset,
+    term,
+    fields,
+    *,
+    order_by_similarity=True,
+    similarity_threshold=0.20,
+):
     """
     Apply robust text search:
     - default: icontains on all fields
@@ -45,11 +167,13 @@ def apply_text_search(queryset, term, fields):
         for field in fields:
             current = TrigramSimilarity(field, cleaned)
             similarity_sum = current if similarity_sum is None else similarity_sum + current
-        return (
+        result = (
             queryset.annotate(_search_similarity=similarity_sum)
-            .filter(base_query | Q(_search_similarity__gte=0.20))
-            .order_by(F("_search_similarity").desc(nulls_last=True))
+            .filter(base_query | Q(_search_similarity__gte=similarity_threshold))
         )
+        if order_by_similarity:
+            result = result.order_by(F("_search_similarity").desc(nulls_last=True))
+        return result
     except DatabaseError:
         # If extension is not enabled or query fails, fallback transparently.
         return queryset.filter(base_query)

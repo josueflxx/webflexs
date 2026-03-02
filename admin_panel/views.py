@@ -25,6 +25,7 @@ from django.utils.text import slugify
 import json
 import os
 import re
+from io import BytesIO
 from datetime import datetime, time, timedelta
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from urllib.parse import urlencode, parse_qs
@@ -76,7 +77,6 @@ from catalog.services.clamp_quoter import (
     parse_int_value,
 )
 from catalog.services.clamp_request_products import (
-    create_or_update_quote_product,
     publish_clamp_request_product,
 )
 from catalog.services.category_assignment import (
@@ -88,7 +88,12 @@ from catalog.services.category_assignment import (
 )
 from core.services.import_manager import ImportTaskManager
 from core.services.background_jobs import dispatch_import_job
-from core.services.advanced_search import apply_text_search
+from core.services.advanced_search import (
+    apply_text_search,
+    apply_parsed_text_search,
+    parse_text_search_query,
+    sanitize_search_token,
+)
 from core.services.catalog_excel_exporter import build_catalog_workbook, build_export_filename
 from core.services.audit import log_admin_action, log_admin_change, model_snapshot
 import traceback
@@ -127,6 +132,31 @@ def can_delete_client_record(user):
     Client deletion is restricted to primary superadmin.
     """
     return is_primary_superadmin(user)
+
+
+def normalize_admin_search_query(raw_query):
+    """
+    Shared admin search parser for all panel lists.
+    """
+    return parse_text_search_query(
+        raw_query,
+        max_include=10,
+        max_exclude=10,
+        max_phrases=5,
+    )
+
+
+def apply_admin_text_search(queryset, raw_query, fields):
+    parsed = normalize_admin_search_query(raw_query)
+    if not parsed.get("raw"):
+        return queryset, ""
+    filtered = apply_parsed_text_search(
+        queryset,
+        parsed,
+        fields,
+        order_by_similarity=False,
+    )
+    return filtered, parsed["raw"]
 
 
 def parse_admin_decimal_input(raw_value, field_label, min_value=None, max_value=None):
@@ -631,13 +661,11 @@ def get_product_queryset(data):
     products = Product.objects.select_related('category', 'supplier_ref').prefetch_related('categories').all()
     
     # Search
-    search = data.get('q', '').strip()
-    if search:
-        products = apply_text_search(
-            products,
-            search,
-            ["sku", "name", "supplier", "supplier_ref__name"],
-        )
+    products, search = apply_admin_text_search(
+        products,
+        data.get('q', ''),
+        ["sku", "name", "supplier", "supplier_ref__name", "description", "filter_1", "filter_2", "filter_3"],
+    )
     
     # Category filter
     category_id = (data.get('category', '') or '').strip()
@@ -1142,23 +1170,23 @@ def product_bulk_status_update(request):
 @staff_member_required
 def supplier_list(request):
     """Supplier directory with KPI summary."""
-    search = request.GET.get('q', '').strip()
+    search = sanitize_search_token(request.GET.get('q', ''))
     only_active = request.GET.get('only_active') == '1'
 
-    suppliers_qs = (
-        Supplier.objects.all()
-        .annotate(
-            products_count=Count('products', distinct=True),
-            active_products_count=Count('products', filter=Q(products__is_active=True), distinct=True),
-            stock_total=Sum('products__stock'),
-        )
-        .order_by('name')
-    )
+    suppliers_qs = Supplier.objects.all()
 
     if only_active:
         suppliers_qs = suppliers_qs.filter(is_active=True)
-    if search:
-        suppliers_qs = suppliers_qs.filter(name__icontains=search)
+    suppliers_qs, search = apply_admin_text_search(
+        suppliers_qs,
+        search,
+        ["name", "normalized_name", "slug"],
+    )
+    suppliers_qs = suppliers_qs.annotate(
+        products_count=Count('products', distinct=True),
+        active_products_count=Count('products', filter=Q(products__is_active=True), distinct=True),
+        stock_total=Sum('products__stock'),
+    ).order_by('name')
 
     uncategorized_products_count = Product.objects.filter(
         Q(supplier='') | Q(supplier__isnull=True) | Q(supplier_ref__isnull=True)
@@ -1189,13 +1217,11 @@ def build_supplier_products_queryset(supplier, req_get):
         supplier_ref=supplier
     )
 
-    search = req_get.get('q', '').strip()
-    if search:
-        products = products.filter(
-            Q(sku__icontains=search)
-            | Q(name__icontains=search)
-            | Q(description__icontains=search)
-        )
+    products, search = apply_admin_text_search(
+        products,
+        req_get.get('q', ''),
+        ["sku", "name", "description", "supplier", "supplier_ref__name"],
+    )
 
     active_filter = req_get.get('active', '').strip()
     if active_filter == '1':
@@ -1489,14 +1515,15 @@ def _replace_sheet_columns(sheet, columns_spec):
 
 @staff_member_required
 def catalog_excel_template_list(request):
-    search = request.GET.get("q", "").strip()
+    search = sanitize_search_token(request.GET.get("q", ""))
     only_active = request.GET.get("only_active") == "1"
 
     templates_qs = CatalogExcelTemplate.objects.all().order_by("name")
-    if search:
-        templates_qs = templates_qs.filter(
-            Q(name__icontains=search) | Q(description__icontains=search)
-        )
+    templates_qs, search = apply_admin_text_search(
+        templates_qs,
+        search,
+        ["name", "description", "slug"],
+    )
     if only_active:
         templates_qs = templates_qs.filter(is_active=True)
 
@@ -2030,9 +2057,11 @@ def supplier_unassigned(request):
         Q(supplier='') | Q(supplier__isnull=True) | Q(supplier_ref__isnull=True)
     ).order_by('name')
 
-    search = request.GET.get('q', '').strip()
-    if search:
-        products = products.filter(Q(sku__icontains=search) | Q(name__icontains=search))
+    products, search = apply_admin_text_search(
+        products,
+        request.GET.get('q', ''),
+        ["sku", "name", "description", "supplier", "supplier_ref__name"],
+    )
 
     paginator = Paginator(products, 40)
     page_number = request.GET.get('page')
@@ -2308,7 +2337,7 @@ def payment_list(request):
 
         return redirect('admin_payment_list')
 
-    q = request.GET.get('q', '').strip()
+    q = sanitize_search_token(request.GET.get('q', ''))
     client_id = request.GET.get('client_id', '').strip()
     order_id = request.GET.get('order_id', '').strip().replace('#', '')
 
@@ -2331,17 +2360,34 @@ def payment_list(request):
     if order_id.isdigit():
         payments = payments.filter(order_id=int(order_id))
     if q:
-        q_filter = (
-            Q(client_profile__company_name__icontains=q)
-            | Q(client_profile__user__username__icontains=q)
-            | Q(client_profile__cuit_dni__icontains=q)
-            | Q(reference__icontains=q)
-            | Q(notes__icontains=q)
+        parsed_q = normalize_admin_search_query(q)
+        text_filtered = apply_parsed_text_search(
+            payments,
+            parsed_q,
+            [
+                "client_profile__company_name",
+                "client_profile__user__username",
+                "client_profile__cuit_dni",
+                "reference",
+                "notes",
+            ],
+            order_by_similarity=False,
         )
-        if q.isdigit():
-            q_filter |= Q(order__id=int(q))
-            q_filter |= Q(id=int(q))
-        payments = payments.filter(q_filter)
+        numeric_terms = set()
+        if parsed_q.get("raw", "").isdigit():
+            numeric_terms.add(int(parsed_q["raw"]))
+        for term in [*parsed_q.get("phrases", []), *parsed_q.get("include_terms", [])]:
+            if str(term).isdigit():
+                numeric_terms.add(int(term))
+        if numeric_terms:
+            numeric_query = Q()
+            for num in numeric_terms:
+                numeric_query |= Q(order__id=num) | Q(id=num)
+            payments = payments.filter(
+                Q(pk__in=text_filtered.values("pk")) | Q(pk__in=payments.filter(numeric_query).values("pk"))
+            )
+        else:
+            payments = text_filtered
 
     summary = payments.filter(is_cancelled=False).aggregate(
         total=Sum('amount'),
@@ -2391,6 +2437,124 @@ def payment_list(request):
 
 # ===================== CLAMP QUOTER =====================
 
+def _format_currency_ars(value):
+    decimal_value = Decimal(str(value or "0")).quantize(Decimal("0.01"))
+    formatted = f"{decimal_value:,.2f}"
+    return formatted.replace(",", "X").replace(".", ",").replace("X", ".")
+
+
+def _build_clamp_quote_download_response(quote):
+    """
+    Build a PDF-like downloadable quote voucher.
+    Falls back to plain text if reportlab is unavailable.
+    """
+    filename = f"cotizacion_{quote.quote_number.lower()}.pdf"
+    company_name = SiteSettings.get_settings().company_name or "FLEXS"
+    client_label = quote.client_name or "Cliente no especificado"
+    closed_label = quote.closed_at.strftime("%d/%m/%Y %H:%M") if quote.closed_at else "-"
+    created_label = quote.created_at.strftime("%d/%m/%Y %H:%M")
+    clamp_type_label = dict(ClampQuotation.CLAMP_TYPE_CHOICES).get(quote.clamp_type, quote.clamp_type)
+
+    try:
+        from reportlab.lib.pagesizes import A4
+        from reportlab.lib.units import mm
+        from reportlab.pdfgen import canvas
+    except Exception:
+        payload = (
+            f"{company_name}\n"
+            f"COTIZACION {quote.quote_number}\n"
+            f"Fecha: {created_label}\n"
+            f"Cliente: {client_label}\n"
+            f"Estado: {quote.get_status_display()}\n"
+            f"Cerrada: {closed_label}\n"
+            "\n"
+            f"Descripcion: {quote.description}\n"
+            f"Tipo abrazadera: {clamp_type_label}\n"
+            f"Medida: {quote.diameter} x {quote.width_mm} x {quote.length_mm} {quote.profile_type}\n"
+            f"Cantidad: {quote.quantity}\n"
+            f"Precio unitario: ${_format_currency_ars(quote.final_price)}\n"
+            f"Total cotizado: ${_format_currency_ars(quote.total_price)}\n"
+        )
+        response = HttpResponse(payload, content_type="text/plain; charset=utf-8")
+        response["Content-Disposition"] = (
+            f'attachment; filename="cotizacion_{quote.quote_number.lower()}.txt"'
+        )
+        return response
+
+    buffer = BytesIO()
+    c = canvas.Canvas(buffer, pagesize=A4)
+    page_w, page_h = A4
+    left = 20 * mm
+    right = page_w - (20 * mm)
+    y = page_h - (20 * mm)
+
+    c.setFont("Helvetica-Bold", 16)
+    c.drawString(left, y, company_name)
+    c.setFont("Helvetica-Bold", 14)
+    c.drawString(left, y - (8 * mm), "COMPROBANTE DE COTIZACION")
+    c.setFont("Helvetica", 10)
+    c.drawRightString(right, y, f"Nro: {quote.quote_number}")
+    c.drawRightString(right, y - (6 * mm), f"Fecha: {created_label}")
+    c.drawRightString(right, y - (12 * mm), f"Estado: {quote.get_status_display()}")
+
+    y -= 24 * mm
+    c.setFont("Helvetica-Bold", 11)
+    c.drawString(left, y, "Cliente")
+    c.setFont("Helvetica", 10)
+    c.drawString(left, y - (5 * mm), client_label)
+    c.drawString(left, y - (10 * mm), f"Cierre: {closed_label}")
+
+    y -= 20 * mm
+    c.setFont("Helvetica-Bold", 11)
+    c.drawString(left, y, "Detalle de cotizacion")
+    c.setFont("Helvetica", 10)
+    c.drawString(left, y - (6 * mm), quote.description)
+    c.drawString(
+        left,
+        y - (12 * mm),
+        f"Tipo: {clamp_type_label} | Medida: {quote.diameter} x {quote.width_mm} x {quote.length_mm} {quote.profile_type}",
+    )
+    c.drawString(
+        left,
+        y - (18 * mm),
+        f"Base: ${_format_currency_ars(quote.base_cost)} | Lista: {quote.get_price_list_display()}",
+    )
+
+    y -= 32 * mm
+    c.line(left, y, right, y)
+    y -= 7 * mm
+    c.setFont("Helvetica-Bold", 10)
+    c.drawString(left, y, "Cantidad")
+    c.drawString(left + (45 * mm), y, "Precio unitario")
+    c.drawString(left + (95 * mm), y, "Total")
+    y -= 4 * mm
+    c.line(left, y, right, y)
+    y -= 8 * mm
+    c.setFont("Helvetica", 10)
+    c.drawString(left, y, str(quote.quantity))
+    c.drawString(left + (45 * mm), y, f"${_format_currency_ars(quote.final_price)}")
+    c.setFont("Helvetica-Bold", 10)
+    c.drawString(left + (95 * mm), y, f"${_format_currency_ars(quote.total_price)}")
+    y -= 8 * mm
+    c.line(left, y, right, y)
+
+    y -= 14 * mm
+    c.setFont("Helvetica", 9)
+    c.drawString(left, y, "Documento informativo. No fiscal.")
+    if quote.closed_note:
+        y -= 6 * mm
+        c.drawString(left, y, f"Nota de cierre: {quote.closed_note[:120]}")
+
+    c.showPage()
+    c.save()
+    pdf_bytes = buffer.getvalue()
+    buffer.close()
+
+    response = HttpResponse(pdf_bytes, content_type="application/pdf")
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    return response
+
+
 @staff_member_required
 def clamp_quoter(request):
     """Mini cotizador de abrazaderas."""
@@ -2406,8 +2570,8 @@ def clamp_quoter(request):
         "diameter": "7/16",
         "width_mm": "",
         "length_mm": "",
+        "quote_quantity": "1",
         "profile_type": "PLANA",
-        "product_stock": "1",
     }
 
     form_values = default_form.copy()
@@ -2424,8 +2588,8 @@ def clamp_quoter(request):
             "diameter": str(request.POST.get("diameter", "7/16")).strip(),
             "width_mm": str(request.POST.get("width_mm", "")).strip(),
             "length_mm": str(request.POST.get("length_mm", "")).strip(),
+            "quote_quantity": str(request.POST.get("quote_quantity", "1")).strip() or "1",
             "profile_type": str(request.POST.get("profile_type", "PLANA")).strip().upper(),
-            "product_stock": str(request.POST.get("product_stock", "1")).strip() or "1",
         })
         if (
             form_values["clamp_type"] == "laminada"
@@ -2434,7 +2598,7 @@ def clamp_quoter(request):
             form_values["diameter"] = CLAMP_LAMINATED_ALLOWED_DIAMETERS[0]
 
         action = str(request.POST.get("action", "save_quote")).strip().lower()
-        if action in {"save_quote", "create_product"}:
+        if action == "save_quote":
             try:
                 result = calculate_clamp_quote(request.POST)
                 selected_key = str(request.POST.get("price_list_key", "")).strip()
@@ -2442,79 +2606,54 @@ def clamp_quoter(request):
                 selected_price = selected_map.get(selected_key)
                 if not selected_price:
                     raise ValueError("Selecciona una lista valida para guardar.")
-                if action == "save_quote":
-                    saved_quote = ClampQuotation.objects.create(
-                        client_name=result["inputs"]["client_name"],
-                        dollar_rate=result["inputs"]["dollar_rate"],
-                        steel_price_usd=result["inputs"]["steel_price_usd"],
-                        supplier_discount_pct=result["inputs"]["supplier_discount_pct"],
-                        general_increase_pct=result["inputs"]["general_increase_pct"],
-                        clamp_type=result["inputs"]["clamp_type"],
-                        is_zincated=result["inputs"]["is_zincated"],
-                        diameter=result["inputs"]["diameter"],
-                        width_mm=result["inputs"]["width_mm"],
-                        length_mm=result["inputs"]["length_mm"],
-                        profile_type=result["inputs"]["profile_type"],
-                        description=result["description"],
-                        base_cost=result["base_cost"],
-                        price_list=selected_price["key"],
-                        final_price=selected_price["final_price"],
-                        created_by=request.user if request.user.is_authenticated else None,
-                    )
-                    log_admin_action(
-                        request,
-                        action="clamp_quote_saved",
-                        target_type="clamp_quotation",
-                        target_id=saved_quote.pk,
-                        details={
-                            "price_list": selected_price["label"],
-                            "final_price": f"{selected_price['final_price']:.2f}",
-                            "description": result["description"],
-                            "generated_code": result.get("generated_code", ""),
-                            "client_name": result["inputs"]["client_name"],
-                        },
-                    )
-                    messages.success(request, f"Cotizacion guardada en {selected_price['label']}.")
-                    return redirect("admin_clamp_quoter")
-
-                product_stock = parse_int_value(
-                    request.POST.get("product_stock", "1"),
-                    "Stock inicial",
+                quote_quantity = parse_int_value(
+                    request.POST.get("quote_quantity", "1"),
+                    "Cantidad cotizada",
                     min_value=1,
                 )
-                product, created, price_row = create_or_update_quote_product(
-                    quote_result=result,
-                    price_list_key=selected_price["key"],
-                    stock=product_stock,
-                    activate_product=True,
+                saved_quote = ClampQuotation.objects.create(
+                    client_name=result["inputs"]["client_name"],
+                    dollar_rate=result["inputs"]["dollar_rate"],
+                    steel_price_usd=result["inputs"]["steel_price_usd"],
+                    supplier_discount_pct=result["inputs"]["supplier_discount_pct"],
+                    general_increase_pct=result["inputs"]["general_increase_pct"],
+                    clamp_type=result["inputs"]["clamp_type"],
+                    is_zincated=result["inputs"]["is_zincated"],
+                    diameter=result["inputs"]["diameter"],
+                    width_mm=result["inputs"]["width_mm"],
+                    length_mm=result["inputs"]["length_mm"],
+                    profile_type=result["inputs"]["profile_type"],
+                    description=result["description"],
+                    base_cost=result["base_cost"],
+                    price_list=selected_price["key"],
+                    final_price=selected_price["final_price"],
+                    quantity=quote_quantity,
+                    created_by=request.user if request.user.is_authenticated else None,
                 )
                 log_admin_action(
                     request,
-                    action="clamp_quote_publish_product",
-                    target_type="product",
-                    target_id=product.pk,
+                    action="clamp_quote_saved",
+                    target_type="clamp_quotation",
+                    target_id=saved_quote.pk,
                     details={
-                        "created": created,
-                        "sku": product.sku,
-                        "price_list": price_row.get("label", selected_price["label"]),
+                        "price_list": selected_price["label"],
                         "final_price": f"{selected_price['final_price']:.2f}",
-                        "base_cost": f"{result['base_cost']:.2f}",
+                        "quantity": quote_quantity,
+                        "total_price": f"{saved_quote.total_price:.2f}",
+                        "description": result["description"],
                         "generated_code": result.get("generated_code", ""),
+                        "client_name": result["inputs"]["client_name"],
                     },
                 )
-                if created:
-                    messages.success(
-                        request,
-                        f"Producto creado desde cotizador: {product.sku}.",
-                    )
-                else:
-                    messages.success(
-                        request,
-                        f"Producto existente actualizado desde cotizador: {product.sku}.",
-                    )
-                return redirect("admin_product_edit", pk=product.pk)
+                messages.success(
+                    request,
+                    f"Cotizacion guardada en {selected_price['label']} por ${_format_currency_ars(saved_quote.total_price)}.",
+                )
+                return redirect("admin_clamp_quoter")
             except ValueError as exc:
                 messages.error(request, str(exc))
+        else:
+            messages.error(request, "Este modulo ahora solo permite generar y guardar cotizaciones.")
 
     saved_quotes = list(ClampQuotation.objects.select_related("created_by").all()[:30])
     for quote in saved_quotes:
@@ -2565,6 +2704,54 @@ def clamp_quoter(request):
     })
 
 
+@staff_member_required
+@require_POST
+def clamp_quote_close(request, quote_id):
+    """Close a saved quote to lock it and allow voucher download."""
+    quote = get_object_or_404(ClampQuotation, pk=quote_id)
+    close_note = str(request.POST.get("close_note", "")).strip()
+    changed = quote.close(actor=request.user, note=close_note)
+
+    log_admin_action(
+        request,
+        action="clamp_quote_close",
+        target_type="clamp_quotation",
+        target_id=quote.pk,
+        details={
+            "changed": changed,
+            "status": quote.status,
+            "closed_note": quote.closed_note,
+        },
+    )
+
+    if changed:
+        messages.success(request, f"Cotizacion {quote.quote_number} cerrada. Ya podes descargar el comprobante.")
+    else:
+        messages.info(request, f"La cotizacion {quote.quote_number} ya estaba cerrada.")
+    return redirect("admin_clamp_quoter")
+
+
+@staff_member_required
+def clamp_quote_download(request, quote_id):
+    """Download a closed quote voucher."""
+    quote = get_object_or_404(
+        ClampQuotation.objects.select_related("created_by", "closed_by"),
+        pk=quote_id,
+    )
+    if quote.status != ClampQuotation.STATUS_CLOSED:
+        messages.warning(request, "Primero cerra la cotizacion para descargar el comprobante.")
+        return redirect("admin_clamp_quoter")
+
+    log_admin_action(
+        request,
+        action="clamp_quote_download",
+        target_type="clamp_quotation",
+        target_id=quote.pk,
+        details={"quote_number": quote.quote_number},
+    )
+    return _build_clamp_quote_download_response(quote)
+
+
 def _find_admin_clamp_request_matches(clamp_request, limit=20):
     """Find products with same technical clamp dimensions for admin review."""
     queryset = (
@@ -2587,7 +2774,7 @@ def _find_admin_clamp_request_matches(clamp_request, limit=20):
 def clamp_request_list(request):
     """Admin queue for client custom clamp requests."""
     status_filter = str(request.GET.get("status", ClampMeasureRequest.STATUS_PENDING)).strip().lower()
-    search = str(request.GET.get("q", "")).strip()
+    search = sanitize_search_token(request.GET.get("q", ""))
 
     queryset = ClampMeasureRequest.objects.select_related("client_user", "processed_by")
 
@@ -2600,12 +2787,17 @@ def clamp_request_list(request):
         status_filter = "all"
 
     if search:
-        queryset = queryset.filter(
-            Q(client_name__icontains=search)
-            | Q(client_email__icontains=search)
-            | Q(client_phone__icontains=search)
-            | Q(description__icontains=search)
-            | Q(generated_code__icontains=search)
+        queryset = apply_parsed_text_search(
+            queryset,
+            normalize_admin_search_query(search),
+            [
+                "client_name",
+                "client_email",
+                "client_phone",
+                "description",
+                "generated_code",
+            ],
+            order_by_similarity=False,
         )
 
     status_summary = (
@@ -2999,13 +3191,11 @@ def client_list(request):
     """Client list with search."""
     clients = ClientProfile.objects.select_related('user').all()
     
-    search = request.GET.get('q', '').strip()
-    if search:
-        clients = clients.filter(
-            Q(company_name__icontains=search) |
-            Q(user__username__icontains=search) |
-            Q(cuit_dni__icontains=search)
-        )
+    clients, search = apply_admin_text_search(
+        clients,
+        request.GET.get('q', ''),
+        ["company_name", "user__username", "cuit_dni", "user__email"],
+    )
     
     paginator = Paginator(clients.order_by('-created_at'), 50)
     page = request.GET.get('page', 1)
@@ -3084,17 +3274,21 @@ def client_order_history(request, pk):
     """Show order history for one client profile."""
     client = get_object_or_404(ClientProfile.objects.select_related('user'), pk=pk)
 
-    orders = (
-        Order.objects.select_related('user')
-        .prefetch_related('items')
-        .filter(user=client.user)
-    )
+    if client.user_id:
+        orders = (
+            Order.objects.select_related('user')
+            .prefetch_related('items')
+            .filter(user_id=client.user_id)
+        )
+    else:
+        orders = Order.objects.none()
 
     status = request.GET.get('status', '').strip()
+    orders_filtered = orders
     if status:
-        orders = orders.filter(status=status)
+        orders_filtered = orders_filtered.filter(status=status)
 
-    summary = orders.aggregate(
+    summary = orders_filtered.aggregate(
         orders_count=Count('id'),
         total_amount=Sum('total'),
         avg_ticket=Avg('total'),
@@ -3108,7 +3302,7 @@ def client_order_history(request, pk):
         last_order_at=Max('created_at'),
     )
 
-    paginator = Paginator(orders.order_by('-created_at'), 30)
+    paginator = Paginator(orders_filtered.order_by('-created_at'), 30)
     page = request.GET.get('page', 1)
     page_obj = paginator.get_page(page)
 
@@ -3132,12 +3326,104 @@ def client_order_history(request, pk):
         running_balance += tx.amount
         debit = tx.amount if tx.amount > 0 else Decimal('0.00')
         credit = abs(tx.amount) if tx.amount < 0 else Decimal('0.00')
+        doc_category = 'account'
+        order_status = ''
+
+        if tx.transaction_type == ClientTransaction.TYPE_PAYMENT:
+            type_label = 'Recibo de pago'
+            doc_category = 'payment'
+            if tx.payment_id:
+                number_label = f'RP{tx.payment_id:07d}'
+            else:
+                number_label = '-'
+        elif tx.transaction_type == ClientTransaction.TYPE_ORDER_CHARGE:
+            order_obj = tx.order
+            if order_obj:
+                order_status = order_obj.status
+                if order_obj.saas_document_number or order_obj.saas_document_type:
+                    doc_category = 'invoice'
+                    type_label = order_obj.saas_document_type or 'Factura'
+                    number_label = order_obj.saas_document_number or f'FC{order_obj.pk:07d}'
+                elif order_obj.status in {Order.STATUS_SHIPPED, Order.STATUS_DELIVERED}:
+                    doc_category = 'remito'
+                    type_label = 'Remito'
+                    number_label = f'RM{order_obj.pk:07d}'
+                elif order_obj.status == Order.STATUS_DRAFT:
+                    doc_category = 'quote'
+                    type_label = 'Cotizacion'
+                    number_label = f'CT{order_obj.pk:07d}'
+                else:
+                    doc_category = 'order'
+                    type_label = 'Pedido'
+                    number_label = f'PD{order_obj.pk:07d}'
+            else:
+                doc_category = 'order'
+                type_label = 'Pedido'
+                number_label = f'PD{tx.order_id:07d}' if tx.order_id else '-'
+        else:
+            type_label = 'Ajuste'
+            doc_category = 'account'
+            number_label = f'AJ{tx.pk:07d}'
+
         ledger_rows.append({
             'tx': tx,
             'debit': debit,
             'credit': credit,
             'running_balance': running_balance,
+            'type_label': type_label,
+            'number_label': number_label,
+            'doc_category': doc_category,
+            'order_status': order_status,
         })
+
+    ledger_tab = request.GET.get('ledger_tab', 'account').strip().lower()
+    valid_ledger_tabs = {'account', 'payments', 'orders', 'invoices', 'remitos', 'quotes'}
+    if ledger_tab not in valid_ledger_tabs:
+        ledger_tab = 'account'
+
+    if ledger_tab == 'payments':
+        ledger_rows_filtered = [row for row in ledger_rows if row['doc_category'] == 'payment']
+    elif ledger_tab == 'orders':
+        ledger_rows_filtered = [row for row in ledger_rows if row['doc_category'] == 'order']
+        if status:
+            ledger_rows_filtered = [
+                row
+                for row in ledger_rows_filtered
+                if row['order_status'] == status
+            ]
+    elif ledger_tab == 'invoices':
+        ledger_rows_filtered = [row for row in ledger_rows if row['doc_category'] == 'invoice']
+    elif ledger_tab == 'remitos':
+        ledger_rows_filtered = [row for row in ledger_rows if row['doc_category'] == 'remito']
+    elif ledger_tab == 'quotes':
+        ledger_rows_filtered = [row for row in ledger_rows if row['doc_category'] == 'quote']
+    else:
+        ledger_rows_filtered = ledger_rows
+
+    ledger_show_all = request.GET.get('show_all') == '1'
+    limit_raw = request.GET.get('limit', '80').strip()
+    try:
+        ledger_limit = max(20, min(int(limit_raw), 500))
+    except ValueError:
+        ledger_limit = 80
+    if request.GET.get('more') == '1':
+        ledger_limit = min(ledger_limit + 80, 500)
+    if ledger_show_all:
+        ledger_rows_visible = ledger_rows_filtered
+    else:
+        ledger_rows_visible = ledger_rows_filtered[:ledger_limit]
+    ledger_hidden_count = max(0, len(ledger_rows_filtered) - len(ledger_rows_visible))
+    open_orders = list(
+        orders.filter(
+            status__in=[
+                Order.STATUS_DRAFT,
+                Order.STATUS_CONFIRMED,
+                Order.STATUS_PREPARING,
+                Order.STATUS_SHIPPED,
+            ]
+        )
+        .order_by('-created_at')[:8]
+    )
 
     return render(request, 'admin_panel/clients/order_history.html', {
         'client': client,
@@ -3166,7 +3452,21 @@ def client_order_history(request, pk):
             'payments_count': payments_summary.get('payments_count') or 0,
             'last_payment_at': payments_summary.get('last_payment_at'),
         },
-        'ledger_rows': ledger_rows,
+        'ledger_rows': ledger_rows_visible,
+        'ledger_rows_total': len(ledger_rows_filtered),
+        'ledger_hidden_count': ledger_hidden_count,
+        'ledger_show_all': ledger_show_all,
+        'ledger_limit': ledger_limit,
+        'ledger_tab': ledger_tab,
+        'ledger_tabs': [
+            {'key': 'account', 'label': 'Cuenta Corriente'},
+            {'key': 'payments', 'label': 'Pagos'},
+            {'key': 'invoices', 'label': 'Facturas'},
+            {'key': 'remitos', 'label': 'Remitos'},
+            {'key': 'orders', 'label': 'Pedidos'},
+            {'key': 'quotes', 'label': 'Presupuestos'},
+        ],
+        'open_orders': open_orders,
     })
 
 
@@ -3713,14 +4013,14 @@ def admin_user_list(request):
     """
     Superadmin-only list to manage admin accounts and permissions.
     """
-    search = request.GET.get('q', '').strip()
+    search = sanitize_search_token(request.GET.get('q', ''))
     admins = User.objects.filter(is_staff=True).order_by('username')
     if search:
-        admins = admins.filter(
-            Q(username__icontains=search)
-            | Q(first_name__icontains=search)
-            | Q(last_name__icontains=search)
-            | Q(email__icontains=search)
+        admins = apply_parsed_text_search(
+            admins,
+            normalize_admin_search_query(search),
+            ["username", "first_name", "last_name", "email"],
+            order_by_similarity=False,
         )
 
     return render(
@@ -3811,7 +4111,7 @@ def admin_user_permissions(request, user_id):
 @staff_member_required
 def category_list(request):
     """Category list."""
-    search = request.GET.get('q', '').strip()
+    search = sanitize_search_token(request.GET.get('q', ''))
     status = request.GET.get('status', 'all').strip().lower()
     focus_raw = request.GET.get('focus', '').strip()
 
@@ -3833,7 +4133,17 @@ def category_list(request):
         child_index.setdefault(cat.parent_id, []).append(cat.id)
 
     if search:
-        matched_ids = {c.id for c in filtered_categories if search.lower() in c.name.lower()}
+        parsed_search = normalize_admin_search_query(search)
+        include_terms = [*parsed_search.get('phrases', []), *parsed_search.get('include_terms', [])]
+        exclude_terms = parsed_search.get('exclude_terms', [])
+
+        def _matches(cat):
+            haystack = cat.name.lower()
+            include_ok = all(term.lower() in haystack for term in include_terms) if include_terms else True
+            exclude_ok = all(term.lower() not in haystack for term in exclude_terms)
+            return include_ok and exclude_ok
+
+        matched_ids = {c.id for c in filtered_categories if _matches(c)}
         visible_ids = set(matched_ids)
 
         # Keep the path to root visible so matches remain understandable in the tree.
@@ -4380,9 +4690,11 @@ def category_manage_products(request, pk):
     def get_filtered_queryset(req_data):
         qs = Product.objects.select_related('category').prefetch_related('categories').all()
 
-        search = req_data.get('q', '').strip()
-        if search:
-            qs = qs.filter(Q(sku__icontains=search) | Q(name__icontains=search))
+        qs, search = apply_admin_text_search(
+            qs,
+            req_data.get('q', ''),
+            ["sku", "name", "description", "supplier", "supplier_ref__name"],
+        )
 
         status = req_data.get('status')
         if status == 'active':

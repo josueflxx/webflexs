@@ -4,6 +4,7 @@ Catalog app views - Product listing and detail.
 import json
 import re
 from decimal import Decimal
+from functools import lru_cache
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -37,9 +38,10 @@ CLAMP_REQUEST_DEFAULT_GENERAL_INCREASE = Decimal("40")
 
 SEARCH_TOKEN_PATTERN = re.compile(r'"([^"]+)"|(\S+)')
 DIMENSIONS_PATTERN = re.compile(
-    r"(?P<diam>\d+(?:\s+\d+/\d+|/\d+)?)\s*[xX]\s*(?P<width>\d{1,4})\s*[xX]\s*(?P<length>\d{1,4})"
+    r"(?P<diam>\d+(?:\s+\d+/\d+|/\d+)?)\s*(?:x|X|×|\*)\s*(?P<width>\d{1,4})\s*(?:x|X|×|\*)\s*(?P<length>\d{1,4})"
 )
 SKU_CODE_PATTERN = re.compile(r"^AB[LT][A-Z0-9/\-]+$", re.IGNORECASE)
+TOKEN_EDGE_TRIM_PATTERN = re.compile(r"^[,;|]+|[,;|]+$")
 
 CLAMP_TYPE_ALIASES = {
     "t": "TREFILADA",
@@ -68,19 +70,25 @@ ADVANCED_KEY_ALIASES = {
     "code": "sku",
     "proveedor": "supplier",
     "supplier": "supplier",
+    "marca": "supplier",
     "prov": "supplier",
     "cat": "category",
     "categoria": "category",
     "tipo": "type",
+    "t": "type",
     "diam": "diameter",
     "diametro": "diameter",
+    "d": "diameter",
     "ancho": "width",
     "width": "width",
+    "w": "width",
     "largo": "length",
     "length": "length",
+    "l": "length",
     "forma": "shape",
     "perfil": "shape",
     "shape": "shape",
+    "f": "shape",
 }
 
 
@@ -98,8 +106,31 @@ def can_use_clamp_measure_feature(user):
     return bool(profile and getattr(profile, "is_approved", False))
 
 
+@lru_cache(maxsize=1)
+def get_compact_diameter_lookup():
+    """
+    Build compact->human lookup once to support searches like 716x80x220.
+    """
+    mapping = {}
+    for option in get_allowed_diameter_options():
+        compact = re.sub(r"[^\d]", "", str(option or ""))
+        if compact:
+            mapping.setdefault(compact, option)
+    return mapping
+
+
+def sanitize_search_token(value):
+    cleaned = str(value or "").strip()
+    if not cleaned:
+        return ""
+    cleaned = TOKEN_EDGE_TRIM_PATTERN.sub("", cleaned).strip()
+    cleaned = cleaned.replace("×", "x")
+    cleaned = re.sub(r"\s+", " ", cleaned)
+    return cleaned
+
+
 def normalize_diameter_value(value):
-    raw = str(value or "").strip().lower()
+    raw = sanitize_search_token(value).lower()
     if not raw:
         return ""
 
@@ -110,6 +141,10 @@ def normalize_diameter_value(value):
         if len(parts) == 2 and all(part.isdigit() for part in parts):
             return f"{int(parts[0])}/{int(parts[1])}"
     if raw.isdigit():
+        compact = raw.lstrip("0") or "0"
+        compact_lookup = get_compact_diameter_lookup()
+        if compact in compact_lookup:
+            return str(compact_lookup[compact])
         return str(int(raw))
     return str(value or "").strip()
 
@@ -164,13 +199,13 @@ def parse_catalog_search_query(raw_query):
         return parsed
 
     for token, is_phrase in extract_search_tokens(parsed["raw"]):
-        cleaned = token.strip()
+        cleaned = sanitize_search_token(token)
         if not cleaned:
             continue
 
         is_exclusion = cleaned.startswith("-") and len(cleaned) > 1
         if is_exclusion:
-            cleaned = cleaned[1:].strip()
+            cleaned = sanitize_search_token(cleaned[1:])
             if not cleaned:
                 continue
 
@@ -181,7 +216,7 @@ def parse_catalog_search_query(raw_query):
             alias = ADVANCED_KEY_ALIASES.get(maybe_key.strip().lower())
             if alias:
                 key = alias
-                value = maybe_value.strip()
+                value = sanitize_search_token(maybe_value)
 
         if key:
             if key == "sku" and value:
@@ -251,22 +286,37 @@ def parse_catalog_search_query(raw_query):
 
 
 def apply_catalog_text_search(products, parsed_search):
-    search_fields = ["name", "sku", "description", "supplier"]
+    search_fields = ["name", "sku", "description", "supplier", "supplier_ref__name"]
 
     if parsed_search["sku"]:
         products = products.filter(sku__icontains=parsed_search["sku"])
 
     for phrase in parsed_search["phrases"]:
-        products = apply_text_search(products, phrase, search_fields)
+        products = apply_text_search(
+            products,
+            phrase,
+            search_fields,
+            order_by_similarity=False,
+        )
 
     for term in parsed_search["include_terms"]:
-        products = apply_text_search(products, term, search_fields)
+        products = apply_text_search(
+            products,
+            term,
+            search_fields,
+            order_by_similarity=False,
+        )
 
     for term in parsed_search["exclude_terms"]:
         products = products.exclude(build_text_query(search_fields, term))
 
     for term in parsed_search["supplier_terms"]:
-        products = apply_text_search(products, term, ["supplier"])
+        products = apply_text_search(
+            products,
+            term,
+            ["supplier", "supplier_ref__name"],
+            order_by_similarity=False,
+        )
 
     for term in parsed_search["category_terms"]:
         products = products.filter(
@@ -354,6 +404,11 @@ def annotate_catalog_search_rank(products, parsed_search):
         )
         rank_expr += Case(
             When(supplier__icontains=term, then=Value(8)),
+            default=Value(0),
+            output_field=IntegerField(),
+        )
+        rank_expr += Case(
+            When(supplier_ref__name__icontains=term, then=Value(8)),
             default=Value(0),
             output_field=IntegerField(),
         )

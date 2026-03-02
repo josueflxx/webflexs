@@ -14,7 +14,11 @@ from accounts.models import ClientProfile, ClientPayment
 from catalog.models import Category, ClampMeasureRequest, Product, Supplier
 from orders.models import Order
 from core.models import UserActivity
-from core.services.advanced_search import apply_text_search
+from core.services.advanced_search import (
+    apply_parsed_text_search,
+    parse_text_search_query,
+    sanitize_search_token,
+)
 from core.services.presence import build_admin_presence_payload, get_presence_config
 
 
@@ -61,6 +65,15 @@ def _normalize_search_scope(raw_scope):
     return str(raw_scope or "").strip().lower()
 
 
+def _parse_suggestion_query(raw_query):
+    return parse_text_search_query(
+        raw_query,
+        max_include=6,
+        max_exclude=4,
+        max_phrases=3,
+    )
+
+
 def _append_suggestion(items, value, label=None, meta="", kind=""):
     value = str(value or "").strip()
     if not value:
@@ -94,37 +107,59 @@ def _unique_trim_suggestions(items, limit=SUGGESTION_LIMIT):
 
 def _suggest_catalog(query):
     items = []
+    parsed_query = _parse_suggestion_query(query)
+    if not parsed_query.get("raw"):
+        return items
 
     product_rows = (
-        apply_text_search(
+        apply_parsed_text_search(
             Product.catalog_visible(),
-            query,
-            ["sku", "name"],
+            parsed_query,
+            ["sku", "name", "supplier", "description"],
+            order_by_similarity=False,
         )
-        .values_list("sku", "name")
+        .values_list("sku", "name", "supplier")
         .order_by("name")[:6]
     )
-    for sku, name in product_rows:
-        _append_suggestion(items, sku, name, meta=f"SKU {sku}", kind="product")
+    for sku, name, supplier in product_rows:
+        meta = f"SKU {sku}"
+        if supplier:
+            meta = f"{meta} | {supplier}"
+        _append_suggestion(items, sku, name, meta=meta, kind="product")
 
-    category_names = (
-        Category.objects.filter(is_active=True, name__icontains=query)
-        .values_list("name", flat=True)
+    category_rows = (
+        apply_parsed_text_search(
+            Category.objects.filter(is_active=True),
+            parsed_query,
+            ["name", "slug"],
+            order_by_similarity=False,
+        )
+        .values_list("name", "slug")
         .order_by("name")[:4]
     )
-    for name in category_names:
-        _append_suggestion(items, name, f"Categoria: {name}", meta="Categoria", kind="category")
+    for name, slug in category_rows:
+        _append_suggestion(
+            items,
+            f"cat:{slug}",
+            f"Categoria: {name}",
+            meta="Filtro categoria",
+            kind="category",
+        )
 
     return _unique_trim_suggestions(items)
 
 
 def _suggest_admin_products(query):
     items = []
+    parsed_query = _parse_suggestion_query(query)
+    if not parsed_query.get("raw"):
+        return items
     rows = (
-        apply_text_search(
+        apply_parsed_text_search(
             Product.objects.all(),
-            query,
+            parsed_query,
             ["sku", "name", "supplier", "supplier_ref__name"],
+            order_by_similarity=False,
         )
         .select_related("supplier_ref")
         .values_list("sku", "name", "supplier", "supplier_ref__name")
@@ -138,18 +173,30 @@ def _suggest_admin_products(query):
 
 def _suggest_admin_categories(query):
     items = []
-    for cat in Category.objects.filter(name__icontains=query).values_list("name", flat=True).order_by("name")[:8]:
+    parsed_query = _parse_suggestion_query(query)
+    if not parsed_query.get("raw"):
+        return items
+    for cat in apply_parsed_text_search(
+        Category.objects.all(),
+        parsed_query,
+        ["name", "slug"],
+        order_by_similarity=False,
+    ).values_list("name", flat=True).order_by("name")[:8]:
         _append_suggestion(items, cat, f"Categoria: {cat}", meta="Categorias", kind="category")
     return _unique_trim_suggestions(items)
 
 
 def _suggest_admin_clients(query):
     items = []
+    parsed_query = _parse_suggestion_query(query)
+    if not parsed_query.get("raw"):
+        return items
     rows = (
-        ClientProfile.objects.filter(
-            Q(company_name__icontains=query)
-            | Q(user__username__icontains=query)
-            | Q(cuit_dni__icontains=query)
+        apply_parsed_text_search(
+            ClientProfile.objects.all(),
+            parsed_query,
+            ["company_name", "user__username", "cuit_dni", "user__email"],
+            order_by_similarity=False,
         )
         .select_related("user")
         .values_list("company_name", "user__username", "cuit_dni")
@@ -164,16 +211,26 @@ def _suggest_admin_clients(query):
 
 def _suggest_admin_orders(query):
     items = []
+    parsed_query = _parse_suggestion_query(query)
+    if not parsed_query.get("raw"):
+        return items
 
-    if query.isdigit():
-        for order_id in Order.objects.filter(pk=int(query)).values_list("pk", flat=True)[:3]:
+    numeric_terms = set()
+    if parsed_query.get("raw", "").isdigit():
+        numeric_terms.add(int(parsed_query["raw"]))
+    for term in [*parsed_query.get("phrases", []), *parsed_query.get("include_terms", [])]:
+        if str(term).isdigit():
+            numeric_terms.add(int(term))
+    for numeric in list(numeric_terms)[:3]:
+        for order_id in Order.objects.filter(pk=numeric).values_list("pk", flat=True)[:1]:
             _append_suggestion(items, str(order_id), f"Pedido #{order_id}", meta="Pedido", kind="order")
 
     rows = (
-        Order.objects.filter(
-            Q(user__username__icontains=query)
-            | Q(client_company__icontains=query)
-            | Q(client_cuit__icontains=query)
+        apply_parsed_text_search(
+            Order.objects.all(),
+            parsed_query,
+            ["user__username", "client_company", "client_cuit"],
+            order_by_similarity=False,
         )
         .select_related("user")
         .values_list("pk", "user__username", "client_company", "client_cuit")
@@ -188,21 +245,43 @@ def _suggest_admin_orders(query):
 
 def _suggest_admin_suppliers(query):
     items = []
-    for name in Supplier.objects.filter(name__icontains=query).values_list("name", flat=True).order_by("name")[:8]:
+    parsed_query = _parse_suggestion_query(query)
+    if not parsed_query.get("raw"):
+        return items
+    for name in apply_parsed_text_search(
+        Supplier.objects.all(),
+        parsed_query,
+        ["name", "normalized_name", "slug"],
+        order_by_similarity=False,
+    ).values_list("name", flat=True).order_by("name")[:8]:
         _append_suggestion(items, name, name, meta="Proveedor", kind="supplier")
     return _unique_trim_suggestions(items)
 
 
 def _suggest_admin_payments(query):
     items = []
+    parsed_query = _parse_suggestion_query(query)
+    if not parsed_query.get("raw"):
+        return items
     items.extend(_suggest_admin_clients(query))
 
-    if query.isdigit():
-        for order_id in Order.objects.filter(pk=int(query)).values_list("pk", flat=True)[:4]:
+    numeric_terms = set()
+    if parsed_query.get("raw", "").isdigit():
+        numeric_terms.add(int(parsed_query["raw"]))
+    for term in [*parsed_query.get("phrases", []), *parsed_query.get("include_terms", [])]:
+        if str(term).isdigit():
+            numeric_terms.add(int(term))
+    for numeric in list(numeric_terms)[:4]:
+        for order_id in Order.objects.filter(pk=numeric).values_list("pk", flat=True)[:1]:
             _append_suggestion(items, str(order_id), f"Pedido #{order_id}", meta="Pedido", kind="order")
 
     references = (
-        ClientPayment.objects.filter(reference__icontains=query)
+        apply_parsed_text_search(
+            ClientPayment.objects.all(),
+            parsed_query,
+            ["reference", "notes", "client_profile__company_name", "client_profile__user__username"],
+            order_by_similarity=False,
+        )
         .exclude(reference="")
         .values_list("reference", flat=True)
         .order_by("-paid_at")[:6]
@@ -214,12 +293,15 @@ def _suggest_admin_payments(query):
 
 def _suggest_admin_clamp_requests(query):
     items = []
+    parsed_query = _parse_suggestion_query(query)
+    if not parsed_query.get("raw"):
+        return items
     rows = (
-        ClampMeasureRequest.objects.filter(
-            Q(client_name__icontains=query)
-            | Q(client_email__icontains=query)
-            | Q(generated_code__icontains=query)
-            | Q(description__icontains=query)
+        apply_parsed_text_search(
+            ClampMeasureRequest.objects.all(),
+            parsed_query,
+            ["client_name", "client_email", "generated_code", "description"],
+            order_by_similarity=False,
         )
         .values_list("client_name", "generated_code", "description")
         .order_by("-created_at")[:8]
@@ -233,15 +315,18 @@ def _suggest_admin_clamp_requests(query):
 
 def _suggest_admin_users(query):
     items = []
+    parsed_query = _parse_suggestion_query(query)
+    if not parsed_query.get("raw"):
+        return items
     rows = (
-        User.objects.filter(
-            is_staff=True
-        ).filter(
-            Q(username__icontains=query)
-            | Q(first_name__icontains=query)
-            | Q(last_name__icontains=query)
-            | Q(email__icontains=query)
-        ).values_list("username", "first_name", "last_name", "email").order_by("username")[:8]
+        apply_parsed_text_search(
+            User.objects.filter(is_staff=True),
+            parsed_query,
+            ["username", "first_name", "last_name", "email"],
+            order_by_similarity=False,
+        )
+        .values_list("username", "first_name", "last_name", "email")
+        .order_by("username")[:8]
     )
     for username, first_name, last_name, email in rows:
         full_name = " ".join(part for part in [first_name, last_name] if part).strip()
@@ -254,7 +339,7 @@ def search_suggestions(request):
     """
     Shared search suggestions endpoint for catalog and admin panel.
     """
-    query = str(request.GET.get("q", "")).strip()
+    query = sanitize_search_token(request.GET.get("q", ""))
     if len(query) < 2:
         return JsonResponse({"suggestions": []})
 
