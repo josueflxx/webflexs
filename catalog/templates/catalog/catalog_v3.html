@@ -114,8 +114,16 @@
                     <p class="text-muted" style="margin:0 0 8px;">
                         Descarga la version publicada del catalogo en formato XLSX.
                     </p>
-                    <a href="{% url 'catalog_client_excel_download' %}" class="btn btn-outline" style="width:100%;">
-                        {{ client_catalog_excel_download_label|default:"Descargar catalogo Excel" }}
+                    <a href="{% url 'catalog_client_excel_download' %}" class="btn btn-outline excel-download-btn" style="width:100%;">
+                        <img
+                            src="{% static 'core/img/excel-icon.svg' %}"
+                            alt="Excel"
+                            class="excel-download-icon"
+                            width="18"
+                            height="18"
+                            loading="lazy"
+                        >
+                        <span>{{ client_catalog_excel_download_label|default:"Descargar catalogo Excel" }}</span>
                     </a>
                 </div>
                 {% endif %}
@@ -566,17 +574,14 @@
         const categoriesWrapper = document.getElementById('categoriesWrapper');
         if (!toggleBtn || !categoriesWrapper) return;
 
-        const savedState = localStorage.getItem('catalogCategoriesVisible');
-        const shouldShow = savedState === null ? true : savedState === 'true';
-
-        categoriesWrapper.style.display = shouldShow ? 'block' : 'none';
-        toggleBtn.textContent = shouldShow ? 'Ocultar' : 'Ver';
+        // Always start visible to avoid "disappearing categories" confusion.
+        categoriesWrapper.style.display = 'block';
+        toggleBtn.textContent = 'Ocultar';
 
         toggleBtn.addEventListener('click', function () {
             const isHidden = categoriesWrapper.style.display === 'none';
             categoriesWrapper.style.display = isHidden ? 'block' : 'none';
             toggleBtn.textContent = isHidden ? 'Ocultar' : 'Ver';
-            localStorage.setItem('catalogCategoriesVisible', isHidden ? 'true' : 'false');
         });
     }
 
