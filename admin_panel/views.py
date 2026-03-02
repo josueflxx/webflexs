@@ -4003,7 +4003,7 @@ def settings_view(request):
             },
         )
         
-        messages.success(request, 'ConfiguraciÃ³n guardada.')
+        messages.success(request, 'Configuración guardada.')
     
     return render(request, 'admin_panel/settings.html', {'settings': settings})
 
@@ -4468,7 +4468,7 @@ def category_edit(request, pk):
                     "is_active": updated.is_active,
                 },
             )
-            messages.success(request, f'CategorÃ­a "{category.name}" actualizada.')
+            messages.success(request, f'Categoría "{category.name}" actualizada.')
             return redirect('admin_category_list')
     else:
         form = CategoryForm(instance=category)
@@ -4579,11 +4579,11 @@ def category_delete(request, pk):
             target_id=category_id,
             details={"name": name},
         )
-        messages.success(request, f'CategorÃ­a "{name}" eliminada.')
+        messages.success(request, f'Categoría "{name}" eliminada.')
         return redirect('admin_category_list')
         
     return render(request, 'admin_panel/delete_confirm.html', {
-        'object': f"CategorÃ­a: {category.name}",
+        'object': f"Categoría: {category.name}",
         'cancel_url': reverse('admin_category_list')
     })
 
@@ -4606,7 +4606,7 @@ def category_attribute_create(request, category_id):
             
             # Simple validation for slug
             if CategoryAttribute.objects.filter(category=category, slug=slug).exists():
-                messages.error(request, f'El slug "{slug}" ya existe en esta categorÃ­a.')
+                messages.error(request, f'El slug "{slug}" ya existe en esta categoría.')
             else:
                 CategoryAttribute.objects.create(
                     category=category,
@@ -4802,7 +4802,7 @@ def parse_product_description(request):
         return JsonResponse({'success': True, 'attributes': extracted})
     except Exception as e:
         logger.exception("Error parsing product description")
-        return JsonResponse({'success': False, 'error': 'No se pudo procesar la descripciÃ³n.'}, status=400)
+        return JsonResponse({'success': False, 'error': 'No se pudo procesar la descripción.'}, status=400)
 
 
 @staff_member_required
@@ -5223,7 +5223,7 @@ def product_delete_all(request):
     expected = "delete productos"
     
     if confirmation != expected:
-        messages.error(request, f'Frase de confirmaciÃ³n incorrecta. Debe escribir: "{expected}"')
+        messages.error(request, f'Frase de confirmación incorrecta. Debe escribir: "{expected}"')
         return redirect('admin_product_list')
     
     count, _ = Product.objects.all().delete()
@@ -5245,7 +5245,7 @@ def client_delete_all(request):
     expected = "delete clientes"
     
     if confirmation != expected:
-        messages.error(request, f'Frase de confirmaciÃ³n incorrecta. Debe escribir: "{expected}"')
+        messages.error(request, f'Frase de confirmación incorrecta. Debe escribir: "{expected}"')
         return redirect('admin_client_list')
 
     active_user_ids = list(
@@ -5279,7 +5279,7 @@ def category_delete_all(request):
     expected = "delete categorias"
     
     if confirmation != expected:
-        messages.error(request, f'Frase de confirmaciÃ³n incorrecta. Debe escribir: "{expected}"')
+        messages.error(request, f'Frase de confirmación incorrecta. Debe escribir: "{expected}"')
         return redirect('admin_category_list')
     
     count, _ = Category.objects.all().delete()
@@ -5289,8 +5289,9 @@ def category_delete_all(request):
         target_type='category_bulk',
         details={'deleted_count': count},
     )
-    messages.success(request, f'Se eliminaron {count} categorÃ­as correctamente.')
+    messages.success(request, f'Se eliminaron {count} categorías correctamente.')
     return redirect('admin_category_list')
+
 
 
 

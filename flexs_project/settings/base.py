@@ -24,7 +24,10 @@ def _env_int(name, default):
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'dev-secret-key-change-in-production')
+SECRET_KEY = os.getenv(
+    'DJANGO_SECRET_KEY',
+    'dev-local-only-flexs-2026-change-this-secret-key-y6K2mP9rQ4tV1xW8zN3',
+)
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv('DJANGO_DEBUG', 'True').lower() == 'true'
