@@ -11,6 +11,7 @@ from django.contrib import messages
 from django.conf import settings
 from django.core.cache import cache
 from django.core.exceptions import ValidationError
+from django.core.files.base import ContentFile
 from django.core.paginator import Paginator
 from django.db import transaction
 from django.db import DatabaseError
@@ -693,6 +694,45 @@ def get_product_queryset(data):
     return products, search, current_category_id, active_filter
 
 
+def _delete_orphan_product_image(image_name):
+    image_name = str(image_name or "").strip()
+    if not image_name:
+        return
+    if Product.objects.filter(image=image_name).exists():
+        return
+    try:
+        storage = Product._meta.get_field("image").storage
+        if storage.exists(image_name):
+            storage.delete(image_name)
+    except Exception:
+        logger.warning("No se pudo eliminar imagen huerfana: %s", image_name)
+
+
+def _validate_admin_image_upload(uploaded_file):
+    if not uploaded_file:
+        raise ValueError("Debes seleccionar una imagen.")
+
+    allowed_ext = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
+    extension = os.path.splitext(uploaded_file.name or "")[1].lower()
+    if extension not in allowed_ext:
+        raise ValueError("Formato de imagen no permitido. Usa JPG, PNG, WEBP o GIF.")
+
+    max_size_bytes = 8 * 1024 * 1024  # 8 MB
+    if uploaded_file.size and uploaded_file.size > max_size_bytes:
+        raise ValueError("La imagen supera 8MB. Reduce el peso e intenta nuevamente.")
+
+
+def _store_bulk_product_image(uploaded_file):
+    _validate_admin_image_upload(uploaded_file)
+    extension = os.path.splitext(uploaded_file.name or "")[1].lower() or ".jpg"
+    base_name = slugify(os.path.splitext(uploaded_file.name or "")[0]) or "producto"
+    stamp = timezone.now().strftime("%Y%m%d%H%M%S")
+    relative_name = f"products/bulk/{base_name}-{stamp}{extension}"
+    storage = Product._meta.get_field("image").storage
+    payload = ContentFile(uploaded_file.read())
+    return storage.save(relative_name, payload)
+
+
 def extract_target_product_ids_from_post(post_data, raw_body=b""):
     """
     Accept multiple input formats for bulk product selection.
@@ -819,7 +859,11 @@ def product_create(request):
             selected_category_ids = normalize_category_ids(request.POST.getlist('categories'))
             description = request.POST.get('description', '').strip()
             attributes_payload = request.POST.get('attributes_json', '{}')
+            uploaded_image = request.FILES.get('image')
             settings = SiteSettings.get_settings()
+
+            if uploaded_image:
+                _validate_admin_image_upload(uploaded_image)
 
             try:
                 attributes_data = json.loads(attributes_payload or '{}')
@@ -876,6 +920,7 @@ def product_create(request):
                     category_id=int(primary_category_id) if str(primary_category_id).isdigit() else None,
                     description=description,
                     attributes=attributes_data,
+                    image=uploaded_image,
                 )
                 assign_categories_to_product(product, selected_category_ids, primary_category_id)
                 log_admin_action(
@@ -920,7 +965,14 @@ def product_edit(request, pk):
             product.stock = parse_int_value(request.POST.get('stock', '0'), 'Stock', min_value=0)
             product.description = request.POST.get('description', '').strip()
             product.is_active = request.POST.get('is_active') == 'on'
-            
+            uploaded_image = request.FILES.get('image')
+            remove_image = request.POST.get('remove_image') == 'on'
+            old_image_name = str(product.image.name or '').strip() if product.image else ''
+            new_image_applied = False
+
+            if uploaded_image:
+                _validate_admin_image_upload(uploaded_image)
+
             primary_category_id = request.POST.get('category', '')
             selected_category_ids = normalize_category_ids(request.POST.getlist('categories'))
             settings = SiteSettings.get_settings()
@@ -975,9 +1027,18 @@ def product_edit(request, pk):
                 )
 
             product.attributes = attributes_data
+
+            if remove_image and not uploaded_image:
+                product.image = None
+                new_image_applied = True
+            if uploaded_image:
+                product.image = uploaded_image
+                new_image_applied = True
             
             product.save()
             assign_categories_to_product(product, selected_category_ids, primary_category_id)
+            if new_image_applied and old_image_name:
+                _delete_orphan_product_image(old_image_name)
             log_admin_action(
                 request,
                 action="product_edit",
@@ -1161,6 +1222,124 @@ def product_bulk_status_update(request):
         action='product_bulk_status_update',
         target_type='product_bulk',
         details={'count': count, 'set_active': set_active, 'select_all_pages': select_all_pages},
+    )
+    return _redirect_admin_product_list_with_filters(request)
+
+
+@staff_member_required
+@require_POST
+@superuser_required_for_modifications
+def product_bulk_image_update(request):
+    """Bulk assign/clear product images for selected or filtered products."""
+    image_mode = str(request.POST.get('image_mode', 'set')).strip().lower()
+    select_all_pages = request.POST.get('select_all_pages') == 'true'
+    only_missing = request.POST.get('only_missing') == '1'
+
+    if image_mode not in {'set', 'clear'}:
+        messages.warning(request, 'Modo de imagen invalido.')
+        return _redirect_admin_product_list_with_filters(request)
+
+    if select_all_pages:
+        products_to_update, _, _, _ = get_product_queryset(request.POST)
+    else:
+        product_ids = extract_target_product_ids_from_post(request.POST, b"")
+        if not product_ids:
+            logger.warning(
+                "product_bulk_image_update without selected products | user=%s | keys=%s | product_ids=%s | product_ids_csv=%s",
+                getattr(request.user, "username", "unknown"),
+                list(request.POST.keys()),
+                request.POST.getlist("product_ids"),
+                request.POST.get("product_ids_csv", ""),
+            )
+            messages.warning(request, 'No se seleccionaron productos.')
+            return _redirect_admin_product_list_with_filters(request)
+        products_to_update = Product.objects.filter(id__in=product_ids)
+
+    # get_product_queryset() includes select_related/prefetch_related for list rendering;
+    # reset those joins here to safely use deferred fields in bulk updates.
+    products_to_update = products_to_update.select_related(None).prefetch_related(None)
+
+    if only_missing and image_mode == 'set':
+        products_to_update = products_to_update.filter(Q(image__isnull=True) | Q(image=''))
+
+    products_to_update = list(products_to_update.only('id', 'image'))
+    if not products_to_update:
+        messages.info(request, 'No hay productos para actualizar con esos criterios.')
+        return _redirect_admin_product_list_with_filters(request)
+
+    orphan_candidates = set()
+    updated_count = 0
+
+    if image_mode == 'set':
+        uploaded_file = request.FILES.get('image_file')
+        try:
+            shared_image_name = _store_bulk_product_image(uploaded_file)
+        except ValueError as exc:
+            messages.error(request, str(exc))
+            return _redirect_admin_product_list_with_filters(request)
+        except Exception:
+            messages.error(request, 'No se pudo almacenar la imagen. Intenta nuevamente.')
+            return _redirect_admin_product_list_with_filters(request)
+
+        for product in products_to_update:
+            old_name = str(product.image.name or '').strip() if product.image else ''
+            if old_name == shared_image_name:
+                continue
+            if old_name:
+                orphan_candidates.add(old_name)
+            product.image = shared_image_name
+            product.save(update_fields=['image', 'updated_at'])
+            updated_count += 1
+
+        if updated_count == 0:
+            _delete_orphan_product_image(shared_image_name)
+            messages.info(request, 'No hubo cambios: todos los productos ya tenian esa imagen.')
+            return _redirect_admin_product_list_with_filters(request)
+
+        for old_name in orphan_candidates:
+            _delete_orphan_product_image(old_name)
+
+        messages.success(request, f'Imagen aplicada a {updated_count} productos.')
+        log_admin_action(
+            request,
+            action='product_bulk_image_update',
+            target_type='product_bulk',
+            details={
+                'count': updated_count,
+                'mode': image_mode,
+                'select_all_pages': select_all_pages,
+                'only_missing': only_missing,
+                'image': shared_image_name,
+            },
+        )
+        return _redirect_admin_product_list_with_filters(request)
+
+    # image_mode == "clear"
+    for product in products_to_update:
+        old_name = str(product.image.name or '').strip() if product.image else ''
+        if not old_name:
+            continue
+        orphan_candidates.add(old_name)
+        product.image = None
+        product.save(update_fields=['image', 'updated_at'])
+        updated_count += 1
+
+    for old_name in orphan_candidates:
+        _delete_orphan_product_image(old_name)
+
+    if updated_count:
+        messages.success(request, f'Se quitaron imagenes en {updated_count} productos.')
+    else:
+        messages.info(request, 'No habia imagenes para quitar.')
+    log_admin_action(
+        request,
+        action='product_bulk_image_update',
+        target_type='product_bulk',
+        details={
+            'count': updated_count,
+            'mode': image_mode,
+            'select_all_pages': select_all_pages,
+        },
     )
     return _redirect_admin_product_list_with_filters(request)
 

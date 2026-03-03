@@ -7,7 +7,7 @@
 <div class="admin-form-container">
     <h2>{{ action }} Producto</h2>
 
-    <form method="post">
+    <form method="post" enctype="multipart/form-data">
         {% csrf_token %}
 
         <div class="form-group">
@@ -46,6 +46,29 @@
                 <option value="{{ supplier_name }}"></option>
                 {% endfor %}
             </datalist>
+        </div>
+
+        <div class="form-group">
+            <label for="image" class="form-label">Imagen</label>
+            {% if product and product.image %}
+            <div class="product-image-preview">
+                <img src="{{ product.image.url }}" alt="{{ product.name }}">
+                <a href="{{ product.image.url }}" target="_blank" rel="noopener" class="btn btn-outline btn-sm">Ver actual</a>
+            </div>
+            {% endif %}
+            <input type="file"
+                   name="image"
+                   id="image"
+                   class="form-input"
+                   accept="image/png,image/jpeg,image/webp,image/gif"
+                   {% if not user.is_superuser %}disabled{% endif %}>
+            {% if product and product.image %}
+            <label class="form-label" style="margin-top: 8px;">
+                <input type="checkbox" name="remove_image" {% if not user.is_superuser %}disabled{% endif %}>
+                Quitar imagen actual
+            </label>
+            {% endif %}
+            <small class="text-muted">Formatos admitidos: JPG, PNG, WEBP o GIF (max. 8MB).</small>
         </div>
 
         <div class="form-group">
@@ -196,6 +219,23 @@
     }
     @media (max-width: 900px) {
         .category-check-grid { grid-template-columns: 1fr; }
+    }
+</style>
+
+<style>
+    .product-image-preview {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 10px;
+    }
+    .product-image-preview img {
+        width: 88px;
+        height: 88px;
+        object-fit: cover;
+        border-radius: 8px;
+        border: 1px solid rgba(255, 255, 255, 0.16);
+        background: rgba(255, 255, 255, 0.04);
     }
 </style>
 

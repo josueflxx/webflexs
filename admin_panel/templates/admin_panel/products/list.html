@@ -108,6 +108,31 @@
                     <button type="button" class="btn btn-danger-outline" onclick="openDeleteModal()">Eliminar Todos</button>
                 </form>
 
+                <form id="bulkImageForm" method="post" enctype="multipart/form-data"
+                    action="{% url 'admin_product_bulk_image' %}" class="products-bulk-form"
+                    onsubmit="return validateBulkImageAction()">
+                    {% csrf_token %}
+                    <input type="hidden" name="q" value="{{ search }}">
+                    <input type="hidden" name="category" value="{{ current_category_id|default:'' }}">
+                    <input type="hidden" name="active" value="{{ active_filter }}">
+                    <input type="hidden" name="order" value="{{ order_by }}">
+                    <input type="hidden" name="page" value="{{ page_obj.number }}">
+                    <input type="hidden" name="select_all_pages" id="bulkImageSelectAllPages" value="false">
+                    <input type="hidden" name="product_ids_csv" id="bulkImageProductIdsCsv" value="">
+
+                    <select name="image_mode" id="bulkImageMode" class="form-select">
+                        <option value="set">Aplicar misma imagen</option>
+                        <option value="clear">Quitar imagen</option>
+                    </select>
+                    <input type="file" name="image_file" id="bulkImageInput" class="form-input"
+                        accept="image/png,image/jpeg,image/webp,image/gif">
+                    <label class="form-label" style="display:flex; align-items:center; gap:6px; margin:0;">
+                        <input type="checkbox" name="only_missing" value="1">
+                        Solo productos sin imagen
+                    </label>
+                    <button type="submit" class="btn btn-primary" id="bulkImageSubmitBtn" disabled>Aplicar imagen</button>
+                </form>
+
                 <div class="products-bulk-form" style="align-items: center;">
                     <button type="button" class="btn btn-outline btn-sm" onclick="selectCurrentPage()">
                         Seleccionar pagina ({{ pagination_count }})
@@ -178,6 +203,32 @@
         </span>
     </div>
 
+    <style>
+        .product-thumb {
+            width: 44px;
+            height: 44px;
+            object-fit: cover;
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.16);
+            background: rgba(255, 255, 255, 0.04);
+            display: block;
+            margin: 0 auto;
+        }
+
+        .mobile-product-image {
+            margin: 8px 0 4px;
+        }
+
+        .mobile-product-image img {
+            width: 72px;
+            height: 72px;
+            object-fit: cover;
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.16);
+            background: rgba(255, 255, 255, 0.04);
+        }
+    </style>
+
     <script>
         const TOTAL_COUNT = Number('{{ total_count|unlocalize }}') || 0;
         const PAGINATION_COUNT = {{ pagination_count }};
@@ -233,6 +284,10 @@
             if (bulkStatusSelectAll) {
                 bulkStatusSelectAll.value = value;
             }
+            const bulkImageSelectAll = document.getElementById('bulkImageSelectAllPages');
+            if (bulkImageSelectAll) {
+                bulkImageSelectAll.value = value;
+            }
         }
 
         function collectSelectedProductIds() {
@@ -262,6 +317,8 @@
             if (categoryCsv) categoryCsv.value = csv;
             const statusCsv = document.getElementById('bulkStatusProductIdsCsv');
             if (statusCsv) statusCsv.value = csv;
+            const imageCsv = document.getElementById('bulkImageProductIdsCsv');
+            if (imageCsv) imageCsv.value = csv;
             return selectedIds.length;
         }
 
@@ -392,6 +449,10 @@
             const categoryBtn = document.getElementById('bulkSubmitBtn');
             const activateBtn = document.getElementById('bulkActivateBtn');
             const deactivateBtn = document.getElementById('bulkDeactivateBtn');
+            const imageBtn = document.getElementById('bulkImageSubmitBtn');
+            const imageMode = document.getElementById('bulkImageMode')?.value || 'set';
+            const imageInput = document.getElementById('bulkImageInput');
+            const hasImageFile = Boolean(imageInput && imageInput.files && imageInput.files.length > 0);
             const selectedLabel = document.getElementById('bulkSelectedCount');
             const selectedInlineLabel = document.getElementById('bulkSelectedCountInline');
 
@@ -425,6 +486,17 @@
                     deactivateBtn.removeAttribute('disabled');
                     deactivateBtn.innerHTML = `Desactivar (${count})`;
                 }
+                if (imageBtn) {
+                    const canRunImageAction = imageMode === 'clear' || hasImageFile;
+                    if (canRunImageAction) {
+                        imageBtn.removeAttribute('disabled');
+                    } else {
+                        imageBtn.setAttribute('disabled', 'true');
+                    }
+                    imageBtn.innerHTML = imageMode === 'clear'
+                        ? `Quitar imagen (${count})`
+                        : `Aplicar imagen (${count})`;
+                }
             } else {
                 if (selectedLabel) selectedLabel.textContent = '0 seleccionados';
                 if (selectedInlineLabel) selectedInlineLabel.textContent = '0 seleccionados';
@@ -439,6 +511,10 @@
                 if (deactivateBtn) {
                     deactivateBtn.setAttribute('disabled', 'true');
                     deactivateBtn.innerHTML = 'Desactivar';
+                }
+                if (imageBtn) {
+                    imageBtn.setAttribute('disabled', 'true');
+                    imageBtn.innerHTML = imageMode === 'clear' ? 'Quitar imagen' : 'Aplicar imagen';
                 }
             }
 
@@ -475,6 +551,28 @@
             return true;
         }
 
+        function validateBulkImageAction() {
+            const form = document.getElementById('bulkImageForm');
+            const globalInput = document.getElementById('selectAllPagesInput');
+            const selectAllGlobal = globalInput ? globalInput.value === 'true' : false;
+            const imageMode = document.getElementById('bulkImageMode')?.value || 'set';
+            const imageInput = document.getElementById('bulkImageInput');
+
+            if (!selectAllGlobal) {
+                const count = appendSelectedIdsToForm(form);
+                if (count === 0) {
+                    alert('Por favor selecciona al menos un producto.');
+                    return false;
+                }
+            }
+
+            if (imageMode === 'set' && (!imageInput || imageInput.files.length === 0)) {
+                alert('Selecciona una imagen para aplicar.');
+                return false;
+            }
+            return true;
+        }
+
         function submitBulkStatus(setActiveValue) {
             const actionInput = document.getElementById('bulkStatusActionInput');
             if (!actionInput) return;
@@ -493,6 +591,8 @@
         };
 
         document.addEventListener('DOMContentLoaded', function () {
+            document.getElementById('bulkImageMode')?.addEventListener('change', updateBulkButton);
+            document.getElementById('bulkImageInput')?.addEventListener('change', updateBulkButton);
             syncSelectionFlags();
             updateBulkButton();
             refreshSelectionInfo();
@@ -505,6 +605,7 @@
                     <th style="width: 40px;"><input type="checkbox" id="selectAll" onclick="toggleSelectAll()"></th>
                     <th class="col-sku">SKU</th>
                     <th class="col-name">Nombre</th>
+                    <th class="col-image">Imagen</th>
                     <th class="col-provider">Proveedor</th>
                     <th class="col-price">Precio</th>
                     <th class="col-stock">Stock</th>
@@ -520,6 +621,13 @@
                             onclick="updateBulkButton()"></td>
                     <td><code>{{ product.sku }}</code></td>
                     <td class="product-name-cell" title="{{ product.name }}">{{ product.name|truncatechars:52 }}</td>
+                    <td class="product-image-cell">
+                        {% if product.image %}
+                        <img src="{{ product.image.url }}" alt="{{ product.name }}" class="product-thumb">
+                        {% else %}
+                        <span class="badge badge-secondary">Sin imagen</span>
+                        {% endif %}
+                    </td>
                     <td class="product-provider-cell" title="{{ product.supplier_ref.name|default:product.supplier|default:'-' }}">
                         {{ product.supplier_ref.name|default:product.supplier|default:'-' }}
                     </td>
@@ -573,7 +681,7 @@
                 </tr>
                 {% empty %}
                 <tr>
-                    <td colspan="9" class="text-center text-muted">No hay productos</td>
+                    <td colspan="10" class="text-center text-muted">No hay productos</td>
                 </tr>
                 {% endfor %}
             </tbody>
@@ -592,6 +700,13 @@
                 {% endif %}
             </div>
             <h3>{{ product.name }}</h3>
+            <div class="mobile-product-image">
+                {% if product.image %}
+                <img src="{{ product.image.url }}" alt="{{ product.name }}">
+                {% else %}
+                <span class="badge badge-secondary">Sin imagen</span>
+                {% endif %}
+            </div>
             <div class="mobile-product-meta">
                 <span>Proveedor: {{ product.supplier_ref.name|default:product.supplier|default:'-' }}</span>
                 <span>Precio: ${{ product.price|floatformat:2 }}</span>
