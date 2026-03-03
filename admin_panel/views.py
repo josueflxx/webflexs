@@ -1262,14 +1262,6 @@ def product_bulk_image_update(request):
     if only_missing and image_mode == 'set':
         products_to_update = products_to_update.filter(Q(image__isnull=True) | Q(image=''))
 
-    products_to_update = list(products_to_update.only('id', 'image'))
-    if not products_to_update:
-        messages.info(request, 'No hay productos para actualizar con esos criterios.')
-        return _redirect_admin_product_list_with_filters(request)
-
-    orphan_candidates = set()
-    updated_count = 0
-
     if image_mode == 'set':
         uploaded_file = request.FILES.get('image_file')
         try:
@@ -1281,23 +1273,17 @@ def product_bulk_image_update(request):
             messages.error(request, 'No se pudo almacenar la imagen. Intenta nuevamente.')
             return _redirect_admin_product_list_with_filters(request)
 
-        for product in products_to_update:
-            old_name = str(product.image.name or '').strip() if product.image else ''
-            if old_name == shared_image_name:
-                continue
-            if old_name:
-                orphan_candidates.add(old_name)
-            product.image = shared_image_name
-            product.save(update_fields=['image', 'updated_at'])
-            updated_count += 1
+        # Bulk update to avoid worker timeouts when updating thousands of products.
+        updated_count = (
+            products_to_update
+            .exclude(image=shared_image_name)
+            .update(image=shared_image_name, updated_at=timezone.now())
+        )
 
         if updated_count == 0:
             _delete_orphan_product_image(shared_image_name)
             messages.info(request, 'No hubo cambios: todos los productos ya tenian esa imagen.')
             return _redirect_admin_product_list_with_filters(request)
-
-        for old_name in orphan_candidates:
-            _delete_orphan_product_image(old_name)
 
         messages.success(request, f'Imagen aplicada a {updated_count} productos.')
         log_admin_action(
@@ -1315,17 +1301,11 @@ def product_bulk_image_update(request):
         return _redirect_admin_product_list_with_filters(request)
 
     # image_mode == "clear"
-    for product in products_to_update:
-        old_name = str(product.image.name or '').strip() if product.image else ''
-        if not old_name:
-            continue
-        orphan_candidates.add(old_name)
-        product.image = None
-        product.save(update_fields=['image', 'updated_at'])
-        updated_count += 1
-
-    for old_name in orphan_candidates:
-        _delete_orphan_product_image(old_name)
+    updated_count = (
+        products_to_update
+        .exclude(Q(image__isnull=True) | Q(image=''))
+        .update(image='', updated_at=timezone.now())
+    )
 
     if updated_count:
         messages.success(request, f'Se quitaron imagenes en {updated_count} productos.')
