@@ -10,7 +10,7 @@ from django.views.decorators.http import require_POST
 from django.views.decorators.http import require_GET
 from django.utils import timezone
 
-from accounts.models import ClientProfile, ClientPayment
+from accounts.models import AccountRequest, ClientProfile, ClientPayment
 from catalog.models import Category, ClampMeasureRequest, Product, Supplier
 from orders.models import Order
 from core.models import UserActivity
@@ -39,6 +39,35 @@ def admin_presence(request):
             "admins": build_admin_presence_payload(),
             "refresh_seconds": config["refresh_seconds"],
             "online_window_seconds": config["online_window_seconds"],
+        }
+    )
+
+
+@require_GET
+def admin_alerts(request):
+    """Lightweight admin alerts payload (new client account requests)."""
+    if not request.user.is_authenticated or not request.user.is_staff:
+        return JsonResponse({"detail": "forbidden"}, status=403)
+
+    pending_qs = AccountRequest.objects.filter(status="pending")
+    latest_pending = (
+        pending_qs.order_by("-created_at")
+        .values("id", "company_name", "created_at")
+        .first()
+    )
+
+    return JsonResponse(
+        {
+            "account_requests": {
+                "pending_count": pending_qs.count(),
+                "latest_id": (latest_pending or {}).get("id") or 0,
+                "latest_company_name": (latest_pending or {}).get("company_name") or "",
+                "latest_created_at": (
+                    latest_pending.get("created_at").isoformat()
+                    if latest_pending and latest_pending.get("created_at")
+                    else ""
+                ),
+            }
         }
     )
 

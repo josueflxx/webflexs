@@ -270,6 +270,15 @@
             return '';
         }
 
+        const ADMIN_ALERTS_STORAGE_KEY = 'adminLastAccountRequestSeenId';
+        const ADMIN_ALERTS_PROMPT_DISMISSED_KEY = 'adminNotificationPromptDismissed';
+        const ADMIN_NOTIFICATION_ICON = '{% static "core/img/favicon-192.png" %}';
+        const ADMIN_REQUESTS_URL = '{% url "admin_request_list" %}?status=pending';
+        const ADMIN_ALERTS_URL = '{% url "admin_alerts" %}';
+
+        let adminAlertBootstrapped = false;
+        let adminLastSeenAccountRequestId = Number(localStorage.getItem(ADMIN_ALERTS_STORAGE_KEY) || '0') || 0;
+
         function escapeHtml(value) {
             return String(value || '')
                 .replaceAll('&', '&amp;')
@@ -277,6 +286,141 @@
                 .replaceAll('>', '&gt;')
                 .replaceAll('"', '&quot;')
                 .replaceAll("'", '&#39;');
+        }
+
+        function normalizePositiveInt(value) {
+            const parsed = Number(value);
+            if (!Number.isFinite(parsed) || parsed <= 0) return 0;
+            return Math.floor(parsed);
+        }
+
+        function canUseBrowserNotifications() {
+            return typeof window !== 'undefined' && 'Notification' in window;
+        }
+
+        function removeNotificationOptinPrompt() {
+            const prompt = document.getElementById('notificationOptinPrompt');
+            if (prompt && prompt.parentElement) {
+                prompt.parentElement.removeChild(prompt);
+            }
+        }
+
+        function markNotificationPromptDismissed() {
+            localStorage.setItem(ADMIN_ALERTS_PROMPT_DISMISSED_KEY, '1');
+            removeNotificationOptinPrompt();
+        }
+
+        function requestBrowserNotificationPermission() {
+            if (!canUseBrowserNotifications()) {
+                return;
+            }
+            Notification.requestPermission().then((permission) => {
+                if (permission === 'granted' || permission === 'denied') {
+                    markNotificationPromptDismissed();
+                }
+            }).catch(() => {
+                // Ignore permission errors.
+            });
+        }
+
+        function renderNotificationOptinPrompt() {
+            if (!canUseBrowserNotifications()) return;
+            if (Notification.permission !== 'default') return;
+            if (localStorage.getItem(ADMIN_ALERTS_PROMPT_DISMISSED_KEY) === '1') return;
+            if (document.getElementById('notificationOptinPrompt')) return;
+
+            const prompt = document.createElement('aside');
+            prompt.id = 'notificationOptinPrompt';
+            prompt.className = 'notification-optin';
+            prompt.innerHTML = `
+                <h3 class="notification-optin-title">Activar notificaciones</h3>
+                <p class="notification-optin-text">
+                    Recibi alertas del navegador cuando llegue una nueva solicitud de cliente.
+                </p>
+                <div class="notification-optin-actions">
+                    <button type="button" class="btn btn-outline btn-sm" id="notificationOptinDismiss">Ahora no</button>
+                    <button type="button" class="btn btn-primary btn-sm" id="notificationOptinAllow">Activar</button>
+                </div>
+            `;
+
+            document.body.appendChild(prompt);
+
+            const dismissBtn = document.getElementById('notificationOptinDismiss');
+            const allowBtn = document.getElementById('notificationOptinAllow');
+
+            if (dismissBtn) {
+                dismissBtn.addEventListener('click', markNotificationPromptDismissed);
+            }
+            if (allowBtn) {
+                allowBtn.addEventListener('click', requestBrowserNotificationPermission);
+            }
+        }
+
+        function notifyNewAccountRequest(payload) {
+            if (!canUseBrowserNotifications()) return;
+            if (Notification.permission !== 'granted') return;
+
+            const companyName = String(payload.latest_company_name || '').trim();
+            const pendingCount = normalizePositiveInt(payload.pending_count);
+
+            const bodyParts = [];
+            if (companyName) {
+                bodyParts.push(`Empresa: ${companyName}`);
+            }
+            if (pendingCount > 0) {
+                bodyParts.push(`Pendientes: ${pendingCount}`);
+            }
+            const body = bodyParts.join(' | ') || 'Tenes una nueva solicitud pendiente.';
+
+            const notification = new Notification('Nueva solicitud de cliente', {
+                body: body,
+                icon: ADMIN_NOTIFICATION_ICON,
+                badge: ADMIN_NOTIFICATION_ICON,
+                tag: `admin-account-request-${payload.latest_id || Date.now()}`,
+                renotify: false,
+            });
+
+            notification.onclick = () => {
+                window.focus();
+                window.location.href = ADMIN_REQUESTS_URL;
+            };
+        }
+
+        async function refreshAdminAlerts() {
+            try {
+                const response = await fetch(ADMIN_ALERTS_URL, {
+                    method: 'GET',
+                    credentials: 'same-origin',
+                    cache: 'no-store',
+                    headers: { 'Accept': 'application/json' },
+                });
+                if (!response.ok) return;
+
+                const data = await response.json();
+                const accountRequests = data.account_requests || {};
+                const latestId = normalizePositiveInt(accountRequests.latest_id);
+
+                // Keep this tab synchronized with writes from other tabs.
+                const storedSeenId = normalizePositiveInt(localStorage.getItem(ADMIN_ALERTS_STORAGE_KEY));
+                if (storedSeenId > adminLastSeenAccountRequestId) {
+                    adminLastSeenAccountRequestId = storedSeenId;
+                }
+
+                if (!adminAlertBootstrapped) {
+                    adminLastSeenAccountRequestId = Math.max(adminLastSeenAccountRequestId, latestId);
+                    localStorage.setItem(ADMIN_ALERTS_STORAGE_KEY, String(adminLastSeenAccountRequestId));
+                    adminAlertBootstrapped = true;
+                    return;
+                }
+
+                if (latestId > adminLastSeenAccountRequestId) {
+                    adminLastSeenAccountRequestId = latestId;
+                    localStorage.setItem(ADMIN_ALERTS_STORAGE_KEY, String(adminLastSeenAccountRequestId));
+                    notifyNewAccountRequest(accountRequests);
+                }
+            } catch (error) {
+                // Ignore transient network issues.
+            }
         }
 
         function renderAdminProfiles(admins) {
@@ -422,6 +566,21 @@
             );
             refreshAdminPresence();
             window.__presenceTimer = setInterval(refreshAdminPresence, refreshSeconds * 1000);
+
+            renderNotificationOptinPrompt();
+            refreshAdminAlerts();
+            window.__adminAlertsTimer = setInterval(
+                refreshAdminAlerts,
+                Math.max(refreshSeconds, 15) * 1000
+            );
+
+            window.addEventListener('storage', function (event) {
+                if (event.key !== ADMIN_ALERTS_STORAGE_KEY) return;
+                const syncedValue = normalizePositiveInt(event.newValue);
+                if (syncedValue > adminLastSeenAccountRequestId) {
+                    adminLastSeenAccountRequestId = syncedValue;
+                }
+            });
         });
 
         window.addEventListener('beforeunload', sendOfflineBeacon);

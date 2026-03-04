@@ -255,6 +255,45 @@
     color: var(--color-danger);
 }
 
+/* Browser notification opt-in */
+.notification-optin {
+    position: fixed;
+    right: 24px;
+    bottom: 24px;
+    z-index: 1300;
+    max-width: 360px;
+    width: min(360px, calc(100vw - 32px));
+    padding: 14px 14px 12px;
+    border-radius: 12px;
+    background: rgba(18, 22, 30, 0.96);
+    border: 1px solid rgba(0, 197, 255, 0.3);
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.32);
+}
+
+.notification-optin-title {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--color-white);
+}
+
+.notification-optin-text {
+    margin: 8px 0 12px;
+    font-size: 13px;
+    line-height: 1.45;
+    color: var(--color-gray-light);
+}
+
+.notification-optin-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+}
+
+.notification-optin.hidden {
+    display: none;
+}
+
 /* Main Content */
 .admin-main {
     margin-left: 260px;
