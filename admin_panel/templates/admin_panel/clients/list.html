@@ -10,6 +10,9 @@
             <button type="submit" class="btn btn-primary">Buscar</button>
         </form>
         <div class="toolbar-actions">
+            {% if can_manage_client_categories %}
+            <a href="{% url 'admin_client_category_list' %}" class="btn btn-outline">Tipos de cliente</a>
+            {% endif %}
             {% if user.is_superuser %}
             <button type="button" class="btn btn-danger" onclick="openDeleteModal()">Desactivar Todos</button>
             {% endif %}
@@ -55,6 +58,7 @@
                 <th>Empresa</th>
                 <th>CUIT/DNI</th>
                 <th>Provincia</th>
+                <th>Tipo</th>
                 <th>Descuento</th>
                 <th>Pedidos</th>
                 <th>Acciones</th>
@@ -67,9 +71,10 @@
                 <td><strong>{{ client.company_name }}</strong></td>
                 <td>{{ client.cuit_dni|default:"-" }}</td>
                 <td>{{ client.province|default:"-" }}</td>
+                <td>{{ client.client_category.name|default:"-" }}</td>
                 <td>
-                    {% if client.discount %}
-                    <span class="badge badge-success">{{ client.discount|floatformat:0 }}%</span>
+                    {% if client.get_effective_discount_percentage %}
+                    <span class="badge badge-success">{{ client.get_effective_discount_percentage|floatformat:0 }}%</span>
                     {% else %}
                     -
                     {% endif %}
@@ -99,7 +104,7 @@
             </tr>
             {% empty %}
             <tr>
-                <td colspan="7" class="text-center text-muted">No hay clientes</td>
+                <td colspan="8" class="text-center text-muted">No hay clientes</td>
             </tr>
             {% endfor %}
         </tbody>

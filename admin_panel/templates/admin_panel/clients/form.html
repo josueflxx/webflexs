@@ -1,4 +1,5 @@
 {% extends 'admin_panel/base.html' %}
+{% load l10n %}
 
 {% block page_title %}Editar Cliente{% endblock %}
 
@@ -26,7 +27,31 @@
 
         <div class="form-group">
             <label for="discount" class="form-label">Descuento (%)</label>
-            <input type="number" step="0.01" name="discount" id="discount" class="form-input" value="{{ client.discount }}">
+            <input
+                type="number"
+                step="0.01"
+                name="discount"
+                id="discount"
+                class="form-input"
+                value="{{ client.discount }}"
+            >
+            <small class="text-muted">Si asignas tipo de cliente, este valor se completa automaticamente.</small>
+        </div>
+
+        <div class="form-group">
+            <label for="client_category" class="form-label">Tipo de cliente (lista comercial)</label>
+            <select name="client_category" id="client_category" class="form-select">
+                <option value="">Sin tipo (usa descuento manual)</option>
+                {% for category in client_categories %}
+                <option
+                    value="{{ category.pk }}"
+                    data-discount="{{ category.discount_percentage|unlocalize }}"
+                    {% if client.client_category_id == category.pk %}selected{% endif %}
+                >
+                    {{ category.name }} - {{ category.discount_percentage|floatformat:2 }}%
+                </option>
+                {% endfor %}
+            </select>
         </div>
 
         <div class="form-group">
@@ -45,7 +70,7 @@
         </div>
 
         <div class="form-group">
-            <label for="client_type" class="form-label">Tipo de Cliente</label>
+            <label for="client_type" class="form-label">Rubro (opcional)</label>
             <select name="client_type" id="client_type" class="form-select">
                 <option value="">-</option>
                 <option value="taller" {% if client.client_type == 'taller' %}selected{% endif %}>Taller</option>
@@ -74,4 +99,54 @@
         </div>
     </form>
 </div>
+<script>
+    (function () {
+        function normalizeDecimal(raw) {
+            if (!raw) return '';
+            return String(raw).trim().replace(',', '.').replace(/[^0-9.-]/g, '');
+        }
+
+        function setupAutoDiscount(selectId, inputId) {
+            const categorySelect = document.getElementById(selectId);
+            const discountInput = document.getElementById(inputId);
+            if (!categorySelect || !discountInput) return;
+
+            function getOptionDiscount(option) {
+                if (!option) return '';
+                let raw = option.dataset ? (option.dataset.discount || '') : '';
+                if (!raw) {
+                    const text = option.textContent || '';
+                    const match = text.match(/(-?\d+(?:[.,]\d+)?)\s*%/);
+                    raw = match ? match[1] : '';
+                }
+                return normalizeDecimal(raw);
+            }
+
+            function syncDiscountByCategory() {
+                const option = categorySelect.options[categorySelect.selectedIndex];
+                if (!option || !option.value) {
+                    discountInput.readOnly = false;
+                    return;
+                }
+                const normalized = getOptionDiscount(option);
+                if (normalized) {
+                    discountInput.value = normalized;
+                }
+                discountInput.readOnly = true;
+            }
+
+            categorySelect.addEventListener('change', syncDiscountByCategory);
+            categorySelect.addEventListener('input', syncDiscountByCategory);
+            syncDiscountByCategory();
+        }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', function () {
+                setupAutoDiscount('client_category', 'discount');
+            });
+        } else {
+            setupAutoDiscount('client_category', 'discount');
+        }
+    })();
+</script>
 {% endblock %}

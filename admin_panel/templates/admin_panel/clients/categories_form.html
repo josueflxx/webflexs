@@ -1,0 +1,133 @@
+{% extends 'admin_panel/base.html' %}
+
+{% block page_title %}{% if category %}Editar Tipo de Cliente{% else %}Nuevo Tipo de Cliente{% endif %}{% endblock %}
+
+{% block content %}
+<div class="admin-form-container">
+    <h2>{% if category %}Editar Tipo de Cliente{% else %}Nuevo Tipo de Cliente{% endif %}</h2>
+
+    <form method="post">
+        {% csrf_token %}
+
+        <div class="form-group">
+            <label for="name" class="form-label">Nombre *</label>
+            <input
+                type="text"
+                name="name"
+                id="name"
+                class="form-input"
+                value="{% if category %}{{ category.name }}{% endif %}"
+                required
+            >
+        </div>
+
+        <div class="form-group">
+            <label for="default_sale_condition" class="form-label">Condicion de venta predeterminada</label>
+            <select name="default_sale_condition" id="default_sale_condition" class="form-select">
+                {% for value, label in sale_condition_choices %}
+                <option
+                    value="{{ value }}"
+                    {% if category %}
+                        {% if category.default_sale_condition == value %}selected{% endif %}
+                    {% else %}
+                        {% if value == 'cash' %}selected{% endif %}
+                    {% endif %}
+                >
+                    {{ label }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label for="discount_percentage" class="form-label">Descuento (%)</label>
+            <input
+                type="number"
+                step="0.01"
+                min="0"
+                max="100"
+                name="discount_percentage"
+                id="discount_percentage"
+                class="form-input"
+                value="{% if category %}{{ category.discount_percentage }}{% else %}0{% endif %}"
+            >
+        </div>
+
+        <div class="form-group">
+            <label for="price_list_name" class="form-label">Lista de precio</label>
+            <input
+                type="text"
+                name="price_list_name"
+                id="price_list_name"
+                class="form-input"
+                value="{% if category %}{{ category.price_list_name }}{% else %}Principal{% endif %}"
+            >
+        </div>
+
+        <div class="form-group">
+            <label for="account_current_limit" class="form-label">Limite de cuenta corriente</label>
+            <input
+                type="number"
+                step="0.01"
+                min="0"
+                name="account_current_limit"
+                id="account_current_limit"
+                class="form-input"
+                value="{% if category %}{{ category.account_current_limit }}{% else %}0{% endif %}"
+            >
+        </div>
+
+        <div class="form-group">
+            <label for="sort_order" class="form-label">Orden</label>
+            <input
+                type="number"
+                min="0"
+                name="sort_order"
+                id="sort_order"
+                class="form-input"
+                value="{% if category %}{{ category.sort_order }}{% else %}0{% endif %}"
+            >
+        </div>
+
+        <div class="form-group">
+            <label class="form-label" style="display:flex; align-items:center; gap:10px;">
+                <input
+                    type="checkbox"
+                    name="allows_account_current"
+                    {% if category and category.allows_account_current %}checked{% endif %}
+                >
+                Habilita cuenta corriente
+            </label>
+        </div>
+
+        <div class="form-group">
+            <label class="form-label" style="display:flex; align-items:center; gap:10px;">
+                <input
+                    type="checkbox"
+                    name="expose_cost"
+                    {% if category and category.expose_cost %}checked{% endif %}
+                >
+                Costo (flag interno)
+            </label>
+        </div>
+
+        <div class="form-group">
+            <label class="form-label" style="display:flex; align-items:center; gap:10px;">
+                <input
+                    type="checkbox"
+                    name="is_active"
+                    {% if not category or category.is_active %}checked{% endif %}
+                >
+                Tipo activo
+            </label>
+        </div>
+
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary">
+                {% if category %}Guardar cambios{% else %}Crear tipo{% endif %}
+            </button>
+            <a href="{% url 'admin_client_category_list' %}" class="btn btn-outline">Cancelar</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

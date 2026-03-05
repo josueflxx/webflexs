@@ -8,6 +8,82 @@ from django.db import models
 from django.db.models import Sum
 from django.contrib.auth.models import User
 from django.utils import timezone
+from django.utils.text import slugify
+
+
+class ClientCategory(models.Model):
+    """
+    Operational category for clients (pricing/discount/account-current rules).
+    """
+
+    SALE_CONDITION_CASH = "cash"
+    SALE_CONDITION_ACCOUNT = "account"
+    SALE_CONDITION_CHOICES = [
+        (SALE_CONDITION_CASH, "Contado"),
+        (SALE_CONDITION_ACCOUNT, "Cuenta corriente"),
+    ]
+
+    name = models.CharField(max_length=120, unique=True, verbose_name="Nombre")
+    slug = models.SlugField(max_length=150, unique=True, blank=True)
+    default_sale_condition = models.CharField(
+        max_length=20,
+        choices=SALE_CONDITION_CHOICES,
+        default=SALE_CONDITION_CASH,
+        verbose_name="Condicion de venta predeterminada",
+    )
+    allows_account_current = models.BooleanField(
+        default=False,
+        verbose_name="Habilita cuenta corriente",
+    )
+    account_current_limit = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=0,
+        verbose_name="Limite de cuenta corriente",
+    )
+    expose_cost = models.BooleanField(
+        default=False,
+        verbose_name="Costo",
+        help_text="Reservado para reglas internas/visuales futuras.",
+    )
+    discount_percentage = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=0,
+        verbose_name="Descuento (%)",
+    )
+    price_list_name = models.CharField(
+        max_length=80,
+        default="Principal",
+        verbose_name="Lista de precio",
+    )
+    sort_order = models.PositiveIntegerField(default=0, verbose_name="Orden")
+    is_active = models.BooleanField(default=True, verbose_name="Activa")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Categoria de cliente"
+        verbose_name_plural = "Categorias de clientes"
+        ordering = ["sort_order", "name"]
+        indexes = [
+            models.Index(fields=["is_active", "sort_order"]),
+            models.Index(fields=["name"]),
+        ]
+
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            base_slug = slugify(self.name) or "categoria-cliente"
+            candidate = base_slug
+            counter = 1
+            while ClientCategory.objects.filter(slug=candidate).exclude(pk=self.pk).exists():
+                candidate = f"{base_slug}-{counter}"
+                counter += 1
+            self.slug = candidate
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return self.name
 
 
 class ClientProfile(models.Model):
@@ -33,6 +109,14 @@ class ClientProfile(models.Model):
         on_delete=models.CASCADE,
         related_name='client_profile',
         verbose_name="Usuario"
+    )
+    client_category = models.ForeignKey(
+        ClientCategory,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='clients',
+        verbose_name="Categoria de cliente",
     )
     company_name = models.CharField(
         max_length=200,
@@ -95,9 +179,18 @@ class ClientProfile(models.Model):
     def __str__(self):
         return f"{self.company_name} ({self.user.username})"
 
+    def get_effective_discount_percentage(self):
+        """
+        Discount in percentage points.
+        If client category exists and is active, its discount takes precedence.
+        """
+        if self.client_category_id and getattr(self.client_category, "is_active", False):
+            return self.client_category.discount_percentage or Decimal('0')
+        return self.discount or Decimal('0')
+
     def get_discount_decimal(self):
         """Return discount as decimal (e.g., 0.10 for 10%)."""
-        return self.discount / 100
+        return self.get_effective_discount_percentage() / 100
 
     def get_total_paid(self):
         total = self.payments.filter(is_cancelled=False).aggregate(total=Sum('amount'))['total']

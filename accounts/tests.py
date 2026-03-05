@@ -3,7 +3,8 @@ from django.core.cache import cache
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
-from accounts.models import ClientPayment, ClientProfile, ClientTransaction
+from accounts.models import ClientCategory, ClientPayment, ClientProfile, ClientTransaction
+from accounts.services.client_importer import ClientImporter
 from orders.models import Order
 
 
@@ -103,3 +104,64 @@ class ClientLedgerTests(TestCase):
         payment.save(update_fields=["is_cancelled", "updated_at"])
         tx.refresh_from_db()
         self.assertEqual(tx.amount, 0)
+
+    def test_discount_decimal_uses_client_category_when_assigned(self):
+        category = ClientCategory.objects.create(
+            name="Distribuidor",
+            discount_percentage="25.00",
+            default_sale_condition=ClientCategory.SALE_CONDITION_ACCOUNT,
+            allows_account_current=True,
+            account_current_limit="1000000.00",
+            price_list_name="Principal",
+        )
+        self.profile.client_category = category
+        self.profile.discount = 5
+        self.profile.save(update_fields=["client_category", "discount"])
+
+        self.profile.refresh_from_db()
+        self.assertEqual(self.profile.get_discount_decimal(), 0.25)
+
+
+class ClientImporterCategoryTests(TestCase):
+    def setUp(self):
+        self.category_n2, _ = ClientCategory.objects.get_or_create(
+            name="N°2",
+            defaults={
+                "discount_percentage": "25.00",
+                "default_sale_condition": ClientCategory.SALE_CONDITION_ACCOUNT,
+                "allows_account_current": True,
+                "account_current_limit": "8000000.00",
+                "price_list_name": "Principal",
+            },
+        )
+
+    def test_import_assigns_client_category_and_uses_category_discount(self):
+        importer = ClientImporter(file=None)
+        row = {
+            "Usuario": "cliente_import_n2",
+            "Nombre": "Cliente N2",
+            "Tipo de cliente": "N°2",
+            "Descuento": "5",
+            "Cond. IVA": "consumidor final",
+        }
+
+        result = importer.process_row(row, dry_run=False)
+        self.assertTrue(result.success)
+
+        user = User.objects.get(username="cliente_import_n2")
+        profile = user.client_profile
+        self.assertEqual(profile.client_category_id, self.category_n2.pk)
+        self.assertEqual(profile.discount, self.category_n2.discount_percentage)
+
+    def test_import_rejects_unknown_client_category(self):
+        importer = ClientImporter(file=None)
+        row = {
+            "Usuario": "cliente_import_x",
+            "Nombre": "Cliente X",
+            "Tipo de cliente": "N°99",
+            "Descuento": "5",
+        }
+
+        result = importer.process_row(row, dry_run=True)
+        self.assertFalse(result.success)
+        self.assertTrue(any("no coincide" in err.lower() for err in result.errors))

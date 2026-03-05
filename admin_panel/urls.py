@@ -30,6 +30,10 @@ urlpatterns = [
     
     # Clients
     path('clientes/', views.client_list, name='admin_client_list'),
+    path('clientes/categorias/', views.client_category_list, name='admin_client_category_list'),
+    path('clientes/categorias/nueva/', views.client_category_create, name='admin_client_category_create'),
+    path('clientes/categorias/<int:pk>/editar/', views.client_category_edit, name='admin_client_category_edit'),
+    path('clientes/categorias/<int:pk>/eliminar/', views.client_category_delete, name='admin_client_category_delete'),
     path('clientes/<int:pk>/pedidos/', views.client_order_history, name='admin_client_order_history'),
     path('clientes/<int:pk>/editar/', views.client_edit, name='admin_client_edit'),
     path('clientes/<int:pk>/password/', views.client_password_change, name='admin_client_password'),

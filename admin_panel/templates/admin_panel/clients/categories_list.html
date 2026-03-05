@@ -1,0 +1,122 @@
+{% extends 'admin_panel/base.html' %}
+
+{% block page_title %}Tipos de clientes{% endblock %}
+
+{% block content %}
+<div class="admin-table-container">
+    <div class="admin-toolbar">
+        <form method="get" class="toolbar-search" style="display:flex; gap:8px; flex-wrap:wrap;">
+            <input
+                type="text"
+                name="q"
+                value="{{ search }}"
+                placeholder="Buscar nombre o lista de precio..."
+                class="form-input"
+                style="min-width:280px;"
+            >
+            <select name="status" class="form-select" style="max-width:180px;">
+                <option value="" {% if not status %}selected{% endif %}>Todos</option>
+                <option value="active" {% if status == 'active' %}selected{% endif %}>Activas</option>
+                <option value="inactive" {% if status == 'inactive' %}selected{% endif %}>Inactivas</option>
+            </select>
+            <button type="submit" class="btn btn-primary">Filtrar</button>
+            <a href="{% url 'admin_client_category_list' %}" class="btn btn-outline">Limpiar</a>
+        </form>
+        <div class="toolbar-actions">
+            <a href="{% url 'admin_client_category_create' %}" class="btn btn-primary">+ Nuevo tipo</a>
+            <a href="{% url 'admin_client_list' %}" class="btn btn-outline">Volver a clientes</a>
+        </div>
+    </div>
+
+    <table class="admin-table">
+        <thead>
+            <tr>
+                <th>Nombre</th>
+                <th>Cond. venta</th>
+                <th>CC</th>
+                <th>Limite CC</th>
+                <th>Costo</th>
+                <th>Descuento</th>
+                <th>Lista precio</th>
+                <th>Estado</th>
+                <th>Clientes</th>
+                <th>Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for category in page_obj %}
+            <tr>
+                <td><strong>{{ category.name }}</strong></td>
+                <td>{{ category.get_default_sale_condition_display }}</td>
+                <td>
+                    {% if category.allows_account_current %}
+                    <span class="badge badge-success">Si</span>
+                    {% else %}
+                    <span class="badge badge-secondary">No</span>
+                    {% endif %}
+                </td>
+                <td>${{ category.account_current_limit|floatformat:2 }}</td>
+                <td>
+                    {% if category.expose_cost %}
+                    <span class="badge badge-info">Si</span>
+                    {% else %}
+                    <span class="badge badge-secondary">No</span>
+                    {% endif %}
+                </td>
+                <td><span class="badge badge-success">{{ category.discount_percentage|floatformat:2 }}%</span></td>
+                <td>{{ category.price_list_name }}</td>
+                <td>
+                    {% if category.is_active %}
+                    <span class="badge badge-success">Activa</span>
+                    {% else %}
+                    <span class="badge badge-danger">Inactiva</span>
+                    {% endif %}
+                </td>
+                <td>{{ category.clients.count }}</td>
+                <td class="actions">
+                    <a href="{% url 'admin_client_category_edit' category.pk %}" class="btn btn-outline btn-sm">Editar</a>
+                    <form
+                        method="post"
+                        action="{% url 'admin_client_category_delete' category.pk %}"
+                        style="display:inline;"
+                        onsubmit="return confirm('Se eliminara la categoria y los clientes quedaran sin categoria. Continuar?');"
+                    >
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-danger-outline btn-sm">Eliminar</button>
+                    </form>
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="10" class="text-center text-muted">No hay tipos de clientes.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    {% if page_obj.paginator.num_pages > 1 %}
+    <div class="pagination-container">
+        <div class="pagination-info">
+            Pagina {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}
+        </div>
+        <div class="pagination-controls">
+            {% if page_obj.has_previous %}
+            <a href="?page=1{% if search %}&q={{ search }}{% endif %}{% if status %}&status={{ status }}{% endif %}" class="btn btn-outline btn-sm"><< Primera</a>
+            <a href="?page={{ page_obj.previous_page_number }}{% if search %}&q={{ search }}{% endif %}{% if status %}&status={{ status }}{% endif %}" class="btn btn-outline btn-sm">Anterior</a>
+            {% else %}
+            <button class="btn btn-outline btn-sm" disabled><< Primera</button>
+            <button class="btn btn-outline btn-sm" disabled>Anterior</button>
+            {% endif %}
+
+            {% if page_obj.has_next %}
+            <a href="?page={{ page_obj.next_page_number }}{% if search %}&q={{ search }}{% endif %}{% if status %}&status={{ status }}{% endif %}" class="btn btn-outline btn-sm">Siguiente</a>
+            <a href="?page={{ page_obj.paginator.num_pages }}{% if search %}&q={{ search }}{% endif %}{% if status %}&status={{ status }}{% endif %}" class="btn btn-outline btn-sm">Ultima >></a>
+            {% else %}
+            <button class="btn btn-outline btn-sm" disabled>Siguiente</button>
+            <button class="btn btn-outline btn-sm" disabled>Ultima >></button>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

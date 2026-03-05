@@ -34,7 +34,13 @@ import csv
 from openpyxl import Workbook
 
 from catalog.models import Product, Category, CategoryAttribute, ClampMeasureRequest, Supplier
-from accounts.models import AccountRequest, ClientPayment, ClientProfile, ClientTransaction
+from accounts.models import (
+    AccountRequest,
+    ClientCategory,
+    ClientPayment,
+    ClientProfile,
+    ClientTransaction,
+)
 from accounts.services.ledger import (
     create_adjustment_transaction,
     sync_order_charge_transaction,
@@ -133,6 +139,29 @@ def can_delete_client_record(user):
     Client deletion is restricted to primary superadmin.
     """
     return is_primary_superadmin(user)
+
+
+def get_active_client_categories():
+    return ClientCategory.objects.filter(is_active=True).order_by("sort_order", "name")
+
+
+def get_client_categories_for_client(client=None):
+    queryset = ClientCategory.objects.all()
+    if client and getattr(client, "client_category_id", None):
+        queryset = queryset.filter(Q(is_active=True) | Q(pk=client.client_category_id))
+    else:
+        queryset = queryset.filter(is_active=True)
+    return queryset.order_by("sort_order", "name")
+
+
+def parse_optional_client_category(raw_value):
+    raw = str(raw_value or "").strip()
+    if not raw:
+        return None
+    try:
+        return ClientCategory.objects.get(pk=int(raw))
+    except (ValueError, TypeError, ClientCategory.DoesNotExist):
+        raise ValueError("Categoria de cliente invalida.")
 
 
 def normalize_admin_search_query(raw_query):
@@ -3348,7 +3377,7 @@ def clamp_request_detail(request, pk):
 @staff_member_required
 def client_list(request):
     """Client list with search."""
-    clients = ClientProfile.objects.select_related('user').all()
+    clients = ClientProfile.objects.select_related('user', 'client_category').all()
     
     clients, search = apply_admin_text_search(
         clients,
@@ -3363,10 +3392,282 @@ def client_list(request):
     return render(request, 'admin_panel/clients/list.html', {
         'page_obj': page_obj,
         'search': search,
+        'can_manage_client_categories': can_edit_client_profile(request.user),
         'can_edit_client_profile': can_edit_client_profile(request.user),
         'can_manage_client_credentials': can_manage_client_credentials(request.user),
         'can_delete_client_record': can_delete_client_record(request.user),
     })
+
+
+@staff_member_required
+def client_category_list(request):
+    """List client categories used for discount/account-current rules."""
+    categories = ClientCategory.objects.all()
+    categories, search = apply_admin_text_search(
+        categories,
+        request.GET.get("q", ""),
+        ["name", "price_list_name", "slug"],
+    )
+    status = str(request.GET.get("status", "")).strip().lower()
+    if status == "active":
+        categories = categories.filter(is_active=True)
+    elif status == "inactive":
+        categories = categories.filter(is_active=False)
+
+    paginator = Paginator(categories.order_by("sort_order", "name"), 50)
+    page_obj = paginator.get_page(request.GET.get("page", 1))
+
+    return render(
+        request,
+        "admin_panel/clients/categories_list.html",
+        {
+            "page_obj": page_obj,
+            "search": search,
+            "status": status,
+        },
+    )
+
+
+@staff_member_required
+def client_category_create(request):
+    """Create a client category."""
+    if request.method == "POST":
+        name = str(request.POST.get("name", "")).strip()
+        default_sale_condition = str(
+            request.POST.get("default_sale_condition", ClientCategory.SALE_CONDITION_CASH)
+        ).strip()
+        allows_account_current = request.POST.get("allows_account_current") == "on"
+        expose_cost = request.POST.get("expose_cost") == "on"
+        is_active = request.POST.get("is_active") == "on"
+        price_list_name = str(request.POST.get("price_list_name", "Principal")).strip() or "Principal"
+
+        try:
+            sort_order = int(str(request.POST.get("sort_order", "0")).strip() or "0")
+        except ValueError:
+            messages.error(request, "Orden invalido.")
+            return render(
+                request,
+                "admin_panel/clients/categories_form.html",
+                {"category": None, "sale_condition_choices": ClientCategory.SALE_CONDITION_CHOICES},
+            )
+
+        try:
+            discount_percentage = parse_admin_decimal_input(
+                request.POST.get("discount_percentage", "0"),
+                "Descuento (%)",
+                min_value="0",
+                max_value="100",
+            )
+            account_current_limit = parse_admin_decimal_input(
+                request.POST.get("account_current_limit", "0"),
+                "Limite de cuenta corriente",
+                min_value="0",
+            )
+        except ValueError as exc:
+            messages.error(request, str(exc))
+            return render(
+                request,
+                "admin_panel/clients/categories_form.html",
+                {"category": None, "sale_condition_choices": ClientCategory.SALE_CONDITION_CHOICES},
+            )
+
+        if not name:
+            messages.error(request, "El nombre es obligatorio.")
+            return render(
+                request,
+                "admin_panel/clients/categories_form.html",
+                {"category": None, "sale_condition_choices": ClientCategory.SALE_CONDITION_CHOICES},
+            )
+        if default_sale_condition not in dict(ClientCategory.SALE_CONDITION_CHOICES):
+            messages.error(request, "Condicion de venta invalida.")
+            return render(
+                request,
+                "admin_panel/clients/categories_form.html",
+                {"category": None, "sale_condition_choices": ClientCategory.SALE_CONDITION_CHOICES},
+            )
+        if ClientCategory.objects.filter(name__iexact=name).exists():
+            messages.error(request, "Ya existe una categoria con ese nombre.")
+            return render(
+                request,
+                "admin_panel/clients/categories_form.html",
+                {"category": None, "sale_condition_choices": ClientCategory.SALE_CONDITION_CHOICES},
+            )
+
+        category = ClientCategory.objects.create(
+            name=name,
+            default_sale_condition=default_sale_condition,
+            allows_account_current=allows_account_current,
+            account_current_limit=account_current_limit,
+            expose_cost=expose_cost,
+            discount_percentage=discount_percentage,
+            price_list_name=price_list_name,
+            sort_order=max(sort_order, 0),
+            is_active=is_active,
+        )
+        log_admin_action(
+            request,
+            action="client_category_create",
+            target_type="client_category",
+            target_id=category.pk,
+            details={
+                "name": category.name,
+                "discount_percentage": str(category.discount_percentage),
+                "allows_account_current": category.allows_account_current,
+                "account_current_limit": str(category.account_current_limit),
+                "price_list_name": category.price_list_name,
+                "is_active": category.is_active,
+            },
+        )
+        messages.success(request, f'Categoria "{category.name}" creada.')
+        return redirect("admin_client_category_list")
+
+    return render(
+        request,
+        "admin_panel/clients/categories_form.html",
+        {"category": None, "sale_condition_choices": ClientCategory.SALE_CONDITION_CHOICES},
+    )
+
+
+@staff_member_required
+def client_category_edit(request, pk):
+    """Edit a client category."""
+    category = get_object_or_404(ClientCategory, pk=pk)
+    if request.method == "POST":
+        before = model_snapshot(
+            category,
+            [
+                "name",
+                "default_sale_condition",
+                "allows_account_current",
+                "account_current_limit",
+                "expose_cost",
+                "discount_percentage",
+                "price_list_name",
+                "sort_order",
+                "is_active",
+            ],
+        )
+
+        name = str(request.POST.get("name", "")).strip()
+        default_sale_condition = str(
+            request.POST.get("default_sale_condition", ClientCategory.SALE_CONDITION_CASH)
+        ).strip()
+        allows_account_current = request.POST.get("allows_account_current") == "on"
+        expose_cost = request.POST.get("expose_cost") == "on"
+        is_active = request.POST.get("is_active") == "on"
+        price_list_name = str(request.POST.get("price_list_name", "Principal")).strip() or "Principal"
+
+        try:
+            sort_order = int(str(request.POST.get("sort_order", "0")).strip() or "0")
+            discount_percentage = parse_admin_decimal_input(
+                request.POST.get("discount_percentage", "0"),
+                "Descuento (%)",
+                min_value="0",
+                max_value="100",
+            )
+            account_current_limit = parse_admin_decimal_input(
+                request.POST.get("account_current_limit", "0"),
+                "Limite de cuenta corriente",
+                min_value="0",
+            )
+        except (ValueError, TypeError) as exc:
+            messages.error(request, str(exc))
+            return render(
+                request,
+                "admin_panel/clients/categories_form.html",
+                {"category": category, "sale_condition_choices": ClientCategory.SALE_CONDITION_CHOICES},
+            )
+
+        if not name:
+            messages.error(request, "El nombre es obligatorio.")
+            return render(
+                request,
+                "admin_panel/clients/categories_form.html",
+                {"category": category, "sale_condition_choices": ClientCategory.SALE_CONDITION_CHOICES},
+            )
+        if default_sale_condition not in dict(ClientCategory.SALE_CONDITION_CHOICES):
+            messages.error(request, "Condicion de venta invalida.")
+            return render(
+                request,
+                "admin_panel/clients/categories_form.html",
+                {"category": category, "sale_condition_choices": ClientCategory.SALE_CONDITION_CHOICES},
+            )
+        if ClientCategory.objects.filter(name__iexact=name).exclude(pk=category.pk).exists():
+            messages.error(request, "Ya existe una categoria con ese nombre.")
+            return render(
+                request,
+                "admin_panel/clients/categories_form.html",
+                {"category": category, "sale_condition_choices": ClientCategory.SALE_CONDITION_CHOICES},
+            )
+
+        category.name = name
+        category.default_sale_condition = default_sale_condition
+        category.allows_account_current = allows_account_current
+        category.account_current_limit = account_current_limit
+        category.expose_cost = expose_cost
+        category.discount_percentage = discount_percentage
+        category.price_list_name = price_list_name
+        category.sort_order = max(sort_order, 0)
+        category.is_active = is_active
+        category.save()
+
+        # Keep assigned clients aligned with category discount rule.
+        ClientProfile.objects.filter(client_category=category).update(discount=category.discount_percentage)
+
+        after = model_snapshot(
+            category,
+            [
+                "name",
+                "default_sale_condition",
+                "allows_account_current",
+                "account_current_limit",
+                "expose_cost",
+                "discount_percentage",
+                "price_list_name",
+                "sort_order",
+                "is_active",
+            ],
+        )
+        log_admin_change(
+            request,
+            action="client_category_update",
+            target_type="client_category",
+            target_id=category.pk,
+            before=before,
+            after=after,
+        )
+        messages.success(request, f'Categoria "{category.name}" actualizada.')
+        return redirect("admin_client_category_list")
+
+    return render(
+        request,
+        "admin_panel/clients/categories_form.html",
+        {"category": category, "sale_condition_choices": ClientCategory.SALE_CONDITION_CHOICES},
+    )
+
+
+@staff_member_required
+@require_POST
+def client_category_delete(request, pk):
+    """Delete/deactivate a client category."""
+    category = get_object_or_404(ClientCategory, pk=pk)
+    before = model_snapshot(
+        category,
+        ["name", "is_active", "discount_percentage", "allows_account_current", "account_current_limit"],
+    )
+    impacted_clients = ClientProfile.objects.filter(client_category=category).count()
+    ClientProfile.objects.filter(client_category=category).update(client_category=None)
+    category.delete()
+    log_admin_change(
+        request,
+        action="client_category_delete",
+        target_type="client_category",
+        target_id=pk,
+        before=before,
+        after={"deleted": True, "impacted_clients": impacted_clients},
+    )
+    messages.success(request, "Categoria eliminada.")
+    return redirect("admin_client_category_list")
 
 
 @staff_member_required
@@ -3383,6 +3684,19 @@ def client_edit(request, pk):
     
     if request.method == 'POST':
         try:
+            selected_category = parse_optional_client_category(request.POST.get("client_category", ""))
+        except ValueError as exc:
+            messages.error(request, str(exc))
+            return render(
+                request,
+                'admin_panel/clients/form.html',
+                {
+                    'client': client,
+                    'client_categories': get_client_categories_for_client(client),
+                },
+            )
+
+        try:
             discount_value = parse_admin_decimal_input(
                 request.POST.get('discount', '0'),
                 'Descuento (%)',
@@ -3391,24 +3705,56 @@ def client_edit(request, pk):
             )
         except ValueError as exc:
             messages.error(request, str(exc))
-            return render(request, 'admin_panel/clients/form.html', {'client': client})
+            return render(
+                request,
+                'admin_panel/clients/form.html',
+                {
+                    'client': client,
+                    'client_categories': get_client_categories_for_client(client),
+                },
+            )
 
         before = model_snapshot(
             client,
-            ['company_name', 'cuit_dni', 'province', 'address', 'phone', 'discount', 'client_type', 'iva_condition'],
+            [
+                'company_name',
+                'cuit_dni',
+                'province',
+                'address',
+                'phone',
+                'discount',
+                'client_type',
+                'iva_condition',
+                'client_category_id',
+            ],
         )
         client.company_name = request.POST.get('company_name', '').strip()
         client.cuit_dni = request.POST.get('cuit_dni', '').strip()
         client.province = request.POST.get('province', '').strip()
         client.address = request.POST.get('address', '').strip()
         client.phone = request.POST.get('phone', '').strip()
-        client.discount = discount_value
+        client.client_category = selected_category
+        client.discount = (
+            selected_category.discount_percentage
+            if selected_category
+            else discount_value
+        )
         client.client_type = request.POST.get('client_type', '')
         client.iva_condition = request.POST.get('iva_condition', '')
         client.save()
         after = model_snapshot(
             client,
-            ['company_name', 'cuit_dni', 'province', 'address', 'phone', 'discount', 'client_type', 'iva_condition'],
+            [
+                'company_name',
+                'cuit_dni',
+                'province',
+                'address',
+                'phone',
+                'discount',
+                'client_type',
+                'iva_condition',
+                'client_category_id',
+            ],
         )
         log_admin_change(
             request,
@@ -3422,10 +3768,23 @@ def client_edit(request, pk):
             },
         )
         
-        messages.success(request, f'Cliente "{client.company_name}" actualizado.')
+        if selected_category:
+            messages.success(
+                request,
+                f'Cliente "{client.company_name}" actualizado con categoria "{selected_category.name}".',
+            )
+        else:
+            messages.success(request, f'Cliente "{client.company_name}" actualizado.')
         return redirect('admin_client_list')
     
-    return render(request, 'admin_panel/clients/form.html', {'client': client})
+    return render(
+        request,
+        'admin_panel/clients/form.html',
+        {
+            'client': client,
+            'client_categories': get_client_categories_for_client(client),
+        },
+    )
 
 
 @staff_member_required
@@ -3766,6 +4125,18 @@ def request_approve(request, pk):
         username = request.POST.get('username', '').strip()
         password = request.POST.get('password', '').strip()
         try:
+            selected_category = parse_optional_client_category(request.POST.get("client_category", ""))
+        except ValueError as exc:
+            messages.error(request, str(exc))
+            return render(
+                request,
+                'admin_panel/requests/approve.html',
+                {
+                    'account_request': account_request,
+                    'client_categories': get_active_client_categories(),
+                },
+            )
+        try:
             discount = parse_admin_decimal_input(
                 request.POST.get('discount', '0'),
                 'Descuento (%)',
@@ -3774,37 +4145,64 @@ def request_approve(request, pk):
             )
         except ValueError as exc:
             messages.error(request, str(exc))
-            return render(request, 'admin_panel/requests/approve.html', {
-                'account_request': account_request,
-            })
+            return render(
+                request,
+                'admin_panel/requests/approve.html',
+                {
+                    'account_request': account_request,
+                    'client_categories': get_active_client_categories(),
+                },
+            )
+        if selected_category:
+            discount = selected_category.discount_percentage
         before = model_snapshot(account_request, ['status', 'admin_notes', 'processed_at', 'created_user_id'])
 
         if not username:
             messages.error(request, 'El nombre de usuario es obligatorio.')
-            return render(request, 'admin_panel/requests/approve.html', {
-                'account_request': account_request,
-            })
+            return render(
+                request,
+                'admin_panel/requests/approve.html',
+                {
+                    'account_request': account_request,
+                    'client_categories': get_active_client_categories(),
+                },
+            )
 
         if User.objects.filter(username=username).exists():
             messages.error(request, f'El usuario "{username}" ya existe.')
-            return render(request, 'admin_panel/requests/approve.html', {
-                'account_request': account_request,
-            })
+            return render(
+                request,
+                'admin_panel/requests/approve.html',
+                {
+                    'account_request': account_request,
+                    'client_categories': get_active_client_categories(),
+                },
+            )
 
         if not password:
             messages.error(request, 'La contrasena es obligatoria.')
-            return render(request, 'admin_panel/requests/approve.html', {
-                'account_request': account_request,
-            })
+            return render(
+                request,
+                'admin_panel/requests/approve.html',
+                {
+                    'account_request': account_request,
+                    'client_categories': get_active_client_categories(),
+                },
+            )
 
         try:
             validate_password(password)
         except ValidationError as exc:
             for error in exc.messages:
                 messages.error(request, error)
-            return render(request, 'admin_panel/requests/approve.html', {
-                'account_request': account_request,
-            })
+            return render(
+                request,
+                'admin_panel/requests/approve.html',
+                {
+                    'account_request': account_request,
+                    'client_categories': get_active_client_categories(),
+                },
+            )
 
         else:
             # Create user
@@ -3824,6 +4222,7 @@ def request_approve(request, pk):
                 address=account_request.address,
                 phone=account_request.phone,
                 discount=discount,
+                client_category=selected_category,
             )
 
             # Update request
@@ -3842,6 +4241,7 @@ def request_approve(request, pk):
                 extra={
                     'created_username': username,
                     'discount': str(discount),
+                    'client_category': selected_category.name if selected_category else '',
                 },
             )
 
@@ -3851,9 +4251,14 @@ def request_approve(request, pk):
             )
             return redirect('admin_request_list')
     
-    return render(request, 'admin_panel/requests/approve.html', {
-        'account_request': account_request,
-    })
+    return render(
+        request,
+        'admin_panel/requests/approve.html',
+        {
+            'account_request': account_request,
+            'client_categories': get_active_client_categories(),
+        },
+    )
 
 
 @staff_member_required
