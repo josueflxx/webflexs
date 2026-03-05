@@ -75,6 +75,11 @@ document.addEventListener('DOMContentLoaded', function () {
     // Admin UX: allow horizontal scrolling overflow panels/tables using right-click drag.
     if (document.body.classList.contains('admin-body')) {
         const adminDragScrollSelector = [
+            '.toolbar-actions',
+            '.form-actions',
+            '.cc-quick-actions',
+            '.cc-links',
+            '.cc-tabs',
             '.products-table-wrapper',
             '.category-table-wrap',
             '.execution-table-wrap',
@@ -147,7 +152,11 @@ document.addEventListener('DOMContentLoaded', function () {
             if (event.button !== 2) return;
             const target = event.target;
             if (!(target instanceof Element)) return;
-            if (target.closest(interactiveBlockSelector)) return;
+
+            const explicitScrollableContainer = target.closest(
+                '.toolbar-actions, .form-actions, .cc-quick-actions, .cc-links, .cc-tabs, [data-drag-scroll]'
+            );
+            if (target.closest(interactiveBlockSelector) && !explicitScrollableContainer) return;
 
             const container = getDragScrollContainer(target) || getDocumentScrollContainer();
             if (!container) return;

@@ -873,7 +873,24 @@
     background: var(--color-secondary);
     border-radius: var(--radius-lg);
     border: 1px solid rgba(255, 255, 255, 0.1);
-    overflow: hidden;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: thin;
+    -webkit-overflow-scrolling: touch;
+}
+
+.admin-table-container::-webkit-scrollbar {
+    height: 8px;
+}
+
+.admin-table-container::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.06);
+    border-radius: 999px;
+}
+
+.admin-table-container::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.22);
+    border-radius: 999px;
 }
 
 .admin-toolbar {
@@ -898,10 +915,42 @@
 .toolbar-actions {
     display: flex;
     gap: var(--spacing-sm);
+    min-width: 0;
+    max-width: 100%;
+    flex: 1 1 auto;
+    justify-content: flex-end;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: thin;
+    -webkit-overflow-scrolling: touch;
+    white-space: nowrap;
+    flex-wrap: nowrap;
+}
+
+.toolbar-actions::-webkit-scrollbar {
+    height: 8px;
+}
+
+.toolbar-actions::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.06);
+    border-radius: 999px;
+}
+
+.toolbar-actions::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.22);
+    border-radius: 999px;
+}
+
+.toolbar-actions > .btn,
+.toolbar-actions > button,
+.toolbar-actions > a,
+.toolbar-actions > form {
+    flex: 0 0 auto;
 }
 
 .admin-table {
-    width: 100%;
+    width: max-content;
+    min-width: 100%;
     border-collapse: collapse;
 }
 
@@ -988,9 +1037,36 @@
 .form-actions {
     display: flex;
     gap: var(--spacing-md);
+    min-width: 0;
     margin-top: var(--spacing-xl);
     padding-top: var(--spacing-xl);
     border-top: 1px solid rgba(255, 255, 255, 0.1);
+    max-width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: thin;
+    -webkit-overflow-scrolling: touch;
+}
+
+.form-actions::-webkit-scrollbar {
+    height: 8px;
+}
+
+.form-actions::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.06);
+    border-radius: 999px;
+}
+
+.form-actions::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.22);
+    border-radius: 999px;
+}
+
+.form-actions > .btn,
+.form-actions > button,
+.form-actions > a,
+.form-actions > form {
+    flex: 0 0 auto;
 }
 
 /* Quick List */
@@ -1344,7 +1420,8 @@
 
     .toolbar-actions {
         width: 100%;
-        flex-wrap: wrap;
+        flex-wrap: nowrap;
+        overflow-x: auto;
     }
 
     .clamp-quoter-layout {
@@ -1400,7 +1477,8 @@
     }
 
     .form-actions {
-        flex-wrap: wrap;
+        flex-wrap: nowrap;
+        overflow-x: auto;
     }
 
     .dashboard-sections {
