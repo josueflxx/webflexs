@@ -9,7 +9,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{% static 'core/css/base.css' %}">
-    <link rel="stylesheet" href="{% static 'core/css/admin.css' %}?v=5">
+    <link rel="stylesheet" href="{% static 'core/css/admin.css' %}?v=6">
     <link rel="stylesheet" href="{% static 'core/css/admin_right_sidebar.css' %}?v=3">
     <link rel="stylesheet" href="{% static 'core/css/search_suggestions.css' %}?v=2">
     <link rel="icon" type="image/x-icon" href="{% static 'core/img/favicon.ico' %}">
@@ -150,6 +150,103 @@
                     <span>{{ user.first_name|default:user.username }}</span>
                 </div>
             </header>
+            <nav class="admin-top-nav-wrap" aria-label="Paneles principales">
+                <div class="admin-top-nav">
+                    <div class="top-nav-group">
+                        <span class="top-nav-group-label">General</span>
+                        <div class="top-nav-group-links">
+                            <a href="{% url 'admin_dashboard' %}" class="top-nav-item {% if request.resolver_match.url_name == 'admin_dashboard' %}active{% endif %}">
+                                <span aria-hidden="true">&#128202;</span> Dashboard
+                            </a>
+                        </div>
+                    </div>
+
+                    <div class="top-nav-group">
+                        <span class="top-nav-group-label">Catalogo</span>
+                        <div class="top-nav-group-links">
+                            <a href="{% url 'admin_product_list' %}" class="top-nav-item {% if 'product' in request.resolver_match.url_name %}active{% endif %}">
+                                <span aria-hidden="true">&#128230;</span> Productos
+                            </a>
+                            <a href="{% url 'admin_category_list' %}" class="top-nav-item {% if 'category' in request.resolver_match.url_name %}active{% endif %}">
+                                <span aria-hidden="true">&#128193;</span> Categorias
+                            </a>
+                            <a href="{% url 'admin_supplier_list' %}" class="top-nav-item {% if 'supplier' in request.resolver_match.url_name %}active{% endif %}">
+                                <span aria-hidden="true">&#127981;</span> Proveedores
+                            </a>
+                            <a href="{% url 'admin_clamp_request_list' %}" class="top-nav-item {% if 'clamp_request' in request.resolver_match.url_name %}active{% endif %}">
+                                <span aria-hidden="true">&#128203;</span> Solicitudes Medida
+                            </a>
+                        </div>
+                    </div>
+
+                    <div class="top-nav-group">
+                        <span class="top-nav-group-label">Clientes</span>
+                        <div class="top-nav-group-links">
+                            <a href="{% url 'admin_client_list' %}" class="top-nav-item {% if 'client' in request.resolver_match.url_name and 'client_category' not in request.resolver_match.url_name %}active{% endif %}">
+                                <span aria-hidden="true">&#128101;</span> Clientes
+                            </a>
+                            <a href="{% url 'admin_client_category_list' %}" class="top-nav-item {% if 'client_category' in request.resolver_match.url_name %}active{% endif %}">
+                                <span aria-hidden="true">&#128203;</span> Tipos clientes
+                            </a>
+                            <a href="{% url 'admin_request_list' %}" class="top-nav-item {% if 'admin_request' in request.resolver_match.url_name %}active{% endif %}">
+                                <span aria-hidden="true">&#128221;</span> Solicitudes
+                            </a>
+                        </div>
+                    </div>
+
+                    <div class="top-nav-group">
+                        <span class="top-nav-group-label">Ventas</span>
+                        <div class="top-nav-group-links">
+                            <a href="{% url 'admin_order_list' %}" class="top-nav-item {% if 'order' in request.resolver_match.url_name %}active{% endif %}">
+                                <span aria-hidden="true">&#128722;</span> Pedidos
+                            </a>
+                            <a href="{% url 'admin_payment_list' %}" class="top-nav-item {% if 'payment' in request.resolver_match.url_name %}active{% endif %}">
+                                <span aria-hidden="true">&#128179;</span> Pagos
+                            </a>
+                            <a href="{% url 'admin_clamp_quoter' %}" class="top-nav-item {% if 'clamp_quoter' in request.resolver_match.url_name %}active{% endif %}">
+                                <span aria-hidden="true">&#128208;</span> Cotizador
+                            </a>
+                        </div>
+                    </div>
+
+                    {% if user.is_superuser %}
+                    <div class="top-nav-group">
+                        <span class="top-nav-group-label">Herramientas</span>
+                        <div class="top-nav-group-links">
+                            <a href="{% url 'admin_import_dashboard' %}" class="top-nav-item {% if 'import' in request.resolver_match.url_name %}active{% endif %}">
+                                <span aria-hidden="true">&#128228;</span> Importar
+                            </a>
+                            <a href="{% url 'admin_catalog_excel_template_list' %}" class="top-nav-item {% if 'catalog_excel' in request.resolver_match.url_name %}active{% endif %}">
+                                <span aria-hidden="true">&#128202;</span> Exportar Excel
+                            </a>
+                        </div>
+                    </div>
+                    <div class="top-nav-group">
+                        <span class="top-nav-group-label">Sistema</span>
+                        <div class="top-nav-group-links">
+                            <a href="{% url 'admin_user_list' %}" class="top-nav-item {% if 'admin_user' in request.resolver_match.url_name %}active{% endif %}">
+                                <span aria-hidden="true">&#128274;</span> Admins
+                            </a>
+                            <a href="{% url 'admin_settings' %}" class="top-nav-item {% if 'settings' in request.resolver_match.url_name %}active{% endif %}">
+                                <span aria-hidden="true">&#9881;</span> Configuracion
+                            </a>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <div class="top-nav-group">
+                        <span class="top-nav-group-label">Acceso</span>
+                        <div class="top-nav-group-links">
+                            <a href="{% url 'catalog' %}" class="top-nav-item" target="_blank" rel="noopener noreferrer">
+                                <span aria-hidden="true">&#127760;</span> Ver Catalogo
+                            </a>
+                            <a href="{% url 'logout' %}" class="top-nav-item top-nav-item-danger">
+                                <span aria-hidden="true">&#128682;</span> Salir
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </nav>
 
             {% if messages %}
             <div class="admin-messages">

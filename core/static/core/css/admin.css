@@ -16,9 +16,9 @@
 
 /* Sidebar */
 .admin-sidebar {
+    display: none !important;
     background: var(--color-secondary);
     border-right: 1px solid rgba(255, 255, 255, 0.1);
-    display: flex;
     flex-direction: column;
     position: fixed;
     top: 0;
@@ -296,7 +296,7 @@
 
 /* Main Content */
 .admin-main {
-    margin-left: 260px;
+    margin-left: 0;
     min-height: 100vh;
     display: flex;
     flex-direction: column;
@@ -336,6 +336,164 @@
 
 .sidebar-overlay {
     display: none;
+}
+
+.left-sidebar-toggle {
+    display: none !important;
+}
+
+.sidebar-overlay {
+    display: none !important;
+}
+
+.admin-top-nav-wrap {
+    background: linear-gradient(180deg, rgba(20, 24, 34, 0.96), rgba(17, 20, 28, 0.94));
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 14px var(--spacing-2xl) 11px;
+    position: relative;
+    z-index: 1;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.22);
+}
+
+.admin-top-nav {
+    display: flex;
+    align-items: stretch;
+    gap: 14px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    white-space: nowrap;
+    padding: 0 0 5px;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(72, 79, 92, 0.95) rgba(10, 13, 19, 0.95);
+}
+
+.top-nav-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding-right: 14px;
+    border-right: 1px solid rgba(255, 255, 255, 0.12);
+    flex: 0 0 auto;
+}
+
+.top-nav-group:last-child {
+    border-right: 0;
+    padding-right: 0;
+}
+
+.top-nav-group-label {
+    display: block;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: rgba(200, 208, 220, 0.88);
+    padding-left: 6px;
+}
+
+.top-nav-group-links {
+    display: flex;
+    align-items: center;
+    gap: 0;
+}
+
+.admin-top-nav::-webkit-scrollbar {
+    height: 6px;
+}
+
+.admin-top-nav::-webkit-scrollbar-track {
+    background: rgba(10, 13, 19, 0.95);
+    border-radius: 999px;
+}
+
+.admin-top-nav::-webkit-scrollbar-thumb {
+    background: rgba(72, 79, 92, 0.95);
+    border-radius: 999px;
+}
+
+.admin-top-nav::-webkit-scrollbar-thumb:hover {
+    background: rgba(98, 106, 120, 0.95);
+}
+
+.top-nav-item {
+    display: inline-flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    gap: 6px;
+    min-width: 0;
+    min-height: 0;
+    padding: 10px 14px;
+    border-radius: 0;
+    border: 0;
+    border-right: 0;
+    background: transparent;
+    color: var(--color-white);
+    font-size: 15px;
+    font-weight: 600;
+    text-decoration: none;
+    transition: all var(--transition-fast);
+    text-align: center;
+    line-height: 1.1;
+    position: relative;
+}
+
+.top-nav-item::after {
+    content: '';
+    position: absolute;
+    left: 12px;
+    right: 12px;
+    bottom: 2px;
+    height: 2px;
+    background: var(--color-primary);
+    transform: scaleX(0);
+    transform-origin: left center;
+    transition: transform var(--transition-fast);
+}
+
+.top-nav-item:hover {
+    color: var(--color-primary-light);
+    background: transparent;
+}
+
+.top-nav-item.active {
+    color: var(--color-primary);
+    background: transparent;
+}
+
+.top-nav-item:hover::after,
+.top-nav-item.active::after {
+    transform: scaleX(1);
+}
+
+.top-nav-group-links .top-nav-item + .top-nav-item {
+    margin-left: 2px;
+}
+
+.top-nav-item > span:first-child {
+    width: auto;
+    height: auto;
+    border-radius: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: 0;
+    font-size: 15px;
+    line-height: 1;
+}
+
+.top-nav-item-danger {
+    color: #ffd0d6;
+}
+
+.top-nav-item-danger:hover {
+    color: #ff8f9d;
+    background: transparent;
 }
 
 .header-user {
@@ -1371,6 +1529,46 @@
 
     .admin-header {
         padding: var(--spacing-md) var(--spacing-lg);
+    }
+
+    .admin-top-nav-wrap {
+        padding: 11px var(--spacing-lg) 9px;
+    }
+
+    .admin-top-nav {
+        gap: 10px;
+        padding-bottom: 3px;
+        scrollbar-width: thin;
+    }
+
+    .top-nav-group {
+        gap: 5px;
+        padding-right: 10px;
+    }
+
+    .top-nav-group-label {
+        font-size: 9px;
+        letter-spacing: 0.06em;
+        padding-left: 4px;
+    }
+
+    .top-nav-item {
+        min-width: 0;
+        min-height: 0;
+        padding: 8px 10px;
+        font-size: 13px;
+        gap: 5px;
+    }
+
+    .admin-top-nav::-webkit-scrollbar {
+        height: 5px;
+    }
+
+    .top-nav-item > span:first-child {
+        width: auto;
+        height: auto;
+        border-radius: 0;
+        font-size: 13px;
     }
 
     .admin-messages {
