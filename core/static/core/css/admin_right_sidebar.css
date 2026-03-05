@@ -191,6 +191,15 @@
     transition: margin-right 0.3s ease;
 }
 
+/* When right sidebar is hidden, reclaim full width for all admin pages */
+.admin-layout.sidebar-collapsed .admin-main {
+    margin-right: 0;
+}
+
+.admin-layout.sidebar-collapsed .admin-content {
+    max-width: 100%;
+}
+
 /* Mobile Adjustments */
 @media (max-width: 1360px) {
     .admin-main {
