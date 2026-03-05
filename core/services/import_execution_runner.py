@@ -5,7 +5,6 @@ import os
 import traceback
 from math import ceil
 
-from django.contrib.auth.models import User
 from django.utils import timezone
 from django.utils.text import slugify
 
@@ -65,47 +64,10 @@ def _run_preflight(import_type, importer_class, file_path):
         import pandas as pd
 
         df = pd.read_excel(file_path)
-        email_cols = [c for c in df.columns if str(c).strip().lower() in {"email", "correo"}]
-        if email_cols:
-            email_col = email_cols[0]
-            duplicated = (
-                df[df[email_col].notna()][email_col]
-                .astype(str)
-                .str.strip()
-                .str.lower()
-                .duplicated(keep=False)
-            )
-            if duplicated.any():
-                dup_values = (
-                    df.loc[duplicated, email_col]
-                    .astype(str)
-                    .str.strip()
-                    .str.lower()
-                    .drop_duplicates()
-                    .head(10)
-                    .tolist()
-                )
-                preflight_errors.append(
-                    "Se detectaron emails duplicados en el archivo: " + ", ".join(dup_values)
-                )
-
-            emails_in_file = (
-                df[email_col]
-                .dropna()
-                .astype(str)
-                .str.strip()
-                .str.lower()
-                .tolist()
-            )
-            if emails_in_file:
-                existing = set(
-                    User.objects.filter(email__in=emails_in_file).values_list("email", flat=True)
-                )
-                if existing:
-                    sample = sorted(existing)[:10]
-                    preflight_errors.append(
-                        "Estos emails ya existen en el sistema: " + ", ".join(sample)
-                    )
+        # Client import is keyed by username/company data in the importer itself.
+        # Do not block import here for duplicated emails because many business
+        # spreadsheets intentionally reuse corporate addresses.
+        _ = df  # keep explicit read/parse validation
 
     elif import_type in {"products", "abrazaderas"}:
         importer = importer_class(file_path)
@@ -206,10 +168,11 @@ def run_import_execution(task_id, execution_id, import_type, importer_class_path
             )
     except Exception as exc:
         traceback.print_exc()
-        ImportTaskManager.fail_task(task_id, str(exc))
+        error_message = str(exc).strip() or f"{exc.__class__.__name__} sin detalle."
+        ImportTaskManager.fail_task(task_id, error_message)
         if execution:
             execution.status = ImportExecution.STATUS_FAILED
-            execution.result_summary = {"error": str(exc)}
+            execution.result_summary = {"error": error_message}
             execution.finished_at = timezone.now()
             execution.save(update_fields=["status", "result_summary", "finished_at"])
     finally:

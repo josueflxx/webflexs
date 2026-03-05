@@ -11,12 +11,32 @@ from core.services.import_manager import ImportTaskManager
 logger = logging.getLogger(__name__)
 
 
+def _should_run_import_sync():
+    """
+    Optional safety mode.
+    Enable only when explicitly requested via IMPORTS_FORCE_SYNC.
+    """
+    return bool(getattr(settings, "IMPORTS_FORCE_SYNC", False))
+
+
 def dispatch_import_job(task_id, execution_id, import_type, importer_class_path, file_path, dry_run):
     """
     Dispatch import execution to:
     - Celery queue if FEATURE_BACKGROUND_JOBS_ENABLED is active and backend available
     - Thread fallback otherwise
     """
+    if _should_run_import_sync():
+        run_import_execution(
+            task_id,
+            execution_id,
+            import_type,
+            importer_class_path,
+            file_path,
+            bool(dry_run),
+        )
+        ImportTaskManager.set_backend(task_id, backend="sync", job_id="")
+        return {"backend": "sync", "job_id": ""}
+
     if getattr(settings, "FEATURE_BACKGROUND_JOBS_ENABLED", False):
         try:
             from core.tasks import run_import_execution_task
@@ -42,4 +62,3 @@ def dispatch_import_job(task_id, execution_id, import_type, importer_class_path,
     thread.start()
     ImportTaskManager.set_backend(task_id, backend="thread", job_id="")
     return {"backend": "thread", "job_id": ""}
-
