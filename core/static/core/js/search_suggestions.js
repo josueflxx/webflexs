@@ -78,6 +78,16 @@
             this.listEl = this.dropdown.querySelector('.flex-search-suggest-list');
             document.body.appendChild(this.dropdown);
 
+            // Disable browser search history/autocomplete dropdown to keep
+            // only server-side suggestions in the UI.
+            this.input.setAttribute('autocomplete', 'off');
+            this.input.setAttribute('autocapitalize', 'off');
+            this.input.setAttribute('autocorrect', 'off');
+            this.input.setAttribute('spellcheck', 'false');
+            if (this.form) {
+                this.form.setAttribute('autocomplete', 'off');
+            }
+
             this.bindEvents();
         }
 
