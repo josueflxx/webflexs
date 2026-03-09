@@ -5,12 +5,14 @@
 /* Hero Section */
 .hero {
     min-height: 100vh;
+    min-height: 100svh;
+    min-height: 100dvh;
     display: flex;
     align-items: center;
     position: relative;
     background: linear-gradient(135deg, var(--color-dark) 0%, var(--color-secondary) 50%, var(--color-dark-light) 100%);
     overflow: hidden;
-    padding-top: 100px;
+    padding-top: var(--header-offset);
 }
 
 .hero-overlay {

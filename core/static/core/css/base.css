@@ -63,6 +63,9 @@
     /* Container */
     --container-max: 1200px;
     --container-padding: 1.5rem;
+
+    /* Layout */
+    --header-offset: 100px;
 }
 
 /* Reset & Base */
@@ -125,6 +128,11 @@ img {
     z-index: 1000;
     background: linear-gradient(180deg, rgba(13, 13, 13, 0.98) 0%, rgba(26, 26, 26, 0.95) 100%);
     backdrop-filter: blur(10px);
+}
+
+.header.scrolled {
+    background: rgba(13, 13, 13, 0.98);
+    box-shadow: 0 12px 26px rgba(0, 0, 0, 0.35);
 }
 
 .header-top {
@@ -283,10 +291,25 @@ img {
     width: 25px;
     height: 2px;
     background: var(--color-white);
-    transition: var(--transition-fast);
+    transition: transform var(--transition-fast), opacity var(--transition-fast);
+}
+
+.mobile-menu-toggle.active span:nth-child(1) {
+    transform: translateY(7px) rotate(45deg);
+}
+
+.mobile-menu-toggle.active span:nth-child(2) {
+    opacity: 0;
+}
+
+.mobile-menu-toggle.active span:nth-child(3) {
+    transform: translateY(-7px) rotate(-45deg);
 }
 
 @media (max-width: 1240px) {
+    :root {
+        --header-offset: 82px;
+    }
     .header-top {
         display: none;
     }
@@ -311,14 +334,14 @@ img {
 
     .nav-menu {
         position: fixed;
-        top: 82px;
+        top: var(--header-offset);
         left: 0;
         right: 0;
         background: var(--color-dark);
         flex-direction: column;
         padding: var(--spacing-xl);
         gap: var(--spacing-md);
-        max-height: calc(100vh - 82px);
+        max-height: calc(100vh - var(--header-offset));
         overflow-y: auto;
         transform: translateY(-150%);
         opacity: 0;
@@ -342,17 +365,18 @@ img {
     }
 
     .messages-container {
-        padding-top: 95px;
+        padding-top: calc(var(--header-offset) + 13px);
     }
 
     .main-content {
-        padding-top: 82px;
+        padding-top: var(--header-offset);
     }
 }
 
 @media (max-width: 576px) {
     :root {
         --container-padding: 1rem;
+        --header-offset: 74px;
     }
 
     .brand-logo.public-brand-logo {
@@ -364,17 +388,17 @@ img {
     }
 
     .nav-menu {
-        top: 74px;
-        max-height: calc(100vh - 74px);
+        top: var(--header-offset);
+        max-height: calc(100vh - var(--header-offset));
         padding: 14px;
     }
 
     .messages-container {
-        padding-top: 86px;
+        padding-top: calc(var(--header-offset) + 12px);
     }
 
     .main-content {
-        padding-top: 74px;
+        padding-top: var(--header-offset);
     }
 }
 
@@ -500,7 +524,7 @@ img {
    Alerts & Messages
    ============================================ */
 .messages-container {
-    padding-top: 120px;
+    padding-top: calc(var(--header-offset) + 20px);
 }
 
 .alert {
@@ -555,7 +579,11 @@ img {
    ============================================ */
 .main-content {
     flex: 1;
-    padding-top: 100px;
+    padding-top: var(--header-offset);
+}
+
+.main-content section[id] {
+    scroll-margin-top: calc(var(--header-offset) + 12px);
 }
 
 /* ============================================
@@ -784,4 +812,15 @@ img {
 
 .gap-3 {
     gap: var(--spacing-lg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
 }
