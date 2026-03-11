@@ -16,6 +16,10 @@ from core.models import (
     CatalogExcelTemplate,
     CatalogExcelTemplateSheet,
     CatalogExcelTemplateColumn,
+    FiscalDocument,
+    FiscalDocumentItem,
+    FiscalPointOfSale,
+    InternalDocument,
 )
 from core.services.company_context import get_default_company
 from orders.models import ClampQuotation, Order, OrderItem, OrderStatusHistory
@@ -63,8 +67,14 @@ class ClientOrderHistoryViewTests(TestCase):
             client_company_ref=self.client_company,
         )
 
+    def _activate_company(self):
+        session = self.client.session
+        session['active_company_id'] = self.company.pk
+        session.save()
+
     def test_staff_can_open_client_order_history(self):
         self.client.force_login(self.staff)
+        self._activate_company()
         response = self.client.get(reverse('admin_client_order_history', args=[self.client_profile.pk]))
 
         self.assertEqual(response.status_code, 200)
@@ -73,6 +83,7 @@ class ClientOrderHistoryViewTests(TestCase):
 
     def test_status_filter_applies_in_client_order_history(self):
         self.client.force_login(self.staff)
+        self._activate_company()
         response = self.client.get(
             reverse('admin_client_order_history', args=[self.client_profile.pk]),
             {'status': Order.STATUS_CONFIRMED},
@@ -80,6 +91,108 @@ class ClientOrderHistoryViewTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.context['summary']['orders_count'], 1)
+
+    def test_client_order_history_uses_tabbed_hub_context(self):
+        self.client.force_login(self.staff)
+        self._activate_company()
+        response = self.client.get(
+            reverse('admin_client_order_history', args=[self.client_profile.pk]),
+            {'client_tab': 'documents'},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context['client_tab'], 'documents')
+        self.assertEqual(len(response.context['client_tabs']), 5)
+        self.assertEqual(len(response.context['ledger_tabs']), 6)
+        self.assertContains(response, 'Comprobantes fiscales')
+        self.assertContains(response, 'Documentos internos')
+
+    def test_quick_remito_redirects_to_latest_remito_document(self):
+        shipped_order = Order.objects.create(
+            user=self.client_user,
+            company=self.company,
+            status=Order.STATUS_SHIPPED,
+            subtotal=Decimal('150.00'),
+            total=Decimal('150.00'),
+            client_company='Cliente Historial',
+            client_company_ref=self.client_company,
+        )
+
+        self.client.force_login(self.staff)
+        self._activate_company()
+        response = self.client.post(
+            reverse('admin_client_quick_order', args=[self.client_profile.pk]),
+            data={'action': 'remito', 'company_id': self.company.pk},
+        )
+
+        remito = InternalDocument.objects.filter(order=shipped_order, doc_type='REM').first()
+        self.assertIsNotNone(remito)
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(
+            response.url,
+            f"{reverse('admin_internal_document_print', args=[remito.pk])}?copy=original",
+        )
+
+    def test_quick_invoice_opens_latest_unbilled_facturable_order(self):
+        billable_order = Order.objects.create(
+            user=self.client_user,
+            company=self.company,
+            status=Order.STATUS_PREPARING,
+            subtotal=Decimal('220.00'),
+            total=Decimal('220.00'),
+            client_company='Cliente Historial',
+            client_company_ref=self.client_company,
+        )
+
+        self.client.force_login(self.staff)
+        self._activate_company()
+        response = self.client.post(
+            reverse('admin_client_quick_order', args=[self.client_profile.pk]),
+            data={'action': 'invoice', 'company_id': self.company.pk},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse('admin_order_detail', args=[billable_order.pk]))
+
+    def test_quick_credit_note_opens_latest_invoice_document(self):
+        invoice_order = Order.objects.create(
+            user=self.client_user,
+            company=self.company,
+            status=Order.STATUS_DELIVERED,
+            subtotal=Decimal('180.00'),
+            total=Decimal('180.00'),
+            client_company='Cliente Historial',
+            client_company_ref=self.client_company,
+        )
+        point_of_sale = FiscalPointOfSale.objects.create(
+            company=self.company,
+            number='99',
+            is_active=True,
+            is_default=True,
+        )
+        invoice_document = FiscalDocument.objects.create(
+            source_key='test-client-history-fa',
+            company=self.company,
+            client_company_ref=self.client_company,
+            client_profile=self.client_profile,
+            order=invoice_order,
+            point_of_sale=point_of_sale,
+            doc_type='FA',
+            issue_mode='manual',
+            status='ready_to_issue',
+            subtotal_net=Decimal('180.00'),
+            total=Decimal('180.00'),
+        )
+
+        self.client.force_login(self.staff)
+        self._activate_company()
+        response = self.client.post(
+            reverse('admin_client_quick_order', args=[self.client_profile.pk]),
+            data={'action': 'credit_note', 'company_id': self.company.pk},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse('admin_fiscal_document_detail', args=[invoice_document.pk]))
 
 
 class ClientCorePermissionsTests(TestCase):
@@ -254,6 +367,177 @@ class PaymentPanelTests(TestCase):
         self.assertEqual(self.client_profile.get_total_orders_for_balance(), Decimal('80.00'))
         self.assertEqual(self.client_profile.get_total_paid(), Decimal('30.00'))
         self.assertEqual(self.client_profile.get_current_balance(), Decimal('50.00'))
+
+
+class OrderAdminLookupTests(TestCase):
+    def setUp(self):
+        self.staff = User.objects.create_user(
+            username='staff_order_lookup',
+            password='secret123',
+            is_staff=True,
+        )
+        self.client_user = User.objects.create_user(
+            username='cliente_order_lookup',
+            password='secret123',
+        )
+        self.client_profile = ClientProfile.objects.create(
+            user=self.client_user,
+            company_name='Cliente Lookup',
+        )
+        self.company = get_default_company()
+        self.client_company = ClientCompany.objects.create(
+            client_profile=self.client_profile,
+            company=self.company,
+            is_active=True,
+        )
+        self.order = Order.objects.create(
+            user=self.client_user,
+            company=self.company,
+            status=Order.STATUS_DRAFT,
+            subtotal=Decimal('0.00'),
+            total=Decimal('0.00'),
+            client_company='Cliente Lookup',
+            client_company_ref=self.client_company,
+        )
+        self.product = Product.objects.create(
+            sku='BA03041',
+            name='1/2 B.ARM FORD SOP BISAGRA CAPOT F-14000',
+            price=Decimal('150.00'),
+            cost=Decimal('80.00'),
+            stock=5,
+            is_active=True,
+        )
+
+    def _activate_company(self):
+        session = self.client.session
+        session['active_company_id'] = self.company.pk
+        session.save()
+
+    def test_staff_can_add_order_item_from_partial_product_text(self):
+        self.client.force_login(self.staff)
+        self._activate_company()
+
+        response = self.client.post(
+            reverse('admin_order_item_add', args=[self.order.pk]),
+            data={
+                'sku': 'bisagra capot f14000',
+                'quantity': '2',
+            },
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        item = OrderItem.objects.filter(order=self.order, product=self.product).first()
+        self.assertIsNotNone(item)
+        self.assertEqual(item.quantity, 2)
+
+
+class FiscalPrintTemplateTests(TestCase):
+    def setUp(self):
+        self.staff = User.objects.create_user(
+            username='staff_fiscal_print',
+            password='secret123',
+            is_staff=True,
+        )
+        self.client_user = User.objects.create_user(
+            username='cliente_fiscal_print',
+            password='secret123',
+        )
+        self.client_profile = ClientProfile.objects.create(
+            user=self.client_user,
+            company_name='Cliente Fiscal Print',
+            document_type='cuit',
+            document_number='20123456789',
+            iva_condition='responsable_inscripto',
+            fiscal_address='Av Siempre Viva 123',
+            fiscal_city='San Martin',
+            fiscal_province='Buenos Aires',
+            postal_code='1650',
+        )
+        self.company = get_default_company()
+        self.company.legal_name = 'Flexs Print SA'
+        self.company.cuit = '30-12345678-9'
+        self.company.tax_condition = 'responsable_inscripto'
+        self.company.fiscal_address = 'Indalecio Gomez 4215'
+        self.company.fiscal_city = 'San Martin'
+        self.company.fiscal_province = 'Buenos Aires'
+        self.company.postal_code = '1650'
+        self.company.save()
+        self.client_company = ClientCompany.objects.create(
+            client_profile=self.client_profile,
+            company=self.company,
+            is_active=True,
+        )
+        self.order = Order.objects.create(
+            user=self.client_user,
+            company=self.company,
+            status=Order.STATUS_CONFIRMED,
+            subtotal=Decimal('1000.00'),
+            discount_percentage=Decimal('10.00'),
+            discount_amount=Decimal('100.00'),
+            total=Decimal('900.00'),
+            client_company='Cliente Fiscal Print',
+            client_company_ref=self.client_company,
+            notes='Observacion visible en factura',
+        )
+        self.point = FiscalPointOfSale.objects.create(
+            company=self.company,
+            number='99',
+            is_active=True,
+            is_default=True,
+        )
+        self.document = FiscalDocument.objects.create(
+            source_key='test:fiscal:print',
+            company=self.company,
+            client_company_ref=self.client_company,
+            client_profile=self.client_profile,
+            order=self.order,
+            point_of_sale=self.point,
+            doc_type='FA',
+            issue_mode='manual',
+            status='authorized',
+            number=4869,
+            subtotal_net=Decimal('1000.00'),
+            discount_total=Decimal('100.00'),
+            tax_total=Decimal('0.00'),
+            total=Decimal('900.00'),
+            cae='12345678901234',
+        )
+        FiscalDocumentItem.objects.create(
+            fiscal_document=self.document,
+            line_number=1,
+            sku='BA03041',
+            description='Buje de prueba para impresion',
+            quantity=Decimal('2.000'),
+            unit_price_net=Decimal('450.00'),
+            discount_percentage=Decimal('0.00'),
+            discount_amount=Decimal('0.00'),
+            net_amount=Decimal('900.00'),
+            iva_rate=Decimal('0.00'),
+            iva_amount=Decimal('0.00'),
+            total_amount=Decimal('900.00'),
+        )
+
+    def _activate_company(self):
+        session = self.client.session
+        session['active_company_id'] = self.company.pk
+        session.save()
+
+    def test_fiscal_print_renders_saas_like_layout_blocks(self):
+        self.client.force_login(self.staff)
+        self._activate_company()
+
+        response = self.client.get(
+            reverse('admin_fiscal_document_print', args=[self.document.pk]),
+            {'copy': 'duplicado'},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Factura A')
+        self.assertContains(response, 'DUPLICADO')
+        self.assertContains(response, 'N 00099-00004869')
+        self.assertContains(response, 'Condicion de venta')
+        self.assertContains(response, 'Observaciones')
 
 
 class ClampQuoterTests(TestCase):

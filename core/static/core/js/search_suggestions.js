@@ -65,6 +65,9 @@
             this.input = input;
             this.scope = scope;
             this.form = input.form;
+            this.submitMode = String(input.dataset.suggestSubmit || 'auto').toLowerCase();
+            this.includeQueryItem = input.dataset.suggestQueryItem !== '0';
+            this.targetSelector = String(input.dataset.suggestTarget || '').trim();
             this.items = [];
             this.highlightIndex = -1;
             this.abortController = null;
@@ -137,6 +140,7 @@
         onInputChange() {
             const query = String(this.input.value || '').trim();
             this.lastQuery = query;
+            this.clearTargetValue();
 
             if (query.length < MIN_CHARS) {
                 this.items = [];
@@ -159,12 +163,14 @@
                 this.abortController.abort();
             }
             this.abortController = new AbortController();
-            const queryItem = {
-                value: query,
-                label: `Buscar "${query}"`,
-                meta: 'Busqueda exacta',
-                kind: 'query',
-            };
+            const queryItem = this.includeQueryItem
+                ? {
+                      value: query,
+                      label: `Buscar "${query}"`,
+                      meta: 'Busqueda exacta',
+                      kind: 'query',
+                  }
+                : null;
 
             try {
                 const params = new URLSearchParams({
@@ -192,7 +198,10 @@
                 const data = await response.json();
                 const serverItems = Array.isArray(data.suggestions) ? data.suggestions : [];
 
-                const merged = [queryItem, ...serverItems].slice(0, MAX_ITEMS + 1);
+                const merged = (queryItem ? [queryItem, ...serverItems] : serverItems).slice(
+                    0,
+                    queryItem ? MAX_ITEMS + 1 : MAX_ITEMS
+                );
                 this.items = merged;
                 this.highlightIndex = -1;
                 this.render();
@@ -206,10 +215,14 @@
                 if (error && error.name === 'AbortError') {
                     return;
                 }
-                this.items = [queryItem];
+                this.items = queryItem ? [queryItem] : [];
                 this.highlightIndex = -1;
                 this.render();
-                this.open();
+                if (this.items.length > 0) {
+                    this.open();
+                } else {
+                    this.close();
+                }
             }
         }
 
@@ -282,9 +295,10 @@
         }
 
         pick(item) {
-            this.input.value = item.value || '';
+            this.input.value = item.input_value || item.label || item.value || '';
+            this.applyTargetValue(item);
             this.close();
-            if (this.form) {
+            if (this.submitMode !== 'manual' && this.form) {
                 if (typeof this.form.requestSubmit === 'function') {
                     this.form.requestSubmit();
                 } else {
@@ -297,6 +311,28 @@
             const name = this.input.getAttribute('name') || 'q';
             url.searchParams.set(name, this.input.value);
             window.location.assign(url.toString());
+        }
+
+        getTargetInput() {
+            if (!this.targetSelector) {
+                return null;
+            }
+            return document.querySelector(this.targetSelector);
+        }
+
+        clearTargetValue() {
+            const target = this.getTargetInput();
+            if (target) {
+                target.value = '';
+            }
+        }
+
+        applyTargetValue(item) {
+            const target = this.getTargetInput();
+            if (!target) {
+                return;
+            }
+            target.value = item.target_value || item.id || item.value || '';
         }
 
         destroy() {

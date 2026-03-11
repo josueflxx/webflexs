@@ -3,79 +3,510 @@
 {% block page_title %}Pedido #{{ order.pk }}{% endblock %}
 
 {% block content %}
-<div class="admin-form-container" style="max-width: 980px;">
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
-        <h2 style="margin: 0;">Pedido #{{ order.pk }}</h2>
-        <span class="badge badge-info" style="font-size: 1rem; padding: 0.5rem 1rem;">{{ order.get_status_display }}</span>
-    </div>
-
-    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; margin-bottom: 2rem;">
-        <div>
-            <h4>Cliente</h4>
-            <p>
-                <strong>{{ order.client_company|default:order.user.username }}</strong><br>
-                {% if order.client_cuit %}CUIT: {{ order.client_cuit }}<br>{% endif %}
-                {{ order.client_address|default:'-' }}<br>
-                {{ order.client_phone|default:'-' }}
-            </p>
-        </div>
-        <div>
-            <h4>Informacion</h4>
-            <p>
-                <strong>Fecha:</strong> {{ order.created_at|date:"d/m/Y H:i" }}<br>
-                <strong>Empresa:</strong> {{ order.company.name|default:"-" }}<br>
-                <strong>Ultimo estado:</strong> {{ order.status_updated_at|date:"d/m/Y H:i" }}<br>
-                <strong>Subtotal:</strong> ${{ order.subtotal|floatformat:2 }}<br>
-                {% if order.discount_percentage %}
-                <strong>Descuento ({{ order.discount_percentage|floatformat:0 }}%):</strong> -${{ order.discount_amount|floatformat:2 }}<br>
-                {% endif %}
-                <strong>Total:</strong> <span style="font-size: 1.25rem; color: var(--color-primary);">${{ order.total|floatformat:2 }}</span><br>
-                <strong>Pagado:</strong> ${{ order_paid_amount|floatformat:2 }}<br>
-                <strong>Pendiente:</strong>
-                {% if order_pending_amount > 0 %}
-                <span class="badge badge-warning">${{ order_pending_amount|floatformat:2 }}</span>
+<div class="admin-form-container order-detail-page">
+    <section class="order-detail-hero">
+        <div class="order-detail-hero-main">
+            <p class="order-detail-eyebrow">Operacion comercial</p>
+            <div class="order-detail-hero-title-row">
+                <h2>Pedido #{{ order.pk }}</h2>
+                {% if order.status == 'delivered' %}
+                <span class="badge badge-success order-status-pill">Entregado</span>
+                {% elif order.status == 'cancelled' %}
+                <span class="badge badge-danger order-status-pill">Cancelado</span>
+                {% elif order.status == 'shipped' %}
+                <span class="badge badge-info order-status-pill">Enviado</span>
+                {% elif order.status == 'preparing' %}
+                <span class="badge badge-warning order-status-pill">En preparacion</span>
+                {% elif order.status == 'confirmed' %}
+                <span class="badge badge-primary order-status-pill">Confirmado</span>
                 {% else %}
-                <span class="badge badge-success">$0.00</span>
+                <span class="badge badge-secondary order-status-pill">Borrador</span>
                 {% endif %}
-                <br>
-                <div style="margin-top:10px;">
-                    <strong>Sync SaaS:</strong>
-                    {% if order.sync_status == 'synced' %}
-                    <span class="badge badge-success">Sincronizado</span>
-                    {% elif order.sync_status == 'failed' %}
-                    <span class="badge badge-danger">Fallido</span>
-                    {% else %}
-                    <span class="badge badge-warning">Pendiente</span>
-                    {% endif %}
-                    <br>
-                    <small class="text-muted">
-                        Sistema: {{ order.external_system|default:"-" }} |
-                        Ext: {{ order.external_number|default:"-" }} |
-                        ID: {{ order.external_id|default:"-" }} |
-                        Sync: {{ order.synced_at|date:"d/m/Y H:i"|default:"-" }}
-                    </small>
+            </div>
+            <div class="order-detail-hero-chips">
+                <span class="order-chip">Empresa {{ order.company.name|default:"-" }}</span>
+                <span class="order-chip">Cliente {{ order.client_company|default:order.user.username|default:"-" }}</span>
+                <span class="order-chip">Creado {{ order.created_at|date:"d/m/Y H:i" }}</span>
+                <span class="order-chip">Actualizado {{ order.status_updated_at|date:"d/m/Y H:i" }}</span>
+            </div>
+        </div>
+        <div class="order-detail-hero-stats">
+            <article class="order-stat-card is-total">
+                <span class="order-stat-label">Total</span>
+                <strong class="order-stat-value">${{ order.total|floatformat:2 }}</strong>
+            </article>
+            <article class="order-stat-card is-paid">
+                <span class="order-stat-label">Pagado</span>
+                <strong class="order-stat-value">${{ order_paid_amount|floatformat:2 }}</strong>
+            </article>
+            <article class="order-stat-card is-pending">
+                <span class="order-stat-label">Pendiente</span>
+                <strong class="order-stat-value">${{ order_pending_amount|floatformat:2 }}</strong>
+            </article>
+        </div>
+    </section>
+
+    <div class="order-detail-grid">
+        <div class="order-detail-main">
+            <section class="order-card">
+                <div class="order-card-header">
+                    <div>
+                        <h3>Documento abierto</h3>
+                        <p class="order-card-subtitle">Contexto comercial aplicado sobre este pedido.</p>
+                    </div>
+                    <span class="order-section-tag">
+                        {% if order.status == 'draft' %}Cotizacion / PED{% else %}Pedido operativo{% endif %}
+                    </span>
                 </div>
-                <div style="margin-top:10px;">
-                    <strong>Estado fiscal (pre-ARCA):</strong>
-                    {% if invoice_ready %}
-                    <span class="badge badge-success">Listo para facturar</span>
-                    {% else %}
-                    <span class="badge badge-warning">No listo</span>
+
+                <div class="order-overview-grid">
+                    <article class="order-info-tile">
+                        <span class="order-info-label">Cliente</span>
+                        <strong class="order-info-value">{{ order.client_company|default:order.user.username|default:"-" }}</strong>
+                        <small class="order-info-help">
+                            {% if order.client_cuit %}CUIT {{ order.client_cuit }}{% else %}Sin CUIT cargado{% endif %}
+                        </small>
+                    </article>
+                    <article class="order-info-tile">
+                        <span class="order-info-label">Tipo documental</span>
+                        <strong class="order-info-value">
+                            {% if order.status == 'draft' %}Cotizacion (COT){% else %}Pedido (PED){% endif %}
+                        </strong>
+                        <small class="order-info-help">Condicion de venta {{ pricing_snapshot.sale_condition|default:"-" }}</small>
+                    </article>
+                    <article class="order-info-tile">
+                        <span class="order-info-label">Lista aplicada</span>
+                        <strong class="order-info-value">{{ pricing_snapshot.price_list.name|default:"-" }}</strong>
+                        <small class="order-info-help">Descuento {{ pricing_snapshot.discount_percentage|default:"0"|floatformat:2 }}%</small>
+                    </article>
+                    <article class="order-info-tile">
+                        <span class="order-info-label">Direccion</span>
+                        <strong class="order-info-value">{{ order.client_address|default:"-" }}</strong>
+                        <small class="order-info-help">Telefono {{ order.client_phone|default:"-" }}</small>
+                    </article>
+                    <article class="order-info-tile">
+                        <span class="order-info-label">Subtotal</span>
+                        <strong class="order-info-value">${{ order.subtotal|floatformat:2 }}</strong>
+                        <small class="order-info-help">
+                            {% if order.discount_percentage %}
+                            Descuento {{ order.discount_percentage|floatformat:0 }}% / -${{ order.discount_amount|floatformat:2 }}
+                            {% else %}
+                            Sin descuento aplicado
+                            {% endif %}
+                        </small>
+                    </article>
+                    <article class="order-info-tile">
+                        <span class="order-info-label">Seguimiento</span>
+                        <strong class="order-info-value">
+                            {% if order.follow_up_at %}{{ order.follow_up_at|date:"d/m/Y H:i" }}{% else %}-{% endif %}
+                        </strong>
+                        <small class="order-info-help">{{ order.follow_up_note|default:"Sin nota de seguimiento" }}</small>
+                    </article>
+                </div>
+
+                {% if order.status == 'draft' %}
+                <div class="order-add-item-form">
+                    <div class="order-card-header">
+                        <div>
+                            <h3>Agregar item</h3>
+                            <p class="order-card-subtitle">Solo disponible mientras el pedido siga en borrador.</p>
+                        </div>
+                    </div>
+                    <form method="post" action="{% url 'admin_order_item_add' order.pk %}" class="order-add-item-grid">
+                        {% csrf_token %}
+                        <div class="form-group" style="margin:0;">
+                            <label for="sku" class="form-label">Producto</label>
+                            <input
+                                type="search"
+                                id="sku"
+                                name="sku"
+                                class="form-input"
+                                placeholder="Busca por SKU, nombre, medida o marca"
+                                data-suggest="1"
+                                data-suggest-scope="admin_products"
+                                data-suggest-submit="manual"
+                                data-suggest-query-item="0"
+                                data-suggest-target="#order-product-id">
+                            <input type="hidden" name="product_id" id="order-product-id">
+                            <small class="form-help">Ej: BA03041, "bisagra capot", "iveco 5/8" o "F14000".</small>
+                        </div>
+                        <div class="form-group" style="margin:0;">
+                            <label for="quantity" class="form-label">Cantidad</label>
+                            <input type="number" min="1" name="quantity" id="quantity" class="form-input" value="1">
+                        </div>
+                        <button type="submit" class="btn btn-primary">Agregar item</button>
+                    </form>
+                </div>
+                {% endif %}
+            </section>
+
+            {% if order.notes or order.admin_notes %}
+            <section class="order-card">
+                <div class="order-card-header">
+                    <div>
+                        <h3>Notas</h3>
+                        <p class="order-card-subtitle">Observaciones del cliente y del equipo interno.</p>
+                    </div>
+                </div>
+                <div class="order-note-stack">
+                    {% if order.notes %}
+                    <article class="order-note-card">
+                        <span class="order-info-label">Notas del cliente</span>
+                        <p>{{ order.notes }}</p>
+                    </article>
                     {% endif %}
+                    {% if order.admin_notes %}
+                    <article class="order-note-card is-internal">
+                        <span class="order-info-label">Notas internas</span>
+                        <p>{{ order.admin_notes }}</p>
+                    </article>
+                    {% endif %}
+                </div>
+            </section>
+            {% endif %}
+
+            <section class="order-card">
+                <div class="order-card-header">
+                    <div>
+                        <h3>Items del pedido</h3>
+                        <p class="order-card-subtitle">Detalle comercial con precio, descuento y acciones disponibles.</p>
+                    </div>
+                    <span class="order-section-tag">{{ order_items|length }} linea{{ order_items|length|pluralize }}</span>
+                </div>
+
+                <div class="order-table-wrap">
+                    <table class="admin-table order-items-table">
+                        <thead>
+                            <tr>
+                                <th>SKU</th>
+                                <th>Producto</th>
+                                <th>Solicitud medida</th>
+                                <th>Cant.</th>
+                                <th>Precio Unit.</th>
+                                <th>Subtotal</th>
+                                <th>Accion</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in order_items %}
+                            <tr>
+                                <td><code>{{ item.product_sku }}</code></td>
+                                <td>{{ item.product_name }}</td>
+                                <td>
+                                    {% if item.clamp_request_id %}
+                                    <div class="order-clamp-meta">
+                                        <div>
+                                            <span class="badge badge-info">#{{ item.clamp_request_id }}</span>
+                                        </div>
+                                        <small class="text-muted">
+                                            {{ item.clamp_request.get_clamp_type_display|upper }}
+                                            {{ item.clamp_request.diameter }} x {{ item.clamp_request.width_mm }} x {{ item.clamp_request.length_mm }}
+                                            {{ item.clamp_request.profile_type }}
+                                        </small>
+                                        {% if item.published_to_catalog %}
+                                        <div>
+                                            <span class="badge badge-success">Ya publicada en catalogo</span>
+                                        </div>
+                                        {% endif %}
+                                    </div>
+                                    {% else %}
+                                    <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ item.quantity }}</td>
+                                <td>
+                                    <span>${{ item.price_at_purchase|floatformat:2 }}</span>
+                                    {% if order.discount_percentage %}
+                                    <div style="margin-top:6px;">
+                                        <span class="badge badge-warning">
+                                            Desc {{ order.discount_percentage|floatformat:0 }}%: -${{ item.unit_discount_amount|floatformat:2 }}
+                                        </span>
+                                    </div>
+                                    {% endif %}
+                                </td>
+                                <td><strong>${{ item.subtotal|floatformat:2 }}</strong></td>
+                                <td>
+                                    <div class="order-inline-actions">
+                                        {% if item.clamp_request_id and item.can_publish_to_catalog %}
+                                        <form method="post" action="{% url 'admin_order_item_publish_clamp' order.pk item.pk %}">
+                                            {% csrf_token %}
+                                            <button
+                                                type="submit"
+                                                class="btn btn-primary btn-sm"
+                                                onclick="return confirm('Publicar esta abrazadera como producto del catalogo?');"
+                                            >
+                                                Anadir a productos
+                                            </button>
+                                        </form>
+                                        {% elif item.clamp_request_id %}
+                                        <span class="text-muted">Publicada</span>
+                                        {% else %}
+                                        <span class="text-muted">-</span>
+                                        {% endif %}
+
+                                        {% if order.status == 'draft' %}
+                                        <form method="post" action="{% url 'admin_order_item_delete' order.pk item.pk %}">
+                                            {% csrf_token %}
+                                            <button type="submit" class="btn btn-danger-outline btn-sm" onclick="return confirm('Eliminar este item?');">
+                                                Quitar item
+                                            </button>
+                                        </form>
+                                        {% endif %}
+                                    </div>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="7" class="text-center text-muted">Este pedido todavia no tiene items cargados.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            {% if user.is_staff %}
+            <section class="order-card">
+                <div class="order-card-header">
+                    <div>
+                        <h3>Workflow del pedido</h3>
+                        <p class="order-card-subtitle">Cambio de estado y notas internas del equipo.</p>
+                    </div>
+                </div>
+
+                <form method="post" class="order-workflow-form">
+                    {% csrf_token %}
+                    <div class="order-workflow-grid">
+                        <div class="form-group" style="margin:0;">
+                            <label for="status_select" class="form-label">Estado</label>
+                            <select name="status" id="status_select" class="form-select">
+                                {% for value, label in status_choices %}
+                                <option value="{{ value }}" {% if order.status == value %}selected{% endif %}>{{ label }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="form-group" style="margin:0;">
+                            <label for="status_note" class="form-label">Nota de cambio</label>
+                            <input type="text" name="status_note" id="status_note" class="form-input" placeholder="Motivo del cambio de estado">
+                        </div>
+                    </div>
+                    <div class="form-group" style="margin:0;">
+                        <label for="admin_notes" class="form-label">Notas internas</label>
+                        <textarea name="admin_notes" id="admin_notes" class="form-textarea" rows="3">{{ order.admin_notes }}</textarea>
+                    </div>
+                    <small class="text-muted">Podes confirmar el pedido y luego registrar los pagos desde el panel de pagos.</small>
+                    <div class="order-inline-actions">
+                        <button type="submit" class="btn btn-primary">Actualizar estado</button>
+                    </div>
+                </form>
+            </section>
+            {% endif %}
+
+            <section class="order-card">
+                <div class="order-card-header">
+                    <div>
+                        <h3>Historial de estados</h3>
+                        <p class="order-card-subtitle">Ultimos cambios registrados para este pedido.</p>
+                    </div>
+                </div>
+
+                <div class="order-table-wrap">
+                    <table class="admin-table">
+                        <thead>
+                            <tr>
+                                <th>Fecha</th>
+                                <th>Desde</th>
+                                <th>Hacia</th>
+                                <th>Usuario</th>
+                                <th>Nota</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in status_history %}
+                            <tr>
+                                <td>{{ row.created_at|date:"d/m/Y H:i" }}</td>
+                                <td>{{ row.from_status|default:"-" }}</td>
+                                <td>{{ row.to_status }}</td>
+                                <td>{{ row.changed_by.username|default:"Sistema" }}</td>
+                                <td>{{ row.note|default:"-" }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="5" class="text-center text-muted">Sin historial de estados.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </div>
+
+        <aside class="order-detail-side">
+            <section class="order-card order-card-sticky">
+                <div class="order-card-header">
+                    <div>
+                        <h3>Resumen comercial</h3>
+                        <p class="order-card-subtitle">Lectura rapida del pedido, cliente y sincronizacion.</p>
+                    </div>
+                </div>
+
+                <div class="order-side-group">
+                    <span class="order-info-label">Cliente</span>
+                    <div class="order-side-list">
+                        <div class="order-side-row">
+                            <span class="order-side-label">Nombre</span>
+                            <strong class="order-side-value">{{ order.client_company|default:order.user.username|default:"-" }}</strong>
+                        </div>
+                        <div class="order-side-row">
+                            <span class="order-side-label">CUIT</span>
+                            <span class="order-side-value">{{ order.client_cuit|default:"-" }}</span>
+                        </div>
+                        <div class="order-side-row">
+                            <span class="order-side-label">Telefono</span>
+                            <span class="order-side-value">{{ order.client_phone|default:"-" }}</span>
+                        </div>
+                        <div class="order-side-row">
+                            <span class="order-side-label">Direccion</span>
+                            <span class="order-side-value">{{ order.client_address|default:"-" }}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="order-side-group">
+                    <span class="order-info-label">Informacion base</span>
+                    <div class="order-side-list">
+                        <div class="order-side-row">
+                            <span class="order-side-label">Fecha</span>
+                            <span class="order-side-value">{{ order.created_at|date:"d/m/Y H:i" }}</span>
+                        </div>
+                        <div class="order-side-row">
+                            <span class="order-side-label">Empresa</span>
+                            <span class="order-side-value">{{ order.company.name|default:"-" }}</span>
+                        </div>
+                        <div class="order-side-row">
+                            <span class="order-side-label">Categoria</span>
+                            <span class="order-side-value">{{ pricing_snapshot.client_category.name|default:"-" }}</span>
+                        </div>
+                        <div class="order-side-row">
+                            <span class="order-side-label">Pagado</span>
+                            <span class="order-side-value">${{ order_paid_amount|floatformat:2 }}</span>
+                        </div>
+                        <div class="order-side-row">
+                            <span class="order-side-label">Pendiente</span>
+                            <span class="order-side-value">${{ order_pending_amount|floatformat:2 }}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="order-side-group">
+                    <span class="order-info-label">Sync SaaS</span>
+                    <div class="order-side-list">
+                        <div class="order-side-row">
+                            <span class="order-side-label">Estado</span>
+                            <span class="order-side-value">
+                                {% if order.sync_status == 'synced' %}
+                                <span class="badge badge-success">Sincronizado</span>
+                                {% elif order.sync_status == 'failed' %}
+                                <span class="badge badge-danger">Fallido</span>
+                                {% else %}
+                                <span class="badge badge-warning">Pendiente</span>
+                                {% endif %}
+                            </span>
+                        </div>
+                        <div class="order-side-row">
+                            <span class="order-side-label">Sistema</span>
+                            <span class="order-side-value">{{ order.external_system|default:"-" }}</span>
+                        </div>
+                        <div class="order-side-row">
+                            <span class="order-side-label">Numero</span>
+                            <span class="order-side-value">{{ order.external_number|default:"-" }}</span>
+                        </div>
+                        <div class="order-side-row">
+                            <span class="order-side-label">ID</span>
+                            <span class="order-side-value">{{ order.external_id|default:"-" }}</span>
+                        </div>
+                        <div class="order-side-row">
+                            <span class="order-side-label">Ultimo sync</span>
+                            <span class="order-side-value">{{ order.synced_at|date:"d/m/Y H:i"|default:"-" }}</span>
+                        </div>
+                    </div>
+                </div>
+
+                {% if order.saas_document_number or order.saas_document_type %}
+                <div class="order-side-group">
+                    <span class="order-info-label">Comprobante SaaS</span>
+                    <div class="order-side-list">
+                        <div class="order-side-row">
+                            <span class="order-side-label">Tipo</span>
+                            <span class="order-side-value">{{ order.saas_document_type|default:"Comprobante" }}</span>
+                        </div>
+                        <div class="order-side-row">
+                            <span class="order-side-label">Numero</span>
+                            <span class="order-side-value">{{ order.saas_document_number|default:"-" }}</span>
+                        </div>
+                        <div class="order-side-row">
+                            <span class="order-side-label">Fecha</span>
+                            <span class="order-side-value">{{ order.saas_document_date|date:"d/m/Y"|default:"-" }}</span>
+                        </div>
+                        <div class="order-side-row">
+                            <span class="order-side-label">Total</span>
+                            <span class="order-side-value">
+                                {% if order.saas_document_total %}${{ order.saas_document_total|floatformat:2 }}{% else %}-{% endif %}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+
+                <div class="order-side-group">
+                    <div class="order-inline-actions">
+                        <a
+                            href="{% url 'admin_payment_list' %}?order_id={{ order.pk }}&company_id={{ order.company_id }}{% if order_client_profile_id %}&client_id={{ order_client_profile_id }}{% endif %}"
+                            class="btn btn-outline btn-sm"
+                        >
+                            Registrar pago
+                        </a>
+                        <a href="{% url 'admin_fiscal_document_list' %}" class="btn btn-outline btn-sm">Ver fiscales</a>
+                    </div>
+                </div>
+            </section>
+
+            <section class="order-card">
+                <div class="order-card-header">
+                    <div>
+                        <h3>Estado fiscal y Fase 3</h3>
+                        <p class="order-card-subtitle">Readiness del pedido y carga de comprobantes locales o externos.</p>
+                    </div>
+                </div>
+
+                <div class="order-readiness {% if invoice_ready %}is-ready{% else %}is-warning{% endif %}">
+                    <div class="order-inline-actions" style="justify-content:space-between;">
+                        <strong>Estado fiscal (pre-ARCA)</strong>
+                        {% if invoice_ready %}
+                        <span class="badge badge-success">Listo para facturar</span>
+                        {% else %}
+                        <span class="badge badge-warning">No listo</span>
+                        {% endif %}
+                    </div>
                     {% if not invoice_ready and invoice_errors %}
-                    <ul style="margin:6px 0 0;padding-left:18px;">
+                    <ul class="order-bullet-list">
                         {% for error in invoice_errors %}
                         <li class="text-muted">{{ error }}</li>
                         {% endfor %}
                     </ul>
                     {% endif %}
                 </div>
-                <div style="margin-top:12px; border-top:1px dashed rgba(255,255,255,.2); padding-top:10px;">
-                    <strong>Flujo fiscal local (Fase 3)</strong><br>
-                    <small class="text-muted">Empresa activa: {{ order.company.name|default:"-" }}</small>
-                    <div style="display:grid; gap:10px; margin-top:10px;">
-                        <form method="post" action="{% url 'admin_order_fiscal_create_local' order.pk %}" style="display:grid; grid-template-columns: 1fr 1fr 1fr auto; gap:8px; align-items:end;">
-                            {% csrf_token %}
+
+                <div class="order-fiscal-grid">
+                    <form method="post" action="{% url 'admin_order_fiscal_create_local' order.pk %}" class="order-fiscal-form">
+                        {% csrf_token %}
+                        <div class="order-card-header" style="margin-bottom:0; padding-bottom:0; border-bottom:0;">
+                            <div>
+                                <h3>Crear local</h3>
+                                <p class="order-card-subtitle">Empresa activa: {{ order.company.name|default:"-" }}</p>
+                            </div>
+                        </div>
+                        <div class="order-fiscal-form-grid">
                             <div>
                                 <label class="form-label">Tipo</label>
                                 <select name="doc_type" class="form-select">
@@ -104,11 +535,19 @@
                                 </select>
                             </div>
                             <button type="submit" class="btn btn-primary" {% if not invoice_ready or not fiscal_points %}disabled{% endif %}>Crear local</button>
-                        </form>
+                        </div>
+                    </form>
 
-                        <form method="post" action="{% url 'admin_order_fiscal_register_external' order.pk %}" style="display:grid; grid-template-columns: 1fr 1fr 1fr 1fr auto; gap:8px; align-items:end;">
-                            {% csrf_token %}
-                            <input type="hidden" name="external_system" value="saas">
+                    <form method="post" action="{% url 'admin_order_fiscal_register_external' order.pk %}" class="order-fiscal-form">
+                        {% csrf_token %}
+                        <input type="hidden" name="external_system" value="saas">
+                        <div class="order-card-header" style="margin-bottom:0; padding-bottom:0; border-bottom:0;">
+                            <div>
+                                <h3>Registrar externo</h3>
+                                <p class="order-card-subtitle">Carga manual de comprobante ya emitido fuera del sistema.</p>
+                            </div>
+                        </div>
+                        <div class="order-fiscal-form-grid is-external">
                             <div>
                                 <label class="form-label">Tipo</label>
                                 <select name="doc_type" class="form-select">
@@ -136,307 +575,96 @@
                                 <label class="form-label">Numero externo</label>
                                 <input type="text" name="external_number" class="form-input" placeholder="0001-00001234">
                             </div>
-                            <button type="submit" class="btn btn-outline" {% if not fiscal_points %}disabled{% endif %}>Registrar externo</button>
-                        </form>
-                    </div>
-                    {% if not fiscal_points %}
-                    <small class="text-muted" style="display:block; margin-top:8px;">
-                        No hay puntos de venta activos para esta empresa. Configuralos en Factura electronica.
-                    </small>
-                    {% endif %}
-                    <div style="margin-top:8px;">
-                        <a href="{% url 'admin_fiscal_document_list' %}" class="btn btn-outline btn-sm">Ver comprobantes fiscales</a>
-                    </div>
+                            <button type="submit" class="btn btn-outline" {% if not fiscal_points %}disabled{% endif %}>Registrar</button>
+                        </div>
+                    </form>
                 </div>
-                {% if order.saas_document_number or order.saas_document_type %}
-                <div style="margin-top:10px;">
-                    <strong>Comprobante SaaS:</strong>
-                    {{ order.saas_document_type|default:"Comprobante" }}
-                    {{ order.saas_document_number|default:"-" }}
-                    {% if order.saas_document_date %}
-                    ({{ order.saas_document_date|date:"d/m/Y" }})
-                    {% endif %}
-                    {% if order.saas_document_total %}
-                    - Total ${{ order.saas_document_total|floatformat:2 }}
-                    {% endif %}
+
+                {% if not fiscal_points %}
+                <div class="order-empty-state">
+                    No hay puntos de venta activos para esta empresa. Configuralos en Factura electronica.
                 </div>
                 {% endif %}
-                <a
-                    href="{% url 'admin_payment_list' %}?order_id={{ order.pk }}&company_id={{ order.company_id }}{% if order_client_profile_id %}&client_id={{ order_client_profile_id }}{% endif %}"
-                    class="btn btn-outline btn-sm"
-                    style="margin-top:6px;"
-                >
-                    Registrar pago de este pedido
-                </a>
-            </p>
-            {% if order_documents %}
-            <div style="margin-top:10px;">
-                <strong>Documentos internos:</strong>
-                <ul style="margin:6px 0 0;padding-left:18px;">
-                    {% for doc in order_documents %}
-                    <li>
-                        {{ doc.get_doc_type_display }} #{{ doc.number|stringformat:"07d" }}
-                        <a href="{% url 'admin_internal_document_print' doc.pk %}?copy=original" class="btn btn-outline btn-sm">Imprimir</a>
-                        <a href="{% url 'admin_internal_document_print' doc.pk %}?copy=original&download=1" class="btn btn-outline btn-sm">PDF</a>
-                        <a href="{% url 'admin_internal_document_print' doc.pk %}?copy=duplicado" class="btn btn-outline btn-sm">Duplicado</a>
-                        <a href="{% url 'admin_internal_document_print' doc.pk %}?copy=triplicado" class="btn btn-outline btn-sm">Triplicado</a>
-                        <a href="mailto:?subject={{ doc.get_doc_type_display }}%20{{ doc.number|stringformat:'07d' }}&body=Documento%20disponible%20en%20el%20panel%20interno." class="btn btn-outline btn-sm">Mail</a>
-                    </li>
-                    {% endfor %}
-                </ul>
-            </div>
-            {% else %}
-            <div style="margin-top:10px;">
-                <small class="text-muted">Sin documentos internos generados.</small>
-            </div>
-            {% endif %}
-            {% if order_fiscal_documents %}
-            <div style="margin-top:10px;">
-                <strong>Documentos fiscales:</strong>
-                <ul style="margin:6px 0 0;padding-left:18px;">
-                    {% for doc in order_fiscal_documents %}
-                    <li>
-                        {{ doc.get_doc_type_display }} - PV {{ doc.point_of_sale.number }} - Nro {{ doc.number|default:"-" }}
-                        ({{ doc.get_status_display }})
-                        {% if doc.issue_mode == 'arca_wsfe' %}
-                        {% if doc.doc_type == 'FA' or doc.doc_type == 'FB' %}
-                        {% if doc.status == 'ready_to_issue' or doc.status == 'pending_retry' or doc.status == 'rejected' %}
-                        <form method="post" action="{% url 'admin_fiscal_document_emit' doc.pk %}" style="display:inline;">
-                            {% csrf_token %}
-                            <button type="submit" class="btn btn-primary btn-sm" onclick="return confirm('Emitir comprobante en ARCA ahora?');">
-                                Emitir
-                            </button>
-                        </form>
-                        {% endif %}
-                        {% endif %}
-                        {% endif %}
-                        <a href="{% url 'admin_fiscal_document_detail' doc.pk %}" class="btn btn-outline btn-sm">Ver</a>
-                        <a href="{% url 'admin_fiscal_document_print' doc.pk %}?copy=original" class="btn btn-outline btn-sm">Original</a>
-                        <a href="{% url 'admin_fiscal_document_print' doc.pk %}?copy=duplicado" class="btn btn-outline btn-sm">Duplicado</a>
-                        <a href="{% url 'admin_fiscal_document_print' doc.pk %}?copy=triplicado" class="btn btn-outline btn-sm">Triplicado</a>
-                    </li>
-                    {% endfor %}
-                </ul>
-            </div>
-            {% else %}
-            <div style="margin-top:10px;">
-                <small class="text-muted">Sin documentos fiscales registrados.</small>
-            </div>
-            {% endif %}
-        </div>
-    </div>
+            </section>
 
-    {% if order.notes %}
-    <div style="background: var(--color-dark); padding: 1rem; border-radius: 8px; margin-bottom: 1rem;">
-        <strong>Notas del cliente:</strong>
-        <p>{{ order.notes }}</p>
-    </div>
-    {% endif %}
-
-    {% if order.admin_notes %}
-    <div style="background: rgba(255,255,255,.04); padding: 1rem; border-radius: 8px; margin-bottom: 1.5rem;">
-        <strong>Notas internas:</strong>
-        <p>{{ order.admin_notes }}</p>
-    </div>
-    {% endif %}
-
-    <div style="border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:16px;margin-bottom:1.5rem;background:rgba(0,0,0,.2);">
-        <h4 style="margin-top:0;">Documento abierto</h4>
-        <div style="display:grid;grid-template-columns:repeat(3,minmax(200px,1fr));gap:12px;">
-            <div>
-                <strong>Empresa</strong><br>
-                <span class="text-muted">{{ order.company.name|default:"-" }}</span>
-            </div>
-            <div>
-                <strong>Cliente</strong><br>
-                <span class="text-muted">{{ order.client_company|default:order.user.username }}</span>
-            </div>
-            <div>
-                <strong>Tipo documental</strong><br>
-                <span class="text-muted">
-                    {% if order.status == 'draft' %}Cotizacion (COT){% else %}Pedido (PED){% endif %}
-                </span>
-            </div>
-            <div>
-                <strong>Condicion de venta</strong><br>
-                <span class="text-muted">{{ pricing_snapshot.sale_condition|default:"-" }}</span>
-            </div>
-            <div>
-                <strong>Lista de precios</strong><br>
-                <span class="text-muted">{{ pricing_snapshot.price_list.name|default:"-" }}</span>
-            </div>
-            <div>
-                <strong>Descuento vigente</strong><br>
-                <span class="text-muted">{{ pricing_snapshot.discount_percentage|default:"0"|floatformat:2 }}%</span>
-            </div>
-        </div>
-
-        {% if order.status == 'draft' %}
-        <div style="margin-top:16px;">
-            <form method="post" action="{% url 'admin_order_item_add' order.pk %}" style="display:grid;grid-template-columns:2fr 1fr auto;gap:12px;align-items:end;">
-                {% csrf_token %}
-                <div class="form-group" style="margin:0;">
-                    <label for="sku" class="form-label">Producto (SKU)</label>
-                    <input list="product_suggestions" id="sku" name="sku" class="form-input" placeholder="SKU del producto">
-                    <datalist id="product_suggestions">
-                        {% for product in product_suggestions %}
-                        <option value="{{ product.sku }}">{{ product.name }}</option>
-                        {% endfor %}
-                    </datalist>
-                </div>
-                <div class="form-group" style="margin:0;">
-                    <label for="quantity" class="form-label">Cantidad</label>
-                    <input type="number" min="1" name="quantity" id="quantity" class="form-input" value="1">
-                </div>
-                <button type="submit" class="btn btn-primary">Agregar item</button>
-            </form>
-            <small class="text-muted">Solo disponible en borradores.</small>
-        </div>
-        {% endif %}
-    </div>
-
-    <h4>Items del Pedido</h4>
-    <table class="admin-table" style="margin-bottom: 2rem;">
-        <thead>
-            <tr>
-                <th>SKU</th>
-                <th>Producto</th>
-                <th>Solicitud medida</th>
-                <th>Cant.</th>
-                <th>Precio Unit.</th>
-                <th>Subtotal</th>
-                <th>Accion</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for item in order_items %}
-            <tr>
-                <td><code>{{ item.product_sku }}</code></td>
-                <td>{{ item.product_name }}</td>
-                <td>
-                    {% if item.clamp_request_id %}
+            <section class="order-card">
+                <div class="order-card-header">
                     <div>
-                        <span class="badge badge-info">#{{ item.clamp_request_id }}</span>
-                        <small class="text-muted">
-                            {{ item.clamp_request.get_clamp_type_display|upper }}
-                            {{ item.clamp_request.diameter }} x {{ item.clamp_request.width_mm }} x {{ item.clamp_request.length_mm }}
-                            {{ item.clamp_request.profile_type }}
-                        </small>
+                        <h3>Documentos vinculados</h3>
+                        <p class="order-card-subtitle">Internos y fiscales generados a partir del pedido.</p>
                     </div>
-                    {% if item.published_to_catalog %}
-                    <div style="margin-top:6px;">
-                        <span class="badge badge-success">Ya publicada en catalogo</span>
-                    </div>
-                    {% endif %}
+                </div>
+
+                <div class="order-side-group">
+                    <span class="order-info-label">Documentos internos</span>
+                    {% if order_documents %}
+                    <ul class="order-doc-list">
+                        {% for doc in order_documents %}
+                        <li class="order-doc-entry">
+                            <div class="order-doc-entry-main">
+                                <strong>{{ doc.get_doc_type_display }} #{{ doc.number|stringformat:"07d" }}</strong>
+                                <small class="text-muted">{{ doc.issued_at|date:"d/m/Y H:i" }}</small>
+                            </div>
+                            <div class="order-doc-entry-actions">
+                                <a href="{% url 'admin_internal_document_print' doc.pk %}?copy=original" class="btn btn-outline btn-sm" data-print-window="1" target="_blank" rel="noopener noreferrer">Original</a>
+                                <a href="{% url 'admin_internal_document_print' doc.pk %}?copy=original&download=1" class="btn btn-outline btn-sm" data-print-window="1" target="_blank" rel="noopener noreferrer">PDF</a>
+                                <a href="{% url 'admin_internal_document_print' doc.pk %}?copy=duplicado" class="btn btn-outline btn-sm" data-print-window="1" target="_blank" rel="noopener noreferrer">Duplicado</a>
+                                <a href="{% url 'admin_internal_document_print' doc.pk %}?copy=triplicado" class="btn btn-outline btn-sm" data-print-window="1" target="_blank" rel="noopener noreferrer">Triplicado</a>
+                            </div>
+                        </li>
+                        {% endfor %}
+                    </ul>
                     {% else %}
-                    <span class="text-muted">-</span>
+                    <div class="order-empty-state">Sin documentos internos generados.</div>
                     {% endif %}
-                </td>
-                <td>{{ item.quantity }}</td>
-                <td>
-                    <span>${{ item.price_at_purchase|floatformat:2 }}</span>
-                    {% if order.discount_percentage %}
-                    <span class="badge badge-warning" style="margin-left:6px;">
-                        Desc {{ order.discount_percentage|floatformat:0 }}%: -${{ item.unit_discount_amount|floatformat:2 }}
-                    </span>
-                    {% endif %}
-                </td>
-                <td>${{ item.subtotal|floatformat:2 }}</td>
-                <td>
-                    {% if item.clamp_request_id and item.can_publish_to_catalog %}
-                    <form method="post" action="{% url 'admin_order_item_publish_clamp' order.pk item.pk %}">
-                        {% csrf_token %}
-                        <button
-                            type="submit"
-                            class="btn btn-primary btn-sm"
-                            onclick="return confirm('Publicar esta abrazadera como producto del catalogo?');"
-                        >
-                            Añadir abrazadera a productos
-                        </button>
-                    </form>
-                    {% elif item.clamp_request_id %}
-                    <span class="text-muted">Publicada</span>
+                </div>
+
+                <div class="order-side-group">
+                    <span class="order-info-label">Documentos fiscales</span>
+                    {% if order_fiscal_documents %}
+                    <ul class="order-doc-list">
+                        {% for doc in order_fiscal_documents %}
+                        <li class="order-doc-entry">
+                            <div class="order-doc-entry-main">
+                                <strong>{{ doc.get_doc_type_display }} - PV {{ doc.point_of_sale.number }} - Nro {{ doc.number|default:"-" }}</strong>
+                                <small class="text-muted">{{ doc.get_status_display }} / {{ doc.get_issue_mode_display }}</small>
+                            </div>
+                            <div class="order-doc-entry-actions">
+                                {% if doc.issue_mode == 'arca_wsfe' %}
+                                {% if doc.doc_type == 'FA' or doc.doc_type == 'FB' %}
+                                {% if doc.status == 'ready_to_issue' or doc.status == 'pending_retry' or doc.status == 'rejected' %}
+                                <form method="post" action="{% url 'admin_fiscal_document_emit' doc.pk %}">
+                                    {% csrf_token %}
+                                    <button type="submit" class="btn btn-primary btn-sm" onclick="return confirm('Emitir comprobante en ARCA ahora?');">
+                                        Emitir
+                                    </button>
+                                </form>
+                                {% endif %}
+                                {% endif %}
+                                {% endif %}
+                                <a href="{% url 'admin_fiscal_document_detail' doc.pk %}" class="btn btn-outline btn-sm">Ver</a>
+                                <a href="{% url 'admin_fiscal_document_print' doc.pk %}?copy=original" class="btn btn-outline btn-sm" data-print-window="1" target="_blank" rel="noopener noreferrer">Original</a>
+                                <a href="{% url 'admin_fiscal_document_print' doc.pk %}?copy=duplicado" class="btn btn-outline btn-sm" data-print-window="1" target="_blank" rel="noopener noreferrer">Duplicado</a>
+                            </div>
+                        </li>
+                        {% endfor %}
+                    </ul>
                     {% else %}
-                    <span class="text-muted">-</span>
+                    <div class="order-empty-state">Sin documentos fiscales registrados.</div>
                     {% endif %}
-                    {% if order.status == 'draft' %}
-                    <form method="post" action="{% url 'admin_order_item_delete' order.pk item.pk %}" style="margin-top:6px;">
-                        {% csrf_token %}
-                        <button type="submit" class="btn btn-danger-outline btn-sm" onclick="return confirm('Eliminar este item?');">
-                            Quitar item
-                        </button>
-                    </form>
-                    {% endif %}
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+                </div>
+            </section>
+        </aside>
+    </div>
 
-    {% if user.is_staff %}
-    <h4>Workflow del pedido</h4>
-    <form method="post" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:end;margin-bottom:1.5rem;">
-        {% csrf_token %}
-        <div class="form-group" style="margin: 0;">
-            <label for="status_select" class="form-label">Estado</label>
-            <select name="status" id="status_select" class="form-select">
-                {% for value, label in status_choices %}
-                <option value="{{ value }}" {% if order.status == value %}selected{% endif %}>{{ label }}</option>
-                {% endfor %}
-            </select>
-        </div>
-        <div class="form-group" style="margin: 0;">
-            <label for="status_note" class="form-label">Nota de cambio</label>
-            <input type="text" name="status_note" id="status_note" class="form-input" placeholder="Motivo del cambio de estado">
-        </div>
-        <div class="form-group" style="margin: 0; grid-column: 1 / -1;">
-            <label for="admin_notes" class="form-label">Notas internas</label>
-            <textarea name="admin_notes" id="admin_notes" class="form-textarea" rows="2">{{ order.admin_notes }}</textarea>
-        </div>
-        <small class="text-muted" style="grid-column: 1 / -1;">
-            Podes confirmar el pedido y luego registrar los pagos desde el panel de pagos.
-        </small>
-        <button type="submit" class="btn btn-primary">Actualizar Estado</button>
-    </form>
-    {% endif %}
-
-    <h4>Historial de estados</h4>
-    <table class="admin-table" style="margin-bottom: 1.5rem;">
-        <thead>
-            <tr>
-                <th>Fecha</th>
-                <th>Desde</th>
-                <th>Hacia</th>
-                <th>Usuario</th>
-                <th>Nota</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for row in status_history %}
-            <tr>
-                <td>{{ row.created_at|date:"d/m/Y H:i" }}</td>
-                <td>{{ row.from_status|default:"-" }}</td>
-                <td>{{ row.to_status }}</td>
-                <td>{{ row.changed_by.username|default:"Sistema" }}</td>
-                <td>{{ row.note|default:"-" }}</td>
-            </tr>
-            {% empty %}
-            <tr>
-                <td colspan="5" class="text-center text-muted">Sin historial de estados</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-
-    <div class="form-actions" style="display: flex; justify-content: space-between; align-items: center; margin-top: 2rem;">
+    <div class="form-actions order-detail-footer">
         <a href="{% url 'admin_order_list' %}" class="btn btn-outline"><- Volver a Pedidos</a>
         {% if user.is_staff %}
         <form method="post" action="{% url 'admin_order_delete' order.pk %}" onsubmit="return confirm('Cancelar pedido? El historial se conserva.');">
             {% csrf_token %}
-            <button type="submit" class="btn btn-danger">Cancelar Pedido</button>
+            <button type="submit" class="btn btn-danger">Cancelar pedido</button>
         </form>
         {% endif %}
     </div>
 </div>
 {% endblock %}
-

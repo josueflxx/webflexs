@@ -9,7 +9,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{% static 'core/css/base.css' %}">
-    <link rel="stylesheet" href="{% static 'core/css/admin.css' %}?v=10">
+    <link rel="stylesheet" href="{% static 'core/css/admin.css' %}?v=11">
     <link rel="stylesheet" href="{% static 'core/css/admin_right_sidebar.css' %}?v=3">
     <link rel="stylesheet" href="{% static 'core/css/search_suggestions.css' %}?v=3">
     <link rel="icon" type="image/x-icon" href="{% static 'core/img/favicon.ico' %}">
@@ -103,38 +103,9 @@
                 </a>
 
                 {% if user.is_superuser and user.username|lower == 'josueflexs' %}
-                <div class="nav-section">Herramientas</div>
-                <a href="{% url 'admin_import_dashboard' %}"
-                    class="nav-item {% if 'import' in request.resolver_match.url_name %}active{% endif %}">
-                    <span class="nav-icon" aria-hidden="true">&#128228;</span>
-                    Importar
-                </a>
-                <a href="{% url 'admin_catalog_excel_template_list' %}"
-                    class="nav-item {% if 'catalog_excel' in request.resolver_match.url_name %}active{% endif %}">
-                    <span class="nav-icon" aria-hidden="true">&#128202;</span>
-                    Exportar Excel
-                </a>
-                {% endif %}
-
-                <div class="nav-section">Sistema</div>
-                {% if user.is_superuser and user.username|lower == 'josueflexs' %}
-                <a href="{% url 'admin_user_list' %}"
-                    class="nav-item {% if 'admin_user' in request.resolver_match.url_name %}active{% endif %}">
-                    <span class="nav-icon" aria-hidden="true">&#128274;</span>
-                    Admins
-                </a>
-                <a href="{% url 'admin_fiscal_config' %}"
-                    class="nav-item {% if 'admin_fiscal' in request.resolver_match.url_name %}active{% endif %}">
-                    <span class="nav-icon" aria-hidden="true">&#128209;</span>
-                    Factura electronica
-                </a>
-                <a href="{% url 'admin_company_list' %}"
-                    class="nav-item {% if 'admin_company' in request.resolver_match.url_name %}active{% endif %}">
-                    <span class="nav-icon" aria-hidden="true">&#127970;</span>
-                    Empresas
-                </a>
+                <div class="nav-section">Configuracion</div>
                 <a href="{% url 'admin_settings' %}"
-                    class="nav-item {% if 'settings' in request.resolver_match.url_name %}active{% endif %}">
+                    class="nav-item {% if request.resolver_match.url_name == 'admin_settings' or request.resolver_match.url_name == 'admin_user_list' or request.resolver_match.url_name == 'admin_user_permissions' or request.resolver_match.url_name == 'admin_company_list' or request.resolver_match.url_name == 'admin_company_edit' or request.resolver_match.url_name == 'admin_fiscal_config' or request.resolver_match.url_name == 'admin_fiscal_point_create' or request.resolver_match.url_name == 'admin_fiscal_point_edit' or request.resolver_match.url_name == 'admin_fiscal_point_toggle_active' or request.resolver_match.url_name == 'admin_fiscal_point_set_default' or 'import' in request.resolver_match.url_name or 'catalog_excel' in request.resolver_match.url_name %}active{% endif %}">
                     <span class="nav-icon" aria-hidden="true">&#9881;</span>
                     Configuracion
                 </a>
@@ -195,6 +166,11 @@
                             <a href="{% url 'admin_dashboard' %}" class="top-nav-item {% if request.resolver_match.url_name == 'admin_dashboard' %}active{% endif %}">
                                 <span aria-hidden="true">&#128202;</span> Dashboard
                             </a>
+                            {% if user.is_superuser and user.username|lower == 'josueflexs' %}
+                            <a href="{% url 'admin_settings' %}" class="top-nav-item {% if request.resolver_match.url_name == 'admin_settings' or request.resolver_match.url_name == 'admin_user_list' or request.resolver_match.url_name == 'admin_user_permissions' or request.resolver_match.url_name == 'admin_company_list' or request.resolver_match.url_name == 'admin_company_edit' or request.resolver_match.url_name == 'admin_fiscal_config' or request.resolver_match.url_name == 'admin_fiscal_point_create' or request.resolver_match.url_name == 'admin_fiscal_point_edit' or request.resolver_match.url_name == 'admin_fiscal_point_toggle_active' or request.resolver_match.url_name == 'admin_fiscal_point_set_default' or 'import' in request.resolver_match.url_name or 'catalog_excel' in request.resolver_match.url_name %}active{% endif %}">
+                                <span aria-hidden="true">&#9881;</span> Configuracion
+                            </a>
+                            {% endif %}
                         </div>
                     </div>
 
@@ -248,37 +224,6 @@
                             </a>
                         </div>
                     </div>
-
-                    {% if user.is_superuser and user.username|lower == 'josueflexs' %}
-                    <div class="top-nav-group">
-                        <span class="top-nav-group-label">Herramientas</span>
-                        <div class="top-nav-group-links">
-                            <a href="{% url 'admin_import_dashboard' %}" class="top-nav-item {% if 'import' in request.resolver_match.url_name %}active{% endif %}">
-                                <span aria-hidden="true">&#128228;</span> Importar
-                            </a>
-                            <a href="{% url 'admin_catalog_excel_template_list' %}" class="top-nav-item {% if 'catalog_excel' in request.resolver_match.url_name %}active{% endif %}">
-                                <span aria-hidden="true">&#128202;</span> Exportar Excel
-                            </a>
-                        </div>
-                    </div>
-                    <div class="top-nav-group">
-                        <span class="top-nav-group-label">Sistema</span>
-                        <div class="top-nav-group-links">
-                            <a href="{% url 'admin_user_list' %}" class="top-nav-item {% if 'admin_user' in request.resolver_match.url_name %}active{% endif %}">
-                                <span aria-hidden="true">&#128274;</span> Admins
-                            </a>
-                            <a href="{% url 'admin_fiscal_config' %}" class="top-nav-item {% if 'admin_fiscal' in request.resolver_match.url_name %}active{% endif %}">
-                                <span aria-hidden="true">&#128209;</span> Factura electronica
-                            </a>
-                            <a href="{% url 'admin_company_list' %}" class="top-nav-item {% if 'admin_company' in request.resolver_match.url_name %}active{% endif %}">
-                                <span aria-hidden="true">&#127970;</span> Empresas
-                            </a>
-                            <a href="{% url 'admin_settings' %}" class="top-nav-item {% if 'settings' in request.resolver_match.url_name %}active{% endif %}">
-                                <span aria-hidden="true">&#9881;</span> Configuracion
-                            </a>
-                        </div>
-                    </div>
-                    {% endif %}
 
                     <div class="top-nav-group">
                         <span class="top-nav-group-label">Acceso</span>
@@ -360,7 +305,7 @@
     </div>
 
     <script src="{% static 'core/js/main.js' %}?v=6"></script>
-    <script src="{% static 'core/js/search_suggestions.js' %}?v=3"></script>
+    <script src="{% static 'core/js/search_suggestions.js' %}?v=4"></script>
     <script>
         const RIGHT_SIDEBAR_AUTO_BREAKPOINT = 1360;
         let rightSidebarAutoMode = false;

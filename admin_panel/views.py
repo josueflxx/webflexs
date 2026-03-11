@@ -50,6 +50,7 @@ from orders.models import ClampQuotation, Order, OrderItem, OrderStatusHistory
 from orders.services.workflow import can_user_transition_order
 from core.models import (
     Company,
+    DocumentSeries,
     FiscalDocument,
     FiscalPointOfSale,
     InternalDocument,
@@ -107,15 +108,17 @@ from catalog.services.category_assignment import (
 )
 from core.services.import_manager import ImportTaskManager
 from core.services.background_jobs import dispatch_import_job
-from core.services.fiscal import is_company_fiscal_ready
+from core.services.fiscal import is_company_fiscal_ready, is_invoice_ready
 from core.services.fiscal_documents import (
     create_local_fiscal_document_from_order,
     register_external_fiscal_document_for_order,
 )
 from core.services.fiscal_emission import emit_fiscal_document_now
 from core.services.advanced_search import (
+    apply_compact_text_search,
     apply_text_search,
     apply_parsed_text_search,
+    compact_search_token,
     parse_text_search_query,
     sanitize_search_token,
 )
@@ -127,6 +130,86 @@ from core.decorators import superuser_required_for_modifications
 
 logger = logging.getLogger(__name__)
 PRIMARY_SUPERADMIN_USERNAME = "josueflexs"
+CLIENT_FACTURABLE_STATUSES = {
+    Order.STATUS_CONFIRMED,
+    Order.STATUS_PREPARING,
+    Order.STATUS_SHIPPED,
+    Order.STATUS_DELIVERED,
+}
+CLIENT_REMITO_READY_STATUSES = {
+    Order.STATUS_SHIPPED,
+    Order.STATUS_DELIVERED,
+}
+FISCAL_PRINT_COPY_LABELS = {
+    "original": "ORIGINAL",
+    "duplicado": "DUPLICADO",
+    "triplicado": "TRIPLICADO",
+}
+FISCAL_PRINT_DOC_META = {
+    "FA": {"letter": "A", "code": "001"},
+    "FB": {"letter": "B", "code": "006"},
+    "NCA": {"letter": "A", "code": "003"},
+    "NCB": {"letter": "B", "code": "008"},
+}
+ORDER_PRODUCT_SEARCH_FIELDS = [
+    "sku",
+    "name",
+    "supplier",
+    "supplier_ref__name",
+    "description",
+]
+
+
+def _find_products_for_order_query(raw_value, *, limit=6):
+    query = sanitize_search_token(raw_value)
+    if not query:
+        return []
+
+    queryset = Product.objects.filter(is_active=True).select_related("supplier_ref")
+    parsed_query = parse_text_search_query(
+        query,
+        max_include=6,
+        max_exclude=2,
+        max_phrases=3,
+    )
+    compact_query = compact_search_token(query)
+    candidates = []
+    seen_ids = set()
+
+    def collect(rows):
+        for product in rows:
+            if product.pk in seen_ids:
+                continue
+            seen_ids.add(product.pk)
+            candidates.append(product)
+            if len(candidates) >= limit:
+                return True
+        return False
+
+    if collect(queryset.filter(Q(sku__iexact=query) | Q(name__iexact=query)).order_by("name")[:3]):
+        return candidates
+    if collect(queryset.filter(Q(sku__istartswith=query) | Q(name__istartswith=query)).order_by("name")[:5]):
+        return candidates
+
+    if parsed_query.get("raw"):
+        if collect(
+            apply_parsed_text_search(
+                queryset,
+                parsed_query,
+                ORDER_PRODUCT_SEARCH_FIELDS,
+                order_by_similarity=False,
+            )
+            .order_by("name")[:limit]
+        ):
+            return candidates
+
+    if compact_query:
+        collect(
+            apply_compact_text_search(queryset, compact_query, ["sku", "name"])
+            .order_by("name")[:limit]
+        )
+
+    return candidates[:limit]
 
 
 def is_primary_superadmin(user):
@@ -217,6 +300,66 @@ def get_admin_company_required(request):
     if active_company:
         return active_company
     return None
+
+
+def _redirect_client_history(client, company=None):
+    url = reverse("admin_client_order_history", args=[client.pk])
+    if company:
+        url = f"{url}?{urlencode({'company_id': company.pk})}"
+    return redirect(url)
+
+
+def _get_client_orders_queryset(client, company=None):
+    if not getattr(client, "user_id", None):
+        return Order.objects.none()
+    queryset = Order.objects.select_related("company", "client_company_ref", "user").filter(
+        user_id=client.user_id
+    )
+    if company:
+        queryset = queryset.filter(company=company)
+    return queryset
+
+
+def _annotate_client_orders_with_documents(order_list, company=None):
+    orders = list(order_list or [])
+    if not orders:
+        return orders
+
+    order_ids = [order.pk for order in orders if getattr(order, "pk", None)]
+    remito_docs_by_order = {}
+    invoice_docs_by_order = {}
+    latest_fiscal_docs_by_order = {}
+
+    if company and order_ids:
+        for document in (
+            InternalDocument.objects.filter(
+                company=company,
+                doc_type=DocumentSeries.DOC_REM,
+                order_id__in=order_ids,
+            )
+            .order_by("-issued_at", "-id")
+        ):
+            remito_docs_by_order.setdefault(document.order_id, document)
+
+        for document in (
+            FiscalDocument.objects.select_related("point_of_sale", "related_document")
+            .filter(company=company, order_id__in=order_ids)
+            .exclude(status="voided")
+            .order_by("-created_at", "-id")
+        ):
+            latest_fiscal_docs_by_order.setdefault(document.order_id, document)
+            if document.doc_type in {"FA", "FB"}:
+                invoice_docs_by_order.setdefault(document.order_id, document)
+
+    for order in orders:
+        order.client_remito_document = remito_docs_by_order.get(order.pk)
+        order.client_invoice_document = invoice_docs_by_order.get(order.pk)
+        order.client_latest_fiscal_document = latest_fiscal_docs_by_order.get(order.pk)
+        order.client_has_saas_invoice = bool(order.saas_document_type or order.saas_document_number)
+        order.client_can_remito = bool(order.client_remito_document) or order.status in CLIENT_REMITO_READY_STATUSES
+        order.client_can_invoice = order.status in CLIENT_FACTURABLE_STATUSES
+        order.client_can_credit_note = bool(order.client_invoice_document)
+    return orders
 
 
 def parse_optional_client_category(raw_value):
@@ -4128,12 +4271,169 @@ def client_quick_order(request, pk):
     active_company = get_admin_selected_company(request)
     if not active_company:
         messages.error(request, "Selecciona una empresa valida para crear el documento.")
-        return redirect("admin_client_order_history", pk=client.pk)
+        return _redirect_client_history(client)
 
     client_company = client.get_company_link(active_company)
     if not client_company:
         messages.error(request, "El cliente no tiene relacion comercial activa con esta empresa.")
-        return redirect("admin_client_order_history", pk=client.pk)
+        return _redirect_client_history(client, active_company)
+
+    if action not in {"quote", "order", "remito", "invoice", "credit_note"}:
+        messages.error(request, "Accion rapida invalida.")
+        return _redirect_client_history(client, active_company)
+
+    if action == "remito":
+        from core.services.documents import ensure_document_for_order
+
+        orders_qs = _get_client_orders_queryset(client, company=active_company).order_by(
+            "-status_updated_at",
+            "-created_at",
+        )
+        remito_order = orders_qs.filter(status__in=CLIENT_REMITO_READY_STATUSES).first()
+        if remito_order:
+            remito_document = (
+                InternalDocument.objects.filter(
+                    company=active_company,
+                    order=remito_order,
+                    doc_type=DocumentSeries.DOC_REM,
+                )
+                .order_by("-issued_at", "-id")
+                .first()
+            )
+            if not remito_document:
+                remito_document = ensure_document_for_order(remito_order, doc_type=DocumentSeries.DOC_REM)
+            if remito_document:
+                messages.success(
+                    request,
+                    f"Se abrio el remito mas reciente del cliente (pedido #{remito_order.pk}).",
+                )
+                print_url = (
+                    f"{reverse('admin_internal_document_print', args=[remito_document.pk])}"
+                    f"?{urlencode({'copy': 'original'})}"
+                )
+                return redirect(print_url)
+
+            messages.info(request, f"Se abrio el pedido #{remito_order.pk} para revisar el remito.")
+            return redirect("admin_order_detail", pk=remito_order.pk)
+
+        pending_order = orders_qs.filter(
+            status__in=[Order.STATUS_CONFIRMED, Order.STATUS_PREPARING]
+        ).first()
+        if pending_order:
+            messages.warning(
+                request,
+                f"No hay pedidos enviados o entregados. Se abrio el pedido #{pending_order.pk} para avanzar a remito.",
+            )
+            return redirect("admin_order_detail", pk=pending_order.pk)
+
+        messages.error(request, "No hay pedidos del cliente listos para remito en esta empresa.")
+        return _redirect_client_history(client, active_company)
+
+    if action == "invoice":
+        facturable_orders = list(
+            _get_client_orders_queryset(client, company=active_company)
+            .filter(status__in=CLIENT_FACTURABLE_STATUSES)
+            .order_by("-status_updated_at", "-created_at")[:30]
+        )
+        order_ids = [order.pk for order in facturable_orders]
+        invoice_docs_by_order = {}
+        if order_ids:
+            for document in (
+                FiscalDocument.objects.select_related("point_of_sale")
+                .filter(company=active_company, order_id__in=order_ids, doc_type__in=["FA", "FB"])
+                .exclude(status="voided")
+                .order_by("-created_at", "-id")
+            ):
+                invoice_docs_by_order.setdefault(document.order_id, document)
+
+        for order in facturable_orders:
+            if order.pk in invoice_docs_by_order:
+                continue
+            if order.saas_document_type or order.saas_document_number:
+                continue
+
+            invoice_ready, invoice_errors = is_invoice_ready(order)
+            if invoice_ready:
+                messages.success(
+                    request,
+                    f"Se abrio el pedido #{order.pk} para crear la factura del cliente.",
+                )
+            else:
+                errors_preview = "; ".join(invoice_errors[:2])
+                messages.warning(
+                    request,
+                    f"Se abrio el pedido #{order.pk}. Antes de facturar faltan datos: {errors_preview}",
+                )
+            return redirect("admin_order_detail", pk=order.pk)
+
+        existing_invoice = next(
+            (invoice_docs_by_order.get(order.pk) for order in facturable_orders if invoice_docs_by_order.get(order.pk)),
+            None,
+        )
+        if existing_invoice:
+            messages.info(
+                request,
+                "El pedido facturable mas reciente ya tiene comprobante fiscal. Se abrio el documento existente.",
+            )
+            return redirect("admin_fiscal_document_detail", pk=existing_invoice.pk)
+
+        existing_saas_order = next(
+            (
+                order
+                for order in facturable_orders
+                if order.saas_document_type or order.saas_document_number
+            ),
+            None,
+        )
+        if existing_saas_order:
+            messages.info(
+                request,
+                f"El pedido facturable mas reciente ya tiene comprobante externo. Se abrio el pedido #{existing_saas_order.pk}.",
+            )
+            return redirect("admin_order_detail", pk=existing_saas_order.pk)
+
+        messages.error(request, "No hay pedidos del cliente listos para facturar en esta empresa.")
+        return _redirect_client_history(client, active_company)
+
+    if action == "credit_note":
+        latest_invoice_document = (
+            FiscalDocument.objects.select_related("order", "point_of_sale", "related_document")
+            .filter(
+                company=active_company,
+                doc_type__in=["FA", "FB"],
+            )
+            .filter(
+                Q(client_profile=client) | Q(client_company_ref__client_profile=client)
+            )
+            .exclude(status="voided")
+            .order_by("-created_at", "-id")
+            .first()
+        )
+        if latest_invoice_document:
+            messages.success(
+                request,
+                "Se abrio el comprobante base mas reciente para gestionar la nota de credito.",
+            )
+            return redirect("admin_fiscal_document_detail", pk=latest_invoice_document.pk)
+
+        saas_invoice_order = (
+            _get_client_orders_queryset(client, company=active_company)
+            .filter(Q(saas_document_type__gt="") | Q(saas_document_number__gt=""))
+            .order_by("-created_at")
+            .first()
+        )
+        if saas_invoice_order:
+            messages.info(
+                request,
+                f"El cliente solo tiene comprobantes externos recientes. Se abrio el pedido #{saas_invoice_order.pk}.",
+            )
+            return redirect("admin_order_detail", pk=saas_invoice_order.pk)
+
+        messages.error(
+            request,
+            "No hay comprobantes fiscales del cliente para usar como base de nota de credito.",
+        )
+        return _redirect_client_history(client, active_company)
 
     try:
         from core.services.pricing import (
@@ -4207,9 +4507,22 @@ def client_cuit_lookup(request):
 def client_order_history(request, pk):
     """Show order history for one client profile."""
     client = get_object_or_404(ClientProfile.objects.select_related('user'), pk=pk)
+    history_base_url = reverse("admin_client_order_history", args=[client.pk])
+
+    def build_history_url(**updates):
+        params = request.GET.copy()
+        for key, value in updates.items():
+            if value in (None, ""):
+                params.pop(key, None)
+            else:
+                params[key] = str(value)
+        encoded = params.urlencode()
+        return f"{history_base_url}?{encoded}" if encoded else history_base_url
+
     companies = Company.objects.filter(is_active=True).order_by("name")
     active_company = get_admin_company_filter(request)
     selected_company_id = "all" if active_company is None else str(active_company.pk)
+    active_company_label = active_company.name if active_company else "Todas las empresas"
     client_company = None
     if active_company:
         client_company = (
@@ -4218,6 +4531,7 @@ def client_order_history(request, pk):
             .first()
         )
     client_company_missing = bool(active_company and not client_company)
+    operations_locked = bool(not active_company or client_company_missing)
     effective_category = (
         client_company.client_category
         if client_company and client_company.client_category_id
@@ -4238,16 +4552,7 @@ def client_order_history(request, pk):
             effective_category.default_sale_condition,
         )
 
-    if client.user_id:
-        orders = (
-            Order.objects.select_related('user')
-            .prefetch_related('items')
-            .filter(user_id=client.user_id)
-        )
-    else:
-        orders = Order.objects.none()
-    if active_company:
-        orders = orders.filter(company=active_company)
+    orders = _get_client_orders_queryset(client, company=active_company).prefetch_related('items')
 
     status = request.GET.get('status', '').strip()
     orders_filtered = orders
@@ -4275,7 +4580,7 @@ def client_order_history(request, pk):
     page = request.GET.get('page', 1)
     page_obj = paginator.get_page(page)
 
-    payments_qs = ClientPayment.objects.select_related('order', 'created_by').filter(
+    payments_qs = ClientPayment.objects.select_related('order', 'created_by', 'company').filter(
         client_profile=client,
         is_cancelled=False,
     )
@@ -4286,6 +4591,7 @@ def client_order_history(request, pk):
         payments_count=Count('id'),
         last_payment_at=Max('paid_at'),
     )
+    payments_recent = list(payments_qs.order_by('-paid_at')[:20])
 
     documents_qs = InternalDocument.objects.filter(
         Q(client_profile=client) | Q(client_company_ref__client_profile=client)
@@ -4293,6 +4599,7 @@ def client_order_history(request, pk):
     if active_company:
         documents_qs = documents_qs.filter(company=active_company)
     documents_qs = documents_qs.select_related("company").order_by("-issued_at")
+    recent_internal_documents = list(documents_qs[:16])
     documents_by_type = {
         "COT": list(documents_qs.filter(doc_type="COT")[:10]),
         "PED": list(documents_qs.filter(doc_type="PED")[:10]),
@@ -4318,65 +4625,103 @@ def client_order_history(request, pk):
         ).order_by("-created_at")[:10]
     )
 
-    ledger_rows = []
-    running_balance = Decimal('0.00')
-    ledger_qs = (
-        client.get_ledger_queryset(company=active_company)
-        .select_related('order', 'payment', 'created_by')
+    fiscal_documents_qs = (
+        FiscalDocument.objects.select_related(
+            "company",
+            "point_of_sale",
+            "order",
+            "related_document",
+        )
+        .filter(Q(client_profile=client) | Q(client_company_ref__client_profile=client))
+        .order_by("-created_at", "-id")
     )
-    for tx in ledger_qs:
-        running_balance += tx.amount
-        debit = tx.amount if tx.amount > 0 else Decimal('0.00')
-        credit = abs(tx.amount) if tx.amount < 0 else Decimal('0.00')
-        doc_category = 'account'
-        order_status = ''
+    if active_company:
+        fiscal_documents_qs = fiscal_documents_qs.filter(company=active_company)
+    recent_fiscal_documents = list(fiscal_documents_qs[:12])
 
-        if tx.transaction_type == ClientTransaction.TYPE_PAYMENT:
-            type_label = 'Recibo de pago'
-            doc_category = 'payment'
-            if tx.payment_id:
-                number_label = f'RP{tx.payment_id:07d}'
-            else:
-                number_label = '-'
-        elif tx.transaction_type == ClientTransaction.TYPE_ORDER_CHARGE:
-            order_obj = tx.order
-            if order_obj:
-                order_status = order_obj.status
-                if order_obj.saas_document_number or order_obj.saas_document_type:
-                    doc_category = 'invoice'
-                    type_label = order_obj.saas_document_type or 'Factura'
-                    number_label = order_obj.saas_document_number or f'FC{order_obj.pk:07d}'
-                elif order_obj.status in {Order.STATUS_SHIPPED, Order.STATUS_DELIVERED}:
-                    doc_category = 'remito'
-                    type_label = 'Remito'
-                    number_label = f'RM{order_obj.pk:07d}'
-                elif order_obj.status == Order.STATUS_DRAFT:
-                    doc_category = 'quote'
-                    type_label = 'Cotizacion'
-                    number_label = f'CT{order_obj.pk:07d}'
+    ledger_rows = []
+    ledger_warning = ""
+    running_balance = Decimal('0.00')
+    try:
+        ledger_qs = (
+            client.get_ledger_queryset(company=active_company)
+            .select_related('order', 'payment', 'created_by')
+        )
+        for tx in ledger_qs:
+            running_balance += tx.amount
+            debit = tx.amount if tx.amount > 0 else Decimal('0.00')
+            credit = abs(tx.amount) if tx.amount < 0 else Decimal('0.00')
+            doc_category = 'account'
+            order_status = ''
+
+            if tx.transaction_type == ClientTransaction.TYPE_PAYMENT:
+                type_label = 'Recibo de pago'
+                doc_category = 'payment'
+                if tx.payment_id:
+                    number_label = f'RP{tx.payment_id:07d}'
+                else:
+                    number_label = '-'
+            elif tx.transaction_type == ClientTransaction.TYPE_ORDER_CHARGE:
+                order_obj = tx.order
+                if order_obj:
+                    order_status = order_obj.status
+                    if order_obj.saas_document_number or order_obj.saas_document_type:
+                        doc_category = 'invoice'
+                        type_label = order_obj.saas_document_type or 'Factura'
+                        number_label = order_obj.saas_document_number or f'FC{order_obj.pk:07d}'
+                    elif order_obj.status in {Order.STATUS_SHIPPED, Order.STATUS_DELIVERED}:
+                        doc_category = 'remito'
+                        type_label = 'Remito'
+                        number_label = f'RM{order_obj.pk:07d}'
+                    elif order_obj.status == Order.STATUS_DRAFT:
+                        doc_category = 'quote'
+                        type_label = 'Cotizacion'
+                        number_label = f'CT{order_obj.pk:07d}'
+                    else:
+                        doc_category = 'order'
+                        type_label = 'Pedido'
+                        number_label = f'PD{order_obj.pk:07d}'
                 else:
                     doc_category = 'order'
                     type_label = 'Pedido'
-                    number_label = f'PD{order_obj.pk:07d}'
+                    number_label = f'PD{tx.order_id:07d}' if tx.order_id else '-'
             else:
-                doc_category = 'order'
-                type_label = 'Pedido'
-                number_label = f'PD{tx.order_id:07d}' if tx.order_id else '-'
-        else:
-            type_label = 'Ajuste'
-            doc_category = 'account'
-            number_label = f'AJ{tx.pk:07d}'
+                type_label = 'Ajuste'
+                doc_category = 'account'
+                number_label = f'AJ{tx.pk:07d}'
 
-        ledger_rows.append({
-            'tx': tx,
-            'debit': debit,
-            'credit': credit,
-            'running_balance': running_balance,
-            'type_label': type_label,
-            'number_label': number_label,
-            'doc_category': doc_category,
-            'order_status': order_status,
-        })
+            detail_url = ""
+            detail_label = ""
+            if tx.order_id:
+                detail_url = reverse("admin_order_detail", args=[tx.order_id])
+                detail_label = f"Pedido #{tx.order_id}"
+            elif tx.payment_id:
+                detail_url = (
+                    f"{reverse('admin_payment_list')}?"
+                    f"{urlencode({'client_id': client.pk, 'company_id': selected_company_id})}"
+                )
+                detail_label = f"Pago #{tx.payment_id}"
+
+            ledger_rows.append({
+                'tx': tx,
+                'debit': debit,
+                'credit': credit,
+                'running_balance': running_balance,
+                'type_label': type_label,
+                'number_label': number_label,
+                'doc_category': doc_category,
+                'order_status': order_status,
+                'detail_url': detail_url,
+                'detail_label': detail_label,
+            })
+    except DatabaseError as exc:
+        ledger_warning = "La cuenta corriente no pudo cargarse en este entorno."
+        logger.warning(
+            "Client history ledger unavailable for client %s and company %s: %s",
+            client.pk,
+            getattr(active_company, "pk", None),
+            exc,
+        )
 
     ledger_tab = request.GET.get('ledger_tab', 'account').strip().lower()
     valid_ledger_tabs = {'account', 'payments', 'orders', 'invoices', 'remitos', 'quotes'}
@@ -4426,6 +4771,148 @@ def client_order_history(request, pk):
         )
         .order_by('-created_at')[:8]
     )
+    _annotate_client_orders_with_documents(page_obj.object_list, active_company)
+    _annotate_client_orders_with_documents(open_orders, active_company)
+
+    if active_company:
+        quick_remito_available = (
+            orders.filter(status__in=CLIENT_REMITO_READY_STATUSES).exists()
+            or orders.filter(status__in=[Order.STATUS_CONFIRMED, Order.STATUS_PREPARING]).exists()
+        )
+        quick_invoice_available = (
+            orders.filter(status__in=CLIENT_FACTURABLE_STATUSES).exists()
+            or fiscal_documents_qs.filter(doc_type__in=["FA", "FB"]).exclude(status="voided").exists()
+            or official_docs_qs.exists()
+        )
+        quick_credit_note_available = (
+            fiscal_documents_qs.filter(doc_type__in=["FA", "FB"]).exclude(status="voided").exists()
+            or official_docs_qs.exists()
+        )
+    else:
+        quick_remito_available = False
+        quick_invoice_available = False
+        quick_credit_note_available = False
+
+    client_tab = request.GET.get('client_tab', 'account').strip().lower()
+    valid_client_tabs = {'overview', 'account', 'orders', 'payments', 'documents'}
+    if client_tab not in valid_client_tabs:
+        client_tab = 'account'
+
+    client_tabs = [
+        {
+            'key': 'overview',
+            'label': 'Resumen',
+            'is_active': client_tab == 'overview',
+            'url': build_history_url(
+                client_tab='overview',
+                page=None,
+                status=None,
+                ledger_tab=None,
+                more=None,
+                show_all=None,
+            ),
+        },
+        {
+            'key': 'account',
+            'label': 'Cuenta corriente',
+            'is_active': client_tab == 'account',
+            'url': build_history_url(
+                client_tab='account',
+                page=None,
+                more=None,
+                show_all=None,
+            ),
+        },
+        {
+            'key': 'orders',
+            'label': 'Pedidos',
+            'is_active': client_tab == 'orders',
+            'url': build_history_url(
+                client_tab='orders',
+                page=None,
+                ledger_tab=None,
+                more=None,
+                show_all=None,
+            ),
+        },
+        {
+            'key': 'payments',
+            'label': 'Pagos',
+            'is_active': client_tab == 'payments',
+            'url': build_history_url(
+                client_tab='payments',
+                page=None,
+                status=None,
+                ledger_tab=None,
+                more=None,
+                show_all=None,
+            ),
+        },
+        {
+            'key': 'documents',
+            'label': 'Documentos',
+            'is_active': client_tab == 'documents',
+            'url': build_history_url(
+                client_tab='documents',
+                page=None,
+                status=None,
+                ledger_tab=None,
+                more=None,
+                show_all=None,
+            ),
+        },
+    ]
+
+    ledger_tabs_ui = [
+        {
+            'key': item['key'],
+            'label': item['label'],
+            'is_active': ledger_tab == item['key'],
+            'url': build_history_url(
+                client_tab='account',
+                ledger_tab=item['key'],
+                page=None,
+                more=None,
+                show_all=None,
+            ),
+        }
+        for item in [
+            {'key': 'account', 'label': 'Cuenta Corriente'},
+            {'key': 'payments', 'label': 'Pagos'},
+            {'key': 'invoices', 'label': 'Facturas'},
+            {'key': 'remitos', 'label': 'Remitos'},
+            {'key': 'orders', 'label': 'Pedidos'},
+            {'key': 'quotes', 'label': 'Presupuestos'},
+        ]
+    ]
+
+    ledger_more_url = ""
+    ledger_show_all_url = ""
+    if ledger_hidden_count > 0:
+        ledger_more_url = build_history_url(
+            client_tab='account',
+            ledger_tab=ledger_tab,
+            more='1',
+            limit=ledger_limit,
+        )
+        ledger_show_all_url = build_history_url(
+            client_tab='account',
+            ledger_tab=ledger_tab,
+            show_all='1',
+            more=None,
+        )
+
+    orders_clear_url = build_history_url(
+        client_tab='orders',
+        status=None,
+        page=None,
+    )
+
+    documents_summary = {
+        'internal_count': documents_qs.count(),
+        'fiscal_count': fiscal_documents_qs.count(),
+        'official_count': official_docs_qs.count(),
+    }
 
     return render(request, 'admin_panel/clients/order_history.html', {
         'client': client,
@@ -4437,7 +4924,11 @@ def client_order_history(request, pk):
         'status_choices': Order.STATUS_CHOICES,
         'companies': companies,
         'active_company': active_company,
+        'active_company_label': active_company_label,
         'selected_company_id': selected_company_id,
+        'operations_locked': operations_locked,
+        'client_tab': client_tab,
+        'client_tabs': client_tabs,
         'summary': {
             'orders_count': summary.get('orders_count') or 0,
             'total_amount': summary.get('total_amount') or Decimal('0.00'),
@@ -4451,7 +4942,7 @@ def client_order_history(request, pk):
             'total_paid': payments_summary.get('total_paid') or Decimal('0.00'),
             'current_balance': client.get_current_balance(company=active_company),
         },
-        'payments_recent': payments_qs.order_by('-paid_at')[:20],
+        'payments_recent': payments_recent,
         'payments_summary': {
             'total_paid': payments_summary.get('total_paid') or Decimal('0.00'),
             'payments_count': payments_summary.get('payments_count') or 0,
@@ -4463,14 +4954,10 @@ def client_order_history(request, pk):
         'ledger_show_all': ledger_show_all,
         'ledger_limit': ledger_limit,
         'ledger_tab': ledger_tab,
-        'ledger_tabs': [
-            {'key': 'account', 'label': 'Cuenta Corriente'},
-            {'key': 'payments', 'label': 'Pagos'},
-            {'key': 'invoices', 'label': 'Facturas'},
-            {'key': 'remitos', 'label': 'Remitos'},
-            {'key': 'orders', 'label': 'Pedidos'},
-            {'key': 'quotes', 'label': 'Presupuestos'},
-        ],
+        'ledger_warning': ledger_warning,
+        'ledger_tabs': ledger_tabs_ui,
+        'ledger_more_url': ledger_more_url,
+        'ledger_show_all_url': ledger_show_all_url,
         'open_orders': open_orders,
         'open_orders_count': open_orders_count,
         'client_company': client_company,
@@ -4479,8 +4966,15 @@ def client_order_history(request, pk):
         'effective_discount': effective_discount,
         'effective_price_list': effective_price_list,
         'sale_condition_label': sale_condition_label,
+        'orders_clear_url': orders_clear_url,
         'documents_by_type': documents_by_type,
+        'recent_internal_documents': recent_internal_documents,
+        'documents_summary': documents_summary,
+        'recent_fiscal_documents': recent_fiscal_documents,
         'official_docs': official_docs,
+        'quick_remito_available': quick_remito_available,
+        'quick_invoice_available': quick_invoice_available,
+        'quick_credit_note_available': quick_credit_note_available,
     })
 
 
@@ -5016,7 +5510,6 @@ def order_detail(request, pk):
         else None
     )
     pricing_snapshot = {}
-    product_suggestions = []
     if order.user_id and order.company_id:
         try:
             from core.services.pricing import (
@@ -5049,11 +5542,6 @@ def order_detail(request, pk):
             }
         except Exception:
             pricing_snapshot = {}
-    if order.is_mutable_for_items():
-        product_suggestions = list(
-            Product.objects.filter(is_active=True).only("sku", "name").order_by("name")[:60]
-        )
-    
     if request.method == 'POST':
         new_status = request.POST.get('status', '')
         if new_status:
@@ -5127,7 +5615,6 @@ def order_detail(request, pk):
         'invoice_errors': invoice_errors,
         'document_company': order.company,
         'pricing_snapshot': pricing_snapshot,
-        'product_suggestions': product_suggestions,
         'fiscal_doc_type_choices': [("FA", "Factura A"), ("FB", "Factura B")],
         'fiscal_issue_mode_choices': [("manual", "Manual"), ("arca_wsfe", "ARCA WSFE")],
         'fiscal_points': fiscal_points,
@@ -5411,6 +5898,69 @@ def fiscal_document_print(request, pk):
     if copy_type not in {"original", "duplicado", "triplicado"}:
         copy_type = "original"
 
+    site_settings = SiteSettings.get_settings()
+    client_profile = fiscal_document.client_profile
+    if not client_profile and getattr(fiscal_document, "client_company_ref", None):
+        client_profile = fiscal_document.client_company_ref.client_profile
+
+    company = fiscal_document.company
+    order = fiscal_document.order
+    company_meta = FISCAL_PRINT_DOC_META.get(fiscal_document.doc_type, {"letter": "-", "code": "---"})
+    copy_label = FISCAL_PRINT_COPY_LABELS.get(copy_type, "ORIGINAL")
+    sale_condition_label = "-"
+    operator_label = "-"
+    observations = []
+
+    if order:
+        if order.notes:
+            observations.append(order.notes)
+        if order.admin_notes:
+            observations.append(order.admin_notes)
+        if getattr(order, "assigned_to", None):
+            operator_label = order.assigned_to.get_full_name() or order.assigned_to.username
+
+    client_company_link = getattr(fiscal_document, "client_company_ref", None)
+    effective_category = None
+    if client_company_link and getattr(client_company_link, "client_category_id", None):
+        effective_category = client_company_link.client_category
+    elif client_profile:
+        try:
+            effective_category = client_profile.get_effective_client_category(company=company)
+        except Exception:
+            effective_category = None
+    if effective_category and getattr(effective_category, "default_sale_condition", None):
+        sale_condition_label = dict(ClientCategory.SALE_CONDITION_CHOICES).get(
+            effective_category.default_sale_condition,
+            effective_category.default_sale_condition,
+        )
+    elif getattr(order, "billing_mode", "") == "official":
+        sale_condition_label = "Cuenta corriente"
+
+    company_address_bits = [
+        company.fiscal_address,
+        company.fiscal_city,
+        company.fiscal_province,
+        company.postal_code,
+    ]
+    client_address_bits = []
+    if client_profile:
+        client_address_bits = [
+            client_profile.fiscal_address or client_profile.address,
+            client_profile.fiscal_city or client_profile.province,
+            client_profile.fiscal_province,
+            client_profile.postal_code,
+        ]
+
+    subtotal_before_discount = Decimal(fiscal_document.subtotal_net or 0)
+    discount_total = Decimal(fiscal_document.discount_total or 0)
+    taxable_net = subtotal_before_discount - discount_total
+    if taxable_net < 0:
+        taxable_net = Decimal("0.00")
+
+    order_total_discount_percentage = Decimal("0.00")
+    if order and getattr(order, "discount_percentage", None):
+        order_total_discount_percentage = Decimal(order.discount_percentage or 0)
+
     return render(
         request,
         "admin_panel/fiscal/print.html",
@@ -5418,6 +5968,32 @@ def fiscal_document_print(request, pk):
             "fiscal_document": fiscal_document,
             "items": fiscal_document.items.all().order_by("line_number"),
             "copy_type": copy_type,
+            "copy_label": copy_label,
+            "document_letter": company_meta["letter"],
+            "document_code": company_meta["code"],
+            "document_number_display": (
+                f"{str(fiscal_document.point_of_sale.number or '').zfill(5)}-"
+                f"{str(fiscal_document.number or 0).zfill(8)}"
+            ),
+            "company_address_line": " / ".join(bit for bit in company_address_bits if bit),
+            "company_contact_line": " / ".join(
+                bit for bit in [site_settings.company_phone, site_settings.company_phone_2, company.email or site_settings.company_email] if bit
+            ),
+            "company_contact_site": site_settings.company_address,
+            "client_profile": client_profile,
+            "client_address_line": " / ".join(bit for bit in client_address_bits if bit),
+            "client_document_label": (
+                client_profile.get_document_type_display() if client_profile and client_profile.document_type else "CUIT/DNI"
+            ) if client_profile else "CUIT/DNI",
+            "client_document_value": (
+                client_profile.document_number or client_profile.cuit_dni
+            ) if client_profile else "",
+            "sale_condition_label": sale_condition_label,
+            "operator_label": operator_label,
+            "observations_text": "\n".join(bit for bit in observations if bit).strip(),
+            "subtotal_before_discount": subtotal_before_discount,
+            "taxable_net": taxable_net,
+            "order_total_discount_percentage": order_total_discount_percentage,
         },
     )
 
@@ -5445,7 +6021,16 @@ def order_item_add(request, pk):
     if product_id.isdigit():
         product = Product.objects.filter(pk=int(product_id)).first()
     if not product and sku:
-        product = Product.objects.filter(sku__iexact=sku).first()
+        product_matches = _find_products_for_order_query(sku, limit=5)
+        if len(product_matches) == 1:
+            product = product_matches[0]
+        elif len(product_matches) > 1:
+            matches_label = ", ".join(match.sku for match in product_matches[:3])
+            messages.error(
+                request,
+                f'Hay varias coincidencias para "{sku}". Elegi una sugerencia mas precisa ({matches_label}).',
+            )
+            return redirect("admin_order_detail", pk=order.pk)
     if not product:
         messages.error(request, "Producto no encontrado.")
         return redirect("admin_order_detail", pk=order.pk)

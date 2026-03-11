@@ -141,9 +141,9 @@
     </table>
 
     <div class="form-actions" style="margin-top:1rem;">
-        <a href="{% url 'admin_fiscal_document_print' fiscal_document.pk %}?copy=original" class="btn btn-outline">Original</a>
-        <a href="{% url 'admin_fiscal_document_print' fiscal_document.pk %}?copy=duplicado" class="btn btn-outline">Duplicado</a>
-        <a href="{% url 'admin_fiscal_document_print' fiscal_document.pk %}?copy=triplicado" class="btn btn-outline">Triplicado</a>
+        <a href="{% url 'admin_fiscal_document_print' fiscal_document.pk %}?copy=original" class="btn btn-outline" data-print-window="1" target="_blank" rel="noopener noreferrer">Original</a>
+        <a href="{% url 'admin_fiscal_document_print' fiscal_document.pk %}?copy=duplicado" class="btn btn-outline" data-print-window="1" target="_blank" rel="noopener noreferrer">Duplicado</a>
+        <a href="{% url 'admin_fiscal_document_print' fiscal_document.pk %}?copy=triplicado" class="btn btn-outline" data-print-window="1" target="_blank" rel="noopener noreferrer">Triplicado</a>
         <a href="{% url 'admin_fiscal_document_list' %}" class="btn btn-outline">Volver</a>
     </div>
 </div>

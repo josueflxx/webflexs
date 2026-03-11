@@ -1,94 +1,534 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ fiscal_document.get_doc_type_display }} {{ fiscal_document.number|default:"-" }}</title>
+    <title>{{ fiscal_document.get_doc_type_display }} {{ document_number_display }}</title>
     <style>
-        body { font-family: Arial, sans-serif; color: #111; margin: 24px; }
-        .header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom: 16px; }
-        .copy-badge { border: 1px solid #111; padding: 4px 10px; font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
-        table { width: 100%; border-collapse: collapse; margin-top: 16px; }
-        th, td { border: 1px solid #ddd; padding: 6px; font-size: 12px; }
-        th { background: #f4f4f4; text-align:left; }
-        .totals { margin-top: 16px; width: 320px; margin-left: auto; }
-        .totals td { border: none; padding: 4px; }
-        .muted { color: #666; font-size: 12px; }
-        @media print { .print-actions { display:none; } body { margin: 10mm; } }
+        :root {
+            --paper-width: 210mm;
+            --paper-min-height: 297mm;
+            --ink: #111111;
+            --muted: #5d5d5d;
+            --line: #222222;
+            --soft-line: #b9b9b9;
+            --panel: #d9d9d9;
+            --panel-soft: #ececec;
+            --accent: #e25a1c;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        html,
+        body {
+            margin: 0;
+            padding: 0;
+            background: #dfe3ea;
+            color: var(--ink);
+            font-family: Arial, Helvetica, sans-serif;
+        }
+
+        body {
+            padding: 20px 0 32px;
+        }
+
+        .print-toolbar {
+            width: var(--paper-width);
+            margin: 0 auto 8px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            font-size: 11px;
+            color: #415164;
+        }
+
+        .print-copy-links {
+            display: flex;
+            gap: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+        }
+
+        .print-copy-links a {
+            color: inherit;
+            text-decoration: none;
+            border-bottom: 1px solid transparent;
+        }
+
+        .print-copy-links a:hover {
+            border-bottom-color: currentColor;
+        }
+
+        .print-toolbar button {
+            border: 1px solid #9fa7b2;
+            background: #ffffff;
+            padding: 7px 12px;
+            border-radius: 999px;
+            font-size: 11px;
+            cursor: pointer;
+        }
+
+        .sheet {
+            width: var(--paper-width);
+            min-height: var(--paper-min-height);
+            margin: 0 auto;
+            background: #ffffff;
+            box-shadow: 0 12px 34px rgba(15, 23, 42, 0.15);
+            padding: 16mm 14mm 12mm;
+        }
+
+        .doc-header {
+            display: grid;
+            grid-template-columns: 1.7fr 0.38fr 1fr;
+            gap: 10mm;
+            align-items: start;
+        }
+
+        .brand-block {
+            text-align: center;
+        }
+
+        .brand-logo {
+            display: block;
+            width: 100%;
+            max-width: 90mm;
+            margin: 0 auto 5mm;
+            object-fit: contain;
+        }
+
+        .brand-meta {
+            font-size: 10px;
+            line-height: 1.35;
+            color: var(--muted);
+        }
+
+        .doc-letter-box {
+            border: 1px solid var(--line);
+            min-height: 27mm;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+        }
+
+        .doc-copy {
+            font-size: 9px;
+            letter-spacing: 0.08em;
+            margin-bottom: 1mm;
+        }
+
+        .doc-letter {
+            font-size: 33px;
+            font-weight: 700;
+            line-height: 1;
+        }
+
+        .doc-code {
+            font-size: 9px;
+            margin-top: 1mm;
+        }
+
+        .doc-main {
+            border: 1px solid var(--line);
+            min-height: 27mm;
+            padding: 4mm 4.5mm;
+        }
+
+        .doc-main-title {
+            font-size: 12px;
+            font-weight: 700;
+            margin: 0 0 2mm;
+        }
+
+        .doc-number {
+            font-size: 18px;
+            font-weight: 700;
+            margin: 0 0 2mm;
+        }
+
+        .doc-date {
+            font-size: 11px;
+            font-weight: 700;
+        }
+
+        .issuer-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 7mm;
+            margin-top: 7mm;
+            margin-bottom: 5mm;
+            font-size: 10px;
+            line-height: 1.35;
+        }
+
+        .issuer-grid strong {
+            color: var(--ink);
+        }
+
+        .client-panel {
+            margin-top: 3mm;
+            background: var(--panel);
+            border-radius: 4mm;
+            padding: 5mm 5mm 4.5mm;
+            display: grid;
+            grid-template-columns: 1.2fr 0.8fr;
+            gap: 7mm;
+            font-size: 11px;
+            line-height: 1.45;
+        }
+
+        .client-panel strong {
+            font-weight: 700;
+        }
+
+        .doc-items {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 4.5mm;
+            font-size: 10px;
+        }
+
+        .doc-items thead th {
+            text-align: left;
+            border-bottom: 1px solid var(--line);
+            padding: 0 0 2mm;
+            font-size: 10px;
+        }
+
+        .doc-items tbody td {
+            vertical-align: top;
+            padding: 1.2mm 0;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+        }
+
+        .doc-items tbody tr:last-child td {
+            border-bottom: none;
+        }
+
+        .sku-col { width: 18%; }
+        .qty-col { width: 8%; text-align: right; padding-right: 2mm; }
+        .price-col,
+        .iva-col,
+        .disc-col,
+        .total-col { width: 11%; text-align: right; }
+        .desc-col { width: 41%; padding-right: 3mm; }
+
+        .item-description {
+            line-height: 1.25;
+        }
+
+        .money,
+        .number {
+            text-align: right;
+            white-space: nowrap;
+        }
+
+        .spacer {
+            min-height: 76mm;
+            border-bottom: 1px solid var(--line);
+            margin-top: 1mm;
+        }
+
+        .doc-footer {
+            display: grid;
+            grid-template-columns: 1.15fr 0.85fr;
+            gap: 6mm;
+            margin-top: 4.5mm;
+            align-items: start;
+        }
+
+        .footer-left {
+            border-top: 1px solid var(--line);
+            padding-top: 3mm;
+            font-size: 10px;
+        }
+
+        .footer-title {
+            font-size: 11px;
+            font-weight: 700;
+            margin-bottom: 1.5mm;
+        }
+
+        .observations-box {
+            min-height: 22mm;
+            white-space: pre-line;
+            margin-bottom: 3mm;
+        }
+
+        .arca-box {
+            margin-top: 2mm;
+            border-top: 1px solid var(--soft-line);
+            padding-top: 3mm;
+            display: grid;
+            grid-template-columns: 29mm 1fr;
+            gap: 4mm;
+            align-items: start;
+        }
+
+        .arca-mark {
+            border: 1px solid var(--line);
+            min-height: 29mm;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            background: var(--panel-soft);
+            font-size: 9px;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+        }
+
+        .arca-details {
+            font-size: 10px;
+            line-height: 1.35;
+        }
+
+        .footer-right {
+            border-top: 1px solid var(--line);
+            padding-top: 3mm;
+        }
+
+        .totals-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 10px;
+        }
+
+        .totals-table td {
+            padding: 1mm 0;
+            vertical-align: top;
+        }
+
+        .totals-table td:last-child {
+            text-align: right;
+            white-space: nowrap;
+            padding-left: 4mm;
+        }
+
+        .total-row td {
+            border-top: 1px solid var(--line);
+            border-bottom: 1px solid var(--line);
+            padding-top: 2mm;
+            padding-bottom: 2mm;
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        .summary-note {
+            margin-top: 2.5mm;
+            font-size: 9px;
+            line-height: 1.3;
+            text-align: right;
+        }
+
+        .sheet-footnote {
+            margin-top: 6mm;
+            text-align: center;
+            color: #8b8b8b;
+            font-size: 9px;
+        }
+
+        @page {
+            size: A4;
+            margin: 9mm;
+        }
+
+        @media print {
+            html,
+            body {
+                background: #ffffff;
+                padding: 0;
+            }
+
+            .print-toolbar {
+                display: none;
+            }
+
+            .sheet {
+                width: auto;
+                min-height: auto;
+                margin: 0;
+                box-shadow: none;
+                padding: 0;
+            }
+        }
     </style>
 </head>
 <body>
-    <div class="print-actions" style="margin-bottom: 12px;">
-        <button onclick="window.print()">Imprimir</button>
-    </div>
-
-    <div class="header">
-        <div>
-            <h2 style="margin:0;">{{ fiscal_document.company.name }}</h2>
-            <div class="muted">{{ fiscal_document.company.legal_name|default:"-" }}</div>
-            <div class="muted">CUIT: {{ fiscal_document.company.cuit|default:"-" }}</div>
-            <div class="muted">{{ fiscal_document.company.fiscal_address|default:"-" }}</div>
+    <div class="print-toolbar">
+        <div class="print-copy-links">
+            <a href="?copy=original" data-print-window="1" target="_blank" rel="noopener noreferrer">Original</a>
+            <a href="?copy=duplicado" data-print-window="1" target="_blank" rel="noopener noreferrer">Duplicado</a>
+            <a href="?copy=triplicado" data-print-window="1" target="_blank" rel="noopener noreferrer">Triplicado</a>
         </div>
-        <div style="text-align:right;">
-            <div class="copy-badge">{{ copy_type }}</div>
-            <h3 style="margin:10px 0 0;">{{ fiscal_document.get_doc_type_display }}</h3>
-            <div>PV {{ fiscal_document.point_of_sale.number }} - Nro {{ fiscal_document.number|default:"-" }}</div>
-            <div>Fecha: {{ fiscal_document.issued_at|date:"d/m/Y H:i"|default:"-" }}</div>
-            <div>Estado: {{ fiscal_document.get_status_display }}</div>
+        <button type="button" onclick="window.print()">Imprimir</button>
+    </div>
+
+    <main class="sheet">
+        <header class="doc-header">
+            <section class="brand-block">
+                <img src="{% static 'core/img/flexs-logo.png' %}" alt="FLEXS" class="brand-logo">
+                <div class="brand-meta">
+                    {{ fiscal_document.company.legal_name|default:fiscal_document.company.name }}<br>
+                    {{ company_address_line|default:"-" }}<br>
+                    {{ company_contact_line|default:"-" }}<br>
+                    {{ company_contact_site|default:"-" }}
+                </div>
+            </section>
+
+            <section class="doc-letter-box">
+                <div class="doc-copy">{{ copy_label }}</div>
+                <div class="doc-letter">{{ document_letter }}</div>
+                <div class="doc-code">COD. {{ document_code }}</div>
+            </section>
+
+            <section class="doc-main">
+                <div class="doc-main-title">{{ fiscal_document.get_doc_type_display }}</div>
+                <div class="doc-number">N {{ document_number_display }}</div>
+                <div class="doc-date">{{ fiscal_document.issued_at|date:"d-m-Y"|default:"-" }}</div>
+            </section>
+        </header>
+
+        <section class="issuer-grid">
+            <div>
+                <strong>CUIT:</strong> {{ fiscal_document.company.cuit|default:"-" }}<br>
+                <strong>Condicion fiscal:</strong> {{ fiscal_document.company.get_tax_condition_display|default:"-" }}
+            </div>
+            <div>
+                <strong>Punto de venta:</strong> {{ fiscal_document.point_of_sale.number|default:"-" }}<br>
+                <strong>Estado fiscal:</strong> {{ fiscal_document.get_status_display }}
+            </div>
+        </section>
+
+        <section class="client-panel">
+            <div>
+                <strong>Razon social:</strong> {{ client_profile.company_name|default:"-" }}<br>
+                <strong>{{ client_document_label }}:</strong> {{ client_document_value|default:"-" }}<br>
+                <strong>Cond. de IVA:</strong> {{ client_profile.get_iva_condition_display|default:"-" }}<br>
+                <strong>Domicilio:</strong> {{ client_address_line|default:"-" }}
+            </div>
+            <div>
+                <strong>Condicion de venta:</strong> {{ sale_condition_label|default:"-" }}<br>
+                <strong>Usuario:</strong> {{ operator_label|default:"-" }}<br>
+                <strong>Pedido:</strong> #{{ fiscal_document.order_id|default:"-" }}<br>
+                {% if fiscal_document.external_system %}
+                <strong>Externo:</strong> {{ fiscal_document.external_system }} {{ fiscal_document.external_number|default:fiscal_document.external_id|default:"-" }}
+                {% endif %}
+            </div>
+        </section>
+
+        <table class="doc-items">
+            <thead>
+                <tr>
+                    <th class="sku-col">Codigo</th>
+                    <th class="qty-col">Cant.</th>
+                    <th class="desc-col">Producto</th>
+                    <th class="price-col">Precio</th>
+                    <th class="iva-col">IVA</th>
+                    <th class="disc-col">Bonif.</th>
+                    <th class="total-col">Importe</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in items %}
+                <tr>
+                    <td class="sku-col">{{ item.sku|default:"-" }}</td>
+                    <td class="qty-col">{{ item.quantity|floatformat:3 }}</td>
+                    <td class="desc-col">
+                        <div class="item-description">{{ item.description }}</div>
+                    </td>
+                    <td class="price-col money">${{ item.unit_price_net|floatformat:2 }}</td>
+                    <td class="iva-col number">
+                        {% if item.iva_rate %}
+                        {{ item.iva_rate|floatformat:0 }} %
+                        {% else %}
+                        -
+                        {% endif %}
+                    </td>
+                    <td class="disc-col number">
+                        {% if item.discount_percentage %}
+                        {{ item.discount_percentage|floatformat:2 }} %
+                        {% else %}
+                        0.00 %
+                        {% endif %}
+                    </td>
+                    <td class="total-col money">${{ item.total_amount|floatformat:2 }}</td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="7">Sin items fiscales.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <div class="spacer"></div>
+
+        <section class="doc-footer">
+            <div class="footer-left">
+                <div class="footer-title">Observaciones</div>
+                <div class="observations-box">
+                    {% if observations_text %}
+                    {{ observations_text }}
+                    {% else %}
+                    Sin observaciones.
+                    {% endif %}
+                </div>
+
+                <div class="arca-box">
+                    <div class="arca-mark">ARCA</div>
+                    <div class="arca-details">
+                        <strong>Comprobante autorizado</strong><br>
+                        CAE: {{ fiscal_document.cae|default:"-" }}<br>
+                        Fecha de vto. de CAE: {{ fiscal_document.cae_due_date|date:"d-m-Y"|default:"-" }}<br>
+                        Tipo: {{ fiscal_document.get_doc_type_display }}<br>
+                        Ref. interna: {{ fiscal_document.source_key }}
+                    </div>
+                </div>
+            </div>
+
+            <div class="footer-right">
+                <table class="totals-table">
+                    <tr>
+                        <td>Subtotal:</td>
+                        <td>${{ subtotal_before_discount|floatformat:2 }}</td>
+                    </tr>
+                    <tr>
+                        <td>Descuento ({{ order_total_discount_percentage|floatformat:2 }} %):</td>
+                        <td>${{ fiscal_document.discount_total|floatformat:2 }}</td>
+                    </tr>
+                    <tr>
+                        <td>Neto despues de descuento:</td>
+                        <td>${{ taxable_net|floatformat:2 }}</td>
+                    </tr>
+                    <tr>
+                        <td>IVA:</td>
+                        <td>${{ fiscal_document.tax_total|floatformat:2 }}</td>
+                    </tr>
+                    <tr class="total-row">
+                        <td>TOTAL:</td>
+                        <td>${{ fiscal_document.total|floatformat:2 }}</td>
+                    </tr>
+                </table>
+
+                <div class="summary-note">
+                    {% if fiscal_document.tax_total %}
+                    Importes fiscales calculados en documento local.
+                    {% else %}
+                    Formato comercial alineado al comprobante oficial. El detalle de IVA por alicuota sigue sujeto a la configuracion fiscal del documento.
+                    {% endif %}
+                </div>
+            </div>
+        </section>
+
+        <div class="sheet-footnote">
+            Comprobante fiscal generado desde FLEXS.
         </div>
-    </div>
-
-    <div style="margin-bottom:12px;">
-        <strong>Cliente:</strong> {{ fiscal_document.client_company_ref.client_profile.company_name|default:"-" }}<br>
-        <strong>Pedido:</strong> {{ fiscal_document.order_id|default:"-" }}<br>
-        <strong>Modo:</strong> {{ fiscal_document.get_issue_mode_display }}
-        {% if fiscal_document.external_system %}
-        <br><strong>Externo:</strong> {{ fiscal_document.external_system }} / {{ fiscal_document.external_number|default:fiscal_document.external_id|default:"-" }}
-        {% endif %}
-    </div>
-
-    <table>
-        <thead>
-            <tr>
-                <th>#</th>
-                <th>SKU</th>
-                <th>Descripcion</th>
-                <th>Cantidad</th>
-                <th>Unitario neto</th>
-                <th>Descuento</th>
-                <th>Neto</th>
-                <th>IVA</th>
-                <th>Total</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for item in items %}
-            <tr>
-                <td>{{ item.line_number }}</td>
-                <td>{{ item.sku|default:"-" }}</td>
-                <td>{{ item.description }}</td>
-                <td>{{ item.quantity|floatformat:3 }}</td>
-                <td>${{ item.unit_price_net|floatformat:2 }}</td>
-                <td>{{ item.discount_percentage|floatformat:2 }}%</td>
-                <td>${{ item.net_amount|floatformat:2 }}</td>
-                <td>${{ item.iva_amount|floatformat:2 }}</td>
-                <td>${{ item.total_amount|floatformat:2 }}</td>
-            </tr>
-            {% empty %}
-            <tr><td colspan="9">Sin items.</td></tr>
-            {% endfor %}
-        </tbody>
-    </table>
-
-    <table class="totals">
-        <tr><td>Subtotal neto</td><td style="text-align:right;">${{ fiscal_document.subtotal_net|floatformat:2 }}</td></tr>
-        <tr><td>Descuento</td><td style="text-align:right;">${{ fiscal_document.discount_total|floatformat:2 }}</td></tr>
-        <tr><td>IVA</td><td style="text-align:right;">${{ fiscal_document.tax_total|floatformat:2 }}</td></tr>
-        <tr><td><strong>Total</strong></td><td style="text-align:right;"><strong>${{ fiscal_document.total|floatformat:2 }}</strong></td></tr>
-    </table>
-
-    <p class="muted" style="margin-top: 18px;">
-        Documento fiscal local del sistema. Emision ARCA pendiente de fases posteriores.
-    </p>
+    </main>
 </body>
 </html>

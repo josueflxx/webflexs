@@ -15,7 +15,9 @@ from catalog.models import Category, ClampMeasureRequest, Product, Supplier
 from orders.models import Order
 from core.models import UserActivity
 from core.services.advanced_search import (
+    apply_compact_text_search,
     apply_parsed_text_search,
+    compact_search_token,
     parse_text_search_query,
     sanitize_search_token,
 )
@@ -103,18 +105,21 @@ def _parse_suggestion_query(raw_query):
     )
 
 
-def _append_suggestion(items, value, label=None, meta="", kind=""):
+def _append_suggestion(items, value, label=None, meta="", kind="", **extra):
     value = str(value or "").strip()
     if not value:
         return
-    items.append(
-        {
-            "value": value,
-            "label": str(label or value).strip(),
-            "meta": str(meta or "").strip(),
-            "kind": str(kind or "").strip(),
-        }
-    )
+    payload = {
+        "value": value,
+        "label": str(label or value).strip(),
+        "meta": str(meta or "").strip(),
+        "kind": str(kind or "").strip(),
+    }
+    for key, extra_value in extra.items():
+        if extra_value in (None, ""):
+            continue
+        payload[str(key)] = str(extra_value).strip()
+    items.append(payload)
 
 
 def _unique_trim_suggestions(items, limit=SUGGESTION_LIMIT):
@@ -178,7 +183,7 @@ def _suggest_catalog(query):
     return _unique_trim_suggestions(items)
 
 
-def _suggest_admin_products(query):
+def _suggest_admin_products_legacy(query):
     items = []
     parsed_query = _parse_suggestion_query(query)
     if not parsed_query.get("raw"):
@@ -197,6 +202,64 @@ def _suggest_admin_products(query):
     for sku, name, supplier_text, supplier_ref_name in rows:
         supplier = supplier_ref_name or supplier_text or "-"
         _append_suggestion(items, sku, name, meta=f"{sku} · {supplier}", kind="product")
+    return _unique_trim_suggestions(items)
+
+
+def _suggest_admin_products(query):
+    items = []
+    parsed_query = _parse_suggestion_query(query)
+    if not parsed_query.get("raw"):
+        return items
+
+    base_queryset = Product.objects.filter(is_active=True).select_related("supplier_ref")
+    search_fields = ["sku", "name", "supplier", "supplier_ref__name", "description"]
+    raw_query = parsed_query["raw"]
+    compact_query = compact_search_token(raw_query)
+
+    exact_rows = list(
+        base_queryset.filter(Q(sku__iexact=raw_query) | Q(name__iexact=raw_query))
+        .values_list("pk", "sku", "name", "supplier", "supplier_ref__name")
+        .order_by("name")[:4]
+    )
+    prefix_rows = list(
+        base_queryset.filter(Q(sku__istartswith=raw_query) | Q(name__istartswith=raw_query))
+        .values_list("pk", "sku", "name", "supplier", "supplier_ref__name")
+        .order_by("name")[:6]
+    )
+    parsed_rows = list(
+        apply_parsed_text_search(
+            base_queryset,
+            parsed_query,
+            search_fields,
+            order_by_similarity=False,
+        )
+        .values_list("pk", "sku", "name", "supplier", "supplier_ref__name")
+        .order_by("name")[:10]
+    )
+    compact_rows = []
+    if compact_query:
+        compact_rows = list(
+            apply_compact_text_search(base_queryset, compact_query, ["sku", "name"])
+            .values_list("pk", "sku", "name", "supplier", "supplier_ref__name")
+            .order_by("name")[:8]
+        )
+
+    for product_id, sku, name, supplier_text, supplier_ref_name in [
+        *exact_rows,
+        *prefix_rows,
+        *parsed_rows,
+        *compact_rows,
+    ]:
+        supplier = supplier_ref_name or supplier_text or "-"
+        _append_suggestion(
+            items,
+            sku,
+            name,
+            meta=f"SKU {sku} · {supplier}",
+            kind="product",
+            target_value=product_id,
+            input_value=f"{sku} - {name}",
+        )
     return _unique_trim_suggestions(items)
 
 

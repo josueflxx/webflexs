@@ -1,485 +1,338 @@
 {% extends 'admin_panel/base.html' %}
 
-{% block page_title %}Historial de Pedidos{% endblock %}
+{% block page_title %}Cliente {{ client.company_name }}{% endblock %}
 
 {% block content %}
-<div class="admin-table-container">
-    <div class="admin-toolbar" style="align-items:flex-start; gap:14px; flex-wrap:wrap;">
-        <div>
-            <h2 style="margin:0;">Historial de Pedidos</h2>
-            <p class="text-muted" style="margin:6px 0 0;">
-                <strong>{{ client.company_name }}</strong>
-                {% if client.user %} ({{ client.user.username }}){% endif %}
-                {% if client.cuit_dni %} - CUIT {{ client.cuit_dni }}{% endif %}
-            </p>
-        </div>
-        <div class="toolbar-actions">
-            {% if client_company_missing %}
-            <button type="button" class="btn btn-primary" disabled>Registrar Pago</button>
-            {% else %}
-            <a href="{% url 'admin_payment_list' %}?client_id={{ client.pk }}&company_id={{ selected_company_id }}" class="btn btn-primary">Registrar Pago</a>
-            {% endif %}
-            {% if can_edit_client_profile %}
-            <a href="{% url 'admin_client_edit' client.pk %}" class="btn btn-outline">Editar Cliente</a>
-            {% endif %}
-            <a href="{% url 'admin_client_list' %}" class="btn btn-outline">Volver a Clientes</a>
-        </div>
-    </div>
+<div class="admin-table-container client-hub-page">
+    <style>
+        .client-hub-page { display: grid; gap: 18px; }
+        .client-hub-hero,
+        .client-hub-panel,
+        .client-hub-card {
+            padding: 18px;
+            border-radius: 18px;
+            background: linear-gradient(180deg, rgba(15,21,34,.96), rgba(10,16,28,.98));
+            border: 1px solid rgba(255,255,255,.08);
+        }
+        .client-hub-hero {
+            display: grid;
+            grid-template-columns: minmax(0, 1.3fr) minmax(300px, .7fr);
+            gap: 16px;
+            background:
+                radial-gradient(circle at top left, rgba(255,107,53,.16), transparent 36%),
+                linear-gradient(180deg, rgba(15,21,34,.96), rgba(10,16,28,.98));
+        }
+        .client-hub-eyebrow {
+            margin: 0 0 8px;
+            text-transform: uppercase;
+            letter-spacing: .08em;
+            font-size: .74rem;
+            color: rgba(207,216,227,.68);
+        }
+        .client-hub-title-row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+        .client-hub-title-row h2 { margin: 0; font-size: 2rem; line-height: 1.08; }
+        .client-hub-subtitle { margin: 10px 0 0; color: rgba(214,223,233,.82); line-height: 1.55; }
+        .client-hub-chips,
+        .client-tab-nav,
+        .client-subtab-nav,
+        .client-action-row,
+        .client-foot-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+        .client-hub-chip,
+        .client-tab-link,
+        .client-subtab-link {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 9px 13px;
+            border-radius: 999px;
+            border: 1px solid rgba(255,255,255,.08);
+            background: rgba(255,255,255,.03);
+            color: rgba(230,236,242,.9);
+            text-decoration: none;
+            font-size: .86rem;
+        }
+        .client-tab-link.is-active,
+        .client-subtab-link.is-active { background: rgba(255,107,53,.16); border-color: rgba(255,107,53,.3); color: #fff0e6; }
+        .client-hub-chip.is-warning { background: rgba(255,193,7,.08); border-color: rgba(255,193,7,.18); color: #ffe79c; }
+        .client-hub-chip.is-success { background: rgba(25,209,127,.08); border-color: rgba(25,209,127,.18); color: #a4f4c9; }
+        .client-section-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 14px; }
+        .client-section-head h3 { margin: 0; }
+        .client-section-head p { margin: 5px 0 0; color: rgba(210,217,226,.7); font-size: .84rem; line-height: 1.5; }
+        .client-data-grid,
+        .client-open-grid,
+        .client-doc-grid,
+        .client-history-metrics { display: grid; gap: 12px; }
+        .client-data-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+        .client-open-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .client-doc-grid,
+        .client-history-metrics { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+        .client-mini-card {
+            border-radius: 16px;
+            padding: 16px;
+            background: rgba(255,255,255,.03);
+            border: 1px solid rgba(255,255,255,.08);
+        }
+        .client-mini-card strong { display: block; margin-bottom: 8px; }
+        .client-mini-list { display: grid; gap: 8px; color: rgba(223,230,237,.82); font-size: .9rem; line-height: 1.45; }
+        .client-open-item {
+            display: flex; justify-content: space-between; align-items: center; gap: 12px;
+            padding: 12px 14px; border-radius: 14px; background: rgba(0,0,0,.18); border: 1px solid rgba(255,255,255,.06);
+        }
+        .client-table-card { border-radius: 16px; overflow: hidden; border: 1px solid rgba(255,255,255,.08); background: rgba(255,255,255,.02); }
+        .client-table-card .admin-table { margin: 0; }
+        .client-table-foot {
+            display: flex; justify-content: space-between; align-items: center; gap: 12px;
+            padding: 14px 16px; border-top: 1px solid rgba(255,255,255,.08); color: rgba(207,216,227,.76); font-size: .86rem;
+        }
+        @media (max-width: 1180px) {
+            .client-hub-hero,
+            .client-data-grid,
+            .client-open-grid,
+            .client-doc-grid,
+            .client-history-metrics { grid-template-columns: 1fr; }
+        }
+    </style>
 
-    <div class="admin-toolbar" style="border-top:1px solid rgba(255,255,255,.08); flex-wrap:wrap;">
-        <div class="toolbar-actions" style="flex-wrap:wrap;">
-            <form method="post" action="{% url 'admin_client_quick_order' client.pk %}" style="display:inline;">
-                {% csrf_token %}
-                <input type="hidden" name="company_id" value="{{ selected_company_id }}">
-                <input type="hidden" name="action" value="quote">
-                <button type="submit" class="btn btn-primary" {% if client_company_missing %}disabled{% endif %}>Nueva cotizacion</button>
-            </form>
-            <form method="post" action="{% url 'admin_client_quick_order' client.pk %}" style="display:inline;">
-                {% csrf_token %}
-                <input type="hidden" name="company_id" value="{{ selected_company_id }}">
-                <input type="hidden" name="action" value="order">
-                <button type="submit" class="btn btn-outline" {% if client_company_missing %}disabled{% endif %}>Nuevo pedido</button>
-            </form>
-            {% if client_company_missing %}
+    <section class="client-hub-hero">
+        <div>
+            <p class="client-hub-eyebrow">Hub de cliente</p>
+            <div class="client-hub-title-row">
+                <h2>{{ client.company_name }}</h2>
+                {% if client.is_approved %}
+                <span class="badge badge-success">Aprobado</span>
+                {% else %}
+                <span class="badge badge-warning">Pendiente</span>
+                {% endif %}
+            </div>
+            <p class="client-hub-subtitle">
+                {% if client.user %}<strong>{{ client.user.username }}</strong>{% endif %}
+                {% if client.user and client.user.email %} | {{ client.user.email }}{% endif %}
+                {% if client.cuit_dni %} | CUIT/DNI {{ client.cuit_dni }}{% endif %}
+            </p>
+            <div class="client-hub-chips" style="margin-top:14px;">
+                <span class="client-hub-chip">Empresa activa: {{ active_company_label }}</span>
+                <span class="client-hub-chip">Condicion: {{ sale_condition_label }}</span>
+                <span class="client-hub-chip">Lista: {{ effective_price_list.name|default:"-" }}</span>
+                {% if operations_locked %}
+                <span class="client-hub-chip is-warning">Operaciones bloqueadas</span>
+                {% else %}
+                <span class="client-hub-chip is-success">Operable</span>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="client-hub-panel">
+            <div class="client-section-head">
+                <div>
+                    <h3>Acciones principales</h3>
+                    <p>Atajos para operar sin salir de esta ficha.</p>
+                </div>
+            </div>
+            <div class="client-action-row">
+                {% if operations_locked %}
+                <button type="button" class="btn btn-primary" disabled>Registrar pago</button>
+                {% else %}
+                <a href="{% url 'admin_payment_list' %}?client_id={{ client.pk }}&company_id={{ selected_company_id }}" class="btn btn-primary">Registrar pago</a>
+                {% endif %}
+                {% if can_edit_client_profile %}
+                <a href="{% url 'admin_client_edit' client.pk %}" class="btn btn-outline">Editar cliente</a>
+                {% endif %}
+                <a href="{% url 'admin_client_list' %}" class="btn btn-outline">Volver</a>
+            </div>
+        </div>
+    </section>
+
+    {% if not active_company %}
+    <div class="alert alert-warning">Selecciona una empresa activa para habilitar acciones comerciales y ver el contexto operativo correcto.</div>
+    {% elif client_company_missing %}
+    <div class="alert alert-warning">Este cliente no esta habilitado para operar en la empresa activa. Las acciones comerciales quedan bloqueadas.</div>
+    {% endif %}
+
+    <section class="client-hub-panel">
+        <div class="client-section-head">
+            <div>
+                <h3>Acciones rapidas</h3>
+                <p>Documentos y operaciones frecuentes sobre la empresa activa.</p>
+            </div>
+        </div>
+        <div class="client-action-row">
+            <form method="post" action="{% url 'admin_client_quick_order' client.pk %}">{% csrf_token %}<input type="hidden" name="company_id" value="{{ selected_company_id }}"><input type="hidden" name="action" value="quote"><button type="submit" class="btn btn-primary" {% if operations_locked %}disabled{% endif %}>Nueva cotizacion</button></form>
+            <form method="post" action="{% url 'admin_client_quick_order' client.pk %}">{% csrf_token %}<input type="hidden" name="company_id" value="{{ selected_company_id }}"><input type="hidden" name="action" value="order"><button type="submit" class="btn btn-outline" {% if operations_locked %}disabled{% endif %}>Nuevo pedido</button></form>
+            {% if operations_locked %}
             <button type="button" class="btn btn-outline" disabled>Nuevo recibo</button>
             {% else %}
             <a href="{% url 'admin_payment_list' %}?client_id={{ client.pk }}&company_id={{ selected_company_id }}" class="btn btn-outline">Nuevo recibo</a>
             {% endif %}
-            <button type="button" class="btn btn-outline" disabled>Nuevo remito (pendiente)</button>
-            <button type="button" class="btn btn-outline" disabled>Nueva factura (pendiente)</button>
-            <button type="button" class="btn btn-outline" disabled>Nota de credito (pendiente)</button>
+            <form method="post" action="{% url 'admin_client_quick_order' client.pk %}">{% csrf_token %}<input type="hidden" name="company_id" value="{{ selected_company_id }}"><input type="hidden" name="action" value="remito"><button type="submit" class="btn btn-outline" {% if operations_locked or not quick_remito_available %}disabled{% endif %}>Remito</button></form>
+            <form method="post" action="{% url 'admin_client_quick_order' client.pk %}">{% csrf_token %}<input type="hidden" name="company_id" value="{{ selected_company_id }}"><input type="hidden" name="action" value="invoice"><button type="submit" class="btn btn-outline" {% if operations_locked or not quick_invoice_available %}disabled{% endif %}>Facturar</button></form>
+            <form method="post" action="{% url 'admin_client_quick_order' client.pk %}">{% csrf_token %}<input type="hidden" name="company_id" value="{{ selected_company_id }}"><input type="hidden" name="action" value="credit_note"><button type="submit" class="btn btn-outline" {% if operations_locked or not quick_credit_note_available %}disabled{% endif %}>Nota de credito</button></form>
         </div>
-        <small class="text-muted" style="margin-left:auto;">
-            Empresa activa: {{ active_company.name|default:"default" }}
-        </small>
-    </div>
-
-    {% if client_company_missing %}
-    <div class="alert alert-warning" style="margin-bottom: 16px;">
-        Este cliente no estÃ¡ habilitado para operar en la empresa activa. Las acciones comerciales quedan bloqueadas.
-    </div>
-    {% endif %}
-
-    <div class="admin-toolbar" style="border-top:1px solid rgba(255,255,255,.08);">
-        <div class="toolbar-actions" style="flex-wrap:wrap;">
-            <a href="#resumen" class="btn btn-outline">Resumen</a>
-            <a href="#pedidos" class="btn btn-outline">Pedidos</a>
-            <a href="#pagos" class="btn btn-outline">Pagos</a>
-            <a href="#cuenta" class="btn btn-outline">Cuenta corriente</a>
-            <a href="#documentos" class="btn btn-outline">Documentos</a>
-        </div>
-    </div>
-
-    <section id="resumen">
-    <div class="admin-toolbar client-history-toolbar">
-        <div class="client-history-metrics">
-            <article class="history-metric-card is-info">
-                <span class="history-metric-label">Pedidos</span>
-                <strong class="history-metric-value">{{ summary.orders_count }}</strong>
-            </article>
-            <article class="history-metric-card is-primary">
-                <span class="history-metric-label">Total comprado</span>
-                <strong class="history-metric-value">${{ summary.total_amount|floatformat:2 }}</strong>
-            </article>
-            <article class="history-metric-card is-warning">
-                <span class="history-metric-label">Ticket promedio</span>
-                <strong class="history-metric-value">${{ summary.avg_ticket|floatformat:2 }}</strong>
-            </article>
-            {% if summary.last_order_at %}
-            <article class="history-metric-card is-success">
-                <span class="history-metric-label">Ultimo pedido</span>
-                <strong class="history-metric-value">{{ summary.last_order_at|date:"d/m/Y H:i" }}</strong>
-            </article>
-            {% else %}
-            <article class="history-metric-card is-secondary">
-                <span class="history-metric-label">Estado</span>
-                <strong class="history-metric-value">Sin pedidos registrados</strong>
-            </article>
-            {% endif %}
-        </div>
-    </div>
-
-    <div class="admin-toolbar client-history-toolbar">
-        <div class="client-history-metrics">
-            <article class="history-metric-card is-success">
-                <span class="history-metric-label">Pagos registrados</span>
-                <strong class="history-metric-value">{{ payments_summary.payments_count }}</strong>
-            </article>
-            <article class="history-metric-card is-primary">
-                <span class="history-metric-label">Total pagado</span>
-                <strong class="history-metric-value">${{ payments_summary.total_paid|floatformat:2 }}</strong>
-            </article>
-            {% if payments_summary.last_payment_at %}
-            <article class="history-metric-card is-info">
-                <span class="history-metric-label">Ultimo pago</span>
-                <strong class="history-metric-value">{{ payments_summary.last_payment_at|date:"d/m/Y H:i" }}</strong>
-            </article>
-            {% endif %}
-        </div>
-    </div>
-
-    <div class="admin-toolbar" style="border-top:1px solid rgba(255,255,255,.08);">
-        <div style="display:grid;grid-template-columns:repeat(3,minmax(220px,1fr));gap:12px;width:100%;">
-            <div style="border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:14px;background:rgba(0,0,0,.2);">
-                <strong>Datos generales</strong>
-                <div class="text-muted" style="margin-top:6px;">
-                    Usuario: {{ client.user.username|default:"-" }}<br>
-                    Email: {{ client.user.email|default:"-" }}<br>
-                    Telefono: {{ client.phone|default:"-" }}
-                </div>
-            </div>
-            <div style="border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:14px;background:rgba(0,0,0,.2);">
-                <strong>Datos comerciales</strong>
-                <div class="text-muted" style="margin-top:6px;">
-                    Categoria: {{ effective_category.name|default:"-" }}<br>
-                    Descuento: {{ effective_discount|floatformat:2 }}%<br>
-                    Lista: {{ effective_price_list.name|default:"-" }}<br>
-                    Condicion: {{ sale_condition_label }}
-                </div>
-            </div>
-            <div style="border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:14px;background:rgba(0,0,0,.2);">
-                <strong>Datos fiscales</strong>
-                <div class="text-muted" style="margin-top:6px;">
-                    Doc: {{ client.document_type|default:"-" }} {{ client.document_number|default:"-" }}<br>
-                    IVA: {{ client.get_iva_condition_display|default:"-" }}<br>
-                    Domicilio: {{ client.fiscal_address|default:"-" }}<br>
-                    {{ client.fiscal_city|default:"-" }} - {{ client.fiscal_province|default:"-" }} ({{ client.postal_code|default:"-" }})
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="admin-toolbar" style="border-top:1px solid rgba(255,255,255,.08);">
-        <div class="client-history-metrics">
-            <article class="history-metric-card is-warning">
-                <span class="history-metric-label">Operaciones abiertas</span>
-                <strong class="history-metric-value">{{ open_orders_count }}</strong>
-            </article>
-            <article class="history-metric-card is-secondary">
-                <span class="history-metric-label">Saldo actual</span>
-                <strong class="history-metric-value">${{ balance_summary.current_balance|floatformat:2 }}</strong>
-            </article>
-        </div>
-    </div>
     </section>
 
-    <section id="pedidos">
-    <div class="admin-toolbar" style="border-top:1px solid rgba(255,255,255,.08);">
-        <form method="get" class="toolbar-search">
-            <select name="company_id" class="form-select">
-                {% for company in companies %}
-                <option value="{{ company.pk }}" {% if selected_company_id == company.pk|stringformat:'s' %}selected{% endif %}>
-                    {{ company.name }}
-                </option>
-                {% endfor %}
-            </select>
-            <select name="status" class="form-select">
-                <option value="">Todos los estados</option>
-                {% for value, label in status_choices %}
-                <option value="{{ value }}" {% if status == value %}selected{% endif %}>{{ label }}</option>
-                {% endfor %}
-            </select>
-            <button type="submit" class="btn btn-primary">Filtrar</button>
-            <a href="{% url 'admin_client_order_history' client.pk %}" class="btn btn-outline">Limpiar</a>
-        </form>
-    </div>
+    <nav class="client-tab-nav">
+        {% for tab in client_tabs %}
+        <a href="{{ tab.url }}" class="client-tab-link {% if tab.is_active %}is-active{% endif %}">{{ tab.label }}</a>
+        {% endfor %}
+    </nav>
 
-    <table class="admin-table">
-        <thead>
-            <tr>
-                <th>#</th>
-                <th>Fecha</th>
-                <th>Empresa</th>
-                <th>Items</th>
-                <th>Subtotal</th>
-                <th>Descuento</th>
-                <th>Total</th>
-                <th>Estado</th>
-                <th>Acciones</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for order in page_obj %}
-            <tr>
-                <td><strong>{{ order.pk }}</strong></td>
-                <td>{{ order.created_at|date:"d/m/Y H:i" }}</td>
-                <td>{{ order.company.name|default:"-" }}</td>
-                <td>{{ order.get_item_count }}</td>
-                <td>${{ order.subtotal|floatformat:2 }}</td>
-                <td>
-                    {% if order.discount_amount %}
-                    -${{ order.discount_amount|floatformat:2 }}
-                    {% else %}
-                    -
-                    {% endif %}
-                </td>
-                <td><strong>${{ order.total|floatformat:2 }}</strong></td>
-                <td>
-                    {% if order.status == 'delivered' %}
-                    <span class="badge badge-success">Entregado</span>
-                    {% elif order.status == 'cancelled' %}
-                    <span class="badge badge-danger">Cancelado</span>
-                    {% elif order.status == 'shipped' %}
-                    <span class="badge badge-info">Enviado</span>
-                    {% elif order.status == 'preparing' %}
-                    <span class="badge badge-warning">En preparacion</span>
-                    {% elif order.status == 'confirmed' %}
-                    <span class="badge badge-primary">Confirmado</span>
-                    {% else %}
-                    <span class="badge badge-secondary">Borrador</span>
-                    {% endif %}
-                </td>
-                <td class="actions">
-                    <a href="{% url 'admin_order_detail' order.pk %}" class="btn btn-outline">Ver pedido</a>
-                </td>
-            </tr>
+    {% if client_tab == 'overview' %}
+    <section class="client-history-metrics">
+        <article class="history-metric-card is-info"><span class="history-metric-label">Pedidos</span><strong class="history-metric-value">{{ summary.orders_count }}</strong></article>
+        <article class="history-metric-card is-primary"><span class="history-metric-label">Total comprado</span><strong class="history-metric-value">${{ summary.total_amount|floatformat:2 }}</strong></article>
+        <article class="history-metric-card is-success"><span class="history-metric-label">Total pagado</span><strong class="history-metric-value">${{ payments_summary.total_paid|floatformat:2 }}</strong></article>
+        <article class="history-metric-card is-secondary"><span class="history-metric-label">Saldo actual</span><strong class="history-metric-value">${{ balance_summary.current_balance|floatformat:2 }}</strong></article>
+    </section>
+
+    <section class="client-data-grid">
+        <article class="client-mini-card"><strong>Datos generales</strong><div class="client-mini-list"><span>Usuario: {{ client.user.username|default:"-" }}</span><span>Email: {{ client.user.email|default:"-" }}</span><span>Telefono: {{ client.phone|default:"-" }}</span><span>Provincia: {{ client.province|default:"-" }}</span></div></article>
+        <article class="client-mini-card"><strong>Datos comerciales</strong><div class="client-mini-list"><span>Categoria: {{ effective_category.name|default:"-" }}</span><span>Descuento: {{ effective_discount|floatformat:2 }}%</span><span>Lista: {{ effective_price_list.name|default:"-" }}</span><span>Condicion: {{ sale_condition_label }}</span></div></article>
+        <article class="client-mini-card"><strong>Datos fiscales</strong><div class="client-mini-list"><span>Documento: {{ client.document_type|default:"-" }} {{ client.document_number|default:"-" }}</span><span>IVA: {{ client.get_iva_condition_display|default:"-" }}</span><span>Domicilio: {{ client.fiscal_address|default:"-" }}</span><span>{{ client.fiscal_city|default:"-" }} - {{ client.fiscal_province|default:"-" }} ({{ client.postal_code|default:"-" }})</span></div></article>
+    </section>
+
+    <section class="client-hub-card">
+        <div class="client-section-head"><div><h3>Operaciones abiertas</h3><p>Pedidos que siguen en curso dentro del contexto activo.</p></div></div>
+        <div class="client-open-grid">
+            {% for order in open_orders %}
+            <div class="client-open-item">
+                <div><strong>Pedido #{{ order.pk }}</strong><div class="text-muted">{{ order.created_at|date:"d/m/Y H:i" }} | {{ order.company.name|default:"-" }}</div><div class="text-muted">Total ${{ order.total|floatformat:2 }}</div></div>
+                <div class="client-foot-actions"><span class="badge badge-secondary">{{ order.get_status_display }}</span><a href="{% url 'admin_order_detail' order.pk %}" class="btn btn-outline btn-sm">Abrir</a></div>
+            </div>
             {% empty %}
-            <tr>
-                <td colspan="9" class="text-center text-muted">Este cliente no tiene pedidos cargados.</td>
-            </tr>
+            <div class="client-mini-card">No hay operaciones abiertas para este cliente.</div>
             {% endfor %}
-        </tbody>
-    </table>
-    {% if page_obj.paginator.num_pages > 1 %}
-    <div class="admin-toolbar">
-        <span>Pagina {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
-        <div class="toolbar-actions">
-            {% if page_obj.has_previous %}
-            <a href="?page={{ page_obj.previous_page_number }}&status={{ status }}&company_id={{ selected_company_id }}" class="btn btn-outline"><- Anterior</a>
-            {% endif %}
-            {% if page_obj.has_next %}
-            <a href="?page={{ page_obj.next_page_number }}&status={{ status }}&company_id={{ selected_company_id }}" class="btn btn-outline">Siguiente -></a>
-            {% endif %}
         </div>
-    </div>
-    {% endif %}
     </section>
 
-    <section id="pagos">
-    <h3 style="margin: 1.2rem 0 .8rem;">Pagos del Cliente</h3>
-    <table class="admin-table" style="margin-bottom: 1rem;">
-        <thead>
-            <tr>
-                <th>Fecha</th>
-                <th>Empresa</th>
-                <th>Pedido</th>
-                <th>Monto</th>
-                <th>Medio</th>
-                <th>Referencia</th>
-                <th>Estado</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for payment in payments_recent %}
-            <tr>
-                <td>{{ payment.paid_at|date:"d/m/Y H:i" }}</td>
-                <td>{{ payment.company.name|default:"-" }}</td>
-                <td>
-                    {% if payment.order_id %}
-                    <a href="{% url 'admin_order_detail' payment.order_id %}" class="btn btn-outline btn-sm">#{{ payment.order_id }}</a>
-                    {% else %}
-                    -
-                    {% endif %}
-                </td>
-                <td>${{ payment.amount|floatformat:2 }}</td>
-                <td>{{ payment.get_method_display }}</td>
-                <td>{{ payment.reference|default:"-" }}</td>
-                <td>
-                    {% if payment.is_cancelled %}
-                    <span class="badge badge-danger">Anulado</span>
-                    {% else %}
-                    <span class="badge badge-success">Activo</span>
-                    {% endif %}
-                </td>
-            </tr>
-            {% empty %}
-            <tr>
-                <td colspan="7" class="text-center text-muted">No hay pagos para este cliente.</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-    </section>
-
-    <section id="cuenta">
-    <div class="admin-toolbar" style="border-top:1px solid rgba(255,255,255,.08); margin-top: 1rem;">
-        <h3 style="margin:0;">Libro Diario de Cuenta Corriente</h3>
-    </div>
-
-    <div style="padding: 1rem; border-top: 1px solid rgba(255,255,255,.08);">
-        <div style="display:grid;grid-template-columns:repeat(3,minmax(220px,1fr));gap:12px;margin-bottom:14px;">
-            <div style="border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:14px;background:rgba(0,0,0,.2);">
-                <small class="text-muted" style="display:block;margin-bottom:4px;">Debe (Pedidos confirmados+)</small>
-                <strong style="font-size:1.35rem;color:#ff8c42;">${{ balance_summary.orders_total|floatformat:2 }}</strong>
-                <small class="text-muted" style="display:block;margin-top:6px;">{{ balance_summary.orders_count }} pedidos contabilizados</small>
-            </div>
-            <div style="border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:14px;background:rgba(0,0,0,.2);">
-                <small class="text-muted" style="display:block;margin-bottom:4px;">Haber (Pagos registrados)</small>
-                <strong style="font-size:1.35rem;color:#19d17f;">${{ balance_summary.total_paid|floatformat:2 }}</strong>
-                <small class="text-muted" style="display:block;margin-top:6px;">Aplicado a cuenta corriente</small>
-            </div>
-            <div style="border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:14px;background:rgba(0,0,0,.2);">
-                <small class="text-muted" style="display:block;margin-bottom:4px;">Saldo Actual</small>
-                {% if balance_summary.current_balance > 0 %}
-                <strong style="font-size:1.35rem;color:#ff5e5e;">${{ balance_summary.current_balance|floatformat:2 }}</strong>
-                <small class="text-muted" style="display:block;margin-top:6px;">Pendiente de cobro</small>
-                {% elif balance_summary.current_balance < 0 %}
-                <strong style="font-size:1.35rem;color:#19d17f;">${{ balance_summary.current_balance|floatformat:2 }}</strong>
-                <small class="text-muted" style="display:block;margin-top:6px;">Saldo a favor del cliente</small>
-                {% else %}
-                <strong style="font-size:1.35rem;color:#19d17f;">$0.00</strong>
-                <small class="text-muted" style="display:block;margin-top:6px;">Cuenta al dia</small>
-                {% endif %}
-            </div>
+    {% elif client_tab == 'account' %}
+    <section class="client-hub-panel">
+        <div class="client-section-head"><div><h3>Cuenta corriente</h3><p>Movimientos ordenados por tipo de documento, con saldo acumulado.</p></div></div>
+        <div class="client-history-metrics" style="margin-bottom:14px;">
+            <article class="history-metric-card is-warning"><span class="history-metric-label">Debe</span><strong class="history-metric-value">${{ balance_summary.orders_total|floatformat:2 }}</strong></article>
+            <article class="history-metric-card is-success"><span class="history-metric-label">Haber</span><strong class="history-metric-value">${{ balance_summary.total_paid|floatformat:2 }}</strong></article>
+            <article class="history-metric-card is-secondary"><span class="history-metric-label">Saldo</span><strong class="history-metric-value">${{ balance_summary.current_balance|floatformat:2 }}</strong></article>
+            <article class="history-metric-card is-info"><span class="history-metric-label">Pedidos contabilizados</span><strong class="history-metric-value">{{ balance_summary.orders_count }}</strong></article>
         </div>
-
-        <table class="admin-table">
-            <thead>
-                <tr>
-                    <th style="width: 65%;">Concepto</th>
-                    <th>Monto</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr>
-                    <td>Total pedidos en cuenta (confirmado, preparacion, enviado, entregado)</td>
-                    <td>${{ balance_summary.orders_total|floatformat:2 }}</td>
-                </tr>
-                <tr>
-                    <td>Total pagos registrados (activos)</td>
-                    <td>-${{ balance_summary.total_paid|floatformat:2 }}</td>
-                </tr>
-                <tr>
-                    <td><strong>Saldo final de cuenta corriente</strong></td>
-                    <td>
-                        <strong>
-                            {% if balance_summary.current_balance > 0 %}
-                            ${{ balance_summary.current_balance|floatformat:2 }}
-                            {% elif balance_summary.current_balance < 0 %}
-                            ${{ balance_summary.current_balance|floatformat:2 }}
-                            {% else %}
-                            $0.00
-                            {% endif %}
-                        </strong>
-                    </td>
-                </tr>
-            </tbody>
-        </table>
-
-        <h3 style="margin: 1.2rem 0 .8rem;">Movimientos de Cuenta Corriente</h3>
-        <table class="admin-table">
-            <thead>
-                <tr>
-                    <th>Fecha</th>
-                    <th>Empresa</th>
-                    <th>Tipo</th>
-                    <th>Referencia</th>
-                    <th>Debe</th>
-                    <th>Haber</th>
-                    <th>Saldo acumulado</th>
-                    <th>Usuario</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for row in ledger_rows %}
-                <tr>
-                    <td>{{ row.tx.occurred_at|date:"d/m/Y H:i" }}</td>
-                    <td>{{ row.tx.company.name|default:"-" }}</td>
-                    <td>{{ row.tx.get_transaction_type_display }}</td>
-                    <td>
-                        {% if row.tx.order_id %}
-                        Pedido #{{ row.tx.order_id }}
-                        {% elif row.tx.payment_id %}
-                        Pago #{{ row.tx.payment_id }}
-                        {% else %}
-                        {{ row.tx.description|default:"-" }}
-                        {% endif %}
-                    </td>
-                    <td>
-                        {% if row.debit > 0 %}
-                        ${{ row.debit|floatformat:2 }}
-                        {% else %}-{% endif %}
-                    </td>
-                    <td>
-                        {% if row.credit > 0 %}
-                        ${{ row.credit|floatformat:2 }}
-                        {% else %}-{% endif %}
-                    </td>
-                    <td>
-                        <strong>${{ row.running_balance|floatformat:2 }}</strong>
-                    </td>
-                    <td>{{ row.tx.created_by.username|default:"sistema" }}</td>
-                </tr>
-                {% empty %}
-                <tr>
-                    <td colspan="8" class="text-center text-muted">No hay movimientos en el libro diario.</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-
-    </section>
-
-    <section id="documentos">
-    <div class="admin-toolbar" style="border-top:1px solid rgba(255,255,255,.08); margin-top: 1rem;">
-        <h3 style="margin:0;">Documentos Internos</h3>
-    </div>
-    <div style="padding: 1rem; border-top: 1px solid rgba(255,255,255,.08);">
-        <div style="display:grid;grid-template-columns:repeat(2,minmax(240px,1fr));gap:12px;">
-            {% for doc_type, docs in documents_by_type.items %}
-            <div style="border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:12px;background:rgba(0,0,0,.2);">
-                <strong>{{ doc_type }}</strong>
-                {% if docs %}
-                <ul style="margin:6px 0 0;padding-left:18px;">
-                    {% for doc in docs %}
-                    <li>
-                        {{ doc.get_doc_type_display }} #{{ doc.number|stringformat:"07d" }}
-                        <a href="{% url 'admin_internal_document_print' doc.pk %}?copy=original" class="btn btn-outline btn-sm">Imprimir</a>
-                        <a href="{% url 'admin_internal_document_print' doc.pk %}?copy=original&download=1" class="btn btn-outline btn-sm">PDF</a>
-                        <a href="{% url 'admin_internal_document_print' doc.pk %}?copy=duplicado" class="btn btn-outline btn-sm">Duplicado</a>
-                        <a href="{% url 'admin_internal_document_print' doc.pk %}?copy=triplicado" class="btn btn-outline btn-sm">Triplicado</a>
-                        <a href="mailto:?subject={{ doc.get_doc_type_display }}%20{{ doc.number|stringformat:'07d' }}&body=Documento%20disponible%20en%20el%20panel%20interno." class="btn btn-outline btn-sm">Mail</a>
-                    </li>
+        <nav class="client-subtab-nav" style="margin-bottom:14px;">{% for tab in ledger_tabs %}<a href="{{ tab.url }}" class="client-subtab-link {% if tab.is_active %}is-active{% endif %}">{{ tab.label }}</a>{% endfor %}</nav>
+        {% if ledger_warning %}<div class="alert alert-warning" style="margin-bottom:14px;">{{ ledger_warning }}</div>{% endif %}
+        <div class="client-table-card">
+            <table class="admin-table">
+                <thead><tr><th>Fecha</th><th>Tipo</th><th>Numero</th><th>Referencia</th><th>Debe</th><th>Haber</th><th>Saldo</th><th>Accion</th></tr></thead>
+                <tbody>
+                    {% for row in ledger_rows %}
+                    <tr>
+                        <td>{{ row.tx.occurred_at|date:"d/m/Y H:i" }}</td>
+                        <td>{{ row.type_label }}</td>
+                        <td><strong>{{ row.number_label }}</strong></td>
+                        <td>{% if row.tx.order_id %}{{ row.tx.company.name|default:"-" }} | Pedido #{{ row.tx.order_id }}{% elif row.tx.payment_id %}{{ row.tx.payment.reference|default:row.tx.description|default:"Pago registrado" }}{% else %}{{ row.tx.description|default:"-" }}{% endif %}</td>
+                        <td>{% if row.debit > 0 %}${{ row.debit|floatformat:2 }}{% else %}-{% endif %}</td>
+                        <td>{% if row.credit > 0 %}${{ row.credit|floatformat:2 }}{% else %}-{% endif %}</td>
+                        <td><strong>${{ row.running_balance|floatformat:2 }}</strong></td>
+                        <td>{% if row.detail_url %}<a href="{{ row.detail_url }}" class="btn btn-outline btn-sm">{{ row.detail_label|default:"Abrir" }}</a>{% else %}-{% endif %}</td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="8" class="text-center text-muted">No hay movimientos para este filtro.</td></tr>
                     {% endfor %}
-                </ul>
-                {% else %}
-                <small class="text-muted">Sin documentos recientes.</small>
-                {% endif %}
-            </div>
-            {% endfor %}
+                </tbody>
+            </table>
+            <div class="client-table-foot"><span>{{ ledger_rows_total }} movimientos | mostrando {{ ledger_rows|length }}</span><div class="client-foot-actions">{% if ledger_hidden_count > 0 and ledger_more_url %}<a href="{{ ledger_more_url }}" class="btn btn-outline btn-sm">Mostrar mas</a>{% endif %}{% if ledger_hidden_count > 0 and ledger_show_all_url %}<a href="{{ ledger_show_all_url }}" class="btn btn-outline btn-sm">Mostrar todo</a>{% endif %}</div></div>
         </div>
-    </div>
-
-    <div class="admin-toolbar" style="border-top:1px solid rgba(255,255,255,.08);">
-        <h3 style="margin:0;">Comprobantes Oficiales (SaaS)</h3>
-    </div>
-    <table class="admin-table" style="margin-bottom: 1rem;">
-        <thead>
-            <tr>
-                <th>Fecha</th>
-                <th>Tipo</th>
-                <th>Numero</th>
-                <th>Total</th>
-                <th>Pedido</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for doc in official_docs %}
-            <tr>
-                <td>{{ doc.saas_document_date|date:"d/m/Y"|default:"-" }}</td>
-                <td>{{ doc.saas_document_type|default:"Factura" }}</td>
-                <td>{{ doc.saas_document_number|default:"-" }}</td>
-                <td>${{ doc.total|floatformat:2 }}</td>
-                <td><a href="{% url 'admin_order_detail' doc.pk %}" class="btn btn-outline btn-sm">#{{ doc.pk }}</a></td>
-            </tr>
-            {% empty %}
-            <tr>
-                <td colspan="5" class="text-center text-muted">No hay comprobantes oficiales registrados.</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
     </section>
+
+    {% elif client_tab == 'orders' %}
+    <section class="client-hub-panel">
+        <div class="client-section-head"><div><h3>Pedidos</h3><p>Pedidos, cotizaciones y estado operativo del cliente por empresa.</p></div></div>
+        <div class="client-history-metrics" style="margin-bottom:14px;">
+            <article class="history-metric-card is-info"><span class="history-metric-label">Pedidos</span><strong class="history-metric-value">{{ summary.orders_count }}</strong></article>
+            <article class="history-metric-card is-primary"><span class="history-metric-label">Total comprado</span><strong class="history-metric-value">${{ summary.total_amount|floatformat:2 }}</strong></article>
+            <article class="history-metric-card is-warning"><span class="history-metric-label">Ticket promedio</span><strong class="history-metric-value">${{ summary.avg_ticket|floatformat:2 }}</strong></article>
+            <article class="history-metric-card is-success"><span class="history-metric-label">Operaciones abiertas</span><strong class="history-metric-value">{{ open_orders_count }}</strong></article>
+        </div>
+        <form method="get" class="toolbar-search" style="margin-bottom:14px; display:flex; flex-wrap:wrap; gap:10px;">
+            <input type="hidden" name="client_tab" value="orders">
+            <select name="company_id" class="form-select">{% for company in companies %}<option value="{{ company.pk }}" {% if selected_company_id == company.pk|stringformat:'s' %}selected{% endif %}>{{ company.name }}</option>{% endfor %}</select>
+            <select name="status" class="form-select"><option value="">Todos los estados</option>{% for value, label in status_choices %}<option value="{{ value }}" {% if status == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select>
+            <button type="submit" class="btn btn-primary">Filtrar</button>
+            <a href="{{ orders_clear_url }}" class="btn btn-outline">Limpiar</a>
+        </form>
+        <div class="client-table-card">
+            <table class="admin-table">
+                <thead><tr><th>#</th><th>Fecha</th><th>Empresa</th><th>Items</th><th>Subtotal</th><th>Descuento</th><th>Total</th><th>Estado</th><th>Acciones</th></tr></thead>
+                <tbody>
+                    {% for order in page_obj %}
+                    <tr>
+                        <td><strong>{{ order.pk }}</strong></td>
+                        <td>{{ order.created_at|date:"d/m/Y H:i" }}</td>
+                        <td>{{ order.company.name|default:"-" }}</td>
+                        <td>{{ order.get_item_count }}</td>
+                        <td>${{ order.subtotal|floatformat:2 }}</td>
+                        <td>{% if order.discount_amount %}-${{ order.discount_amount|floatformat:2 }}{% else %}-{% endif %}</td>
+                        <td><strong>${{ order.total|floatformat:2 }}</strong></td>
+                        <td><span class="badge badge-secondary">{{ order.get_status_display }}</span></td>
+                        <td class="actions"><a href="{% url 'admin_order_detail' order.pk %}" class="btn btn-outline btn-sm">Abrir</a>{% if order.client_remito_document %}<a href="{% url 'admin_internal_document_print' order.client_remito_document.pk %}?copy=original" class="btn btn-outline btn-sm" data-print-window="1" target="_blank" rel="noopener noreferrer">Remito</a>{% elif order.client_can_remito %}<a href="{% url 'admin_order_detail' order.pk %}" class="btn btn-outline btn-sm">Preparar remito</a>{% endif %}{% if order.client_invoice_document %}<a href="{% url 'admin_fiscal_document_detail' order.client_invoice_document.pk %}" class="btn btn-outline btn-sm">Factura</a>{% elif order.client_can_invoice %}<a href="{% url 'admin_order_detail' order.pk %}" class="btn btn-outline btn-sm">Facturar</a>{% elif order.client_has_saas_invoice %}<a href="{% url 'admin_order_detail' order.pk %}" class="btn btn-outline btn-sm">SaaS</a>{% endif %}</td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="9" class="text-center text-muted">Este cliente no tiene pedidos cargados.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% if page_obj.paginator.num_pages > 1 %}
+            <div class="client-table-foot"><span>Pagina {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span><div class="client-foot-actions">{% if page_obj.has_previous %}<a href="?client_tab=orders&page={{ page_obj.previous_page_number }}&status={{ status }}&company_id={{ selected_company_id }}" class="btn btn-outline btn-sm">Anterior</a>{% endif %}{% if page_obj.has_next %}<a href="?client_tab=orders&page={{ page_obj.next_page_number }}&status={{ status }}&company_id={{ selected_company_id }}" class="btn btn-outline btn-sm">Siguiente</a>{% endif %}</div></div>
+            {% endif %}
+        </div>
+    </section>
+
+    {% elif client_tab == 'payments' %}
+    <section class="client-hub-panel">
+        <div class="client-section-head"><div><h3>Pagos</h3><p>Recibos, referencias y monto aplicado para el cliente.</p></div>{% if not operations_locked %}<a href="{% url 'admin_payment_list' %}?client_id={{ client.pk }}&company_id={{ selected_company_id }}" class="btn btn-primary">Registrar pago</a>{% endif %}</div>
+        <div class="client-history-metrics" style="margin-bottom:14px;">
+            <article class="history-metric-card is-success"><span class="history-metric-label">Pagos registrados</span><strong class="history-metric-value">{{ payments_summary.payments_count }}</strong></article>
+            <article class="history-metric-card is-primary"><span class="history-metric-label">Total pagado</span><strong class="history-metric-value">${{ payments_summary.total_paid|floatformat:2 }}</strong></article>
+            <article class="history-metric-card is-info"><span class="history-metric-label">Ultimo pago</span><strong class="history-metric-value">{{ payments_summary.last_payment_at|date:"d/m/Y H:i"|default:"-" }}</strong></article>
+            <article class="history-metric-card is-secondary"><span class="history-metric-label">Saldo actual</span><strong class="history-metric-value">${{ balance_summary.current_balance|floatformat:2 }}</strong></article>
+        </div>
+        <div class="client-table-card">
+            <table class="admin-table">
+                <thead><tr><th>Fecha</th><th>Empresa</th><th>Pedido</th><th>Monto</th><th>Medio</th><th>Referencia</th><th>Estado</th></tr></thead>
+                <tbody>
+                    {% for payment in payments_recent %}
+                    <tr>
+                        <td>{{ payment.paid_at|date:"d/m/Y H:i" }}</td>
+                        <td>{{ payment.company.name|default:"-" }}</td>
+                        <td>{% if payment.order_id %}<a href="{% url 'admin_order_detail' payment.order_id %}" class="btn btn-outline btn-sm">#{{ payment.order_id }}</a>{% else %}-{% endif %}</td>
+                        <td>${{ payment.amount|floatformat:2 }}</td>
+                        <td>{{ payment.get_method_display }}</td>
+                        <td>{{ payment.reference|default:"-" }}</td>
+                        <td>{% if payment.is_cancelled %}<span class="badge badge-danger">Anulado</span>{% else %}<span class="badge badge-success">Activo</span>{% endif %}</td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="7" class="text-center text-muted">No hay pagos para este cliente.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    {% elif client_tab == 'documents' %}
+    <section class="client-doc-grid">
+        <article class="history-metric-card is-warning"><span class="history-metric-label">Internos</span><strong class="history-metric-value">{{ documents_summary.internal_count }}</strong></article>
+        <article class="history-metric-card is-info"><span class="history-metric-label">Fiscales</span><strong class="history-metric-value">{{ documents_summary.fiscal_count }}</strong></article>
+        <article class="history-metric-card is-primary"><span class="history-metric-label">SaaS</span><strong class="history-metric-value">{{ documents_summary.official_count }}</strong></article>
+    </section>
+
+    <section class="client-hub-card">
+        <div class="client-section-head"><div><h3>Documentos internos</h3><p>Ultimos documentos operativos del cliente.</p></div></div>
+        <div class="client-table-card"><table class="admin-table"><thead><tr><th>Fecha</th><th>Tipo</th><th>Empresa</th><th>Numero</th><th>Pedido</th><th>Acciones</th></tr></thead><tbody>{% for doc in recent_internal_documents %}<tr><td>{{ doc.issued_at|date:"d/m/Y H:i" }}</td><td>{{ doc.get_doc_type_display }}</td><td>{{ doc.company.name|default:"-" }}</td><td>{{ doc.number|stringformat:"07d" }}</td><td>{% if doc.order_id %}<a href="{% url 'admin_order_detail' doc.order_id %}" class="btn btn-outline btn-sm">#{{ doc.order_id }}</a>{% else %}-{% endif %}</td><td class="actions"><a href="{% url 'admin_internal_document_print' doc.pk %}?copy=original" class="btn btn-outline btn-sm" data-print-window="1" target="_blank" rel="noopener noreferrer">Original</a><a href="{% url 'admin_internal_document_print' doc.pk %}?copy=duplicado" class="btn btn-outline btn-sm" data-print-window="1" target="_blank" rel="noopener noreferrer">Duplicado</a></td></tr>{% empty %}<tr><td colspan="6" class="text-center text-muted">Sin documentos internos recientes.</td></tr>{% endfor %}</tbody></table></div>
+    </section>
+
+    <section class="client-hub-card">
+        <div class="client-section-head"><div><h3>Comprobantes fiscales</h3><p>Documentos fiscales locales y su estado operativo.</p></div></div>
+        <div class="client-table-card"><table class="admin-table"><thead><tr><th>Fecha</th><th>Tipo</th><th>Punto de venta</th><th>Numero</th><th>Estado</th><th>Pedido</th><th>Acciones</th></tr></thead><tbody>{% for doc in recent_fiscal_documents %}<tr><td>{{ doc.created_at|date:"d/m/Y H:i" }}</td><td>{{ doc.get_doc_type_display }}</td><td>{{ doc.point_of_sale.number|default:"-" }}</td><td>{% if doc.number %}{{ doc.number }}{% elif doc.external_number %}{{ doc.external_number }}{% else %}-{% endif %}</td><td>{{ doc.get_status_display }}</td><td>{% if doc.order_id %}<a href="{% url 'admin_order_detail' doc.order_id %}" class="btn btn-outline btn-sm">#{{ doc.order_id }}</a>{% else %}-{% endif %}</td><td class="actions"><a href="{% url 'admin_fiscal_document_detail' doc.pk %}" class="btn btn-outline btn-sm">Ver</a><a href="{% url 'admin_fiscal_document_print' doc.pk %}?copy=original" class="btn btn-outline btn-sm" data-print-window="1" target="_blank" rel="noopener noreferrer">Original</a></td></tr>{% empty %}<tr><td colspan="7" class="text-center text-muted">No hay comprobantes fiscales recientes para este cliente.</td></tr>{% endfor %}</tbody></table></div>
+    </section>
+
+    <section class="client-hub-card">
+        <div class="client-section-head"><div><h3>Comprobantes oficiales (SaaS)</h3><p>Historial de comprobantes externos registrados desde la transicion.</p></div></div>
+        <div class="client-table-card"><table class="admin-table"><thead><tr><th>Fecha</th><th>Tipo</th><th>Numero</th><th>Total</th><th>Pedido</th></tr></thead><tbody>{% for doc in official_docs %}<tr><td>{{ doc.saas_document_date|date:"d/m/Y"|default:"-" }}</td><td>{{ doc.saas_document_type|default:"Factura" }}</td><td>{{ doc.saas_document_number|default:"-" }}</td><td>${{ doc.total|floatformat:2 }}</td><td><a href="{% url 'admin_order_detail' doc.pk %}" class="btn btn-outline btn-sm">#{{ doc.pk }}</a></td></tr>{% empty %}<tr><td colspan="5" class="text-center text-muted">No hay comprobantes oficiales registrados.</td></tr>{% endfor %}</tbody></table></div>
+    </section>
+    {% endif %}
 </div>
 {% endblock %}

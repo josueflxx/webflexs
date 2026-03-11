@@ -4,7 +4,8 @@ import re
 
 from django.conf import settings
 from django.db import DatabaseError, connection
-from django.db.models import F, Q
+from django.db.models import F, Q, Value
+from django.db.models.functions import Lower, Replace
 
 try:
     from django.contrib.postgres.search import TrigramSimilarity
@@ -14,6 +15,25 @@ except Exception:  # pragma: no cover - backend optional
 
 SEARCH_TOKEN_PATTERN = re.compile(r'"([^"]+)"|(\S+)')
 TOKEN_EDGE_TRIM_PATTERN = re.compile(r"^[,;|]+|[,;|]+$")
+COMPACT_SEARCH_PATTERN = re.compile(r"[^a-z0-9]+")
+COMPACT_SEARCH_REPLACE_CHARS = (
+    " ",
+    "-",
+    "/",
+    ".",
+    ",",
+    "_",
+    "(",
+    ")",
+    "[",
+    "]",
+    "{",
+    "}",
+    ":",
+    ";",
+    "|",
+    "\\",
+)
 
 
 def build_text_query(fields, term):
@@ -37,6 +57,14 @@ def sanitize_search_token(value):
     cleaned = cleaned.replace("×", "x")
     cleaned = re.sub(r"\s+", " ", cleaned)
     return cleaned
+
+
+def compact_search_token(value):
+    """Normalize text for compact matching across punctuation and spaces."""
+    cleaned = sanitize_search_token(value).lower()
+    if not cleaned:
+        return ""
+    return COMPACT_SEARCH_PATTERN.sub("", cleaned)
 
 
 def extract_search_tokens(raw_query):
@@ -177,3 +205,29 @@ def apply_text_search(
     except DatabaseError:
         # If extension is not enabled or query fails, fallback transparently.
         return queryset.filter(base_query)
+
+
+def build_compact_text_expression(field_name):
+    """Build a DB expression that removes common separators from a text field."""
+    expression = Lower(F(field_name))
+    for char in COMPACT_SEARCH_REPLACE_CHARS:
+        expression = Replace(expression, Value(char), Value(""))
+    return expression
+
+
+def apply_compact_text_search(queryset, term, fields):
+    """
+    Apply compact matching over fields, ignoring common separators like spaces,
+    hyphens and slashes.
+    """
+    compact_term = compact_search_token(term)
+    if not compact_term:
+        return queryset.none()
+
+    annotations = {}
+    query = Q()
+    for index, field in enumerate(fields):
+        alias = f"_compact_{index}"
+        annotations[alias] = build_compact_text_expression(field)
+        query |= Q(**{f"{alias}__contains": compact_term})
+    return queryset.annotate(**annotations).filter(query)

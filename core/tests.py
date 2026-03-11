@@ -6,6 +6,7 @@ from django.test import TestCase
 from django.urls import reverse
 
 from catalog.models import Category, Product
+from core.services.company_context import get_default_company
 
 
 class GlobalNumberFormatTests(TestCase):
@@ -25,6 +26,12 @@ class GlobalNumberFormatTests(TestCase):
 
 
 class SearchSuggestionsTests(TestCase):
+    def _activate_company(self):
+        company = get_default_company()
+        session = self.client.session
+        session["active_company_id"] = company.pk
+        session.save()
+
     def test_catalog_scope_returns_suggestions(self):
         Category.objects.create(name="ABT716 Bujes", slug="abt716-bujes", is_active=True)
         Product.objects.create(
@@ -65,6 +72,7 @@ class SearchSuggestionsTests(TestCase):
         )
         staff = User.objects.create_user("admin_tester", password="secret123", is_staff=True)
         self.client.force_login(staff)
+        self._activate_company()
 
         response = self.client.get(
             reverse("search_suggestions"),
@@ -75,6 +83,29 @@ class SearchSuggestionsTests(TestCase):
         payload = response.json()
         values = [item["value"] for item in payload["suggestions"]]
         self.assertIn("ZZ-ADMIN-01", values)
+
+    def test_admin_scope_matches_compact_product_tokens(self):
+        Product.objects.create(
+            sku="BA03041",
+            name="1/2 B.ARM FORD SOP BISAGRA CAPOT F-14000",
+            price=Decimal("100.00"),
+            cost=Decimal("60.00"),
+            stock=1,
+            is_active=True,
+        )
+        staff = User.objects.create_user("admin_compact_tester", password="secret123", is_staff=True)
+        self.client.force_login(staff)
+        self._activate_company()
+
+        response = self.client.get(
+            reverse("search_suggestions"),
+            {"scope": "admin_products", "q": "F14000"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        values = [item["value"] for item in payload["suggestions"]]
+        self.assertIn("BA03041", values)
 
 
 class ObservabilityMiddlewareTests(TestCase):
