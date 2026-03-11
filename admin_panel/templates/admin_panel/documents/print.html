@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <title>{{ document.get_doc_type_display }} {{ document.number|stringformat:"07d" }}</title>
+    <style>
+        body { font-family: Arial, sans-serif; color: #222; margin: 24px; }
+        .header { display: flex; justify-content: space-between; align-items: center; }
+        .badge { border: 1px solid #222; padding: 4px 8px; font-size: 12px; letter-spacing: 1px; }
+        .section { margin-top: 16px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+        th, td { border: 1px solid #ccc; padding: 6px; font-size: 12px; text-align: left; }
+        th { background: #f3f3f3; }
+        .right { text-align: right; }
+        @media print {
+            .no-print { display: none; }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div>
+            <h2 style="margin:0;">{{ document.company.name }}</h2>
+            <small>{{ document.company.legal_name|default:"-" }} | CUIT {{ document.company.cuit|default:"-" }}</small><br>
+            <small>{{ document.company.fiscal_address|default:"-" }} - {{ document.company.fiscal_city|default:"-" }}</small>
+        </div>
+        <div class="badge">{{ copy_label }}</div>
+    </div>
+
+    <div class="section">
+        <strong>{{ document.get_doc_type_display }} #{{ document.number|stringformat:"07d" }}</strong><br>
+        <small>Fecha: {{ document.issued_at|date:"d/m/Y H:i" }}</small>
+    </div>
+
+    <div class="section">
+        <strong>Cliente</strong><br>
+        {% if document.client_company_ref %}
+            {{ document.client_company_ref.client_profile.company_name }}<br>
+            CUIT/DNI: {{ document.client_company_ref.client_profile.cuit_dni|default:"-" }}<br>
+        {% elif document.client_profile %}
+            {{ document.client_profile.company_name }}<br>
+            CUIT/DNI: {{ document.client_profile.cuit_dni|default:"-" }}<br>
+        {% else %}
+            -
+        {% endif %}
+    </div>
+
+    {% if document.order %}
+    <div class="section">
+        <strong>Pedido #{{ document.order.pk }}</strong>
+        <table>
+            <thead>
+                <tr>
+                    <th>SKU</th>
+                    <th>Producto</th>
+                    <th>Cant.</th>
+                    <th class="right">Precio</th>
+                    <th class="right">Subtotal</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in order_items %}
+                <tr>
+                    <td>{{ item.product_sku }}</td>
+                    <td>{{ item.product_name }}</td>
+                    <td>{{ item.quantity }}</td>
+                    <td class="right">${{ item.price_at_purchase|floatformat:2 }}</td>
+                    <td class="right">${{ item.subtotal|floatformat:2 }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        <table>
+            <tr>
+                <td>Subtotal</td>
+                <td class="right">${{ document.order.subtotal|floatformat:2 }}</td>
+            </tr>
+            <tr>
+                <td>Descuento</td>
+                <td class="right">-${{ document.order.discount_amount|floatformat:2 }}</td>
+            </tr>
+            <tr>
+                <td><strong>Total</strong></td>
+                <td class="right"><strong>${{ document.order.total|floatformat:2 }}</strong></td>
+            </tr>
+        </table>
+    </div>
+    {% endif %}
+
+    {% if document.payment %}
+    <div class="section">
+        <strong>Pago asociado</strong><br>
+        Monto: ${{ document.payment.amount|floatformat:2 }}<br>
+        Medio: {{ document.payment.get_method_display }}<br>
+        Referencia: {{ document.payment.reference|default:"-" }}
+    </div>
+    {% endif %}
+
+    {% if document.transaction %}
+    <div class="section">
+        <strong>Ajuste asociado</strong><br>
+        Monto: ${{ document.transaction.amount|floatformat:2 }}<br>
+        Descripcion: {{ document.transaction.description|default:"-" }}
+    </div>
+    {% endif %}
+
+    <div class="section no-print">
+        <button onclick="window.print()">Imprimir</button>
+    </div>
+</body>
+</html>

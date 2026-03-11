@@ -12,7 +12,7 @@
 
             <div class="checkout-items">
                 <h3>Productos ({{ cart.get_item_count }})</h3>
-                {% for item in cart.items.all %}
+                {% for item in cart_items %}
                 <div class="checkout-item">
                     <span class="item-qty">{{ item.quantity }}x</span>
                     <span class="item-name">{{ item.product.name }}</span>

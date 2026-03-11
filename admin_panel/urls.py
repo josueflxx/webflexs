@@ -35,10 +35,12 @@ urlpatterns = [
     path('clientes/categorias/<int:pk>/editar/', views.client_category_edit, name='admin_client_category_edit'),
     path('clientes/categorias/<int:pk>/eliminar/', views.client_category_delete, name='admin_client_category_delete'),
     path('clientes/<int:pk>/pedidos/', views.client_order_history, name='admin_client_order_history'),
+    path('clientes/<int:pk>/accion-rapida/', views.client_quick_order, name='admin_client_quick_order'),
     path('clientes/<int:pk>/editar/', views.client_edit, name='admin_client_edit'),
     path('clientes/<int:pk>/password/', views.client_password_change, name='admin_client_password'),
     path('clientes/<int:pk>/eliminar/', views.client_delete, name='admin_client_delete'),
     path('clientes/eliminar-todos/', views.client_delete_all, name='admin_client_delete_all'),
+    path('clientes/cuit-lookup/', views.client_cuit_lookup, name='admin_client_cuit_lookup'),
     
     # Account Requests
     path('solicitudes/', views.request_list, name='admin_request_list'),
@@ -47,7 +49,12 @@ urlpatterns = [
     
     # Orders
     path('pedidos/', views.order_list, name='admin_order_list'),
+    path('pedidos/exportar-saas/', views.order_export_saas, name='admin_order_export_saas'),
     path('pedidos/<int:pk>/', views.order_detail, name='admin_order_detail'),
+    path('pedidos/<int:pk>/fiscal/crear-local/', views.order_fiscal_create_local, name='admin_order_fiscal_create_local'),
+    path('pedidos/<int:pk>/fiscal/registrar-externo/', views.order_fiscal_register_external, name='admin_order_fiscal_register_external'),
+    path('pedidos/<int:pk>/items/agregar/', views.order_item_add, name='admin_order_item_add'),
+    path('pedidos/<int:pk>/items/<int:item_id>/eliminar/', views.order_item_delete, name='admin_order_item_delete'),
     path(
         'pedidos/<int:pk>/items/<int:item_id>/publicar-abrazadera/',
         views.order_item_publish_clamp,
@@ -55,7 +62,13 @@ urlpatterns = [
     ),
     path('pedidos/<int:pk>/eliminar/', views.order_delete, name='admin_order_delete'),
     path('pagos/', views.payment_list, name='admin_payment_list'),
+    path('pagos/exportar-saas/', views.payment_export_saas, name='admin_payment_export_saas'),
     path('cotizador/', views.clamp_quoter, name='admin_clamp_quoter'),
+    path('documentos/<int:doc_id>/imprimir/', views.internal_document_print, name='admin_internal_document_print'),
+    path('fiscal/documentos/', views.fiscal_document_list, name='admin_fiscal_document_list'),
+    path('fiscal/documentos/<int:pk>/', views.fiscal_document_detail, name='admin_fiscal_document_detail'),
+    path('fiscal/documentos/<int:pk>/emitir/', views.fiscal_document_emit, name='admin_fiscal_document_emit'),
+    path('fiscal/documentos/<int:pk>/imprimir/', views.fiscal_document_print, name='admin_fiscal_document_print'),
 
     # Catalog Excel templates
     path('exportar-catalogo/', views.catalog_excel_template_list, name='admin_catalog_excel_template_list'),
@@ -90,6 +103,13 @@ urlpatterns = [
     
     # Settings
     path('configuracion/', views.settings_view, name='admin_settings'),
+    path('fiscal/configuracion/', views.fiscal_config, name='admin_fiscal_config'),
+    path('fiscal/puntos-venta/nuevo/', views.fiscal_point_create, name='admin_fiscal_point_create'),
+    path('fiscal/puntos-venta/<int:pk>/editar/', views.fiscal_point_edit, name='admin_fiscal_point_edit'),
+    path('fiscal/puntos-venta/<int:pk>/toggle-activo/', views.fiscal_point_toggle_active, name='admin_fiscal_point_toggle_active'),
+    path('fiscal/puntos-venta/<int:pk>/default/', views.fiscal_point_set_default, name='admin_fiscal_point_set_default'),
+    path('empresas/', views.company_list, name='admin_company_list'),
+    path('empresas/<int:pk>/', views.company_edit, name='admin_company_edit'),
     path('admins/', views.admin_user_list, name='admin_user_list'),
     path('admins/<int:user_id>/permisos/', views.admin_user_permissions, name='admin_user_permissions'),
     

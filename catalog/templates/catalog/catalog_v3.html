@@ -353,7 +353,7 @@
                                 {% if discount %}
                                 <div class="price-row list-price">
                                     <span class="label">Precio lista</span>
-                                    <span class="value">${{ product.price|floatformat:2 }}</span>
+                                    <span class="value">${{ product.base_price|default:product.price|floatformat:2 }}</span>
                                 </div>
                                 <div class="price-row discount-row">
                                     <span class="label">Descuento</span>
@@ -365,7 +365,7 @@
                                 </div>
                                 {% else %}
                                 <div class="price-row final-price single-price">
-                                    <span class="value">${{ product.price|floatformat:2 }}</span>
+                                    <span class="value">${{ product.base_price|default:product.price|floatformat:2 }}</span>
                                 </div>
                                 {% endif %}
                             </div>

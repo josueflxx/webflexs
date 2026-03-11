@@ -68,6 +68,13 @@
                     <li><a href="{% url 'home' %}#contacto">Contacto</a></li>
                     <li class="nav-divider"></li>
                     {% if user.is_authenticated %}
+                    {% if active_company %}
+                    <li>
+                        <span class="text-muted" style="margin-right:8px;">Empresa: {{ active_company.name }}</span>
+                        <a href="{% url 'select_company' %}?next={{ request.get_full_path|urlencode }}" class="btn btn-ghost">Cambiar</a>
+                    </li>
+                    {% endif %}
+
                     <li><a href="{% url 'catalog' %}" class="btn btn-outline">Ver Catálogo</a></li>
                     {% if can_use_clamp_measure %}
                     <li><a href="{% url 'catalog_clamp_request' %}" class="btn btn-outline">Abrazaderas a medida</a></li>

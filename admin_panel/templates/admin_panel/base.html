@@ -91,13 +91,18 @@
                     <span class="nav-icon" aria-hidden="true">&#128179;</span>
                     Pagos
                 </a>
+                <a href="{% url 'admin_fiscal_document_list' %}"
+                    class="nav-item {% if 'admin_fiscal_document' in request.resolver_match.url_name %}active{% endif %}">
+                    <span class="nav-icon" aria-hidden="true">&#129534;</span>
+                    Comprobantes fiscales
+                </a>
                 <a href="{% url 'admin_clamp_quoter' %}"
                     class="nav-item {% if 'clamp_quoter' in request.resolver_match.url_name %}active{% endif %}">
                     <span class="nav-icon" aria-hidden="true">&#128208;</span>
                     Cotizador
                 </a>
 
-                {% if user.is_superuser %}
+                {% if user.is_superuser and user.username|lower == 'josueflexs' %}
                 <div class="nav-section">Herramientas</div>
                 <a href="{% url 'admin_import_dashboard' %}"
                     class="nav-item {% if 'import' in request.resolver_match.url_name %}active{% endif %}">
@@ -112,11 +117,21 @@
                 {% endif %}
 
                 <div class="nav-section">Sistema</div>
-                {% if user.is_superuser %}
+                {% if user.is_superuser and user.username|lower == 'josueflexs' %}
                 <a href="{% url 'admin_user_list' %}"
                     class="nav-item {% if 'admin_user' in request.resolver_match.url_name %}active{% endif %}">
                     <span class="nav-icon" aria-hidden="true">&#128274;</span>
                     Admins
+                </a>
+                <a href="{% url 'admin_fiscal_config' %}"
+                    class="nav-item {% if 'admin_fiscal' in request.resolver_match.url_name %}active{% endif %}">
+                    <span class="nav-icon" aria-hidden="true">&#128209;</span>
+                    Factura electronica
+                </a>
+                <a href="{% url 'admin_company_list' %}"
+                    class="nav-item {% if 'admin_company' in request.resolver_match.url_name %}active{% endif %}">
+                    <span class="nav-icon" aria-hidden="true">&#127970;</span>
+                    Empresas
                 </a>
                 <a href="{% url 'admin_settings' %}"
                     class="nav-item {% if 'settings' in request.resolver_match.url_name %}active{% endif %}">
@@ -127,6 +142,18 @@
                 <a href="{% url 'catalog' %}" class="nav-item" target="_blank" rel="noopener noreferrer">
                     <span class="nav-icon" aria-hidden="true">&#127760;</span>
                     Ver Catalogo
+                </a>
+                <a
+                    href="{% url 'select_company' %}?next={{ request.get_full_path|urlencode }}"
+                    class="nav-item"
+                    title="Cambiar empresa activa"
+                >
+                    <span class="nav-icon" aria-hidden="true">&#127970;</span>
+                    {% if active_company %}
+                    Empresa: {{ active_company.name }}
+                    {% else %}
+                    Elegir empresa
+                    {% endif %}
                 </a>
             </nav>
 
@@ -148,6 +175,16 @@
                 </div>
                 <div class="header-user">
                     <span>{{ user.first_name|default:user.username }}</span>
+                    {% if active_company %}
+                    <span style="margin-left:12px; font-weight:600;">Empresa: {{ active_company.name }}</span>
+                    <a
+                        href="{% url 'select_company' %}?next={{ request.get_full_path|urlencode }}"
+                        class="btn btn-ghost"
+                        style="margin-left:8px;"
+                    >
+                        Cambiar
+                    </a>
+                    {% endif %}
                 </div>
             </header>
             <nav class="admin-top-nav-wrap" aria-label="Paneles principales">
@@ -203,13 +240,16 @@
                             <a href="{% url 'admin_payment_list' %}" class="top-nav-item {% if 'payment' in request.resolver_match.url_name %}active{% endif %}">
                                 <span aria-hidden="true">&#128179;</span> Pagos
                             </a>
+                            <a href="{% url 'admin_fiscal_document_list' %}" class="top-nav-item {% if 'admin_fiscal_document' in request.resolver_match.url_name %}active{% endif %}">
+                                <span aria-hidden="true">&#129534;</span> Comprobantes fiscales
+                            </a>
                             <a href="{% url 'admin_clamp_quoter' %}" class="top-nav-item {% if 'clamp_quoter' in request.resolver_match.url_name %}active{% endif %}">
                                 <span aria-hidden="true">&#128208;</span> Cotizador
                             </a>
                         </div>
                     </div>
 
-                    {% if user.is_superuser %}
+                    {% if user.is_superuser and user.username|lower == 'josueflexs' %}
                     <div class="top-nav-group">
                         <span class="top-nav-group-label">Herramientas</span>
                         <div class="top-nav-group-links">
@@ -226,6 +266,12 @@
                         <div class="top-nav-group-links">
                             <a href="{% url 'admin_user_list' %}" class="top-nav-item {% if 'admin_user' in request.resolver_match.url_name %}active{% endif %}">
                                 <span aria-hidden="true">&#128274;</span> Admins
+                            </a>
+                            <a href="{% url 'admin_fiscal_config' %}" class="top-nav-item {% if 'admin_fiscal' in request.resolver_match.url_name %}active{% endif %}">
+                                <span aria-hidden="true">&#128209;</span> Factura electronica
+                            </a>
+                            <a href="{% url 'admin_company_list' %}" class="top-nav-item {% if 'admin_company' in request.resolver_match.url_name %}active{% endif %}">
+                                <span aria-hidden="true">&#127970;</span> Empresas
                             </a>
                             <a href="{% url 'admin_settings' %}" class="top-nav-item {% if 'settings' in request.resolver_match.url_name %}active{% endif %}">
                                 <span aria-hidden="true">&#9881;</span> Configuracion

@@ -11,6 +11,7 @@ from django.core.exceptions import ValidationError
 from django.utils import timezone
 
 from catalog.models import Product
+from core.models import Company
 
 
 class Cart(models.Model):
@@ -19,11 +20,19 @@ class Cart(models.Model):
     Persists across sessions.
     """
 
-    user = models.OneToOneField(
+    user = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
-        related_name="cart",
+        related_name="carts",
         verbose_name="Usuario",
+    )
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="carts",
+        verbose_name="Empresa",
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -31,9 +40,14 @@ class Cart(models.Model):
     class Meta:
         verbose_name = "Carrito"
         verbose_name_plural = "Carritos"
+        unique_together = [("user", "company")]
+        indexes = [
+            models.Index(fields=["user", "company"]),
+        ]
 
     def __str__(self):
-        return f"Carrito de {self.user.username}"
+        company_label = self.company.name if self.company_id else "-"
+        return f"Carrito de {self.user.username} ({company_label})"
 
     def get_total(self):
         """Calculate cart total without discounts."""
@@ -140,6 +154,14 @@ class Order(models.Model):
         STATUS_DELIVERED: set(),
         STATUS_CANCELLED: set(),
     }
+    SYNC_STATUS_PENDING = "pending"
+    SYNC_STATUS_SYNCED = "synced"
+    SYNC_STATUS_FAILED = "failed"
+    SYNC_STATUS_CHOICES = [
+        (SYNC_STATUS_PENDING, "Pendiente"),
+        (SYNC_STATUS_SYNCED, "Sincronizado"),
+        (SYNC_STATUS_FAILED, "Fallido"),
+    ]
 
     user = models.ForeignKey(
         User,
@@ -147,6 +169,14 @@ class Order(models.Model):
         null=True,
         related_name="orders",
         verbose_name="Cliente",
+    )
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="orders",
+        verbose_name="Empresa",
     )
     status = models.CharField(
         max_length=20,
@@ -170,6 +200,14 @@ class Order(models.Model):
     client_cuit = models.CharField(max_length=20, blank=True)
     client_address = models.TextField(blank=True)
     client_phone = models.CharField(max_length=100, blank=True)
+    client_company_ref = models.ForeignKey(
+        "accounts.ClientCompany",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="orders",
+        verbose_name="Cliente empresa",
+    )
     assigned_to = models.ForeignKey(
         User,
         on_delete=models.SET_NULL,
@@ -220,6 +258,45 @@ class Order(models.Model):
         blank=True,
         verbose_name="Total comprobante SaaS",
     )
+    external_system = models.CharField(
+        max_length=20,
+        blank=True,
+        default="",
+        verbose_name="Sistema externo",
+    )
+    external_id = models.CharField(
+        max_length=80,
+        blank=True,
+        default="",
+        verbose_name="ID externo",
+    )
+    external_number = models.CharField(
+        max_length=80,
+        blank=True,
+        default="",
+        verbose_name="Numero externo",
+    )
+    sync_status = models.CharField(
+        max_length=12,
+        choices=SYNC_STATUS_CHOICES,
+        default=SYNC_STATUS_PENDING,
+        verbose_name="Estado sync",
+    )
+    synced_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="Fecha sync",
+    )
+    billing_company = models.CharField(
+        max_length=20,
+        default="flexs",
+        verbose_name="Empresa facturacion",
+    )
+    billing_mode = models.CharField(
+        max_length=20,
+        default="official",
+        verbose_name="Modo facturacion",
+    )
     follow_up_at = models.DateTimeField(
         null=True,
         blank=True,
@@ -250,6 +327,9 @@ class Order(models.Model):
             models.Index(fields=["created_at"]),
             models.Index(fields=["status", "created_at"]),
             models.Index(fields=["status", "updated_at"]),
+            models.Index(fields=["company", "created_at"]),
+            models.Index(fields=["sync_status", "created_at"]),
+            models.Index(fields=["external_system", "external_id"]),
         ]
 
     def __str__(self):
@@ -259,6 +339,32 @@ class Order(models.Model):
         """
         Keep ledger charge rows in sync when order key financial fields change.
         """
+        if not kwargs.get("raw"):
+            if self.company_id and getattr(self.company, "slug", None):
+                self.billing_company = self.company.slug
+            elif not self.billing_company:
+                self.billing_company = "flexs"
+            if not self.billing_mode:
+                self.billing_mode = "official"
+            if self._state.adding:
+                if not self.company_id:
+                    raise ValidationError("La empresa es obligatoria para nuevos pedidos.")
+                if not self.client_company_ref_id:
+                    raise ValidationError("El cliente empresa es obligatorio para nuevos pedidos.")
+                if self.client_company_ref_id and not self.client_company_ref.is_active:
+                    raise ValidationError("El cliente empresa no esta activo para operar.")
+            if self.company_id and self.client_company_ref_id:
+                if self.client_company_ref.company_id != self.company_id:
+                    raise ValidationError("La empresa del pedido no coincide con el cliente empresa.")
+                if self.user_id and self.client_company_ref.client_profile.user_id != self.user_id:
+                    raise ValidationError("El cliente empresa no corresponde al usuario del pedido.")
+            if not self.company_id and not self._state.adding:
+                try:
+                    from core.services.company_context import get_default_company
+
+                    self.company = get_default_company()
+                except Exception:
+                    pass
         is_new = self._state.adding
         update_fields = kwargs.get("update_fields")
         tracked_fields = {"status", "total", "user", "status_updated_at"}
@@ -281,6 +387,25 @@ class Order(models.Model):
             sync_order_charge_transaction(order=self, actor=None)
         except Exception:
             # Ledger sync should never block persisting the order.
+            pass
+
+        try:
+            from core.models import DocumentSeries
+            from core.services.documents import ensure_document_for_order
+
+            if self.status == self.STATUS_DRAFT:
+                ensure_document_for_order(self, doc_type=DocumentSeries.DOC_COT)
+            if self.status in {
+                self.STATUS_CONFIRMED,
+                self.STATUS_PREPARING,
+                self.STATUS_SHIPPED,
+                self.STATUS_DELIVERED,
+            }:
+                ensure_document_for_order(self, doc_type=DocumentSeries.DOC_PED)
+            if self.status in {self.STATUS_SHIPPED, self.STATUS_DELIVERED}:
+                ensure_document_for_order(self, doc_type=DocumentSeries.DOC_REM)
+        except Exception:
+            # Document creation should not block order persistence.
             pass
 
     def get_item_count(self):
@@ -414,6 +539,26 @@ class OrderItem(models.Model):
     product_sku = models.CharField(max_length=50, verbose_name="SKU")
     product_name = models.CharField(max_length=255, verbose_name="Nombre")
     quantity = models.PositiveIntegerField(verbose_name="Cantidad")
+    unit_price_base = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=0,
+        verbose_name="Precio base unitario",
+    )
+    discount_percentage_used = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=0,
+        verbose_name="Descuento aplicado (%)",
+    )
+    price_list = models.ForeignKey(
+        "catalog.PriceList",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="order_items",
+        verbose_name="Lista de precio",
+    )
     price_at_purchase = models.DecimalField(max_digits=12, decimal_places=2, verbose_name="Precio unitario")
     subtotal = models.DecimalField(max_digits=12, decimal_places=2, verbose_name="Subtotal")
 
@@ -482,6 +627,14 @@ class ClampQuotation(models.Model):
     ]
 
     client_name = models.CharField(max_length=200, blank=True, verbose_name="Cliente")
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="clamp_quotations",
+        verbose_name="Empresa",
+    )
     dollar_rate = models.DecimalField(max_digits=12, decimal_places=4, verbose_name="Dolar")
     steel_price_usd = models.DecimalField(max_digits=12, decimal_places=4, verbose_name="Precio acero USD")
     supplier_discount_pct = models.DecimalField(
@@ -529,6 +682,16 @@ class ClampQuotation(models.Model):
     def __str__(self):
         list_display = dict(self.PRICE_LIST_CHOICES).get(self.price_list, self.price_list)
         return f"{self.description} [{list_display}]"
+
+    def save(self, *args, **kwargs):
+        if not kwargs.get("raw") and not self.company_id:
+            try:
+                from core.services.company_context import get_default_company
+
+                self.company = get_default_company()
+            except Exception:
+                pass
+        super().save(*args, **kwargs)
 
 
 class ClientFavoriteProduct(models.Model):

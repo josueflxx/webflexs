@@ -1,0 +1,114 @@
+{% extends 'admin_panel/base.html' %}
+
+{% block page_title %}Factura electronica{% endblock %}
+
+{% block content %}
+<div class="admin-table-container">
+    <div class="admin-toolbar">
+        <div class="toolbar-search">
+            <strong>Configuracion fiscal de empresa activa</strong>
+            <div class="text-muted" style="margin-top:4px;">
+                Empresa activa: <strong>{{ active_company.name }}</strong>
+            </div>
+        </div>
+        <div class="toolbar-actions">
+            <a href="{% url 'admin_company_edit' active_company.pk %}" class="btn btn-outline">Editar empresa</a>
+            <a href="{% url 'admin_fiscal_document_list' %}" class="btn btn-outline">Comprobantes</a>
+            <a href="{% url 'admin_fiscal_point_create' %}" class="btn btn-primary">Nuevo punto de venta</a>
+        </div>
+    </div>
+
+    <div class="card" style="padding: 1rem; margin-bottom: 1rem;">
+        <div style="display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+            <div>
+                <div><strong>Razon social:</strong> {{ active_company.legal_name|default:"-" }}</div>
+                <div><strong>CUIT:</strong> {{ active_company.cuit|default:"-" }}</div>
+                <div><strong>Condicion fiscal:</strong> {{ active_company.get_tax_condition_display|default:"-" }}</div>
+                <div><strong>Domicilio fiscal:</strong> {{ active_company.fiscal_address|default:"-" }}</div>
+                <div><strong>Ciudad/Provincia:</strong> {{ active_company.fiscal_city|default:"-" }} / {{ active_company.fiscal_province|default:"-" }}</div>
+                <div><strong>Codigo postal:</strong> {{ active_company.postal_code|default:"-" }}</div>
+            </div>
+            <div>
+                <div><strong>POS default (Company):</strong> {{ active_company.point_of_sale_default|default:"-" }}</div>
+                <div><strong>POS activos:</strong> {{ active_points_count }}</div>
+                <div>
+                    <strong>POS default (modelo):</strong>
+                    {% if default_point %}{{ default_point.number }}{% else %}-{% endif %}
+                </div>
+                <div style="margin-top:8px;">
+                    {% if is_ready %}
+                    <span class="badge badge-success">Lista para emitir</span>
+                    {% else %}
+                    <span class="badge badge-warning">Configuracion incompleta</span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% if not is_ready %}
+        <div class="alert alert-warning" style="margin-top: 1rem;">
+            <strong>Faltantes detectados:</strong>
+            <ul style="margin:8px 0 0 16px;">
+                {% for item in readiness_errors %}
+                <li>{{ item }}</li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+    </div>
+
+    <table class="admin-table">
+        <thead>
+            <tr>
+                <th>Numero</th>
+                <th>Nombre</th>
+                <th>Entorno</th>
+                <th>Activo</th>
+                <th>Default</th>
+                <th>Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for point in points %}
+            <tr>
+                <td><strong>{{ point.number }}</strong></td>
+                <td>{{ point.name|default:"-" }}</td>
+                <td>{{ point.get_environment_display }}</td>
+                <td>
+                    {% if point.is_active %}
+                    <span class="badge badge-success">Si</span>
+                    {% else %}
+                    <span class="badge badge-secondary">No</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if point.is_default %}
+                    <span class="badge badge-primary">Default</span>
+                    {% else %}
+                    <span class="badge badge-secondary">-</span>
+                    {% endif %}
+                </td>
+                <td class="actions">
+                    <a href="{% url 'admin_fiscal_point_edit' point.pk %}" class="btn btn-outline btn-sm">Editar</a>
+                    <form method="post" action="{% url 'admin_fiscal_point_toggle_active' point.pk %}" style="display:inline;">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-outline btn-sm">
+                            {% if point.is_active %}Desactivar{% else %}Activar{% endif %}
+                        </button>
+                    </form>
+                    {% if not point.is_default %}
+                    <form method="post" action="{% url 'admin_fiscal_point_set_default' point.pk %}" style="display:inline;">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-primary btn-sm">Marcar default</button>
+                    </form>
+                    {% endif %}
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="6" class="text-center text-muted">No hay puntos de venta para esta empresa.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

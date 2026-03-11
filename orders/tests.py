@@ -5,9 +5,10 @@ from django.core.exceptions import ValidationError
 from django.test import TestCase
 from django.urls import reverse
 
-from accounts.models import ClientPayment, ClientProfile
+from accounts.models import ClientCompany, ClientPayment, ClientProfile
 from catalog.models import ClampMeasureRequest, Product
 from orders.models import Cart, CartItem, Order, OrderItem
+from core.services.company_context import get_default_company
 
 
 class OrderPaymentWorkflowTests(TestCase):
@@ -25,14 +26,23 @@ class OrderPaymentWorkflowTests(TestCase):
             user=self.client_user,
             company_name='Cliente Pago Workflow',
         )
+        self.company = get_default_company()
+        self.client_company = ClientCompany.objects.create(
+            client_profile=self.client_profile,
+            company=self.company,
+            is_active=True,
+            discount_percentage=Decimal('5.00'),
+        )
 
     def test_can_confirm_unpaid_order(self):
         order = Order.objects.create(
             user=self.client_user,
+            company=self.company,
             status=Order.STATUS_DRAFT,
             subtotal=Decimal('100.00'),
             total=Decimal('100.00'),
             client_company='Cliente Pago Workflow',
+            client_company_ref=self.client_company,
         )
 
         changed = order.change_status(
@@ -49,10 +59,12 @@ class OrderPaymentWorkflowTests(TestCase):
     def test_pending_amount_decreases_with_payments(self):
         order = Order.objects.create(
             user=self.client_user,
+            company=self.company,
             status=Order.STATUS_CONFIRMED,
             subtotal=Decimal('100.00'),
             total=Decimal('100.00'),
             client_company='Cliente Pago Workflow',
+            client_company_ref=self.client_company,
         )
         ClientPayment.objects.create(
             client_profile=self.client_profile,
@@ -73,10 +85,16 @@ class CheckoutClampRequestFlowTests(TestCase):
             username='cliente_checkout_clamp',
             password='secret123',
         )
-        ClientProfile.objects.create(
+        self.client_profile = ClientProfile.objects.create(
             user=self.client_user,
             company_name='Cliente Checkout Clamp',
             discount=Decimal('0.00'),
+        )
+        self.company = get_default_company()
+        self.client_company = ClientCompany.objects.create(
+            client_profile=self.client_profile,
+            company=self.company,
+            is_active=True,
         )
         self.product = Product.objects.create(
             sku='TEST-CLAMP-CHK-01',
@@ -109,7 +127,7 @@ class CheckoutClampRequestFlowTests(TestCase):
             status=ClampMeasureRequest.STATUS_COMPLETED,
             confirmed_price=Decimal('140.00'),
         )
-        self.cart = Cart.objects.create(user=self.client_user)
+        self.cart = Cart.objects.create(user=self.client_user, company=self.company)
         CartItem.objects.create(
             cart=self.cart,
             product=self.product,
@@ -138,6 +156,16 @@ class OrderItemMutationGuardTests(TestCase):
             username='order_item_guard_user',
             password='secret123',
         )
+        self.client_profile = ClientProfile.objects.create(
+            user=self.user,
+            company_name='Guard Co',
+        )
+        self.company = get_default_company()
+        self.client_company = ClientCompany.objects.create(
+            client_profile=self.client_profile,
+            company=self.company,
+            is_active=True,
+        )
         self.product = Product.objects.create(
             sku='GUARD-ITEM-01',
             name='Producto Guard',
@@ -150,10 +178,12 @@ class OrderItemMutationGuardTests(TestCase):
     def test_edit_item_blocked_when_order_confirmed(self):
         order = Order.objects.create(
             user=self.user,
+            company=self.company,
             status=Order.STATUS_CONFIRMED,
             subtotal=Decimal('100.00'),
             total=Decimal('100.00'),
             client_company='Guard Co',
+            client_company_ref=self.client_company,
         )
         item = OrderItem.objects.create(
             order=order,
@@ -171,10 +201,12 @@ class OrderItemMutationGuardTests(TestCase):
     def test_edit_item_allowed_when_order_draft(self):
         order = Order.objects.create(
             user=self.user,
+            company=self.company,
             status=Order.STATUS_DRAFT,
             subtotal=Decimal('100.00'),
             total=Decimal('100.00'),
             client_company='Guard Co',
+            client_company_ref=self.client_company,
         )
         item = OrderItem.objects.create(
             order=order,

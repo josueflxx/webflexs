@@ -110,6 +110,50 @@ class SessionIdleTimeoutMiddleware:
         return self.get_response(request)
 
 
+class ActiveCompanyMiddleware:
+    """
+    Ensure authenticated users operate under an explicit active company context.
+    """
+
+    EXEMPT_PREFIXES = (
+        "/accounts/login/",
+        "/accounts/logout/",
+        "/accounts/redirect/",
+        "/accounts/empresa/",
+        "/accounts/solicitar/",
+        "/api/admin-presence/",
+        "/api/admin-alerts/",
+        "/api/go-offline/",
+        "/static/",
+        "/media/",
+        "/django-admin/",
+    )
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        if request.user.is_authenticated:
+            path = request.path or ""
+            if not path.startswith(self.EXEMPT_PREFIXES):
+                from core.services.company_context import get_active_company, get_user_companies
+
+                companies = list(get_user_companies(request.user))
+                active_company = get_active_company(request)
+                if companies and active_company is None:
+                    wants_json = "application/json" in request.headers.get("Accept", "")
+                    if wants_json or path.startswith("/api/"):
+                        return JsonResponse(
+                            {"detail": "Empresa activa requerida.", "requires_company": True},
+                            status=400,
+                        )
+                    params = urlencode({"next": request.get_full_path()})
+                    if hasattr(request, "_messages"):
+                        messages.info(request, "Selecciona una empresa para continuar.")
+                    return redirect(f"{reverse('select_company')}?{params}")
+        return self.get_response(request)
+
+
 class UserActivityMiddleware:
     """Update user activity on each request."""
     

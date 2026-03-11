@@ -5,6 +5,7 @@ from django.conf import settings
 
 from .models import CatalogExcelTemplate, SiteSettings
 from core.services.presence import build_admin_presence_payload, get_presence_config
+from core.services.company_context import get_active_company, get_user_companies
 
 
 def _can_use_clamp_measure_feature(request):
@@ -14,7 +15,12 @@ def _can_use_clamp_measure_feature(request):
     if user.is_staff:
         return True
     profile = getattr(user, "client_profile", None)
-    return bool(profile and getattr(profile, "is_approved", False))
+    if not profile or not getattr(profile, "is_approved", False):
+        return False
+    company = get_active_company(request)
+    if company:
+        return profile.can_operate_in_company(company)
+    return False
 
 
 def site_settings(request):
@@ -29,7 +35,14 @@ def site_settings(request):
             can_access_client_export = True
         else:
             profile = getattr(user, "client_profile", None)
-            can_access_client_export = bool(profile and getattr(profile, "is_approved", False))
+            if profile and getattr(profile, "is_approved", False):
+                company = get_active_company(request)
+                if company:
+                    can_access_client_export = profile.can_operate_in_company(company)
+                else:
+                    can_access_client_export = False
+            else:
+                can_access_client_export = False
 
         if can_access_client_export:
             published_template = CatalogExcelTemplate.get_client_download_template()
@@ -60,4 +73,18 @@ def active_admins(request):
             "admin_online_window_seconds": config["online_window_seconds"],
         }
     return {}
+
+
+def active_company_context(request):
+    user = getattr(request, "user", None)
+    companies = []
+    if user and user.is_authenticated:
+        try:
+            companies = list(get_user_companies(user))
+        except Exception:
+            companies = []
+    return {
+        "active_company": get_active_company(request),
+        "active_company_choices": companies,
+    }
 

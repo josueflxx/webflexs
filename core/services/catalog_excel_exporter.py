@@ -9,7 +9,7 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 
-from catalog.models import Category, Product
+from catalog.models import Category, Product, PriceListItem
 from core.models import CATALOG_EXPORT_COLUMN_CHOICES
 
 
@@ -55,7 +55,7 @@ def _yes_no(value):
     return "Si" if value else "No"
 
 
-def _serialize_product_value(product, key):
+def _serialize_product_value(product, key, price_map=None, discount_percentage=None):
     if key == "sku":
         return product.sku
     if key == "name":
@@ -67,7 +67,13 @@ def _serialize_product_value(product, key):
     if key == "supplier_normalized":
         return product.supplier_ref.name if product.supplier_ref_id else ""
     if key == "price":
-        return _decimal_to_excel(product.price)
+        base_price = product.price
+        if price_map is not None:
+            base_price = price_map.get(product.id, product.price)
+        if discount_percentage is not None and discount_percentage != 0:
+            discount_decimal = Decimal(str(discount_percentage)) / Decimal("100")
+            base_price = base_price * (Decimal("1") - discount_decimal)
+        return _decimal_to_excel(base_price)
     if key == "cost":
         return _decimal_to_excel(product.cost)
     if key == "stock":
@@ -220,7 +226,7 @@ def _set_auto_column_widths(worksheet, column_widths):
         worksheet.column_dimensions[get_column_letter(idx)].width = adjusted
 
 
-def build_catalog_workbook(template):
+def build_catalog_workbook(template, price_list=None, discount_percentage=None):
     """
     Build an XLSX workbook from one CatalogExcelTemplate instance.
     Returns (workbook, stats_dict).
@@ -240,6 +246,15 @@ def build_catalog_workbook(template):
         default_sheet.append(["La plantilla no tiene hojas configuradas."])
         rows_by_sheet["Catalogo"] = 1
         return workbook, {"rows_by_sheet": rows_by_sheet, "total_rows": 1}
+
+    price_map = None
+    if price_list:
+        price_map = {
+            product_id: price
+            for product_id, price in PriceListItem.objects.filter(price_list=price_list).values_list(
+                "product_id", "price"
+            )
+        }
 
     for sheet_config in sheets:
         worksheet = workbook.create_sheet(sheet_config.name[:31] or "Hoja")
@@ -271,7 +286,15 @@ def build_catalog_workbook(template):
 
         row_count = 0
         for product in _apply_sheet_filters(sheet_config).iterator(chunk_size=500):
-            row_values = [_serialize_product_value(product, col.key) for col in columns]
+            row_values = [
+                _serialize_product_value(
+                    product,
+                    col.key,
+                    price_map=price_map,
+                    discount_percentage=discount_percentage,
+                )
+                for col in columns
+            ]
             worksheet.append(row_values)
             row_count += 1
             for idx, value in enumerate(row_values):

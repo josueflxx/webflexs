@@ -33,10 +33,11 @@ from urllib.parse import urlencode, parse_qs
 import csv
 from openpyxl import Workbook
 
-from catalog.models import Product, Category, CategoryAttribute, ClampMeasureRequest, Supplier
+from catalog.models import Product, Category, CategoryAttribute, ClampMeasureRequest, Supplier, PriceList
 from accounts.models import (
     AccountRequest,
     ClientCategory,
+    ClientCompany,
     ClientPayment,
     ClientProfile,
     ClientTransaction,
@@ -48,6 +49,10 @@ from accounts.services.ledger import (
 from orders.models import ClampQuotation, Order, OrderItem, OrderStatusHistory
 from orders.services.workflow import can_user_transition_order
 from core.models import (
+    Company,
+    FiscalDocument,
+    FiscalPointOfSale,
+    InternalDocument,
     SiteSettings,
     CatalogAnalyticsEvent,
     AdminAuditLog,
@@ -55,6 +60,13 @@ from core.models import (
     CatalogExcelTemplate,
     CatalogExcelTemplateSheet,
     CatalogExcelTemplateColumn,
+)
+from core.services.company_context import (
+    get_active_company,
+    get_default_company,
+    get_default_client_origin_company,
+    set_active_company,
+    user_has_company_access,
 )
 from django.contrib.auth.models import User
 from admin_panel.forms.import_forms import ProductImportForm, ClientImportForm, CategoryImportForm
@@ -95,6 +107,12 @@ from catalog.services.category_assignment import (
 )
 from core.services.import_manager import ImportTaskManager
 from core.services.background_jobs import dispatch_import_job
+from core.services.fiscal import is_company_fiscal_ready
+from core.services.fiscal_documents import (
+    create_local_fiscal_document_from_order,
+    register_external_fiscal_document_for_order,
+)
+from core.services.fiscal_emission import emit_fiscal_document_now
 from core.services.advanced_search import (
     apply_text_search,
     apply_parsed_text_search,
@@ -145,13 +163,60 @@ def get_active_client_categories():
     return ClientCategory.objects.filter(is_active=True).order_by("sort_order", "name")
 
 
-def get_client_categories_for_client(client=None):
+def get_client_categories_for_client(client=None, client_company=None):
     queryset = ClientCategory.objects.all()
-    if client and getattr(client, "client_category_id", None):
-        queryset = queryset.filter(Q(is_active=True) | Q(pk=client.client_category_id))
+    selected_category_id = None
+    if client_company and getattr(client_company, "client_category_id", None):
+        selected_category_id = client_company.client_category_id
+    elif client and getattr(client, "client_category_id", None):
+        selected_category_id = client.client_category_id
+    if selected_category_id:
+        queryset = queryset.filter(Q(is_active=True) | Q(pk=selected_category_id))
     else:
         queryset = queryset.filter(is_active=True)
     return queryset.order_by("sort_order", "name")
+
+
+def get_admin_selected_company(request):
+    company_id = request.POST.get("company_id") or request.GET.get("company_id") or request.GET.get("company")
+    if company_id:
+        if str(company_id).isdigit():
+            company = Company.objects.filter(pk=company_id, is_active=True).first()
+            if company and user_has_company_access(request.user, company):
+                set_active_company(request, company)
+                return company
+    return get_active_company(request)
+
+
+def get_admin_company_filter(request):
+    raw_company = request.GET.get("company_id") or request.GET.get("company") or request.POST.get("company_id")
+    if raw_company == "all":
+        return get_active_company(request)
+    if raw_company and str(raw_company).isdigit():
+        company = Company.objects.filter(pk=int(raw_company), is_active=True).first()
+        if company and user_has_company_access(request.user, company):
+            set_active_company(request, company)
+            return company
+    return get_active_company(request)
+
+
+def get_admin_company_required(request):
+    """
+    Return explicit company for export/import flows.
+    """
+    raw_company = request.GET.get("company_id") or request.GET.get("company") or request.POST.get("company_id")
+    if raw_company == "all":
+        return get_active_company(request)
+    if raw_company and str(raw_company).isdigit():
+        company = Company.objects.filter(pk=int(raw_company), is_active=True).first()
+        if company and user_has_company_access(request.user, company):
+            set_active_company(request, company)
+            return company
+        return None
+    active_company = get_active_company(request)
+    if active_company:
+        return active_company
+    return None
 
 
 def parse_optional_client_category(raw_value):
@@ -397,6 +462,7 @@ def collect_created_refs(import_type, row_results):
 @staff_member_required
 def dashboard(request):
     """Admin dashboard with key metrics."""
+    active_company = get_active_company(request)
     last_30_days = timezone.now() - timedelta(days=30)
     analytics_qs = CatalogAnalyticsEvent.objects.filter(created_at__gte=last_30_days)
 
@@ -422,43 +488,55 @@ def dashboard(request):
         .order_by("-total")[:5]
     )
 
-    recent_orders = list(
-        Order.objects.select_related('user').order_by('-created_at')[:5]
-    )
+    recent_orders_qs = Order.objects.select_related('user').order_by('-created_at')
+    if active_company:
+        recent_orders_qs = recent_orders_qs.filter(company=active_company)
+    recent_orders = list(recent_orders_qs[:5])
     today_start = timezone.localtime().replace(hour=0, minute=0, second=0, microsecond=0)
     orders_today_qs = Order.objects.filter(created_at__gte=today_start)
+    if active_company:
+        orders_today_qs = orders_today_qs.filter(company=active_company)
     orders_today_summary = orders_today_qs.aggregate(
         count=Count('id'),
         total=Sum('total'),
     )
 
-    active_clients_30d = set(
-        Order.objects.filter(
-            created_at__gte=last_30_days,
-            user_id__isnull=False,
-        ).values_list('user_id', flat=True)
+    active_clients_orders_qs = Order.objects.filter(
+        created_at__gte=last_30_days,
+        user_id__isnull=False,
     )
+    if active_company:
+        active_clients_orders_qs = active_clients_orders_qs.filter(company=active_company)
+    active_clients_30d = set(active_clients_orders_qs.values_list('user_id', flat=True))
+    active_clients_payments_qs = ClientPayment.objects.filter(
+        paid_at__gte=last_30_days,
+        is_cancelled=False,
+        client_profile__user_id__isnull=False,
+    )
+    if active_company:
+        active_clients_payments_qs = active_clients_payments_qs.filter(company=active_company)
     active_clients_30d.update(
-        ClientPayment.objects.filter(
-            paid_at__gte=last_30_days,
-            is_cancelled=False,
-            client_profile__user_id__isnull=False,
-        ).values_list('client_profile__user_id', flat=True)
+        active_clients_payments_qs.values_list('client_profile__user_id', flat=True)
     )
 
+    top_products_qs = OrderItem.objects.filter(order__created_at__gte=last_30_days)
+    if active_company:
+        top_products_qs = top_products_qs.filter(order__company=active_company)
     top_products_30d = (
-        OrderItem.objects.filter(order__created_at__gte=last_30_days)
-        .values('product_sku', 'product_name')
+        top_products_qs.values('product_sku', 'product_name')
         .annotate(total_qty=Sum('quantity'), total_amount=Sum('subtotal'))
         .order_by('-total_qty', '-total_amount')[:5]
     )
 
     # Delivery cycle estimation (hours) from status history.
-    delivered_candidates = (
+    delivered_candidates_qs = (
         Order.objects.filter(status=Order.STATUS_DELIVERED, created_at__gte=last_30_days)
         .prefetch_related('status_history')
-        .order_by('-created_at')[:120]
+        .order_by('-created_at')
     )
+    if active_company:
+        delivered_candidates_qs = delivered_candidates_qs.filter(company=active_company)
+    delivered_candidates = list(delivered_candidates_qs[:120])
     cycle_hours = []
     for order in delivered_candidates:
         history = list(order.status_history.all())
@@ -480,16 +558,22 @@ def dashboard(request):
     # Internal alerts.
     stale_days = int(getattr(settings, 'ALERT_PREPARING_STALE_DAYS', 3) or 3)
     stale_threshold = timezone.now() - timedelta(days=stale_days)
-    stale_preparing_orders = list(
+    stale_preparing_qs = (
         Order.objects.select_related('user')
         .filter(status=Order.STATUS_PREPARING, status_updated_at__lt=stale_threshold)
-        .order_by('status_updated_at')[:10]
+        .order_by('status_updated_at')
     )
+    if active_company:
+        stale_preparing_qs = stale_preparing_qs.filter(company=active_company)
+    stale_preparing_orders = list(stale_preparing_qs[:10])
 
     high_debt_threshold = Decimal(str(getattr(settings, 'ALERT_HIGH_DEBT_THRESHOLD', 500000)))
     high_debt_items = []
+    high_debt_qs = ClientTransaction.objects.values('client_profile_id')
+    if active_company:
+        high_debt_qs = high_debt_qs.filter(company=active_company)
     high_debt_raw = (
-        ClientTransaction.objects.values('client_profile_id')
+        high_debt_qs
         .annotate(balance=Coalesce(Sum('amount'), Value(Decimal('0.00'))))
         .filter(balance__gt=high_debt_threshold)
         .order_by('-balance')[:10]
@@ -2338,8 +2422,17 @@ def _parse_paid_at(raw_paid_at):
 @staff_member_required
 def payment_list(request):
     """Payments control panel with search and order assignment."""
+    companies = Company.objects.filter(is_active=True).order_by("name")
+    active_company = get_admin_company_filter(request)
+    selected_company_id = "all" if active_company is None else str(active_company.pk)
     if request.method == 'POST':
         action = request.POST.get('action', 'create').strip()
+        company_id_raw = request.POST.get("company_id", "").strip()
+        company_for_action = None
+        if company_id_raw and company_id_raw.isdigit():
+            company_for_action = Company.objects.filter(pk=int(company_id_raw), is_active=True).first()
+        if not company_for_action and active_company:
+            company_for_action = active_company
 
         if action == 'cancel':
             payment_id = request.POST.get('payment_id', '').strip()
@@ -2399,12 +2492,21 @@ def payment_list(request):
                 messages.error(request, str(exc))
                 return redirect('admin_payment_list')
 
-            tx = create_adjustment_transaction(
-                client_profile=client_profile,
-                amount=amount,
-                reason=notes or 'Ajuste manual de cuenta corriente',
-                actor=request.user,
-            )
+            if not company_for_action:
+                messages.error(request, 'Selecciona una empresa valida para registrar el ajuste.')
+                return redirect('admin_payment_list')
+
+            try:
+                tx = create_adjustment_transaction(
+                    client_profile=client_profile,
+                    amount=amount,
+                    reason=notes or 'Ajuste manual de cuenta corriente',
+                    actor=request.user,
+                    company=company_for_action,
+                )
+            except ValueError as exc:
+                messages.error(request, str(exc))
+                return redirect('admin_payment_list')
             log_admin_action(
                 request,
                 action='client_adjustment_create',
@@ -2435,6 +2537,9 @@ def payment_list(request):
             order = Order.objects.select_related('user').filter(pk=order_id).first()
             if not order:
                 messages.error(request, 'El pedido indicado no existe.')
+                return redirect('admin_payment_list')
+            if order.company_id and company_for_action and order.company_id != company_for_action.id:
+                messages.error(request, 'La empresa seleccionada no coincide con el pedido.')
                 return redirect('admin_payment_list')
 
         client_profile = None
@@ -2468,17 +2573,26 @@ def payment_list(request):
             if order:
                 locked_order = Order.objects.select_for_update().select_related('user').get(pk=order.pk)
                 order = locked_order
+                company_for_action = order.company
+            if not order and not company_for_action:
+                messages.error(request, 'Selecciona una empresa valida para el pago.')
+                return redirect('admin_payment_list')
 
-            payment = ClientPayment.objects.create(
-                client_profile=client_profile,
-                order=order,
-                amount=amount,
-                method=method,
-                paid_at=paid_at,
-                reference=reference,
-                notes=notes,
-                created_by=request.user if request.user.is_authenticated else None,
-            )
+            try:
+                payment = ClientPayment.objects.create(
+                    client_profile=client_profile,
+                    order=order,
+                    company=company_for_action,
+                    amount=amount,
+                    method=method,
+                    paid_at=paid_at,
+                    reference=reference,
+                    notes=notes,
+                    created_by=request.user if request.user.is_authenticated else None,
+                )
+            except ValidationError as exc:
+                messages.error(request, "; ".join(exc.messages))
+                return redirect('admin_payment_list')
 
         log_admin_change(
             request,
@@ -2528,9 +2642,13 @@ def payment_list(request):
     q = sanitize_search_token(request.GET.get('q', ''))
     client_id = request.GET.get('client_id', '').strip()
     order_id = request.GET.get('order_id', '').strip().replace('#', '')
+    sync_status = request.GET.get('sync_status', '').strip()
 
     if order_id.isdigit() and not client_id:
-        order_for_prefill = Order.objects.select_related('user').filter(pk=order_id).first()
+        order_for_prefill = Order.objects.select_related('user').filter(pk=order_id)
+        if active_company:
+            order_for_prefill = order_for_prefill.filter(company=active_company)
+        order_for_prefill = order_for_prefill.first()
         if order_for_prefill and order_for_prefill.user_id:
             profile = ClientProfile.objects.filter(user_id=order_for_prefill.user_id).first()
             if profile:
@@ -2542,11 +2660,15 @@ def payment_list(request):
         'order',
         'created_by',
     ).all()
+    if active_company:
+        payments = payments.filter(company=active_company)
 
     if client_id.isdigit():
         payments = payments.filter(client_profile_id=int(client_id))
     if order_id.isdigit():
         payments = payments.filter(order_id=int(order_id))
+    if sync_status:
+        payments = payments.filter(sync_status=sync_status)
     if q:
         parsed_q = normalize_admin_search_query(q)
         text_filtered = apply_parsed_text_search(
@@ -2558,6 +2680,8 @@ def payment_list(request):
                 "client_profile__cuit_dni",
                 "reference",
                 "notes",
+                "external_number",
+                "external_id",
             ],
             order_by_similarity=False,
         )
@@ -2586,8 +2710,26 @@ def payment_list(request):
     page = request.GET.get('page', 1)
     page_obj = paginator.get_page(page)
 
+    payment_docs = {}
+    payment_ids = [payment.pk for payment in page_obj]
+    if payment_ids:
+        for doc in InternalDocument.objects.filter(payment_id__in=payment_ids):
+            payment_docs.setdefault(doc.payment_id, []).append(doc)
+    for payment in page_obj:
+        payment.internal_documents = payment_docs.get(payment.pk, [])
+
     clients = ClientProfile.objects.select_related('user').order_by('company_name')
-    selected_order = Order.objects.select_related('user').filter(pk=order_id).first() if order_id.isdigit() else None
+    if active_company:
+        clients = clients.filter(
+            company_links__company=active_company,
+            company_links__is_active=True,
+        ).distinct()
+    selected_order = None
+    if order_id.isdigit():
+        selected_order_qs = Order.objects.select_related('user').filter(pk=order_id)
+        if active_company:
+            selected_order_qs = selected_order_qs.filter(company=active_company)
+        selected_order = selected_order_qs.first()
     selected_client = (
         ClientProfile.objects.select_related('user').filter(pk=client_id).first()
         if client_id.isdigit()
@@ -2598,9 +2740,9 @@ def payment_list(request):
     selected_client_id = str(selected_client.pk) if selected_client else client_id
     selected_client_metrics = None
     if selected_client:
-        orders_total = selected_client.get_total_orders_for_balance()
-        total_paid = selected_client.get_total_paid()
-        ledger_balance = selected_client.get_current_balance()
+        orders_total = selected_client.get_total_orders_for_balance(company=active_company)
+        total_paid = selected_client.get_total_paid(company=active_company)
+        ledger_balance = selected_client.get_current_balance(company=active_company)
         selected_client_metrics = {
             'orders_total': orders_total,
             'total_paid': total_paid,
@@ -2613,14 +2755,111 @@ def payment_list(request):
         'client_id': client_id,
         'selected_client_id': selected_client_id,
         'order_id': order_id,
+        'sync_status': sync_status,
         'clients': clients,
+        'companies': companies,
+        'selected_company_id': selected_company_id,
+        'active_company': active_company,
         'selected_client': selected_client,
         'selected_client_metrics': selected_client_metrics,
         'selected_order': selected_order,
         'payment_methods': ClientPayment.METHOD_CHOICES,
+        'sync_status_choices': ClientPayment.SYNC_STATUS_CHOICES,
         'summary_total': summary.get('total') or Decimal('0.00'),
         'summary_count': summary.get('count') or 0,
+        'payment_documents': payment_docs,
     })
+
+
+@staff_member_required
+def payment_export_saas(request):
+    company = get_admin_company_required(request)
+    if not company:
+        messages.error(request, 'Selecciona una empresa valida para exportar pagos.')
+        return redirect('admin_payment_list')
+
+    sync_status = request.GET.get('sync_status', '').strip()
+    payments = (
+        ClientPayment.objects.select_related('client_profile', 'order', 'company')
+        .filter(company=company, is_cancelled=False)
+    )
+    if sync_status and sync_status != "all":
+        payments = payments.filter(sync_status=sync_status)
+
+    if not payments.exists():
+        messages.info(request, 'No hay pagos para exportar con esos filtros.')
+        return redirect('admin_payment_list')
+
+    def _fmt_dt(value):
+        if not value:
+            return ""
+        return timezone.localtime(value).strftime("%Y-%m-%d %H:%M:%S")
+
+    file_stamp = timezone.localtime().strftime("%Y%m%d_%H%M")
+    company_slug = company.slug or slugify(company.name) or f"company{company.pk}"
+    filename = f"saas_pagos_{company_slug}_{file_stamp}.csv"
+
+    response = HttpResponse(content_type="text/csv")
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    writer = csv.writer(response)
+
+    writer.writerow([
+        "payment_id",
+        "paid_at",
+        "company_slug",
+        "company_cuit",
+        "client_id",
+        "client_company_name",
+        "client_cuit",
+        "order_id",
+        "amount",
+        "method",
+        "reference",
+        "notes",
+        "origin",
+        "external_system",
+        "external_id",
+        "external_number",
+        "sync_status",
+        "synced_at",
+    ])
+
+    rows_count = 0
+    for payment in payments:
+        writer.writerow([
+            payment.pk,
+            _fmt_dt(payment.paid_at),
+            company_slug,
+            company.cuit or "",
+            payment.client_profile_id,
+            payment.client_profile.company_name if payment.client_profile_id else "",
+            payment.client_profile.cuit_dni if payment.client_profile_id else "",
+            payment.order_id or "",
+            f"{payment.amount:.2f}",
+            payment.method,
+            payment.reference,
+            payment.notes,
+            payment.origin,
+            payment.external_system,
+            payment.external_id,
+            payment.external_number,
+            payment.sync_status,
+            _fmt_dt(payment.synced_at),
+        ])
+        rows_count += 1
+
+    log_admin_action(
+        request,
+        action="payment_export_saas",
+        target_type="client_payment",
+        target_id=0,
+        details={
+            "company_id": company.pk,
+            "rows": rows_count,
+            "sync_status": sync_status or "",
+        },
+    )
+    return response
 
 
 # ===================== CLAMP QUOTER =====================
@@ -3377,7 +3616,13 @@ def clamp_request_detail(request, pk):
 @staff_member_required
 def client_list(request):
     """Client list with search."""
+    active_company = get_active_company(request)
     clients = ClientProfile.objects.select_related('user', 'client_category').all()
+    if active_company:
+        clients = clients.filter(
+            company_links__company=active_company,
+            company_links__is_active=True,
+        ).distinct()
     
     clients, search = apply_admin_text_search(
         clients,
@@ -3674,6 +3919,24 @@ def client_category_delete(request, pk):
 def client_edit(request, pk):
     """Edit client profile."""
     client = get_object_or_404(ClientProfile, pk=pk)
+    active_company = get_admin_selected_company(request)
+    companies = Company.objects.filter(is_active=True).order_by("name")
+    client_company = None
+    if active_company:
+        client_company = (
+            ClientCompany.objects.select_related("company", "client_category")
+            .filter(client_profile=client, company=active_company)
+            .first()
+        )
+    effective_category = (
+        client_company.client_category
+        if client_company and client_company.client_category_id
+        else client.client_category
+    )
+    effective_category_id = effective_category.pk if effective_category else None
+    effective_discount = client.get_effective_discount_percentage(company=active_company)
+    company_is_active = client_company.is_active if client_company else bool(client.is_approved)
+    uses_legacy = client.uses_legacy_commercial_rules(active_company)
 
     if not can_edit_client_profile(request.user):
         messages.error(
@@ -3692,7 +3955,14 @@ def client_edit(request, pk):
                 'admin_panel/clients/form.html',
                 {
                     'client': client,
-                    'client_categories': get_client_categories_for_client(client),
+                    'client_categories': get_client_categories_for_client(client, client_company),
+                    'companies': companies,
+                    'active_company': active_company,
+                    'client_company': client_company,
+                    'effective_category_id': effective_category_id,
+                    'effective_discount': effective_discount,
+                    'company_is_active': company_is_active,
+                    'uses_legacy_rules': uses_legacy,
                 },
             )
 
@@ -3710,7 +3980,14 @@ def client_edit(request, pk):
                 'admin_panel/clients/form.html',
                 {
                     'client': client,
-                    'client_categories': get_client_categories_for_client(client),
+                    'client_categories': get_client_categories_for_client(client, client_company),
+                    'companies': companies,
+                    'active_company': active_company,
+                    'client_company': client_company,
+                    'effective_category_id': effective_category_id,
+                    'effective_discount': effective_discount,
+                    'company_is_active': company_is_active,
+                    'uses_legacy_rules': uses_legacy,
                 },
             )
 
@@ -3719,8 +3996,14 @@ def client_edit(request, pk):
             [
                 'company_name',
                 'cuit_dni',
+                'document_type',
+                'document_number',
                 'province',
+                'fiscal_province',
+                'fiscal_city',
                 'address',
+                'fiscal_address',
+                'postal_code',
                 'phone',
                 'discount',
                 'client_type',
@@ -3729,26 +4012,69 @@ def client_edit(request, pk):
             ],
         )
         client.company_name = request.POST.get('company_name', '').strip()
+        client.document_type = request.POST.get('document_type', '').strip()
+        client.document_number = request.POST.get('document_number', '').strip()
         client.cuit_dni = request.POST.get('cuit_dni', '').strip()
         client.province = request.POST.get('province', '').strip()
+        client.fiscal_province = request.POST.get('fiscal_province', '').strip()
+        client.fiscal_city = request.POST.get('fiscal_city', '').strip()
         client.address = request.POST.get('address', '').strip()
+        client.fiscal_address = request.POST.get('fiscal_address', '').strip()
+        client.postal_code = request.POST.get('postal_code', '').strip()
         client.phone = request.POST.get('phone', '').strip()
-        client.client_category = selected_category
-        client.discount = (
-            selected_category.discount_percentage
-            if selected_category
-            else discount_value
+        default_company = get_default_client_origin_company()
+        should_update_legacy = (
+            not active_company
+            or (default_company and active_company and default_company.id == active_company.id)
         )
+        if should_update_legacy:
+            client.client_category = selected_category
+            client.discount = (
+                selected_category.discount_percentage
+                if selected_category
+                else discount_value
+            )
         client.client_type = request.POST.get('client_type', '')
         client.iva_condition = request.POST.get('iva_condition', '')
         client.save()
+
+        if active_company:
+            link, _ = ClientCompany.objects.get_or_create(
+                client_profile=client,
+                company=active_company,
+                defaults={
+                    "is_active": bool(client.is_approved),
+                },
+            )
+            link.client_category = selected_category
+            link.discount_percentage = (
+                selected_category.discount_percentage
+                if selected_category
+                else discount_value
+            )
+            if "company_is_active" in request.POST:
+                link.is_active = str(request.POST.get("company_is_active", "")).lower() in {
+                    "1",
+                    "true",
+                    "on",
+                    "yes",
+                }
+            else:
+                link.is_active = bool(link.is_active)
+            link.save()
         after = model_snapshot(
             client,
             [
                 'company_name',
                 'cuit_dni',
+                'document_type',
+                'document_number',
                 'province',
+                'fiscal_province',
+                'fiscal_city',
                 'address',
+                'fiscal_address',
+                'postal_code',
                 'phone',
                 'discount',
                 'client_type',
@@ -3782,8 +4108,98 @@ def client_edit(request, pk):
         'admin_panel/clients/form.html',
         {
             'client': client,
-            'client_categories': get_client_categories_for_client(client),
+            'client_categories': get_client_categories_for_client(client, client_company),
+            'companies': companies,
+            'active_company': active_company,
+            'client_company': client_company,
+            'effective_category_id': effective_category_id,
+            'effective_discount': effective_discount,
+            'company_is_active': company_is_active,
+            'uses_legacy_rules': uses_legacy,
         },
+    )
+
+
+@staff_member_required
+@require_POST
+def client_quick_order(request, pk):
+    client = get_object_or_404(ClientProfile.objects.select_related('user'), pk=pk)
+    action = request.POST.get("action", "quote").strip().lower()
+    active_company = get_admin_selected_company(request)
+    if not active_company:
+        messages.error(request, "Selecciona una empresa valida para crear el documento.")
+        return redirect("admin_client_order_history", pk=client.pk)
+
+    client_company = client.get_company_link(active_company)
+    if not client_company:
+        messages.error(request, "El cliente no tiene relacion comercial activa con esta empresa.")
+        return redirect("admin_client_order_history", pk=client.pk)
+
+    try:
+        from core.services.pricing import (
+            resolve_pricing_context,
+            resolve_effective_discount_percentage,
+            resolve_effective_price_list,
+        )
+
+        _, _, client_category = resolve_pricing_context(client.user, active_company)
+        discount_percentage = resolve_effective_discount_percentage(
+            client_profile=client,
+            company=active_company,
+            client_company=client_company,
+            client_category=client_category,
+        )
+        price_list = resolve_effective_price_list(active_company, client_company, client_category)
+    except Exception:
+        discount_percentage = Decimal("0")
+        price_list = None
+
+    order = Order.objects.create(
+        user=client.user,
+        company=active_company,
+        status=Order.STATUS_DRAFT,
+        priority=Order.PRIORITY_NORMAL,
+        notes="",
+        admin_notes="Cotizacion creada desde ficha cliente." if action == "quote" else "Pedido creado desde ficha cliente.",
+        subtotal=Decimal("0.00"),
+        discount_percentage=discount_percentage,
+        discount_amount=Decimal("0.00"),
+        total=Decimal("0.00"),
+        client_company=client.company_name or "",
+        client_cuit=client.cuit_dni or "",
+        client_address=client.address or "",
+        client_phone=client.phone or "",
+        client_company_ref=client_company,
+        saas_document_type="",
+        saas_document_number="",
+        saas_document_cae="",
+        follow_up_note="",
+    )
+    OrderStatusHistory.objects.create(
+        order=order,
+        from_status="",
+        to_status=order.status,
+        changed_by=request.user if request.user.is_authenticated else None,
+        note="Documento creado desde ficha cliente",
+    )
+    if price_list:
+        order.admin_notes = f"{order.admin_notes} Lista: {price_list.name}"
+        order.save(update_fields=["admin_notes", "updated_at"])
+
+    messages.success(request, "Documento borrador creado. Ahora podes cargar productos.")
+    return redirect("admin_order_detail", pk=order.pk)
+
+
+@staff_member_required
+def client_cuit_lookup(request):
+    cuit = request.GET.get("cuit", "").strip()
+    if not cuit:
+        return JsonResponse({"ok": False, "message": "CUIT requerido."}, status=400)
+    return JsonResponse(
+        {
+            "ok": False,
+            "message": "Autocompletado fiscal no disponible. Integracion pendiente.",
+        }
     )
 
 
@@ -3791,6 +4207,36 @@ def client_edit(request, pk):
 def client_order_history(request, pk):
     """Show order history for one client profile."""
     client = get_object_or_404(ClientProfile.objects.select_related('user'), pk=pk)
+    companies = Company.objects.filter(is_active=True).order_by("name")
+    active_company = get_admin_company_filter(request)
+    selected_company_id = "all" if active_company is None else str(active_company.pk)
+    client_company = None
+    if active_company:
+        client_company = (
+            ClientCompany.objects.select_related("company", "client_category", "price_list")
+            .filter(client_profile=client, company=active_company)
+            .first()
+        )
+    client_company_missing = bool(active_company and not client_company)
+    effective_category = (
+        client_company.client_category
+        if client_company and client_company.client_category_id
+        else client.client_category
+    )
+    effective_discount = client.get_effective_discount_percentage(company=active_company)
+    try:
+        from core.services.pricing import resolve_pricing_context, resolve_effective_price_list
+
+        _, _, client_category = resolve_pricing_context(client.user, active_company)
+        effective_price_list = resolve_effective_price_list(active_company, client_company, client_category)
+    except Exception:
+        effective_price_list = None
+    sale_condition_label = "-"
+    if effective_category and getattr(effective_category, "default_sale_condition", None):
+        sale_condition_label = dict(ClientCategory.SALE_CONDITION_CHOICES).get(
+            effective_category.default_sale_condition,
+            effective_category.default_sale_condition,
+        )
 
     if client.user_id:
         orders = (
@@ -3800,6 +4246,8 @@ def client_order_history(request, pk):
         )
     else:
         orders = Order.objects.none()
+    if active_company:
+        orders = orders.filter(company=active_company)
 
     status = request.GET.get('status', '').strip()
     orders_filtered = orders
@@ -3812,8 +4260,11 @@ def client_order_history(request, pk):
         avg_ticket=Avg('total'),
         last_order_at=Max('created_at'),
     )
+    open_orders_count = orders.filter(
+        status__in=[Order.STATUS_DRAFT, Order.STATUS_CONFIRMED, Order.STATUS_PREPARING]
+    ).count()
 
-    balance_orders_qs = client.get_orders_queryset_for_balance()
+    balance_orders_qs = client.get_orders_queryset_for_balance(company=active_company)
     balance_orders_summary = balance_orders_qs.aggregate(
         orders_count=Count('id'),
         total_amount=Sum('total'),
@@ -3828,16 +4279,49 @@ def client_order_history(request, pk):
         client_profile=client,
         is_cancelled=False,
     )
+    if active_company:
+        payments_qs = payments_qs.filter(company=active_company)
     payments_summary = payments_qs.aggregate(
         total_paid=Sum('amount'),
         payments_count=Count('id'),
         last_payment_at=Max('paid_at'),
     )
 
+    documents_qs = InternalDocument.objects.filter(
+        Q(client_profile=client) | Q(client_company_ref__client_profile=client)
+    )
+    if active_company:
+        documents_qs = documents_qs.filter(company=active_company)
+    documents_qs = documents_qs.select_related("company").order_by("-issued_at")
+    documents_by_type = {
+        "COT": list(documents_qs.filter(doc_type="COT")[:10]),
+        "PED": list(documents_qs.filter(doc_type="PED")[:10]),
+        "REM": list(documents_qs.filter(doc_type="REM")[:10]),
+        "REC": list(documents_qs.filter(doc_type="REC")[:10]),
+        "AJU": list(documents_qs.filter(doc_type="AJU")[:10]),
+    }
+
+    official_docs_qs = Order.objects.filter(
+        user_id=client.user_id,
+    ).exclude(
+        saas_document_number=""
+    )
+    if active_company:
+        official_docs_qs = official_docs_qs.filter(company=active_company)
+    official_docs = list(
+        official_docs_qs.only(
+            "id",
+            "saas_document_type",
+            "saas_document_number",
+            "saas_document_date",
+            "total",
+        ).order_by("-created_at")[:10]
+    )
+
     ledger_rows = []
     running_balance = Decimal('0.00')
     ledger_qs = (
-        client.get_ledger_queryset()
+        client.get_ledger_queryset(company=active_company)
         .select_related('order', 'payment', 'created_by')
     )
     for tx in ledger_qs:
@@ -3951,6 +4435,9 @@ def client_order_history(request, pk):
         'can_manage_client_credentials': can_manage_client_credentials(request.user),
         'can_delete_client_record': can_delete_client_record(request.user),
         'status_choices': Order.STATUS_CHOICES,
+        'companies': companies,
+        'active_company': active_company,
+        'selected_company_id': selected_company_id,
         'summary': {
             'orders_count': summary.get('orders_count') or 0,
             'total_amount': summary.get('total_amount') or Decimal('0.00'),
@@ -3962,7 +4449,7 @@ def client_order_history(request, pk):
             'orders_total': balance_orders_summary.get('total_amount') or Decimal('0.00'),
             'last_order_at': balance_orders_summary.get('last_order_at'),
             'total_paid': payments_summary.get('total_paid') or Decimal('0.00'),
-            'current_balance': client.get_current_balance(),
+            'current_balance': client.get_current_balance(company=active_company),
         },
         'payments_recent': payments_qs.order_by('-paid_at')[:20],
         'payments_summary': {
@@ -3985,6 +4472,15 @@ def client_order_history(request, pk):
             {'key': 'quotes', 'label': 'Presupuestos'},
         ],
         'open_orders': open_orders,
+        'open_orders_count': open_orders_count,
+        'client_company': client_company,
+        'client_company_missing': client_company_missing,
+        'effective_category': effective_category,
+        'effective_discount': effective_discount,
+        'effective_price_list': effective_price_list,
+        'sale_condition_label': sale_condition_label,
+        'documents_by_type': documents_by_type,
+        'official_docs': official_docs,
     })
 
 
@@ -4214,7 +4710,7 @@ def request_approve(request, pk):
             )
 
             # Create client profile
-            ClientProfile.objects.create(
+            profile = ClientProfile.objects.create(
                 user=user,
                 company_name=account_request.company_name,
                 cuit_dni=account_request.cuit_dni,
@@ -4224,6 +4720,15 @@ def request_approve(request, pk):
                 discount=discount,
                 client_category=selected_category,
             )
+            default_company = get_default_client_origin_company()
+            if default_company:
+                ClientCompany.objects.create(
+                    client_profile=profile,
+                    company=default_company,
+                    client_category=selected_category,
+                    discount_percentage=discount,
+                    is_active=bool(profile.is_approved),
+                )
 
             # Update request
             account_request.status = 'approved'
@@ -4290,12 +4795,22 @@ def request_reject(request, pk):
 @staff_member_required
 def order_list(request):
     """Order list with filters."""
-    orders = Order.objects.select_related('user').all()
+    orders = Order.objects.select_related('user', 'company').all()
+    companies = Company.objects.filter(is_active=True).order_by("name")
+    active_company = get_admin_company_filter(request)
+    selected_company_id = "all" if active_company is None else str(active_company.pk)
+    if active_company:
+        orders = orders.filter(company=active_company)
     
     # Status filter
     status = request.GET.get('status', '')
     if status:
         orders = orders.filter(status=status)
+
+    # Sync status filter
+    sync_status = request.GET.get('sync_status', '').strip()
+    if sync_status:
+        orders = orders.filter(sync_status=sync_status)
     
     # Client filter
     client = request.GET.get('client', '')
@@ -4309,15 +4824,157 @@ def order_list(request):
     return render(request, 'admin_panel/orders/list.html', {
         'page_obj': page_obj,
         'status': status,
+        'sync_status': sync_status,
         'client': client,
         'status_choices': Order.STATUS_CHOICES,
+        'sync_status_choices': Order.SYNC_STATUS_CHOICES,
+        'companies': companies,
+        'selected_company_id': selected_company_id,
     })
+
+
+@staff_member_required
+def order_export_saas(request):
+    company = get_admin_company_required(request)
+    if not company:
+        messages.error(request, 'Selecciona una empresa valida para exportar pedidos.')
+        return redirect('admin_order_list')
+
+    status = request.GET.get('status', '').strip()
+    sync_status = request.GET.get('sync_status', '').strip()
+    orders = (
+        Order.objects.select_related('user', 'company', 'client_company_ref')
+        .prefetch_related('items')
+        .filter(company=company)
+    )
+    if status:
+        orders = orders.filter(status=status)
+    else:
+        orders = orders.filter(
+            status__in=[
+                Order.STATUS_CONFIRMED,
+                Order.STATUS_PREPARING,
+                Order.STATUS_SHIPPED,
+                Order.STATUS_DELIVERED,
+            ]
+        )
+    if sync_status and sync_status != "all":
+        orders = orders.filter(sync_status=sync_status)
+
+    if not orders.exists():
+        messages.info(request, 'No hay pedidos para exportar con esos filtros.')
+        return redirect('admin_order_list')
+
+    def _fmt_dt(value):
+        if not value:
+            return ""
+        return timezone.localtime(value).strftime("%Y-%m-%d %H:%M:%S")
+
+    file_stamp = timezone.localtime().strftime("%Y%m%d_%H%M")
+    company_slug = company.slug or slugify(company.name) or f"company{company.pk}"
+    filename = f"saas_pedidos_{company_slug}_{file_stamp}.csv"
+
+    response = HttpResponse(content_type="text/csv")
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    writer = csv.writer(response)
+
+    writer.writerow([
+        "order_id",
+        "status",
+        "created_at",
+        "company_slug",
+        "company_cuit",
+        "client_username",
+        "client_company_name",
+        "client_cuit",
+        "subtotal",
+        "discount_percentage",
+        "discount_amount",
+        "total",
+        "notes",
+        "admin_notes",
+        "external_system",
+        "external_id",
+        "external_number",
+        "sync_status",
+        "synced_at",
+        "items",
+    ])
+
+    rows_count = 0
+    for order in orders:
+        items_payload = []
+        for item in order.items.all():
+            items_payload.append({
+                "sku": item.product_sku,
+                "name": item.product_name,
+                "qty": item.quantity,
+                "unit_price_base": f"{item.unit_price_base:.2f}",
+                "discount_pct": f"{item.discount_percentage_used:.2f}",
+                "unit_price": f"{item.price_at_purchase:.2f}",
+                "subtotal": f"{item.subtotal:.2f}",
+            })
+
+        writer.writerow([
+            order.pk,
+            order.status,
+            _fmt_dt(order.created_at),
+            company_slug,
+            company.cuit or "",
+            order.user.username if order.user_id else "",
+            order.client_company or (order.user.username if order.user_id else ""),
+            order.client_cuit or "",
+            f"{order.subtotal:.2f}",
+            f"{order.discount_percentage:.2f}",
+            f"{order.discount_amount:.2f}",
+            f"{order.total:.2f}",
+            order.notes,
+            order.admin_notes,
+            order.external_system,
+            order.external_id,
+            order.external_number,
+            order.sync_status,
+            _fmt_dt(order.synced_at),
+            json.dumps(items_payload, ensure_ascii=False),
+        ])
+        rows_count += 1
+
+    log_admin_action(
+        request,
+        action="order_export_saas",
+        target_type="order",
+        target_id=0,
+        details={
+            "company_id": company.pk,
+            "rows": rows_count,
+            "status_filter": status or "confirmed+",
+            "sync_status": sync_status or "",
+        },
+    )
+    return response
 
 
 @staff_member_required
 def order_detail(request, pk):
     """Order detail and status management."""
-    order = get_object_or_404(Order.objects.prefetch_related('status_history__changed_by'), pk=pk)
+    active_company = get_active_company(request)
+    order = get_object_or_404(
+        Order.objects.select_related(
+            "company",
+            "client_company_ref",
+            "client_company_ref__client_profile",
+        ).prefetch_related("status_history__changed_by"),
+        pk=pk,
+    )
+    if active_company and order.company_id != active_company.id:
+        messages.error(request, "El pedido no pertenece a la empresa activa.")
+        return redirect('admin_order_list')
+    try:
+        from core.services.fiscal import is_invoice_ready
+
+        invoice_ready, invoice_errors = is_invoice_ready(order)
+    except Exception:
+        invoice_ready, invoice_errors = False, ["No se pudo validar estado fiscal."]
     order_items = list(
         order.items.select_related(
             'product',
@@ -4331,9 +4988,15 @@ def order_detail(request, pk):
     )
     for item in order_items:
         unit_discount_amount = Decimal('0.00')
-        if order_discount_percentage > 0:
+        item_discount_percentage = (
+            item.discount_percentage_used
+            if getattr(item, "discount_percentage_used", None) not in (None, 0)
+            else order_discount_percentage
+        )
+        base_price = item.unit_price_base if getattr(item, "unit_price_base", None) else item.price_at_purchase
+        if item_discount_percentage and item_discount_percentage > 0:
             unit_discount_amount = (
-                item.price_at_purchase * order_discount_percentage / Decimal('100')
+                base_price * item_discount_percentage / Decimal('100')
             ).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
         item.unit_discount_amount = unit_discount_amount
 
@@ -4352,6 +5015,44 @@ def order_detail(request, pk):
         if order.user_id
         else None
     )
+    pricing_snapshot = {}
+    product_suggestions = []
+    if order.user_id and order.company_id:
+        try:
+            from core.services.pricing import (
+                resolve_pricing_context,
+                resolve_effective_discount_percentage,
+                resolve_effective_price_list,
+            )
+
+            client_profile, client_company, client_category = resolve_pricing_context(order.user, order.company)
+            price_list = resolve_effective_price_list(order.company, client_company, client_category)
+            discount_percentage = resolve_effective_discount_percentage(
+                client_profile=client_profile,
+                company=order.company,
+                client_company=client_company,
+                client_category=client_category,
+            )
+            pricing_snapshot = {
+                "client_company": client_company,
+                "client_category": client_category,
+                "price_list": price_list,
+                "discount_percentage": discount_percentage,
+                "sale_condition": (
+                    dict(ClientCategory.SALE_CONDITION_CHOICES).get(
+                        client_category.default_sale_condition,
+                        client_category.default_sale_condition,
+                    )
+                    if client_category and client_category.default_sale_condition
+                    else "-"
+                ),
+            }
+        except Exception:
+            pricing_snapshot = {}
+    if order.is_mutable_for_items():
+        product_suggestions = list(
+            Product.objects.filter(is_active=True).only("sku", "name").order_by("name")[:60]
+        )
     
     if request.method == 'POST':
         new_status = request.POST.get('status', '')
@@ -4395,7 +5096,23 @@ def order_detail(request, pk):
                     messages.info(request, f'El pedido #{order.pk} ya estaba en ese estado.')
             except ValueError as exc:
                 messages.error(request, str(exc))
-    
+
+    fiscal_points = FiscalPointOfSale.objects.filter(
+        company=order.company,
+        is_active=True,
+    ).order_by("number")
+    fiscal_default_point = fiscal_points.filter(is_default=True).first() or fiscal_points.first()
+    order_fiscal_documents = (
+        FiscalDocument.objects.select_related(
+            "company",
+            "point_of_sale",
+            "client_company_ref__client_profile",
+            "order",
+        )
+        .filter(company=order.company, order=order)
+        .order_by("-created_at")
+    )
+
     return render(request, 'admin_panel/orders/detail.html', {
         'order': order,
         'order_items': order_items,
@@ -4405,7 +5122,460 @@ def order_detail(request, pk):
         'order_pending_amount': order.get_pending_amount(),
         'order_is_paid': order.is_paid(),
         'order_client_profile_id': order_client_profile.pk if order_client_profile else '',
+        'order_documents': InternalDocument.objects.filter(order=order).order_by('issued_at'),
+        'invoice_ready': invoice_ready,
+        'invoice_errors': invoice_errors,
+        'document_company': order.company,
+        'pricing_snapshot': pricing_snapshot,
+        'product_suggestions': product_suggestions,
+        'fiscal_doc_type_choices': [("FA", "Factura A"), ("FB", "Factura B")],
+        'fiscal_issue_mode_choices': [("manual", "Manual"), ("arca_wsfe", "ARCA WSFE")],
+        'fiscal_points': fiscal_points,
+        'fiscal_default_point': fiscal_default_point,
+        'order_fiscal_documents': order_fiscal_documents,
     })
+
+
+@staff_member_required
+@require_POST
+def order_fiscal_create_local(request, pk):
+    active_company = get_active_company(request)
+    if not active_company:
+        messages.error(request, "Selecciona una empresa activa para operar.")
+        return redirect("select_company")
+
+    order = get_object_or_404(
+        Order.objects.select_related("company", "client_company_ref", "client_company_ref__client_profile"),
+        pk=pk,
+    )
+    if order.company_id != active_company.id:
+        messages.error(request, "No podes crear comprobantes de otra empresa.")
+        return redirect("admin_order_list")
+
+    doc_type = str(request.POST.get("doc_type", "")).strip().upper()
+    issue_mode = str(request.POST.get("issue_mode", "manual")).strip()
+    point_id = str(request.POST.get("point_of_sale_id", "")).strip()
+    point_of_sale = None
+    if point_id.isdigit():
+        point_of_sale = FiscalPointOfSale.objects.filter(
+            pk=int(point_id),
+            company=active_company,
+        ).first()
+
+    try:
+        fiscal_doc, created = create_local_fiscal_document_from_order(
+            order=order,
+            company=active_company,
+            doc_type=doc_type,
+            point_of_sale=point_of_sale,
+            issue_mode=issue_mode,
+        )
+    except ValidationError as exc:
+        messages.error(request, "; ".join(exc.messages))
+        return redirect("admin_order_detail", pk=order.pk)
+
+    if created:
+        messages.success(
+            request,
+            f"Comprobante fiscal local creado ({fiscal_doc.doc_type}) para el pedido #{order.pk}.",
+        )
+    else:
+        messages.info(request, "El comprobante fiscal local ya existia y se reutilizo.")
+    return redirect("admin_fiscal_document_detail", pk=fiscal_doc.pk)
+
+
+@staff_member_required
+@require_POST
+def order_fiscal_register_external(request, pk):
+    active_company = get_active_company(request)
+    if not active_company:
+        messages.error(request, "Selecciona una empresa activa para operar.")
+        return redirect("select_company")
+
+    order = get_object_or_404(
+        Order.objects.select_related("company", "client_company_ref", "client_company_ref__client_profile"),
+        pk=pk,
+    )
+    if order.company_id != active_company.id:
+        messages.error(request, "No podes registrar comprobantes externos de otra empresa.")
+        return redirect("admin_order_list")
+
+    doc_type = str(request.POST.get("doc_type", "")).strip().upper()
+    point_id = str(request.POST.get("point_of_sale_id", "")).strip()
+    point_of_sale = None
+    if point_id.isdigit():
+        point_of_sale = FiscalPointOfSale.objects.filter(
+            pk=int(point_id),
+            company=active_company,
+        ).first()
+
+    external_system = str(request.POST.get("external_system", "saas")).strip().lower()
+    external_id = str(request.POST.get("external_id", "")).strip()
+    external_number = str(request.POST.get("external_number", "")).strip()
+
+    try:
+        fiscal_doc, created = register_external_fiscal_document_for_order(
+            order=order,
+            company=active_company,
+            doc_type=doc_type,
+            point_of_sale=point_of_sale,
+            external_system=external_system,
+            external_id=external_id,
+            external_number=external_number,
+        )
+    except ValidationError as exc:
+        messages.error(request, "; ".join(exc.messages))
+        return redirect("admin_order_detail", pk=order.pk)
+
+    if created:
+        messages.success(
+            request,
+            f"Comprobante externo registrado ({fiscal_doc.doc_type}) para el pedido #{order.pk}.",
+        )
+    else:
+        messages.info(request, "El comprobante externo ya existia y se reutilizo.")
+    return redirect("admin_fiscal_document_detail", pk=fiscal_doc.pk)
+
+
+@staff_member_required
+def fiscal_document_list(request):
+    active_company = get_active_company(request)
+    if not active_company:
+        messages.error(request, "Selecciona una empresa activa para operar.")
+        return redirect("select_company")
+
+    status = str(request.GET.get("status", "")).strip()
+    doc_type = str(request.GET.get("doc_type", "")).strip()
+    issue_mode = str(request.GET.get("issue_mode", "")).strip()
+    query = sanitize_search_token(request.GET.get("q", ""))
+
+    documents = (
+        FiscalDocument.objects.select_related(
+            "company",
+            "point_of_sale",
+            "client_company_ref__client_profile",
+            "order",
+        )
+        .filter(company=active_company)
+        .order_by("-created_at")
+    )
+    if status:
+        documents = documents.filter(status=status)
+    if doc_type:
+        documents = documents.filter(doc_type=doc_type)
+    if issue_mode:
+        documents = documents.filter(issue_mode=issue_mode)
+    if query:
+        search_filter = (
+            Q(source_key__icontains=query)
+            | Q(external_number__icontains=query)
+            | Q(external_id__icontains=query)
+            | Q(client_company_ref__client_profile__company_name__icontains=query)
+        )
+        if query.isdigit():
+            search_filter = search_filter | Q(order_id=int(query))
+        documents = documents.filter(search_filter)
+
+    paginator = Paginator(documents, 30)
+    page_obj = paginator.get_page(request.GET.get("page"))
+
+    return render(
+        request,
+        "admin_panel/fiscal/list.html",
+        {
+            "active_company": active_company,
+            "page_obj": page_obj,
+            "status": status,
+            "doc_type": doc_type,
+            "issue_mode": issue_mode,
+            "search": query,
+            "status_choices": FiscalDocument.STATUS_CHOICES,
+            "doc_type_choices": FiscalDocument.DOC_TYPE_CHOICES,
+            "issue_mode_choices": FiscalDocument.ISSUE_MODE_CHOICES,
+        },
+    )
+
+
+@staff_member_required
+def fiscal_document_detail(request, pk):
+    active_company = get_active_company(request)
+    if not active_company:
+        messages.error(request, "Selecciona una empresa activa para operar.")
+        return redirect("select_company")
+
+    fiscal_document = get_object_or_404(
+        FiscalDocument.objects.select_related(
+            "company",
+            "point_of_sale",
+            "client_company_ref__client_profile",
+            "client_profile",
+            "order",
+            "related_document",
+        ).prefetch_related("items__product"),
+        pk=pk,
+    )
+    if fiscal_document.company_id != active_company.id:
+        messages.error(request, "El comprobante fiscal no pertenece a la empresa activa.")
+        return redirect("admin_fiscal_document_list")
+
+    can_emit = (
+        fiscal_document.issue_mode == "arca_wsfe"
+        and fiscal_document.doc_type in {"FA", "FB"}
+        and fiscal_document.status in {"ready_to_issue", "pending_retry", "rejected"}
+    )
+
+    return render(
+        request,
+        "admin_panel/fiscal/detail.html",
+        {
+            "active_company": active_company,
+            "fiscal_document": fiscal_document,
+            "items": fiscal_document.items.all().order_by("line_number"),
+            "attempts": fiscal_document.emission_attempts.select_related("triggered_by").all()[:20],
+            "can_emit": can_emit,
+        },
+    )
+
+
+@staff_member_required
+@require_POST
+def fiscal_document_emit(request, pk):
+    active_company = get_active_company(request)
+    if not active_company:
+        messages.error(request, "Selecciona una empresa activa para operar.")
+        return redirect("select_company")
+
+    fiscal_document = get_object_or_404(
+        FiscalDocument.objects.select_related(
+            "company",
+            "point_of_sale",
+            "client_company_ref",
+            "client_profile",
+            "order",
+        ),
+        pk=pk,
+    )
+    if fiscal_document.company_id != active_company.id:
+        messages.error(request, "No podes emitir comprobantes de otra empresa.")
+        return redirect("admin_fiscal_document_list")
+
+    try:
+        outcome = emit_fiscal_document_now(
+            fiscal_document=fiscal_document,
+            actor=request.user,
+        )
+    except ValidationError as exc:
+        messages.error(request, "; ".join(exc.messages))
+        return redirect("admin_fiscal_document_detail", pk=fiscal_document.pk)
+    except Exception as exc:
+        messages.error(request, f"Fallo inesperado al emitir: {exc}")
+        return redirect("admin_fiscal_document_detail", pk=fiscal_document.pk)
+
+    if outcome.state == "authorized":
+        messages.success(
+            request,
+            f"Comprobante autorizado. CAE: {outcome.document.cae or '-'}",
+        )
+    elif outcome.state == "pending_retry":
+        messages.warning(request, outcome.message)
+    elif outcome.state == "rejected":
+        messages.error(request, outcome.message)
+    else:
+        messages.info(request, outcome.message)
+
+    return redirect("admin_fiscal_document_detail", pk=fiscal_document.pk)
+
+
+@staff_member_required
+def fiscal_document_print(request, pk):
+    active_company = get_active_company(request)
+    if not active_company:
+        messages.error(request, "Selecciona una empresa activa para operar.")
+        return redirect("select_company")
+
+    fiscal_document = get_object_or_404(
+        FiscalDocument.objects.select_related(
+            "company",
+            "point_of_sale",
+            "client_company_ref__client_profile",
+            "client_profile",
+            "order",
+        ).prefetch_related("items__product"),
+        pk=pk,
+    )
+    if fiscal_document.company_id != active_company.id:
+        messages.error(request, "El comprobante fiscal no pertenece a la empresa activa.")
+        return redirect("admin_fiscal_document_list")
+
+    copy_type = str(request.GET.get("copy", "original")).strip().lower()
+    if copy_type not in {"original", "duplicado", "triplicado"}:
+        copy_type = "original"
+
+    return render(
+        request,
+        "admin_panel/fiscal/print.html",
+        {
+            "fiscal_document": fiscal_document,
+            "items": fiscal_document.items.all().order_by("line_number"),
+            "copy_type": copy_type,
+        },
+    )
+
+
+@staff_member_required
+@require_POST
+def order_item_add(request, pk):
+    order = get_object_or_404(Order.objects.select_related('company', 'user'), pk=pk)
+    if not order.is_mutable_for_items():
+        messages.error(request, "Solo podes editar items en pedidos borrador.")
+        return redirect("admin_order_detail", pk=order.pk)
+
+    sku = request.POST.get("sku", "").strip()
+    product_id = request.POST.get("product_id", "").strip()
+    qty_raw = request.POST.get("quantity", "1").strip()
+    try:
+        quantity = int(qty_raw)
+    except ValueError:
+        quantity = 0
+    if quantity <= 0:
+        messages.error(request, "Cantidad invalida.")
+        return redirect("admin_order_detail", pk=order.pk)
+
+    product = None
+    if product_id.isdigit():
+        product = Product.objects.filter(pk=int(product_id)).first()
+    if not product and sku:
+        product = Product.objects.filter(sku__iexact=sku).first()
+    if not product:
+        messages.error(request, "Producto no encontrado.")
+        return redirect("admin_order_detail", pk=order.pk)
+
+    try:
+        from core.services.pricing import (
+            resolve_pricing_context,
+            resolve_effective_discount_percentage,
+            resolve_effective_price_list,
+            get_product_pricing,
+        )
+
+        client_profile, client_company, client_category = resolve_pricing_context(order.user, order.company)
+        discount_percentage = resolve_effective_discount_percentage(
+            client_profile=client_profile,
+            company=order.company,
+            client_company=client_company,
+            client_category=client_category,
+        )
+        price_list = resolve_effective_price_list(order.company, client_company, client_category)
+        pricing = get_product_pricing(
+            product,
+            user=order.user,
+            company=order.company,
+            price_list=price_list,
+            context=(client_profile, client_company, client_category),
+        )
+    except Exception:
+        discount_percentage = Decimal("0")
+        price_list = None
+        pricing = None
+
+    unit_price_base = pricing.base_price if pricing else product.price
+    final_price = pricing.final_price if pricing else product.price
+    discount_used = pricing.discount_percentage if pricing else discount_percentage
+    OrderItem.objects.create(
+        order=order,
+        product=product,
+        clamp_request=None,
+        product_sku=product.sku,
+        product_name=product.name,
+        quantity=quantity,
+        price_at_purchase=final_price,
+        unit_price_base=unit_price_base,
+        discount_percentage_used=discount_used,
+        price_list=price_list,
+    )
+
+    items = list(order.items.all())
+    subtotal = sum((item.unit_price_base or Decimal("0")) * item.quantity for item in items)
+    discount_amount = (subtotal * (Decimal(discount_used) / Decimal("100"))).quantize(Decimal("0.01"))
+    total = (subtotal - discount_amount).quantize(Decimal("0.01"))
+    order.subtotal = subtotal
+    order.discount_percentage = discount_used
+    order.discount_amount = discount_amount
+    order.total = total
+    order.save(update_fields=["subtotal", "discount_percentage", "discount_amount", "total", "updated_at"])
+
+    messages.success(request, "Item agregado al documento.")
+    return redirect("admin_order_detail", pk=order.pk)
+
+
+@staff_member_required
+@require_POST
+def order_item_delete(request, pk, item_id):
+    order = get_object_or_404(Order.objects.select_related('company', 'user'), pk=pk)
+    if not order.is_mutable_for_items():
+        messages.error(request, "Solo podes eliminar items en pedidos borrador.")
+        return redirect("admin_order_detail", pk=order.pk)
+
+    order_item = get_object_or_404(OrderItem, pk=item_id, order=order)
+    try:
+        order_item.delete()
+    except ValidationError as exc:
+        messages.error(request, "; ".join(exc.messages))
+        return redirect("admin_order_detail", pk=order.pk)
+
+    items = list(order.items.all())
+    subtotal = sum((item.unit_price_base or Decimal("0")) * item.quantity for item in items)
+    discount_percentage = order.discount_percentage or Decimal("0")
+    discount_amount = (subtotal * (Decimal(discount_percentage) / Decimal("100"))).quantize(Decimal("0.01"))
+    total = (subtotal - discount_amount).quantize(Decimal("0.01"))
+    order.subtotal = subtotal
+    order.discount_amount = discount_amount
+    order.total = total
+    order.save(update_fields=["subtotal", "discount_amount", "total", "updated_at"])
+
+    messages.success(request, "Item eliminado.")
+    return redirect("admin_order_detail", pk=order.pk)
+
+
+@staff_member_required
+def internal_document_print(request, doc_id):
+    document = get_object_or_404(
+        InternalDocument.objects.select_related(
+            "company",
+            "client_company_ref__client_profile",
+            "client_profile",
+            "order",
+            "payment",
+            "transaction",
+        ),
+        pk=doc_id,
+    )
+    copy_key = request.GET.get("copy", "original").strip().lower()
+    copy_labels = {
+        "original": "ORIGINAL",
+        "duplicado": "DUPLICADO",
+        "triplicado": "TRIPLICADO",
+    }
+    copy_label = copy_labels.get(copy_key, "ORIGINAL")
+    order_items = []
+    if document.order_id:
+        order_items = list(
+            document.order.items.select_related("product").all()
+        )
+
+    response = render(
+        request,
+        "admin_panel/documents/print.html",
+        {
+            "document": document,
+            "copy_label": copy_label,
+            "order_items": order_items,
+        },
+    )
+    if request.GET.get("download") == "1":
+        filename = f"{document.doc_type}_{document.number:07d}.html"
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    return response
 
 
 @staff_member_required
@@ -4538,6 +5708,353 @@ def order_delete(request, pk):
 
 
 # ===================== SETTINGS =====================
+
+@user_passes_test(is_primary_superadmin)
+def company_list(request):
+    """List and access company configuration."""
+    companies = Company.objects.order_by("name")
+    active_company = get_active_company(request)
+    return render(
+        request,
+        "admin_panel/companies/list.html",
+        {
+            "companies": companies,
+            "active_company": active_company,
+        },
+    )
+
+
+@user_passes_test(is_primary_superadmin)
+def company_edit(request, pk):
+    """Edit company/legal entity details."""
+    company = get_object_or_404(Company, pk=pk)
+    active_company = get_active_company(request)
+    price_lists = PriceList.objects.filter(company=company).order_by("name")
+    if request.method == "POST":
+        was_active = company.is_active
+        before = model_snapshot(
+            company,
+            [
+                "name",
+                "legal_name",
+                "email",
+                "cuit",
+                "tax_condition",
+                "fiscal_address",
+                "fiscal_city",
+                "fiscal_province",
+                "postal_code",
+                "point_of_sale_default",
+                "default_price_list_id",
+                "is_active",
+            ],
+        )
+        company.name = request.POST.get("name", "").strip()
+        company.legal_name = request.POST.get("legal_name", "").strip()
+        company.email = request.POST.get("email", "").strip()
+        company.cuit = request.POST.get("cuit", "").strip()
+        company.tax_condition = request.POST.get("tax_condition", "").strip()
+        company.fiscal_address = request.POST.get("fiscal_address", "").strip()
+        company.fiscal_city = request.POST.get("fiscal_city", "").strip()
+        company.fiscal_province = request.POST.get("fiscal_province", "").strip()
+        company.postal_code = request.POST.get("postal_code", "").strip()
+        company.point_of_sale_default = request.POST.get("point_of_sale_default", "").strip()
+        default_price_list_id = str(request.POST.get("default_price_list", "")).strip()
+        if default_price_list_id:
+            selected_price_list = price_lists.filter(pk=default_price_list_id).first()
+            company.default_price_list = selected_price_list
+        else:
+            company.default_price_list = None
+        if "is_active" in request.POST:
+            company.is_active = str(request.POST.get("is_active", "")).lower() in {"1", "true", "on"}
+
+        if not company.name:
+            messages.error(request, "El nombre es obligatorio.")
+        else:
+            if was_active and not company.is_active:
+                has_other_active = Company.objects.filter(is_active=True).exclude(pk=company.pk).exists()
+                if not has_other_active:
+                    messages.error(
+                        request,
+                        "No podes desactivar la unica empresa activa del sistema.",
+                    )
+                    company.is_active = True
+                    return render(
+                        request,
+                        "admin_panel/companies/edit.html",
+                        {
+                            "company": company,
+                            "active_company": active_company,
+                            "tax_condition_choices": Company.TAX_CONDITION_CHOICES,
+                            "price_lists": price_lists,
+                        },
+                    )
+            company.save()
+            log_admin_change(
+                request,
+                action="company_update",
+                target_type="company",
+                target_id=company.pk,
+                before=before,
+                after=model_snapshot(
+                    company,
+                    [
+                        "name",
+                        "legal_name",
+                        "email",
+                        "cuit",
+                        "tax_condition",
+                        "fiscal_address",
+                        "fiscal_city",
+                        "fiscal_province",
+                        "postal_code",
+                        "point_of_sale_default",
+                        "default_price_list_id",
+                        "is_active",
+                    ],
+                ),
+            )
+            messages.success(request, "Empresa actualizada.")
+            return redirect("admin_company_list")
+
+    return render(
+        request,
+        "admin_panel/companies/edit.html",
+        {
+            "company": company,
+            "active_company": active_company,
+            "tax_condition_choices": Company.TAX_CONDITION_CHOICES,
+            "price_lists": price_lists,
+        },
+    )
+
+
+def _sync_company_default_pos(company, point_of_sale):
+    if not company or not point_of_sale:
+        return
+    if company.point_of_sale_default != point_of_sale.number:
+        company.point_of_sale_default = point_of_sale.number
+        company.save(update_fields=["point_of_sale_default", "updated_at"])
+
+
+def _get_fiscal_active_company(request):
+    active_company = get_active_company(request)
+    if not active_company:
+        messages.error(request, "Selecciona una empresa activa para configurar factura electronica.")
+        return None
+    return active_company
+
+
+@user_passes_test(is_primary_superadmin)
+def fiscal_config(request):
+    """Fiscal configuration dashboard scoped to active company."""
+    active_company = _get_fiscal_active_company(request)
+    if not active_company:
+        return redirect("select_company")
+
+    points = FiscalPointOfSale.objects.filter(company=active_company).order_by("number")
+    is_ready, readiness_errors = is_company_fiscal_ready(active_company)
+    default_point = points.filter(is_default=True).first()
+    active_points_count = points.filter(is_active=True).count()
+
+    return render(
+        request,
+        "admin_panel/fiscal/config.html",
+        {
+            "active_company": active_company,
+            "points": points,
+            "is_ready": is_ready,
+            "readiness_errors": readiness_errors,
+            "default_point": default_point,
+            "active_points_count": active_points_count,
+            "environment_choices": FiscalPointOfSale.ENV_CHOICES,
+        },
+    )
+
+
+@user_passes_test(is_primary_superadmin)
+def fiscal_point_create(request):
+    """Create fiscal point of sale for active company."""
+    active_company = _get_fiscal_active_company(request)
+    if not active_company:
+        return redirect("select_company")
+
+    if request.method == "POST":
+        number = str(request.POST.get("number", "")).strip()
+        name = str(request.POST.get("name", "")).strip()
+        environment = str(request.POST.get("environment", FiscalPointOfSale.ENV_HOMOLOGATION)).strip()
+        is_active = request.POST.get("is_active") == "on"
+        is_default = request.POST.get("is_default") == "on"
+
+        if not number:
+            messages.error(request, "El numero de punto de venta es obligatorio.")
+        elif environment not in dict(FiscalPointOfSale.ENV_CHOICES):
+            messages.error(request, "Entorno invalido.")
+        elif FiscalPointOfSale.objects.filter(company=active_company, number=number).exists():
+            messages.error(request, f"Ya existe un punto de venta {number} para esta empresa.")
+        else:
+            pos = FiscalPointOfSale.objects.create(
+                company=active_company,
+                number=number,
+                name=name or f"PV {number}",
+                environment=environment,
+                is_active=True if is_default else is_active,
+                is_default=is_default,
+                notes=str(request.POST.get("notes", "")).strip(),
+            )
+            if pos.is_default:
+                _sync_company_default_pos(active_company, pos)
+            log_admin_action(
+                request,
+                action="fiscal_pos_create",
+                target_type="fiscal_point_of_sale",
+                target_id=pos.pk,
+                details={
+                    "company_id": active_company.pk,
+                    "number": pos.number,
+                    "environment": pos.environment,
+                    "is_active": pos.is_active,
+                    "is_default": pos.is_default,
+                },
+            )
+            messages.success(request, f"Punto de venta {pos.number} creado.")
+            return redirect("admin_fiscal_config")
+
+    return render(
+        request,
+        "admin_panel/fiscal/pos_form.html",
+        {
+            "active_company": active_company,
+            "point": None,
+            "environment_choices": FiscalPointOfSale.ENV_CHOICES,
+            "form_mode": "create",
+        },
+    )
+
+
+@user_passes_test(is_primary_superadmin)
+def fiscal_point_edit(request, pk):
+    """Edit fiscal point of sale for active company."""
+    active_company = _get_fiscal_active_company(request)
+    if not active_company:
+        return redirect("select_company")
+    point = get_object_or_404(FiscalPointOfSale, pk=pk, company=active_company)
+
+    if request.method == "POST":
+        before = model_snapshot(point, ["number", "name", "environment", "is_active", "is_default", "notes"])
+        number = str(request.POST.get("number", "")).strip()
+        name = str(request.POST.get("name", "")).strip()
+        environment = str(request.POST.get("environment", FiscalPointOfSale.ENV_HOMOLOGATION)).strip()
+        is_active = request.POST.get("is_active") == "on"
+        is_default = request.POST.get("is_default") == "on"
+
+        if not number:
+            messages.error(request, "El numero de punto de venta es obligatorio.")
+        elif environment not in dict(FiscalPointOfSale.ENV_CHOICES):
+            messages.error(request, "Entorno invalido.")
+        elif (
+            FiscalPointOfSale.objects.filter(company=active_company, number=number)
+            .exclude(pk=point.pk)
+            .exists()
+        ):
+            messages.error(request, f"Ya existe un punto de venta {number} para esta empresa.")
+        else:
+            point.number = number
+            point.name = name or f"PV {number}"
+            point.environment = environment
+            point.is_default = is_default
+            point.is_active = True if is_default else is_active
+            point.notes = str(request.POST.get("notes", "")).strip()
+            point.save()
+            if point.is_default:
+                _sync_company_default_pos(active_company, point)
+            log_admin_change(
+                request,
+                action="fiscal_pos_update",
+                target_type="fiscal_point_of_sale",
+                target_id=point.pk,
+                before=before,
+                after=model_snapshot(point, ["number", "name", "environment", "is_active", "is_default", "notes"]),
+            )
+            messages.success(request, f"Punto de venta {point.number} actualizado.")
+            return redirect("admin_fiscal_config")
+
+    return render(
+        request,
+        "admin_panel/fiscal/pos_form.html",
+        {
+            "active_company": active_company,
+            "point": point,
+            "environment_choices": FiscalPointOfSale.ENV_CHOICES,
+            "form_mode": "edit",
+        },
+    )
+
+
+@user_passes_test(is_primary_superadmin)
+@require_POST
+def fiscal_point_toggle_active(request, pk):
+    active_company = _get_fiscal_active_company(request)
+    if not active_company:
+        return redirect("select_company")
+    point = get_object_or_404(FiscalPointOfSale, pk=pk, company=active_company)
+    before = model_snapshot(point, ["is_active", "is_default"])
+
+    point.is_active = not point.is_active
+    if not point.is_active and point.is_default:
+        point.is_default = False
+    point.save(update_fields=["is_active", "is_default", "updated_at"])
+
+    if not point.is_active and active_company.point_of_sale_default == point.number:
+        replacement = (
+            FiscalPointOfSale.objects.filter(company=active_company, is_active=True)
+            .exclude(pk=point.pk)
+            .order_by("number")
+            .first()
+        )
+        if replacement:
+            replacement.is_default = True
+            replacement.save(update_fields=["is_default", "updated_at"])
+            _sync_company_default_pos(active_company, replacement)
+
+    log_admin_change(
+        request,
+        action="fiscal_pos_toggle_active",
+        target_type="fiscal_point_of_sale",
+        target_id=point.pk,
+        before=before,
+        after=model_snapshot(point, ["is_active", "is_default"]),
+    )
+    state_text = "activo" if point.is_active else "inactivo"
+    messages.success(request, f"Punto de venta {point.number} marcado como {state_text}.")
+    return redirect("admin_fiscal_config")
+
+
+@user_passes_test(is_primary_superadmin)
+@require_POST
+def fiscal_point_set_default(request, pk):
+    active_company = _get_fiscal_active_company(request)
+    if not active_company:
+        return redirect("select_company")
+    point = get_object_or_404(FiscalPointOfSale, pk=pk, company=active_company)
+    before = model_snapshot(point, ["is_active", "is_default"])
+
+    point.is_active = True
+    point.is_default = True
+    point.save(update_fields=["is_active", "is_default", "updated_at"])
+    _sync_company_default_pos(active_company, point)
+
+    log_admin_change(
+        request,
+        action="fiscal_pos_set_default",
+        target_type="fiscal_point_of_sale",
+        target_id=point.pk,
+        before=before,
+        after=model_snapshot(point, ["is_active", "is_default"]),
+    )
+    messages.success(request, f"Punto de venta {point.number} configurado como default.")
+    return redirect("admin_fiscal_config")
+
 
 @user_passes_test(is_primary_superadmin)
 def settings_view(request):
@@ -5576,17 +7093,25 @@ def import_status(request, task_id):
 @user_passes_test(is_primary_superadmin)
 def import_dashboard(request):
     """Import dashboard / hub."""
-    executions = ImportExecution.objects.select_related('user').order_by('-created_at')[:40]
+    active_company = get_active_company(request)
+    executions = ImportExecution.objects.select_related('user').order_by('-created_at')
+    if active_company:
+        executions = executions.filter(company=active_company)
+    executions = executions[:40]
     return render(
         request,
         'admin_panel/importers/dashboard.html',
-        {'executions': executions},
+        {'executions': executions, 'active_company': active_company},
     )
 
 
 @user_passes_test(is_primary_superadmin)
 def import_process(request, import_type):
     """Handle file upload and processing for imports."""
+    active_company = get_active_company(request)
+    if not active_company:
+        messages.error(request, "Selecciona una empresa activa antes de importar.")
+        return redirect('select_company')
     if import_type == 'products':
         FormClass = ProductImportForm
         ImporterClass = ProductImporter
@@ -5660,6 +7185,7 @@ def import_process(request, import_type):
                 task_id = ImportTaskManager.start_task()
                 execution = ImportExecution.objects.create(
                     user=request.user if request.user.is_authenticated else None,
+                    company=active_company,
                     import_type=import_type,
                     file_name=file_basename,
                     dry_run=dry_run,

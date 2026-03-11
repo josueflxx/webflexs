@@ -23,6 +23,7 @@
             <h4>Informacion</h4>
             <p>
                 <strong>Fecha:</strong> {{ order.created_at|date:"d/m/Y H:i" }}<br>
+                <strong>Empresa:</strong> {{ order.company.name|default:"-" }}<br>
                 <strong>Ultimo estado:</strong> {{ order.status_updated_at|date:"d/m/Y H:i" }}<br>
                 <strong>Subtotal:</strong> ${{ order.subtotal|floatformat:2 }}<br>
                 {% if order.discount_percentage %}
@@ -37,14 +38,191 @@
                 <span class="badge badge-success">$0.00</span>
                 {% endif %}
                 <br>
+                <div style="margin-top:10px;">
+                    <strong>Sync SaaS:</strong>
+                    {% if order.sync_status == 'synced' %}
+                    <span class="badge badge-success">Sincronizado</span>
+                    {% elif order.sync_status == 'failed' %}
+                    <span class="badge badge-danger">Fallido</span>
+                    {% else %}
+                    <span class="badge badge-warning">Pendiente</span>
+                    {% endif %}
+                    <br>
+                    <small class="text-muted">
+                        Sistema: {{ order.external_system|default:"-" }} |
+                        Ext: {{ order.external_number|default:"-" }} |
+                        ID: {{ order.external_id|default:"-" }} |
+                        Sync: {{ order.synced_at|date:"d/m/Y H:i"|default:"-" }}
+                    </small>
+                </div>
+                <div style="margin-top:10px;">
+                    <strong>Estado fiscal (pre-ARCA):</strong>
+                    {% if invoice_ready %}
+                    <span class="badge badge-success">Listo para facturar</span>
+                    {% else %}
+                    <span class="badge badge-warning">No listo</span>
+                    {% endif %}
+                    {% if not invoice_ready and invoice_errors %}
+                    <ul style="margin:6px 0 0;padding-left:18px;">
+                        {% for error in invoice_errors %}
+                        <li class="text-muted">{{ error }}</li>
+                        {% endfor %}
+                    </ul>
+                    {% endif %}
+                </div>
+                <div style="margin-top:12px; border-top:1px dashed rgba(255,255,255,.2); padding-top:10px;">
+                    <strong>Flujo fiscal local (Fase 3)</strong><br>
+                    <small class="text-muted">Empresa activa: {{ order.company.name|default:"-" }}</small>
+                    <div style="display:grid; gap:10px; margin-top:10px;">
+                        <form method="post" action="{% url 'admin_order_fiscal_create_local' order.pk %}" style="display:grid; grid-template-columns: 1fr 1fr 1fr auto; gap:8px; align-items:end;">
+                            {% csrf_token %}
+                            <div>
+                                <label class="form-label">Tipo</label>
+                                <select name="doc_type" class="form-select">
+                                    {% for value, label in fiscal_doc_type_choices %}
+                                    <option value="{{ value }}">{{ label }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div>
+                                <label class="form-label">Punto de venta</label>
+                                <select name="point_of_sale_id" class="form-select" required>
+                                    <option value="">Seleccionar</option>
+                                    {% for point in fiscal_points %}
+                                    <option value="{{ point.pk }}" {% if fiscal_default_point and fiscal_default_point.pk == point.pk %}selected{% endif %}>
+                                        {{ point.number }} - {{ point.name|default:"PV" }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div>
+                                <label class="form-label">Modo</label>
+                                <select name="issue_mode" class="form-select">
+                                    {% for value, label in fiscal_issue_mode_choices %}
+                                    <option value="{{ value }}">{{ label }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <button type="submit" class="btn btn-primary" {% if not invoice_ready or not fiscal_points %}disabled{% endif %}>Crear local</button>
+                        </form>
+
+                        <form method="post" action="{% url 'admin_order_fiscal_register_external' order.pk %}" style="display:grid; grid-template-columns: 1fr 1fr 1fr 1fr auto; gap:8px; align-items:end;">
+                            {% csrf_token %}
+                            <input type="hidden" name="external_system" value="saas">
+                            <div>
+                                <label class="form-label">Tipo</label>
+                                <select name="doc_type" class="form-select">
+                                    {% for value, label in fiscal_doc_type_choices %}
+                                    <option value="{{ value }}">{{ label }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div>
+                                <label class="form-label">Punto de venta</label>
+                                <select name="point_of_sale_id" class="form-select" required>
+                                    <option value="">Seleccionar</option>
+                                    {% for point in fiscal_points %}
+                                    <option value="{{ point.pk }}" {% if fiscal_default_point and fiscal_default_point.pk == point.pk %}selected{% endif %}>
+                                        {{ point.number }} - {{ point.name|default:"PV" }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div>
+                                <label class="form-label">ID externo</label>
+                                <input type="text" name="external_id" class="form-input" placeholder="ID SaaS">
+                            </div>
+                            <div>
+                                <label class="form-label">Numero externo</label>
+                                <input type="text" name="external_number" class="form-input" placeholder="0001-00001234">
+                            </div>
+                            <button type="submit" class="btn btn-outline" {% if not fiscal_points %}disabled{% endif %}>Registrar externo</button>
+                        </form>
+                    </div>
+                    {% if not fiscal_points %}
+                    <small class="text-muted" style="display:block; margin-top:8px;">
+                        No hay puntos de venta activos para esta empresa. Configuralos en Factura electronica.
+                    </small>
+                    {% endif %}
+                    <div style="margin-top:8px;">
+                        <a href="{% url 'admin_fiscal_document_list' %}" class="btn btn-outline btn-sm">Ver comprobantes fiscales</a>
+                    </div>
+                </div>
+                {% if order.saas_document_number or order.saas_document_type %}
+                <div style="margin-top:10px;">
+                    <strong>Comprobante SaaS:</strong>
+                    {{ order.saas_document_type|default:"Comprobante" }}
+                    {{ order.saas_document_number|default:"-" }}
+                    {% if order.saas_document_date %}
+                    ({{ order.saas_document_date|date:"d/m/Y" }})
+                    {% endif %}
+                    {% if order.saas_document_total %}
+                    - Total ${{ order.saas_document_total|floatformat:2 }}
+                    {% endif %}
+                </div>
+                {% endif %}
                 <a
-                    href="{% url 'admin_payment_list' %}?order_id={{ order.pk }}{% if order_client_profile_id %}&client_id={{ order_client_profile_id }}{% endif %}"
+                    href="{% url 'admin_payment_list' %}?order_id={{ order.pk }}&company_id={{ order.company_id }}{% if order_client_profile_id %}&client_id={{ order_client_profile_id }}{% endif %}"
                     class="btn btn-outline btn-sm"
                     style="margin-top:6px;"
                 >
                     Registrar pago de este pedido
                 </a>
             </p>
+            {% if order_documents %}
+            <div style="margin-top:10px;">
+                <strong>Documentos internos:</strong>
+                <ul style="margin:6px 0 0;padding-left:18px;">
+                    {% for doc in order_documents %}
+                    <li>
+                        {{ doc.get_doc_type_display }} #{{ doc.number|stringformat:"07d" }}
+                        <a href="{% url 'admin_internal_document_print' doc.pk %}?copy=original" class="btn btn-outline btn-sm">Imprimir</a>
+                        <a href="{% url 'admin_internal_document_print' doc.pk %}?copy=original&download=1" class="btn btn-outline btn-sm">PDF</a>
+                        <a href="{% url 'admin_internal_document_print' doc.pk %}?copy=duplicado" class="btn btn-outline btn-sm">Duplicado</a>
+                        <a href="{% url 'admin_internal_document_print' doc.pk %}?copy=triplicado" class="btn btn-outline btn-sm">Triplicado</a>
+                        <a href="mailto:?subject={{ doc.get_doc_type_display }}%20{{ doc.number|stringformat:'07d' }}&body=Documento%20disponible%20en%20el%20panel%20interno." class="btn btn-outline btn-sm">Mail</a>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% else %}
+            <div style="margin-top:10px;">
+                <small class="text-muted">Sin documentos internos generados.</small>
+            </div>
+            {% endif %}
+            {% if order_fiscal_documents %}
+            <div style="margin-top:10px;">
+                <strong>Documentos fiscales:</strong>
+                <ul style="margin:6px 0 0;padding-left:18px;">
+                    {% for doc in order_fiscal_documents %}
+                    <li>
+                        {{ doc.get_doc_type_display }} - PV {{ doc.point_of_sale.number }} - Nro {{ doc.number|default:"-" }}
+                        ({{ doc.get_status_display }})
+                        {% if doc.issue_mode == 'arca_wsfe' %}
+                        {% if doc.doc_type == 'FA' or doc.doc_type == 'FB' %}
+                        {% if doc.status == 'ready_to_issue' or doc.status == 'pending_retry' or doc.status == 'rejected' %}
+                        <form method="post" action="{% url 'admin_fiscal_document_emit' doc.pk %}" style="display:inline;">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-primary btn-sm" onclick="return confirm('Emitir comprobante en ARCA ahora?');">
+                                Emitir
+                            </button>
+                        </form>
+                        {% endif %}
+                        {% endif %}
+                        {% endif %}
+                        <a href="{% url 'admin_fiscal_document_detail' doc.pk %}" class="btn btn-outline btn-sm">Ver</a>
+                        <a href="{% url 'admin_fiscal_document_print' doc.pk %}?copy=original" class="btn btn-outline btn-sm">Original</a>
+                        <a href="{% url 'admin_fiscal_document_print' doc.pk %}?copy=duplicado" class="btn btn-outline btn-sm">Duplicado</a>
+                        <a href="{% url 'admin_fiscal_document_print' doc.pk %}?copy=triplicado" class="btn btn-outline btn-sm">Triplicado</a>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% else %}
+            <div style="margin-top:10px;">
+                <small class="text-muted">Sin documentos fiscales registrados.</small>
+            </div>
+            {% endif %}
         </div>
     </div>
 
@@ -61,6 +239,61 @@
         <p>{{ order.admin_notes }}</p>
     </div>
     {% endif %}
+
+    <div style="border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:16px;margin-bottom:1.5rem;background:rgba(0,0,0,.2);">
+        <h4 style="margin-top:0;">Documento abierto</h4>
+        <div style="display:grid;grid-template-columns:repeat(3,minmax(200px,1fr));gap:12px;">
+            <div>
+                <strong>Empresa</strong><br>
+                <span class="text-muted">{{ order.company.name|default:"-" }}</span>
+            </div>
+            <div>
+                <strong>Cliente</strong><br>
+                <span class="text-muted">{{ order.client_company|default:order.user.username }}</span>
+            </div>
+            <div>
+                <strong>Tipo documental</strong><br>
+                <span class="text-muted">
+                    {% if order.status == 'draft' %}Cotizacion (COT){% else %}Pedido (PED){% endif %}
+                </span>
+            </div>
+            <div>
+                <strong>Condicion de venta</strong><br>
+                <span class="text-muted">{{ pricing_snapshot.sale_condition|default:"-" }}</span>
+            </div>
+            <div>
+                <strong>Lista de precios</strong><br>
+                <span class="text-muted">{{ pricing_snapshot.price_list.name|default:"-" }}</span>
+            </div>
+            <div>
+                <strong>Descuento vigente</strong><br>
+                <span class="text-muted">{{ pricing_snapshot.discount_percentage|default:"0"|floatformat:2 }}%</span>
+            </div>
+        </div>
+
+        {% if order.status == 'draft' %}
+        <div style="margin-top:16px;">
+            <form method="post" action="{% url 'admin_order_item_add' order.pk %}" style="display:grid;grid-template-columns:2fr 1fr auto;gap:12px;align-items:end;">
+                {% csrf_token %}
+                <div class="form-group" style="margin:0;">
+                    <label for="sku" class="form-label">Producto (SKU)</label>
+                    <input list="product_suggestions" id="sku" name="sku" class="form-input" placeholder="SKU del producto">
+                    <datalist id="product_suggestions">
+                        {% for product in product_suggestions %}
+                        <option value="{{ product.sku }}">{{ product.name }}</option>
+                        {% endfor %}
+                    </datalist>
+                </div>
+                <div class="form-group" style="margin:0;">
+                    <label for="quantity" class="form-label">Cantidad</label>
+                    <input type="number" min="1" name="quantity" id="quantity" class="form-input" value="1">
+                </div>
+                <button type="submit" class="btn btn-primary">Agregar item</button>
+            </form>
+            <small class="text-muted">Solo disponible en borradores.</small>
+        </div>
+        {% endif %}
+    </div>
 
     <h4>Items del Pedido</h4>
     <table class="admin-table" style="margin-bottom: 2rem;">
@@ -125,6 +358,14 @@
                     <span class="text-muted">Publicada</span>
                     {% else %}
                     <span class="text-muted">-</span>
+                    {% endif %}
+                    {% if order.status == 'draft' %}
+                    <form method="post" action="{% url 'admin_order_item_delete' order.pk item.pk %}" style="margin-top:6px;">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-danger-outline btn-sm" onclick="return confirm('Eliminar este item?');">
+                            Quitar item
+                        </button>
+                    </form>
                     {% endif %}
                 </td>
             </tr>

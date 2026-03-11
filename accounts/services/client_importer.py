@@ -1,7 +1,8 @@
 from decimal import Decimal
 from core.services.importer import BaseImporter, ImportRowResult
 from django.contrib.auth.models import User
-from accounts.models import ClientProfile, ClientCategory
+from accounts.models import ClientCompany, ClientProfile, ClientCategory
+from core.services.company_context import get_default_client_origin_company
 from django.db import transaction
 from django.utils.text import slugify
 import pandas as pd
@@ -278,6 +279,30 @@ class ClientImporter(BaseImporter):
                         profile.notes = notes
                 
                 profile.save()
+
+                default_company = getattr(self, "company", None) or get_default_client_origin_company()
+                if default_company:
+                    link, _ = ClientCompany.objects.get_or_create(
+                        client_profile=profile,
+                        company=default_company,
+                        defaults={
+                            "is_active": bool(profile.is_approved),
+                        },
+                    )
+                    if has_category_column:
+                        link.client_category = selected_category
+                        link.discount_percentage = (
+                            selected_category.discount_percentage
+                            if selected_category
+                            else Decimal(str(discount_val))
+                        )
+                    else:
+                        if link.client_category_id:
+                            link.discount_percentage = link.client_category.discount_percentage or Decimal("0")
+                        else:
+                            link.discount_percentage = Decimal(str(discount_val))
+                    link.is_active = bool(profile.is_approved)
+                    link.save()
                 
             result.success = True
             

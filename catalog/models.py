@@ -4,7 +4,10 @@ Catalog app models - products, categories, and clamp specs.
 from django.db import models
 from django.db.models import Q
 from django.utils import timezone
+from django.utils.text import slugify
 import re
+
+from core.models import Company
 
 
 class Category(models.Model):
@@ -277,6 +280,78 @@ class Supplier(models.Model):
         return self.name
 
 
+class PriceList(models.Model):
+    """Price list per company."""
+
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.PROTECT,
+        related_name="price_lists",
+        verbose_name="Empresa",
+    )
+    name = models.CharField(max_length=120, verbose_name="Nombre")
+    slug = models.SlugField(max_length=140, blank=True)
+    is_active = models.BooleanField(default=True, verbose_name="Activa")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Lista de precio"
+        verbose_name_plural = "Listas de precios"
+        ordering = ["company_id", "name"]
+        unique_together = [("company", "slug")]
+        indexes = [
+            models.Index(fields=["company", "is_active"]),
+            models.Index(fields=["company", "slug"]),
+        ]
+
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            base_slug = slugify(self.name) or "lista-precio"
+            candidate = base_slug
+            counter = 1
+            while PriceList.objects.filter(company=self.company, slug=candidate).exclude(pk=self.pk).exists():
+                candidate = f"{base_slug}-{counter}"
+                counter += 1
+            self.slug = candidate
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.company.name} - {self.name}"
+
+
+class PriceListItem(models.Model):
+    """Per-product price inside a price list."""
+
+    price_list = models.ForeignKey(
+        PriceList,
+        on_delete=models.CASCADE,
+        related_name="items",
+        verbose_name="Lista de precio",
+    )
+    product = models.ForeignKey(
+        "catalog.Product",
+        on_delete=models.CASCADE,
+        related_name="price_list_items",
+        verbose_name="Producto",
+    )
+    price = models.DecimalField(max_digits=12, decimal_places=2, verbose_name="Precio")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Precio de lista"
+        verbose_name_plural = "Precios de lista"
+        unique_together = [("price_list", "product")]
+        indexes = [
+            models.Index(fields=["price_list", "product"]),
+            models.Index(fields=["product"]),
+        ]
+
+    def __str__(self):
+        return f"{self.product.sku} | {self.price_list.name}"
+
+
 class Product(models.Model):
     """Product model with all required fields."""
 
@@ -541,6 +616,14 @@ class ClampMeasureRequest(models.Model):
         related_name="clamp_measure_requests",
         verbose_name="Cliente usuario",
     )
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="clamp_measure_requests",
+        verbose_name="Empresa",
+    )
     client_name = models.CharField(max_length=200, blank=True, verbose_name="Cliente")
     client_email = models.EmailField(blank=True, verbose_name="Email cliente")
     client_phone = models.CharField(max_length=120, blank=True, verbose_name="Telefono cliente")
@@ -629,3 +712,13 @@ class ClampMeasureRequest(models.Model):
 
     def __str__(self):
         return f"{self.client_name or '-'} | {self.generated_code or self.description}"
+
+    def save(self, *args, **kwargs):
+        if not kwargs.get("raw") and not self.company_id:
+            try:
+                from core.services.company_context import get_default_company
+
+                self.company = get_default_company()
+            except Exception:
+                pass
+        super().save(*args, **kwargs)

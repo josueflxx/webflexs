@@ -17,6 +17,14 @@ from django.views.decorators.http import require_POST
 
 from accounts.models import ClientPayment
 from catalog.models import Product
+from core.services.company_context import get_active_company
+from core.services.pricing import (
+    calculate_cart_pricing,
+    calculate_final_price,
+    resolve_effective_discount_percentage,
+    resolve_pricing_context,
+    get_base_price_for_product,
+)
 
 from .models import Cart, CartItem, ClientFavoriteProduct, Order, OrderItem, OrderStatusHistory
 
@@ -27,37 +35,62 @@ def _get_client_profile(user):
     return getattr(user, "client_profile", None)
 
 
-def _get_discount_decimal(user):
-    client_profile = _get_client_profile(user)
-    if not client_profile:
+def _get_discount_decimal(user, company=None):
+    client_profile, client_company, client_category = resolve_pricing_context(user, company)
+    discount_percentage = resolve_effective_discount_percentage(
+        client_profile=client_profile,
+        company=company,
+        client_company=client_company,
+        client_category=client_category,
+    )
+    if not discount_percentage:
         return Decimal("0")
-    return Decimal(client_profile.get_discount_decimal())
+    return Decimal(discount_percentage) / Decimal("100")
 
 
-def _build_order_totals_from_cart(cart, discount_decimal):
-    subtotal = cart.get_total()
-    discount_amount = subtotal * discount_decimal
-    total = subtotal - discount_amount
-    return subtotal, discount_amount, total
+def _get_cart_for_company(user, company, create=False):
+    if not company:
+        return None, False
+    if create:
+        return Cart.objects.get_or_create(user=user, company=company)
+    return Cart.objects.filter(user=user, company=company).first(), False
 
 
-def _build_order_from_cart(cart, user, notes="", status=Order.STATUS_CONFIRMED):
+def _build_order_totals_from_cart(cart, user, company):
+    pricing = calculate_cart_pricing(cart, user=user, company=company)
+    return pricing["subtotal"], pricing["discount_amount"], pricing["total"], pricing
+
+
+def _build_order_from_cart(cart, user, notes="", status=Order.STATUS_CONFIRMED, company=None):
     client_profile = _get_client_profile(user)
-    discount_decimal = _get_discount_decimal(user)
-    subtotal, discount_amount, total = _build_order_totals_from_cart(cart, discount_decimal)
+    if not company:
+        raise ValueError("Empresa activa requerida para confirmar el pedido.")
+    if not client_profile or not client_profile.can_operate_in_company(company):
+        raise ValueError("Cliente no habilitado para operar en esta empresa.")
+    client_company_ref = None
+    if client_profile and company:
+        client_company_ref = client_profile.get_company_link(company)
+    if not client_company_ref or client_company_ref.company_id != company.id:
+        raise ValueError("No se pudo validar la relacion cliente-empresa.")
+    subtotal, discount_amount, total, pricing = _build_order_totals_from_cart(cart, user, company)
+    discount_percentage = pricing["discount_percentage"]
+    price_list = pricing["price_list"]
+    item_map = pricing["item_map"]
     order = Order.objects.create(
         user=user,
+        company=company,
         status=status,
         priority=Order.PRIORITY_NORMAL,
         notes=(notes or "").strip(),
         subtotal=subtotal,
-        discount_percentage=discount_decimal * 100,
+        discount_percentage=discount_percentage,
         discount_amount=discount_amount,
         total=total,
         client_company=client_profile.company_name if client_profile else "",
         client_cuit=client_profile.cuit_dni if client_profile else "",
         client_address=client_profile.address if client_profile else "",
         client_phone=client_profile.phone if client_profile else "",
+        client_company_ref=client_company_ref,
         saas_document_type="",
         saas_document_number="",
         saas_document_cae="",
@@ -74,6 +107,12 @@ def _build_order_from_cart(cart, user, notes="", status=Order.STATUS_CONFIRMED):
     clamp_request_ids = set()
 
     for cart_item in cart.items.select_related("product", "clamp_request"):
+        base_price = get_base_price_for_product(
+            cart_item.product,
+            price_list=price_list,
+            item_map=item_map,
+        )
+        final_price = calculate_final_price(base_price, discount_percentage)
         OrderItem.objects.create(
             order=order,
             product=cart_item.product,
@@ -81,7 +120,10 @@ def _build_order_from_cart(cart, user, notes="", status=Order.STATUS_CONFIRMED):
             product_sku=cart_item.product.sku,
             product_name=cart_item.product.name,
             quantity=cart_item.quantity,
-            price_at_purchase=cart_item.product.price,
+            price_at_purchase=final_price,
+            unit_price_base=base_price,
+            discount_percentage_used=discount_percentage,
+            price_list=price_list,
         )
 
         if cart_item.clamp_request_id:
@@ -91,7 +133,7 @@ def _build_order_from_cart(cart, user, notes="", status=Order.STATUS_CONFIRMED):
                     f"- Solicitud #{cart_item.clamp_request_id}: "
                     f"{cart_item.product.name} | "
                     f"cant. {cart_item.quantity} | "
-                    f"${cart_item.product.price:.2f} c/u"
+                    f"${final_price:.2f} c/u"
                 )
             )
 
@@ -128,13 +170,19 @@ def _build_order_from_cart(cart, user, notes="", status=Order.STATUS_CONFIRMED):
 @login_required
 def cart_view(request):
     """View shopping cart."""
-    cart, _ = Cart.objects.get_or_create(user=request.user)
-    discount = _get_discount_decimal(request.user)
-    subtotal = cart.get_total()
-    discount_amount = subtotal * discount
-    total = subtotal - discount_amount
+    company = get_active_company(request)
+    if not company:
+        messages.error(request, "No se pudo resolver la empresa activa.")
+        return redirect("catalog")
+    cart, _ = _get_cart_for_company(request.user, company, create=True)
+    pricing = calculate_cart_pricing(cart, user=request.user, company=company)
+    discount = pricing["discount_percentage"] / Decimal("100") if pricing["discount_percentage"] else Decimal("0")
+    subtotal = pricing["subtotal"]
+    discount_amount = pricing["discount_amount"]
+    total = pricing["total"]
     context = {
         "cart": cart,
+        "cart_items": pricing["items"],
         "discount": discount,
         "discount_display": discount * 100,
         "subtotal": subtotal,
@@ -159,7 +207,10 @@ def add_to_cart(request):
             Product.catalog_visible(Product.objects.select_related("category").prefetch_related("categories")),
             id=product_id,
         )
-        cart, _ = Cart.objects.get_or_create(user=request.user)
+        company = get_active_company(request)
+        if not company:
+            return JsonResponse({"success": False, "error": "Empresa activa no disponible."}, status=400)
+        cart, _ = _get_cart_for_company(request.user, company, create=True)
         cart_item, created = CartItem.objects.get_or_create(
             cart=cart,
             product=product,
@@ -191,7 +242,15 @@ def update_cart_item(request):
         item_id = data.get("item_id")
         quantity = int(data.get("quantity", 1))
 
-        cart_item = get_object_or_404(CartItem, id=item_id, cart__user=request.user)
+        company = get_active_company(request)
+        if not company:
+            return JsonResponse({"success": False, "error": "Empresa activa no disponible."}, status=400)
+        cart_item = get_object_or_404(
+            CartItem,
+            id=item_id,
+            cart__user=request.user,
+            cart__company=company,
+        )
         if quantity <= 0:
             cart_item.delete()
             message = "Producto eliminado del carrito"
@@ -201,11 +260,12 @@ def update_cart_item(request):
             message = "Cantidad actualizada"
 
         cart = cart_item.cart
+        pricing = calculate_cart_pricing(cart, user=request.user, company=company)
         return JsonResponse(
             {
                 "success": True,
                 "message": message,
-                "cart_total": float(cart.get_total()),
+                "cart_total": float(pricing["subtotal"]),
                 "cart_count": cart.get_item_count(),
             }
         )
@@ -221,14 +281,23 @@ def remove_from_cart(request):
     try:
         data = json.loads(request.body)
         item_id = data.get("item_id")
-        cart_item = get_object_or_404(CartItem, id=item_id, cart__user=request.user)
+        company = get_active_company(request)
+        if not company:
+            return JsonResponse({"success": False, "error": "Empresa activa no disponible."}, status=400)
+        cart_item = get_object_or_404(
+            CartItem,
+            id=item_id,
+            cart__user=request.user,
+            cart__company=company,
+        )
         cart = cart_item.cart
         cart_item.delete()
+        pricing = calculate_cart_pricing(cart, user=request.user, company=company)
         return JsonResponse(
             {
                 "success": True,
                 "message": "Producto eliminado",
-                "cart_total": float(cart.get_total()),
+                "cart_total": float(pricing["subtotal"]),
                 "cart_count": cart.get_item_count(),
             }
         )
@@ -240,33 +309,61 @@ def remove_from_cart(request):
 @login_required
 def checkout(request):
     """Checkout view - confirm order."""
-    cart = get_object_or_404(Cart, user=request.user)
+    company = get_active_company(request)
+    if not company:
+        messages.error(request, "No se pudo resolver la empresa activa.")
+        return redirect("cart")
+    cart, _ = _get_cart_for_company(request.user, company, create=False)
+    if not cart:
+        messages.warning(request, "Tu carrito esta vacio.")
+        return redirect("catalog")
     if cart.items.count() == 0:
         messages.warning(request, "Tu carrito esta vacio.")
         return redirect("catalog")
 
-    discount = _get_discount_decimal(request.user)
+    client_profile = _get_client_profile(request.user)
+    if not client_profile or not client_profile.can_operate_in_company(company):
+        messages.error(
+            request,
+            "No tienes habilitada la operacion comercial para esta empresa.",
+        )
+        return redirect("cart")
+    client_company_ref = client_profile.get_company_link(company)
+    if not client_company_ref or client_company_ref.company_id != company.id:
+        messages.error(
+            request,
+            "No se pudo validar la relacion comercial con la empresa seleccionada.",
+        )
+        return redirect("cart")
+    pricing = calculate_cart_pricing(cart, user=request.user, company=company)
+    discount = pricing["discount_percentage"] / Decimal("100") if pricing["discount_percentage"] else Decimal("0")
     if request.method == "POST":
         notes = request.POST.get("notes", "").strip()
         with transaction.atomic():
             cart = Cart.objects.select_for_update().get(pk=cart.pk)
-            order = _build_order_from_cart(
-                cart=cart,
-                user=request.user,
-                notes=notes,
-                status=Order.STATUS_CONFIRMED,
-            )
+            try:
+                order = _build_order_from_cart(
+                    cart=cart,
+                    user=request.user,
+                    notes=notes,
+                    status=Order.STATUS_CONFIRMED,
+                    company=company,
+                )
+            except ValueError as exc:
+                messages.error(request, str(exc))
+                return redirect("cart")
             cart.clear()
         messages.success(request, f"Pedido #{order.pk} creado exitosamente.")
         return redirect("order_detail", order_id=order.pk)
 
     context = {
         "cart": cart,
+        "cart_items": pricing["items"],
         "discount": discount,
         "discount_display": discount * 100,
-        "subtotal": cart.get_total(),
-        "discount_amount": cart.get_total() * discount,
-        "total": cart.get_total_with_discount(discount),
+        "subtotal": pricing["subtotal"],
+        "discount_amount": pricing["discount_amount"],
+        "total": pricing["total"],
     }
     return render(request, "orders/checkout.html", context)
 
@@ -275,7 +372,10 @@ def checkout(request):
 def order_list(request):
     """List of user's orders."""
     status = request.GET.get("status", "").strip()
+    company = get_active_company(request)
     orders = Order.objects.filter(user=request.user).prefetch_related("items")
+    if company:
+        orders = orders.filter(company=company)
     if status:
         orders = orders.filter(status=status)
     orders = orders.order_by("-created_at")
@@ -293,19 +393,26 @@ def order_list(request):
 @login_required
 def order_detail(request, order_id):
     """Order detail view."""
+    company = get_active_company(request)
+    order_qs = Order.objects.prefetch_related(
+        Prefetch("items", queryset=OrderItem.objects.select_related("product", "clamp_request")),
+        Prefetch("status_history", queryset=OrderStatusHistory.objects.select_related("changed_by")),
+    )
+    if company:
+        order_qs = order_qs.filter(company=company)
     order = get_object_or_404(
-        Order.objects.prefetch_related(
-            Prefetch("items", queryset=OrderItem.objects.select_related("product", "clamp_request")),
-            Prefetch("status_history", queryset=OrderStatusHistory.objects.select_related("changed_by")),
-        ),
+        order_qs,
         pk=order_id,
         user=request.user,
     )
-    payments = list(
+    payments_qs = (
         ClientPayment.objects.filter(order_id=order.pk, is_cancelled=False)
         .select_related("created_by")
         .order_by("-paid_at")
     )
+    if company:
+        payments_qs = payments_qs.filter(company=company)
+    payments = list(payments_qs)
     return render(
         request,
         "orders/order_detail.html",
@@ -322,8 +429,15 @@ def order_detail(request, order_id):
 @require_POST
 def reorder_to_cart(request, order_id):
     """Copy all order lines into active cart for quick re-order."""
-    order = get_object_or_404(Order.objects.prefetch_related("items"), pk=order_id, user=request.user)
-    cart, _ = Cart.objects.get_or_create(user=request.user)
+    company = get_active_company(request)
+    if not company:
+        messages.error(request, "No se pudo resolver la empresa activa.")
+        return redirect("order_list")
+    order_qs = Order.objects.prefetch_related("items")
+    if company:
+        order_qs = order_qs.filter(company=company)
+    order = get_object_or_404(order_qs, pk=order_id, user=request.user)
+    cart, _ = _get_cart_for_company(request.user, company, create=True)
     added = 0
     for item in order.items.select_related("clamp_request"):
         if not item.product_id or not item.product:
@@ -351,7 +465,10 @@ def reorder_to_cart(request, order_id):
 @login_required
 def client_portal(request):
     """B2B client portal dashboard."""
+    company = get_active_company(request)
     orders_qs = Order.objects.filter(user=request.user)
+    if company:
+        orders_qs = orders_qs.filter(company=company)
     client_profile = _get_client_profile(request.user)
     favorites = (
         ClientFavoriteProduct.objects.filter(user=request.user)
@@ -360,11 +477,10 @@ def client_portal(request):
     )
     recent_payments = []
     if client_profile:
-        recent_payments = list(
-            ClientPayment.objects.filter(client_profile=client_profile, is_cancelled=False)
-            .select_related("order")
-            .order_by("-paid_at")[:8]
-        )
+        payments_qs = ClientPayment.objects.filter(client_profile=client_profile, is_cancelled=False)
+        if company:
+            payments_qs = payments_qs.filter(company=company)
+        recent_payments = list(payments_qs.select_related("order").order_by("-paid_at")[:8])
 
     context = {
         "active_orders_count": orders_qs.exclude(
@@ -375,7 +491,7 @@ def client_portal(request):
         "favorites": favorites,
         "client_profile": client_profile,
         "recent_payments": recent_payments,
-        "current_balance": client_profile.get_current_balance() if client_profile else Decimal("0.00"),
+        "current_balance": client_profile.get_current_balance(company=company) if client_profile else Decimal("0.00"),
     }
     return render(request, "orders/client_portal.html", context)
 
@@ -410,6 +526,9 @@ def toggle_favorite(request):
 @login_required
 def cart_count(request):
     """Get cart item count (AJAX)."""
-    cart, _ = Cart.objects.get_or_create(user=request.user)
+    company = get_active_company(request)
+    if not company:
+        return JsonResponse({"count": 0, "favorites": 0})
+    cart, _ = _get_cart_for_company(request.user, company, create=True)
     favorites_count = ClientFavoriteProduct.objects.filter(user=request.user).count()
     return JsonResponse({"count": cart.get_item_count(), "favorites": favorites_count})

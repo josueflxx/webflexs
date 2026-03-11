@@ -40,11 +40,21 @@ def sync_order_charge_transaction(order, actor=None):
         return None
 
     source_key = f"order:{order.pk}:charge"
+    company = getattr(order, "company", None)
+    if not company:
+        try:
+            from core.services.company_context import get_default_company
+
+            company = get_default_company()
+        except Exception:
+            company = None
     amount = _to_decimal(order.total if order.status in BILLABLE_ORDER_STATUSES else 0).quantize(Decimal("0.01"))
     occurred_at = getattr(order, "status_updated_at", None) or timezone.now()
 
     defaults = {
         "client_profile": client_profile,
+        "company": company,
+        "billing_company": getattr(company, "slug", None) or "flexs",
         "order": order,
         "transaction_type": ClientTransaction.TYPE_ORDER_CHARGE,
         "amount": amount,
@@ -68,12 +78,24 @@ def sync_payment_transaction(payment, actor=None):
         return None
 
     source_key = f"payment:{payment.pk}:applied"
+    company = getattr(payment, "company", None)
+    if not company and getattr(payment, "order_id", None):
+        company = getattr(payment.order, "company", None)
+    if not company:
+        try:
+            from core.services.company_context import get_default_company
+
+            company = get_default_company()
+        except Exception:
+            company = None
     amount = Decimal("0.00")
     if not payment.is_cancelled:
         amount = (_to_decimal(payment.amount) * Decimal("-1")).quantize(Decimal("0.01"))
 
     defaults = {
         "client_profile": payment.client_profile,
+        "company": company,
+        "billing_company": getattr(company, "slug", None) or "flexs",
         "order": payment.order,
         "payment": payment,
         "transaction_type": ClientTransaction.TYPE_PAYMENT,
@@ -96,6 +118,7 @@ def create_adjustment_transaction(
     reason,
     actor=None,
     order=None,
+    company=None,
     occurred_at=None,
 ):
     """
@@ -106,8 +129,13 @@ def create_adjustment_transaction(
     dec_amount = _to_decimal(amount).quantize(Decimal("0.01"))
     suffix = timezone.now().strftime("%Y%m%d%H%M%S%f")
     source_key = f"adjustment:{client_profile.pk}:{suffix}"
-    return ClientTransaction.objects.create(
+    resolved_company = company or getattr(order, "company", None)
+    if not resolved_company:
+        raise ValueError("Empresa obligatoria para ajustes de cuenta corriente.")
+    tx = ClientTransaction.objects.create(
         client_profile=client_profile,
+        company=resolved_company,
+        billing_company=getattr(resolved_company, "slug", None) or "flexs",
         order=order,
         payment=None,
         transaction_type=ClientTransaction.TYPE_ADJUSTMENT,
@@ -117,6 +145,13 @@ def create_adjustment_transaction(
         occurred_at=occurred,
         created_by=actor if getattr(actor, "is_authenticated", False) else None,
     )
+    try:
+        from core.services.documents import ensure_document_for_adjustment
+
+        ensure_document_for_adjustment(tx)
+    except Exception:
+        pass
+    return tx
 
 
 def resync_client_ledger(*, client_profile=None):

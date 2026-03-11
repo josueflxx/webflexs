@@ -3,6 +3,8 @@
 from rest_framework import serializers
 
 from accounts.models import ClientProfile
+from core.models import Company
+from core.services.company_context import get_active_company
 from catalog.models import Category, Product
 from orders.models import Order
 
@@ -110,7 +112,15 @@ class ClientProfileSerializer(serializers.ModelSerializer):
         ]
 
     def get_current_balance(self, obj):
-        return obj.get_current_balance()
+        request = self.context.get("request")
+        company = None
+        if request:
+            raw_company = request.query_params.get("company_id") or request.query_params.get("company")
+            if raw_company and str(raw_company).isdigit():
+                company = Company.objects.filter(pk=int(raw_company), is_active=True).first()
+            if not company:
+                company = get_active_company(request)
+        return obj.get_current_balance(company=company)
 
 
 class OrderListSerializer(serializers.ModelSerializer):
@@ -146,4 +156,3 @@ class OrderListSerializer(serializers.ModelSerializer):
             "username": user.username,
             "email": user.email,
         }
-

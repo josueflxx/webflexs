@@ -9,7 +9,7 @@ from django.db import connection
 from django.utils import timezone
 from openpyxl import load_workbook
 
-from accounts.models import AccountRequest, ClientPayment, ClientProfile
+from accounts.models import AccountRequest, ClientCompany, ClientPayment, ClientProfile
 from catalog.models import Category, ClampMeasureRequest, Product, Supplier
 from catalog.services.clamp_quoter import calculate_clamp_quote
 from core.models import (
@@ -17,6 +17,7 @@ from core.models import (
     CatalogExcelTemplateSheet,
     CatalogExcelTemplateColumn,
 )
+from core.services.company_context import get_default_company
 from orders.models import ClampQuotation, Order, OrderItem, OrderStatusHistory
 
 
@@ -35,21 +36,31 @@ class ClientOrderHistoryViewTests(TestCase):
             user=self.client_user,
             company_name='Cliente Historial',
         )
+        self.company = get_default_company()
+        self.client_company = ClientCompany.objects.create(
+            client_profile=self.client_profile,
+            company=self.company,
+            is_active=True,
+        )
         Order.objects.create(
             user=self.client_user,
+            company=self.company,
             status=Order.STATUS_CONFIRMED,
             subtotal=Decimal('100.00'),
             total=Decimal('100.00'),
             client_company='Cliente Historial',
+            client_company_ref=self.client_company,
         )
         Order.objects.create(
             user=self.client_user,
+            company=self.company,
             status=Order.STATUS_DRAFT,
             subtotal=Decimal('200.00'),
             total=Decimal('190.00'),
             discount_amount=Decimal('10.00'),
             discount_percentage=Decimal('5.00'),
             client_company='Cliente Historial',
+            client_company_ref=self.client_company,
         )
 
     def test_staff_can_open_client_order_history(self):
@@ -174,19 +185,29 @@ class PaymentPanelTests(TestCase):
             user=self.client_user,
             company_name='Cliente Panel Pagos',
         )
+        self.company = get_default_company()
+        self.client_company = ClientCompany.objects.create(
+            client_profile=self.client_profile,
+            company=self.company,
+            is_active=True,
+        )
         self.order = Order.objects.create(
             user=self.client_user,
+            company=self.company,
             status=Order.STATUS_DRAFT,
             subtotal=Decimal('120.00'),
             total=Decimal('120.00'),
             client_company='Cliente Panel Pagos',
+            client_company_ref=self.client_company,
         )
         self.order_confirmed = Order.objects.create(
             user=self.client_user,
+            company=self.company,
             status=Order.STATUS_CONFIRMED,
             subtotal=Decimal('80.00'),
             total=Decimal('80.00'),
             client_company='Cliente Panel Pagos',
+            client_company_ref=self.client_company,
         )
 
     def test_staff_can_register_payment_from_panel(self):
@@ -557,12 +578,24 @@ class OrderClampPublishTests(TestCase):
             username='cliente_publish_clamp',
             password='secret123',
         )
+        self.client_profile = ClientProfile.objects.create(
+            user=self.client_user,
+            company_name='Cliente Publish Clamp',
+        )
+        self.company = get_default_company()
+        self.client_company = ClientCompany.objects.create(
+            client_profile=self.client_profile,
+            company=self.company,
+            is_active=True,
+        )
         self.order = Order.objects.create(
             user=self.client_user,
+            company=self.company,
             status=Order.STATUS_CONFIRMED,
             subtotal=Decimal('1500.00'),
             total=Decimal('1500.00'),
             client_company='Cliente Publish Clamp',
+            client_company_ref=self.client_company,
         )
         self.product = Product.objects.create(
             sku='ABT3481220S-R1',
@@ -679,6 +712,12 @@ class OrderDeleteTests(TestCase):
             user=self.client_user,
             company_name='Cliente Delete',
         )
+        self.company = get_default_company()
+        self.client_company = ClientCompany.objects.create(
+            client_profile=self.client_profile,
+            company=self.company,
+            is_active=True,
+        )
         self.product = Product.objects.create(
             sku='DEL-001',
             name='Producto Delete',
@@ -689,10 +728,12 @@ class OrderDeleteTests(TestCase):
         )
         self.order = Order.objects.create(
             user=self.client_user,
+            company=self.company,
             status=Order.STATUS_DRAFT,
             subtotal=Decimal('100.00'),
             total=Decimal('100.00'),
             client_company='Cliente Delete',
+            client_company_ref=self.client_company,
         )
         OrderItem.objects.create(
             order=self.order,
@@ -713,6 +754,7 @@ class OrderDeleteTests(TestCase):
         ClientPayment.objects.create(
             client_profile=self.client_profile,
             order=self.order,
+            company=self.company,
             amount=Decimal('20.00'),
             method=ClientPayment.METHOD_TRANSFER,
             created_by=self.staff,

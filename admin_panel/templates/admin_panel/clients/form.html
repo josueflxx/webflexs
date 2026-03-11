@@ -15,6 +15,22 @@
             <input type="text" class="form-input" value="{{ client.user.username }}" disabled>
         </div>
 
+        {% if companies %}
+        <div class="form-group">
+            <label for="company_id" class="form-label">Empresa operativa</label>
+            <select name="company_id" id="company_id" class="form-select">
+                {% for company in companies %}
+                <option value="{{ company.pk }}" {% if active_company and active_company.pk == company.pk %}selected{% endif %}>
+                    {{ company.name }}
+                </option>
+                {% endfor %}
+            </select>
+            {% if uses_legacy_rules %}
+            <small class="text-muted">No hay relacion comercial para esta empresa. Se creara al guardar.</small>
+            {% endif %}
+        </div>
+        {% endif %}
+
         <div class="form-group">
             <label for="company_name" class="form-label">Empresa / Razon Social</label>
             <input type="text" name="company_name" id="company_name" class="form-input" value="{{ client.company_name }}">
@@ -23,6 +39,28 @@
         <div class="form-group">
             <label for="cuit_dni" class="form-label">CUIT / DNI</label>
             <input type="text" name="cuit_dni" id="cuit_dni" class="form-input" value="{{ client.cuit_dni }}">
+            <button type="button" id="cuit_autofill" class="btn btn-outline" style="margin-top:8px;">
+                Autocompletar fiscal (CUIT)
+            </button>
+            <small class="text-muted">Preparado para futura consulta fiscal. Copia el CUIT a los campos fiscales si estan vacios.</small>
+        </div>
+
+        <div class="form-group">
+            <label for="document_type" class="form-label">Tipo de documento (fiscal)</label>
+            <select name="document_type" id="document_type" class="form-select">
+                <option value="">-</option>
+                <option value="cuit" {% if client.document_type == 'cuit' %}selected{% endif %}>CUIT</option>
+                <option value="cuil" {% if client.document_type == 'cuil' %}selected{% endif %}>CUIL</option>
+                <option value="dni" {% if client.document_type == 'dni' %}selected{% endif %}>DNI</option>
+                <option value="cdi" {% if client.document_type == 'cdi' %}selected{% endif %}>CDI</option>
+                <option value="passport" {% if client.document_type == 'passport' %}selected{% endif %}>Pasaporte</option>
+                <option value="otro" {% if client.document_type == 'otro' %}selected{% endif %}>Otro</option>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label for="document_number" class="form-label">Numero de documento (fiscal)</label>
+            <input type="text" name="document_number" id="document_number" class="form-input" value="{{ client.document_number }}">
         </div>
 
         <div class="form-group">
@@ -33,7 +71,7 @@
                 name="discount"
                 id="discount"
                 class="form-input"
-                value="{{ client.discount }}"
+                value="{{ effective_discount }}"
             >
             <small class="text-muted">Si asignas tipo de cliente, este valor se completa automaticamente.</small>
         </div>
@@ -46,7 +84,7 @@
                 <option
                     value="{{ category.pk }}"
                     data-discount="{{ category.discount_percentage|unlocalize }}"
-                    {% if client.client_category_id == category.pk %}selected{% endif %}
+                    {% if effective_category_id == category.pk %}selected{% endif %}
                 >
                     {{ category.name }} - {{ category.discount_percentage|floatformat:2 }}%
                 </option>
@@ -55,13 +93,46 @@
         </div>
 
         <div class="form-group">
+            <label class="form-label">Estado en empresa</label>
+            <label class="form-checkbox-label" style="display:flex;align-items:center;gap:8px;">
+                <input
+                    type="checkbox"
+                    id="company_is_active"
+                    name="company_is_active"
+                    {% if company_is_active %}checked{% endif %}
+                >
+                Cliente habilitado para operar en esta empresa
+            </label>
+        </div>
+
+        <div class="form-group">
             <label for="province" class="form-label">Provincia</label>
             <input type="text" name="province" id="province" class="form-input" value="{{ client.province }}">
         </div>
 
         <div class="form-group">
+            <label for="fiscal_province" class="form-label">Provincia fiscal</label>
+            <input type="text" name="fiscal_province" id="fiscal_province" class="form-input" value="{{ client.fiscal_province }}">
+        </div>
+
+        <div class="form-group">
+            <label for="fiscal_city" class="form-label">Localidad fiscal</label>
+            <input type="text" name="fiscal_city" id="fiscal_city" class="form-input" value="{{ client.fiscal_city }}">
+        </div>
+
+        <div class="form-group">
             <label for="address" class="form-label">Domicilio</label>
             <textarea name="address" id="address" class="form-textarea">{{ client.address }}</textarea>
+        </div>
+
+        <div class="form-group">
+            <label for="fiscal_address" class="form-label">Domicilio fiscal</label>
+            <input type="text" name="fiscal_address" id="fiscal_address" class="form-input" value="{{ client.fiscal_address }}">
+        </div>
+
+        <div class="form-group">
+            <label for="postal_code" class="form-label">Codigo postal</label>
+            <input type="text" name="postal_code" id="postal_code" class="form-input" value="{{ client.postal_code }}">
         </div>
 
         <div class="form-group">
@@ -147,6 +218,35 @@
         } else {
             setupAutoDiscount('client_category', 'discount');
         }
+    })();
+
+    (function () {
+        const button = document.getElementById('cuit_autofill');
+        if (!button) return;
+        button.addEventListener('click', function () {
+            const cuitInput = document.getElementById('cuit_dni');
+            const docType = document.getElementById('document_type');
+            const docNumber = document.getElementById('document_number');
+            const cuit = (cuitInput ? cuitInput.value : '').trim();
+            if (!cuit) {
+                window.alert('Ingresa un CUIT/DNI primero.');
+                return;
+            }
+            fetch(`/admin-panel/clientes/cuit-lookup/?cuit=${encodeURIComponent(cuit)}`)
+                .then((response) => response.json())
+                .then((data) => {
+                    if (docNumber && !docNumber.value) docNumber.value = cuit;
+                    if (docType && !docType.value) docType.value = 'cuit';
+                    if (data && data.message) {
+                        window.alert(data.message);
+                    }
+                })
+                .catch(() => {
+                    if (docNumber && !docNumber.value) docNumber.value = cuit;
+                    if (docType && !docType.value) docType.value = 'cuit';
+                    window.alert('Autocompletado no disponible. Datos copiados desde CUIT.');
+                });
+        });
     })();
 </script>
 {% endblock %}

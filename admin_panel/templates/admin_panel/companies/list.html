@@ -1,0 +1,68 @@
+{% extends 'admin_panel/base.html' %}
+
+{% block page_title %}Empresas{% endblock %}
+
+{% block content %}
+<div class="admin-table-container">
+    <div class="admin-toolbar">
+        <div class="toolbar-search">
+            <strong>Empresas / Razones sociales</strong>
+            {% if active_company %}
+            <div class="text-muted" style="margin-top:4px;">
+                Empresa activa: <strong>{{ active_company.name }}</strong>
+            </div>
+            {% endif %}
+        </div>
+        <div class="toolbar-actions">
+            <a href="{% url 'admin_fiscal_config' %}" class="btn btn-outline">Factura electronica</a>
+            <a href="{% url 'admin_settings' %}" class="btn btn-outline">Configuracion general</a>
+        </div>
+    </div>
+
+    <table class="admin-table">
+        <thead>
+            <tr>
+                <th>Nombre</th>
+                <th>Razon social</th>
+                <th>CUIT</th>
+                <th>Email</th>
+                <th>Punto de venta</th>
+                <th>Lista base</th>
+                <th>Activa</th>
+                <th>Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for company in companies %}
+            <tr>
+                <td>
+                    <strong>{{ company.name }}</strong>
+                    {% if active_company and active_company.pk == company.pk %}
+                    <div class="text-muted">Activa ahora</div>
+                    {% endif %}
+                </td>
+                <td>{{ company.legal_name|default:"-" }}</td>
+                <td>{{ company.cuit|default:"-" }}</td>
+                <td>{{ company.email|default:"-" }}</td>
+                <td>{{ company.point_of_sale_default|default:"-" }}</td>
+                <td>{{ company.default_price_list.name|default:"-" }}</td>
+                <td>
+                    {% if company.is_active %}
+                    <span class="badge badge-success">Si</span>
+                    {% else %}
+                    <span class="badge badge-secondary">No</span>
+                    {% endif %}
+                </td>
+                <td class="actions">
+                    <a href="{% url 'admin_company_edit' company.pk %}" class="btn btn-outline btn-sm">Editar</a>
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="8" class="text-center text-muted">No hay empresas cargadas</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

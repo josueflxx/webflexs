@@ -15,9 +15,32 @@
                 </option>
                 {% endfor %}
             </select>
+            <select name="company_id" class="form-select">
+                {% for company in companies %}
+                <option value="{{ company.pk }}" {% if selected_company_id == company.pk|stringformat:'s' %}selected{% endif %}>
+                    {{ company.name }}
+                </option>
+                {% endfor %}
+            </select>
+            <select name="sync_status" class="form-select">
+                <option value="">Sync: todos</option>
+                {% for value, label in sync_status_choices %}
+                <option value="{{ value }}" {% if sync_status == value %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
             <input type="text" name="order_id" value="{{ order_id }}" placeholder="Pedido # (opcional)" class="form-input" style="max-width:180px;">
             <button type="submit" class="btn btn-primary">Filtrar</button>
             <a href="{% url 'admin_payment_list' %}" class="btn btn-outline">Limpiar</a>
+            {% if selected_company_id != 'all' %}
+            <a
+                href="{% url 'admin_payment_export_saas' %}?company_id={{ selected_company_id }}&sync_status={{ sync_status|default:'pending' }}"
+                class="btn btn-outline"
+            >
+                Exportar pendientes SaaS
+            </a>
+            {% else %}
+            <span class="text-muted">Selecciona empresa para exportar</span>
+            {% endif %}
         </form>
     </div>
 
@@ -76,6 +99,18 @@
             </div>
 
             <div class="form-group" style="margin:0;">
+                <label for="company_id" class="form-label">Empresa</label>
+                <select name="company_id" id="company_id" class="form-select" {% if selected_company_id == 'all' and not selected_order %}required{% endif %}>
+                    <option value="">-- Seleccionar --</option>
+                    {% for company in companies %}
+                    <option value="{{ company.pk }}" {% if selected_company_id == company.pk|stringformat:'s' %}selected{% endif %}>
+                        {{ company.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="form-group" style="margin:0;">
                 <label for="amount" class="form-label">Monto</label>
                 <input id="amount" type="text" name="amount" class="form-input" required placeholder="Ej: 15000.50 (ajuste: usar negativo)">
             </div>
@@ -117,12 +152,15 @@
         <thead>
             <tr>
                 <th>Fecha</th>
+                <th>Empresa</th>
+                <th>Recibo</th>
                 <th>Cliente</th>
                 <th>Pedido</th>
                 <th>Monto</th>
                 <th>Medio</th>
                 <th>Referencia</th>
                 <th>Estado</th>
+                <th>Sync</th>
                 <th>Acciones</th>
             </tr>
         </thead>
@@ -130,6 +168,16 @@
             {% for payment in page_obj %}
             <tr>
                 <td>{{ payment.paid_at|date:"d/m/Y H:i" }}</td>
+                <td>{{ payment.company.name|default:"-" }}</td>
+                <td>
+                    {% if payment.internal_documents %}
+                        {% for doc in payment.internal_documents %}
+                            {{ doc.get_doc_type_display }} #{{ doc.number|stringformat:"07d" }}{% if not forloop.last %}<br>{% endif %}
+                        {% endfor %}
+                    {% else %}
+                        -
+                    {% endif %}
+                </td>
                 <td>
                     <strong>{{ payment.client_profile.company_name }}</strong><br>
                     <small class="text-muted">{{ payment.client_profile.user.username }}</small>
@@ -153,6 +201,18 @@
                     <span class="badge badge-success">Activo</span>
                     {% endif %}
                 </td>
+                <td>
+                    {% if payment.sync_status == 'synced' %}
+                    <span class="badge badge-success">Sincronizado</span>
+                    {% elif payment.sync_status == 'failed' %}
+                    <span class="badge badge-danger">Fallido</span>
+                    {% else %}
+                    <span class="badge badge-warning">Pendiente</span>
+                    {% endif %}
+                    {% if payment.external_number %}
+                    <div class="text-muted" style="font-size:0.85rem;">Ext: {{ payment.external_number }}</div>
+                    {% endif %}
+                </td>
                 <td class="actions">
                     <a href="{% url 'admin_client_order_history' payment.client_profile_id %}" class="btn btn-outline btn-sm">Historial</a>
                     {% if not payment.is_cancelled %}
@@ -168,7 +228,7 @@
             </tr>
             {% empty %}
             <tr>
-                <td colspan="8" class="text-center text-muted">No hay pagos registrados.</td>
+                <td colspan="11" class="text-center text-muted">No hay pagos registrados.</td>
             </tr>
             {% endfor %}
         </tbody>
@@ -179,10 +239,10 @@
         <span>Pagina {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
         <div class="toolbar-actions">
             {% if page_obj.has_previous %}
-            <a href="?page={{ page_obj.previous_page_number }}&q={{ search }}&client_id={{ client_id }}&order_id={{ order_id }}" class="btn btn-outline"><- Anterior</a>
+            <a href="?page={{ page_obj.previous_page_number }}&q={{ search }}&client_id={{ client_id }}&company_id={{ selected_company_id }}&order_id={{ order_id }}&sync_status={{ sync_status }}" class="btn btn-outline"><- Anterior</a>
             {% endif %}
             {% if page_obj.has_next %}
-            <a href="?page={{ page_obj.next_page_number }}&q={{ search }}&client_id={{ client_id }}&order_id={{ order_id }}" class="btn btn-outline">Siguiente -></a>
+            <a href="?page={{ page_obj.next_page_number }}&q={{ search }}&client_id={{ client_id }}&company_id={{ selected_company_id }}&order_id={{ order_id }}&sync_status={{ sync_status }}" class="btn btn-outline">Siguiente -></a>
             {% endif %}
         </div>
     </div>

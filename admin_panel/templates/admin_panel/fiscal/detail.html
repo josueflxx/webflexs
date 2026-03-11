@@ -1,0 +1,150 @@
+{% extends 'admin_panel/base.html' %}
+
+{% block page_title %}Comprobante fiscal #{{ fiscal_document.pk }}{% endblock %}
+
+{% block content %}
+<div class="admin-form-container" style="max-width: 1080px;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 1rem;">
+        <h2 style="margin:0;">Comprobante fiscal #{{ fiscal_document.pk }}</h2>
+        <span class="badge badge-info">{{ fiscal_document.get_status_display }}</span>
+    </div>
+
+    <div class="form-actions" style="margin-bottom:1rem; gap:8px;">
+        {% if can_emit %}
+        <form method="post" action="{% url 'admin_fiscal_document_emit' fiscal_document.pk %}" style="display:inline;">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-primary" onclick="return confirm('Emitir este comprobante en ARCA ahora?');">
+                Emitir ahora (ARCA)
+            </button>
+        </form>
+        {% elif fiscal_document.issue_mode != 'arca_wsfe' %}
+        <span class="text-muted">Modo actual: {{ fiscal_document.get_issue_mode_display }} (no emite por ARCA).</span>
+        {% else %}
+        <span class="text-muted">Estado actual no permite emision directa.</span>
+        {% endif %}
+    </div>
+
+    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:1rem; margin-bottom:1rem;">
+        <div>
+            <h4>Encabezado</h4>
+            <p>
+                <strong>Empresa:</strong> {{ fiscal_document.company.name }}<br>
+                <strong>Tipo:</strong> {{ fiscal_document.get_doc_type_display }}<br>
+                <strong>Punto de venta:</strong> {{ fiscal_document.point_of_sale.number }}<br>
+                <strong>Numero:</strong> {{ fiscal_document.number|default:"-" }}<br>
+                <strong>Modo:</strong> {{ fiscal_document.get_issue_mode_display }}<br>
+                <strong>Estado:</strong> {{ fiscal_document.get_status_display }}<br>
+                <strong>Fecha:</strong> {{ fiscal_document.issued_at|date:"d/m/Y H:i"|default:"-" }}<br>
+                <strong>CAE:</strong> {{ fiscal_document.cae|default:"-" }}<br>
+                <strong>Vto CAE:</strong> {{ fiscal_document.cae_due_date|date:"d/m/Y"|default:"-" }}
+            </p>
+        </div>
+        <div>
+            <h4>Relacion</h4>
+            <p>
+                <strong>Cliente:</strong> {{ fiscal_document.client_company_ref.client_profile.company_name|default:"-" }}<br>
+                <strong>Pedido:</strong>
+                {% if fiscal_document.order_id %}
+                <a href="{% url 'admin_order_detail' fiscal_document.order_id %}">#{{ fiscal_document.order_id }}</a>
+                {% else %}
+                -
+                {% endif %}
+                <br>
+                <strong>Sistema externo:</strong> {{ fiscal_document.external_system|default:"-" }}<br>
+                <strong>ID externo:</strong> {{ fiscal_document.external_id|default:"-" }}<br>
+                <strong>Numero externo:</strong> {{ fiscal_document.external_number|default:"-" }}<br>
+                <strong>Source key:</strong> <small>{{ fiscal_document.source_key }}</small>
+            </p>
+        </div>
+    </div>
+
+    <div style="background: rgba(255,255,255,.03); border:1px solid rgba(255,255,255,.08); border-radius:8px; padding: 12px; margin-bottom: 1rem;">
+        <strong>Resultado de emision</strong><br>
+        <span><strong>Codigo error:</strong> {{ fiscal_document.error_code|default:"-" }}</span><br>
+        <span><strong>Mensaje:</strong> {{ fiscal_document.error_message|default:"-" }}</span><br>
+        <span><strong>Intentos:</strong> {{ fiscal_document.attempts_count }}</span>
+        {% if fiscal_document.last_attempt_at %}
+        <br><span><strong>Ultimo intento:</strong> {{ fiscal_document.last_attempt_at|date:"d/m/Y H:i" }}</span>
+        {% endif %}
+    </div>
+
+    <div style="background: rgba(255,255,255,.03); border:1px solid rgba(255,255,255,.08); border-radius:8px; padding: 12px; margin-bottom: 1rem;">
+        <strong>Importes</strong><br>
+        Subtotal neto: ${{ fiscal_document.subtotal_net|floatformat:2 }}<br>
+        Descuento: ${{ fiscal_document.discount_total|floatformat:2 }}<br>
+        IVA: ${{ fiscal_document.tax_total|floatformat:2 }}<br>
+        <strong>Total: ${{ fiscal_document.total|floatformat:2 }}</strong>
+    </div>
+
+    <h4>Items</h4>
+    <table class="admin-table">
+        <thead>
+            <tr>
+                <th>#</th>
+                <th>SKU</th>
+                <th>Descripcion</th>
+                <th>Cant.</th>
+                <th>Unitario neto</th>
+                <th>Desc.</th>
+                <th>Neto</th>
+                <th>IVA</th>
+                <th>Total</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in items %}
+            <tr>
+                <td>{{ item.line_number }}</td>
+                <td><code>{{ item.sku|default:"-" }}</code></td>
+                <td>{{ item.description }}</td>
+                <td>{{ item.quantity|floatformat:3 }}</td>
+                <td>${{ item.unit_price_net|floatformat:2 }}</td>
+                <td>{{ item.discount_percentage|floatformat:2 }}% (${{ item.discount_amount|floatformat:2 }})</td>
+                <td>${{ item.net_amount|floatformat:2 }}</td>
+                <td>{{ item.iva_rate|floatformat:2 }}% (${{ item.iva_amount|floatformat:2 }})</td>
+                <td><strong>${{ item.total_amount|floatformat:2 }}</strong></td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="9" class="text-center text-muted">Sin items fiscales.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <h4 style="margin-top:1rem;">Intentos de emision</h4>
+    <table class="admin-table">
+        <thead>
+            <tr>
+                <th>Fecha</th>
+                <th>Usuario</th>
+                <th>Resultado</th>
+                <th>Codigo</th>
+                <th>Mensaje</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for attempt in attempts %}
+            <tr>
+                <td>{{ attempt.created_at|date:"d/m/Y H:i" }}</td>
+                <td>{{ attempt.triggered_by.username|default:"Sistema" }}</td>
+                <td>{{ attempt.get_result_status_display }}</td>
+                <td>{{ attempt.error_code|default:"-" }}</td>
+                <td>{{ attempt.error_message|default:"-" }}</td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="5" class="text-center text-muted">Sin intentos registrados.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <div class="form-actions" style="margin-top:1rem;">
+        <a href="{% url 'admin_fiscal_document_print' fiscal_document.pk %}?copy=original" class="btn btn-outline">Original</a>
+        <a href="{% url 'admin_fiscal_document_print' fiscal_document.pk %}?copy=duplicado" class="btn btn-outline">Duplicado</a>
+        <a href="{% url 'admin_fiscal_document_print' fiscal_document.pk %}?copy=triplicado" class="btn btn-outline">Triplicado</a>
+        <a href="{% url 'admin_fiscal_document_list' %}" class="btn btn-outline">Volver</a>
+    </div>
+</div>
+{% endblock %}

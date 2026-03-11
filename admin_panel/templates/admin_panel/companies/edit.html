@@ -1,0 +1,102 @@
+{% extends 'admin_panel/base.html' %}
+
+{% block page_title %}Editar empresa{% endblock %}
+
+{% block content %}
+<div class="admin-form-container">
+    <h2>Editar empresa: {{ company.name }}</h2>
+
+    {% if active_company and active_company.pk == company.pk %}
+    <div class="alert alert-info" style="margin-top: 1rem;">
+        Estas editando la empresa activa actual.
+    </div>
+    {% endif %}
+
+    <form method="post" style="margin-top: 1.5rem;">
+        {% csrf_token %}
+
+        <div class="flex gap-3" style="flex-wrap: wrap;">
+            <div class="form-group" style="flex: 1; min-width: 240px;">
+                <label for="name" class="form-label">Nombre (visible)</label>
+                <input type="text" name="name" id="name" class="form-input" value="{{ company.name }}" required>
+            </div>
+            <div class="form-group" style="flex: 1; min-width: 240px;">
+                <label for="legal_name" class="form-label">Razon social</label>
+                <input type="text" name="legal_name" id="legal_name" class="form-input" value="{{ company.legal_name }}">
+            </div>
+        </div>
+
+        <div class="flex gap-3" style="flex-wrap: wrap;">
+            <div class="form-group" style="flex: 1; min-width: 220px;">
+                <label for="cuit" class="form-label">CUIT</label>
+                <input type="text" name="cuit" id="cuit" class="form-input" value="{{ company.cuit }}">
+            </div>
+            <div class="form-group" style="flex: 1; min-width: 220px;">
+                <label for="email" class="form-label">Email</label>
+                <input type="email" name="email" id="email" class="form-input" value="{{ company.email }}">
+            </div>
+            <div class="form-group" style="flex: 1; min-width: 220px;">
+                <label for="tax_condition" class="form-label">Condicion fiscal</label>
+                <select name="tax_condition" id="tax_condition" class="form-select">
+                    <option value="">Sin definir</option>
+                    {% for key, label in tax_condition_choices %}
+                    <option value="{{ key }}" {% if company.tax_condition == key %}selected{% endif %}>
+                        {{ label }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label for="fiscal_address" class="form-label">Domicilio fiscal</label>
+            <input type="text" name="fiscal_address" id="fiscal_address" class="form-input" value="{{ company.fiscal_address }}">
+        </div>
+
+        <div class="flex gap-3" style="flex-wrap: wrap;">
+            <div class="form-group" style="flex: 1; min-width: 220px;">
+                <label for="fiscal_city" class="form-label">Localidad fiscal</label>
+                <input type="text" name="fiscal_city" id="fiscal_city" class="form-input" value="{{ company.fiscal_city }}">
+            </div>
+            <div class="form-group" style="flex: 1; min-width: 220px;">
+                <label for="fiscal_province" class="form-label">Provincia fiscal</label>
+                <input type="text" name="fiscal_province" id="fiscal_province" class="form-input" value="{{ company.fiscal_province }}">
+            </div>
+            <div class="form-group" style="flex: 1; min-width: 220px;">
+                <label for="postal_code" class="form-label">Codigo postal</label>
+                <input type="text" name="postal_code" id="postal_code" class="form-input" value="{{ company.postal_code }}">
+            </div>
+        </div>
+
+        <div class="flex gap-3" style="flex-wrap: wrap;">
+            <div class="form-group" style="flex: 1; min-width: 220px;">
+                <label for="point_of_sale_default" class="form-label">Punto de venta (default)</label>
+                <input type="text" name="point_of_sale_default" id="point_of_sale_default" class="form-input" value="{{ company.point_of_sale_default }}">
+            </div>
+            <div class="form-group" style="flex: 1; min-width: 220px;">
+                <label for="default_price_list" class="form-label">Lista base</label>
+                <select name="default_price_list" id="default_price_list" class="form-select">
+                    <option value="">Sin lista</option>
+                    {% for price_list in price_lists %}
+                    <option value="{{ price_list.pk }}" {% if company.default_price_list_id == price_list.pk %}selected{% endif %}>
+                        {{ price_list.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group" style="display:flex; align-items:flex-end; min-width: 180px;">
+                <label style="display:flex; align-items:center; gap:8px;">
+                    <input type="checkbox" name="is_active" {% if company.is_active %}checked{% endif %} style="width:18px; height:18px;">
+                    Empresa activa
+                </label>
+            </div>
+        </div>
+
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary">Guardar cambios</button>
+            <a href="{% url 'admin_fiscal_config' %}" class="btn btn-outline">Factura electronica</a>
+            <a href="{% url 'admin_company_list' %}" class="btn btn-outline">Volver</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

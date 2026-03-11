@@ -53,11 +53,11 @@
                 {% if show_prices %}
                 <div class="price-box">
                     {% if discount %}
-                    <p class="detail-list-price">Precio de lista: ${{ product.price|floatformat:2 }}</p>
+                    <p class="detail-list-price">Precio de lista: ${{ base_price|default:product.price|floatformat:2 }}</p>
                     <p class="detail-discount">Descuento: {{ discount_percentage|floatformat:0 }}%</p>
                     <p class="price-final">Precio final: ${{ final_price|floatformat:2 }}</p>
                     {% else %}
-                    <p class="price-final">${{ product.price|floatformat:2 }}</p>
+                    <p class="price-final">${{ base_price|default:product.price|floatformat:2 }}</p>
                     {% endif %}
                 </div>
                 {% else %}

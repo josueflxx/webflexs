@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Category, CategoryAttribute, Product, ClampSpecs, Supplier
+from .models import Category, CategoryAttribute, Product, ClampSpecs, Supplier, PriceList, PriceListItem
 from .services.clamp_parser import ClampParser
 
 class CategoryAttributeInline(admin.TabularInline):
@@ -11,6 +11,12 @@ class ClampSpecsInline(admin.StackedInline):
     model = ClampSpecs
     can_delete = False
     verbose_name_plural = 'Especificaciones de Abrazaderas'
+
+
+class PriceListItemInline(admin.TabularInline):
+    model = PriceListItem
+    extra = 0
+    autocomplete_fields = ("product",)
 
 @admin.action(description='Reparsear especificaciones de Abrazaderas')
 def reparse_abrazaderas(modeladmin, request, queryset):
@@ -69,3 +75,19 @@ class SupplierAdmin(admin.ModelAdmin):
     list_display = ('name', 'is_active', 'updated_at')
     list_filter = ('is_active',)
     search_fields = ('name', 'normalized_name')
+
+
+@admin.register(PriceList)
+class PriceListAdmin(admin.ModelAdmin):
+    list_display = ("name", "company", "is_active", "updated_at")
+    list_filter = ("company", "is_active")
+    search_fields = ("name", "company__name")
+    prepopulated_fields = {"slug": ("name",)}
+    inlines = [PriceListItemInline]
+
+
+@admin.register(PriceListItem)
+class PriceListItemAdmin(admin.ModelAdmin):
+    list_display = ("price_list", "product", "price", "updated_at")
+    list_filter = ("price_list", "price_list__company")
+    search_fields = ("price_list__name", "product__sku", "product__name")

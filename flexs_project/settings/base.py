@@ -4,6 +4,7 @@ Shared configuration for all environments.
 """
 
 import os
+import json
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -20,6 +21,17 @@ def _env_int(name, default):
     except ValueError:
         return default
 
+
+def _env_json(name, default):
+    raw = os.getenv(name, "").strip()
+    if not raw:
+        return default
+    try:
+        data = json.loads(raw)
+        return data
+    except json.JSONDecodeError:
+        return default
+
 # Build paths inside the project
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
@@ -33,6 +45,9 @@ SECRET_KEY = os.getenv(
 DEBUG = os.getenv('DJANGO_DEBUG', 'True').lower() == 'true'
 
 ALLOWED_HOSTS = os.getenv('DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
+
+# Default company for new client origin (Ubolt by default).
+DEFAULT_CLIENT_ORIGIN_COMPANY_SLUG = os.getenv('DEFAULT_CLIENT_ORIGIN_COMPANY_SLUG', 'ubolt')
 
 # Application definition
 INSTALLED_APPS = [
@@ -62,6 +77,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'core.middleware.ActiveCompanyMiddleware',
     'core.middleware.ReadOnlyModeMiddleware',
     'core.middleware.SessionIdleTimeoutMiddleware',
     'core.middleware.AuditRequestContextMiddleware',
@@ -89,6 +105,7 @@ TEMPLATES = [
                 'django.contrib.messages.context_processors.messages',
                 'core.context_processors.site_settings',
                 'core.context_processors.active_admins',
+                'core.context_processors.active_company_context',
             ],
         },
     },
@@ -162,6 +179,31 @@ FEATURE_ADVANCED_SEARCH_ENABLED = os.getenv('FEATURE_ADVANCED_SEARCH_ENABLED', '
 FEATURE_OBSERVABILITY_ENABLED = os.getenv('FEATURE_OBSERVABILITY_ENABLED', 'False').lower() == 'true'
 FEATURE_READ_ONLY_MODE = os.getenv('FEATURE_READ_ONLY_MODE', 'False').lower() == 'true'
 ORDER_REQUIRE_PAYMENT_FOR_CONFIRMATION = os.getenv('ORDER_REQUIRE_PAYMENT_FOR_CONFIRMATION', 'False').lower() == 'true'
+
+# ARCA / WSFE integration (Phase 4 - homologation first)
+ARCA_ALLOW_PRODUCTION = os.getenv("ARCA_ALLOW_PRODUCTION", "False").lower() == "true"
+ARCA_TIMEOUT_SECONDS = max(_env_int("ARCA_TIMEOUT_SECONDS", 30), 5)
+ARCA_OPENSSL_BIN = os.getenv("ARCA_OPENSSL_BIN", "openssl").strip() or "openssl"
+ARCA_WSAA_SERVICE = os.getenv("ARCA_WSAA_SERVICE", "wsfe").strip() or "wsfe"
+ARCA_WSAA_URL_HOMOLOGATION = os.getenv(
+    "ARCA_WSAA_URL_HOMOLOGATION",
+    "https://wsaahomo.afip.gov.ar/ws/services/LoginCms",
+).strip()
+ARCA_WSAA_URL_PRODUCTION = os.getenv(
+    "ARCA_WSAA_URL_PRODUCTION",
+    "https://wsaa.afip.gov.ar/ws/services/LoginCms",
+).strip()
+ARCA_WSFE_URL_HOMOLOGATION = os.getenv(
+    "ARCA_WSFE_URL_HOMOLOGATION",
+    "https://wswhomo.afip.gov.ar/wsfev1/service.asmx",
+).strip()
+ARCA_WSFE_URL_PRODUCTION = os.getenv(
+    "ARCA_WSFE_URL_PRODUCTION",
+    "https://servicios1.afip.gov.ar/wsfev1/service.asmx",
+).strip()
+# JSON esperado:
+# {"ubolt":{"homologation":{"cuit":"20123456789","cert_path":"C:/certs/ubolt_homo.crt","key_path":"C:/certs/ubolt_homo.key"}}}
+ARCA_COMPANY_CONFIG = _env_json("ARCA_COMPANY_CONFIG_JSON", {})
 
 # Django REST Framework
 REST_FRAMEWORK = {

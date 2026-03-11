@@ -14,7 +14,11 @@
             </p>
         </div>
         <div class="toolbar-actions">
-            <a href="{% url 'admin_payment_list' %}?client_id={{ client.pk }}" class="btn btn-primary">Registrar Pago</a>
+            {% if client_company_missing %}
+            <button type="button" class="btn btn-primary" disabled>Registrar Pago</button>
+            {% else %}
+            <a href="{% url 'admin_payment_list' %}?client_id={{ client.pk }}&company_id={{ selected_company_id }}" class="btn btn-primary">Registrar Pago</a>
+            {% endif %}
             {% if can_edit_client_profile %}
             <a href="{% url 'admin_client_edit' client.pk %}" class="btn btn-outline">Editar Cliente</a>
             {% endif %}
@@ -22,6 +26,51 @@
         </div>
     </div>
 
+    <div class="admin-toolbar" style="border-top:1px solid rgba(255,255,255,.08); flex-wrap:wrap;">
+        <div class="toolbar-actions" style="flex-wrap:wrap;">
+            <form method="post" action="{% url 'admin_client_quick_order' client.pk %}" style="display:inline;">
+                {% csrf_token %}
+                <input type="hidden" name="company_id" value="{{ selected_company_id }}">
+                <input type="hidden" name="action" value="quote">
+                <button type="submit" class="btn btn-primary" {% if client_company_missing %}disabled{% endif %}>Nueva cotizacion</button>
+            </form>
+            <form method="post" action="{% url 'admin_client_quick_order' client.pk %}" style="display:inline;">
+                {% csrf_token %}
+                <input type="hidden" name="company_id" value="{{ selected_company_id }}">
+                <input type="hidden" name="action" value="order">
+                <button type="submit" class="btn btn-outline" {% if client_company_missing %}disabled{% endif %}>Nuevo pedido</button>
+            </form>
+            {% if client_company_missing %}
+            <button type="button" class="btn btn-outline" disabled>Nuevo recibo</button>
+            {% else %}
+            <a href="{% url 'admin_payment_list' %}?client_id={{ client.pk }}&company_id={{ selected_company_id }}" class="btn btn-outline">Nuevo recibo</a>
+            {% endif %}
+            <button type="button" class="btn btn-outline" disabled>Nuevo remito (pendiente)</button>
+            <button type="button" class="btn btn-outline" disabled>Nueva factura (pendiente)</button>
+            <button type="button" class="btn btn-outline" disabled>Nota de credito (pendiente)</button>
+        </div>
+        <small class="text-muted" style="margin-left:auto;">
+            Empresa activa: {{ active_company.name|default:"default" }}
+        </small>
+    </div>
+
+    {% if client_company_missing %}
+    <div class="alert alert-warning" style="margin-bottom: 16px;">
+        Este cliente no estÃ¡ habilitado para operar en la empresa activa. Las acciones comerciales quedan bloqueadas.
+    </div>
+    {% endif %}
+
+    <div class="admin-toolbar" style="border-top:1px solid rgba(255,255,255,.08);">
+        <div class="toolbar-actions" style="flex-wrap:wrap;">
+            <a href="#resumen" class="btn btn-outline">Resumen</a>
+            <a href="#pedidos" class="btn btn-outline">Pedidos</a>
+            <a href="#pagos" class="btn btn-outline">Pagos</a>
+            <a href="#cuenta" class="btn btn-outline">Cuenta corriente</a>
+            <a href="#documentos" class="btn btn-outline">Documentos</a>
+        </div>
+    </div>
+
+    <section id="resumen">
     <div class="admin-toolbar client-history-toolbar">
         <div class="client-history-metrics">
             <article class="history-metric-card is-info">
@@ -70,7 +119,60 @@
     </div>
 
     <div class="admin-toolbar" style="border-top:1px solid rgba(255,255,255,.08);">
+        <div style="display:grid;grid-template-columns:repeat(3,minmax(220px,1fr));gap:12px;width:100%;">
+            <div style="border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:14px;background:rgba(0,0,0,.2);">
+                <strong>Datos generales</strong>
+                <div class="text-muted" style="margin-top:6px;">
+                    Usuario: {{ client.user.username|default:"-" }}<br>
+                    Email: {{ client.user.email|default:"-" }}<br>
+                    Telefono: {{ client.phone|default:"-" }}
+                </div>
+            </div>
+            <div style="border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:14px;background:rgba(0,0,0,.2);">
+                <strong>Datos comerciales</strong>
+                <div class="text-muted" style="margin-top:6px;">
+                    Categoria: {{ effective_category.name|default:"-" }}<br>
+                    Descuento: {{ effective_discount|floatformat:2 }}%<br>
+                    Lista: {{ effective_price_list.name|default:"-" }}<br>
+                    Condicion: {{ sale_condition_label }}
+                </div>
+            </div>
+            <div style="border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:14px;background:rgba(0,0,0,.2);">
+                <strong>Datos fiscales</strong>
+                <div class="text-muted" style="margin-top:6px;">
+                    Doc: {{ client.document_type|default:"-" }} {{ client.document_number|default:"-" }}<br>
+                    IVA: {{ client.get_iva_condition_display|default:"-" }}<br>
+                    Domicilio: {{ client.fiscal_address|default:"-" }}<br>
+                    {{ client.fiscal_city|default:"-" }} - {{ client.fiscal_province|default:"-" }} ({{ client.postal_code|default:"-" }})
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="admin-toolbar" style="border-top:1px solid rgba(255,255,255,.08);">
+        <div class="client-history-metrics">
+            <article class="history-metric-card is-warning">
+                <span class="history-metric-label">Operaciones abiertas</span>
+                <strong class="history-metric-value">{{ open_orders_count }}</strong>
+            </article>
+            <article class="history-metric-card is-secondary">
+                <span class="history-metric-label">Saldo actual</span>
+                <strong class="history-metric-value">${{ balance_summary.current_balance|floatformat:2 }}</strong>
+            </article>
+        </div>
+    </div>
+    </section>
+
+    <section id="pedidos">
+    <div class="admin-toolbar" style="border-top:1px solid rgba(255,255,255,.08);">
         <form method="get" class="toolbar-search">
+            <select name="company_id" class="form-select">
+                {% for company in companies %}
+                <option value="{{ company.pk }}" {% if selected_company_id == company.pk|stringformat:'s' %}selected{% endif %}>
+                    {{ company.name }}
+                </option>
+                {% endfor %}
+            </select>
             <select name="status" class="form-select">
                 <option value="">Todos los estados</option>
                 {% for value, label in status_choices %}
@@ -87,6 +189,7 @@
             <tr>
                 <th>#</th>
                 <th>Fecha</th>
+                <th>Empresa</th>
                 <th>Items</th>
                 <th>Subtotal</th>
                 <th>Descuento</th>
@@ -100,6 +203,7 @@
             <tr>
                 <td><strong>{{ order.pk }}</strong></td>
                 <td>{{ order.created_at|date:"d/m/Y H:i" }}</td>
+                <td>{{ order.company.name|default:"-" }}</td>
                 <td>{{ order.get_item_count }}</td>
                 <td>${{ order.subtotal|floatformat:2 }}</td>
                 <td>
@@ -131,17 +235,33 @@
             </tr>
             {% empty %}
             <tr>
-                <td colspan="8" class="text-center text-muted">Este cliente no tiene pedidos cargados.</td>
+                <td colspan="9" class="text-center text-muted">Este cliente no tiene pedidos cargados.</td>
             </tr>
             {% endfor %}
         </tbody>
     </table>
+    {% if page_obj.paginator.num_pages > 1 %}
+    <div class="admin-toolbar">
+        <span>Pagina {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
+        <div class="toolbar-actions">
+            {% if page_obj.has_previous %}
+            <a href="?page={{ page_obj.previous_page_number }}&status={{ status }}&company_id={{ selected_company_id }}" class="btn btn-outline"><- Anterior</a>
+            {% endif %}
+            {% if page_obj.has_next %}
+            <a href="?page={{ page_obj.next_page_number }}&status={{ status }}&company_id={{ selected_company_id }}" class="btn btn-outline">Siguiente -></a>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+    </section>
 
+    <section id="pagos">
     <h3 style="margin: 1.2rem 0 .8rem;">Pagos del Cliente</h3>
     <table class="admin-table" style="margin-bottom: 1rem;">
         <thead>
             <tr>
                 <th>Fecha</th>
+                <th>Empresa</th>
                 <th>Pedido</th>
                 <th>Monto</th>
                 <th>Medio</th>
@@ -153,6 +273,7 @@
             {% for payment in payments_recent %}
             <tr>
                 <td>{{ payment.paid_at|date:"d/m/Y H:i" }}</td>
+                <td>{{ payment.company.name|default:"-" }}</td>
                 <td>
                     {% if payment.order_id %}
                     <a href="{% url 'admin_order_detail' payment.order_id %}" class="btn btn-outline btn-sm">#{{ payment.order_id }}</a>
@@ -173,12 +294,14 @@
             </tr>
             {% empty %}
             <tr>
-                <td colspan="6" class="text-center text-muted">No hay pagos para este cliente.</td>
+                <td colspan="7" class="text-center text-muted">No hay pagos para este cliente.</td>
             </tr>
             {% endfor %}
         </tbody>
     </table>
+    </section>
 
+    <section id="cuenta">
     <div class="admin-toolbar" style="border-top:1px solid rgba(255,255,255,.08); margin-top: 1rem;">
         <h3 style="margin:0;">Libro Diario de Cuenta Corriente</h3>
     </div>
@@ -248,6 +371,7 @@
             <thead>
                 <tr>
                     <th>Fecha</th>
+                    <th>Empresa</th>
                     <th>Tipo</th>
                     <th>Referencia</th>
                     <th>Debe</th>
@@ -260,6 +384,7 @@
                 {% for row in ledger_rows %}
                 <tr>
                     <td>{{ row.tx.occurred_at|date:"d/m/Y H:i" }}</td>
+                    <td>{{ row.tx.company.name|default:"-" }}</td>
                     <td>{{ row.tx.get_transaction_type_display }}</td>
                     <td>
                         {% if row.tx.order_id %}
@@ -287,25 +412,74 @@
                 </tr>
                 {% empty %}
                 <tr>
-                    <td colspan="7" class="text-center text-muted">No hay movimientos en el libro diario.</td>
+                    <td colspan="8" class="text-center text-muted">No hay movimientos en el libro diario.</td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
     </div>
 
-    {% if page_obj.paginator.num_pages > 1 %}
-    <div class="admin-toolbar">
-        <span>Pagina {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
-        <div class="toolbar-actions">
-            {% if page_obj.has_previous %}
-            <a href="?page={{ page_obj.previous_page_number }}&status={{ status }}" class="btn btn-outline"><- Anterior</a>
-            {% endif %}
-            {% if page_obj.has_next %}
-            <a href="?page={{ page_obj.next_page_number }}&status={{ status }}" class="btn btn-outline">Siguiente -></a>
-            {% endif %}
+    </section>
+
+    <section id="documentos">
+    <div class="admin-toolbar" style="border-top:1px solid rgba(255,255,255,.08); margin-top: 1rem;">
+        <h3 style="margin:0;">Documentos Internos</h3>
+    </div>
+    <div style="padding: 1rem; border-top: 1px solid rgba(255,255,255,.08);">
+        <div style="display:grid;grid-template-columns:repeat(2,minmax(240px,1fr));gap:12px;">
+            {% for doc_type, docs in documents_by_type.items %}
+            <div style="border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:12px;background:rgba(0,0,0,.2);">
+                <strong>{{ doc_type }}</strong>
+                {% if docs %}
+                <ul style="margin:6px 0 0;padding-left:18px;">
+                    {% for doc in docs %}
+                    <li>
+                        {{ doc.get_doc_type_display }} #{{ doc.number|stringformat:"07d" }}
+                        <a href="{% url 'admin_internal_document_print' doc.pk %}?copy=original" class="btn btn-outline btn-sm">Imprimir</a>
+                        <a href="{% url 'admin_internal_document_print' doc.pk %}?copy=original&download=1" class="btn btn-outline btn-sm">PDF</a>
+                        <a href="{% url 'admin_internal_document_print' doc.pk %}?copy=duplicado" class="btn btn-outline btn-sm">Duplicado</a>
+                        <a href="{% url 'admin_internal_document_print' doc.pk %}?copy=triplicado" class="btn btn-outline btn-sm">Triplicado</a>
+                        <a href="mailto:?subject={{ doc.get_doc_type_display }}%20{{ doc.number|stringformat:'07d' }}&body=Documento%20disponible%20en%20el%20panel%20interno." class="btn btn-outline btn-sm">Mail</a>
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <small class="text-muted">Sin documentos recientes.</small>
+                {% endif %}
+            </div>
+            {% endfor %}
         </div>
     </div>
-    {% endif %}
+
+    <div class="admin-toolbar" style="border-top:1px solid rgba(255,255,255,.08);">
+        <h3 style="margin:0;">Comprobantes Oficiales (SaaS)</h3>
+    </div>
+    <table class="admin-table" style="margin-bottom: 1rem;">
+        <thead>
+            <tr>
+                <th>Fecha</th>
+                <th>Tipo</th>
+                <th>Numero</th>
+                <th>Total</th>
+                <th>Pedido</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for doc in official_docs %}
+            <tr>
+                <td>{{ doc.saas_document_date|date:"d/m/Y"|default:"-" }}</td>
+                <td>{{ doc.saas_document_type|default:"Factura" }}</td>
+                <td>{{ doc.saas_document_number|default:"-" }}</td>
+                <td>${{ doc.total|floatformat:2 }}</td>
+                <td><a href="{% url 'admin_order_detail' doc.pk %}" class="btn btn-outline btn-sm">#{{ doc.pk }}</a></td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="5" class="text-center text-muted">No hay comprobantes oficiales registrados.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    </section>
 </div>
 {% endblock %}

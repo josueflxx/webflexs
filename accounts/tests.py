@@ -3,9 +3,10 @@ from django.core.cache import cache
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
-from accounts.models import ClientCategory, ClientPayment, ClientProfile, ClientTransaction
+from accounts.models import ClientCategory, ClientCompany, ClientPayment, ClientProfile, ClientTransaction
 from accounts.services.client_importer import ClientImporter
 from orders.models import Order
+from core.services.company_context import get_default_company
 
 
 class LoginSecurityTests(TestCase):
@@ -63,10 +64,17 @@ class ClientLedgerTests(TestCase):
             user=self.user,
             company_name="Cliente Ledger",
         )
+        self.company = get_default_company()
+        self.client_company = ClientCompany.objects.create(
+            client_profile=self.profile,
+            company=self.company,
+            is_active=True,
+        )
 
     def test_current_balance_prefers_ledger_when_available(self):
         ClientTransaction.objects.create(
             client_profile=self.profile,
+            company=self.company,
             transaction_type=ClientTransaction.TYPE_ORDER_CHARGE,
             amount="100.00",
             description="Cargo pedido #1",
@@ -74,6 +82,7 @@ class ClientLedgerTests(TestCase):
         )
         ClientTransaction.objects.create(
             client_profile=self.profile,
+            company=self.company,
             transaction_type=ClientTransaction.TYPE_PAYMENT,
             amount="-35.00",
             description="Pago #1",
@@ -85,14 +94,17 @@ class ClientLedgerTests(TestCase):
     def test_client_payment_save_creates_or_updates_ledger_transaction(self):
         order = Order.objects.create(
             user=self.user,
+            company=self.company,
             status=Order.STATUS_CONFIRMED,
             subtotal="100.00",
             total="100.00",
             client_company="Cliente Ledger",
+            client_company_ref=self.client_company,
         )
         payment = ClientPayment.objects.create(
             client_profile=self.profile,
             order=order,
+            company=self.company,
             amount="40.00",
             method=ClientPayment.METHOD_TRANSFER,
         )

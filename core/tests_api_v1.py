@@ -4,9 +4,10 @@ from django.contrib.auth.models import User
 from django.test import TestCase
 from django.urls import reverse
 
-from accounts.models import ClientProfile
+from accounts.models import ClientCompany, ClientProfile
 from catalog.models import Category, Product
 from orders.models import Order
+from core.services.company_context import get_default_company
 
 
 class ApiV1Tests(TestCase):
@@ -39,6 +40,17 @@ class ApiV1Tests(TestCase):
             company_name="Otro Cliente",
             cuit_dni="27-12345678-1",
             is_approved=True,
+        )
+        self.company = get_default_company()
+        self.client_company = ClientCompany.objects.create(
+            client_profile=self.client_profile,
+            company=self.company,
+            is_active=True,
+        )
+        self.other_client_company = ClientCompany.objects.create(
+            client_profile=self.other_profile,
+            company=self.company,
+            is_active=True,
         )
 
         self.category_active = Category.objects.create(name="Categoria API", is_active=True)
@@ -77,15 +89,19 @@ class ApiV1Tests(TestCase):
 
         self.order_client = Order.objects.create(
             user=self.client_user,
+            company=self.company,
             status=Order.STATUS_CONFIRMED,
             subtotal=Decimal("1000.00"),
             total=Decimal("1000.00"),
+            client_company_ref=self.client_company,
         )
         self.order_other = Order.objects.create(
             user=self.other_user,
+            company=self.company,
             status=Order.STATUS_DRAFT,
             subtotal=Decimal("700.00"),
             total=Decimal("700.00"),
+            client_company_ref=self.other_client_company,
         )
 
     def _results(self, response):

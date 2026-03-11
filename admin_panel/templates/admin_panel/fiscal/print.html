@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ fiscal_document.get_doc_type_display }} {{ fiscal_document.number|default:"-" }}</title>
+    <style>
+        body { font-family: Arial, sans-serif; color: #111; margin: 24px; }
+        .header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom: 16px; }
+        .copy-badge { border: 1px solid #111; padding: 4px 10px; font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+        table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+        th, td { border: 1px solid #ddd; padding: 6px; font-size: 12px; }
+        th { background: #f4f4f4; text-align:left; }
+        .totals { margin-top: 16px; width: 320px; margin-left: auto; }
+        .totals td { border: none; padding: 4px; }
+        .muted { color: #666; font-size: 12px; }
+        @media print { .print-actions { display:none; } body { margin: 10mm; } }
+    </style>
+</head>
+<body>
+    <div class="print-actions" style="margin-bottom: 12px;">
+        <button onclick="window.print()">Imprimir</button>
+    </div>
+
+    <div class="header">
+        <div>
+            <h2 style="margin:0;">{{ fiscal_document.company.name }}</h2>
+            <div class="muted">{{ fiscal_document.company.legal_name|default:"-" }}</div>
+            <div class="muted">CUIT: {{ fiscal_document.company.cuit|default:"-" }}</div>
+            <div class="muted">{{ fiscal_document.company.fiscal_address|default:"-" }}</div>
+        </div>
+        <div style="text-align:right;">
+            <div class="copy-badge">{{ copy_type }}</div>
+            <h3 style="margin:10px 0 0;">{{ fiscal_document.get_doc_type_display }}</h3>
+            <div>PV {{ fiscal_document.point_of_sale.number }} - Nro {{ fiscal_document.number|default:"-" }}</div>
+            <div>Fecha: {{ fiscal_document.issued_at|date:"d/m/Y H:i"|default:"-" }}</div>
+            <div>Estado: {{ fiscal_document.get_status_display }}</div>
+        </div>
+    </div>
+
+    <div style="margin-bottom:12px;">
+        <strong>Cliente:</strong> {{ fiscal_document.client_company_ref.client_profile.company_name|default:"-" }}<br>
+        <strong>Pedido:</strong> {{ fiscal_document.order_id|default:"-" }}<br>
+        <strong>Modo:</strong> {{ fiscal_document.get_issue_mode_display }}
+        {% if fiscal_document.external_system %}
+        <br><strong>Externo:</strong> {{ fiscal_document.external_system }} / {{ fiscal_document.external_number|default:fiscal_document.external_id|default:"-" }}
+        {% endif %}
+    </div>
+
+    <table>
+        <thead>
+            <tr>
+                <th>#</th>
+                <th>SKU</th>
+                <th>Descripcion</th>
+                <th>Cantidad</th>
+                <th>Unitario neto</th>
+                <th>Descuento</th>
+                <th>Neto</th>
+                <th>IVA</th>
+                <th>Total</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in items %}
+            <tr>
+                <td>{{ item.line_number }}</td>
+                <td>{{ item.sku|default:"-" }}</td>
+                <td>{{ item.description }}</td>
+                <td>{{ item.quantity|floatformat:3 }}</td>
+                <td>${{ item.unit_price_net|floatformat:2 }}</td>
+                <td>{{ item.discount_percentage|floatformat:2 }}%</td>
+                <td>${{ item.net_amount|floatformat:2 }}</td>
+                <td>${{ item.iva_amount|floatformat:2 }}</td>
+                <td>${{ item.total_amount|floatformat:2 }}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="9">Sin items.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <table class="totals">
+        <tr><td>Subtotal neto</td><td style="text-align:right;">${{ fiscal_document.subtotal_net|floatformat:2 }}</td></tr>
+        <tr><td>Descuento</td><td style="text-align:right;">${{ fiscal_document.discount_total|floatformat:2 }}</td></tr>
+        <tr><td>IVA</td><td style="text-align:right;">${{ fiscal_document.tax_total|floatformat:2 }}</td></tr>
+        <tr><td><strong>Total</strong></td><td style="text-align:right;"><strong>${{ fiscal_document.total|floatformat:2 }}</strong></td></tr>
+    </table>
+
+    <p class="muted" style="margin-top: 18px;">
+        Documento fiscal local del sistema. Emision ARCA pendiente de fases posteriores.
+    </p>
+</body>
+</html>

@@ -126,6 +126,8 @@ def run_import_execution(task_id, execution_id, import_type, importer_class_path
             ImportTaskManager.update_progress(task_id, current, total, f"Procesando fila {current} de {total}")
 
         importer = importer_class(file_path)
+        if execution and getattr(execution, "company_id", None):
+            importer.company = execution.company
         result = importer.run(dry_run=dry_run, progress_callback=progress_callback)
 
         created_refs = collect_created_refs(import_type, result.row_results) if not dry_run else []

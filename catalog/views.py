@@ -20,6 +20,14 @@ from django.views.decorators.http import require_POST
 from core.models import CatalogAnalyticsEvent, CatalogExcelTemplate, SiteSettings
 from core.services.advanced_search import apply_text_search, build_text_query
 from core.services.catalog_excel_exporter import build_catalog_workbook, build_export_filename
+from core.services.company_context import get_active_company
+from core.services.pricing import (
+    build_price_list_item_map,
+    resolve_effective_discount_percentage,
+    resolve_effective_price_list,
+    resolve_pricing_context,
+    get_product_pricing,
+)
 from orders.models import Cart, CartItem, ClientFavoriteProduct
 
 from catalog.services.clamp_request_products import get_or_create_request_product
@@ -92,7 +100,7 @@ ADVANCED_KEY_ALIASES = {
 }
 
 
-def can_use_clamp_measure_feature(user):
+def can_use_clamp_measure_feature(user, company=None):
     """
     Clamp custom measure feature is available only for:
     - Admin users
@@ -103,7 +111,13 @@ def can_use_clamp_measure_feature(user):
     if user.is_staff:
         return True
     profile = getattr(user, "client_profile", None)
-    return bool(profile and getattr(profile, "is_approved", False))
+    if not profile:
+        return False
+    if not getattr(profile, "is_approved", False):
+        return False
+    if company:
+        return profile.can_operate_in_company(company)
+    return True
 
 
 @lru_cache(maxsize=1)
@@ -745,14 +759,34 @@ def catalog(request):
     settings = SiteSettings.get_settings()
     show_prices = settings.show_public_prices or request.user.is_authenticated
 
-    discount = 0
+    company = get_active_company(request)
+    discount_percentage = Decimal("0")
+    discount = Decimal("0")
+    pricing_context = None
+    price_list = None
     favorite_product_ids = set()
     if request.user.is_authenticated and hasattr(request.user, "client_profile"):
-        discount = request.user.client_profile.get_discount_decimal()
+        pricing_context = resolve_pricing_context(request.user, company)
+        price_list = resolve_effective_price_list(
+            company=company,
+            client_company=pricing_context[1],
+            client_category=pricing_context[2],
+        )
+        discount_percentage = resolve_effective_discount_percentage(
+            client_profile=pricing_context[0],
+            company=company,
+            client_company=pricing_context[1],
+            client_category=pricing_context[2],
+        )
+        discount = discount_percentage / 100 if discount_percentage else Decimal("0")
         favorite_product_ids = set(
             ClientFavoriteProduct.objects.filter(user=request.user).values_list("product_id", flat=True)
         )
+    else:
+        price_list = resolve_effective_price_list(company=company)
 
+    product_ids = [product.id for product in page_obj.object_list]
+    price_item_map = build_price_list_item_map(price_list, product_ids)
     for product in page_obj.object_list:
         linked_categories = list(getattr(product, "prefetched_active_categories", []))
         if (
@@ -764,11 +798,15 @@ def catalog(request):
             linked_categories.append(product.category)
         product.display_categories = linked_categories[:3]
         product.is_favorite = product.id in favorite_product_ids
-        if discount > 0:
-            fixed_discount = discount / 100 if discount > 1 else discount
-            product.final_price = product.price * (1 - fixed_discount)
-        else:
-            product.final_price = product.price
+        pricing = get_product_pricing(
+            product,
+            company=company,
+            price_list=price_list,
+            item_map=price_item_map,
+            context=pricing_context,
+        )
+        product.base_price = pricing.base_price
+        product.final_price = pricing.final_price
 
     expanded_category_ids = []
     current_category_has_descendants = False
@@ -883,9 +921,27 @@ def product_detail(request, sku):
     settings = SiteSettings.get_settings()
     show_prices = settings.show_public_prices or request.user.is_authenticated
 
-    discount = 0
+    company = get_active_company(request)
+    discount_percentage = Decimal("0")
+    discount = Decimal("0")
+    pricing_context = None
+    price_list = None
     if request.user.is_authenticated and hasattr(request.user, "client_profile"):
-        discount = request.user.client_profile.get_discount_decimal()
+        pricing_context = resolve_pricing_context(request.user, company)
+        price_list = resolve_effective_price_list(
+            company=company,
+            client_company=pricing_context[1],
+            client_category=pricing_context[2],
+        )
+        discount_percentage = resolve_effective_discount_percentage(
+            client_profile=pricing_context[0],
+            company=company,
+            client_company=pricing_context[1],
+            client_category=pricing_context[2],
+        )
+        discount = discount_percentage / 100 if discount_percentage else Decimal("0")
+    else:
+        price_list = resolve_effective_price_list(company=company)
     is_favorite = False
     if request.user.is_authenticated:
         is_favorite = ClientFavoriteProduct.objects.filter(
@@ -893,7 +949,14 @@ def product_detail(request, sku):
             product_id=product.id,
         ).exists()
 
-    final_price = product.price * (1 - discount) if discount else product.price
+    pricing = get_product_pricing(
+        product,
+        company=company,
+        price_list=price_list,
+        context=pricing_context,
+    )
+    final_price = pricing.final_price
+    base_price = pricing.base_price
     linked_categories = list(getattr(product, "prefetched_active_categories", []))
     if (
         product.category_id
@@ -918,8 +981,9 @@ def product_detail(request, sku):
         "display_categories": linked_categories[:6],
         "show_prices": show_prices,
         "discount": discount,
-        "discount_percentage": discount * 100,
+        "discount_percentage": discount_percentage,
         "final_price": final_price,
+        "base_price": base_price,
         "price_message": settings.public_prices_message,
         "primary_category": primary_category,
         "category_breadcrumb": category_breadcrumb,
@@ -937,10 +1001,17 @@ def client_catalog_excel_download(request):
     """Download the published catalog Excel template for approved clients/admins."""
     if not request.user.is_staff:
         profile = getattr(request.user, "client_profile", None)
+        company = get_active_company(request)
         if not profile or not getattr(profile, "is_approved", False):
             messages.warning(
                 request,
                 "La descarga de Excel esta disponible solo para clientes aprobados.",
+            )
+            return redirect("catalog")
+        if company and not profile.can_operate_in_company(company):
+            messages.warning(
+                request,
+                "Tu cuenta no esta habilitada para descargar el catalogo en esta empresa.",
             )
             return redirect("catalog")
 
@@ -962,7 +1033,24 @@ def client_catalog_excel_download(request):
         )
         return redirect("catalog")
 
-    workbook, _stats = build_catalog_workbook(template)
+    company = get_active_company(request)
+    pricing_context = resolve_pricing_context(request.user, company) if request.user.is_authenticated else None
+    price_list = resolve_effective_price_list(
+        company=company,
+        client_company=pricing_context[1] if pricing_context else None,
+        client_category=pricing_context[2] if pricing_context else None,
+    )
+    discount_percentage = resolve_effective_discount_percentage(
+        client_profile=pricing_context[0] if pricing_context else None,
+        company=company,
+        client_company=pricing_context[1] if pricing_context else None,
+        client_category=pricing_context[2] if pricing_context else None,
+    )
+    workbook, _stats = build_catalog_workbook(
+        template,
+        price_list=price_list,
+        discount_percentage=discount_percentage,
+    )
     file_name = build_export_filename(template)
     response = HttpResponse(
         content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -1008,7 +1096,8 @@ def clamp_measure_request(request):
     2) If not found, submit "consultar precio" request.
     3) Admin confirms a price and client can later see it in this page.
     """
-    if not can_use_clamp_measure_feature(request.user):
+    company = get_active_company(request)
+    if not can_use_clamp_measure_feature(request.user, company=company):
         messages.error(
             request,
             "Esta opcion esta disponible solo para clientes aprobados o administradores.",
@@ -1054,7 +1143,10 @@ def clamp_measure_request(request):
     allowed_feedback_ids = {int(item) for item in feedback_ids if str(item).isdigit()}
     request_id = str(request.GET.get("request_id", "")).strip()
     if request_id.isdigit():
-        candidate = ClampMeasureRequest.objects.filter(pk=int(request_id)).first()
+        candidate_qs = ClampMeasureRequest.objects.filter(pk=int(request_id))
+        if company:
+            candidate_qs = candidate_qs.filter(company=company)
+        candidate = candidate_qs.first()
         if candidate:
             is_allowed = bool(request.user.is_authenticated and request.user.is_staff)
             if not is_allowed and request.user.is_authenticated and candidate.client_user_id == request.user.pk:
@@ -1065,13 +1157,18 @@ def clamp_measure_request(request):
                 created_request = candidate
 
     if request.user.is_authenticated:
-        client_requests = ClampMeasureRequest.objects.filter(client_user=request.user).order_by("-created_at")[:25]
+        client_requests = ClampMeasureRequest.objects.filter(client_user=request.user)
+        if company:
+            client_requests = client_requests.filter(company=company)
+        client_requests = client_requests.order_by("-created_at")[:25]
     else:
-        client_requests = (
-            ClampMeasureRequest.objects.filter(pk__in=allowed_feedback_ids).order_by("-created_at")[:25]
-            if allowed_feedback_ids
-            else []
-        )
+        if allowed_feedback_ids:
+            client_requests = ClampMeasureRequest.objects.filter(pk__in=allowed_feedback_ids)
+            if company:
+                client_requests = client_requests.filter(company=company)
+            client_requests = client_requests.order_by("-created_at")[:25]
+        else:
+            client_requests = []
 
     if request.method == "POST":
         form_values.update(
@@ -1155,6 +1252,7 @@ def clamp_measure_request(request):
 
                     created = ClampMeasureRequest.objects.create(
                         client_user=request.user if request.user.is_authenticated else None,
+                        company=company,
                         client_name=client_name,
                         client_email=client_email,
                         client_phone=client_phone,
@@ -1215,15 +1313,19 @@ def clamp_measure_request(request):
 @require_POST
 def clamp_request_add_to_cart(request, pk):
     """Add a completed custom clamp request into client cart."""
-    if not can_use_clamp_measure_feature(request.user):
+    company = get_active_company(request)
+    if not can_use_clamp_measure_feature(request.user, company=company):
         messages.error(
             request,
             "Esta opcion esta disponible solo para clientes aprobados o administradores.",
         )
         return redirect("catalog")
 
+    clamp_qs = ClampMeasureRequest.objects.select_related("linked_product")
+    if company:
+        clamp_qs = clamp_qs.filter(company=company)
     clamp_request = get_object_or_404(
-        ClampMeasureRequest.objects.select_related("linked_product"),
+        clamp_qs,
         pk=pk,
         client_user=request.user,
     )
@@ -1253,7 +1355,10 @@ def clamp_request_add_to_cart(request, pk):
         product.price = clamp_request.confirmed_price
         product.save(update_fields=["price", "updated_at"])
 
-    cart, _ = Cart.objects.get_or_create(user=request.user)
+    cart, _ = Cart.objects.get_or_create(user=request.user, defaults={"company": company})
+    if not cart.company_id and company:
+        cart.company = company
+        cart.save(update_fields=["company"])
     cart_item, created = CartItem.objects.get_or_create(
         cart=cart,
         product=product,

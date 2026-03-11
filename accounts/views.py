@@ -9,10 +9,18 @@ from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.core.cache import cache
 from django.shortcuts import redirect, render
+from django.urls import reverse
 from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
 
 from .models import AccountRequest
+from core.models import Company
+from core.services.company_context import (
+    get_active_company,
+    get_user_companies,
+    set_active_company,
+    user_has_company_access,
+)
 
 
 def _get_client_ip(request):
@@ -111,6 +119,11 @@ def login_redirect(request):
     Redirect after login based on user role.
     Admin sees choice screen, client goes to catalog.
     """
+    companies = list(get_user_companies(request.user))
+    active_company = get_active_company(request)
+    if len(companies) > 1 and not active_company:
+        target = reverse("admin_dashboard") if request.user.is_staff else reverse("catalog")
+        return redirect(f"{reverse('select_company')}?next={target}")
     if request.user.is_staff:
         return render(request, "accounts/admin_redirect.html")
     return redirect("catalog")
@@ -126,6 +139,63 @@ def logout_view(request):
     logout(request)
     messages.info(request, "Has cerrado sesion.")
     return redirect("home")
+
+
+@login_required
+def select_company(request):
+    """
+    Mandatory company selection for multi-company users.
+    """
+    companies = list(get_user_companies(request.user))
+    if not companies:
+        messages.error(request, "No tenes empresas habilitadas para operar.")
+        return redirect("home")
+
+    next_url = request.GET.get("next", "").strip()
+    if next_url and not url_has_allowed_host_and_scheme(
+        next_url,
+        allowed_hosts={request.get_host()},
+        require_https=request.is_secure(),
+    ):
+        next_url = ""
+
+    default_next = "admin_dashboard" if request.user.is_staff else "catalog"
+    redirect_target = next_url or reverse(default_next)
+
+    if len(companies) == 1:
+        set_active_company(request, companies[0])
+        return redirect(redirect_target)
+
+    active_company = get_active_company(request)
+    if request.method == "POST":
+        post_next = request.POST.get("next", "").strip()
+        if post_next:
+            next_url = post_next
+            if not url_has_allowed_host_and_scheme(
+                next_url,
+                allowed_hosts={request.get_host()},
+                require_https=request.is_secure(),
+            ):
+                next_url = ""
+        company_id = request.POST.get("company_id", "").strip()
+        company = None
+        if company_id.isdigit():
+            company = Company.objects.filter(pk=int(company_id), is_active=True).first()
+        if not company or not user_has_company_access(request.user, company):
+            messages.error(request, "Selecciona una empresa valida.")
+        else:
+            set_active_company(request, company)
+            return redirect(next_url or redirect_target)
+
+    return render(
+        request,
+        "accounts/select_company.html",
+        {
+            "companies": companies,
+            "active_company": active_company,
+            "next_url": next_url or redirect_target,
+        },
+    )
 
 
 def account_request(request):

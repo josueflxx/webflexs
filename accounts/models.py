@@ -8,8 +8,10 @@ from django.db import models
 from django.db.models import Sum
 from django.contrib.auth.models import User
 from django.utils import timezone
+from django.core.exceptions import ValidationError
 from django.utils.text import slugify
 
+from core.models import Company
 
 class ClientCategory(models.Model):
     """
@@ -91,6 +93,14 @@ class ClientProfile(models.Model):
     Extended profile for B2B clients.
     Linked to Django's built-in User model.
     """
+    DOCUMENT_TYPE_CHOICES = [
+        ('cuit', 'CUIT'),
+        ('cuil', 'CUIL'),
+        ('dni', 'DNI'),
+        ('cdi', 'CDI'),
+        ('passport', 'Pasaporte'),
+        ('otro', 'Otro'),
+    ]
     IVA_CHOICES = [
         ('responsable_inscripto', 'Responsable Inscripto'),
         ('monotributista', 'Monotributista'),
@@ -122,6 +132,17 @@ class ClientProfile(models.Model):
         max_length=200,
         verbose_name="Empresa/Razón Social"
     )
+    document_type = models.CharField(
+        max_length=20,
+        choices=DOCUMENT_TYPE_CHOICES,
+        blank=True,
+        verbose_name="Tipo de documento",
+    )
+    document_number = models.CharField(
+        max_length=20,
+        blank=True,
+        verbose_name="Numero de documento",
+    )
     cuit_dni = models.CharField(
         max_length=20,
         blank=True,
@@ -132,9 +153,29 @@ class ClientProfile(models.Model):
         blank=True,
         verbose_name="Provincia"
     )
+    fiscal_province = models.CharField(
+        max_length=120,
+        blank=True,
+        verbose_name="Provincia fiscal",
+    )
+    fiscal_city = models.CharField(
+        max_length=120,
+        blank=True,
+        verbose_name="Localidad fiscal",
+    )
     address = models.TextField(
         blank=True,
         verbose_name="Domicilio"
+    )
+    fiscal_address = models.CharField(
+        max_length=255,
+        blank=True,
+        verbose_name="Domicilio fiscal",
+    )
+    postal_code = models.CharField(
+        max_length=20,
+        blank=True,
+        verbose_name="Codigo postal",
     )
     phone = models.CharField(
         max_length=100,
@@ -179,37 +220,115 @@ class ClientProfile(models.Model):
     def __str__(self):
         return f"{self.company_name} ({self.user.username})"
 
-    def get_effective_discount_percentage(self):
+    def get_company_link(self, company):
+        if not company:
+            return None
+        return (
+            self.company_links.select_related("company", "client_category")
+            .filter(company=company, is_active=True, company__is_active=True)
+            .first()
+        )
+
+    def get_effective_client_category(self, company=None):
+        link = self.get_company_link(company) if company else None
+        if link and link.client_category_id:
+            return link.client_category
+        if self.client_category_id:
+            return self.client_category
+        return None
+
+    def get_effective_discount_percentage(self, company=None):
         """
         Discount in percentage points.
-        If client category exists and is active, its discount takes precedence.
+        Priority:
+        1) ClientCompany.discount_percentage
+        2) ClientCategoryCompanyRule.discount_percentage
+        3) ClientCategory.discount_percentage
+        4) ClientProfile.discount (legacy)
         """
-        if self.client_category_id and getattr(self.client_category, "is_active", False):
-            return self.client_category.discount_percentage or Decimal('0')
-        return self.discount or Decimal('0')
+        link = self.get_company_link(company) if company else None
+        if link and link.discount_percentage and link.discount_percentage != 0:
+            return link.discount_percentage or Decimal("0")
+        category = self.get_effective_client_category(company=company)
+        if company and category:
+            rule = ClientCategoryCompanyRule.objects.filter(
+                company=company,
+                client_category=category,
+            ).first()
+            if rule and rule.discount_percentage is not None and rule.discount_percentage != 0:
+                return rule.discount_percentage
+        if category and getattr(category, "is_active", False):
+            if category.discount_percentage and category.discount_percentage != 0:
+                return category.discount_percentage
+        if self.discount and self.discount != 0:
+            return self.discount
+        return Decimal("0")
 
-    def get_discount_decimal(self):
+    def get_discount_decimal(self, company=None):
         """Return discount as decimal (e.g., 0.10 for 10%)."""
-        return self.get_effective_discount_percentage() / 100
+        return self.get_effective_discount_percentage(company=company) / 100
 
-    def get_total_paid(self):
-        total = self.payments.filter(is_cancelled=False).aggregate(total=Sum('amount'))['total']
+    def uses_legacy_commercial_rules(self, company=None):
+        if not company:
+            return True
+        link = self.company_links.filter(company=company).first()
+        if not link:
+            return True
+        if link.client_category_id:
+            return False
+        if link.discount_percentage and link.discount_percentage != 0:
+            return False
+        if link.price_list_id:
+            return False
+        category = self.get_effective_client_category(company=company)
+        if category:
+            rule = ClientCategoryCompanyRule.objects.filter(
+                company=company,
+                client_category=category,
+            ).first()
+            if rule and (rule.price_list_id or (rule.discount_percentage and rule.discount_percentage != 0)):
+                return False
+        return True
+
+    def can_operate_in_company(self, company=None):
+        if not self.is_approved:
+            return False
+        link = self.get_company_link(company)
+        if not link or not link.is_active:
+            return False
+        if link.client_category_id:
+            return True
+        if link.discount_percentage and link.discount_percentage != 0:
+            return True
+        return False
+
+    def get_total_paid(self, company=None):
+        payments = self.payments.filter(is_cancelled=False)
+        if company:
+            payments = payments.filter(company=company)
+        total = payments.aggregate(total=Sum('amount'))['total']
         return total or Decimal('0.00')
 
-    def get_ledger_queryset(self):
-        return self.transactions.select_related('order', 'payment', 'created_by').order_by('occurred_at', 'id')
+    def get_ledger_queryset(self, company=None):
+        queryset = self.transactions.select_related('order', 'payment', 'created_by')
+        if company:
+            queryset = queryset.filter(company=company)
+        return queryset.order_by('occurred_at', 'id')
 
-    def get_ledger_balance(self):
-        total = self.transactions.aggregate(total=Sum('amount'))['total']
+    def get_ledger_balance(self, company=None):
+        queryset = self.transactions
+        if company:
+            queryset = queryset.filter(company=company)
+        total = queryset.aggregate(total=Sum('amount'))['total']
         return total or Decimal('0.00')
 
-    def get_orders_queryset_for_balance(self):
+    def get_orders_queryset_for_balance(self, company=None):
         """
         Orders that impact client debt/saldo:
         confirmed and subsequent operational states (except draft/cancelled).
         """
         Order = apps.get_model('orders', 'Order')
-        return Order.objects.filter(
+        queryset = Order.objects.filter(
             user_id=self.user_id,
             status__in=[
                 Order.STATUS_CONFIRMED,
@@ -218,16 +337,131 @@ class ClientProfile(models.Model):
                 Order.STATUS_DELIVERED,
             ],
         )
+        if company:
+            queryset = queryset.filter(company=company)
+        return queryset
 
-    def get_total_orders_for_balance(self):
-        total = self.get_orders_queryset_for_balance().aggregate(total=Sum('total'))['total']
+    def get_total_orders_for_balance(self, company=None):
+        total = self.get_orders_queryset_for_balance(company=company).aggregate(total=Sum('total'))['total']
         return total or Decimal('0.00')
 
-    def get_current_balance(self):
+    def get_current_balance(self, company=None):
         # Prefer ledger when available (auditable + robust to adjustments/reversals).
-        if self.transactions.exists():
-            return self.get_ledger_balance()
-        return self.get_total_orders_for_balance() - self.get_total_paid()
+        transactions = self.transactions
+        if company:
+            transactions = transactions.filter(company=company)
+        if transactions.exists():
+            return self.get_ledger_balance(company=company)
+        return self.get_total_orders_for_balance(company=company) - self.get_total_paid(company=company)
+
+
+class ClientCompany(models.Model):
+    """Client-specific settings per company."""
+
+    client_profile = models.ForeignKey(
+        ClientProfile,
+        on_delete=models.CASCADE,
+        related_name="company_links",
+        verbose_name="Cliente",
+    )
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.PROTECT,
+        related_name="client_links",
+        verbose_name="Empresa",
+    )
+    client_category = models.ForeignKey(
+        ClientCategory,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="company_clients",
+        verbose_name="Categoria de cliente",
+    )
+    price_list = models.ForeignKey(
+        "catalog.PriceList",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="client_companies",
+        verbose_name="Lista de precio",
+    )
+    discount_percentage = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=0,
+        verbose_name="Descuento (%)",
+    )
+    is_active = models.BooleanField(default=True, verbose_name="Activo")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Cliente por Empresa"
+        verbose_name_plural = "Clientes por Empresa"
+        unique_together = [("client_profile", "company")]
+        indexes = [
+            models.Index(fields=["company", "is_active"]),
+            models.Index(fields=["client_profile", "company"]),
+            models.Index(fields=["company", "price_list"]),
+        ]
+
+    def __str__(self):
+        return f"{self.client_profile.company_name} - {self.company.name}"
+
+    def has_commercial_rules(self):
+        if self.client_category_id:
+            return True
+        if self.discount_percentage and self.discount_percentage != 0:
+            return True
+        return False
+
+
+class ClientCategoryCompanyRule(models.Model):
+    """Commercial rule for a category scoped to a company."""
+
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.PROTECT,
+        related_name="category_rules",
+        verbose_name="Empresa",
+    )
+    client_category = models.ForeignKey(
+        ClientCategory,
+        on_delete=models.CASCADE,
+        related_name="company_rules",
+        verbose_name="Categoria de cliente",
+    )
+    price_list = models.ForeignKey(
+        "catalog.PriceList",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="category_company_rules",
+        verbose_name="Lista de precio",
+    )
+    discount_percentage = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        verbose_name="Descuento (%)",
+    )
+    is_active = models.BooleanField(default=True, verbose_name="Activa")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Regla categoria por empresa"
+        verbose_name_plural = "Reglas categoria por empresa"
+        unique_together = [("company", "client_category")]
+        indexes = [
+            models.Index(fields=["company", "client_category"]),
+            models.Index(fields=["company", "is_active"]),
+        ]
+
+    def __str__(self):
+        return f"{self.company.name} - {self.client_category.name}"
 
 
 class AccountRequest(models.Model):
@@ -310,6 +544,20 @@ class AccountRequest(models.Model):
 class ClientPayment(models.Model):
     """Client payment record with optional order allocation."""
 
+    ORIGIN_LOCAL = "local"
+    ORIGIN_EXTERNAL = "external"
+    ORIGIN_CHOICES = [
+        (ORIGIN_LOCAL, "Local"),
+        (ORIGIN_EXTERNAL, "Externo"),
+    ]
+    SYNC_STATUS_PENDING = "pending"
+    SYNC_STATUS_SYNCED = "synced"
+    SYNC_STATUS_FAILED = "failed"
+    SYNC_STATUS_CHOICES = [
+        (SYNC_STATUS_PENDING, "Pendiente"),
+        (SYNC_STATUS_SYNCED, "Sincronizado"),
+        (SYNC_STATUS_FAILED, "Fallido"),
+    ]
     METHOD_TRANSFER = 'transfer'
     METHOD_CASH = 'cash'
     METHOD_CARD = 'card'
@@ -330,6 +578,14 @@ class ClientPayment(models.Model):
         related_name='payments',
         verbose_name='Cliente',
     )
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="client_payments",
+        verbose_name="Empresa",
+    )
     order = models.ForeignKey(
         'orders.Order',
         on_delete=models.SET_NULL,
@@ -344,6 +600,41 @@ class ClientPayment(models.Model):
         choices=METHOD_CHOICES,
         default=METHOD_TRANSFER,
         verbose_name='Medio de pago',
+    )
+    origin = models.CharField(
+        max_length=12,
+        choices=ORIGIN_CHOICES,
+        default=ORIGIN_LOCAL,
+        verbose_name="Origen",
+    )
+    external_system = models.CharField(
+        max_length=20,
+        blank=True,
+        default="",
+        verbose_name="Sistema externo",
+    )
+    external_id = models.CharField(
+        max_length=80,
+        blank=True,
+        default="",
+        verbose_name="ID externo",
+    )
+    external_number = models.CharField(
+        max_length=80,
+        blank=True,
+        default="",
+        verbose_name="Numero externo",
+    )
+    sync_status = models.CharField(
+        max_length=12,
+        choices=SYNC_STATUS_CHOICES,
+        default=SYNC_STATUS_PENDING,
+        verbose_name="Estado sync",
+    )
+    synced_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="Fecha sync",
     )
     paid_at = models.DateTimeField(default=timezone.now, verbose_name='Fecha de pago')
     reference = models.CharField(max_length=120, blank=True, verbose_name='Referencia')
@@ -371,6 +662,9 @@ class ClientPayment(models.Model):
             models.Index(fields=['client_profile', 'is_cancelled', 'paid_at']),
             models.Index(fields=['order', 'paid_at']),
             models.Index(fields=['is_cancelled']),
+            models.Index(fields=['company', 'paid_at']),
+            models.Index(fields=['sync_status', 'paid_at']),
+            models.Index(fields=['external_system', 'external_id']),
         ]
 
     def __str__(self):
@@ -378,6 +672,24 @@ class ClientPayment(models.Model):
         return f"{company} - ${self.amount}"
 
     def save(self, *args, **kwargs):
+        if not kwargs.get("raw"):
+            if self.order_id:
+                if self.company_id and getattr(self.order, "company_id", None):
+                    if self.company_id != self.order.company_id:
+                        raise ValidationError("La empresa del pago no coincide con el pedido.")
+                if getattr(self.order, "company_id", None):
+                    self.company_id = self.order.company_id
+                else:
+                    if self._state.adding and not self.company_id:
+                        try:
+                            from core.services.company_context import get_default_company
+
+                            self.company = get_default_company()
+                        except Exception:
+                            pass
+            else:
+                if self._state.adding and not self.company_id:
+                    raise ValidationError("La empresa es obligatoria para pagos sin pedido.")
         super().save(*args, **kwargs)
 
         # Keep client ledger in sync on create/update/cancel.
@@ -386,6 +698,14 @@ class ClientPayment(models.Model):
             payment=self,
             actor=self.created_by if self.created_by_id else None,
         )
+
+        try:
+            from core.services.documents import ensure_document_for_payment
+
+            ensure_document_for_payment(self)
+        except Exception:
+            # Document creation should not block payment persistence.
+            pass
 
 
 class ClientTransaction(models.Model):
@@ -407,6 +727,14 @@ class ClientTransaction(models.Model):
         related_name='transactions',
         verbose_name='Cliente',
     )
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="client_transactions",
+        verbose_name="Empresa",
+    )
     order = models.ForeignKey(
         'orders.Order',
         on_delete=models.SET_NULL,
@@ -422,6 +750,11 @@ class ClientTransaction(models.Model):
         blank=True,
         related_name='ledger_transactions',
         verbose_name='Pago asociado',
+    )
+    billing_company = models.CharField(
+        max_length=20,
+        default="flexs",
+        verbose_name="Empresa facturacion",
     )
     transaction_type = models.CharField(
         max_length=24,
@@ -463,6 +796,7 @@ class ClientTransaction(models.Model):
             models.Index(fields=['transaction_type', 'occurred_at']),
             models.Index(fields=['order']),
             models.Index(fields=['payment']),
+            models.Index(fields=['company', 'occurred_at']),
         ]
 
     def __str__(self):

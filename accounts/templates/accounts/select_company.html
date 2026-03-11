@@ -1,0 +1,46 @@
+{% extends 'base.html' %}
+
+{% block title %}Elegir empresa activa{% endblock %}
+
+{% block content %}
+<section class="section">
+    <div class="container" style="max-width: 720px;">
+        <div class="card" style="padding: var(--spacing-2xl);">
+            <h1 style="margin-bottom: var(--spacing-md);">Elegir empresa activa</h1>
+            <p class="text-muted" style="margin-bottom: var(--spacing-xl);">
+                Selecciona la razón social con la que vas a operar. Esta elección se usará en todo el sistema.
+            </p>
+
+            <form method="post">
+                {% csrf_token %}
+                <input type="hidden" name="next" value="{{ next_url }}">
+                <div class="grid" style="display:grid; gap: var(--spacing-lg);">
+                    {% for company in companies %}
+                    <button
+                        type="submit"
+                        name="company_id"
+                        value="{{ company.pk }}"
+                        class="card"
+                        style="text-align:left; padding: var(--spacing-lg); border: 2px solid rgba(255,255,255,0.08);"
+                    >
+                        <div style="font-weight: 700; font-size: var(--font-size-lg); margin-bottom: 6px;">
+                            {{ company.name }}
+                        </div>
+                        <div class="text-muted" style="margin-bottom: 6px;">
+                            {{ company.legal_name|default:"Sin razón social" }}
+                        </div>
+                        <div class="text-muted">
+                            CUIT: {{ company.cuit|default:"-" }}
+                        </div>
+                    </button>
+                    {% endfor %}
+                </div>
+            </form>
+
+            <div style="margin-top: var(--spacing-xl);">
+                <a href="{% url 'logout' %}" class="btn btn-ghost">Cerrar sesión</a>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}
