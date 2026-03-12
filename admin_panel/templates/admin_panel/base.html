@@ -9,7 +9,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{% static 'core/css/base.css' %}">
-    <link rel="stylesheet" href="{% static 'core/css/admin.css' %}?v=21">
+    <link rel="stylesheet" href="{% static 'core/css/admin.css' %}?v=24">
     <link rel="stylesheet" href="{% static 'core/css/admin_right_sidebar.css' %}?v=3">
     <link rel="stylesheet" href="{% static 'core/css/search_suggestions.css' %}?v=3">
     <link rel="icon" type="image/x-icon" href="{% static 'core/img/favicon.ico' %}">
@@ -206,11 +206,17 @@
                                         <small>Alta rapida de usuario, perfil y empresa</small>
                                     </a>
                                     <a href="{% url 'admin_client_category_list' %}" class="top-nav-submenu-item {% if 'client_category' in request.resolver_match.url_name %}is-active{% endif %}">
-                                        <strong>Informes</strong>
+                                        <strong class="top-nav-submenu-title">
+                                            <span>Informes</span>
+                                            <span class="top-nav-beta-tag">BETA</span>
+                                        </strong>
                                         <small>Tipos de cliente, descuentos y clasificacion</small>
                                     </a>
                                     <a href="{% url 'admin_request_list' %}" class="top-nav-submenu-item {% if 'admin_request' in request.resolver_match.url_name %}is-active{% endif %}">
-                                        <strong>Herramientas</strong>
+                                        <strong class="top-nav-submenu-title">
+                                            <span>Herramientas</span>
+                                            <span class="top-nav-beta-tag">BETA</span>
+                                        </strong>
                                         <small>Solicitudes pendientes y aprobaciones</small>
                                     </a>
                                 </div>
@@ -370,6 +376,41 @@
             } else {
                 adminLayout.classList.remove('left-sidebar-open');
             }
+        }
+
+        function setupClientsTopNavFloatingSubmenu() {
+            const menu = document.querySelector('.top-nav-menu-clients');
+            if (!menu) return;
+            const trigger = menu.querySelector('.top-nav-item');
+            const submenu = menu.querySelector('.top-nav-submenu');
+            const navScroller = document.querySelector('.admin-top-nav');
+            if (!trigger || !submenu) return;
+
+            function isDesktop() {
+                return window.innerWidth > 992;
+            }
+
+            function positionSubmenu() {
+                if (!isDesktop()) {
+                    submenu.classList.remove('is-floating');
+                    submenu.style.removeProperty('--top-nav-submenu-top');
+                    submenu.style.removeProperty('--top-nav-submenu-left');
+                    return;
+                }
+                const rect = trigger.getBoundingClientRect();
+                submenu.style.setProperty('--top-nav-submenu-top', `${Math.round(rect.bottom + 10)}px`);
+                submenu.style.setProperty('--top-nav-submenu-left', `${Math.round(Math.max(12, rect.left))}px`);
+                submenu.classList.add('is-floating');
+            }
+
+            menu.addEventListener('mouseenter', positionSubmenu);
+            menu.addEventListener('focusin', positionSubmenu);
+            window.addEventListener('resize', positionSubmenu);
+            window.addEventListener('scroll', positionSubmenu, true);
+            if (navScroller) {
+                navScroller.addEventListener('scroll', positionSubmenu);
+            }
+            positionSubmenu();
         }
 
         window.toggleLeftSidebar = function(opened) {
@@ -677,6 +718,7 @@
                 Number('{{ admin_presence_refresh_seconds|default:30 }}') || 30,
                 10
             );
+            setupClientsTopNavFloatingSubmenu();
             refreshAdminPresence();
             window.__presenceTimer = setInterval(refreshAdminPresence, refreshSeconds * 1000);
 

@@ -11,17 +11,26 @@
             <div class="portal-card">
                 <h3>Pedidos en curso</h3>
                 <p class="portal-number">{{ active_orders_count }}</p>
-                <a href="{% url 'order_list' %}" class="btn btn-outline">Ver pedidos</a>
+                <a href="#" class="btn btn-outline beta-control" aria-disabled="true">
+                    <span class="beta-strike">Ver pedidos</span>
+                    <span class="beta-pill">BETA</span>
+                </a>
             </div>
             <div class="portal-card">
                 <h3>Pedidos totales</h3>
                 <p class="portal-number">{{ total_orders_count }}</p>
-                <a href="{% url 'order_list' %}" class="btn btn-outline">Historial</a>
+                <a href="#" class="btn btn-outline beta-control" aria-disabled="true">
+                    <span class="beta-strike">Historial</span>
+                    <span class="beta-pill">BETA</span>
+                </a>
             </div>
             <div class="portal-card">
                 <h3>Favoritos</h3>
                 <p class="portal-number">{{ favorites|length }}</p>
-                <a href="{% url 'catalog' %}" class="btn btn-outline">Ver catalogo</a>
+                <a href="#" class="btn btn-outline beta-control" aria-disabled="true">
+                    <span class="beta-strike">Ver catalogo</span>
+                    <span class="beta-pill">BETA</span>
+                </a>
             </div>
             <div class="portal-card">
                 <h3>Saldo actual</h3>
@@ -34,8 +43,9 @@
             <div class="portal-card">
                 <h3>Catalogo Excel</h3>
                 <p class="portal-number">XLSX</p>
-                <a href="{% url 'catalog_client_excel_download' %}" class="btn btn-outline">
-                    {{ client_catalog_excel_download_label|default:"Descargar catalogo Excel" }}
+                <a href="#" class="btn btn-outline beta-control" aria-disabled="true">
+                    <span class="beta-strike">{{ client_catalog_excel_download_label|default:"Descargar catalogo Excel" }}</span>
+                    <span class="beta-pill">BETA</span>
                 </a>
             </div>
             {% endif %}
@@ -54,7 +64,10 @@
                         </div>
                         <form method="post" action="{% url 'reorder_to_cart' order.pk %}">
                             {% csrf_token %}
-                            <button type="submit" class="btn btn-primary btn-sm">Recomprar</button>
+                            <button type="submit" class="btn btn-primary btn-sm beta-control-button" disabled>
+                                <span class="beta-strike">Recomprar</span>
+                                <span class="beta-pill">BETA</span>
+                            </button>
                         </form>
                     </li>
                     {% endfor %}
@@ -74,7 +87,10 @@
                             <strong>{{ favorite.product.sku }}</strong>
                             <small>{{ favorite.product.name }}</small>
                         </div>
-                        <a href="{% url 'product_detail' favorite.product.sku %}" class="btn btn-outline btn-sm">Ver</a>
+                        <a href="#" class="btn btn-outline btn-sm beta-control" aria-disabled="true">
+                            <span class="beta-strike">Ver</span>
+                            <span class="beta-pill">BETA</span>
+                        </a>
                     </li>
                     {% endfor %}
                 </ul>
@@ -94,7 +110,10 @@
                             <small>{{ payment.paid_at|date:"d/m/Y H:i" }} - {{ payment.get_method_display }}</small>
                         </div>
                         {% if payment.order_id %}
-                        <a href="{% url 'order_detail' payment.order_id %}" class="btn btn-outline btn-sm">Pedido #{{ payment.order_id }}</a>
+                        <a href="#" class="btn btn-outline btn-sm beta-control" aria-disabled="true">
+                            <span class="beta-strike">Pedido #{{ payment.order_id }}</span>
+                            <span class="beta-pill">BETA</span>
+                        </a>
                         {% else %}
                         <span class="text-muted">Pago general</span>
                         {% endif %}
@@ -170,6 +189,40 @@
     .portal-list small {
         display: block;
         color: var(--color-gray-light);
+    }
+    .beta-control {
+        pointer-events: none;
+        cursor: not-allowed !important;
+        opacity: 0.72;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+    }
+    .beta-control-button {
+        pointer-events: none;
+        cursor: not-allowed !important;
+        opacity: 0.72;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+    }
+    .beta-strike {
+        text-decoration: line-through;
+        text-decoration-thickness: 2px;
+    }
+    .beta-pill {
+        font-size: 0.62rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: #ffc896;
+        border: 1px solid rgba(255, 122, 64, 0.45);
+        background: rgba(255, 122, 64, 0.18);
+        border-radius: 999px;
+        padding: 2px 6px;
     }
     @media (max-width: 900px) {
         .portal-grid {

@@ -358,7 +358,8 @@
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
     padding: 10px 24px 8px;
     position: relative;
-    z-index: 1;
+    z-index: 105;
+    overflow: visible;
     box-shadow: 0 12px 22px rgba(0, 0, 0, 0.18);
 }
 
@@ -368,6 +369,7 @@
     gap: 14px;
     overflow-x: auto;
     overflow-y: visible;
+    flex-wrap: nowrap;
     white-space: nowrap;
     padding: 0 0 5px;
     border: 0;
@@ -434,7 +436,14 @@
     visibility: hidden;
     transform: translateY(8px);
     transition: opacity 0.18s ease, transform 0.18s ease, visibility 0.18s ease;
-    z-index: 1200;
+    z-index: 2200;
+}
+
+.top-nav-submenu.is-floating {
+    position: fixed;
+    top: var(--top-nav-submenu-top, 116px);
+    left: var(--top-nav-submenu-left, 24px);
+    z-index: 2600;
 }
 
 .top-nav-submenu::before {
@@ -472,6 +481,27 @@
 .top-nav-submenu-item strong {
     color: #fff6ef;
     font-size: 0.92rem;
+}
+
+.top-nav-submenu-title {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.top-nav-beta-tag {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2px 7px;
+    border-radius: 999px;
+    font-size: 0.62rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #ff7a40;
+    background: rgba(255, 122, 64, 0.14);
+    border: 1px solid rgba(255, 122, 64, 0.32);
 }
 
 .top-nav-submenu-item small {
@@ -1641,6 +1671,27 @@
     color: rgba(209, 216, 226, 0.72);
     text-transform: uppercase;
     letter-spacing: 0.08em;
+}
+
+.client-module-card-label-row {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.client-module-beta-tag {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2px 7px;
+    border-radius: 999px;
+    font-size: 0.62rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #ffc986;
+    background: rgba(255, 122, 64, 0.16);
+    border: 1px solid rgba(255, 122, 64, 0.36);
 }
 
 .client-module-card strong {

@@ -47,7 +47,10 @@
         <a href="{% url 'admin_client_category_list' %}" class="client-module-card {% if client_panel == 'reports' %}is-active{% endif %}">
             <div class="client-module-card-icon" aria-hidden="true">&#128202;</div>
             <div class="client-module-card-copy">
-                <span class="client-module-card-label">Informes</span>
+                <span class="client-module-card-label-row">
+                    <span class="client-module-card-label">Informes</span>
+                    <span class="client-module-beta-tag">BETA</span>
+                </span>
                 <strong>Tipos de cliente</strong>
                 <small>Clasificacion, descuentos y reglas base del modulo.</small>
             </div>
@@ -56,7 +59,10 @@
         <a href="{% url 'admin_request_list' %}" class="client-module-card {% if client_panel == 'tools' %}is-active{% endif %}">
             <div class="client-module-card-icon" aria-hidden="true">&#9881;</div>
             <div class="client-module-card-copy">
-                <span class="client-module-card-label">Herramientas</span>
+                <span class="client-module-card-label-row">
+                    <span class="client-module-card-label">Herramientas</span>
+                    <span class="client-module-beta-tag">BETA</span>
+                </span>
                 <strong>Solicitudes</strong>
                 <small>Aprobaciones y cola de ingresos pendientes.</small>
             </div>
