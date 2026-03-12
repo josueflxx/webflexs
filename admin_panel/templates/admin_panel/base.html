@@ -9,7 +9,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{% static 'core/css/base.css' %}">
-    <link rel="stylesheet" href="{% static 'core/css/admin.css' %}?v=11">
+    <link rel="stylesheet" href="{% static 'core/css/admin.css' %}?v=17">
     <link rel="stylesheet" href="{% static 'core/css/admin_right_sidebar.css' %}?v=3">
     <link rel="stylesheet" href="{% static 'core/css/search_suggestions.css' %}?v=3">
     <link rel="icon" type="image/x-icon" href="{% static 'core/img/favicon.ico' %}">
@@ -110,10 +110,6 @@
                     Configuracion
                 </a>
                 {% endif %}
-                <a href="{% url 'catalog' %}" class="nav-item" target="_blank" rel="noopener noreferrer">
-                    <span class="nav-icon" aria-hidden="true">&#127760;</span>
-                    Ver Catalogo
-                </a>
                 <a
                     href="{% url 'select_company' %}?next={{ request.get_full_path|urlencode }}"
                     class="nav-item"
@@ -225,17 +221,6 @@
                         </div>
                     </div>
 
-                    <div class="top-nav-group">
-                        <span class="top-nav-group-label">Acceso</span>
-                        <div class="top-nav-group-links">
-                            <a href="{% url 'catalog' %}" class="top-nav-item" target="_blank" rel="noopener noreferrer">
-                                <span aria-hidden="true">&#127760;</span> Ver Catalogo
-                            </a>
-                            <a href="{% url 'logout' %}" class="top-nav-item top-nav-item-danger">
-                                <span aria-hidden="true">&#128682;</span> Salir
-                            </a>
-                        </div>
-                    </div>
                 </div>
             </nav>
 
@@ -262,6 +247,26 @@
                 {% block content %}{% endblock %}
             </div>
         </main>
+
+        <a
+            href="{% url 'logout' %}"
+            class="admin-catalog-fab admin-logout-fab"
+            title="Cerrar sesion"
+            aria-label="Cerrar sesion"
+        >
+            <span aria-hidden="true">&#128682;</span>
+        </a>
+
+        <a
+            href="{% url 'catalog' %}"
+            class="admin-catalog-fab"
+            target="_blank"
+            rel="noopener noreferrer"
+            title="Ver catalogo"
+            aria-label="Ver catalogo"
+        >
+            <span aria-hidden="true">&#127760;</span>
+        </a>
 
         <button class="sidebar-show-btn" id="showRightSidebar" title="Mostrar actividad" onclick="toggleSidebar(false)">
             <span>&#128101;</span>

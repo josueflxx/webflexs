@@ -1,0 +1,182 @@
+{% extends 'admin_panel/base.html' %}
+
+{% block page_title %}Tipos de documento{% endblock %}
+
+{% block content %}
+<div class="settings-hub">
+    <section class="settings-hero">
+        <div>
+            <p class="settings-eyebrow">Motor documental</p>
+            <h2>Tipos de documento comerciales</h2>
+            <p class="settings-hero-copy">
+                Esta configuracion define como opera cada comprobante en la empresa activa:
+                numeracion, stock, cuenta corriente, fiscalidad y documentos internos.
+            </p>
+        </div>
+        <div class="settings-hero-badges">
+            <span class="settings-hero-badge">Empresa: {{ active_company.name }}</span>
+            <span class="settings-hero-badge">{{ document_summary.total }} tipos</span>
+            <span class="settings-hero-badge">{{ warehouses_count }} depositos</span>
+        </div>
+    </section>
+
+    <section class="settings-section">
+        <div class="settings-section-header">
+            <div>
+                <h3>Estado general</h3>
+                <p>Vista rapida de lo que ya esta configurado y de como impacta en la operacion.</p>
+            </div>
+            <div class="toolbar-actions">
+                <a href="{% url 'admin_sales_document_type_create' %}" class="btn btn-primary">Nuevo tipo</a>
+                <a href="{% url 'admin_warehouse_list' %}" class="btn btn-outline">Depositos</a>
+                <a href="{% url 'admin_settings' %}" class="btn btn-outline">Configuracion</a>
+            </div>
+        </div>
+
+        <div class="doc-type-metrics">
+            <article class="doc-type-metric">
+                <span class="doc-type-metric-label">Habilitados</span>
+                <strong class="doc-type-metric-value">{{ document_summary.enabled }}</strong>
+                <small>Tipos activos para emitir o generar documentos.</small>
+            </article>
+            <article class="doc-type-metric">
+                <span class="doc-type-metric-label">Con stock</span>
+                <strong class="doc-type-metric-value">{{ document_summary.with_stock }}</strong>
+                <small>Impactan movimientos fisicos o reservas segun configuracion.</small>
+            </article>
+            <article class="doc-type-metric">
+                <span class="doc-type-metric-label">Con cuenta</span>
+                <strong class="doc-type-metric-value">{{ document_summary.with_account }}</strong>
+                <small>Generan o ajustan cuenta corriente del cliente.</small>
+            </article>
+            <article class="doc-type-metric">
+                <span class="doc-type-metric-label">Fiscales</span>
+                <strong class="doc-type-metric-value">{{ document_summary.fiscal }}</strong>
+                <small>Usan modo fiscal en vez de documento interno puro.</small>
+            </article>
+        </div>
+    </section>
+
+    <section class="settings-section">
+        <div class="settings-section-header">
+            <div>
+                <h3>Cobertura por comportamiento</h3>
+                <p>Que tipos existen para cada familia documental y cual esta marcado como predeterminado.</p>
+            </div>
+        </div>
+
+        <div class="doc-type-overview-grid">
+            {% for behavior in behavior_overview %}
+            <article class="doc-type-overview-card">
+                <div class="doc-type-overview-top">
+                    <strong>{{ behavior.label }}</strong>
+                    <span class="badge {% if behavior.enabled_count %}badge-success{% else %}badge-secondary{% endif %}">
+                        {{ behavior.enabled_count }}/{{ behavior.count }} activos
+                    </span>
+                </div>
+                <p class="doc-type-overview-copy">
+                    {% if behavior.default_item %}
+                    Default: <strong>{{ behavior.default_item.name }}</strong>
+                    {% else %}
+                    Sin default configurado.
+                    {% endif %}
+                </p>
+            </article>
+            {% empty %}
+            <div class="order-empty-state">No hay comportamientos cargados para esta empresa.</div>
+            {% endfor %}
+        </div>
+    </section>
+
+    <section class="settings-section">
+        <div class="settings-section-header">
+            <div>
+                <h3>Tipos configurados</h3>
+                <p>Detalle operativo de cada comprobante, con sus reglas, numeracion y dependencias.</p>
+            </div>
+        </div>
+
+        <div class="doc-type-grid">
+            {% for item in document_types %}
+            <article class="doc-type-card {% if item.enabled %}is-enabled{% else %}is-disabled{% endif %}">
+                <div class="doc-type-card-head">
+                    <div>
+                        <div class="doc-type-kicker">{{ item.code }}</div>
+                        <h4>{{ item.name }}</h4>
+                    </div>
+                    <div class="doc-type-badges">
+                        <span class="badge badge-info">{{ item.get_document_behavior_display }}</span>
+                        {% if item.enabled %}
+                        <span class="badge badge-success">Activo</span>
+                        {% else %}
+                        <span class="badge badge-secondary">Deshabilitado</span>
+                        {% endif %}
+                        {% if item.is_default %}
+                        <span class="badge badge-warning">Default</span>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="doc-type-number-block">
+                    <span class="doc-type-number-label">Numeracion actual</span>
+                    <strong class="doc-type-number-value">{{ item.format_number }}</strong>
+                    <small>
+                        {% if item.point_of_sale %}
+                        Punto de venta {{ item.point_of_sale.number }} · {{ item.get_billing_mode_display }}
+                        {% else %}
+                        Documento interno · {{ item.get_billing_mode_display }}
+                        {% endif %}
+                    </small>
+                </div>
+
+                <div class="doc-type-info-grid">
+                    <div>
+                        <span class="doc-type-info-label">Interno asociado</span>
+                        <strong>{{ item.get_internal_doc_type_display|default:item.internal_doc_type|default:"-" }}</strong>
+                    </div>
+                    <div>
+                        <span class="doc-type-info-label">Fiscal asociado</span>
+                        <strong>{{ item.get_fiscal_doc_type_display|default:item.fiscal_doc_type|default:"-" }}</strong>
+                    </div>
+                    <div>
+                        <span class="doc-type-info-label">Deposito</span>
+                        <strong>{{ item.default_warehouse.name|default:"-" }}</strong>
+                    </div>
+                    <div>
+                        <span class="doc-type-info-label">Vendedor default</span>
+                        <strong>{{ item.default_sales_user.username|default:"-" }}</strong>
+                    </div>
+                </div>
+
+                <div class="doc-type-rule-strip">
+                    <span class="doc-type-rule {% if item.generate_stock_movement %}is-on{% endif %}">
+                        Stock: {% if item.generate_stock_movement %}si{% else %}no{% endif %}
+                    </span>
+                    <span class="doc-type-rule {% if item.generate_account_movement %}is-on{% endif %}">
+                        Cuenta: {% if item.generate_account_movement %}si{% else %}no{% endif %}
+                    </span>
+                    <span class="doc-type-rule {% if item.group_equal_products %}is-on{% endif %}">
+                        Agrupa: {% if item.group_equal_products %}si{% else %}no{% endif %}
+                    </span>
+                    <span class="doc-type-rule {% if item.prioritize_default_warehouse %}is-on{% endif %}">
+                        Deposito prioritario: {% if item.prioritize_default_warehouse %}si{% else %}no{% endif %}
+                    </span>
+                </div>
+
+                <div class="doc-type-actions">
+                    <a href="{% url 'admin_sales_document_type_edit' item.pk %}" class="btn btn-outline btn-sm">Editar</a>
+                    <form method="post" action="{% url 'admin_sales_document_type_toggle_enabled' item.pk %}">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-outline btn-sm">
+                            {% if item.enabled %}Deshabilitar{% else %}Habilitar{% endif %}
+                        </button>
+                    </form>
+                </div>
+            </article>
+            {% empty %}
+            <div class="order-empty-state">No hay tipos de documento configurados para la empresa activa.</div>
+            {% endfor %}
+        </div>
+    </section>
+</div>
+{% endblock %}

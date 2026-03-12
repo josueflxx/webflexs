@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="utf-8">
-    <title>{{ document.get_doc_type_display }} {{ document.number|stringformat:"07d" }}</title>
+    <title>{{ document.commercial_type_label }} {{ document.display_number }}</title>
     <style>
         body { font-family: Arial, sans-serif; color: #222; margin: 24px; }
         .header { display: flex; justify-content: space-between; align-items: center; }
@@ -28,8 +28,8 @@
     </div>
 
     <div class="section">
-        <strong>{{ document.get_doc_type_display }} #{{ document.number|stringformat:"07d" }}</strong><br>
-        <small>Fecha: {{ document.issued_at|date:"d/m/Y H:i" }}</small>
+        <strong>{{ document.commercial_type_label }} {{ document.display_number }}</strong><br>
+        <small>Base interna: {{ document.get_doc_type_display }} · Fecha: {{ document.issued_at|date:"d/m/Y H:i" }}</small>
     </div>
 
     <div class="section">
@@ -96,11 +96,10 @@
     </div>
     {% endif %}
 
-    {% if document.transaction %}
+    {% if document.transaction_id %}
     <div class="section">
         <strong>Ajuste asociado</strong><br>
-        Monto: ${{ document.transaction.amount|floatformat:2 }}<br>
-        Descripcion: {{ document.transaction.description|default:"-" }}
+        Referencia interna: ajuste #{{ document.transaction_id }}
     </div>
     {% endif %}
 

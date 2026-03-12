@@ -11,13 +11,22 @@ from core.models import (
     FISCAL_ISSUE_MODE_ARCA_WSFE,
     FISCAL_ISSUE_MODE_EXTERNAL_SAAS,
     FISCAL_ISSUE_MODE_MANUAL,
+    FISCAL_STATUS_AUTHORIZED,
     FISCAL_STATUS_EXTERNAL_RECORDED,
+    FISCAL_STATUS_PENDING_RETRY,
     FISCAL_STATUS_READY_TO_ISSUE,
+    FISCAL_STATUS_REJECTED,
+    FISCAL_STATUS_SUBMITTING,
+    FISCAL_STATUS_VOIDED,
     FiscalDocument,
     FiscalDocumentItem,
     FiscalPointOfSale,
 )
 from core.services.fiscal import is_invoice_ready
+from core.services.sales_documents import (
+    apply_sales_document_type_to_fiscal_document,
+    resolve_sales_document_type_for_fiscal_doc,
+)
 
 
 ALLOWED_DOC_TYPES_FOR_PHASE3 = {"FA", "FB"}
@@ -128,7 +137,17 @@ def _create_document_items(document, payload):
         FiscalDocumentItem.objects.bulk_create(items)
 
 
-def create_local_fiscal_document_from_order(*, order, company, doc_type, point_of_sale, issue_mode):
+def create_local_fiscal_document_from_order(
+    *,
+    order,
+    company,
+    doc_type,
+    point_of_sale,
+    issue_mode,
+    sales_document_type=None,
+    actor=None,
+    require_invoice_ready=True,
+):
     """Create local fiscal document from order without ARCA emission."""
     _validate_order_and_point(
         order=order,
@@ -140,7 +159,7 @@ def create_local_fiscal_document_from_order(*, order, company, doc_type, point_o
         raise ValidationError("Modo de comprobante invalido para creacion local.")
 
     invoice_ready, invoice_errors = is_invoice_ready(order)
-    if not invoice_ready:
+    if require_invoice_ready and not invoice_ready:
         raise ValidationError("No se puede crear comprobante fiscal: " + " | ".join(invoice_errors))
 
     source_key = build_local_source_key(
@@ -154,6 +173,11 @@ def create_local_fiscal_document_from_order(*, order, company, doc_type, point_o
     with transaction.atomic():
         existing = FiscalDocument.objects.select_for_update().filter(source_key=source_key).first()
         if existing:
+            apply_sales_document_type_to_fiscal_document(
+                document=existing,
+                sales_document_type=sales_document_type,
+                actor=actor,
+            )
             return existing, False
 
         duplicate = (
@@ -186,6 +210,7 @@ def create_local_fiscal_document_from_order(*, order, company, doc_type, point_o
             doc_type=doc_type,
             issue_mode=issue_mode,
             status=FISCAL_STATUS_READY_TO_ISSUE,
+            sales_document_type=sales_document_type,
             subtotal_net=Decimal(order.subtotal or 0),
             discount_total=Decimal(order.discount_amount or 0),
             tax_total=Decimal("0.00"),
@@ -194,6 +219,15 @@ def create_local_fiscal_document_from_order(*, order, company, doc_type, point_o
             exchange_rate=Decimal("1.000000"),
         )
         _create_document_items(document, payload)
+        resolved_type = sales_document_type or resolve_sales_document_type_for_fiscal_doc(
+            company=company,
+            doc_type=doc_type,
+        )
+        apply_sales_document_type_to_fiscal_document(
+            document=document,
+            sales_document_type=resolved_type,
+            actor=actor,
+        )
         return document, True
 
 
@@ -206,6 +240,8 @@ def register_external_fiscal_document_for_order(
     external_system,
     external_id,
     external_number,
+    sales_document_type=None,
+    actor=None,
 ):
     """Register external/SaaS fiscal document without local emission."""
     _validate_order_and_point(
@@ -236,6 +272,11 @@ def register_external_fiscal_document_for_order(
     with transaction.atomic():
         existing = FiscalDocument.objects.select_for_update().filter(source_key=source_key).first()
         if existing:
+            apply_sales_document_type_to_fiscal_document(
+                document=existing,
+                sales_document_type=sales_document_type,
+                actor=actor,
+            )
             return existing, False
 
         duplicate = (
@@ -285,6 +326,7 @@ def register_external_fiscal_document_for_order(
             issue_mode=FISCAL_ISSUE_MODE_EXTERNAL_SAAS,
             status=FISCAL_STATUS_EXTERNAL_RECORDED,
             issued_at=timezone.now(),
+            sales_document_type=sales_document_type,
             subtotal_net=Decimal(order.subtotal or 0),
             discount_total=Decimal(order.discount_amount or 0),
             tax_total=Decimal("0.00"),
@@ -296,4 +338,83 @@ def register_external_fiscal_document_for_order(
             external_number=external_number,
         )
         _create_document_items(document, payload)
+        resolved_type = sales_document_type or resolve_sales_document_type_for_fiscal_doc(
+            company=company,
+            doc_type=doc_type,
+        )
+        apply_sales_document_type_to_fiscal_document(
+            document=document,
+            sales_document_type=resolved_type,
+            actor=actor,
+        )
         return document, True
+
+
+def close_fiscal_document(*, fiscal_document, actor=None):
+    """Close a manual fiscal document without ARCA emission."""
+    if not fiscal_document:
+        raise ValidationError("Comprobante fiscal invalido.")
+    if fiscal_document.status == FISCAL_STATUS_VOIDED:
+        raise ValidationError("El comprobante esta anulado.")
+    if fiscal_document.issue_mode == FISCAL_ISSUE_MODE_ARCA_WSFE:
+        raise ValidationError("Los comprobantes ARCA se cierran emitiendolos.")
+    if fiscal_document.issue_mode == FISCAL_ISSUE_MODE_EXTERNAL_SAAS:
+        raise ValidationError("El comprobante externo ya esta cerrado por definicion.")
+    if fiscal_document.status == FISCAL_STATUS_EXTERNAL_RECORDED:
+        return fiscal_document, False
+    if fiscal_document.status not in {
+        FISCAL_STATUS_READY_TO_ISSUE,
+        FISCAL_STATUS_PENDING_RETRY,
+        FISCAL_STATUS_REJECTED,
+    }:
+        raise ValidationError("El comprobante no puede cerrarse en su estado actual.")
+    if fiscal_document.order_id:
+        invoice_ready, invoice_errors = is_invoice_ready(fiscal_document.order)
+        if not invoice_ready:
+            raise ValidationError(
+                "No se puede cerrar el comprobante: " + " | ".join(invoice_errors)
+            )
+
+    fiscal_document.status = FISCAL_STATUS_EXTERNAL_RECORDED
+    if not fiscal_document.issued_at:
+        fiscal_document.issued_at = timezone.now()
+        fiscal_document.save(update_fields=["status", "issued_at", "updated_at"])
+    else:
+        fiscal_document.save(update_fields=["status", "updated_at"])
+    return fiscal_document, True
+
+
+def reopen_fiscal_document(*, fiscal_document, actor=None):
+    """Reopen a manual fiscal document that was closed without ARCA emission."""
+    if not fiscal_document:
+        raise ValidationError("Comprobante fiscal invalido.")
+    if fiscal_document.status == FISCAL_STATUS_VOIDED:
+        raise ValidationError("El comprobante esta anulado.")
+    if fiscal_document.issue_mode != FISCAL_ISSUE_MODE_MANUAL:
+        raise ValidationError("Solo los comprobantes manuales pueden reabrirse.")
+    if fiscal_document.status == FISCAL_STATUS_READY_TO_ISSUE:
+        return fiscal_document, False
+    if fiscal_document.status != FISCAL_STATUS_EXTERNAL_RECORDED:
+        raise ValidationError("Solo se pueden reabrir comprobantes cerrados manualmente.")
+
+    fiscal_document.status = FISCAL_STATUS_READY_TO_ISSUE
+    fiscal_document.save(update_fields=["status", "updated_at"])
+    return fiscal_document, True
+
+
+def void_fiscal_document(*, fiscal_document, actor=None):
+    """Void a fiscal document before it is legally authorized in ARCA."""
+    if not fiscal_document:
+        raise ValidationError("Comprobante fiscal invalido.")
+    if fiscal_document.status == FISCAL_STATUS_VOIDED:
+        return fiscal_document, False
+    if fiscal_document.status == FISCAL_STATUS_SUBMITTING:
+        raise ValidationError("El comprobante se esta enviando. Espera a que termine el intento.")
+    if fiscal_document.status == FISCAL_STATUS_AUTHORIZED:
+        raise ValidationError(
+            "Un comprobante autorizado no puede anularse desde aqui. Usa una nota de credito."
+        )
+
+    fiscal_document.status = FISCAL_STATUS_VOIDED
+    fiscal_document.save(update_fields=["status", "updated_at"])
+    return fiscal_document, True

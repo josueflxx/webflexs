@@ -154,6 +154,54 @@ def create_adjustment_transaction(
     return tx
 
 
+def ensure_adjustment_transaction(
+    *,
+    source_key,
+    client_profile,
+    amount,
+    reason,
+    actor=None,
+    order=None,
+    company=None,
+    occurred_at=None,
+):
+    """
+    Idempotent adjustment row keyed by explicit source_key.
+    Positive amount increases debt; negative amount reduces debt.
+    """
+    if not source_key:
+        raise ValueError("source_key obligatorio para ajustes idempotentes.")
+    resolved_company = company or getattr(order, "company", None)
+    if not resolved_company:
+        raise ValueError("Empresa obligatoria para ajustes de cuenta corriente.")
+
+    occurred = occurred_at or timezone.now()
+    dec_amount = _to_decimal(amount).quantize(Decimal("0.01"))
+    defaults = {
+        "client_profile": client_profile,
+        "company": resolved_company,
+        "billing_company": getattr(resolved_company, "slug", None) or "flexs",
+        "order": order,
+        "payment": None,
+        "transaction_type": ClientTransaction.TYPE_ADJUSTMENT,
+        "amount": dec_amount,
+        "description": (reason or "").strip(),
+        "occurred_at": occurred,
+        "created_by": actor if getattr(actor, "is_authenticated", False) else None,
+    }
+    tx, _ = ClientTransaction.objects.update_or_create(
+        source_key=source_key,
+        defaults=defaults,
+    )
+    try:
+        from core.services.documents import ensure_document_for_adjustment
+
+        ensure_document_for_adjustment(tx)
+    except Exception:
+        pass
+    return tx
+
+
 def resync_client_ledger(*, client_profile=None):
     """
     Rebuild (upsert) order and payment ledger rows.

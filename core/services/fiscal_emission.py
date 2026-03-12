@@ -26,6 +26,7 @@ from core.services.arca_client import (
     ArcaWsfeClient,
 )
 from core.services.fiscal import is_company_fiscal_ready, is_invoice_ready
+from core.services.sales_documents import sync_sales_document_type_counter
 
 
 ALLOWED_DOC_TYPES_FOR_EMISSION = {"FA", "FB"}
@@ -155,6 +156,10 @@ def emit_fiscal_document_now(*, fiscal_document: FiscalDocument, actor=None) -> 
                 "error_message",
                 "updated_at",
             ]
+        )
+        sync_sales_document_type_counter(
+            sales_document_type=locked_doc.sales_document_type,
+            number=reserved_number,
         )
 
     request_payload = {}

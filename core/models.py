@@ -55,6 +55,49 @@ FISCAL_ATTEMPT_RESULT_CHOICES = [
     (FISCAL_ATTEMPT_RESULT_ERROR, "Con error"),
 ]
 
+SALES_BEHAVIOR_FACTURA = "Factura"
+SALES_BEHAVIOR_NOTA_CREDITO = "NotaCredito"
+SALES_BEHAVIOR_NOTA_DEBITO = "NotaDebito"
+SALES_BEHAVIOR_RECIBO = "Recibo"
+SALES_BEHAVIOR_REMITO = "Remito"
+SALES_BEHAVIOR_PEDIDO = "Pedido"
+SALES_BEHAVIOR_PRESUPUESTO = "Presupuesto"
+SALES_BEHAVIOR_COTIZACION = "Cotizacion"
+SALES_DOCUMENT_BEHAVIOR_CHOICES = [
+    (SALES_BEHAVIOR_FACTURA, "Factura"),
+    (SALES_BEHAVIOR_NOTA_CREDITO, "Nota de Credito"),
+    (SALES_BEHAVIOR_NOTA_DEBITO, "Nota de Debito"),
+    (SALES_BEHAVIOR_RECIBO, "Recibo"),
+    (SALES_BEHAVIOR_REMITO, "Remito"),
+    (SALES_BEHAVIOR_PEDIDO, "Pedido"),
+    (SALES_BEHAVIOR_PRESUPUESTO, "Presupuesto"),
+    (SALES_BEHAVIOR_COTIZACION, "Cotizacion"),
+]
+
+SALES_BILLING_MODE_INTERNAL_DOCUMENT = "INTERNAL_DOCUMENT"
+SALES_BILLING_MODE_AFIP_WSFE = "ELECTRONIC_AFIP_WSFE"
+SALES_BILLING_MODE_MANUAL_FISCAL = "MANUAL_FISCAL_RECEIPT"
+SALES_BILLING_MODE_AFIP_ONLINE = "AFIP_ONLINE_INVOICE"
+SALES_BILLING_MODE_CHOICES = [
+    (SALES_BILLING_MODE_INTERNAL_DOCUMENT, "Documento interno"),
+    (SALES_BILLING_MODE_AFIP_WSFE, "ARCA WSFE"),
+    (SALES_BILLING_MODE_MANUAL_FISCAL, "Comprobante fiscal manual"),
+    (SALES_BILLING_MODE_AFIP_ONLINE, "Factura online AFIP"),
+]
+
+STOCK_MOVEMENT_IN = "in"
+STOCK_MOVEMENT_OUT = "out"
+STOCK_MOVEMENT_RESERVE = "reserve"
+STOCK_MOVEMENT_RELEASE = "release"
+STOCK_MOVEMENT_ADJUSTMENT = "adjustment"
+STOCK_MOVEMENT_CHOICES = [
+    (STOCK_MOVEMENT_IN, "Ingreso"),
+    (STOCK_MOVEMENT_OUT, "Salida"),
+    (STOCK_MOVEMENT_RESERVE, "Reserva"),
+    (STOCK_MOVEMENT_RELEASE, "Liberacion"),
+    (STOCK_MOVEMENT_ADJUSTMENT, "Ajuste"),
+]
+
 
 class Company(models.Model):
     """Legal entity / business unit."""
@@ -136,6 +179,36 @@ class Company(models.Model):
 
     def __str__(self):
         return self.name
+
+
+class Warehouse(models.Model):
+    """Logical warehouse/deposit per company for document configuration."""
+
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.PROTECT,
+        related_name="warehouses",
+        verbose_name="Empresa",
+    )
+    code = models.SlugField(max_length=40, verbose_name="Codigo")
+    name = models.CharField(max_length=80, verbose_name="Nombre")
+    is_active = models.BooleanField(default=True, verbose_name="Activo")
+    notes = models.TextField(blank=True, verbose_name="Notas")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Depositos"
+        verbose_name_plural = "Depositos"
+        ordering = ["company_id", "name"]
+        unique_together = [("company", "code")]
+        indexes = [
+            models.Index(fields=["company", "is_active"]),
+            models.Index(fields=["company", "code"]),
+        ]
+
+    def __str__(self):
+        return f"{self.company.name} - {self.name}"
 
 
 class FiscalPointOfSale(models.Model):
@@ -241,6 +314,148 @@ class DocumentSeries(models.Model):
 
     def __str__(self):
         return f"{self.company.name} - {self.doc_type} ({self.next_number})"
+
+
+class SalesDocumentType(models.Model):
+    """Configurable commercial document type that drives generation rules."""
+
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.PROTECT,
+        related_name="sales_document_types",
+        verbose_name="Empresa",
+    )
+    code = models.SlugField(max_length=40, verbose_name="Codigo")
+    name = models.CharField(max_length=80, verbose_name="Nombre")
+    letter = models.CharField(max_length=4, blank=True, verbose_name="Letra")
+    point_of_sale = models.ForeignKey(
+        "core.FiscalPointOfSale",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="sales_document_types",
+        verbose_name="Punto de venta",
+    )
+    last_number = models.PositiveIntegerField(default=0, verbose_name="Ultimo numero")
+    enabled = models.BooleanField(default=True, verbose_name="Habilitado")
+    document_behavior = models.CharField(
+        max_length=24,
+        choices=SALES_DOCUMENT_BEHAVIOR_CHOICES,
+        verbose_name="Tipo de comprobante",
+    )
+    generate_stock_movement = models.BooleanField(default=False, verbose_name="Genera movimiento de stock")
+    generate_account_movement = models.BooleanField(default=False, verbose_name="Genera movimiento de cuenta")
+    group_equal_products = models.BooleanField(default=True, verbose_name="Agrupa productos iguales")
+    default_warehouse = models.ForeignKey(
+        "core.Warehouse",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="sales_document_types",
+        verbose_name="Deposito predeterminado",
+    )
+    prioritize_default_warehouse = models.BooleanField(default=True, verbose_name="Priorizar deposito predeterminado")
+    default_sales_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="default_sales_document_types",
+        verbose_name="Vendedor predeterminado",
+    )
+    billing_mode = models.CharField(
+        max_length=32,
+        choices=SALES_BILLING_MODE_CHOICES,
+        default=SALES_BILLING_MODE_INTERNAL_DOCUMENT,
+        verbose_name="Modo de facturacion",
+    )
+    internal_doc_type = models.CharField(
+        max_length=3,
+        blank=True,
+        choices=DocumentSeries.DOC_TYPE_CHOICES,
+        verbose_name="Tipo interno asociado",
+    )
+    fiscal_doc_type = models.CharField(
+        max_length=3,
+        blank=True,
+        choices=FISCAL_DOC_TYPE_CHOICES,
+        verbose_name="Tipo fiscal asociado",
+    )
+    is_default = models.BooleanField(default=False, verbose_name="Predeterminado")
+    display_order = models.PositiveIntegerField(default=0, verbose_name="Orden")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Tipo de documento comercial"
+        verbose_name_plural = "Tipos de documentos comerciales"
+        ordering = ["company_id", "display_order", "name"]
+        indexes = [
+            models.Index(fields=["company", "enabled"]),
+            models.Index(fields=["company", "document_behavior"]),
+            models.Index(fields=["company", "billing_mode"]),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["company", "code"],
+                name="uniq_sales_document_type_company_code",
+            ),
+            models.UniqueConstraint(
+                fields=["company", "document_behavior"],
+                condition=models.Q(is_default=True),
+                name="uniq_default_sales_document_type_per_behavior",
+            ),
+        ]
+
+    def clean(self):
+        if self.point_of_sale_id and self.point_of_sale.company_id != self.company_id:
+            raise ValidationError("El punto de venta no pertenece a la empresa del tipo de documento.")
+        if self.default_warehouse_id and self.default_warehouse.company_id != self.company_id:
+            raise ValidationError("El deposito no pertenece a la empresa del tipo de documento.")
+        if self.document_behavior in {
+            SALES_BEHAVIOR_FACTURA,
+            SALES_BEHAVIOR_NOTA_CREDITO,
+            SALES_BEHAVIOR_NOTA_DEBITO,
+        }:
+            if self.billing_mode == SALES_BILLING_MODE_INTERNAL_DOCUMENT and not self.internal_doc_type:
+                raise ValidationError("Debes definir un tipo interno si el modo de facturacion es interno.")
+            if self.billing_mode != SALES_BILLING_MODE_INTERNAL_DOCUMENT and not self.fiscal_doc_type:
+                raise ValidationError("Debes definir un tipo fiscal para documentos con facturacion fiscal.")
+        if self.internal_doc_type and self.billing_mode != SALES_BILLING_MODE_INTERNAL_DOCUMENT:
+            # Allow storing the mapping for print/compatibility without blocking.
+            pass
+
+    def save(self, *args, **kwargs):
+        if not self.code:
+            base_code = slugify(self.name) or "tipo-documento"
+            candidate = base_code
+            counter = 1
+            while SalesDocumentType.objects.filter(company=self.company, code=candidate).exclude(pk=self.pk).exists():
+                candidate = f"{base_code}-{counter}"
+                counter += 1
+            self.code = candidate
+        if not kwargs.get("raw"):
+            self.clean()
+        super().save(*args, **kwargs)
+
+    @property
+    def point_of_sale_number(self):
+        return getattr(self.point_of_sale, "number", "") or ""
+
+    def format_number(self, number=None):
+        seq = int(number if number is not None else (self.last_number or 0))
+        sequence = str(seq).zfill(8)
+        point = str(self.point_of_sale_number or "").strip()
+        letter = str(self.letter or "").strip()
+        if point:
+            prefix = f"{letter}{point.zfill(5)}"
+            return f"{prefix}-{sequence}"
+        if letter:
+            return f"{letter}-{sequence}"
+        return sequence
+
+    def __str__(self):
+        return f"{self.company.name} - {self.name}"
 
 
 class FiscalDocumentSeries(models.Model):
@@ -421,6 +636,14 @@ class FiscalDocument(models.Model):
     external_system = models.CharField(max_length=20, blank=True, default="", verbose_name="Sistema externo")
     external_id = models.CharField(max_length=80, blank=True, default="", verbose_name="ID externo")
     external_number = models.CharField(max_length=80, blank=True, default="", verbose_name="Numero externo")
+    sales_document_type = models.ForeignKey(
+        "core.SalesDocumentType",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="fiscal_documents",
+        verbose_name="Tipo de documento comercial",
+    )
     request_payload = models.JSONField(default=dict, blank=True, verbose_name="Request payload")
     response_payload = models.JSONField(default=dict, blank=True, verbose_name="Response payload")
     error_code = models.CharField(max_length=80, blank=True, default="", verbose_name="Codigo error")
@@ -466,6 +689,23 @@ class FiscalDocument(models.Model):
     def __str__(self):
         number_text = self.number if self.number is not None else "-"
         return f"{self.doc_type} {self.point_of_sale.number}-{number_text} ({self.company.name})"
+
+    @property
+    def commercial_type_label(self):
+        if self.sales_document_type_id:
+            return self.sales_document_type.name
+        return self.get_doc_type_display()
+
+    @property
+    def display_number(self):
+        if self.number is None:
+            return self.external_number or "-"
+        if self.sales_document_type_id:
+            return self.sales_document_type.format_number(number=self.number)
+        point = getattr(self.point_of_sale, "number", "") or ""
+        if point:
+            return f"{str(point).zfill(5)}-{str(self.number).zfill(8)}"
+        return str(self.number).zfill(8)
 
 
 class FiscalDocumentItem(models.Model):
@@ -621,6 +861,14 @@ class InternalDocument(models.Model):
         verbose_name="Movimiento",
     )
     issued_at = models.DateTimeField(default=timezone.now, verbose_name="Fecha emision")
+    sales_document_type = models.ForeignKey(
+        "core.SalesDocumentType",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="internal_documents",
+        verbose_name="Tipo de documento comercial",
+    )
     is_cancelled = models.BooleanField(default=False, verbose_name="Anulado")
     cancelled_at = models.DateTimeField(null=True, blank=True, verbose_name="Fecha anulacion")
     cancel_reason = models.CharField(max_length=255, blank=True, verbose_name="Motivo anulacion")
@@ -641,6 +889,20 @@ class InternalDocument(models.Model):
     def __str__(self):
         return f"{self.doc_type}-{self.number:07d} ({self.company.name})"
 
+    @property
+    def commercial_type_label(self):
+        if self.sales_document_type_id:
+            return self.sales_document_type.name
+        return self.get_doc_type_display()
+
+    @property
+    def display_number(self):
+        if self.number is None:
+            return "-"
+        if self.sales_document_type_id:
+            return self.sales_document_type.format_number(number=self.number)
+        return f"{self.number:07d}"
+
     def clean(self):
         if not self.company_id:
             raise ValidationError("La empresa es obligatoria para documentos internos.")
@@ -658,6 +920,111 @@ class InternalDocument(models.Model):
         if not kwargs.get("raw"):
             self.clean()
         super().save(*args, **kwargs)
+
+
+class StockMovement(models.Model):
+    """Auditable stock movement generated from configurable sales documents."""
+
+    source_key = models.CharField(
+        max_length=160,
+        unique=True,
+        db_index=True,
+        verbose_name="Clave de origen",
+    )
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.PROTECT,
+        related_name="stock_movements",
+        verbose_name="Empresa",
+    )
+    warehouse = models.ForeignKey(
+        Warehouse,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="stock_movements",
+        verbose_name="Deposito",
+    )
+    product = models.ForeignKey(
+        "catalog.Product",
+        on_delete=models.PROTECT,
+        related_name="stock_movements",
+        verbose_name="Producto",
+    )
+    sales_document_type = models.ForeignKey(
+        SalesDocumentType,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="stock_movements",
+        verbose_name="Tipo de documento comercial",
+    )
+    order = models.ForeignKey(
+        "orders.Order",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="stock_movements",
+        verbose_name="Pedido",
+    )
+    internal_document = models.ForeignKey(
+        InternalDocument,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="stock_movements",
+        verbose_name="Documento interno",
+    )
+    fiscal_document = models.ForeignKey(
+        FiscalDocument,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="stock_movements",
+        verbose_name="Documento fiscal",
+    )
+    movement_type = models.CharField(
+        max_length=20,
+        choices=STOCK_MOVEMENT_CHOICES,
+        verbose_name="Tipo de movimiento",
+    )
+    quantity = models.DecimalField(max_digits=14, decimal_places=3, verbose_name="Cantidad")
+    notes = models.CharField(max_length=255, blank=True, verbose_name="Notas")
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="stock_movements_created",
+        verbose_name="Generado por",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Movimiento de stock"
+        verbose_name_plural = "Movimientos de stock"
+        ordering = ["-created_at", "-id"]
+        indexes = [
+            models.Index(fields=["company", "created_at"]),
+            models.Index(fields=["product", "created_at"]),
+            models.Index(fields=["warehouse", "created_at"]),
+            models.Index(fields=["movement_type", "created_at"]),
+        ]
+
+    def clean(self):
+        if self.warehouse_id and self.warehouse.company_id != self.company_id:
+            raise ValidationError("El deposito no coincide con la empresa del movimiento.")
+        if self.sales_document_type_id and self.sales_document_type.company_id != self.company_id:
+            raise ValidationError("El tipo de documento no coincide con la empresa del movimiento.")
+
+    def save(self, *args, **kwargs):
+        if not kwargs.get("raw"):
+            self.clean()
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.product_id} | {self.movement_type} | {self.quantity}"
 
 
 class SiteSettings(models.Model):

@@ -1,171 +1,211 @@
 {% extends 'admin_panel/base.html' %}
 {% load l10n %}
 
-{% block page_title %}Editar Cliente{% endblock %}
+{% block page_title %}{% if is_create %}Nuevo Cliente{% else %}Editar Cliente{% endif %}{% endblock %}
 
 {% block content %}
 <div class="admin-form-container">
-    <h2>Editar Cliente: {{ client.company_name }}</h2>
+    <h2>{% if is_create %}Nuevo cliente{% else %}Editar cliente: {{ client.company_name }}{% endif %}</h2>
 
     <form method="post">
         {% csrf_token %}
 
-        <div class="form-group">
-            <label class="form-label">Usuario</label>
-            <input type="text" class="form-input" value="{{ client.user.username }}" disabled>
+        <div class="order-card" style="margin-bottom:18px;">
+            <div class="order-card-header">
+                <div>
+                    <h3>Usuario</h3>
+                    <p class="order-card-subtitle">Credenciales y acceso al portal del cliente.</p>
+                </div>
+            </div>
+            <div class="admin-grid" style="display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:16px;">
+                <div class="form-group">
+                    <label for="username" class="form-label">Usuario</label>
+                    <input type="text" name="username" id="username" class="form-input" value="{{ form_values.username }}" required>
+                </div>
+                <div class="form-group">
+                    <label for="email" class="form-label">Email</label>
+                    <input type="email" name="email" id="email" class="form-input" value="{{ form_values.email }}">
+                </div>
+                <div class="form-group">
+                    <label for="first_name" class="form-label">Nombre</label>
+                    <input type="text" name="first_name" id="first_name" class="form-input" value="{{ form_values.first_name }}">
+                </div>
+                <div class="form-group">
+                    <label for="last_name" class="form-label">Apellido</label>
+                    <input type="text" name="last_name" id="last_name" class="form-input" value="{{ form_values.last_name }}">
+                </div>
+                {% if is_create %}
+                <div class="form-group">
+                    <label for="password" class="form-label">Contrasena inicial</label>
+                    <input type="password" name="password" id="password" class="form-input" required>
+                </div>
+                <div class="form-group">
+                    <label for="password_confirm" class="form-label">Confirmar contrasena</label>
+                    <input type="password" name="password_confirm" id="password_confirm" class="form-input" required>
+                </div>
+                {% endif %}
+                <div class="form-group">
+                    <label class="form-label">Estado de acceso</label>
+                    <label class="form-checkbox-label" style="display:flex;align-items:center;gap:8px;">
+                        <input type="checkbox" id="user_is_active" name="user_is_active" {% if form_values.user_is_active %}checked{% endif %}>
+                        Usuario habilitado para iniciar sesion
+                    </label>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Estado del perfil</label>
+                    <label class="form-checkbox-label" style="display:flex;align-items:center;gap:8px;">
+                        <input type="checkbox" id="client_is_approved" name="client_is_approved" {% if form_values.client_is_approved %}checked{% endif %}>
+                        Perfil aprobado para operar
+                    </label>
+                </div>
+            </div>
         </div>
 
-        {% if companies %}
-        <div class="form-group">
-            <label for="company_id" class="form-label">Empresa operativa</label>
-            <select name="company_id" id="company_id" class="form-select">
-                {% for company in companies %}
-                <option value="{{ company.pk }}" {% if active_company and active_company.pk == company.pk %}selected{% endif %}>
-                    {{ company.name }}
-                </option>
-                {% endfor %}
-            </select>
-            {% if uses_legacy_rules %}
-            <small class="text-muted">No hay relacion comercial para esta empresa. Se creara al guardar.</small>
+        <div class="order-card" style="margin-bottom:18px;">
+            <div class="order-card-header">
+                <div>
+                    <h3>Relacion comercial</h3>
+                    <p class="order-card-subtitle">Empresa operativa, categoria y reglas comerciales del cliente.</p>
+                </div>
+            </div>
+
+            {% if companies %}
+            <div class="form-group">
+                <label for="company_id" class="form-label">Empresa operativa</label>
+                <select name="company_id" id="company_id" class="form-select">
+                    {% for company in companies %}
+                    <option value="{{ company.pk }}" {% if form_values.company_id == company.pk|stringformat:"s" %}selected{% endif %}>
+                        {{ company.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+                {% if uses_legacy_rules %}
+                <small class="text-muted">No hay relacion comercial para esta empresa. Se creara o actualizara al guardar.</small>
+                {% endif %}
+            </div>
             {% endif %}
-        </div>
-        {% endif %}
 
-        <div class="form-group">
-            <label for="company_name" class="form-label">Empresa / Razon Social</label>
-            <input type="text" name="company_name" id="company_name" class="form-input" value="{{ client.company_name }}">
-        </div>
-
-        <div class="form-group">
-            <label for="cuit_dni" class="form-label">CUIT / DNI</label>
-            <input type="text" name="cuit_dni" id="cuit_dni" class="form-input" value="{{ client.cuit_dni }}">
-            <button type="button" id="cuit_autofill" class="btn btn-outline" style="margin-top:8px;">
-                Autocompletar fiscal (CUIT)
-            </button>
-            <small class="text-muted">Preparado para futura consulta fiscal. Copia el CUIT a los campos fiscales si estan vacios.</small>
-        </div>
-
-        <div class="form-group">
-            <label for="document_type" class="form-label">Tipo de documento (fiscal)</label>
-            <select name="document_type" id="document_type" class="form-select">
-                <option value="">-</option>
-                <option value="cuit" {% if client.document_type == 'cuit' %}selected{% endif %}>CUIT</option>
-                <option value="cuil" {% if client.document_type == 'cuil' %}selected{% endif %}>CUIL</option>
-                <option value="dni" {% if client.document_type == 'dni' %}selected{% endif %}>DNI</option>
-                <option value="cdi" {% if client.document_type == 'cdi' %}selected{% endif %}>CDI</option>
-                <option value="passport" {% if client.document_type == 'passport' %}selected{% endif %}>Pasaporte</option>
-                <option value="otro" {% if client.document_type == 'otro' %}selected{% endif %}>Otro</option>
-            </select>
-        </div>
-
-        <div class="form-group">
-            <label for="document_number" class="form-label">Numero de documento (fiscal)</label>
-            <input type="text" name="document_number" id="document_number" class="form-input" value="{{ client.document_number }}">
-        </div>
-
-        <div class="form-group">
-            <label for="discount" class="form-label">Descuento (%)</label>
-            <input
-                type="number"
-                step="0.01"
-                name="discount"
-                id="discount"
-                class="form-input"
-                value="{{ effective_discount }}"
-            >
-            <small class="text-muted">Si asignas tipo de cliente, este valor se completa automaticamente.</small>
-        </div>
-
-        <div class="form-group">
-            <label for="client_category" class="form-label">Tipo de cliente (lista comercial)</label>
-            <select name="client_category" id="client_category" class="form-select">
-                <option value="">Sin tipo (usa descuento manual)</option>
-                {% for category in client_categories %}
-                <option
-                    value="{{ category.pk }}"
-                    data-discount="{{ category.discount_percentage|unlocalize }}"
-                    {% if effective_category_id == category.pk %}selected{% endif %}
-                >
-                    {{ category.name }} - {{ category.discount_percentage|floatformat:2 }}%
-                </option>
-                {% endfor %}
-            </select>
+            <div class="admin-grid" style="display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:16px;">
+                <div class="form-group">
+                    <label for="company_name" class="form-label">Empresa / Razon social</label>
+                    <input type="text" name="company_name" id="company_name" class="form-input" value="{{ form_values.company_name }}" required>
+                </div>
+                <div class="form-group">
+                    <label for="phone" class="form-label">Telefonos</label>
+                    <input type="text" name="phone" id="phone" class="form-input" value="{{ form_values.phone }}">
+                </div>
+                <div class="form-group">
+                    <label for="discount" class="form-label">Descuento (%)</label>
+                    <input type="number" step="0.01" name="discount" id="discount" class="form-input" value="{{ form_values.discount }}">
+                    <small class="text-muted">Si asignas tipo de cliente, este valor se completa automaticamente.</small>
+                </div>
+                <div class="form-group">
+                    <label for="client_category" class="form-label">Tipo de cliente (lista comercial)</label>
+                    <select name="client_category" id="client_category" class="form-select">
+                        <option value="">Sin tipo (usa descuento manual)</option>
+                        {% for category in client_categories %}
+                        <option
+                            value="{{ category.pk }}"
+                            data-discount="{{ category.discount_percentage|unlocalize }}"
+                            {% if form_values.client_category == category.pk|stringformat:"s" %}selected{% endif %}
+                        >
+                            {{ category.name }} - {{ category.discount_percentage|floatformat:2 }}%
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="client_type" class="form-label">Rubro</label>
+                    <select name="client_type" id="client_type" class="form-select">
+                        <option value="">-</option>
+                        {% for value, label in client_type_choices %}
+                        <option value="{{ value }}" {% if form_values.client_type == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Estado en empresa</label>
+                    <label class="form-checkbox-label" style="display:flex;align-items:center;gap:8px;">
+                        <input type="checkbox" id="company_is_active" name="company_is_active" {% if form_values.company_is_active %}checked{% endif %}>
+                        Cliente habilitado para operar en esta empresa
+                    </label>
+                </div>
+            </div>
         </div>
 
-        <div class="form-group">
-            <label class="form-label">Estado en empresa</label>
-            <label class="form-checkbox-label" style="display:flex;align-items:center;gap:8px;">
-                <input
-                    type="checkbox"
-                    id="company_is_active"
-                    name="company_is_active"
-                    {% if company_is_active %}checked{% endif %}
-                >
-                Cliente habilitado para operar en esta empresa
-            </label>
-        </div>
+        <div class="order-card" style="margin-bottom:18px;">
+            <div class="order-card-header">
+                <div>
+                    <h3>Informacion fiscal y contacto</h3>
+                    <p class="order-card-subtitle">Datos legales, fiscales y de ubicacion del cliente.</p>
+                </div>
+            </div>
 
-        <div class="form-group">
-            <label for="province" class="form-label">Provincia</label>
-            <input type="text" name="province" id="province" class="form-input" value="{{ client.province }}">
-        </div>
-
-        <div class="form-group">
-            <label for="fiscal_province" class="form-label">Provincia fiscal</label>
-            <input type="text" name="fiscal_province" id="fiscal_province" class="form-input" value="{{ client.fiscal_province }}">
-        </div>
-
-        <div class="form-group">
-            <label for="fiscal_city" class="form-label">Localidad fiscal</label>
-            <input type="text" name="fiscal_city" id="fiscal_city" class="form-input" value="{{ client.fiscal_city }}">
-        </div>
-
-        <div class="form-group">
-            <label for="address" class="form-label">Domicilio</label>
-            <textarea name="address" id="address" class="form-textarea">{{ client.address }}</textarea>
-        </div>
-
-        <div class="form-group">
-            <label for="fiscal_address" class="form-label">Domicilio fiscal</label>
-            <input type="text" name="fiscal_address" id="fiscal_address" class="form-input" value="{{ client.fiscal_address }}">
-        </div>
-
-        <div class="form-group">
-            <label for="postal_code" class="form-label">Codigo postal</label>
-            <input type="text" name="postal_code" id="postal_code" class="form-input" value="{{ client.postal_code }}">
-        </div>
-
-        <div class="form-group">
-            <label for="phone" class="form-label">Telefonos</label>
-            <input type="text" name="phone" id="phone" class="form-input" value="{{ client.phone }}">
-        </div>
-
-        <div class="form-group">
-            <label for="client_type" class="form-label">Rubro (opcional)</label>
-            <select name="client_type" id="client_type" class="form-select">
-                <option value="">-</option>
-                <option value="taller" {% if client.client_type == 'taller' %}selected{% endif %}>Taller</option>
-                <option value="distribuidora" {% if client.client_type == 'distribuidora' %}selected{% endif %}>Distribuidora</option>
-                <option value="flota" {% if client.client_type == 'flota' %}selected{% endif %}>Flota</option>
-                <option value="otro" {% if client.client_type == 'otro' %}selected{% endif %}>Otro</option>
-            </select>
-        </div>
-
-        <div class="form-group">
-            <label for="iva_condition" class="form-label">Condicion IVA</label>
-            <select name="iva_condition" id="iva_condition" class="form-select">
-                <option value="">-</option>
-                <option value="responsable_inscripto" {% if client.iva_condition == 'responsable_inscripto' %}selected{% endif %}>Responsable Inscripto</option>
-                <option value="monotributista" {% if client.iva_condition == 'monotributista' %}selected{% endif %}>Monotributista</option>
-                <option value="exento" {% if client.iva_condition == 'exento' %}selected{% endif %}>Exento</option>
-                <option value="consumidor_final" {% if client.iva_condition == 'consumidor_final' %}selected{% endif %}>Consumidor Final</option>
-            </select>
+            <div class="admin-grid" style="display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:16px;">
+                <div class="form-group">
+                    <label for="cuit_dni" class="form-label">CUIT / DNI</label>
+                    <input type="text" name="cuit_dni" id="cuit_dni" class="form-input" value="{{ form_values.cuit_dni }}">
+                    <button type="button" id="cuit_autofill" class="btn btn-outline" style="margin-top:8px;">Autocompletar fiscal (CUIT)</button>
+                    <small class="text-muted">Prepara los campos fiscales con el CUIT cargado si todavia estan vacios.</small>
+                </div>
+                <div class="form-group">
+                    <label for="iva_condition" class="form-label">Condicion IVA</label>
+                    <select name="iva_condition" id="iva_condition" class="form-select">
+                        <option value="">-</option>
+                        {% for value, label in iva_condition_choices %}
+                        <option value="{{ value }}" {% if form_values.iva_condition == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="document_type" class="form-label">Tipo de documento (fiscal)</label>
+                    <select name="document_type" id="document_type" class="form-select">
+                        <option value="">-</option>
+                        {% for value, label in document_type_choices %}
+                        <option value="{{ value }}" {% if form_values.document_type == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="document_number" class="form-label">Numero de documento (fiscal)</label>
+                    <input type="text" name="document_number" id="document_number" class="form-input" value="{{ form_values.document_number }}">
+                </div>
+                <div class="form-group">
+                    <label for="province" class="form-label">Provincia</label>
+                    <input type="text" name="province" id="province" class="form-input" value="{{ form_values.province }}">
+                </div>
+                <div class="form-group">
+                    <label for="fiscal_province" class="form-label">Provincia fiscal</label>
+                    <input type="text" name="fiscal_province" id="fiscal_province" class="form-input" value="{{ form_values.fiscal_province }}">
+                </div>
+                <div class="form-group">
+                    <label for="fiscal_city" class="form-label">Localidad fiscal</label>
+                    <input type="text" name="fiscal_city" id="fiscal_city" class="form-input" value="{{ form_values.fiscal_city }}">
+                </div>
+                <div class="form-group">
+                    <label for="postal_code" class="form-label">Codigo postal</label>
+                    <input type="text" name="postal_code" id="postal_code" class="form-input" value="{{ form_values.postal_code }}">
+                </div>
+                <div class="form-group" style="grid-column:1 / -1;">
+                    <label for="address" class="form-label">Domicilio</label>
+                    <textarea name="address" id="address" class="form-textarea">{{ form_values.address }}</textarea>
+                </div>
+                <div class="form-group" style="grid-column:1 / -1;">
+                    <label for="fiscal_address" class="form-label">Domicilio fiscal</label>
+                    <input type="text" name="fiscal_address" id="fiscal_address" class="form-input" value="{{ form_values.fiscal_address }}">
+                </div>
+            </div>
         </div>
 
         <div class="form-actions">
-            <button type="submit" class="btn btn-primary">Guardar</button>
-            <a href="{% url 'admin_client_order_history' client.pk %}" class="btn btn-warning-outline">Ver Pedidos</a>
-            <a href="{% url 'admin_payment_list' %}?client_id={{ client.pk }}" class="btn btn-primary">Ver Pagos</a>
+            <button type="submit" class="btn btn-primary">{% if is_create %}Crear cliente{% else %}Guardar cambios{% endif %}</button>
+            {% if not is_create %}
+            <a href="{% url 'admin_client_order_history' client.pk %}" class="btn btn-warning-outline">Ver historial</a>
+            <a href="{% url 'admin_payment_list' %}?client_id={{ client.pk }}" class="btn btn-primary">Ver pagos</a>
+            {% if can_manage_client_credentials and client.user %}
+            <a href="{% url 'admin_client_password' client.pk %}" class="btn btn-outline">Cambiar clave</a>
+            {% endif %}
+            {% endif %}
             <a href="{% url 'admin_client_list' %}" class="btn btn-outline">Cancelar</a>
         </div>
     </form>
@@ -187,7 +227,7 @@
                 let raw = option.dataset ? (option.dataset.discount || '') : '';
                 if (!raw) {
                     const text = option.textContent || '';
-                    const match = text.match(/(-?\d+(?:[.,]\d+)?)\s*%/);
+                    const match = text.match(/(-?\\d+(?:[.,]\\d+)?)\\s*%/);
                     raw = match ? match[1] : '';
                 }
                 return normalizeDecimal(raw);

@@ -51,9 +51,31 @@ from orders.services.workflow import can_user_transition_order
 from core.models import (
     Company,
     DocumentSeries,
+    FISCAL_DOC_TYPE_FA,
+    FISCAL_DOC_TYPE_FB,
+    FISCAL_ISSUE_MODE_ARCA_WSFE,
+    FISCAL_ISSUE_MODE_EXTERNAL_SAAS,
+    FISCAL_ISSUE_MODE_MANUAL,
+    FISCAL_STATUS_AUTHORIZED,
+    FISCAL_STATUS_EXTERNAL_RECORDED,
+    FISCAL_STATUS_PENDING_RETRY,
+    FISCAL_STATUS_READY_TO_ISSUE,
+    FISCAL_STATUS_REJECTED,
+    FISCAL_STATUS_SUBMITTING,
+    FISCAL_STATUS_VOIDED,
     FiscalDocument,
     FiscalPointOfSale,
     InternalDocument,
+    SALES_BEHAVIOR_COTIZACION,
+    SALES_DOCUMENT_BEHAVIOR_CHOICES,
+    SALES_BEHAVIOR_FACTURA,
+    SALES_BEHAVIOR_NOTA_CREDITO,
+    SALES_BEHAVIOR_NOTA_DEBITO,
+    SALES_BEHAVIOR_PEDIDO,
+    SALES_BEHAVIOR_PRESUPUESTO,
+    SALES_BEHAVIOR_RECIBO,
+    SALES_BEHAVIOR_REMITO,
+    SalesDocumentType,
     SiteSettings,
     CatalogAnalyticsEvent,
     AdminAuditLog,
@@ -61,6 +83,7 @@ from core.models import (
     CatalogExcelTemplate,
     CatalogExcelTemplateSheet,
     CatalogExcelTemplateColumn,
+    Warehouse,
 )
 from core.services.company_context import (
     get_active_company,
@@ -77,6 +100,7 @@ from admin_panel.forms.export_forms import (
     CatalogExcelTemplateSheetForm,
     CatalogExcelTemplateColumnForm,
 )
+from admin_panel.forms.sales_document_type_forms import SalesDocumentTypeForm, WarehouseForm
 from catalog.services.product_importer import ProductImporter
 from accounts.services.client_importer import ClientImporter
 from catalog.services.category_importer import CategoryImporter
@@ -110,10 +134,19 @@ from core.services.import_manager import ImportTaskManager
 from core.services.background_jobs import dispatch_import_job
 from core.services.fiscal import is_company_fiscal_ready, is_invoice_ready
 from core.services.fiscal_documents import (
+    close_fiscal_document,
     create_local_fiscal_document_from_order,
+    reopen_fiscal_document,
     register_external_fiscal_document_for_order,
+    void_fiscal_document,
 )
 from core.services.fiscal_emission import emit_fiscal_document_now
+from core.services.documents import ensure_document_for_adjustment, ensure_document_for_payment
+from core.services.sales_documents import (
+    create_fiscal_document_from_sales_type,
+    create_internal_document_from_sales_type,
+    resolve_sales_document_type,
+)
 from core.services.advanced_search import (
     apply_compact_text_search,
     apply_text_search,
@@ -140,11 +173,110 @@ CLIENT_REMITO_READY_STATUSES = {
     Order.STATUS_SHIPPED,
     Order.STATUS_DELIVERED,
 }
+ORDER_INTERNAL_DOC_STATUS_RULES = {
+    DocumentSeries.DOC_COT: {
+        Order.STATUS_DRAFT,
+        Order.STATUS_CONFIRMED,
+        Order.STATUS_PREPARING,
+        Order.STATUS_SHIPPED,
+        Order.STATUS_DELIVERED,
+    },
+    DocumentSeries.DOC_PED: {
+        Order.STATUS_CONFIRMED,
+        Order.STATUS_PREPARING,
+        Order.STATUS_SHIPPED,
+        Order.STATUS_DELIVERED,
+    },
+    DocumentSeries.DOC_REM: CLIENT_REMITO_READY_STATUSES,
+}
 FISCAL_PRINT_COPY_LABELS = {
     "original": "ORIGINAL",
     "duplicado": "DUPLICADO",
     "triplicado": "TRIPLICADO",
 }
+
+
+def _get_order_client_profile(order):
+    client_company = getattr(order, "client_company_ref", None)
+    if client_company and getattr(client_company, "client_profile", None):
+        return client_company.client_profile
+    if getattr(order, "user_id", None):
+        return ClientProfile.objects.filter(user_id=order.user_id).first()
+    return None
+
+
+def _resolve_default_point_of_sale(company):
+    if not company:
+        return None
+
+    company_default = str(getattr(company, "point_of_sale_default", "") or "").strip()
+    points = FiscalPointOfSale.objects.filter(company=company, is_active=True)
+    if company_default:
+        matched = points.filter(number=company_default).first()
+        if matched:
+            return matched
+    return points.order_by("-is_default", "number", "id").first()
+
+
+def _resolve_preferred_invoice_doc_type(order):
+    client_profile = _get_order_client_profile(order)
+    if client_profile and client_profile.iva_condition == "responsable_inscripto":
+        return FISCAL_DOC_TYPE_FA
+    return FISCAL_DOC_TYPE_FB
+
+
+def _resolve_invoice_sales_document_type_for_order(order):
+    preferred_doc_type = _resolve_preferred_invoice_doc_type(order)
+    configured = resolve_sales_document_type(
+        company=order.company,
+        behavior=SALES_BEHAVIOR_FACTURA,
+        fiscal_doc_type=preferred_doc_type,
+    )
+    if configured:
+        return configured
+    return resolve_sales_document_type(
+        company=order.company,
+        behavior=SALES_BEHAVIOR_FACTURA,
+    )
+
+
+def _get_order_active_invoice(order):
+    if not order:
+        return None
+    return (
+        FiscalDocument.objects.select_related(
+            "company",
+            "point_of_sale",
+            "sales_document_type",
+            "client_company_ref__client_profile",
+        )
+        .filter(order=order, doc_type__in=[FISCAL_DOC_TYPE_FA, FISCAL_DOC_TYPE_FB])
+        .exclude(status=FISCAL_STATUS_VOIDED)
+        .order_by("-created_at", "-id")
+        .first()
+    )
+
+
+def _get_fiscal_workflow_state(document):
+    if not document:
+        return {"label": "Sin factura", "badge_class": "", "is_open": False}
+    if document.status == FISCAL_STATUS_VOIDED:
+        return {"label": "Cancelada", "badge_class": "", "is_open": False}
+    if document.issue_mode == FISCAL_ISSUE_MODE_MANUAL:
+        if document.status == FISCAL_STATUS_EXTERNAL_RECORDED:
+            return {"label": "Cerrada", "badge_class": "is-success", "is_open": False}
+        return {"label": "Abierta", "badge_class": "is-info", "is_open": True}
+    if document.issue_mode == FISCAL_ISSUE_MODE_EXTERNAL_SAAS:
+        return {"label": "Cerrada", "badge_class": "is-success", "is_open": False}
+    if document.status == FISCAL_STATUS_AUTHORIZED:
+        return {"label": "Cerrada", "badge_class": "is-success", "is_open": False}
+    if document.status == FISCAL_STATUS_SUBMITTING:
+        return {"label": "En proceso", "badge_class": "is-info", "is_open": True}
+    if document.status == FISCAL_STATUS_PENDING_RETRY:
+        return {"label": "Pendiente", "badge_class": "", "is_open": True}
+    if document.status == FISCAL_STATUS_REJECTED:
+        return {"label": "Rechazada", "badge_class": "", "is_open": True}
+    return {"label": "Abierta", "badge_class": "is-info", "is_open": True}
 FISCAL_PRINT_DOC_META = {
     "FA": {"letter": "A", "code": "001"},
     "FB": {"letter": "B", "code": "006"},
@@ -370,6 +502,153 @@ def parse_optional_client_category(raw_value):
         return ClientCategory.objects.get(pk=int(raw))
     except (ValueError, TypeError, ClientCategory.DoesNotExist):
         raise ValueError("Categoria de cliente invalida.")
+
+
+def _is_checked(form_data, field_name, default=False):
+    if form_data is None:
+        return bool(default)
+    if field_name not in form_data:
+        return bool(default)
+    return str(form_data.get(field_name, "")).strip().lower() in {"1", "true", "on", "yes"}
+
+
+def _resolve_client_editor_company(request, client=None):
+    companies = Company.objects.filter(is_active=True).order_by("name")
+    active_company = get_admin_selected_company(request)
+    if active_company:
+        return active_company, companies
+    if client:
+        preferred_link = (
+            client.company_links.select_related("company")
+            .filter(company__is_active=True)
+            .order_by("-is_active", "company__name", "company_id")
+            .first()
+        )
+        if preferred_link:
+            return preferred_link.company, companies
+    fallback_company = get_default_client_origin_company() or companies.first()
+    return fallback_company, companies
+
+
+def _build_client_form_values(client=None, active_company=None, client_company=None, form_data=None):
+    if form_data is not None:
+        return {
+            "username": str(form_data.get("username", "")).strip(),
+            "email": str(form_data.get("email", "")).strip(),
+            "first_name": str(form_data.get("first_name", "")).strip(),
+            "last_name": str(form_data.get("last_name", "")).strip(),
+            "user_is_active": _is_checked(form_data, "user_is_active", default=False),
+            "client_is_approved": _is_checked(form_data, "client_is_approved", default=False),
+            "company_id": str(form_data.get("company_id", "")).strip(),
+            "company_name": str(form_data.get("company_name", "")).strip(),
+            "cuit_dni": str(form_data.get("cuit_dni", "")).strip(),
+            "document_type": str(form_data.get("document_type", "")).strip(),
+            "document_number": str(form_data.get("document_number", "")).strip(),
+            "discount": str(form_data.get("discount", "")).strip(),
+            "client_category": str(form_data.get("client_category", "")).strip(),
+            "company_is_active": _is_checked(form_data, "company_is_active", default=False),
+            "province": str(form_data.get("province", "")).strip(),
+            "fiscal_province": str(form_data.get("fiscal_province", "")).strip(),
+            "fiscal_city": str(form_data.get("fiscal_city", "")).strip(),
+            "address": str(form_data.get("address", "")).strip(),
+            "fiscal_address": str(form_data.get("fiscal_address", "")).strip(),
+            "postal_code": str(form_data.get("postal_code", "")).strip(),
+            "phone": str(form_data.get("phone", "")).strip(),
+            "client_type": str(form_data.get("client_type", "")).strip(),
+            "iva_condition": str(form_data.get("iva_condition", "")).strip(),
+        }
+
+    effective_category = None
+    effective_discount = Decimal("0")
+    if client:
+        effective_category = (
+            client_company.client_category
+            if client_company and client_company.client_category_id
+            else client.client_category
+        )
+        effective_discount = client.get_effective_discount_percentage(company=active_company)
+
+    user = getattr(client, "user", None)
+    return {
+        "username": getattr(user, "username", "") or "",
+        "email": getattr(user, "email", "") or "",
+        "first_name": getattr(user, "first_name", "") or "",
+        "last_name": getattr(user, "last_name", "") or "",
+        "user_is_active": bool(getattr(user, "is_active", True)) if user else True,
+        "client_is_approved": bool(getattr(client, "is_approved", True)) if client else True,
+        "company_id": str(active_company.pk) if active_company else "",
+        "company_name": getattr(client, "company_name", "") or "",
+        "cuit_dni": getattr(client, "cuit_dni", "") or "",
+        "document_type": getattr(client, "document_type", "") or "",
+        "document_number": getattr(client, "document_number", "") or "",
+        "discount": format(effective_discount, "f"),
+        "client_category": str(effective_category.pk) if effective_category else "",
+        "company_is_active": client_company.is_active if client_company else bool(getattr(client, "is_approved", True)) if client else True,
+        "province": getattr(client, "province", "") or "",
+        "fiscal_province": getattr(client, "fiscal_province", "") or "",
+        "fiscal_city": getattr(client, "fiscal_city", "") or "",
+        "address": getattr(client, "address", "") or "",
+        "fiscal_address": getattr(client, "fiscal_address", "") or "",
+        "postal_code": getattr(client, "postal_code", "") or "",
+        "phone": getattr(client, "phone", "") or "",
+        "client_type": getattr(client, "client_type", "") or "",
+        "iva_condition": getattr(client, "iva_condition", "") or "",
+    }
+
+
+def _render_client_form(
+    request,
+    *,
+    client=None,
+    active_company=None,
+    companies=None,
+    client_company=None,
+    form_values=None,
+):
+    if companies is None:
+        companies = Company.objects.filter(is_active=True).order_by("name")
+    if form_values is None:
+        form_values = _build_client_form_values(
+            client=client,
+            active_company=active_company,
+            client_company=client_company,
+        )
+
+    effective_category = (
+        client_company.client_category
+        if client_company and client_company.client_category_id
+        else getattr(client, "client_category", None)
+    )
+    effective_category_id = effective_category.pk if effective_category else None
+    effective_discount = (
+        client.get_effective_discount_percentage(company=active_company)
+        if client
+        else Decimal("0")
+    )
+    company_is_active = form_values.get("company_is_active", True)
+    uses_legacy = client.uses_legacy_commercial_rules(active_company) if client else False
+
+    return render(
+        request,
+        "admin_panel/clients/form.html",
+        {
+            "client": client,
+            "form_values": form_values,
+            "is_create": client is None,
+            "client_categories": get_client_categories_for_client(client, client_company),
+            "companies": companies,
+            "active_company": active_company,
+            "client_company": client_company,
+            "effective_category_id": effective_category_id,
+            "effective_discount": effective_discount,
+            "company_is_active": company_is_active,
+            "uses_legacy_rules": uses_legacy,
+            "can_manage_client_credentials": can_manage_client_credentials(request.user),
+            "document_type_choices": ClientProfile.DOCUMENT_TYPE_CHOICES,
+            "client_type_choices": ClientProfile.CLIENT_TYPE_CHOICES,
+            "iva_condition_choices": ClientProfile.IVA_CHOICES,
+        },
+    )
 
 
 def normalize_admin_search_query(raw_query):
@@ -2571,11 +2850,20 @@ def payment_list(request):
     if request.method == 'POST':
         action = request.POST.get('action', 'create').strip()
         company_id_raw = request.POST.get("company_id", "").strip()
+        sales_document_type_id_raw = request.POST.get("sales_document_type_id", "").strip()
         company_for_action = None
         if company_id_raw and company_id_raw.isdigit():
             company_for_action = Company.objects.filter(pk=int(company_id_raw), is_active=True).first()
         if not company_for_action and active_company:
             company_for_action = active_company
+        selected_sales_document_type = None
+        if sales_document_type_id_raw.isdigit() and company_for_action:
+            selected_sales_document_type = SalesDocumentType.objects.filter(
+                pk=int(sales_document_type_id_raw),
+                company=company_for_action,
+                enabled=True,
+                billing_mode="INTERNAL_DOCUMENT",
+            ).first()
 
         if action == 'cancel':
             payment_id = request.POST.get('payment_id', '').strip()
@@ -2650,6 +2938,11 @@ def payment_list(request):
             except ValueError as exc:
                 messages.error(request, str(exc))
                 return redirect('admin_payment_list')
+            if selected_sales_document_type and selected_sales_document_type.document_behavior == SALES_BEHAVIOR_NOTA_DEBITO:
+                ensure_document_for_adjustment(
+                    tx,
+                    sales_document_type=selected_sales_document_type,
+                )
             log_admin_action(
                 request,
                 action='client_adjustment_create',
@@ -2736,6 +3029,11 @@ def payment_list(request):
             except ValidationError as exc:
                 messages.error(request, "; ".join(exc.messages))
                 return redirect('admin_payment_list')
+            if selected_sales_document_type and selected_sales_document_type.document_behavior == SALES_BEHAVIOR_RECIBO:
+                ensure_document_for_payment(
+                    payment,
+                    sales_document_type=selected_sales_document_type,
+                )
 
         log_admin_change(
             request,
@@ -2786,6 +3084,8 @@ def payment_list(request):
     client_id = request.GET.get('client_id', '').strip()
     order_id = request.GET.get('order_id', '').strip().replace('#', '')
     sync_status = request.GET.get('sync_status', '').strip()
+    suggested_action = request.GET.get('suggested_action', '').strip().lower()
+    selected_sales_document_type_id = request.GET.get('sales_document_type_id', '').strip()
 
     if order_id.isdigit() and not client_id:
         order_for_prefill = Order.objects.select_related('user').filter(pk=order_id)
@@ -2856,7 +3156,7 @@ def payment_list(request):
     payment_docs = {}
     payment_ids = [payment.pk for payment in page_obj]
     if payment_ids:
-        for doc in InternalDocument.objects.filter(payment_id__in=payment_ids):
+        for doc in InternalDocument.objects.select_related('sales_document_type').filter(payment_id__in=payment_ids):
             payment_docs.setdefault(doc.payment_id, []).append(doc)
     for payment in page_obj:
         payment.internal_documents = payment_docs.get(payment.pk, [])
@@ -2891,6 +3191,14 @@ def payment_list(request):
             'total_paid': total_paid,
             'current_balance': ledger_balance,
         }
+    payment_sales_document_types = SalesDocumentType.objects.none()
+    if active_company:
+        payment_sales_document_types = SalesDocumentType.objects.filter(
+            company=active_company,
+            enabled=True,
+            billing_mode="INTERNAL_DOCUMENT",
+            document_behavior__in=[SALES_BEHAVIOR_RECIBO, SALES_BEHAVIOR_NOTA_DEBITO],
+        ).order_by("display_order", "name")
 
     return render(request, 'admin_panel/payments/list.html', {
         'page_obj': page_obj,
@@ -2911,6 +3219,9 @@ def payment_list(request):
         'summary_total': summary.get('total') or Decimal('0.00'),
         'summary_count': summary.get('count') or 0,
         'payment_documents': payment_docs,
+        'payment_sales_document_types': payment_sales_document_types,
+        'selected_sales_document_type_id': selected_sales_document_type_id,
+        'suggested_action': suggested_action,
     })
 
 
@@ -3782,6 +4093,7 @@ def client_list(request):
         'search': search,
         'can_manage_client_categories': can_edit_client_profile(request.user),
         'can_edit_client_profile': can_edit_client_profile(request.user),
+        'can_create_client': can_edit_client_profile(request.user),
         'can_manage_client_credentials': can_manage_client_credentials(request.user),
         'can_delete_client_record': can_delete_client_record(request.user),
     })
@@ -4059,11 +4371,209 @@ def client_category_delete(request, pk):
 
 
 @staff_member_required
+def client_create(request):
+    """Create a client user, profile and initial company relation from the admin panel."""
+    if not can_edit_client_profile(request.user):
+        messages.error(request, "No tienes permisos para crear clientes.")
+        return redirect("admin_client_list")
+
+    active_company, companies = _resolve_client_editor_company(request)
+    initial_values = _build_client_form_values(active_company=active_company)
+    if active_company and not initial_values.get("company_id"):
+        initial_values["company_id"] = str(active_company.pk)
+
+    if request.method == "POST":
+        form_values = _build_client_form_values(form_data=request.POST)
+        company = None
+        company_id = form_values.get("company_id", "")
+        if company_id.isdigit():
+            company = Company.objects.filter(pk=int(company_id), is_active=True).first()
+        if not company:
+            company = active_company or get_default_client_origin_company()
+            if company:
+                form_values["company_id"] = str(company.pk)
+
+        company_id = form_values.get("company_id", "")
+        if not company_id or not str(company_id).isdigit():
+            messages.error(request, "Selecciona una empresa operativa valida.")
+            return _render_client_form(
+                request,
+                active_company=company,
+                companies=companies,
+                client_company=None,
+                form_values=form_values,
+            )
+
+        if not company:
+            messages.error(request, "Selecciona una empresa operativa valida.")
+            return _render_client_form(
+                request,
+                active_company=active_company,
+                companies=companies,
+                client_company=None,
+                form_values=form_values,
+            )
+
+        try:
+            selected_category = parse_optional_client_category(form_values.get("client_category", ""))
+            discount_value = parse_admin_decimal_input(
+                form_values.get("discount", "0"),
+                "Descuento (%)",
+                min_value="0",
+                max_value="100",
+            )
+        except ValueError as exc:
+            messages.error(request, str(exc))
+            return _render_client_form(
+                request,
+                active_company=company,
+                companies=companies,
+                client_company=None,
+                form_values=form_values,
+            )
+
+        username = form_values.get("username", "")
+        password = str(request.POST.get("password", "")).strip()
+        password_confirm = str(request.POST.get("password_confirm", "")).strip()
+        company_name = form_values.get("company_name", "")
+
+        if not username:
+            messages.error(request, "El nombre de usuario es obligatorio.")
+            return _render_client_form(
+                request,
+                active_company=company,
+                companies=companies,
+                client_company=None,
+                form_values=form_values,
+            )
+        if User.objects.filter(username__iexact=username).exists():
+            messages.error(request, f'El usuario "{username}" ya existe.')
+            return _render_client_form(
+                request,
+                active_company=company,
+                companies=companies,
+                client_company=None,
+                form_values=form_values,
+            )
+        if not company_name:
+            messages.error(request, "La razon social o empresa es obligatoria.")
+            return _render_client_form(
+                request,
+                active_company=company,
+                companies=companies,
+                client_company=None,
+                form_values=form_values,
+            )
+        if not password:
+            messages.error(request, "La contrasena inicial es obligatoria.")
+            return _render_client_form(
+                request,
+                active_company=company,
+                companies=companies,
+                client_company=None,
+                form_values=form_values,
+            )
+        if password != password_confirm:
+            messages.error(request, "Las contrasenas no coinciden.")
+            return _render_client_form(
+                request,
+                active_company=company,
+                companies=companies,
+                client_company=None,
+                form_values=form_values,
+            )
+        try:
+            validate_password(password)
+        except ValidationError as exc:
+            for error in exc.messages:
+                messages.error(request, error)
+            return _render_client_form(
+                request,
+                active_company=company,
+                companies=companies,
+                client_company=None,
+                form_values=form_values,
+            )
+
+        document_type_choices = {choice[0] for choice in ClientProfile.DOCUMENT_TYPE_CHOICES}
+        client_type_choices = {choice[0] for choice in ClientProfile.CLIENT_TYPE_CHOICES}
+        iva_choices = {choice[0] for choice in ClientProfile.IVA_CHOICES}
+        user_is_active = form_values.get("user_is_active", True)
+        client_is_approved = form_values.get("client_is_approved", True)
+        company_is_active = form_values.get("company_is_active", True)
+        default_company = get_default_client_origin_company()
+        should_update_legacy = (
+            not company
+            or (default_company and company and default_company.id == company.id)
+        )
+
+        with transaction.atomic():
+            user = User.objects.create_user(
+                username=username,
+                email=form_values.get("email", ""),
+                password=password,
+                first_name=form_values.get("first_name", ""),
+                last_name=form_values.get("last_name", ""),
+                is_active=user_is_active,
+            )
+            client = ClientProfile.objects.create(
+                user=user,
+                company_name=company_name,
+                document_type=form_values.get("document_type", "") if form_values.get("document_type", "") in document_type_choices else "",
+                document_number=form_values.get("document_number", ""),
+                cuit_dni=form_values.get("cuit_dni", ""),
+                province=form_values.get("province", ""),
+                fiscal_province=form_values.get("fiscal_province", ""),
+                fiscal_city=form_values.get("fiscal_city", ""),
+                address=form_values.get("address", ""),
+                fiscal_address=form_values.get("fiscal_address", ""),
+                postal_code=form_values.get("postal_code", ""),
+                phone=form_values.get("phone", ""),
+                discount=(selected_category.discount_percentage if selected_category else discount_value) if should_update_legacy else Decimal("0"),
+                iva_condition=form_values.get("iva_condition", "") if form_values.get("iva_condition", "") in iva_choices else "",
+                client_type=form_values.get("client_type", "") if form_values.get("client_type", "") in client_type_choices else "",
+                client_category=selected_category if should_update_legacy else None,
+                is_approved=client_is_approved,
+            )
+            client_company = ClientCompany.objects.create(
+                client_profile=client,
+                company=company,
+                client_category=selected_category,
+                discount_percentage=selected_category.discount_percentage if selected_category else discount_value,
+                is_active=company_is_active,
+            )
+
+        log_admin_action(
+            request,
+            action="client_create",
+            target_type="client_profile",
+            target_id=client.pk,
+            details={
+                "username": user.username,
+                "email": user.email,
+                "company_name": client.company_name,
+                "company_id": company.pk,
+                "client_company_id": client_company.pk,
+                "client_category_id": selected_category.pk if selected_category else None,
+                "discount": str(client_company.discount_percentage),
+            },
+        )
+        messages.success(request, f'Cliente "{client.company_name}" creado correctamente.')
+        return redirect("admin_client_edit", pk=client.pk)
+
+    return _render_client_form(
+        request,
+        active_company=active_company,
+        companies=companies,
+        form_values=initial_values,
+    )
+
+
+@staff_member_required
 def client_edit(request, pk):
     """Edit client profile."""
-    client = get_object_or_404(ClientProfile, pk=pk)
-    active_company = get_admin_selected_company(request)
-    companies = Company.objects.filter(is_active=True).order_by("name")
+    client = get_object_or_404(ClientProfile.objects.select_related("user", "client_category"), pk=pk)
+    active_company, companies = _resolve_client_editor_company(request, client=client)
     client_company = None
     if active_company:
         client_company = (
@@ -4089,86 +4599,152 @@ def client_edit(request, pk):
         return redirect('admin_client_order_history', pk=client.pk)
     
     if request.method == 'POST':
+        form_values = _build_client_form_values(form_data=request.POST)
+        company = None
+        company_id = form_values.get("company_id", "")
+        if company_id.isdigit():
+            company = Company.objects.filter(pk=int(company_id), is_active=True).first()
+        if not company:
+            company = active_company or get_default_client_origin_company()
+            if company:
+                form_values["company_id"] = str(company.pk)
+
         try:
-            selected_category = parse_optional_client_category(request.POST.get("client_category", ""))
+            selected_category = parse_optional_client_category(form_values.get("client_category", ""))
         except ValueError as exc:
             messages.error(request, str(exc))
-            return render(
+            return _render_client_form(
                 request,
-                'admin_panel/clients/form.html',
-                {
-                    'client': client,
-                    'client_categories': get_client_categories_for_client(client, client_company),
-                    'companies': companies,
-                    'active_company': active_company,
-                    'client_company': client_company,
-                    'effective_category_id': effective_category_id,
-                    'effective_discount': effective_discount,
-                    'company_is_active': company_is_active,
-                    'uses_legacy_rules': uses_legacy,
-                },
+                client=client,
+                active_company=company or active_company,
+                companies=companies,
+                client_company=client_company,
+                form_values=form_values,
             )
 
         try:
             discount_value = parse_admin_decimal_input(
-                request.POST.get('discount', '0'),
+                form_values.get('discount', '0'),
                 'Descuento (%)',
                 min_value='0',
                 max_value='100',
             )
         except ValueError as exc:
             messages.error(request, str(exc))
-            return render(
+            return _render_client_form(
                 request,
-                'admin_panel/clients/form.html',
-                {
-                    'client': client,
-                    'client_categories': get_client_categories_for_client(client, client_company),
-                    'companies': companies,
-                    'active_company': active_company,
-                    'client_company': client_company,
-                    'effective_category_id': effective_category_id,
-                    'effective_discount': effective_discount,
-                    'company_is_active': company_is_active,
-                    'uses_legacy_rules': uses_legacy,
-                },
+                client=client,
+                active_company=company or active_company,
+                companies=companies,
+                client_company=client_company,
+                form_values=form_values,
             )
 
-        before = model_snapshot(
-            client,
-            [
-                'company_name',
-                'cuit_dni',
-                'document_type',
-                'document_number',
-                'province',
-                'fiscal_province',
-                'fiscal_city',
-                'address',
-                'fiscal_address',
-                'postal_code',
-                'phone',
-                'discount',
-                'client_type',
-                'iva_condition',
-                'client_category_id',
-            ],
-        )
-        client.company_name = request.POST.get('company_name', '').strip()
-        client.document_type = request.POST.get('document_type', '').strip()
-        client.document_number = request.POST.get('document_number', '').strip()
-        client.cuit_dni = request.POST.get('cuit_dni', '').strip()
-        client.province = request.POST.get('province', '').strip()
-        client.fiscal_province = request.POST.get('fiscal_province', '').strip()
-        client.fiscal_city = request.POST.get('fiscal_city', '').strip()
-        client.address = request.POST.get('address', '').strip()
-        client.fiscal_address = request.POST.get('fiscal_address', '').strip()
-        client.postal_code = request.POST.get('postal_code', '').strip()
-        client.phone = request.POST.get('phone', '').strip()
+        username = form_values.get("username", "")
+        if not username:
+            messages.error(request, "El nombre de usuario es obligatorio.")
+            return _render_client_form(
+                request,
+                client=client,
+                active_company=company or active_company,
+                companies=companies,
+                client_company=client_company,
+                form_values=form_values,
+            )
+        username_qs = User.objects.filter(username__iexact=username)
+        if client.user_id:
+            username_qs = username_qs.exclude(pk=client.user_id)
+        if username_qs.exists():
+            messages.error(request, f'El usuario "{username}" ya existe.')
+            return _render_client_form(
+                request,
+                client=client,
+                active_company=company or active_company,
+                companies=companies,
+                client_company=client_company,
+                form_values=form_values,
+            )
+        if not form_values.get("company_name", ""):
+            messages.error(request, "La razon social o empresa es obligatoria.")
+            return _render_client_form(
+                request,
+                client=client,
+                active_company=company or active_company,
+                companies=companies,
+                client_company=client_company,
+                form_values=form_values,
+            )
+        if not company:
+            messages.error(request, "Selecciona una empresa operativa valida.")
+            return _render_client_form(
+                request,
+                client=client,
+                active_company=active_company,
+                companies=companies,
+                client_company=client_company,
+                form_values=form_values,
+            )
+
+        document_type_choices = {choice[0] for choice in ClientProfile.DOCUMENT_TYPE_CHOICES}
+        client_type_choices = {choice[0] for choice in ClientProfile.CLIENT_TYPE_CHOICES}
+        iva_choices = {choice[0] for choice in ClientProfile.IVA_CHOICES}
+        before = {
+            "user": model_snapshot(
+                client.user,
+                ["username", "email", "first_name", "last_name", "is_active"],
+            ) if client.user_id else {},
+            "client": model_snapshot(
+                client,
+                [
+                    'company_name',
+                    'cuit_dni',
+                    'document_type',
+                    'document_number',
+                    'province',
+                    'fiscal_province',
+                    'fiscal_city',
+                    'address',
+                    'fiscal_address',
+                    'postal_code',
+                    'phone',
+                    'discount',
+                    'client_type',
+                    'iva_condition',
+                    'client_category_id',
+                    'is_approved',
+                ],
+            ),
+            "client_company": model_snapshot(
+                client_company,
+                ["client_category_id", "discount_percentage", "is_active"],
+            ) if client_company else {},
+        }
+
+        user = client.user
+        if user:
+            user.username = username
+            user.email = form_values.get("email", "")
+            user.first_name = form_values.get("first_name", "")
+            user.last_name = form_values.get("last_name", "")
+            user.is_active = form_values.get("user_is_active", True)
+            user.save(update_fields=["username", "email", "first_name", "last_name", "is_active"])
+
+        client.company_name = form_values.get('company_name', '')
+        client.document_type = form_values.get('document_type', '') if form_values.get("document_type", "") in document_type_choices else ''
+        client.document_number = form_values.get('document_number', '')
+        client.cuit_dni = form_values.get('cuit_dni', '')
+        client.province = form_values.get('province', '')
+        client.fiscal_province = form_values.get('fiscal_province', '')
+        client.fiscal_city = form_values.get('fiscal_city', '')
+        client.address = form_values.get('address', '')
+        client.fiscal_address = form_values.get('fiscal_address', '')
+        client.postal_code = form_values.get('postal_code', '')
+        client.phone = form_values.get('phone', '')
+        client.is_approved = form_values.get("client_is_approved", True)
         default_company = get_default_client_origin_company()
         should_update_legacy = (
-            not active_company
-            or (default_company and active_company and default_company.id == active_company.id)
+            not company
+            or (default_company and company and default_company.id == company.id)
         )
         if should_update_legacy:
             client.client_category = selected_category
@@ -4177,14 +4753,14 @@ def client_edit(request, pk):
                 if selected_category
                 else discount_value
             )
-        client.client_type = request.POST.get('client_type', '')
-        client.iva_condition = request.POST.get('iva_condition', '')
+        client.client_type = form_values.get('client_type', '') if form_values.get("client_type", "") in client_type_choices else ''
+        client.iva_condition = form_values.get('iva_condition', '') if form_values.get("iva_condition", "") in iva_choices else ''
         client.save()
 
-        if active_company:
+        if company:
             link, _ = ClientCompany.objects.get_or_create(
                 client_profile=client,
-                company=active_company,
+                company=company,
                 defaults={
                     "is_active": bool(client.is_approved),
                 },
@@ -4195,36 +4771,41 @@ def client_edit(request, pk):
                 if selected_category
                 else discount_value
             )
-            if "company_is_active" in request.POST:
-                link.is_active = str(request.POST.get("company_is_active", "")).lower() in {
-                    "1",
-                    "true",
-                    "on",
-                    "yes",
-                }
-            else:
-                link.is_active = bool(link.is_active)
+            link.is_active = form_values.get("company_is_active", True)
             link.save()
-        after = model_snapshot(
-            client,
-            [
-                'company_name',
-                'cuit_dni',
-                'document_type',
-                'document_number',
-                'province',
-                'fiscal_province',
-                'fiscal_city',
-                'address',
-                'fiscal_address',
-                'postal_code',
-                'phone',
-                'discount',
-                'client_type',
-                'iva_condition',
-                'client_category_id',
-            ],
-        )
+        else:
+            link = client_company
+        after = {
+            "user": model_snapshot(
+                client.user,
+                ["username", "email", "first_name", "last_name", "is_active"],
+            ) if client.user_id else {},
+            "client": model_snapshot(
+                client,
+                [
+                    'company_name',
+                    'cuit_dni',
+                    'document_type',
+                    'document_number',
+                    'province',
+                    'fiscal_province',
+                    'fiscal_city',
+                    'address',
+                    'fiscal_address',
+                    'postal_code',
+                    'phone',
+                    'discount',
+                    'client_type',
+                    'iva_condition',
+                    'client_category_id',
+                    'is_approved',
+                ],
+            ),
+            "client_company": model_snapshot(
+                link,
+                ["client_category_id", "discount_percentage", "is_active"],
+            ) if link else {},
+        }
         log_admin_change(
             request,
             action='client_update',
@@ -4244,22 +4825,14 @@ def client_edit(request, pk):
             )
         else:
             messages.success(request, f'Cliente "{client.company_name}" actualizado.')
-        return redirect('admin_client_list')
+        return redirect('admin_client_edit', pk=client.pk)
     
-    return render(
+    return _render_client_form(
         request,
-        'admin_panel/clients/form.html',
-        {
-            'client': client,
-            'client_categories': get_client_categories_for_client(client, client_company),
-            'companies': companies,
-            'active_company': active_company,
-            'client_company': client_company,
-            'effective_category_id': effective_category_id,
-            'effective_discount': effective_discount,
-            'company_is_active': company_is_active,
-            'uses_legacy_rules': uses_legacy,
-        },
+        client=client,
+        active_company=active_company,
+        companies=companies,
+        client_company=client_company,
     )
 
 
@@ -4277,6 +4850,26 @@ def client_quick_order(request, pk):
     if not client_company:
         messages.error(request, "El cliente no tiene relacion comercial activa con esta empresa.")
         return _redirect_client_history(client, active_company)
+
+    selected_sales_document_type = None
+    selected_sales_document_type_id = str(request.POST.get("sales_document_type_id", "")).strip()
+    if selected_sales_document_type_id.isdigit():
+        selected_sales_document_type = SalesDocumentType.objects.filter(
+            pk=int(selected_sales_document_type_id),
+            company=active_company,
+            enabled=True,
+        ).first()
+        if not selected_sales_document_type:
+            messages.error(request, "El tipo comercial seleccionado no esta disponible para esta empresa.")
+            return _redirect_client_history(client, active_company)
+        action = {
+            SALES_BEHAVIOR_COTIZACION: "quote",
+            SALES_BEHAVIOR_PRESUPUESTO: "quote",
+            SALES_BEHAVIOR_PEDIDO: "order",
+            SALES_BEHAVIOR_REMITO: "remito",
+            SALES_BEHAVIOR_FACTURA: "invoice",
+            SALES_BEHAVIOR_NOTA_CREDITO: "credit_note",
+        }.get(selected_sales_document_type.document_behavior, action)
 
     if action not in {"quote", "order", "remito", "invoice", "credit_note"}:
         messages.error(request, "Accion rapida invalida.")
@@ -4301,7 +4894,18 @@ def client_quick_order(request, pk):
                 .first()
             )
             if not remito_document:
-                remito_document = ensure_document_for_order(remito_order, doc_type=DocumentSeries.DOC_REM)
+                if selected_sales_document_type:
+                    try:
+                        remito_document, _ = create_internal_document_from_sales_type(
+                            order=remito_order,
+                            sales_document_type=selected_sales_document_type,
+                            actor=request.user,
+                        )
+                    except ValidationError as exc:
+                        messages.error(request, "; ".join(exc.messages))
+                        return redirect("admin_order_detail", pk=remito_order.pk)
+                else:
+                    remito_document = ensure_document_for_order(remito_order, doc_type=DocumentSeries.DOC_REM)
             if remito_document:
                 messages.success(
                     request,
@@ -4353,6 +4957,25 @@ def client_quick_order(request, pk):
                 continue
 
             invoice_ready, invoice_errors = is_invoice_ready(order)
+            if invoice_ready and selected_sales_document_type:
+                try:
+                    fiscal_doc, _ = create_fiscal_document_from_sales_type(
+                        order=order,
+                        sales_document_type=selected_sales_document_type,
+                        actor=request.user,
+                    )
+                except ValidationError as exc:
+                    errors_preview = "; ".join(exc.messages[:2])
+                    messages.warning(
+                        request,
+                        f"Se abrio el pedido #{order.pk}. No se pudo emitir {selected_sales_document_type.name}: {errors_preview}",
+                    )
+                    return redirect("admin_order_detail", pk=order.pk)
+                messages.success(
+                    request,
+                    f"Se genero {fiscal_doc.commercial_type_label} para el pedido #{order.pk}.",
+                )
+                return redirect("admin_fiscal_document_detail", pk=fiscal_doc.pk)
             if invoice_ready:
                 messages.success(
                     request,
@@ -4454,13 +5077,18 @@ def client_quick_order(request, pk):
         discount_percentage = Decimal("0")
         price_list = None
 
+    created_label = (
+        selected_sales_document_type.name
+        if selected_sales_document_type
+        else ("Cotizacion" if action == "quote" else "Pedido")
+    )
     order = Order.objects.create(
         user=client.user,
         company=active_company,
         status=Order.STATUS_DRAFT,
         priority=Order.PRIORITY_NORMAL,
         notes="",
-        admin_notes="Cotizacion creada desde ficha cliente." if action == "quote" else "Pedido creado desde ficha cliente.",
+        admin_notes=f"{created_label} creada desde ficha cliente.",
         subtotal=Decimal("0.00"),
         discount_percentage=discount_percentage,
         discount_amount=Decimal("0.00"),
@@ -4480,13 +5108,27 @@ def client_quick_order(request, pk):
         from_status="",
         to_status=order.status,
         changed_by=request.user if request.user.is_authenticated else None,
-        note="Documento creado desde ficha cliente",
+        note=f"{created_label} creado desde ficha cliente",
     )
     if price_list:
         order.admin_notes = f"{order.admin_notes} Lista: {price_list.name}"
         order.save(update_fields=["admin_notes", "updated_at"])
 
-    messages.success(request, "Documento borrador creado. Ahora podes cargar productos.")
+    if (
+        selected_sales_document_type
+        and selected_sales_document_type.billing_mode == "INTERNAL_DOCUMENT"
+        and selected_sales_document_type.internal_doc_type == DocumentSeries.DOC_COT
+    ):
+        try:
+            create_internal_document_from_sales_type(
+                order=order,
+                sales_document_type=selected_sales_document_type,
+                actor=request.user,
+            )
+        except ValidationError:
+            pass
+
+    messages.success(request, f"{created_label} creada. Ahora podes cargar productos.")
     return redirect("admin_order_detail", pk=order.pk)
 
 
@@ -4598,7 +5240,7 @@ def client_order_history(request, pk):
     )
     if active_company:
         documents_qs = documents_qs.filter(company=active_company)
-    documents_qs = documents_qs.select_related("company").order_by("-issued_at")
+    documents_qs = documents_qs.select_related("company", "sales_document_type").order_by("-issued_at")
     recent_internal_documents = list(documents_qs[:16])
     documents_by_type = {
         "COT": list(documents_qs.filter(doc_type="COT")[:10]),
@@ -4629,6 +5271,7 @@ def client_order_history(request, pk):
         FiscalDocument.objects.select_related(
             "company",
             "point_of_sale",
+            "sales_document_type",
             "order",
             "related_document",
         )
@@ -4638,57 +5281,166 @@ def client_order_history(request, pk):
     if active_company:
         fiscal_documents_qs = fiscal_documents_qs.filter(company=active_company)
     recent_fiscal_documents = list(fiscal_documents_qs[:12])
+    latest_internal_document = recent_internal_documents[0] if recent_internal_documents else None
+    latest_fiscal_document = recent_fiscal_documents[0] if recent_fiscal_documents else None
 
     ledger_rows = []
     ledger_warning = ""
     running_balance = Decimal('0.00')
+    payment_history_rows = []
     try:
-        ledger_qs = (
+        ledger_entries = list(
             client.get_ledger_queryset(company=active_company)
-            .select_related('order', 'payment', 'created_by')
+            .select_related('order', 'payment', 'payment__order', 'created_by', 'company')
         )
-        for tx in ledger_qs:
+        ledger_order_ids = {tx.order_id for tx in ledger_entries if tx.order_id}
+        ledger_payment_ids = {tx.payment_id for tx in ledger_entries if tx.payment_id}
+        ledger_transaction_ids = {tx.pk for tx in ledger_entries}
+
+        related_internal_documents = InternalDocument.objects.none()
+        if ledger_order_ids or ledger_payment_ids or ledger_transaction_ids:
+            related_internal_documents = InternalDocument.objects.select_related(
+                "company",
+                "sales_document_type",
+            ).filter(
+                Q(order_id__in=ledger_order_ids)
+                | Q(payment_id__in=ledger_payment_ids)
+                | Q(transaction_id__in=ledger_transaction_ids)
+            )
+            if active_company:
+                related_internal_documents = related_internal_documents.filter(company=active_company)
+            related_internal_documents = related_internal_documents.order_by("-issued_at", "-id")
+
+        related_fiscal_documents = FiscalDocument.objects.none()
+        if ledger_order_ids:
+            related_fiscal_documents = FiscalDocument.objects.select_related(
+                "company",
+                "point_of_sale",
+                "sales_document_type",
+            ).filter(order_id__in=ledger_order_ids)
+            if active_company:
+                related_fiscal_documents = related_fiscal_documents.filter(company=active_company)
+            related_fiscal_documents = related_fiscal_documents.exclude(status="voided").order_by("-created_at", "-id")
+
+        receipt_documents_by_payment = {}
+        adjustment_documents_by_transaction = {}
+        remito_documents_by_order = {}
+        quote_documents_by_order = {}
+        order_documents_by_order = {}
+        for doc in related_internal_documents:
+            if doc.payment_id and doc.doc_type == DocumentSeries.DOC_REC:
+                receipt_documents_by_payment.setdefault(doc.payment_id, doc)
+            if doc.transaction_id and doc.doc_type == DocumentSeries.DOC_AJU:
+                adjustment_documents_by_transaction.setdefault(doc.transaction_id, doc)
+            if doc.order_id and doc.doc_type == DocumentSeries.DOC_REM:
+                remito_documents_by_order.setdefault(doc.order_id, doc)
+            if doc.order_id and doc.doc_type == DocumentSeries.DOC_COT:
+                quote_documents_by_order.setdefault(doc.order_id, doc)
+            if doc.order_id and doc.doc_type == DocumentSeries.DOC_PED:
+                order_documents_by_order.setdefault(doc.order_id, doc)
+
+        fiscal_documents_by_order = {}
+        for doc in related_fiscal_documents:
+            if doc.order_id:
+                fiscal_documents_by_order.setdefault(doc.order_id, doc)
+
+        for tx in ledger_entries:
             running_balance += tx.amount
             debit = tx.amount if tx.amount > 0 else Decimal('0.00')
             credit = abs(tx.amount) if tx.amount < 0 else Decimal('0.00')
             doc_category = 'account'
             order_status = ''
+            type_family_label = ""
+            source_origin_label = "Movimiento"
+            source_document = None
 
             if tx.transaction_type == ClientTransaction.TYPE_PAYMENT:
-                type_label = 'Recibo de pago'
                 doc_category = 'payment'
-                if tx.payment_id:
-                    number_label = f'RP{tx.payment_id:07d}'
+                source_document = receipt_documents_by_payment.get(tx.payment_id)
+                payment_order = getattr(getattr(tx, "payment", None), "order", None)
+                linked_invoice = fiscal_documents_by_order.get(payment_order.pk) if payment_order else None
+                if source_document:
+                    type_label = source_document.commercial_type_label
+                    type_family_label = source_document.get_doc_type_display()
+                    number_label = source_document.display_number
+                    source_origin_label = "Interno"
                 else:
-                    number_label = '-'
+                    type_label = 'Recibo de pago'
+                    number_label = f'RP{tx.payment_id:07d}' if tx.payment_id else '-'
+                    source_origin_label = "Pago"
             elif tx.transaction_type == ClientTransaction.TYPE_ORDER_CHARGE:
                 order_obj = tx.order
                 if order_obj:
                     order_status = order_obj.status
-                    if order_obj.saas_document_number or order_obj.saas_document_type:
+                    source_document = fiscal_documents_by_order.get(order_obj.pk)
+                    if source_document:
+                        doc_category = 'invoice'
+                        type_label = source_document.commercial_type_label
+                        type_family_label = source_document.get_doc_type_display()
+                        number_label = source_document.display_number
+                        source_origin_label = "Fiscal"
+                    elif order_obj.saas_document_number or order_obj.saas_document_type:
                         doc_category = 'invoice'
                         type_label = order_obj.saas_document_type or 'Factura'
                         number_label = order_obj.saas_document_number or f'FC{order_obj.pk:07d}'
-                    elif order_obj.status in {Order.STATUS_SHIPPED, Order.STATUS_DELIVERED}:
+                        source_origin_label = "SaaS"
+                    elif order_obj.pk in remito_documents_by_order:
+                        source_document = remito_documents_by_order.get(order_obj.pk)
                         doc_category = 'remito'
-                        type_label = 'Remito'
-                        number_label = f'RM{order_obj.pk:07d}'
-                    elif order_obj.status == Order.STATUS_DRAFT:
+                        type_label = source_document.commercial_type_label
+                        type_family_label = source_document.get_doc_type_display()
+                        number_label = source_document.display_number
+                        source_origin_label = "Interno"
+                    elif order_obj.pk in quote_documents_by_order or order_obj.status == Order.STATUS_DRAFT:
+                        source_document = quote_documents_by_order.get(order_obj.pk)
                         doc_category = 'quote'
-                        type_label = 'Cotizacion'
-                        number_label = f'CT{order_obj.pk:07d}'
+                        if source_document:
+                            type_label = source_document.commercial_type_label
+                            type_family_label = source_document.get_doc_type_display()
+                            number_label = source_document.display_number
+                            source_origin_label = "Interno"
+                        else:
+                            type_label = 'Cotizacion'
+                            number_label = f'CT{order_obj.pk:07d}'
+                            source_origin_label = "Pedido"
+                    elif order_obj.pk in order_documents_by_order:
+                        source_document = order_documents_by_order.get(order_obj.pk)
+                        doc_category = 'order'
+                        type_label = source_document.commercial_type_label
+                        type_family_label = source_document.get_doc_type_display()
+                        number_label = source_document.display_number
+                        source_origin_label = "Interno"
                     else:
                         doc_category = 'order'
                         type_label = 'Pedido'
                         number_label = f'PD{order_obj.pk:07d}'
+                        source_origin_label = "Pedido"
                 else:
                     doc_category = 'order'
                     type_label = 'Pedido'
                     number_label = f'PD{tx.order_id:07d}' if tx.order_id else '-'
+                    source_origin_label = "Pedido"
             else:
-                type_label = 'Ajuste'
-                doc_category = 'account'
-                number_label = f'AJ{tx.pk:07d}'
+                source_document = adjustment_documents_by_transaction.get(tx.pk)
+                if source_document:
+                    type_label = source_document.commercial_type_label
+                    type_family_label = source_document.get_doc_type_display()
+                    number_label = source_document.display_number
+                    source_origin_label = "Interno"
+                else:
+                    type_label = 'Ajuste'
+                    number_label = f'AJ{tx.pk:07d}'
+
+            document_url = ""
+            document_action_label = ""
+            document_target_blank = False
+            if isinstance(source_document, InternalDocument):
+                document_url = f"{reverse('admin_internal_document_print', args=[source_document.pk])}?copy=original"
+                document_action_label = "Documento"
+                document_target_blank = True
+            elif isinstance(source_document, FiscalDocument):
+                document_url = reverse("admin_fiscal_document_detail", args=[source_document.pk])
+                document_action_label = "Comprobante"
 
             detail_url = ""
             detail_label = ""
@@ -4702,17 +5454,136 @@ def client_order_history(request, pk):
                 )
                 detail_label = f"Pago #{tx.payment_id}"
 
+            if tx.order_id:
+                if doc_category == 'invoice' and isinstance(source_document, FiscalDocument):
+                    reference_title = "Venta facturada"
+                    reference_meta_parts = [
+                        f"{source_document.commercial_type_label} {source_document.display_number}",
+                        f"Pedido #{tx.order_id}",
+                        getattr(tx.company, "name", "") or "-",
+                    ]
+                    if tx.order:
+                        reference_meta_parts.append(tx.order.get_status_display())
+                    reference_meta = " | ".join(part for part in reference_meta_parts if part)
+                elif doc_category == 'invoice' and source_origin_label == "SaaS":
+                    reference_title = "Venta facturada en SaaS"
+                    reference_meta_parts = [
+                        f"{type_label} {number_label}",
+                        f"Pedido #{tx.order_id}",
+                        getattr(tx.company, "name", "") or "-",
+                    ]
+                    if tx.order:
+                        reference_meta_parts.append(tx.order.get_status_display())
+                    reference_meta = " | ".join(part for part in reference_meta_parts if part)
+                elif doc_category == 'remito' and isinstance(source_document, InternalDocument):
+                    reference_title = "Venta remitida"
+                    reference_meta_parts = [
+                        f"{source_document.commercial_type_label} {source_document.display_number}",
+                        f"Pedido #{tx.order_id}",
+                        getattr(tx.company, "name", "") or "-",
+                    ]
+                    if tx.order:
+                        reference_meta_parts.append(tx.order.get_status_display())
+                    reference_meta = " | ".join(part for part in reference_meta_parts if part)
+                elif doc_category == 'quote':
+                    reference_title = "Cotizacion comercial"
+                    reference_meta_parts = [f"Pedido #{tx.order_id}", getattr(tx.company, "name", "") or "-"]
+                    if tx.order:
+                        reference_meta_parts.append(tx.order.get_status_display())
+                    reference_meta = " | ".join(part for part in reference_meta_parts if part)
+                else:
+                    reference_title = f"Pedido #{tx.order_id}"
+                    reference_meta_parts = [getattr(tx.company, "name", "") or "-"]
+                    if tx.order:
+                        reference_meta_parts.append(tx.order.get_status_display())
+                    reference_meta = " | ".join(part for part in reference_meta_parts if part)
+            elif tx.payment_id:
+                payment_obj = getattr(tx, "payment", None)
+                payment_order = getattr(payment_obj, "order", None)
+                linked_invoice = fiscal_documents_by_order.get(payment_order.pk) if payment_order else None
+                if linked_invoice:
+                    reference_title = f"Pago aplicado a {linked_invoice.commercial_type_label}"
+                    reference_meta_parts = [
+                        linked_invoice.display_number,
+                        f"Pedido #{payment_order.pk}",
+                        getattr(tx.company, "name", "") or "-",
+                    ]
+                else:
+                    reference_title = getattr(payment_obj, "reference", "") or tx.description or f"Pago #{tx.payment_id}"
+                    reference_meta_parts = [getattr(tx.company, "name", "") or "-"]
+                    payment_order_id = getattr(payment_obj, "order_id", None)
+                    if payment_order_id:
+                        reference_meta_parts.append(f"Pedido #{payment_order_id}")
+                reference_meta = " | ".join(part for part in reference_meta_parts if part)
+            else:
+                reference_title = tx.description or "Ajuste manual"
+                reference_meta = getattr(tx.company, "name", "") or "-"
+
             ledger_rows.append({
                 'tx': tx,
                 'debit': debit,
                 'credit': credit,
                 'running_balance': running_balance,
                 'type_label': type_label,
+                'type_family_label': type_family_label,
                 'number_label': number_label,
                 'doc_category': doc_category,
                 'order_status': order_status,
+                'source_origin_label': source_origin_label,
+                'reference_title': reference_title,
+                'reference_meta': reference_meta,
+                'document_url': document_url,
+                'document_action_label': document_action_label,
+                'document_target_blank': document_target_blank,
                 'detail_url': detail_url,
                 'detail_label': detail_label,
+            })
+
+        for payment in payments_recent:
+            receipt_document = receipt_documents_by_payment.get(payment.pk)
+            linked_invoice = fiscal_documents_by_order.get(payment.order_id) if payment.order_id else None
+            receipt_label = receipt_document.commercial_type_label if receipt_document else "Recibo de pago"
+            receipt_number = (
+                receipt_document.display_number
+                if receipt_document
+                else (f"RP{payment.pk:07d}" if payment.pk else "-")
+            )
+            if linked_invoice:
+                applied_title = f"{linked_invoice.commercial_type_label} {linked_invoice.display_number}"
+                applied_meta_parts = ["Factura vinculada", getattr(payment.company, "name", "") or "-"]
+                if payment.order_id:
+                    applied_meta_parts.append(f"Pedido #{payment.order_id}")
+                applied_meta = " | ".join(part for part in applied_meta_parts if part)
+                applied_url = reverse("admin_fiscal_document_detail", args=[linked_invoice.pk])
+                applied_label = "Factura"
+            elif payment.order_id:
+                applied_title = f"Pedido #{payment.order_id}"
+                applied_meta_parts = ["Aplicado a pedido", getattr(payment.company, "name", "") or "-"]
+                if payment.order:
+                    applied_meta_parts.append(payment.order.get_status_display())
+                applied_meta = " | ".join(part for part in applied_meta_parts if part)
+                applied_url = reverse("admin_order_detail", args=[payment.order_id])
+                applied_label = "Pedido"
+            else:
+                applied_title = "Pago a cuenta"
+                applied_meta = getattr(payment.company, "name", "") or "-"
+                applied_url = ""
+                applied_label = "Cuenta corriente"
+
+            payment_history_rows.append({
+                "payment": payment,
+                "receipt_label": receipt_label,
+                "receipt_number": receipt_number,
+                "receipt_origin_label": "Interno" if receipt_document else "Pago",
+                "applied_title": applied_title,
+                "applied_meta": applied_meta,
+                "applied_url": applied_url,
+                "applied_label": applied_label,
+                "document_url": (
+                    f"{reverse('admin_internal_document_print', args=[receipt_document.pk])}?copy=original"
+                    if receipt_document
+                    else ""
+                ),
             })
     except DatabaseError as exc:
         ledger_warning = "La cuenta corriente no pudo cargarse en este entorno."
@@ -4792,6 +5663,78 @@ def client_order_history(request, pk):
         quick_remito_available = False
         quick_invoice_available = False
         quick_credit_note_available = False
+
+    quick_sales_document_actions = []
+    if active_company:
+        quick_type_queryset = SalesDocumentType.objects.filter(
+            company=active_company,
+            enabled=True,
+            document_behavior__in=[
+                SALES_BEHAVIOR_RECIBO,
+                SALES_BEHAVIOR_COTIZACION,
+                SALES_BEHAVIOR_PRESUPUESTO,
+                SALES_BEHAVIOR_PEDIDO,
+                SALES_BEHAVIOR_REMITO,
+                SALES_BEHAVIOR_FACTURA,
+                SALES_BEHAVIOR_NOTA_CREDITO,
+                SALES_BEHAVIOR_NOTA_DEBITO,
+            ],
+        ).order_by("display_order", "name")
+        for item in quick_type_queryset:
+            behavior = item.document_behavior
+            action_meta = {
+                "sales_document_type": item,
+                "label": item.name,
+                "help_text": "",
+                "method": "post",
+                "url": reverse("admin_client_quick_order", args=[client.pk]),
+                "action_value": "",
+                "disabled": operations_locked,
+                "target_blank": False,
+                "css_class": "",
+            }
+            if behavior in {SALES_BEHAVIOR_COTIZACION, SALES_BEHAVIOR_PRESUPUESTO}:
+                action_meta["action_value"] = "quote"
+                action_meta["help_text"] = "Crea un borrador comercial desde la ficha del cliente."
+                action_meta["css_class"] = "is-quote"
+            elif behavior == SALES_BEHAVIOR_PEDIDO:
+                action_meta["action_value"] = "order"
+                action_meta["help_text"] = "Abre un pedido nuevo para cargar productos."
+                action_meta["css_class"] = "is-order"
+            elif behavior == SALES_BEHAVIOR_REMITO:
+                action_meta["action_value"] = "remito"
+                action_meta["help_text"] = "Busca el pedido mas reciente listo para remito."
+                action_meta["disabled"] = operations_locked or not quick_remito_available
+                action_meta["css_class"] = "is-remito"
+            elif behavior == SALES_BEHAVIOR_FACTURA:
+                action_meta["action_value"] = "invoice"
+                action_meta["help_text"] = "Usa el pedido facturable mas reciente y aplica el tipo elegido."
+                action_meta["disabled"] = operations_locked or not quick_invoice_available
+                action_meta["css_class"] = "is-fiscal"
+            elif behavior == SALES_BEHAVIOR_NOTA_CREDITO:
+                action_meta["action_value"] = "credit_note"
+                action_meta["help_text"] = "Abre el comprobante base mas reciente para gestionar la nota."
+                action_meta["disabled"] = operations_locked or not quick_credit_note_available
+                action_meta["css_class"] = "is-credit-note"
+            elif behavior == SALES_BEHAVIOR_RECIBO:
+                action_meta["method"] = "get"
+                action_meta["url"] = (
+                    f"{reverse('admin_payment_list')}?"
+                    f"{urlencode({'client_id': client.pk, 'company_id': selected_company_id, 'sales_document_type_id': item.pk, 'suggested_action': 'create'})}"
+                )
+                action_meta["help_text"] = "Abre pagos con este tipo comercial preseleccionado."
+                action_meta["css_class"] = "is-payment"
+            elif behavior == SALES_BEHAVIOR_NOTA_DEBITO:
+                action_meta["method"] = "get"
+                action_meta["url"] = (
+                    f"{reverse('admin_payment_list')}?"
+                    f"{urlencode({'client_id': client.pk, 'company_id': selected_company_id, 'sales_document_type_id': item.pk, 'suggested_action': 'adjust'})}"
+                )
+                action_meta["help_text"] = "Abre ajustes de cuenta con este tipo comercial."
+                action_meta["css_class"] = "is-adjustment"
+            else:
+                continue
+            quick_sales_document_actions.append(action_meta)
 
     client_tab = request.GET.get('client_tab', 'account').strip().lower()
     valid_client_tabs = {'overview', 'account', 'orders', 'payments', 'documents'}
@@ -4908,10 +5851,30 @@ def client_order_history(request, pk):
         page=None,
     )
 
+    latest_document_label = "-"
+    latest_document_hint = "Sin actividad reciente"
+    latest_internal_at = getattr(latest_internal_document, "issued_at", None)
+    latest_fiscal_at = getattr(latest_fiscal_document, "created_at", None)
+    latest_official = official_docs[0] if official_docs else None
+    latest_official_at = getattr(latest_official, "saas_document_date", None) if latest_official else None
+    if latest_fiscal_document and (not latest_internal_at or (latest_fiscal_at and latest_fiscal_at >= latest_internal_at)):
+        latest_document_label = latest_fiscal_document.commercial_type_label
+        latest_document_hint = "Ultimo fiscal"
+    elif latest_internal_document:
+        latest_document_label = latest_internal_document.commercial_type_label
+        latest_document_hint = "Ultimo interno"
+    elif latest_official:
+        latest_document_label = latest_official.saas_document_type or "Factura"
+        latest_document_hint = "Ultimo SaaS"
+
     documents_summary = {
         'internal_count': documents_qs.count(),
         'fiscal_count': fiscal_documents_qs.count(),
         'official_count': official_docs_qs.count(),
+        'latest_internal_label': latest_internal_document.commercial_type_label if latest_internal_document else "-",
+        'latest_fiscal_label': latest_fiscal_document.commercial_type_label if latest_fiscal_document else "-",
+        'latest_document_label': latest_document_label,
+        'latest_document_hint': latest_document_hint,
     }
 
     return render(request, 'admin_panel/clients/order_history.html', {
@@ -4943,6 +5906,7 @@ def client_order_history(request, pk):
             'current_balance': client.get_current_balance(company=active_company),
         },
         'payments_recent': payments_recent,
+        'payment_history_rows': payment_history_rows,
         'payments_summary': {
             'total_paid': payments_summary.get('total_paid') or Decimal('0.00'),
             'payments_count': payments_summary.get('payments_count') or 0,
@@ -4975,6 +5939,7 @@ def client_order_history(request, pk):
         'quick_remito_available': quick_remito_available,
         'quick_invoice_available': quick_invoice_available,
         'quick_credit_note_available': quick_credit_note_available,
+        'quick_sales_document_actions': quick_sales_document_actions,
     })
 
 
@@ -5585,21 +6550,34 @@ def order_detail(request, pk):
             except ValueError as exc:
                 messages.error(request, str(exc))
 
-    fiscal_points = FiscalPointOfSale.objects.filter(
-        company=order.company,
-        is_active=True,
-    ).order_by("number")
-    fiscal_default_point = fiscal_points.filter(is_default=True).first() or fiscal_points.first()
+    sales_internal_document_types = [
+        item
+        for item in SalesDocumentType.objects.select_related("default_warehouse")
+        .filter(company=order.company, enabled=True, billing_mode="INTERNAL_DOCUMENT")
+        .exclude(internal_doc_type="")
+        .order_by("-is_default", "display_order", "name")
+        if order.status in ORDER_INTERNAL_DOC_STATUS_RULES.get(item.internal_doc_type, set())
+    ]
     order_fiscal_documents = (
         FiscalDocument.objects.select_related(
             "company",
             "point_of_sale",
+            "sales_document_type",
             "client_company_ref__client_profile",
             "order",
         )
         .filter(company=order.company, order=order)
         .order_by("-created_at")
     )
+    order_invoice_document = _get_order_active_invoice(order)
+    order_invoice_state = _get_fiscal_workflow_state(order_invoice_document)
+    order_has_external_invoice = bool(order.saas_document_type or order.saas_document_number)
+    order_can_invoice = (
+        order.status in CLIENT_FACTURABLE_STATUSES
+        and not order_invoice_document
+        and not order_has_external_invoice
+    )
+    order_invoice_action_label = "Facturar" if invoice_ready else "Abrir factura"
 
     return render(request, 'admin_panel/orders/detail.html', {
         'order': order,
@@ -5610,17 +6588,142 @@ def order_detail(request, pk):
         'order_pending_amount': order.get_pending_amount(),
         'order_is_paid': order.is_paid(),
         'order_client_profile_id': order_client_profile.pk if order_client_profile else '',
-        'order_documents': InternalDocument.objects.filter(order=order).order_by('issued_at'),
-        'invoice_ready': invoice_ready,
-        'invoice_errors': invoice_errors,
+        'order_documents': InternalDocument.objects.select_related('sales_document_type').filter(order=order).order_by('issued_at'),
         'document_company': order.company,
         'pricing_snapshot': pricing_snapshot,
-        'fiscal_doc_type_choices': [("FA", "Factura A"), ("FB", "Factura B")],
-        'fiscal_issue_mode_choices': [("manual", "Manual"), ("arca_wsfe", "ARCA WSFE")],
-        'fiscal_points': fiscal_points,
-        'fiscal_default_point': fiscal_default_point,
+        'sales_internal_document_types': sales_internal_document_types,
         'order_fiscal_documents': order_fiscal_documents,
+        'order_invoice_document': order_invoice_document,
+        'order_invoice_state': order_invoice_state,
+        'order_can_invoice': order_can_invoice,
+        'order_has_external_invoice': order_has_external_invoice,
+        'order_invoice_action_label': order_invoice_action_label,
     })
+
+
+@staff_member_required
+@require_POST
+def order_invoice_open(request, pk):
+    active_company = get_active_company(request)
+    if not active_company:
+        messages.error(request, "Selecciona una empresa activa para operar.")
+        return redirect("select_company")
+
+    order = get_object_or_404(
+        Order.objects.select_related("company", "client_company_ref", "client_company_ref__client_profile"),
+        pk=pk,
+    )
+    if order.company_id != active_company.id:
+        messages.error(request, "No podes facturar pedidos de otra empresa.")
+        return redirect("admin_order_list")
+
+    existing_invoice = _get_order_active_invoice(order)
+    if existing_invoice:
+        messages.info(request, "El pedido ya tiene una factura activa. Se abrio el comprobante existente.")
+        return redirect("admin_fiscal_document_detail", pk=existing_invoice.pk)
+
+    if order.saas_document_type or order.saas_document_number:
+        messages.warning(
+            request,
+            "El pedido ya tiene un comprobante externo registrado. Revisa la trazabilidad antes de generar otra factura.",
+        )
+        return redirect("admin_order_detail", pk=order.pk)
+
+    invoice_ready, invoice_errors = is_invoice_ready(order)
+
+    selected_sales_document_type = _resolve_invoice_sales_document_type_for_order(order)
+    try:
+        if selected_sales_document_type:
+            fiscal_doc, created = create_fiscal_document_from_sales_type(
+                order=order,
+                sales_document_type=selected_sales_document_type,
+                actor=request.user,
+                require_invoice_ready=invoice_ready,
+            )
+        else:
+            point_of_sale = _resolve_default_point_of_sale(order.company)
+            fiscal_doc, created = create_local_fiscal_document_from_order(
+                order=order,
+                company=active_company,
+                doc_type=_resolve_preferred_invoice_doc_type(order),
+                point_of_sale=point_of_sale,
+                issue_mode=FISCAL_ISSUE_MODE_MANUAL,
+                actor=request.user,
+                require_invoice_ready=invoice_ready,
+            )
+    except ValidationError as exc:
+        messages.error(request, "; ".join(exc.messages))
+        return redirect("admin_order_detail", pk=order.pk)
+
+    if created:
+        if invoice_ready:
+            messages.success(
+                request,
+                f"Se genero {fiscal_doc.commercial_type_label} para el pedido #{order.pk}.",
+            )
+        else:
+            errors_preview = "; ".join(invoice_errors[:3])
+            messages.warning(
+                request,
+                f"Se abrio {fiscal_doc.commercial_type_label} para el pedido #{order.pk}. "
+                f"Completa los datos fiscales antes de cerrar o emitir. Pendientes: {errors_preview}",
+            )
+    else:
+        messages.info(request, "La factura ya existia y se reutilizo.")
+    return redirect("admin_fiscal_document_detail", pk=fiscal_doc.pk)
+
+
+@staff_member_required
+@require_POST
+def order_internal_document_create(request, pk):
+    active_company = get_active_company(request)
+    if not active_company:
+        messages.error(request, "Selecciona una empresa activa para operar.")
+        return redirect("select_company")
+
+    order = get_object_or_404(
+        Order.objects.select_related("company", "client_company_ref", "client_company_ref__client_profile"),
+        pk=pk,
+    )
+    if order.company_id != active_company.id:
+        messages.error(request, "No podes generar documentos de otra empresa.")
+        return redirect("admin_order_list")
+
+    sales_document_type = None
+    sales_document_type_id = str(request.POST.get("sales_document_type_id", "")).strip()
+    if sales_document_type_id.isdigit():
+        sales_document_type = SalesDocumentType.objects.filter(
+            pk=int(sales_document_type_id),
+            company=active_company,
+            enabled=True,
+            billing_mode="INTERNAL_DOCUMENT",
+        ).exclude(internal_doc_type="").first()
+
+    if not sales_document_type:
+        messages.error(request, "Selecciona un tipo comercial interno valido.")
+        return redirect("admin_order_detail", pk=order.pk)
+
+    try:
+        document, created = create_internal_document_from_sales_type(
+            order=order,
+            sales_document_type=sales_document_type,
+            actor=request.user,
+        )
+    except ValidationError as exc:
+        messages.error(request, "; ".join(exc.messages))
+        return redirect("admin_order_detail", pk=order.pk)
+
+    if created:
+        messages.success(
+            request,
+            f"Documento interno creado ({document.commercial_type_label}) para el pedido #{order.pk}.",
+        )
+    else:
+        messages.info(
+            request,
+            f"El documento interno ya existia y se reutilizo ({document.commercial_type_label}).",
+        )
+    return redirect("admin_order_detail", pk=order.pk)
 
 
 @staff_member_required
@@ -5639,24 +6742,40 @@ def order_fiscal_create_local(request, pk):
         messages.error(request, "No podes crear comprobantes de otra empresa.")
         return redirect("admin_order_list")
 
-    doc_type = str(request.POST.get("doc_type", "")).strip().upper()
-    issue_mode = str(request.POST.get("issue_mode", "manual")).strip()
-    point_id = str(request.POST.get("point_of_sale_id", "")).strip()
-    point_of_sale = None
-    if point_id.isdigit():
-        point_of_sale = FiscalPointOfSale.objects.filter(
-            pk=int(point_id),
+    sales_document_type = None
+    sales_document_type_id = str(request.POST.get("sales_document_type_id", "")).strip()
+    if sales_document_type_id.isdigit():
+        sales_document_type = SalesDocumentType.objects.filter(
+            pk=int(sales_document_type_id),
             company=active_company,
+            enabled=True,
         ).first()
 
     try:
-        fiscal_doc, created = create_local_fiscal_document_from_order(
-            order=order,
-            company=active_company,
-            doc_type=doc_type,
-            point_of_sale=point_of_sale,
-            issue_mode=issue_mode,
-        )
+        if sales_document_type:
+            fiscal_doc, created = create_fiscal_document_from_sales_type(
+                order=order,
+                sales_document_type=sales_document_type,
+                actor=request.user,
+            )
+        else:
+            doc_type = str(request.POST.get("doc_type", "")).strip().upper()
+            issue_mode = str(request.POST.get("issue_mode", "manual")).strip()
+            point_id = str(request.POST.get("point_of_sale_id", "")).strip()
+            point_of_sale = None
+            if point_id.isdigit():
+                point_of_sale = FiscalPointOfSale.objects.filter(
+                    pk=int(point_id),
+                    company=active_company,
+                ).first()
+            fiscal_doc, created = create_local_fiscal_document_from_order(
+                order=order,
+                company=active_company,
+                doc_type=doc_type,
+                point_of_sale=point_of_sale,
+                issue_mode=issue_mode,
+                actor=request.user,
+            )
     except ValidationError as exc:
         messages.error(request, "; ".join(exc.messages))
         return redirect("admin_order_detail", pk=order.pk)
@@ -5687,29 +6806,47 @@ def order_fiscal_register_external(request, pk):
         messages.error(request, "No podes registrar comprobantes externos de otra empresa.")
         return redirect("admin_order_list")
 
-    doc_type = str(request.POST.get("doc_type", "")).strip().upper()
-    point_id = str(request.POST.get("point_of_sale_id", "")).strip()
-    point_of_sale = None
-    if point_id.isdigit():
-        point_of_sale = FiscalPointOfSale.objects.filter(
-            pk=int(point_id),
-            company=active_company,
-        ).first()
-
     external_system = str(request.POST.get("external_system", "saas")).strip().lower()
     external_id = str(request.POST.get("external_id", "")).strip()
     external_number = str(request.POST.get("external_number", "")).strip()
+    sales_document_type = None
+    sales_document_type_id = str(request.POST.get("sales_document_type_id", "")).strip()
+    if sales_document_type_id.isdigit():
+        sales_document_type = SalesDocumentType.objects.filter(
+            pk=int(sales_document_type_id),
+            company=active_company,
+            enabled=True,
+        ).first()
 
     try:
-        fiscal_doc, created = register_external_fiscal_document_for_order(
-            order=order,
-            company=active_company,
-            doc_type=doc_type,
-            point_of_sale=point_of_sale,
-            external_system=external_system,
-            external_id=external_id,
-            external_number=external_number,
-        )
+        if sales_document_type:
+            fiscal_doc, created = create_fiscal_document_from_sales_type(
+                order=order,
+                sales_document_type=sales_document_type,
+                actor=request.user,
+                external_system=external_system,
+                external_id=external_id,
+                external_number=external_number,
+            )
+        else:
+            doc_type = str(request.POST.get("doc_type", "")).strip().upper()
+            point_id = str(request.POST.get("point_of_sale_id", "")).strip()
+            point_of_sale = None
+            if point_id.isdigit():
+                point_of_sale = FiscalPointOfSale.objects.filter(
+                    pk=int(point_id),
+                    company=active_company,
+                ).first()
+            fiscal_doc, created = register_external_fiscal_document_for_order(
+                order=order,
+                company=active_company,
+                doc_type=doc_type,
+                point_of_sale=point_of_sale,
+                external_system=external_system,
+                external_id=external_id,
+                external_number=external_number,
+                actor=request.user,
+            )
     except ValidationError as exc:
         messages.error(request, "; ".join(exc.messages))
         return redirect("admin_order_detail", pk=order.pk)
@@ -5798,6 +6935,7 @@ def fiscal_document_detail(request, pk):
             "client_profile",
             "order",
             "related_document",
+            "sales_document_type",
         ).prefetch_related("items__product"),
         pk=pk,
     )
@@ -5806,10 +6944,39 @@ def fiscal_document_detail(request, pk):
         return redirect("admin_fiscal_document_list")
 
     can_emit = (
-        fiscal_document.issue_mode == "arca_wsfe"
-        and fiscal_document.doc_type in {"FA", "FB"}
-        and fiscal_document.status in {"ready_to_issue", "pending_retry", "rejected"}
+        fiscal_document.issue_mode == FISCAL_ISSUE_MODE_ARCA_WSFE
+        and fiscal_document.doc_type in {FISCAL_DOC_TYPE_FA, FISCAL_DOC_TYPE_FB}
+        and fiscal_document.status in {
+            FISCAL_STATUS_READY_TO_ISSUE,
+            FISCAL_STATUS_PENDING_RETRY,
+            FISCAL_STATUS_REJECTED,
+        }
     )
+    document_invoice_ready = True
+    document_invoice_errors = []
+    if fiscal_document.order_id:
+        document_invoice_ready, document_invoice_errors = is_invoice_ready(fiscal_document.order)
+    can_emit = can_emit and document_invoice_ready
+    workflow_state = _get_fiscal_workflow_state(fiscal_document)
+    can_close_document = (
+        fiscal_document.issue_mode == FISCAL_ISSUE_MODE_MANUAL
+        and fiscal_document.status in {
+            FISCAL_STATUS_READY_TO_ISSUE,
+            FISCAL_STATUS_PENDING_RETRY,
+            FISCAL_STATUS_REJECTED,
+        }
+        and document_invoice_ready
+    )
+    can_reopen_document = (
+        fiscal_document.issue_mode == FISCAL_ISSUE_MODE_MANUAL
+        and fiscal_document.status == FISCAL_STATUS_EXTERNAL_RECORDED
+    )
+    can_void_document = fiscal_document.status in {
+        FISCAL_STATUS_READY_TO_ISSUE,
+        FISCAL_STATUS_PENDING_RETRY,
+        FISCAL_STATUS_REJECTED,
+        FISCAL_STATUS_EXTERNAL_RECORDED,
+    }
 
     return render(
         request,
@@ -5820,6 +6987,12 @@ def fiscal_document_detail(request, pk):
             "items": fiscal_document.items.all().order_by("line_number"),
             "attempts": fiscal_document.emission_attempts.select_related("triggered_by").all()[:20],
             "can_emit": can_emit,
+            "workflow_state": workflow_state,
+            "can_close_document": can_close_document,
+            "can_reopen_document": can_reopen_document,
+            "can_void_document": can_void_document,
+            "document_invoice_ready": document_invoice_ready,
+            "document_invoice_errors": document_invoice_errors,
         },
     )
 
@@ -5874,6 +7047,93 @@ def fiscal_document_emit(request, pk):
 
 
 @staff_member_required
+@require_POST
+def fiscal_document_close(request, pk):
+    active_company = get_active_company(request)
+    if not active_company:
+        messages.error(request, "Selecciona una empresa activa para operar.")
+        return redirect("select_company")
+
+    fiscal_document = get_object_or_404(FiscalDocument, pk=pk)
+    if fiscal_document.company_id != active_company.id:
+        messages.error(request, "No podes operar comprobantes de otra empresa.")
+        return redirect("admin_fiscal_document_list")
+
+    try:
+        document, changed = close_fiscal_document(
+            fiscal_document=fiscal_document,
+            actor=request.user,
+        )
+    except ValidationError as exc:
+        messages.error(request, "; ".join(exc.messages))
+        return redirect("admin_fiscal_document_detail", pk=fiscal_document.pk)
+
+    if changed:
+        messages.success(request, f"{document.commercial_type_label} cerrada correctamente.")
+    else:
+        messages.info(request, "La factura ya estaba cerrada.")
+    return redirect("admin_fiscal_document_detail", pk=fiscal_document.pk)
+
+
+@staff_member_required
+@require_POST
+def fiscal_document_reopen(request, pk):
+    active_company = get_active_company(request)
+    if not active_company:
+        messages.error(request, "Selecciona una empresa activa para operar.")
+        return redirect("select_company")
+
+    fiscal_document = get_object_or_404(FiscalDocument, pk=pk)
+    if fiscal_document.company_id != active_company.id:
+        messages.error(request, "No podes operar comprobantes de otra empresa.")
+        return redirect("admin_fiscal_document_list")
+
+    try:
+        document, changed = reopen_fiscal_document(
+            fiscal_document=fiscal_document,
+            actor=request.user,
+        )
+    except ValidationError as exc:
+        messages.error(request, "; ".join(exc.messages))
+        return redirect("admin_fiscal_document_detail", pk=fiscal_document.pk)
+
+    if changed:
+        messages.success(request, f"{document.commercial_type_label} reabierta.")
+    else:
+        messages.info(request, "La factura ya estaba abierta.")
+    return redirect("admin_fiscal_document_detail", pk=fiscal_document.pk)
+
+
+@staff_member_required
+@require_POST
+def fiscal_document_void(request, pk):
+    active_company = get_active_company(request)
+    if not active_company:
+        messages.error(request, "Selecciona una empresa activa para operar.")
+        return redirect("select_company")
+
+    fiscal_document = get_object_or_404(FiscalDocument, pk=pk)
+    if fiscal_document.company_id != active_company.id:
+        messages.error(request, "No podes operar comprobantes de otra empresa.")
+        return redirect("admin_fiscal_document_list")
+
+    try:
+        document, changed = void_fiscal_document(
+            fiscal_document=fiscal_document,
+            actor=request.user,
+        )
+    except ValidationError as exc:
+        messages.error(request, "; ".join(exc.messages))
+        return redirect("admin_fiscal_document_detail", pk=fiscal_document.pk)
+
+    if changed:
+        messages.success(request, f"{document.commercial_type_label} anulada.")
+    else:
+        messages.info(request, "La factura ya estaba anulada.")
+    return redirect("admin_fiscal_document_detail", pk=fiscal_document.pk)
+
+
+@staff_member_required
 def fiscal_document_print(request, pk):
     active_company = get_active_company(request)
     if not active_company:
@@ -5887,6 +7147,7 @@ def fiscal_document_print(request, pk):
             "client_company_ref__client_profile",
             "client_profile",
             "order",
+            "sales_document_type",
         ).prefetch_related("items__product"),
         pk=pk,
     )
@@ -6131,7 +7392,7 @@ def internal_document_print(request, doc_id):
             "client_profile",
             "order",
             "payment",
-            "transaction",
+            "sales_document_type",
         ),
         pk=doc_id,
     )
@@ -6294,6 +7555,36 @@ def order_delete(request, pk):
 
 # ===================== SETTINGS =====================
 
+SALES_DOCUMENT_TYPE_SNAPSHOT_FIELDS = [
+    "company_id",
+    "code",
+    "name",
+    "letter",
+    "point_of_sale_id",
+    "last_number",
+    "enabled",
+    "document_behavior",
+    "generate_stock_movement",
+    "generate_account_movement",
+    "group_equal_products",
+    "default_warehouse_id",
+    "prioritize_default_warehouse",
+    "default_sales_user_id",
+    "billing_mode",
+    "internal_doc_type",
+    "fiscal_doc_type",
+    "is_default",
+    "display_order",
+]
+
+WAREHOUSE_SNAPSHOT_FIELDS = [
+    "company_id",
+    "code",
+    "name",
+    "is_active",
+    "notes",
+]
+
 @user_passes_test(is_primary_superadmin)
 def company_list(request):
     """List and access company configuration."""
@@ -6412,6 +7703,267 @@ def company_edit(request, pk):
             "price_lists": price_lists,
         },
     )
+
+
+def _get_settings_active_company(request, *, message):
+    active_company = get_active_company(request)
+    if not active_company:
+        messages.error(request, message)
+        return None
+    return active_company
+
+
+@user_passes_test(is_primary_superadmin)
+def warehouse_list(request):
+    active_company = _get_settings_active_company(
+        request,
+        message="Selecciona una empresa activa para gestionar depositos.",
+    )
+    if not active_company:
+        return redirect("select_company")
+
+    warehouses = Warehouse.objects.filter(company=active_company).order_by("name")
+    return render(
+        request,
+        "admin_panel/settings/warehouses_list.html",
+        {
+            "active_company": active_company,
+            "warehouses": warehouses,
+        },
+    )
+
+
+@user_passes_test(is_primary_superadmin)
+def warehouse_create(request):
+    active_company = _get_settings_active_company(
+        request,
+        message="Selecciona una empresa activa para crear depositos.",
+    )
+    if not active_company:
+        return redirect("select_company")
+
+    form = WarehouseForm(request.POST or None)
+    if request.method == "POST" and form.is_valid():
+        warehouse = form.save(commit=False)
+        warehouse.company = active_company
+        warehouse.save()
+        log_admin_action(
+            request,
+            action="warehouse_create",
+            target_type="warehouse",
+            target_id=warehouse.pk,
+            details=model_snapshot(warehouse, WAREHOUSE_SNAPSHOT_FIELDS),
+        )
+        messages.success(request, "Deposito creado.")
+        return redirect("admin_warehouse_list")
+
+    return render(
+        request,
+        "admin_panel/settings/warehouse_form.html",
+        {
+            "active_company": active_company,
+            "form": form,
+            "warehouse": None,
+        },
+    )
+
+
+@user_passes_test(is_primary_superadmin)
+def warehouse_edit(request, pk):
+    active_company = _get_settings_active_company(
+        request,
+        message="Selecciona una empresa activa para editar depositos.",
+    )
+    if not active_company:
+        return redirect("select_company")
+
+    warehouse = get_object_or_404(Warehouse, pk=pk)
+    if warehouse.company_id != active_company.id:
+        messages.error(request, "El deposito no pertenece a la empresa activa.")
+        return redirect("admin_warehouse_list")
+
+    before = model_snapshot(warehouse, WAREHOUSE_SNAPSHOT_FIELDS)
+    form = WarehouseForm(request.POST or None, instance=warehouse)
+    if request.method == "POST" and form.is_valid():
+        warehouse = form.save()
+        log_admin_change(
+            request,
+            action="warehouse_update",
+            target_type="warehouse",
+            target_id=warehouse.pk,
+            before=before,
+            after=model_snapshot(warehouse, WAREHOUSE_SNAPSHOT_FIELDS),
+        )
+        messages.success(request, "Deposito actualizado.")
+        return redirect("admin_warehouse_list")
+
+    return render(
+        request,
+        "admin_panel/settings/warehouse_form.html",
+        {
+            "active_company": active_company,
+            "form": form,
+            "warehouse": warehouse,
+        },
+    )
+
+
+@user_passes_test(is_primary_superadmin)
+def sales_document_type_list(request):
+    active_company = _get_settings_active_company(
+        request,
+        message="Selecciona una empresa activa para gestionar tipos de documento.",
+    )
+    if not active_company:
+        return redirect("select_company")
+
+    document_types = list(
+        SalesDocumentType.objects.select_related(
+            "point_of_sale",
+            "default_warehouse",
+            "default_sales_user",
+        )
+        .filter(company=active_company)
+        .order_by("display_order", "name")
+    )
+    summary = {
+        "total": len(document_types),
+        "enabled": sum(1 for item in document_types if item.enabled),
+        "with_stock": sum(1 for item in document_types if item.generate_stock_movement),
+        "with_account": sum(1 for item in document_types if item.generate_account_movement),
+        "fiscal": sum(1 for item in document_types if item.billing_mode != "INTERNAL_DOCUMENT"),
+    }
+    behavior_overview = []
+    for behavior_value, behavior_label in SALES_DOCUMENT_BEHAVIOR_CHOICES:
+        matches = [item for item in document_types if item.document_behavior == behavior_value]
+        if not matches:
+            continue
+        behavior_overview.append(
+            {
+                "key": behavior_value,
+                "label": behavior_label,
+                "count": len(matches),
+                "default_item": next((item for item in matches if item.is_default), None),
+                "enabled_count": sum(1 for item in matches if item.enabled),
+            }
+        )
+    return render(
+        request,
+        "admin_panel/settings/sales_document_types_list.html",
+        {
+            "active_company": active_company,
+            "document_types": document_types,
+            "document_summary": summary,
+            "behavior_overview": behavior_overview,
+            "warehouses_count": Warehouse.objects.filter(company=active_company).count(),
+        },
+    )
+
+
+@user_passes_test(is_primary_superadmin)
+def sales_document_type_create(request):
+    active_company = _get_settings_active_company(
+        request,
+        message="Selecciona una empresa activa para crear tipos de documento.",
+    )
+    if not active_company:
+        return redirect("select_company")
+
+    form = SalesDocumentTypeForm(request.POST or None, company=active_company)
+    if request.method == "POST" and form.is_valid():
+        document_type = form.save()
+        log_admin_action(
+            request,
+            action="sales_document_type_create",
+            target_type="sales_document_type",
+            target_id=document_type.pk,
+            details=model_snapshot(document_type, SALES_DOCUMENT_TYPE_SNAPSHOT_FIELDS),
+        )
+        messages.success(request, "Tipo de documento guardado.")
+        return redirect("admin_sales_document_type_list")
+
+    return render(
+        request,
+        "admin_panel/settings/sales_document_type_form.html",
+        {
+            "active_company": active_company,
+            "form": form,
+            "document_type": None,
+        },
+    )
+
+
+@user_passes_test(is_primary_superadmin)
+def sales_document_type_edit(request, pk):
+    active_company = _get_settings_active_company(
+        request,
+        message="Selecciona una empresa activa para editar tipos de documento.",
+    )
+    if not active_company:
+        return redirect("select_company")
+
+    document_type = get_object_or_404(SalesDocumentType, pk=pk)
+    if document_type.company_id != active_company.id:
+        messages.error(request, "El tipo de documento no pertenece a la empresa activa.")
+        return redirect("admin_sales_document_type_list")
+
+    before = model_snapshot(document_type, SALES_DOCUMENT_TYPE_SNAPSHOT_FIELDS)
+    form = SalesDocumentTypeForm(request.POST or None, instance=document_type, company=active_company)
+    if request.method == "POST" and form.is_valid():
+        document_type = form.save()
+        log_admin_change(
+            request,
+            action="sales_document_type_update",
+            target_type="sales_document_type",
+            target_id=document_type.pk,
+            before=before,
+            after=model_snapshot(document_type, SALES_DOCUMENT_TYPE_SNAPSHOT_FIELDS),
+        )
+        messages.success(request, "Tipo de documento actualizado.")
+        return redirect("admin_sales_document_type_list")
+
+    return render(
+        request,
+        "admin_panel/settings/sales_document_type_form.html",
+        {
+            "active_company": active_company,
+            "form": form,
+            "document_type": document_type,
+        },
+    )
+
+
+@user_passes_test(is_primary_superadmin)
+@require_POST
+def sales_document_type_toggle_enabled(request, pk):
+    active_company = _get_settings_active_company(
+        request,
+        message="Selecciona una empresa activa para editar tipos de documento.",
+    )
+    if not active_company:
+        return redirect("select_company")
+
+    document_type = get_object_or_404(SalesDocumentType, pk=pk)
+    if document_type.company_id != active_company.id:
+        messages.error(request, "El tipo de documento no pertenece a la empresa activa.")
+        return redirect("admin_sales_document_type_list")
+
+    before = model_snapshot(document_type, ["enabled"])
+    document_type.enabled = not document_type.enabled
+    document_type.save(update_fields=["enabled", "updated_at"])
+    log_admin_change(
+        request,
+        action="sales_document_type_toggle_enabled",
+        target_type="sales_document_type",
+        target_id=document_type.pk,
+        before=before,
+        after=model_snapshot(document_type, ["enabled"]),
+    )
+    messages.success(
+        request,
+        "Tipo de documento habilitado." if document_type.enabled else "Tipo de documento deshabilitado.",
+    )
+    return redirect("admin_sales_document_type_list")
 
 
 def _sync_company_default_pos(company, point_of_sale):

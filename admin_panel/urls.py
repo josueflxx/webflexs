@@ -30,6 +30,7 @@ urlpatterns = [
     
     # Clients
     path('clientes/', views.client_list, name='admin_client_list'),
+    path('clientes/nuevo/', views.client_create, name='admin_client_create'),
     path('clientes/categorias/', views.client_category_list, name='admin_client_category_list'),
     path('clientes/categorias/nueva/', views.client_category_create, name='admin_client_category_create'),
     path('clientes/categorias/<int:pk>/editar/', views.client_category_edit, name='admin_client_category_edit'),
@@ -51,6 +52,8 @@ urlpatterns = [
     path('pedidos/', views.order_list, name='admin_order_list'),
     path('pedidos/exportar-saas/', views.order_export_saas, name='admin_order_export_saas'),
     path('pedidos/<int:pk>/', views.order_detail, name='admin_order_detail'),
+    path('pedidos/<int:pk>/facturar/', views.order_invoice_open, name='admin_order_invoice_open'),
+    path('pedidos/<int:pk>/interno/crear/', views.order_internal_document_create, name='admin_order_internal_document_create'),
     path('pedidos/<int:pk>/fiscal/crear-local/', views.order_fiscal_create_local, name='admin_order_fiscal_create_local'),
     path('pedidos/<int:pk>/fiscal/registrar-externo/', views.order_fiscal_register_external, name='admin_order_fiscal_register_external'),
     path('pedidos/<int:pk>/items/agregar/', views.order_item_add, name='admin_order_item_add'),
@@ -68,6 +71,9 @@ urlpatterns = [
     path('fiscal/documentos/', views.fiscal_document_list, name='admin_fiscal_document_list'),
     path('fiscal/documentos/<int:pk>/', views.fiscal_document_detail, name='admin_fiscal_document_detail'),
     path('fiscal/documentos/<int:pk>/emitir/', views.fiscal_document_emit, name='admin_fiscal_document_emit'),
+    path('fiscal/documentos/<int:pk>/cerrar/', views.fiscal_document_close, name='admin_fiscal_document_close'),
+    path('fiscal/documentos/<int:pk>/reabrir/', views.fiscal_document_reopen, name='admin_fiscal_document_reopen'),
+    path('fiscal/documentos/<int:pk>/anular/', views.fiscal_document_void, name='admin_fiscal_document_void'),
     path('fiscal/documentos/<int:pk>/imprimir/', views.fiscal_document_print, name='admin_fiscal_document_print'),
 
     # Catalog Excel templates
@@ -103,6 +109,13 @@ urlpatterns = [
     
     # Settings
     path('configuracion/', views.settings_view, name='admin_settings'),
+    path('configuracion/tipos-documento/', views.sales_document_type_list, name='admin_sales_document_type_list'),
+    path('configuracion/tipos-documento/nuevo/', views.sales_document_type_create, name='admin_sales_document_type_create'),
+    path('configuracion/tipos-documento/<int:pk>/editar/', views.sales_document_type_edit, name='admin_sales_document_type_edit'),
+    path('configuracion/tipos-documento/<int:pk>/toggle/', views.sales_document_type_toggle_enabled, name='admin_sales_document_type_toggle_enabled'),
+    path('configuracion/depositos/', views.warehouse_list, name='admin_warehouse_list'),
+    path('configuracion/depositos/nuevo/', views.warehouse_create, name='admin_warehouse_create'),
+    path('configuracion/depositos/<int:pk>/editar/', views.warehouse_edit, name='admin_warehouse_edit'),
     path('fiscal/configuracion/', views.fiscal_config, name='admin_fiscal_config'),
     path('fiscal/puntos-venta/nuevo/', views.fiscal_point_create, name='admin_fiscal_point_create'),
     path('fiscal/puntos-venta/<int:pk>/editar/', views.fiscal_point_edit, name='admin_fiscal_point_edit'),

@@ -3,148 +3,372 @@
 {% block page_title %}Comprobante fiscal #{{ fiscal_document.pk }}{% endblock %}
 
 {% block content %}
-<div class="admin-form-container" style="max-width: 1080px;">
-    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 1rem;">
-        <h2 style="margin:0;">Comprobante fiscal #{{ fiscal_document.pk }}</h2>
-        <span class="badge badge-info">{{ fiscal_document.get_status_display }}</span>
-    </div>
-
-    <div class="form-actions" style="margin-bottom:1rem; gap:8px;">
-        {% if can_emit %}
-        <form method="post" action="{% url 'admin_fiscal_document_emit' fiscal_document.pk %}" style="display:inline;">
-            {% csrf_token %}
-            <button type="submit" class="btn btn-primary" onclick="return confirm('Emitir este comprobante en ARCA ahora?');">
-                Emitir ahora (ARCA)
-            </button>
-        </form>
-        {% elif fiscal_document.issue_mode != 'arca_wsfe' %}
-        <span class="text-muted">Modo actual: {{ fiscal_document.get_issue_mode_display }} (no emite por ARCA).</span>
-        {% else %}
-        <span class="text-muted">Estado actual no permite emision directa.</span>
-        {% endif %}
-    </div>
-
-    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:1rem; margin-bottom:1rem;">
-        <div>
-            <h4>Encabezado</h4>
-            <p>
-                <strong>Empresa:</strong> {{ fiscal_document.company.name }}<br>
-                <strong>Tipo:</strong> {{ fiscal_document.get_doc_type_display }}<br>
-                <strong>Punto de venta:</strong> {{ fiscal_document.point_of_sale.number }}<br>
-                <strong>Numero:</strong> {{ fiscal_document.number|default:"-" }}<br>
-                <strong>Modo:</strong> {{ fiscal_document.get_issue_mode_display }}<br>
-                <strong>Estado:</strong> {{ fiscal_document.get_status_display }}<br>
-                <strong>Fecha:</strong> {{ fiscal_document.issued_at|date:"d/m/Y H:i"|default:"-" }}<br>
-                <strong>CAE:</strong> {{ fiscal_document.cae|default:"-" }}<br>
-                <strong>Vto CAE:</strong> {{ fiscal_document.cae_due_date|date:"d/m/Y"|default:"-" }}
-            </p>
-        </div>
-        <div>
-            <h4>Relacion</h4>
-            <p>
-                <strong>Cliente:</strong> {{ fiscal_document.client_company_ref.client_profile.company_name|default:"-" }}<br>
-                <strong>Pedido:</strong>
-                {% if fiscal_document.order_id %}
-                <a href="{% url 'admin_order_detail' fiscal_document.order_id %}">#{{ fiscal_document.order_id }}</a>
-                {% else %}
-                -
+<div class="admin-form-container sales-record-page">
+    <section class="sales-record-shell">
+        <div class="sales-record-header">
+            <div class="sales-record-title-wrap">
+                <div class="sales-record-icon" aria-hidden="true">&#128179;</div>
+                <div>
+                    <p class="sales-record-kicker">Ficha comercial</p>
+                    <h2 class="sales-record-heading">
+                        Ver la venta {{ fiscal_document.commercial_type_label }} {{ fiscal_document.display_number }}
+                    </h2>
+                    <p class="sales-record-subcopy">
+                        {{ fiscal_document.company.name }} &middot; {{ fiscal_document.get_doc_type_display }} &middot;
+                        {{ fiscal_document.get_issue_mode_display }} &middot; Estado {{ workflow_state.label }}
+                    </p>
+                </div>
+            </div>
+            <div class="sales-record-actions">
+                {% if can_close_document %}
+                <form method="post" action="{% url 'admin_fiscal_document_close' fiscal_document.pk %}" style="display:inline;">
+                    {% csrf_token %}
+                    <button type="submit" class="sales-record-action is-primary">Cerrar</button>
+                </form>
                 {% endif %}
-                <br>
-                <strong>Sistema externo:</strong> {{ fiscal_document.external_system|default:"-" }}<br>
-                <strong>ID externo:</strong> {{ fiscal_document.external_id|default:"-" }}<br>
-                <strong>Numero externo:</strong> {{ fiscal_document.external_number|default:"-" }}<br>
-                <strong>Source key:</strong> <small>{{ fiscal_document.source_key }}</small>
-            </p>
+                {% if can_reopen_document %}
+                <form method="post" action="{% url 'admin_fiscal_document_reopen' fiscal_document.pk %}" style="display:inline;">
+                    {% csrf_token %}
+                    <button type="submit" class="sales-record-action">Reabrir</button>
+                </form>
+                {% endif %}
+                {% if can_emit %}
+                <form method="post" action="{% url 'admin_fiscal_document_emit' fiscal_document.pk %}" style="display:inline;">
+                    {% csrf_token %}
+                    <button type="submit" class="sales-record-action is-primary" onclick="return confirm('Emitir este comprobante en ARCA ahora?');">
+                        Emitir ARCA
+                    </button>
+                </form>
+                {% endif %}
+                {% if can_void_document %}
+                <form method="post" action="{% url 'admin_fiscal_document_void' fiscal_document.pk %}" style="display:inline;">
+                    {% csrf_token %}
+                    <button type="submit" class="sales-record-action" onclick="return confirm('Anular este comprobante?');">
+                        Anular
+                    </button>
+                </form>
+                {% endif %}
+                <a href="{% url 'admin_fiscal_document_print' fiscal_document.pk %}?copy=original" class="sales-record-action" data-print-window="1" target="_blank" rel="noopener noreferrer">Original</a>
+                <a href="{% url 'admin_fiscal_document_print' fiscal_document.pk %}?copy=duplicado" class="sales-record-action" data-print-window="1" target="_blank" rel="noopener noreferrer">Duplicado</a>
+                <a href="{% url 'admin_fiscal_document_print' fiscal_document.pk %}?copy=triplicado" class="sales-record-action" data-print-window="1" target="_blank" rel="noopener noreferrer">Triplicado</a>
+                <a href="{% url 'admin_fiscal_document_list' %}" class="sales-record-action">Volver</a>
+            </div>
         </div>
-    </div>
 
-    <div style="background: rgba(255,255,255,.03); border:1px solid rgba(255,255,255,.08); border-radius:8px; padding: 12px; margin-bottom: 1rem;">
-        <strong>Resultado de emision</strong><br>
-        <span><strong>Codigo error:</strong> {{ fiscal_document.error_code|default:"-" }}</span><br>
-        <span><strong>Mensaje:</strong> {{ fiscal_document.error_message|default:"-" }}</span><br>
-        <span><strong>Intentos:</strong> {{ fiscal_document.attempts_count }}</span>
-        {% if fiscal_document.last_attempt_at %}
-        <br><span><strong>Ultimo intento:</strong> {{ fiscal_document.last_attempt_at|date:"d/m/Y H:i" }}</span>
+        <div class="sales-record-top-grid">
+            <section class="sales-record-panel">
+                <div class="sales-record-panel-header">
+                    <h3 class="sales-record-panel-title">Datos basicos</h3>
+                    <span class="sales-record-tag {% if workflow_state.badge_class %}{{ workflow_state.badge_class }}{% endif %}">
+                        {{ workflow_state.label }}
+                    </span>
+                </div>
+                <div class="sales-record-grid">
+                    <div class="sales-record-field">
+                        <span class="sales-record-field-label">Estado comercial</span>
+                        <span class="sales-record-field-value">{{ workflow_state.label }}</span>
+                    </div>
+                    <div class="sales-record-field">
+                        <span class="sales-record-field-label">Tipo comercial</span>
+                        <span class="sales-record-field-value">{{ fiscal_document.commercial_type_label }}</span>
+                    </div>
+                    <div class="sales-record-field">
+                        <span class="sales-record-field-label">Numero</span>
+                        <span class="sales-record-field-value">{{ fiscal_document.display_number }}</span>
+                    </div>
+                    <div class="sales-record-field">
+                        <span class="sales-record-field-label">Tipo fiscal</span>
+                        <span class="sales-record-field-value">{{ fiscal_document.get_doc_type_display }}</span>
+                    </div>
+                    <div class="sales-record-field">
+                        <span class="sales-record-field-label">Fecha</span>
+                        <span class="sales-record-field-value">{{ fiscal_document.issued_at|date:"d/m/Y H:i"|default:"-" }}</span>
+                    </div>
+                    <div class="sales-record-field">
+                        <span class="sales-record-field-label">Condicion de venta</span>
+                        <span class="sales-record-field-value">
+                            {% if fiscal_document.order and fiscal_document.order.client_company_ref and fiscal_document.order.client_company_ref.client_category %}
+                            {{ fiscal_document.order.client_company_ref.client_category.get_default_sale_condition_display|default:"Cuenta corriente" }}
+                            {% else %}
+                            Cuenta corriente
+                            {% endif %}
+                        </span>
+                    </div>
+                    <div class="sales-record-field">
+                        <span class="sales-record-field-label">CAE</span>
+                        <span class="sales-record-field-value">{{ fiscal_document.cae|default:"-" }}</span>
+                    </div>
+                    <div class="sales-record-field">
+                        <span class="sales-record-field-label">Vencimiento CAE</span>
+                        <span class="sales-record-field-value">{{ fiscal_document.cae_due_date|date:"d/m/Y"|default:"-" }}</span>
+                    </div>
+                    <div class="sales-record-field">
+                        <span class="sales-record-field-label">Punto de venta</span>
+                        <span class="sales-record-field-value">{{ fiscal_document.point_of_sale.number|default:"-" }}</span>
+                    </div>
+                </div>
+            </section>
+
+            <section class="sales-record-panel">
+                <div class="sales-record-panel-header">
+                    <h3 class="sales-record-panel-title">Cliente</h3>
+                    <span class="sales-record-tag is-info">Empresa activa {{ fiscal_document.company.name }}</span>
+                </div>
+                <div class="sales-record-grid">
+                    <div class="sales-record-field">
+                        <span class="sales-record-field-label">Nombre</span>
+                        <span class="sales-record-field-value">
+                            {{ fiscal_document.client_company_ref.client_profile.company_name|default:fiscal_document.client_profile.company_name|default:"-" }}
+                        </span>
+                    </div>
+                    <div class="sales-record-field">
+                        <span class="sales-record-field-label">N° de cliente</span>
+                        <span class="sales-record-field-value">
+                            {% if fiscal_document.client_company_ref_id %}{{ fiscal_document.client_company_ref_id }}{% else %}-{% endif %}
+                        </span>
+                    </div>
+                    <div class="sales-record-field">
+                        <span class="sales-record-field-label">Domicilio</span>
+                        <span class="sales-record-field-value">
+                            {{ fiscal_document.client_profile.fiscal_address|default:fiscal_document.client_profile.address|default:"-" }}
+                        </span>
+                    </div>
+                    <div class="sales-record-field">
+                        <span class="sales-record-field-label">Localidad</span>
+                        <span class="sales-record-field-value">
+                            {{ fiscal_document.client_profile.fiscal_city|default:fiscal_document.client_profile.province|default:"-" }}
+                        </span>
+                    </div>
+                    <div class="sales-record-field">
+                        <span class="sales-record-field-label">Condicion de IVA</span>
+                        <span class="sales-record-field-value">{{ fiscal_document.client_profile.get_iva_condition_display|default:"-" }}</span>
+                    </div>
+                    <div class="sales-record-field">
+                        <span class="sales-record-field-label">CUIT / Documento</span>
+                        <span class="sales-record-field-value">
+                            {{ fiscal_document.client_profile.cuit_dni|default:fiscal_document.client_profile.document_number|default:"-" }}
+                        </span>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        {% if not document_invoice_ready and document_invoice_errors %}
+        <section class="sales-record-panel" style="margin-top:16px;">
+            <div class="sales-record-panel-header">
+                <h3 class="sales-record-panel-title">Pendientes para cerrar o emitir</h3>
+                <span class="sales-record-tag">Incompleto</span>
+            </div>
+            <div class="sales-record-panel-collapsed">
+                Esta factura puede quedar abierta, pero todavia no puede cerrarse ni emitirse.
+            </div>
+            <ul class="order-readiness-list" style="margin-top:12px;">
+                {% for error in document_invoice_errors %}
+                <li>{{ error }}</li>
+                {% endfor %}
+            </ul>
+        </section>
         {% endif %}
+    </section>
+
+    <div class="sales-record-body-grid">
+        <div class="sales-record-main">
+            <section class="sales-record-card">
+                <div class="sales-record-card-head">
+                    <div>
+                        <h3>Productos de la venta</h3>
+                        <p>Detalle del comprobante con cantidades, importes y descuentos aplicados.</p>
+                    </div>
+                    <span class="sales-record-tag">{{ items|length }} item{{ items|length|pluralize }}</span>
+                </div>
+                <div class="sales-record-table-wrap">
+                    <table class="admin-table sales-record-table">
+                        <thead>
+                            <tr>
+                                <th>Codigo</th>
+                                <th>Cant.</th>
+                                <th>Producto</th>
+                                <th>Precio</th>
+                                <th>IVA</th>
+                                <th>Bonif.</th>
+                                <th>Importe</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in items %}
+                            <tr>
+                                <td><code>{{ item.sku|default:"-" }}</code></td>
+                                <td>{{ item.quantity|floatformat:3 }}</td>
+                                <td>{{ item.description }}</td>
+                                <td>${{ item.unit_price_net|floatformat:2 }}</td>
+                                <td>{{ item.iva_rate|floatformat:2 }}%</td>
+                                <td>{{ item.discount_percentage|floatformat:2 }}%</td>
+                                <td><strong>${{ item.total_amount|floatformat:2 }}</strong></td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="7" class="text-center text-muted">Sin items fiscales.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <section class="sales-record-card">
+                <div class="sales-record-card-head">
+                    <div>
+                        <h3>Observaciones</h3>
+                        <p>Notas operativas y referencias vinculadas a esta venta.</p>
+                    </div>
+                </div>
+                <div class="sales-record-note-box">
+                    {% if fiscal_document.order and fiscal_document.order.admin_notes %}
+                    {{ fiscal_document.order.admin_notes }}
+                    {% elif fiscal_document.error_message %}
+                    {{ fiscal_document.error_message }}
+                    {% else %}
+                    Sin observaciones registradas para este comprobante.
+                    {% endif %}
+                </div>
+            </section>
+        </div>
+
+        <aside class="sales-record-side">
+            <section class="sales-record-card">
+                <div class="sales-record-card-head">
+                    <div>
+                        <h3>Totales</h3>
+                        <p>Resumen economico del comprobante.</p>
+                    </div>
+                </div>
+                <div class="sales-record-summary">
+                    <div class="sales-record-summary-row">
+                        <span>Subtotal</span>
+                        <strong>${{ fiscal_document.subtotal_net|floatformat:2 }}</strong>
+                    </div>
+                    <div class="sales-record-summary-row">
+                        <span>Descuento</span>
+                        <strong>${{ fiscal_document.discount_total|floatformat:2 }}</strong>
+                    </div>
+                    <div class="sales-record-summary-row">
+                        <span>Neto</span>
+                        <strong>${{ fiscal_document.subtotal_net|floatformat:2 }}</strong>
+                    </div>
+                    <div class="sales-record-summary-row">
+                        <span>IVA</span>
+                        <strong>${{ fiscal_document.tax_total|floatformat:2 }}</strong>
+                    </div>
+                    <div class="sales-record-summary-row">
+                        <span>Impuestos</span>
+                        <strong>$0.00</strong>
+                    </div>
+                    <div class="sales-record-summary-row is-total">
+                        <span>Total</span>
+                        <strong>${{ fiscal_document.total|floatformat:2 }}</strong>
+                    </div>
+                </div>
+            </section>
+
+            <section class="sales-record-card">
+                <div class="sales-record-card-head">
+                    <div>
+                        <h3>Relacion y trazabilidad</h3>
+                        <p>Pedido, origen y referencias del sistema.</p>
+                    </div>
+                </div>
+                <div class="sales-record-side-list">
+                    <div class="sales-record-side-row">
+                        <span class="sales-record-side-label">Pedido</span>
+                        <span class="sales-record-side-value">
+                            {% if fiscal_document.order_id %}
+                            <a href="{% url 'admin_order_detail' fiscal_document.order_id %}" class="btn btn-outline btn-sm">#{{ fiscal_document.order_id }}</a>
+                            {% else %}
+                            -
+                            {% endif %}
+                        </span>
+                    </div>
+                    <div class="sales-record-side-row">
+                        <span class="sales-record-side-label">Sistema externo</span>
+                        <span class="sales-record-side-value">{{ fiscal_document.external_system|default:"-" }}</span>
+                    </div>
+                    <div class="sales-record-side-row">
+                        <span class="sales-record-side-label">ID externo</span>
+                        <span class="sales-record-side-value">{{ fiscal_document.external_id|default:"-" }}</span>
+                    </div>
+                    <div class="sales-record-side-row">
+                        <span class="sales-record-side-label">Numero externo</span>
+                        <span class="sales-record-side-value">{{ fiscal_document.external_number|default:"-" }}</span>
+                    </div>
+                    <div class="sales-record-side-row">
+                        <span class="sales-record-side-label">Source key</span>
+                        <span class="sales-record-side-value"><small>{{ fiscal_document.source_key }}</small></span>
+                    </div>
+                </div>
+            </section>
+
+            <section class="sales-record-card">
+                <div class="sales-record-card-head">
+                    <div>
+                        <h3>Resultado de emision</h3>
+                        <p>Estado tecnico de ARCA y mensajes del comprobante.</p>
+                    </div>
+                </div>
+                <div class="sales-record-side-list">
+                    <div class="sales-record-side-row">
+                        <span class="sales-record-side-label">Codigo error</span>
+                        <span class="sales-record-side-value">{{ fiscal_document.error_code|default:"-" }}</span>
+                    </div>
+                    <div class="sales-record-side-row">
+                        <span class="sales-record-side-label">Mensaje</span>
+                        <span class="sales-record-side-value">{{ fiscal_document.error_message|default:"-" }}</span>
+                    </div>
+                    <div class="sales-record-side-row">
+                        <span class="sales-record-side-label">Intentos</span>
+                        <span class="sales-record-side-value">{{ fiscal_document.attempts_count }}</span>
+                    </div>
+                    <div class="sales-record-side-row">
+                        <span class="sales-record-side-label">Ultimo intento</span>
+                        <span class="sales-record-side-value">{{ fiscal_document.last_attempt_at|date:"d/m/Y H:i"|default:"-" }}</span>
+                    </div>
+                </div>
+            </section>
+
+            <section class="sales-record-card">
+                <div class="sales-record-card-head">
+                    <div>
+                        <h3>Intentos de emision</h3>
+                        <p>Ultimos eventos registrados para este comprobante.</p>
+                    </div>
+                </div>
+                {% if attempts %}
+                <ul class="sales-record-attempt-list">
+                    {% for attempt in attempts %}
+                    <li class="sales-record-attempt-item">
+                        <strong>{{ attempt.get_result_status_display }} · {{ attempt.created_at|date:"d/m/Y H:i" }}</strong>
+                        <small>
+                            Usuario: {{ attempt.triggered_by.username|default:"Sistema" }} ·
+                            Codigo: {{ attempt.error_code|default:"-" }}<br>
+                            {{ attempt.error_message|default:"Sin mensaje adicional." }}
+                        </small>
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <div class="sales-record-panel-collapsed">Sin intentos registrados.</div>
+                {% endif %}
+            </section>
+        </aside>
     </div>
 
-    <div style="background: rgba(255,255,255,.03); border:1px solid rgba(255,255,255,.08); border-radius:8px; padding: 12px; margin-bottom: 1rem;">
-        <strong>Importes</strong><br>
-        Subtotal neto: ${{ fiscal_document.subtotal_net|floatformat:2 }}<br>
-        Descuento: ${{ fiscal_document.discount_total|floatformat:2 }}<br>
-        IVA: ${{ fiscal_document.tax_total|floatformat:2 }}<br>
-        <strong>Total: ${{ fiscal_document.total|floatformat:2 }}</strong>
-    </div>
-
-    <h4>Items</h4>
-    <table class="admin-table">
-        <thead>
-            <tr>
-                <th>#</th>
-                <th>SKU</th>
-                <th>Descripcion</th>
-                <th>Cant.</th>
-                <th>Unitario neto</th>
-                <th>Desc.</th>
-                <th>Neto</th>
-                <th>IVA</th>
-                <th>Total</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for item in items %}
-            <tr>
-                <td>{{ item.line_number }}</td>
-                <td><code>{{ item.sku|default:"-" }}</code></td>
-                <td>{{ item.description }}</td>
-                <td>{{ item.quantity|floatformat:3 }}</td>
-                <td>${{ item.unit_price_net|floatformat:2 }}</td>
-                <td>{{ item.discount_percentage|floatformat:2 }}% (${{ item.discount_amount|floatformat:2 }})</td>
-                <td>${{ item.net_amount|floatformat:2 }}</td>
-                <td>{{ item.iva_rate|floatformat:2 }}% (${{ item.iva_amount|floatformat:2 }})</td>
-                <td><strong>${{ item.total_amount|floatformat:2 }}</strong></td>
-            </tr>
-            {% empty %}
-            <tr>
-                <td colspan="9" class="text-center text-muted">Sin items fiscales.</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-
-    <h4 style="margin-top:1rem;">Intentos de emision</h4>
-    <table class="admin-table">
-        <thead>
-            <tr>
-                <th>Fecha</th>
-                <th>Usuario</th>
-                <th>Resultado</th>
-                <th>Codigo</th>
-                <th>Mensaje</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for attempt in attempts %}
-            <tr>
-                <td>{{ attempt.created_at|date:"d/m/Y H:i" }}</td>
-                <td>{{ attempt.triggered_by.username|default:"Sistema" }}</td>
-                <td>{{ attempt.get_result_status_display }}</td>
-                <td>{{ attempt.error_code|default:"-" }}</td>
-                <td>{{ attempt.error_message|default:"-" }}</td>
-            </tr>
-            {% empty %}
-            <tr>
-                <td colspan="5" class="text-center text-muted">Sin intentos registrados.</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-
-    <div class="form-actions" style="margin-top:1rem;">
-        <a href="{% url 'admin_fiscal_document_print' fiscal_document.pk %}?copy=original" class="btn btn-outline" data-print-window="1" target="_blank" rel="noopener noreferrer">Original</a>
-        <a href="{% url 'admin_fiscal_document_print' fiscal_document.pk %}?copy=duplicado" class="btn btn-outline" data-print-window="1" target="_blank" rel="noopener noreferrer">Duplicado</a>
-        <a href="{% url 'admin_fiscal_document_print' fiscal_document.pk %}?copy=triplicado" class="btn btn-outline" data-print-window="1" target="_blank" rel="noopener noreferrer">Triplicado</a>
-        <a href="{% url 'admin_fiscal_document_list' %}" class="btn btn-outline">Volver</a>
+    <div class="form-actions sales-record-footer">
+        <a href="{% url 'admin_fiscal_document_list' %}" class="btn btn-outline"><- Volver a comprobantes</a>
+        {% if can_emit %}
+        <form method="post" action="{% url 'admin_fiscal_document_emit' fiscal_document.pk %}">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-primary" onclick="return confirm('Emitir este comprobante en ARCA ahora?');">Emitir ahora</button>
+        </form>
+        {% endif %}
     </div>
 </div>
 {% endblock %}

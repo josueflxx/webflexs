@@ -24,6 +24,9 @@
             <button type="submit" class="btn btn-primary">Buscar</button>
         </form>
         <div class="toolbar-actions">
+            {% if can_create_client %}
+            <a href="{% url 'admin_client_create' %}" class="btn btn-primary">Nuevo cliente</a>
+            {% endif %}
             {% if can_manage_client_categories %}
             <a href="{% url 'admin_client_category_list' %}" class="btn btn-outline">Tipos de cliente</a>
             {% endif %}

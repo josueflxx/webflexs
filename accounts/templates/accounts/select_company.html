@@ -3,44 +3,329 @@
 {% block title %}Elegir empresa activa{% endblock %}
 
 {% block content %}
-<section class="section">
-    <div class="container" style="max-width: 720px;">
-        <div class="card" style="padding: var(--spacing-2xl);">
-            <h1 style="margin-bottom: var(--spacing-md);">Elegir empresa activa</h1>
-            <p class="text-muted" style="margin-bottom: var(--spacing-xl);">
-                Selecciona la razón social con la que vas a operar. Esta elección se usará en todo el sistema.
-            </p>
+<section class="company-select-page">
+    <div class="container company-select-shell">
+        <div class="company-select-card">
+            <div class="company-select-hero">
+                <div>
+                    <p class="company-select-eyebrow">Contexto operativo</p>
+                    <h1>Elegir empresa activa</h1>
+                    <p class="company-select-copy">
+                        Seleccioná la razón social con la que vas a trabajar ahora. Esta elección define precios,
+                        pedidos, pagos y documentos durante toda la sesión.
+                    </p>
+                </div>
+                <div class="company-select-summary">
+                    <span class="company-select-summary-label">Empresas disponibles</span>
+                    <strong>{{ companies|length }}</strong>
+                    <span class="company-select-summary-note">Podés cambiarla más adelante cuando lo necesites.</span>
+                </div>
+            </div>
 
-            <form method="post">
+            <form method="post" class="company-select-form">
                 {% csrf_token %}
                 <input type="hidden" name="next" value="{{ next_url }}">
-                <div class="grid" style="display:grid; gap: var(--spacing-lg);">
+
+                <div class="company-select-grid">
                     {% for company in companies %}
                     <button
                         type="submit"
                         name="company_id"
                         value="{{ company.pk }}"
-                        class="card"
-                        style="text-align:left; padding: var(--spacing-lg); border: 2px solid rgba(255,255,255,0.08);"
+                        class="company-option {% if active_company and active_company.pk == company.pk %}is-active{% endif %}"
                     >
-                        <div style="font-weight: 700; font-size: var(--font-size-lg); margin-bottom: 6px;">
-                            {{ company.name }}
+                        <div class="company-option-top">
+                            <div class="company-option-mark">
+                                {{ company.name|slice:":1"|upper }}
+                            </div>
+                            <div class="company-option-head">
+                                <div class="company-option-title-row">
+                                    <strong>{{ company.name }}</strong>
+                                    {% if active_company and active_company.pk == company.pk %}
+                                    <span class="company-option-badge">Activa</span>
+                                    {% endif %}
+                                </div>
+                                <span class="company-option-legal">
+                                    {{ company.legal_name|default:"Sin razon social cargada" }}
+                                </span>
+                            </div>
                         </div>
-                        <div class="text-muted" style="margin-bottom: 6px;">
-                            {{ company.legal_name|default:"Sin razón social" }}
+
+                        <div class="company-option-details">
+                            <div class="company-option-detail">
+                                <span class="company-option-label">CUIT</span>
+                                <span class="company-option-value">{{ company.cuit|default:"-" }}</span>
+                            </div>
+                            <div class="company-option-detail">
+                                <span class="company-option-label">Fiscal</span>
+                                <span class="company-option-value">{{ company.tax_condition|default:"-" }}</span>
+                            </div>
                         </div>
-                        <div class="text-muted">
-                            CUIT: {{ company.cuit|default:"-" }}
+
+                        <div class="company-option-footer">
+                            <span>Entrar con esta empresa</span>
+                            <span aria-hidden="true">&rsaquo;</span>
                         </div>
                     </button>
                     {% endfor %}
                 </div>
             </form>
 
-            <div style="margin-top: var(--spacing-xl);">
+            <div class="company-select-footer">
                 <a href="{% url 'logout' %}" class="btn btn-ghost">Cerrar sesión</a>
             </div>
         </div>
     </div>
 </section>
+
+<style>
+    .company-select-page {
+        min-height: calc(100vh - var(--header-offset) - 40px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: var(--spacing-2xl) 0;
+        background:
+            radial-gradient(circle at top left, rgba(255, 107, 53, 0.12), transparent 28%),
+            radial-gradient(circle at 85% 20%, rgba(0, 197, 255, 0.1), transparent 24%);
+    }
+
+    .company-select-shell {
+        display: flex;
+        justify-content: center;
+    }
+
+    .company-select-card {
+        width: 100%;
+        max-width: 860px;
+        padding: clamp(24px, 3vw, 38px);
+        border-radius: 28px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        background:
+            linear-gradient(180deg, rgba(42, 42, 42, 0.96), rgba(26, 26, 26, 0.98));
+        box-shadow: 0 26px 60px rgba(0, 0, 0, 0.3);
+    }
+
+    .company-select-hero {
+        display: grid;
+        grid-template-columns: minmax(0, 1.4fr) minmax(220px, 0.6fr);
+        gap: 18px;
+        align-items: stretch;
+        margin-bottom: 28px;
+    }
+
+    .company-select-eyebrow {
+        margin: 0 0 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        font-size: 0.76rem;
+        color: rgba(209, 219, 230, 0.68);
+    }
+
+    .company-select-hero h1 {
+        margin-bottom: 12px;
+        font-size: clamp(2rem, 3vw, 2.7rem);
+        line-height: 1.04;
+    }
+
+    .company-select-copy {
+        max-width: 60ch;
+        color: rgba(218, 225, 233, 0.8);
+        line-height: 1.7;
+    }
+
+    .company-select-summary {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        gap: 6px;
+        padding: 20px 22px;
+        border-radius: 20px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        background:
+            linear-gradient(180deg, rgba(255, 107, 53, 0.16), rgba(255, 107, 53, 0.05));
+    }
+
+    .company-select-summary-label,
+    .company-select-summary-note {
+        color: rgba(222, 229, 236, 0.76);
+        font-size: 0.86rem;
+        line-height: 1.5;
+    }
+
+    .company-select-summary strong {
+        font-size: clamp(2rem, 3vw, 2.8rem);
+        line-height: 1;
+        color: #fff;
+    }
+
+    .company-select-grid {
+        display: grid;
+        gap: 16px;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .company-option {
+        width: 100%;
+        padding: 22px;
+        border-radius: 20px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        background:
+            linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.015));
+        color: var(--color-white);
+        text-align: left;
+        cursor: pointer;
+        transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+    }
+
+    .company-option:hover {
+        transform: translateY(-3px);
+        border-color: rgba(255, 107, 53, 0.32);
+        box-shadow: 0 18px 34px rgba(0, 0, 0, 0.24);
+        background:
+            linear-gradient(180deg, rgba(255, 107, 53, 0.11), rgba(255, 255, 255, 0.02));
+    }
+
+    .company-option.is-active {
+        border-color: rgba(0, 197, 255, 0.32);
+        box-shadow: 0 18px 34px rgba(0, 0, 0, 0.24);
+        background:
+            linear-gradient(180deg, rgba(0, 197, 255, 0.14), rgba(255, 255, 255, 0.02));
+    }
+
+    .company-option-top {
+        display: flex;
+        gap: 14px;
+        align-items: flex-start;
+        margin-bottom: 18px;
+    }
+
+    .company-option-mark {
+        width: 48px;
+        height: 48px;
+        flex: 0 0 48px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 16px;
+        font-size: 1.1rem;
+        font-weight: 800;
+        background: rgba(255, 255, 255, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .company-option-head {
+        min-width: 0;
+        display: grid;
+        gap: 6px;
+    }
+
+    .company-option-title-row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .company-option-title-row strong {
+        font-size: 1.22rem;
+        line-height: 1.1;
+    }
+
+    .company-option-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 5px 10px;
+        border-radius: 999px;
+        font-size: 0.76rem;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: #d8fbff;
+        background: rgba(0, 197, 255, 0.16);
+        border: 1px solid rgba(0, 197, 255, 0.24);
+    }
+
+    .company-option-legal {
+        color: rgba(214, 223, 232, 0.74);
+        line-height: 1.5;
+    }
+
+    .company-option-details {
+        display: grid;
+        gap: 10px;
+        margin-bottom: 18px;
+    }
+
+    .company-option-detail {
+        display: flex;
+        justify-content: space-between;
+        gap: 16px;
+        padding-top: 10px;
+        border-top: 1px solid rgba(255, 255, 255, 0.07);
+    }
+
+    .company-option-label {
+        color: rgba(198, 208, 219, 0.66);
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        font-size: 0.72rem;
+    }
+
+    .company-option-value {
+        color: rgba(238, 242, 247, 0.92);
+        text-align: right;
+    }
+
+    .company-option-footer {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        color: rgba(255, 255, 255, 0.9);
+        font-weight: 600;
+    }
+
+    .company-select-footer {
+        display: flex;
+        justify-content: flex-start;
+        margin-top: 24px;
+        padding-top: 20px;
+        border-top: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    @media (max-width: 900px) {
+        .company-select-card {
+            max-width: 100%;
+        }
+
+        .company-select-hero,
+        .company-select-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    @media (max-width: 640px) {
+        .company-select-page {
+            min-height: calc(100vh - var(--header-offset) - 24px);
+            padding: var(--spacing-xl) 0;
+        }
+
+        .company-select-card {
+            padding: 22px 18px;
+            border-radius: 22px;
+        }
+
+        .company-option {
+            padding: 18px;
+        }
+
+        .company-option-detail {
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .company-option-value {
+            text-align: left;
+        }
+    }
+</style>
 {% endblock %}

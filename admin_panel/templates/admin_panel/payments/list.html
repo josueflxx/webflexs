@@ -44,34 +44,40 @@
         </form>
     </div>
 
-    <div class="admin-toolbar" style="border-top:1px solid rgba(255,255,255,.08);">
-        <div class="toolbar-actions" style="flex-wrap:wrap;">
-            <span class="badge badge-info">Pagos: {{ summary_count }}</span>
-            <span class="badge badge-success">Total registrado: ${{ summary_total|floatformat:2 }}</span>
+    <div class="admin-toolbar payments-summary-toolbar" style="border-top:1px solid rgba(255,255,255,.08);">
+        <div class="payments-summary-grid">
+            <article class="doc-type-metric">
+                <span class="doc-type-metric-label">Pagos visibles</span>
+                <strong class="doc-type-metric-value">{{ summary_count }}</strong>
+                <small>Resultado del filtro actual sobre la empresa activa.</small>
+            </article>
+            <article class="doc-type-metric">
+                <span class="doc-type-metric-label">Total registrado</span>
+                <strong class="doc-type-metric-value">${{ summary_total|floatformat:2 }}</strong>
+                <small>Solo pagos activos, sin anulados.</small>
+            </article>
             {% if selected_order %}
-            <span class="badge badge-warning">
-                Pedido #{{ selected_order.pk }} pendiente: ${{ selected_order.get_pending_amount|floatformat:2 }}
-            </span>
+            <article class="doc-type-metric">
+                <span class="doc-type-metric-label">Pedido #{{ selected_order.pk }}</span>
+                <strong class="doc-type-metric-value">${{ selected_order.get_pending_amount|floatformat:2 }}</strong>
+                <small>Pendiente actual del pedido seleccionado.</small>
+            </article>
             {% endif %}
             {% if selected_client %}
-            <span class="badge badge-info">
-                Cliente: {{ selected_client.company_name }}
-            </span>
-            <span class="badge badge-warning">
-                Pedidos confirmados+: ${{ selected_client_metrics.orders_total|floatformat:2 }}
-            </span>
-            <span class="badge badge-success">
-                Pagado: ${{ selected_client_metrics.total_paid|floatformat:2 }}
-            </span>
-            {% if selected_client_metrics.current_balance > 0 %}
-            <span class="badge badge-danger">
-                Saldo pendiente: ${{ selected_client_metrics.current_balance|floatformat:2 }}
-            </span>
-            {% else %}
-            <span class="badge badge-success">
-                Saldo al dia: $0.00
-            </span>
-            {% endif %}
+            <article class="doc-type-metric">
+                <span class="doc-type-metric-label">{{ selected_client.company_name }}</span>
+                <strong class="doc-type-metric-value">
+                    {% if selected_client_metrics.current_balance > 0 %}
+                    ${{ selected_client_metrics.current_balance|floatformat:2 }}
+                    {% else %}
+                    $0.00
+                    {% endif %}
+                </strong>
+                <small>
+                    Pedidos: ${{ selected_client_metrics.orders_total|floatformat:2 }} ·
+                    Pagado: ${{ selected_client_metrics.total_paid|floatformat:2 }}
+                </small>
+            </article>
             {% endif %}
         </div>
     </div>
@@ -79,7 +85,7 @@
     <div class="admin-toolbar" style="border-top:1px solid rgba(255,255,255,.08);">
         <form method="post" style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px;align-items:end;width:100%;">
             {% csrf_token %}
-            <input type="hidden" id="paymentActionInput" name="action" value="create">
+            <input type="hidden" id="paymentActionInput" name="action" value="{% if suggested_action == 'adjust' %}adjust{% else %}create{% endif %}">
 
             <div class="form-group" style="margin:0;">
                 <label for="client_profile_id" class="form-label">Cliente</label>
@@ -125,6 +131,18 @@
             </div>
 
             <div class="form-group" style="margin:0;">
+                <label for="sales_document_type_id" class="form-label">Tipo comercial</label>
+                <select id="sales_document_type_id" name="sales_document_type_id" class="form-select">
+                    <option value="">Automatico por configuracion</option>
+                    {% for doc_type in payment_sales_document_types %}
+                    <option value="{{ doc_type.pk }}" {% if selected_sales_document_type_id == doc_type.pk|stringformat:'s' %}selected{% endif %}>
+                        {{ doc_type.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="form-group" style="margin:0;">
                 <label for="paid_at" class="form-label">Fecha/Hora</label>
                 <input id="paid_at" type="datetime-local" name="paid_at" class="form-input">
             </div>
@@ -140,8 +158,8 @@
             </div>
 
             <div class="form-group" style="margin:0; grid-column: 1 / -1;">
-                <button type="submit" class="btn btn-primary" onclick="document.querySelector('#paymentActionInput').value='create';">Registrar Pago</button>
-                <button type="submit" class="btn btn-outline" onclick="document.querySelector('#paymentActionInput').value='adjust';">
+                <button type="submit" class="btn btn-primary" onclick="document.querySelector('#paymentActionInput').value='create';" {% if suggested_action == 'adjust' %}style="opacity:.75;"{% endif %}>Registrar Pago</button>
+                <button type="submit" class="btn btn-outline" onclick="document.querySelector('#paymentActionInput').value='adjust';" {% if suggested_action == 'adjust' %}style="border-color:rgba(255,107,53,.38);color:#fff0e6;"{% endif %}>
                     Registrar Ajuste (+/-)
                 </button>
             </div>
@@ -153,7 +171,7 @@
             <tr>
                 <th>Fecha</th>
                 <th>Empresa</th>
-                <th>Recibo</th>
+                <th>Recibo comercial</th>
                 <th>Cliente</th>
                 <th>Pedido</th>
                 <th>Monto</th>
@@ -172,7 +190,8 @@
                 <td>
                     {% if payment.internal_documents %}
                         {% for doc in payment.internal_documents %}
-                            {{ doc.get_doc_type_display }} #{{ doc.number|stringformat:"07d" }}{% if not forloop.last %}<br>{% endif %}
+                            <strong>{{ doc.commercial_type_label }}</strong><br>
+                            <small class="text-muted">{{ doc.display_number }}</small>{% if not forloop.last %}<br><br>{% endif %}
                         {% endfor %}
                     {% else %}
                         -

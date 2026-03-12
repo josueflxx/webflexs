@@ -1,0 +1,181 @@
+{% extends 'admin_panel/base.html' %}
+
+{% block page_title %}{% if document_type %}Editar tipo de documento{% else %}Nuevo tipo de documento{% endif %}{% endblock %}
+
+{% block content %}
+<div class="settings-hub">
+    <section class="settings-hero">
+        <div>
+            <p class="settings-eyebrow">Configuracion documental</p>
+            <h2>
+                {% if document_type %}
+                {{ document_type.name }}
+                {% else %}
+                Nuevo tipo de documento
+                {% endif %}
+            </h2>
+            <p class="settings-hero-copy">
+                Defini como se comporta este comprobante en la empresa activa:
+                numeracion, integracion fiscal, stock, cuenta corriente y reglas operativas.
+            </p>
+        </div>
+        <div class="settings-hero-badges">
+            <span class="settings-hero-badge">Empresa: {{ active_company.name }}</span>
+            <span class="settings-hero-badge">
+                {% if document_type %}Editando{% else %}Alta nueva{% endif %}
+            </span>
+        </div>
+    </section>
+
+    <form method="post" class="doc-type-form-layout">
+        {% csrf_token %}
+
+        <section class="settings-section">
+            <div class="settings-section-header">
+                <div>
+                    <h3>Identidad y numeracion</h3>
+                    <p>Nombre visible, codigo interno y punto de partida de la secuencia.</p>
+                </div>
+            </div>
+
+            <div class="doc-type-form-grid">
+                <div class="form-group">
+                    <label for="{{ form.code.id_for_label }}" class="form-label">Codigo</label>
+                    {{ form.code }}
+                    <small class="doc-type-inline-help">Identificador tecnico unico por empresa.</small>
+                </div>
+                <div class="form-group doc-type-form-span-2">
+                    <label for="{{ form.name.id_for_label }}" class="form-label">Nombre</label>
+                    {{ form.name }}
+                    <small class="doc-type-inline-help">Texto visible en panel, impresiones y flujos de emision.</small>
+                </div>
+                <div class="form-group">
+                    <label for="{{ form.letter.id_for_label }}" class="form-label">Letra</label>
+                    {{ form.letter }}
+                </div>
+                <div class="form-group">
+                    <label for="{{ form.last_number.id_for_label }}" class="form-label">Ultimo numero</label>
+                    {{ form.last_number }}
+                </div>
+                <div class="form-group">
+                    <label for="{{ form.display_order.id_for_label }}" class="form-label">Orden</label>
+                    {{ form.display_order }}
+                </div>
+            </div>
+        </section>
+
+        <section class="settings-section">
+            <div class="settings-section-header">
+                <div>
+                    <h3>Comportamiento e integracion</h3>
+                    <p>Define si el documento es interno, fiscal y como se conecta con las series existentes.</p>
+                </div>
+            </div>
+
+            <div class="doc-type-form-grid">
+                <div class="form-group">
+                    <label for="{{ form.document_behavior.id_for_label }}" class="form-label">Comportamiento</label>
+                    {{ form.document_behavior }}
+                </div>
+                <div class="form-group">
+                    <label for="{{ form.billing_mode.id_for_label }}" class="form-label">Modo de facturacion</label>
+                    {{ form.billing_mode }}
+                </div>
+                <div class="form-group">
+                    <label for="{{ form.point_of_sale.id_for_label }}" class="form-label">Punto de venta</label>
+                    {{ form.point_of_sale }}
+                </div>
+                <div class="form-group">
+                    <label for="{{ form.internal_doc_type.id_for_label }}" class="form-label">Tipo interno asociado</label>
+                    {{ form.internal_doc_type }}
+                </div>
+                <div class="form-group">
+                    <label for="{{ form.fiscal_doc_type.id_for_label }}" class="form-label">Tipo fiscal asociado</label>
+                    {{ form.fiscal_doc_type }}
+                </div>
+                <div class="form-group">
+                    <label for="{{ form.default_sales_user.id_for_label }}" class="form-label">Vendedor predeterminado</label>
+                    {{ form.default_sales_user }}
+                </div>
+            </div>
+        </section>
+
+        <section class="settings-section">
+            <div class="settings-section-header">
+                <div>
+                    <h3>Logistica y reglas</h3>
+                    <p>Controla como este comprobante impacta stock, cuenta corriente y deposito sugerido.</p>
+                </div>
+            </div>
+
+            <div class="doc-type-form-grid">
+                <div class="form-group">
+                    <label for="{{ form.default_warehouse.id_for_label }}" class="form-label">Deposito predeterminado</label>
+                    {{ form.default_warehouse }}
+                </div>
+            </div>
+
+            <div class="doc-type-switch-grid">
+                <label class="doc-type-switch-card">
+                    {{ form.prioritize_default_warehouse }}
+                    <span>
+                        <strong>Priorizar deposito predeterminado</strong>
+                        <small>Usa primero el deposito configurado cuando el flujo lo requiera.</small>
+                    </span>
+                </label>
+                <label class="doc-type-switch-card">
+                    {{ form.generate_stock_movement }}
+                    <span>
+                        <strong>Generar movimientos de stock</strong>
+                        <small>Deja trazabilidad de salida, ingreso o reserva segun el comportamiento.</small>
+                    </span>
+                </label>
+                <label class="doc-type-switch-card">
+                    {{ form.generate_account_movement }}
+                    <span>
+                        <strong>Generar movimientos de cuenta corriente</strong>
+                        <small>Aplica ajustes contables cuando el documento lo requiera.</small>
+                    </span>
+                </label>
+                <label class="doc-type-switch-card">
+                    {{ form.group_equal_products }}
+                    <span>
+                        <strong>Agrupar productos iguales</strong>
+                        <small>Compacta lineas repetidas para numeracion, stock e impresion.</small>
+                    </span>
+                </label>
+                <label class="doc-type-switch-card">
+                    {{ form.enabled }}
+                    <span>
+                        <strong>Habilitado</strong>
+                        <small>Permite usar este tipo en formularios y procesos automaticos.</small>
+                    </span>
+                </label>
+                <label class="doc-type-switch-card">
+                    {{ form.is_default }}
+                    <span>
+                        <strong>Predeterminado</strong>
+                        <small>Se resuelve primero dentro de su comportamiento para esta empresa.</small>
+                    </span>
+                </label>
+            </div>
+        </section>
+
+        {% if form.non_field_errors %}
+        <section class="settings-section">
+            <div class="alert alert-danger">
+                {{ form.non_field_errors }}
+            </div>
+        </section>
+        {% endif %}
+
+        <section class="settings-section">
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary">Guardar</button>
+                <a href="{% url 'admin_sales_document_type_list' %}" class="btn btn-outline">Volver</a>
+                <a href="{% url 'admin_warehouse_list' %}" class="btn btn-outline">Depositos</a>
+            </div>
+        </section>
+    </form>
+</div>
+{% endblock %}

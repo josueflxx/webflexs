@@ -3,607 +3,498 @@
 {% block page_title %}Pedido #{{ order.pk }}{% endblock %}
 
 {% block content %}
-<div class="admin-form-container order-detail-page">
-    <section class="order-detail-hero">
-        <div class="order-detail-hero-main">
-            <p class="order-detail-eyebrow">Operacion comercial</p>
-            <div class="order-detail-hero-title-row">
-                <h2>Pedido #{{ order.pk }}</h2>
-                {% if order.status == 'delivered' %}
-                <span class="badge badge-success order-status-pill">Entregado</span>
-                {% elif order.status == 'cancelled' %}
-                <span class="badge badge-danger order-status-pill">Cancelado</span>
-                {% elif order.status == 'shipped' %}
-                <span class="badge badge-info order-status-pill">Enviado</span>
-                {% elif order.status == 'preparing' %}
-                <span class="badge badge-warning order-status-pill">En preparacion</span>
-                {% elif order.status == 'confirmed' %}
-                <span class="badge badge-primary order-status-pill">Confirmado</span>
+<div class="admin-form-container sales-record-page order-record-page">
+    <section class="sales-record-shell order-record-shell">
+        <div class="sales-record-header order-record-header">
+            <div class="sales-record-title-wrap">
+                <div class="sales-record-icon" aria-hidden="true">&#128722;</div>
+                <div>
+                    <p class="sales-record-kicker">Ficha de venta</p>
+                    <h2 class="sales-record-heading">
+                        Ver la venta
+                        {% if order.status == 'draft' %}Cotizacion{% else %}Pedido{% endif %}
+                        {{ order.pk }}
+                    </h2>
+                    <p class="sales-record-subcopy">
+                        {{ order.company.name|default:"-" }} &middot; {{ order.client_company|default:order.user.username|default:"-" }} &middot;
+                        {{ order.created_at|date:"d/m/Y H:i" }}
+                    </p>
+                </div>
+            </div>
+            <div class="sales-record-actions">
+                {% if order_invoice_document %}
+                <a href="{% url 'admin_fiscal_document_detail' order_invoice_document.pk %}" class="sales-record-action is-primary">Abrir factura</a>
+                {% elif order_can_invoice %}
+                <form method="post" action="{% url 'admin_order_invoice_open' order.pk %}" style="display:inline;">
+                    {% csrf_token %}
+                    <button type="submit" class="sales-record-action is-primary">{{ order_invoice_action_label }}</button>
+                </form>
+                {% elif order_has_external_invoice %}
+                <span class="sales-record-action is-disabled">Facturado en SaaS</span>
                 {% else %}
-                <span class="badge badge-secondary order-status-pill">Borrador</span>
+                <span class="sales-record-action is-disabled">Facturar</span>
                 {% endif %}
-            </div>
-            <div class="order-detail-hero-chips">
-                <span class="order-chip">Empresa {{ order.company.name|default:"-" }}</span>
-                <span class="order-chip">Cliente {{ order.client_company|default:order.user.username|default:"-" }}</span>
-                <span class="order-chip">Creado {{ order.created_at|date:"d/m/Y H:i" }}</span>
-                <span class="order-chip">Actualizado {{ order.status_updated_at|date:"d/m/Y H:i" }}</span>
+                <a
+                    href="{% url 'admin_payment_list' %}?order_id={{ order.pk }}&company_id={{ order.company_id }}{% if order_client_profile_id %}&client_id={{ order_client_profile_id }}{% endif %}"
+                    class="sales-record-action"
+                >
+                    Registrar pago
+                </a>
+                <a href="{% url 'admin_fiscal_document_list' %}" class="sales-record-action">Comprobantes fiscales</a>
+                <a href="{% url 'admin_order_list' %}" class="sales-record-action">Volver</a>
             </div>
         </div>
-        <div class="order-detail-hero-stats">
-            <article class="order-stat-card is-total">
-                <span class="order-stat-label">Total</span>
-                <strong class="order-stat-value">${{ order.total|floatformat:2 }}</strong>
-            </article>
-            <article class="order-stat-card is-paid">
-                <span class="order-stat-label">Pagado</span>
-                <strong class="order-stat-value">${{ order_paid_amount|floatformat:2 }}</strong>
-            </article>
-            <article class="order-stat-card is-pending">
-                <span class="order-stat-label">Pendiente</span>
-                <strong class="order-stat-value">${{ order_pending_amount|floatformat:2 }}</strong>
-            </article>
-        </div>
-    </section>
 
-    <div class="order-detail-grid">
-        <div class="order-detail-main">
-            <section class="order-card">
-                <div class="order-card-header">
-                    <div>
-                        <h3>Documento abierto</h3>
-                        <p class="order-card-subtitle">Contexto comercial aplicado sobre este pedido.</p>
-                    </div>
-                    <span class="order-section-tag">
-                        {% if order.status == 'draft' %}Cotizacion / PED{% else %}Pedido operativo{% endif %}
-                    </span>
+        <div class="sales-record-top-grid order-record-top-grid">
+            <section class="sales-record-panel">
+                <div class="sales-record-panel-header">
+                    <h3 class="sales-record-panel-title">Datos basicos</h3>
+                    {% if order.status == 'delivered' %}
+                    <span class="sales-record-tag is-success">Entregado</span>
+                    {% elif order.status == 'cancelled' %}
+                    <span class="sales-record-tag">Cancelado</span>
+                    {% elif order.status == 'shipped' %}
+                    <span class="sales-record-tag is-info">Enviado</span>
+                    {% elif order.status == 'preparing' %}
+                    <span class="sales-record-tag">En preparacion</span>
+                    {% elif order.status == 'confirmed' %}
+                    <span class="sales-record-tag is-success">Confirmado</span>
+                    {% else %}
+                    <span class="sales-record-tag is-info">Borrador</span>
+                    {% endif %}
                 </div>
-
-                <div class="order-overview-grid">
-                    <article class="order-info-tile">
-                        <span class="order-info-label">Cliente</span>
-                        <strong class="order-info-value">{{ order.client_company|default:order.user.username|default:"-" }}</strong>
-                        <small class="order-info-help">
-                            {% if order.client_cuit %}CUIT {{ order.client_cuit }}{% else %}Sin CUIT cargado{% endif %}
-                        </small>
-                    </article>
-                    <article class="order-info-tile">
-                        <span class="order-info-label">Tipo documental</span>
-                        <strong class="order-info-value">
+                <div class="sales-record-grid">
+                    <div class="sales-record-field">
+                        <span class="sales-record-field-label">Estado</span>
+                        <span class="sales-record-field-value">{{ order.get_status_display }}</span>
+                    </div>
+                    <div class="sales-record-field">
+                        <span class="sales-record-field-label">Tipo de comprobante</span>
+                        <span class="sales-record-field-value">
                             {% if order.status == 'draft' %}Cotizacion (COT){% else %}Pedido (PED){% endif %}
-                        </strong>
-                        <small class="order-info-help">Condicion de venta {{ pricing_snapshot.sale_condition|default:"-" }}</small>
-                    </article>
-                    <article class="order-info-tile">
-                        <span class="order-info-label">Lista aplicada</span>
-                        <strong class="order-info-value">{{ pricing_snapshot.price_list.name|default:"-" }}</strong>
-                        <small class="order-info-help">Descuento {{ pricing_snapshot.discount_percentage|default:"0"|floatformat:2 }}%</small>
-                    </article>
-                    <article class="order-info-tile">
-                        <span class="order-info-label">Direccion</span>
-                        <strong class="order-info-value">{{ order.client_address|default:"-" }}</strong>
-                        <small class="order-info-help">Telefono {{ order.client_phone|default:"-" }}</small>
-                    </article>
-                    <article class="order-info-tile">
-                        <span class="order-info-label">Subtotal</span>
-                        <strong class="order-info-value">${{ order.subtotal|floatformat:2 }}</strong>
-                        <small class="order-info-help">
-                            {% if order.discount_percentage %}
-                            Descuento {{ order.discount_percentage|floatformat:0 }}% / -${{ order.discount_amount|floatformat:2 }}
+                        </span>
+                    </div>
+                    <div class="sales-record-field">
+                        <span class="sales-record-field-label">Numero</span>
+                        <span class="sales-record-field-value">Pedido #{{ order.pk }}</span>
+                    </div>
+                    <div class="sales-record-field">
+                        <span class="sales-record-field-label">Fecha</span>
+                        <span class="sales-record-field-value">{{ order.created_at|date:"d/m/Y H:i" }}</span>
+                    </div>
+                    <div class="sales-record-field">
+                        <span class="sales-record-field-label">Condicion de venta</span>
+                        <span class="sales-record-field-value">{{ pricing_snapshot.sale_condition|default:"-" }}</span>
+                    </div>
+                    <div class="sales-record-field">
+                        <span class="sales-record-field-label">Descuento</span>
+                        <span class="sales-record-field-value">
+                            {% if order.discount_percentage %}{{ order.discount_percentage|floatformat:2 }}%{% else %}0.00%{% endif %}
+                        </span>
+                    </div>
+                    <div class="sales-record-field">
+                        <span class="sales-record-field-label">Pagado</span>
+                        <span class="sales-record-field-value">${{ order_paid_amount|floatformat:2 }}</span>
+                    </div>
+                    <div class="sales-record-field">
+                        <span class="sales-record-field-label">Pendiente</span>
+                        <span class="sales-record-field-value">${{ order_pending_amount|floatformat:2 }}</span>
+                    </div>
+                </div>
+            </section>
+
+            <section class="sales-record-panel">
+                <div class="sales-record-panel-header">
+                    <h3 class="sales-record-panel-title">Cliente</h3>
+                    <span class="sales-record-tag is-info">Empresa {{ order.company.name|default:"-" }}</span>
+                </div>
+                <div class="sales-record-grid">
+                    <div class="sales-record-field">
+                        <span class="sales-record-field-label">Nombre</span>
+                        <span class="sales-record-field-value">{{ order.client_company|default:order.user.username|default:"-" }}</span>
+                    </div>
+                    <div class="sales-record-field">
+                        <span class="sales-record-field-label">CUIT</span>
+                        <span class="sales-record-field-value">{{ order.client_cuit|default:"-" }}</span>
+                    </div>
+                    <div class="sales-record-field">
+                        <span class="sales-record-field-label">Domicilio</span>
+                        <span class="sales-record-field-value">{{ order.client_address|default:"-" }}</span>
+                    </div>
+                    <div class="sales-record-field">
+                        <span class="sales-record-field-label">Telefono</span>
+                        <span class="sales-record-field-value">{{ order.client_phone|default:"-" }}</span>
+                    </div>
+                    <div class="sales-record-field">
+                        <span class="sales-record-field-label">Categoria</span>
+                        <span class="sales-record-field-value">{{ pricing_snapshot.client_category.name|default:"-" }}</span>
+                    </div>
+                    <div class="sales-record-field">
+                        <span class="sales-record-field-label">Actualizado</span>
+                        <span class="sales-record-field-value">{{ order.status_updated_at|date:"d/m/Y H:i"|default:"-" }}</span>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <div class="order-record-mini-grid">
+            <section class="sales-record-panel order-record-mini-panel">
+                <div class="sales-record-panel-header">
+                    <h3 class="sales-record-panel-title">Datos adicionales</h3>
+                </div>
+                <div class="sales-record-grid order-record-mini-fields">
+                    <div class="sales-record-field">
+                        <span class="sales-record-field-label">Seguimiento</span>
+                        <span class="sales-record-field-value">{% if order.follow_up_at %}{{ order.follow_up_at|date:"d/m/Y H:i" }}{% else %}-{% endif %}</span>
+                    </div>
+                    <div class="sales-record-field">
+                        <span class="sales-record-field-label">Lista</span>
+                        <span class="sales-record-field-value">{{ pricing_snapshot.price_list.name|default:"-" }}</span>
+                    </div>
+                </div>
+            </section>
+
+            <section class="sales-record-panel order-record-mini-panel">
+                <div class="sales-record-panel-header">
+                    <h3 class="sales-record-panel-title">Moneda</h3>
+                </div>
+                <div class="sales-record-grid order-record-mini-fields">
+                    <div class="sales-record-field">
+                        <span class="sales-record-field-label">Moneda</span>
+                        <span class="sales-record-field-value">Peso argentino</span>
+                    </div>
+                    <div class="sales-record-field">
+                        <span class="sales-record-field-label">Subtotal</span>
+                        <span class="sales-record-field-value">${{ order.subtotal|floatformat:2 }}</span>
+                    </div>
+                </div>
+            </section>
+
+            <section class="sales-record-panel order-record-mini-panel">
+                <div class="sales-record-panel-header">
+                    <h3 class="sales-record-panel-title">Lista y depositos</h3>
+                </div>
+                <div class="sales-record-grid order-record-mini-fields">
+                    <div class="sales-record-field">
+                        <span class="sales-record-field-label">Empresa</span>
+                        <span class="sales-record-field-value">{{ order.company.name|default:"-" }}</span>
+                    </div>
+                    <div class="sales-record-field">
+                        <span class="sales-record-field-label">Deposito</span>
+                        <span class="sales-record-field-value">Principal</span>
+                    </div>
+                </div>
+            </section>
+
+            <section class="sales-record-panel order-record-mini-panel">
+                <div class="sales-record-panel-header">
+                    <h3 class="sales-record-panel-title">Movimientos generados</h3>
+                </div>
+                <div class="sales-record-grid order-record-mini-fields">
+                    <div class="sales-record-field">
+                        <span class="sales-record-field-label">Internos</span>
+                        <span class="sales-record-field-value">{{ order_documents|length }}</span>
+                    </div>
+                    <div class="sales-record-field">
+                        <span class="sales-record-field-label">Fiscales</span>
+                        <span class="sales-record-field-value">{{ order_fiscal_documents|length }}</span>
+                    </div>
+                    <div class="sales-record-field">
+                        <span class="sales-record-field-label">Factura</span>
+                        <span class="sales-record-field-value">
+                            {% if order_invoice_document %}
+                            {{ order_invoice_document.commercial_type_label }}
+                            {% elif order_has_external_invoice %}
+                            Comprobante externo
                             {% else %}
-                            Sin descuento aplicado
+                            Sin factura
                             {% endif %}
-                        </small>
-                    </article>
-                    <article class="order-info-tile">
-                        <span class="order-info-label">Seguimiento</span>
-                        <strong class="order-info-value">
-                            {% if order.follow_up_at %}{{ order.follow_up_at|date:"d/m/Y H:i" }}{% else %}-{% endif %}
-                        </strong>
-                        <small class="order-info-help">{{ order.follow_up_note|default:"Sin nota de seguimiento" }}</small>
-                    </article>
-                </div>
-
-                {% if order.status == 'draft' %}
-                <div class="order-add-item-form">
-                    <div class="order-card-header">
-                        <div>
-                            <h3>Agregar item</h3>
-                            <p class="order-card-subtitle">Solo disponible mientras el pedido siga en borrador.</p>
-                        </div>
+                        </span>
                     </div>
-                    <form method="post" action="{% url 'admin_order_item_add' order.pk %}" class="order-add-item-grid">
-                        {% csrf_token %}
-                        <div class="form-group" style="margin:0;">
-                            <label for="sku" class="form-label">Producto</label>
-                            <input
-                                type="search"
-                                id="sku"
-                                name="sku"
-                                class="form-input"
-                                placeholder="Busca por SKU, nombre, medida o marca"
-                                data-suggest="1"
-                                data-suggest-scope="admin_products"
-                                data-suggest-submit="manual"
-                                data-suggest-query-item="0"
-                                data-suggest-target="#order-product-id">
-                            <input type="hidden" name="product_id" id="order-product-id">
-                            <small class="form-help">Ej: BA03041, "bisagra capot", "iveco 5/8" o "F14000".</small>
-                        </div>
-                        <div class="form-group" style="margin:0;">
-                            <label for="quantity" class="form-label">Cantidad</label>
-                            <input type="number" min="1" name="quantity" id="quantity" class="form-input" value="1">
-                        </div>
-                        <button type="submit" class="btn btn-primary">Agregar item</button>
-                    </form>
-                </div>
-                {% endif %}
-            </section>
-
-            {% if order.notes or order.admin_notes %}
-            <section class="order-card">
-                <div class="order-card-header">
-                    <div>
-                        <h3>Notas</h3>
-                        <p class="order-card-subtitle">Observaciones del cliente y del equipo interno.</p>
+                    <div class="sales-record-field">
+                        <span class="sales-record-field-label">Estado factura</span>
+                        <span class="sales-record-field-value">
+                            {% if order_invoice_document %}
+                            {{ order_invoice_state.label }}
+                            {% elif order_has_external_invoice %}
+                            Cerrada
+                            {% else %}
+                            Pendiente
+                            {% endif %}
+                        </span>
                     </div>
                 </div>
-                <div class="order-note-stack">
-                    {% if order.notes %}
-                    <article class="order-note-card">
-                        <span class="order-info-label">Notas del cliente</span>
-                        <p>{{ order.notes }}</p>
-                    </article>
-                    {% endif %}
-                    {% if order.admin_notes %}
-                    <article class="order-note-card is-internal">
-                        <span class="order-info-label">Notas internas</span>
-                        <p>{{ order.admin_notes }}</p>
-                    </article>
-                    {% endif %}
-                </div>
             </section>
+        </div>
+
+        <section class="sales-record-card order-record-products-card">
+            <div class="sales-record-card-head">
+                <div>
+                    <h3>Productos de la venta</h3>
+                    <p>Detalle comercial con cantidades, descuentos y acciones del documento.</p>
+                </div>
+                <span class="sales-record-tag">{{ order_items|length }} item{{ order_items|length|pluralize }}</span>
+            </div>
+
+            {% if order.status == 'draft' %}
+            <form method="post" action="{% url 'admin_order_item_add' order.pk %}" class="order-record-add-item-grid">
+                {% csrf_token %}
+                <div class="form-group" style="margin:0;">
+                    <label for="sku" class="form-label">Producto</label>
+                    <input
+                        type="search"
+                        id="sku"
+                        name="sku"
+                        class="form-input"
+                        placeholder="Busca por SKU, nombre, medida o marca"
+                        data-suggest="1"
+                        data-suggest-scope="admin_products"
+                        data-suggest-submit="manual"
+                        data-suggest-query-item="0"
+                        data-suggest-target="#order-product-id">
+                    <input type="hidden" name="product_id" id="order-product-id">
+                    <small class="form-help">Ej: BA03041, "bisagra capot", "iveco 5/8" o "F14000".</small>
+                </div>
+                <div class="form-group" style="margin:0;">
+                    <label for="quantity" class="form-label">Cant.</label>
+                    <input type="number" min="1" name="quantity" id="quantity" class="form-input" value="1">
+                </div>
+                <button type="submit" class="btn btn-primary">Agregar item</button>
+            </form>
             {% endif %}
 
-            <section class="order-card">
-                <div class="order-card-header">
-                    <div>
-                        <h3>Items del pedido</h3>
-                        <p class="order-card-subtitle">Detalle comercial con precio, descuento y acciones disponibles.</p>
-                    </div>
-                    <span class="order-section-tag">{{ order_items|length }} linea{{ order_items|length|pluralize }}</span>
-                </div>
-
-                <div class="order-table-wrap">
-                    <table class="admin-table order-items-table">
-                        <thead>
-                            <tr>
-                                <th>SKU</th>
-                                <th>Producto</th>
-                                <th>Solicitud medida</th>
-                                <th>Cant.</th>
-                                <th>Precio Unit.</th>
-                                <th>Subtotal</th>
-                                <th>Accion</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for item in order_items %}
-                            <tr>
-                                <td><code>{{ item.product_sku }}</code></td>
-                                <td>{{ item.product_name }}</td>
-                                <td>
-                                    {% if item.clamp_request_id %}
-                                    <div class="order-clamp-meta">
-                                        <div>
-                                            <span class="badge badge-info">#{{ item.clamp_request_id }}</span>
-                                        </div>
-                                        <small class="text-muted">
-                                            {{ item.clamp_request.get_clamp_type_display|upper }}
-                                            {{ item.clamp_request.diameter }} x {{ item.clamp_request.width_mm }} x {{ item.clamp_request.length_mm }}
-                                            {{ item.clamp_request.profile_type }}
-                                        </small>
-                                        {% if item.published_to_catalog %}
-                                        <div>
-                                            <span class="badge badge-success">Ya publicada en catalogo</span>
-                                        </div>
-                                        {% endif %}
-                                    </div>
+            <div class="sales-record-table-wrap">
+                <table class="admin-table sales-record-table order-record-products-table">
+                    <thead>
+                        <tr>
+                            <th>Codigo</th>
+                            <th>Cant.</th>
+                            <th>Producto</th>
+                            <th>Solicitud</th>
+                            <th>Precio</th>
+                            <th>Bonif.</th>
+                            <th>Importe</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in order_items %}
+                        <tr>
+                            <td><a href="#" onclick="return false;">{{ item.product_sku }}</a></td>
+                            <td>{{ item.quantity }}</td>
+                            <td>{{ item.product_name }}</td>
+                            <td>
+                                {% if item.clamp_request_id %}
+                                <div class="order-clamp-meta">
+                                    <strong>#{{ item.clamp_request_id }}</strong>
+                                    <small class="text-muted">
+                                        {{ item.clamp_request.get_clamp_type_display|upper }}
+                                        {{ item.clamp_request.diameter }} x {{ item.clamp_request.width_mm }} x {{ item.clamp_request.length_mm }}
+                                        {{ item.clamp_request.profile_type }}
+                                    </small>
+                                    {% if item.published_to_catalog %}
+                                    <span class="badge badge-success">Publicada</span>
+                                    {% endif %}
+                                </div>
+                                {% else %}
+                                <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
+                            <td>${{ item.price_at_purchase|floatformat:2 }}</td>
+                            <td>
+                                {% if order.discount_percentage %}
+                                {{ order.discount_percentage|floatformat:0 }}%<br>
+                                <small class="text-muted">-${{ item.unit_discount_amount|floatformat:2 }}</small>
+                                {% else %}
+                                0.00%
+                                {% endif %}
+                            </td>
+                            <td><strong>${{ item.subtotal|floatformat:2 }}</strong></td>
+                            <td>
+                                <div class="order-inline-actions">
+                                    {% if item.clamp_request_id and item.can_publish_to_catalog %}
+                                    <form method="post" action="{% url 'admin_order_item_publish_clamp' order.pk item.pk %}">
+                                        {% csrf_token %}
+                                        <button
+                                            type="submit"
+                                            class="btn btn-primary btn-sm"
+                                            onclick="return confirm('Publicar esta abrazadera como producto del catalogo?');"
+                                        >
+                                            Anadir
+                                        </button>
+                                    </form>
+                                    {% elif item.clamp_request_id %}
+                                    <span class="text-muted">Publicada</span>
                                     {% else %}
                                     <span class="text-muted">-</span>
                                     {% endif %}
-                                </td>
-                                <td>{{ item.quantity }}</td>
-                                <td>
-                                    <span>${{ item.price_at_purchase|floatformat:2 }}</span>
-                                    {% if order.discount_percentage %}
-                                    <div style="margin-top:6px;">
-                                        <span class="badge badge-warning">
-                                            Desc {{ order.discount_percentage|floatformat:0 }}%: -${{ item.unit_discount_amount|floatformat:2 }}
-                                        </span>
-                                    </div>
+
+                                    {% if order.status == 'draft' %}
+                                    <form method="post" action="{% url 'admin_order_item_delete' order.pk item.pk %}">
+                                        {% csrf_token %}
+                                        <button type="submit" class="btn btn-danger-outline btn-sm" onclick="return confirm('Eliminar este item?');">
+                                            Quitar
+                                        </button>
+                                    </form>
                                     {% endif %}
-                                </td>
-                                <td><strong>${{ item.subtotal|floatformat:2 }}</strong></td>
-                                <td>
-                                    <div class="order-inline-actions">
-                                        {% if item.clamp_request_id and item.can_publish_to_catalog %}
-                                        <form method="post" action="{% url 'admin_order_item_publish_clamp' order.pk item.pk %}">
-                                            {% csrf_token %}
-                                            <button
-                                                type="submit"
-                                                class="btn btn-primary btn-sm"
-                                                onclick="return confirm('Publicar esta abrazadera como producto del catalogo?');"
-                                            >
-                                                Anadir a productos
-                                            </button>
-                                        </form>
-                                        {% elif item.clamp_request_id %}
-                                        <span class="text-muted">Publicada</span>
-                                        {% else %}
-                                        <span class="text-muted">-</span>
-                                        {% endif %}
+                                </div>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="8" class="text-center text-muted">Este pedido todavia no tiene items cargados.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
 
-                                        {% if order.status == 'draft' %}
-                                        <form method="post" action="{% url 'admin_order_item_delete' order.pk item.pk %}">
-                                            {% csrf_token %}
-                                            <button type="submit" class="btn btn-danger-outline btn-sm" onclick="return confirm('Eliminar este item?');">
-                                                Quitar item
-                                            </button>
-                                        </form>
-                                        {% endif %}
-                                    </div>
-                                </td>
-                            </tr>
-                            {% empty %}
-                            <tr>
-                                <td colspan="7" class="text-center text-muted">Este pedido todavia no tiene items cargados.</td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
+        <div class="order-record-foot-grid">
+            <section class="sales-record-card">
+                <div class="sales-record-card-head">
+                    <div>
+                        <h3>Observaciones</h3>
+                        <p>Notas del cliente y del equipo interno sobre la venta.</p>
+                    </div>
+                </div>
+                <div class="sales-record-note-box">
+                    {% if order.notes %}
+                    <strong>Cliente</strong><br>
+                    {{ order.notes }}<br><br>
+                    {% endif %}
+                    {% if order.admin_notes %}
+                    <strong>Internas</strong><br>
+                    {{ order.admin_notes }}
+                    {% elif not order.notes %}
+                    Sin observaciones registradas para esta venta.
+                    {% endif %}
                 </div>
             </section>
 
-            {% if user.is_staff %}
-            <section class="order-card">
-                <div class="order-card-header">
+            <section class="sales-record-card">
+                <div class="sales-record-card-head">
                     <div>
-                        <h3>Workflow del pedido</h3>
-                        <p class="order-card-subtitle">Cambio de estado y notas internas del equipo.</p>
+                        <h3>Totales</h3>
+                        <p>Resumen economico del documento comercial.</p>
                     </div>
                 </div>
-
-                <form method="post" class="order-workflow-form">
-                    {% csrf_token %}
-                    <div class="order-workflow-grid">
-                        <div class="form-group" style="margin:0;">
-                            <label for="status_select" class="form-label">Estado</label>
-                            <select name="status" id="status_select" class="form-select">
-                                {% for value, label in status_choices %}
-                                <option value="{{ value }}" {% if order.status == value %}selected{% endif %}>{{ label }}</option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                        <div class="form-group" style="margin:0;">
-                            <label for="status_note" class="form-label">Nota de cambio</label>
-                            <input type="text" name="status_note" id="status_note" class="form-input" placeholder="Motivo del cambio de estado">
-                        </div>
+                <div class="sales-record-summary">
+                    <div class="sales-record-summary-row">
+                        <span>Subtotal</span>
+                        <strong>${{ order.subtotal|floatformat:2 }}</strong>
                     </div>
-                    <div class="form-group" style="margin:0;">
-                        <label for="admin_notes" class="form-label">Notas internas</label>
-                        <textarea name="admin_notes" id="admin_notes" class="form-textarea" rows="3">{{ order.admin_notes }}</textarea>
+                    <div class="sales-record-summary-row">
+                        <span>Descuento</span>
+                        <strong>${{ order.discount_amount|floatformat:2 }}</strong>
                     </div>
-                    <small class="text-muted">Podes confirmar el pedido y luego registrar los pagos desde el panel de pagos.</small>
-                    <div class="order-inline-actions">
-                        <button type="submit" class="btn btn-primary">Actualizar estado</button>
+                    <div class="sales-record-summary-row">
+                        <span>Neto</span>
+                        <strong>${{ order.total|floatformat:2 }}</strong>
                     </div>
-                </form>
-            </section>
-            {% endif %}
-
-            <section class="order-card">
-                <div class="order-card-header">
-                    <div>
-                        <h3>Historial de estados</h3>
-                        <p class="order-card-subtitle">Ultimos cambios registrados para este pedido.</p>
+                    <div class="sales-record-summary-row">
+                        <span>Pagado</span>
+                        <strong>${{ order_paid_amount|floatformat:2 }}</strong>
                     </div>
-                </div>
-
-                <div class="order-table-wrap">
-                    <table class="admin-table">
-                        <thead>
-                            <tr>
-                                <th>Fecha</th>
-                                <th>Desde</th>
-                                <th>Hacia</th>
-                                <th>Usuario</th>
-                                <th>Nota</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for row in status_history %}
-                            <tr>
-                                <td>{{ row.created_at|date:"d/m/Y H:i" }}</td>
-                                <td>{{ row.from_status|default:"-" }}</td>
-                                <td>{{ row.to_status }}</td>
-                                <td>{{ row.changed_by.username|default:"Sistema" }}</td>
-                                <td>{{ row.note|default:"-" }}</td>
-                            </tr>
-                            {% empty %}
-                            <tr>
-                                <td colspan="5" class="text-center text-muted">Sin historial de estados.</td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
+                    <div class="sales-record-summary-row">
+                        <span>Saldo</span>
+                        <strong>${{ order_pending_amount|floatformat:2 }}</strong>
+                    </div>
+                    <div class="sales-record-summary-row is-total">
+                        <span>Total</span>
+                        <strong>${{ order.total|floatformat:2 }}</strong>
+                    </div>
                 </div>
             </section>
         </div>
+    </section>
 
-        <aside class="order-detail-side">
-            <section class="order-card order-card-sticky">
-                <div class="order-card-header">
-                    <div>
-                        <h3>Resumen comercial</h3>
-                        <p class="order-card-subtitle">Lectura rapida del pedido, cliente y sincronizacion.</p>
+    <section class="order-record-secondary-grid">
+        {% if user.is_staff %}
+        <section class="sales-record-card">
+            <div class="sales-record-card-head">
+                <div>
+                    <h3>Workflow</h3>
+                    <p>Cambio de estado y notas internas del equipo.</p>
+                </div>
+            </div>
+
+            <form method="post" class="order-workflow-form">
+                {% csrf_token %}
+                <div class="order-workflow-grid">
+                    <div class="form-group" style="margin:0;">
+                        <label for="status_select" class="form-label">Estado</label>
+                        <select name="status" id="status_select" class="form-select">
+                            {% for value, label in status_choices %}
+                            <option value="{{ value }}" {% if order.status == value %}selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-group" style="margin:0;">
+                        <label for="status_note" class="form-label">Nota de cambio</label>
+                        <input type="text" name="status_note" id="status_note" class="form-input" placeholder="Motivo del cambio de estado">
                     </div>
                 </div>
-
-                <div class="order-side-group">
-                    <span class="order-info-label">Cliente</span>
-                    <div class="order-side-list">
-                        <div class="order-side-row">
-                            <span class="order-side-label">Nombre</span>
-                            <strong class="order-side-value">{{ order.client_company|default:order.user.username|default:"-" }}</strong>
-                        </div>
-                        <div class="order-side-row">
-                            <span class="order-side-label">CUIT</span>
-                            <span class="order-side-value">{{ order.client_cuit|default:"-" }}</span>
-                        </div>
-                        <div class="order-side-row">
-                            <span class="order-side-label">Telefono</span>
-                            <span class="order-side-value">{{ order.client_phone|default:"-" }}</span>
-                        </div>
-                        <div class="order-side-row">
-                            <span class="order-side-label">Direccion</span>
-                            <span class="order-side-value">{{ order.client_address|default:"-" }}</span>
-                        </div>
-                    </div>
+                <div class="form-group" style="margin:0;">
+                    <label for="admin_notes" class="form-label">Notas internas</label>
+                    <textarea name="admin_notes" id="admin_notes" class="form-textarea" rows="4">{{ order.admin_notes }}</textarea>
                 </div>
-
-                <div class="order-side-group">
-                    <span class="order-info-label">Informacion base</span>
-                    <div class="order-side-list">
-                        <div class="order-side-row">
-                            <span class="order-side-label">Fecha</span>
-                            <span class="order-side-value">{{ order.created_at|date:"d/m/Y H:i" }}</span>
-                        </div>
-                        <div class="order-side-row">
-                            <span class="order-side-label">Empresa</span>
-                            <span class="order-side-value">{{ order.company.name|default:"-" }}</span>
-                        </div>
-                        <div class="order-side-row">
-                            <span class="order-side-label">Categoria</span>
-                            <span class="order-side-value">{{ pricing_snapshot.client_category.name|default:"-" }}</span>
-                        </div>
-                        <div class="order-side-row">
-                            <span class="order-side-label">Pagado</span>
-                            <span class="order-side-value">${{ order_paid_amount|floatformat:2 }}</span>
-                        </div>
-                        <div class="order-side-row">
-                            <span class="order-side-label">Pendiente</span>
-                            <span class="order-side-value">${{ order_pending_amount|floatformat:2 }}</span>
-                        </div>
-                    </div>
+                <div class="order-inline-actions">
+                    <button type="submit" class="btn btn-primary">Actualizar estado</button>
                 </div>
+            </form>
+        </section>
+        {% endif %}
 
-                <div class="order-side-group">
-                    <span class="order-info-label">Sync SaaS</span>
-                    <div class="order-side-list">
-                        <div class="order-side-row">
-                            <span class="order-side-label">Estado</span>
-                            <span class="order-side-value">
-                                {% if order.sync_status == 'synced' %}
-                                <span class="badge badge-success">Sincronizado</span>
-                                {% elif order.sync_status == 'failed' %}
-                                <span class="badge badge-danger">Fallido</span>
-                                {% else %}
-                                <span class="badge badge-warning">Pendiente</span>
-                                {% endif %}
-                            </span>
-                        </div>
-                        <div class="order-side-row">
-                            <span class="order-side-label">Sistema</span>
-                            <span class="order-side-value">{{ order.external_system|default:"-" }}</span>
-                        </div>
-                        <div class="order-side-row">
-                            <span class="order-side-label">Numero</span>
-                            <span class="order-side-value">{{ order.external_number|default:"-" }}</span>
-                        </div>
-                        <div class="order-side-row">
-                            <span class="order-side-label">ID</span>
-                            <span class="order-side-value">{{ order.external_id|default:"-" }}</span>
-                        </div>
-                        <div class="order-side-row">
-                            <span class="order-side-label">Ultimo sync</span>
-                            <span class="order-side-value">{{ order.synced_at|date:"d/m/Y H:i"|default:"-" }}</span>
-                        </div>
-                    </div>
+        <section class="sales-record-card order-record-span-2">
+            <div class="sales-record-card-head">
+                <div>
+                    <h3>Documentos vinculados</h3>
+                    <p>Internos y fiscales generados a partir de esta venta.</p>
                 </div>
+            </div>
 
-                {% if order.saas_document_number or order.saas_document_type %}
-                <div class="order-side-group">
-                    <span class="order-info-label">Comprobante SaaS</span>
-                    <div class="order-side-list">
-                        <div class="order-side-row">
-                            <span class="order-side-label">Tipo</span>
-                            <span class="order-side-value">{{ order.saas_document_type|default:"Comprobante" }}</span>
-                        </div>
-                        <div class="order-side-row">
-                            <span class="order-side-label">Numero</span>
-                            <span class="order-side-value">{{ order.saas_document_number|default:"-" }}</span>
-                        </div>
-                        <div class="order-side-row">
-                            <span class="order-side-label">Fecha</span>
-                            <span class="order-side-value">{{ order.saas_document_date|date:"d/m/Y"|default:"-" }}</span>
-                        </div>
-                        <div class="order-side-row">
-                            <span class="order-side-label">Total</span>
-                            <span class="order-side-value">
-                                {% if order.saas_document_total %}${{ order.saas_document_total|floatformat:2 }}{% else %}-{% endif %}
-                            </span>
-                        </div>
-                    </div>
-                </div>
-                {% endif %}
-
-                <div class="order-side-group">
-                    <div class="order-inline-actions">
-                        <a
-                            href="{% url 'admin_payment_list' %}?order_id={{ order.pk }}&company_id={{ order.company_id }}{% if order_client_profile_id %}&client_id={{ order_client_profile_id }}{% endif %}"
-                            class="btn btn-outline btn-sm"
-                        >
-                            Registrar pago
-                        </a>
-                        <a href="{% url 'admin_fiscal_document_list' %}" class="btn btn-outline btn-sm">Ver fiscales</a>
-                    </div>
-                </div>
-            </section>
-
-            <section class="order-card">
-                <div class="order-card-header">
-                    <div>
-                        <h3>Estado fiscal y Fase 3</h3>
-                        <p class="order-card-subtitle">Readiness del pedido y carga de comprobantes locales o externos.</p>
-                    </div>
-                </div>
-
-                <div class="order-readiness {% if invoice_ready %}is-ready{% else %}is-warning{% endif %}">
-                    <div class="order-inline-actions" style="justify-content:space-between;">
-                        <strong>Estado fiscal (pre-ARCA)</strong>
-                        {% if invoice_ready %}
-                        <span class="badge badge-success">Listo para facturar</span>
-                        {% else %}
-                        <span class="badge badge-warning">No listo</span>
-                        {% endif %}
-                    </div>
-                    {% if not invoice_ready and invoice_errors %}
-                    <ul class="order-bullet-list">
-                        {% for error in invoice_errors %}
-                        <li class="text-muted">{{ error }}</li>
-                        {% endfor %}
-                    </ul>
-                    {% endif %}
-                </div>
-
-                <div class="order-fiscal-grid">
-                    <form method="post" action="{% url 'admin_order_fiscal_create_local' order.pk %}" class="order-fiscal-form">
-                        {% csrf_token %}
-                        <div class="order-card-header" style="margin-bottom:0; padding-bottom:0; border-bottom:0;">
-                            <div>
-                                <h3>Crear local</h3>
-                                <p class="order-card-subtitle">Empresa activa: {{ order.company.name|default:"-" }}</p>
-                            </div>
-                        </div>
-                        <div class="order-fiscal-form-grid">
-                            <div>
-                                <label class="form-label">Tipo</label>
-                                <select name="doc_type" class="form-select">
-                                    {% for value, label in fiscal_doc_type_choices %}
-                                    <option value="{{ value }}">{{ label }}</option>
-                                    {% endfor %}
-                                </select>
-                            </div>
-                            <div>
-                                <label class="form-label">Punto de venta</label>
-                                <select name="point_of_sale_id" class="form-select" required>
-                                    <option value="">Seleccionar</option>
-                                    {% for point in fiscal_points %}
-                                    <option value="{{ point.pk }}" {% if fiscal_default_point and fiscal_default_point.pk == point.pk %}selected{% endif %}>
-                                        {{ point.number }} - {{ point.name|default:"PV" }}
-                                    </option>
-                                    {% endfor %}
-                                </select>
-                            </div>
-                            <div>
-                                <label class="form-label">Modo</label>
-                                <select name="issue_mode" class="form-select">
-                                    {% for value, label in fiscal_issue_mode_choices %}
-                                    <option value="{{ value }}">{{ label }}</option>
-                                    {% endfor %}
-                                </select>
-                            </div>
-                            <button type="submit" class="btn btn-primary" {% if not invoice_ready or not fiscal_points %}disabled{% endif %}>Crear local</button>
-                        </div>
-                    </form>
-
-                    <form method="post" action="{% url 'admin_order_fiscal_register_external' order.pk %}" class="order-fiscal-form">
-                        {% csrf_token %}
-                        <input type="hidden" name="external_system" value="saas">
-                        <div class="order-card-header" style="margin-bottom:0; padding-bottom:0; border-bottom:0;">
-                            <div>
-                                <h3>Registrar externo</h3>
-                                <p class="order-card-subtitle">Carga manual de comprobante ya emitido fuera del sistema.</p>
-                            </div>
-                        </div>
-                        <div class="order-fiscal-form-grid is-external">
-                            <div>
-                                <label class="form-label">Tipo</label>
-                                <select name="doc_type" class="form-select">
-                                    {% for value, label in fiscal_doc_type_choices %}
-                                    <option value="{{ value }}">{{ label }}</option>
-                                    {% endfor %}
-                                </select>
-                            </div>
-                            <div>
-                                <label class="form-label">Punto de venta</label>
-                                <select name="point_of_sale_id" class="form-select" required>
-                                    <option value="">Seleccionar</option>
-                                    {% for point in fiscal_points %}
-                                    <option value="{{ point.pk }}" {% if fiscal_default_point and fiscal_default_point.pk == point.pk %}selected{% endif %}>
-                                        {{ point.number }} - {{ point.name|default:"PV" }}
-                                    </option>
-                                    {% endfor %}
-                                </select>
-                            </div>
-                            <div>
-                                <label class="form-label">ID externo</label>
-                                <input type="text" name="external_id" class="form-input" placeholder="ID SaaS">
-                            </div>
-                            <div>
-                                <label class="form-label">Numero externo</label>
-                                <input type="text" name="external_number" class="form-input" placeholder="0001-00001234">
-                            </div>
-                            <button type="submit" class="btn btn-outline" {% if not fiscal_points %}disabled{% endif %}>Registrar</button>
-                        </div>
-                    </form>
-                </div>
-
-                {% if not fiscal_points %}
-                <div class="order-empty-state">
-                    No hay puntos de venta activos para esta empresa. Configuralos en Factura electronica.
-                </div>
-                {% endif %}
-            </section>
-
-            <section class="order-card">
-                <div class="order-card-header">
-                    <div>
-                        <h3>Documentos vinculados</h3>
-                        <p class="order-card-subtitle">Internos y fiscales generados a partir del pedido.</p>
-                    </div>
-                </div>
-
+            <div class="order-record-doc-grid">
                 <div class="order-side-group">
                     <span class="order-info-label">Documentos internos</span>
+                    {% if sales_internal_document_types %}
+                    <form method="post" action="{% url 'admin_order_internal_document_create' order.pk %}" class="order-fiscal-form">
+                        {% csrf_token %}
+                        <div class="sales-record-card-head order-record-subhead">
+                            <div>
+                                <h3>Generar documento interno</h3>
+                                <p>Crea o reutiliza un documento segun el tipo comercial elegido.</p>
+                            </div>
+                        </div>
+                        <div class="order-fiscal-form-grid order-record-inline-create">
+                            <div>
+                                <label class="form-label">Tipo comercial interno</label>
+                                <select name="sales_document_type_id" class="form-select">
+                                    {% for configured_type in sales_internal_document_types %}
+                                    <option value="{{ configured_type.pk }}">
+                                        {{ configured_type.name }} &middot; {{ configured_type.get_internal_doc_type_display|default:configured_type.internal_doc_type }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <button type="submit" class="btn btn-outline">Generar interno</button>
+                        </div>
+                    </form>
+                    {% else %}
+                    <div class="order-empty-state">
+                        No hay tipos internos disponibles para el estado actual del pedido.
+                    </div>
+                    {% endif %}
+
                     {% if order_documents %}
                     <ul class="order-doc-list">
                         {% for doc in order_documents %}
                         <li class="order-doc-entry">
                             <div class="order-doc-entry-main">
-                                <strong>{{ doc.get_doc_type_display }} #{{ doc.number|stringformat:"07d" }}</strong>
-                                <small class="text-muted">{{ doc.issued_at|date:"d/m/Y H:i" }}</small>
+                                <strong>{{ doc.commercial_type_label }} &middot; {{ doc.display_number }}</strong>
+                                <small class="text-muted">
+                                    Base {{ doc.get_doc_type_display }} &middot; {{ doc.issued_at|date:"d/m/Y H:i" }}
+                                </small>
                             </div>
                             <div class="order-doc-entry-actions">
                                 <a href="{% url 'admin_internal_document_print' doc.pk %}?copy=original" class="btn btn-outline btn-sm" data-print-window="1" target="_blank" rel="noopener noreferrer">Original</a>
@@ -626,8 +517,10 @@
                         {% for doc in order_fiscal_documents %}
                         <li class="order-doc-entry">
                             <div class="order-doc-entry-main">
-                                <strong>{{ doc.get_doc_type_display }} - PV {{ doc.point_of_sale.number }} - Nro {{ doc.number|default:"-" }}</strong>
-                                <small class="text-muted">{{ doc.get_status_display }} / {{ doc.get_issue_mode_display }}</small>
+                                <strong>{{ doc.commercial_type_label }} &middot; {{ doc.display_number }}</strong>
+                                <small class="text-muted">
+                                    {{ doc.get_doc_type_display }} &middot; {{ doc.get_status_display }} / {{ doc.get_issue_mode_display }}
+                                </small>
                             </div>
                             <div class="order-doc-entry-actions">
                                 {% if doc.issue_mode == 'arca_wsfe' %}
@@ -653,9 +546,46 @@
                     <div class="order-empty-state">Sin documentos fiscales registrados.</div>
                     {% endif %}
                 </div>
-            </section>
-        </aside>
-    </div>
+            </div>
+        </section>
+
+        <section class="sales-record-card order-record-span-2">
+            <div class="sales-record-card-head">
+                <div>
+                    <h3>Historial de la venta</h3>
+                    <p>Ultimos cambios de estado registrados para este documento.</p>
+                </div>
+            </div>
+            <div class="sales-record-table-wrap">
+                <table class="admin-table sales-record-table">
+                    <thead>
+                        <tr>
+                            <th>Fecha</th>
+                            <th>Desde</th>
+                            <th>Hacia</th>
+                            <th>Usuario</th>
+                            <th>Nota</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in status_history %}
+                        <tr>
+                            <td>{{ row.created_at|date:"d/m/Y H:i" }}</td>
+                            <td>{{ row.from_status|default:"-" }}</td>
+                            <td>{{ row.to_status }}</td>
+                            <td>{{ row.changed_by.username|default:"Sistema" }}</td>
+                            <td>{{ row.note|default:"-" }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="5" class="text-center text-muted">Sin historial de estados.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </section>
 
     <div class="form-actions order-detail-footer">
         <a href="{% url 'admin_order_list' %}" class="btn btn-outline"><- Volver a Pedidos</a>

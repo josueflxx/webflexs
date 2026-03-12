@@ -6,6 +6,7 @@ from django.test import TestCase
 from django.urls import reverse
 
 from catalog.models import Category, Product
+from core.models import Company, SalesDocumentType, Warehouse
 from core.services.company_context import get_default_company
 
 
@@ -114,3 +115,41 @@ class ObservabilityMiddlewareTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn("X-Request-ID", response)
         self.assertTrue(str(response["X-Request-ID"]).strip())
+
+
+class SalesDocumentTypeSeedTests(TestCase):
+    def test_defaults_are_seeded_for_each_company(self):
+        companies = list(Company.objects.all())
+
+        self.assertGreaterEqual(len(companies), 1)
+
+        for company in companies:
+            self.assertTrue(
+                Warehouse.objects.filter(company=company, code="principal").exists(),
+                f"Falta deposito principal para {company}",
+            )
+            self.assertTrue(
+                SalesDocumentType.objects.filter(company=company, code="cotizacion", enabled=True).exists(),
+                f"Falta cotizacion para {company}",
+            )
+            self.assertTrue(
+                SalesDocumentType.objects.filter(company=company, code="pedido", enabled=True).exists(),
+                f"Falta pedido para {company}",
+            )
+            self.assertTrue(
+                SalesDocumentType.objects.filter(company=company, code="remito", enabled=True).exists(),
+                f"Falta remito para {company}",
+            )
+            self.assertTrue(
+                SalesDocumentType.objects.filter(company=company, code="recibo", enabled=True).exists(),
+                f"Falta recibo para {company}",
+            )
+            self.assertEqual(
+                SalesDocumentType.objects.filter(
+                    company=company,
+                    document_behavior="Factura",
+                    is_default=True,
+                ).count(),
+                1,
+                f"Debe existir un tipo factura predeterminado para {company}",
+            )

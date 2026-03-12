@@ -6,6 +6,204 @@
 <div class="admin-table-container client-hub-page">
     <style>
         .client-hub-page { display: grid; gap: 18px; }
+        .client-sales-shell {
+            display: grid;
+            gap: 14px;
+            padding: 16px 18px;
+            border-radius: 18px;
+            background:
+                linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.015)),
+                linear-gradient(180deg, rgba(15,21,34,.96), rgba(10,16,28,.98));
+            border: 1px solid rgba(255,255,255,.08);
+        }
+        .client-sales-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            padding-bottom: 14px;
+            border-bottom: 1px solid rgba(255,255,255,.08);
+        }
+        .client-sales-title-wrap {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            min-width: 0;
+        }
+        .client-sales-icon {
+            width: 54px;
+            height: 54px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 16px;
+            background:
+                radial-gradient(circle at 30% 30%, rgba(255,107,53,.24), transparent 58%),
+                rgba(255,255,255,.05);
+            border: 1px solid rgba(255,255,255,.1);
+            box-shadow: inset 0 1px 0 rgba(255,255,255,.08);
+            font-size: 1.55rem;
+        }
+        .client-sales-heading {
+            margin: 0;
+            font-size: 1.22rem;
+            line-height: 1.2;
+        }
+        .client-sales-kicker {
+            margin: 4px 0 0;
+            color: rgba(210,217,226,.76);
+            font-size: .88rem;
+            line-height: 1.45;
+        }
+        .client-sales-head-right {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+            gap: 10px;
+        }
+        .client-mini-stat {
+            min-width: 128px;
+            padding: 10px 12px;
+            border-radius: 14px;
+            border: 1px solid rgba(255,255,255,.08);
+            background: rgba(255,255,255,.03);
+        }
+        .client-mini-stat span {
+            display: block;
+            margin-bottom: 4px;
+            color: rgba(207,216,227,.66);
+            font-size: .72rem;
+            text-transform: uppercase;
+            letter-spacing: .08em;
+        }
+        .client-mini-stat strong {
+            display: block;
+            font-size: 1rem;
+            color: #f4f7fb;
+        }
+        .client-sales-toolbar {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+        }
+        .client-doc-launcher {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) minmax(280px, 340px);
+            gap: 16px;
+            align-items: start;
+        }
+        .client-doc-launcher-panel {
+            padding: 16px;
+            border-radius: 16px;
+            border: 1px solid rgba(255,255,255,.08);
+            background: rgba(255,255,255,.03);
+        }
+        .client-doc-launcher-list {
+            display: grid;
+            gap: 8px;
+            margin-top: 12px;
+        }
+        .client-doc-launcher-item,
+        .client-doc-launcher-panel button {
+            width: 100%;
+            display: inline-flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 12px;
+            border-radius: 12px;
+            border: 1px solid rgba(255,255,255,.08);
+            background: rgba(255,255,255,.03);
+            color: #eef3f8;
+            text-decoration: none;
+            font-size: .86rem;
+            text-align: left;
+            transition: background .18s ease, border-color .18s ease, transform .18s ease;
+        }
+        .client-doc-launcher-item:hover,
+        .client-doc-launcher-panel button:hover {
+            background: rgba(255,255,255,.06);
+            border-color: rgba(255,255,255,.14);
+            transform: translateY(-1px);
+        }
+        .client-doc-launcher-panel button { cursor: pointer; }
+        .client-doc-launcher-item.is-fiscal,
+        .client-doc-launcher-panel button.is-fiscal { border-color: rgba(31,143,255,.2); }
+        .client-doc-launcher-item.is-payment,
+        .client-doc-launcher-panel button.is-payment { border-color: rgba(25,209,127,.2); }
+        .client-doc-launcher-item.is-adjustment,
+        .client-doc-launcher-panel button.is-adjustment { border-color: rgba(255,193,7,.2); }
+        .client-doc-launcher-item.is-remito,
+        .client-doc-launcher-panel button.is-remito { border-color: rgba(255,107,53,.2); }
+        .client-doc-launcher-item.is-credit-note,
+        .client-doc-launcher-panel button.is-credit-note { border-color: rgba(151,117,250,.2); }
+        .client-doc-launcher-item.is-order,
+        .client-doc-launcher-item.is-quote,
+        .client-doc-launcher-panel button.is-order,
+        .client-doc-launcher-panel button.is-quote { border-color: rgba(255,255,255,.12); }
+        .client-doc-launcher-item.is-disabled,
+        .client-doc-launcher-panel button:disabled {
+            opacity: .52;
+            pointer-events: none;
+        }
+        .client-doc-launcher-text {
+            display: grid;
+            gap: 4px;
+        }
+        .client-doc-launcher-text strong { color: #fff; }
+        .client-doc-launcher-text small { color: rgba(210,217,226,.68); line-height: 1.35; }
+        .client-doc-launcher-arrow {
+            font-size: 1rem;
+            color: rgba(230,236,242,.72);
+        }
+        .client-toolbar-actions,
+        .client-toolbar-meta,
+        .client-tab-nav,
+        .client-subtab-nav,
+        .client-action-row,
+        .client-foot-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+        .client-toolbar-meta { gap: 8px; }
+        .client-toolbar-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 11px;
+            border-radius: 999px;
+            background: rgba(255,255,255,.04);
+            border: 1px solid rgba(255,255,255,.08);
+            color: rgba(228,234,241,.84);
+            font-size: .8rem;
+        }
+        .client-toolbar-chip strong { color: #fff; font-size: .82rem; }
+        .client-action-compact {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 12px;
+            border-radius: 12px;
+            border: 1px solid rgba(255,255,255,.08);
+            background: rgba(255,255,255,.04);
+            color: #f4f7fb;
+            text-decoration: none;
+            font-size: .84rem;
+            transition: background .18s ease, border-color .18s ease, transform .18s ease;
+        }
+        .client-action-compact:hover {
+            background: rgba(255,107,53,.12);
+            border-color: rgba(255,107,53,.26);
+            transform: translateY(-1px);
+        }
+        .client-action-compact.is-primary {
+            background: linear-gradient(180deg, rgba(255,107,53,.2), rgba(255,107,53,.12));
+            border-color: rgba(255,107,53,.28);
+        }
+        .client-action-compact[aria-disabled="true"],
+        .client-action-compact.is-disabled {
+            opacity: .52;
+            pointer-events: none;
+        }
         .client-hub-hero,
         .client-hub-panel,
         .client-hub-card {
@@ -32,27 +230,28 @@
         .client-hub-title-row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
         .client-hub-title-row h2 { margin: 0; font-size: 2rem; line-height: 1.08; }
         .client-hub-subtitle { margin: 10px 0 0; color: rgba(214,223,233,.82); line-height: 1.55; }
-        .client-hub-chips,
-        .client-tab-nav,
-        .client-subtab-nav,
-        .client-action-row,
-        .client-foot-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+        .client-hub-chips { display: flex; flex-wrap: wrap; gap: 10px; }
         .client-hub-chip,
         .client-tab-link,
         .client-subtab-link {
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            padding: 9px 13px;
-            border-radius: 999px;
-            border: 1px solid rgba(255,255,255,.08);
-            background: rgba(255,255,255,.03);
-            color: rgba(230,236,242,.9);
+            padding: 11px 16px;
+            border-radius: 0;
+            border: 1px solid rgba(255,255,255,.12);
+            background: rgba(255,255,255,.04);
+            color: rgba(235,239,244,.88);
             text-decoration: none;
-            font-size: .86rem;
+            font-size: .84rem;
+            box-shadow: inset 0 1px 0 rgba(255,255,255,.04);
         }
         .client-tab-link.is-active,
-        .client-subtab-link.is-active { background: rgba(255,107,53,.16); border-color: rgba(255,107,53,.3); color: #fff0e6; }
+        .client-subtab-link.is-active {
+            background: linear-gradient(180deg, rgba(255,107,53,.18), rgba(255,107,53,.1));
+            border-color: rgba(255,107,53,.32);
+            color: #fff4ec;
+        }
         .client-hub-chip.is-warning { background: rgba(255,193,7,.08); border-color: rgba(255,193,7,.18); color: #ffe79c; }
         .client-hub-chip.is-success { background: rgba(25,209,127,.08); border-color: rgba(25,209,127,.18); color: #a4f4c9; }
         .client-section-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 14px; }
@@ -84,90 +283,241 @@
             display: flex; justify-content: space-between; align-items: center; gap: 12px;
             padding: 14px 16px; border-top: 1px solid rgba(255,255,255,.08); color: rgba(207,216,227,.76); font-size: .86rem;
         }
+        .client-cell-stack { display: grid; gap: 4px; }
+        .client-cell-stack strong { color: #f7f9fc; }
+        .client-cell-stack small { color: rgba(205,214,224,.68); line-height: 1.35; }
+        .client-inline-badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 4px 8px;
+            border-radius: 999px;
+            background: rgba(255,255,255,.06);
+            border: 1px solid rgba(255,255,255,.08);
+            color: rgba(235,240,245,.86);
+            font-size: .72rem;
+            text-transform: uppercase;
+            letter-spacing: .04em;
+            width: fit-content;
+        }
+        .client-inline-badge.is-fiscal { background: rgba(31,143,255,.12); border-color: rgba(31,143,255,.22); color: #b8dcff; }
+        .client-inline-badge.is-internal { background: rgba(255,107,53,.12); border-color: rgba(255,107,53,.24); color: #ffd7c6; }
+        .client-inline-badge.is-saas { background: rgba(151,117,250,.12); border-color: rgba(151,117,250,.22); color: #ddd1ff; }
+        .client-inline-badge.is-payment { background: rgba(25,209,127,.12); border-color: rgba(25,209,127,.22); color: #b2f3d0; }
+        .client-inline-badge.is-movement { background: rgba(255,193,7,.12); border-color: rgba(255,193,7,.22); color: #ffe8a3; }
+        .client-ledger-panel {
+            padding: 14px;
+            border-radius: 16px;
+            border: 1px solid rgba(255,255,255,.08);
+            background: rgba(255,255,255,.02);
+        }
+        .client-ledger-topline {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+        .client-ledger-title {
+            margin: 0;
+            font-size: 1.08rem;
+        }
+        .client-ledger-summary {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+        .client-ledger-chip {
+            min-width: 132px;
+            padding: 10px 12px;
+            border-radius: 12px;
+            border: 1px solid rgba(255,255,255,.08);
+            background: rgba(255,255,255,.03);
+        }
+        .client-ledger-chip span {
+            display: block;
+            margin-bottom: 4px;
+            color: rgba(207,216,227,.68);
+            font-size: .72rem;
+            text-transform: uppercase;
+            letter-spacing: .08em;
+        }
+        .client-ledger-chip strong {
+            font-size: .98rem;
+            color: #f7f9fc;
+        }
+        .client-table-card.is-ledger {
+            border-radius: 14px;
+            background: rgba(0,0,0,.14);
+        }
+        .client-table-card.is-ledger .admin-table thead th {
+            padding-top: 13px;
+            padding-bottom: 13px;
+            font-size: .76rem;
+            text-transform: uppercase;
+            letter-spacing: .06em;
+            color: rgba(208,216,225,.72);
+            background: rgba(255,255,255,.02);
+        }
+        .client-table-card.is-ledger .admin-table tbody td {
+            padding-top: 11px;
+            padding-bottom: 11px;
+            vertical-align: middle;
+        }
+        .client-row-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+        }
+        .client-icon-action {
+            width: 34px;
+            height: 34px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            border: 1px solid rgba(255,255,255,.12);
+            background: rgba(255,255,255,.04);
+            color: #f4f7fb;
+            text-decoration: none;
+            font-size: .95rem;
+            transition: background .18s ease, border-color .18s ease, transform .18s ease;
+        }
+        .client-icon-action:hover {
+            background: rgba(255,107,53,.14);
+            border-color: rgba(255,107,53,.32);
+            transform: translateY(-1px);
+        }
+        .client-icon-action.is-danger:hover {
+            background: rgba(220,53,69,.14);
+            border-color: rgba(220,53,69,.3);
+        }
         @media (max-width: 1180px) {
+            .client-sales-head,
             .client-hub-hero,
             .client-data-grid,
             .client-open-grid,
             .client-doc-grid,
             .client-history-metrics { grid-template-columns: 1fr; }
+            .client-doc-launcher { grid-template-columns: 1fr; }
+            .client-sales-head {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            .client-sales-head-right {
+                justify-content: flex-start;
+            }
         }
     </style>
 
-    <section class="client-hub-hero">
-        <div>
-            <p class="client-hub-eyebrow">Hub de cliente</p>
-            <div class="client-hub-title-row">
-                <h2>{{ client.company_name }}</h2>
-                {% if client.is_approved %}
-                <span class="badge badge-success">Aprobado</span>
-                {% else %}
-                <span class="badge badge-warning">Pendiente</span>
-                {% endif %}
+    <section class="client-sales-shell">
+        <div class="client-sales-head">
+            <div class="client-sales-title-wrap">
+                <div class="client-sales-icon" aria-hidden="true">&#128179;</div>
+                <div>
+                    <h2 class="client-sales-heading">Ventas del cliente {{ client.company_name }}</h2>
+                    <p class="client-sales-kicker">
+                        {% if client.user %}{{ client.user.username }}{% else %}Sin usuario{% endif %}
+                        {% if client.cuit_dni %} | CUIT/DNI {{ client.cuit_dni }}{% endif %}
+                        | {{ active_company_label }}
+                    </p>
+                </div>
             </div>
-            <p class="client-hub-subtitle">
-                {% if client.user %}<strong>{{ client.user.username }}</strong>{% endif %}
-                {% if client.user and client.user.email %} | {{ client.user.email }}{% endif %}
-                {% if client.cuit_dni %} | CUIT/DNI {{ client.cuit_dni }}{% endif %}
-            </p>
-            <div class="client-hub-chips" style="margin-top:14px;">
-                <span class="client-hub-chip">Empresa activa: {{ active_company_label }}</span>
-                <span class="client-hub-chip">Condicion: {{ sale_condition_label }}</span>
-                <span class="client-hub-chip">Lista: {{ effective_price_list.name|default:"-" }}</span>
-                {% if operations_locked %}
-                <span class="client-hub-chip is-warning">Operaciones bloqueadas</span>
-                {% else %}
-                <span class="client-hub-chip is-success">Operable</span>
-                {% endif %}
+            <div class="client-sales-head-right">
+                <div class="client-mini-stat">
+                    <span>Saldo actual</span>
+                    <strong>${{ balance_summary.current_balance|floatformat:2 }}</strong>
+                </div>
+                <div class="client-mini-stat">
+                    <span>Total vendido</span>
+                    <strong>${{ summary.total_amount|floatformat:2 }}</strong>
+                </div>
+                <div class="client-mini-stat">
+                    <span>Estado</span>
+                    <strong>{% if operations_locked %}Bloqueado{% else %}Operable{% endif %}</strong>
+                </div>
             </div>
         </div>
 
-        <div class="client-hub-panel">
-            <div class="client-section-head">
-                <div>
-                    <h3>Acciones principales</h3>
-                    <p>Atajos para operar sin salir de esta ficha.</p>
-                </div>
-            </div>
-            <div class="client-action-row">
+        <div class="client-sales-toolbar">
+            <div class="client-toolbar-actions">
                 {% if operations_locked %}
-                <button type="button" class="btn btn-primary" disabled>Registrar pago</button>
+                <span class="client-action-compact is-primary is-disabled" aria-disabled="true"><span aria-hidden="true">&#128179;</span> Registrar pago</span>
+                <span class="client-action-compact is-disabled" aria-disabled="true"><span aria-hidden="true">&#128221;</span> Nuevo pedido</span>
+                <span class="client-action-compact is-disabled" aria-disabled="true"><span aria-hidden="true">&#128196;</span> Cotizacion</span>
                 {% else %}
-                <a href="{% url 'admin_payment_list' %}?client_id={{ client.pk }}&company_id={{ selected_company_id }}" class="btn btn-primary">Registrar pago</a>
+                <a href="{% url 'admin_payment_list' %}?client_id={{ client.pk }}&company_id={{ selected_company_id }}" class="client-action-compact is-primary"><span aria-hidden="true">&#128179;</span> Registrar pago</a>
+                <form method="post" action="{% url 'admin_client_quick_order' client.pk %}" style="margin:0;">{% csrf_token %}<input type="hidden" name="company_id" value="{{ selected_company_id }}"><input type="hidden" name="action" value="order"><button type="submit" class="client-action-compact" style="font:inherit; cursor:pointer;"><span aria-hidden="true">&#128221;</span> Nuevo pedido</button></form>
+                <form method="post" action="{% url 'admin_client_quick_order' client.pk %}" style="margin:0;">{% csrf_token %}<input type="hidden" name="company_id" value="{{ selected_company_id }}"><input type="hidden" name="action" value="quote"><button type="submit" class="client-action-compact" style="font:inherit; cursor:pointer;"><span aria-hidden="true">&#128196;</span> Cotizacion</button></form>
                 {% endif %}
                 {% if can_edit_client_profile %}
-                <a href="{% url 'admin_client_edit' client.pk %}" class="btn btn-outline">Editar cliente</a>
+                <a href="{% url 'admin_client_edit' client.pk %}" class="client-action-compact"><span aria-hidden="true">&#9998;</span> Editar</a>
                 {% endif %}
-                <a href="{% url 'admin_client_list' %}" class="btn btn-outline">Volver</a>
+                <a href="{% url 'admin_client_list' %}" class="client-action-compact"><span aria-hidden="true">&#8617;</span> Volver</a>
+            </div>
+            <div class="client-toolbar-meta">
+                <span class="client-toolbar-chip"><strong>Condicion</strong> {{ sale_condition_label }}</span>
+                <span class="client-toolbar-chip"><strong>Lista</strong> {{ effective_price_list.name|default:"-" }}</span>
+                <span class="client-toolbar-chip"><strong>Categoria</strong> {{ effective_category.name|default:"-" }}</span>
             </div>
         </div>
     </section>
+
+    {% if quick_sales_document_actions %}
+    <section class="client-doc-launcher">
+        <div class="client-hub-panel">
+            <div class="client-section-head">
+                <div>
+                    <h3>Atencion rapida</h3>
+                    <p>Ventas y operaciones abiertas del cliente dentro de la empresa activa.</p>
+                </div>
+            </div>
+            <div class="client-hub-chips">
+                <span class="client-hub-chip">Empresa activa: {{ active_company_label }}</span>
+                {% if operations_locked %}
+                <span class="client-hub-chip is-warning">Operaciones bloqueadas</span>
+                {% else %}
+                <span class="client-hub-chip is-success">Listo para operar</span>
+                {% endif %}
+                <span class="client-hub-chip">Tipos disponibles: {{ quick_sales_document_actions|length }}</span>
+            </div>
+        </div>
+        <aside class="client-doc-launcher-panel">
+            <div class="client-section-head" style="margin-bottom:0;">
+                <div>
+                    <h3>Nuevo documento</h3>
+                    <p>Tipos comerciales configurados para {{ active_company_label }}.</p>
+                </div>
+            </div>
+            <div class="client-doc-launcher-list">
+                {% for item in quick_sales_document_actions %}
+                    {% if item.method == 'get' %}
+                    <a href="{{ item.url }}" class="client-doc-launcher-item {{ item.css_class }} {% if item.disabled %}is-disabled{% endif %}">
+                        <span class="client-doc-launcher-text"><strong>{{ item.label }}</strong><small>{{ item.help_text }}</small></span>
+                        <span class="client-doc-launcher-arrow" aria-hidden="true">&#10132;</span>
+                    </a>
+                    {% else %}
+                    <form method="post" action="{{ item.url }}" style="margin:0;">{% csrf_token %}
+                        <input type="hidden" name="company_id" value="{{ selected_company_id }}">
+                        <input type="hidden" name="action" value="{{ item.action_value }}">
+                        <input type="hidden" name="sales_document_type_id" value="{{ item.sales_document_type.pk }}">
+                        <button type="submit" class="{{ item.css_class }}" {% if item.disabled %}disabled{% endif %}>
+                            <span class="client-doc-launcher-text"><strong>{{ item.label }}</strong><small>{{ item.help_text }}</small></span>
+                            <span class="client-doc-launcher-arrow" aria-hidden="true">&#10132;</span>
+                        </button>
+                    </form>
+                    {% endif %}
+                {% endfor %}
+            </div>
+        </aside>
+    </section>
+    {% endif %}
 
     {% if not active_company %}
     <div class="alert alert-warning">Selecciona una empresa activa para habilitar acciones comerciales y ver el contexto operativo correcto.</div>
     {% elif client_company_missing %}
     <div class="alert alert-warning">Este cliente no esta habilitado para operar en la empresa activa. Las acciones comerciales quedan bloqueadas.</div>
     {% endif %}
-
-    <section class="client-hub-panel">
-        <div class="client-section-head">
-            <div>
-                <h3>Acciones rapidas</h3>
-                <p>Documentos y operaciones frecuentes sobre la empresa activa.</p>
-            </div>
-        </div>
-        <div class="client-action-row">
-            <form method="post" action="{% url 'admin_client_quick_order' client.pk %}">{% csrf_token %}<input type="hidden" name="company_id" value="{{ selected_company_id }}"><input type="hidden" name="action" value="quote"><button type="submit" class="btn btn-primary" {% if operations_locked %}disabled{% endif %}>Nueva cotizacion</button></form>
-            <form method="post" action="{% url 'admin_client_quick_order' client.pk %}">{% csrf_token %}<input type="hidden" name="company_id" value="{{ selected_company_id }}"><input type="hidden" name="action" value="order"><button type="submit" class="btn btn-outline" {% if operations_locked %}disabled{% endif %}>Nuevo pedido</button></form>
-            {% if operations_locked %}
-            <button type="button" class="btn btn-outline" disabled>Nuevo recibo</button>
-            {% else %}
-            <a href="{% url 'admin_payment_list' %}?client_id={{ client.pk }}&company_id={{ selected_company_id }}" class="btn btn-outline">Nuevo recibo</a>
-            {% endif %}
-            <form method="post" action="{% url 'admin_client_quick_order' client.pk %}">{% csrf_token %}<input type="hidden" name="company_id" value="{{ selected_company_id }}"><input type="hidden" name="action" value="remito"><button type="submit" class="btn btn-outline" {% if operations_locked or not quick_remito_available %}disabled{% endif %}>Remito</button></form>
-            <form method="post" action="{% url 'admin_client_quick_order' client.pk %}">{% csrf_token %}<input type="hidden" name="company_id" value="{{ selected_company_id }}"><input type="hidden" name="action" value="invoice"><button type="submit" class="btn btn-outline" {% if operations_locked or not quick_invoice_available %}disabled{% endif %}>Facturar</button></form>
-            <form method="post" action="{% url 'admin_client_quick_order' client.pk %}">{% csrf_token %}<input type="hidden" name="company_id" value="{{ selected_company_id }}"><input type="hidden" name="action" value="credit_note"><button type="submit" class="btn btn-outline" {% if operations_locked or not quick_credit_note_available %}disabled{% endif %}>Nota de credito</button></form>
-        </div>
-    </section>
 
     <nav class="client-tab-nav">
         {% for tab in client_tabs %}
@@ -204,30 +554,72 @@
     </section>
 
     {% elif client_tab == 'account' %}
-    <section class="client-hub-panel">
-        <div class="client-section-head"><div><h3>Cuenta corriente</h3><p>Movimientos ordenados por tipo de documento, con saldo acumulado.</p></div></div>
-        <div class="client-history-metrics" style="margin-bottom:14px;">
-            <article class="history-metric-card is-warning"><span class="history-metric-label">Debe</span><strong class="history-metric-value">${{ balance_summary.orders_total|floatformat:2 }}</strong></article>
-            <article class="history-metric-card is-success"><span class="history-metric-label">Haber</span><strong class="history-metric-value">${{ balance_summary.total_paid|floatformat:2 }}</strong></article>
-            <article class="history-metric-card is-secondary"><span class="history-metric-label">Saldo</span><strong class="history-metric-value">${{ balance_summary.current_balance|floatformat:2 }}</strong></article>
-            <article class="history-metric-card is-info"><span class="history-metric-label">Pedidos contabilizados</span><strong class="history-metric-value">{{ balance_summary.orders_count }}</strong></article>
+    <section class="client-ledger-panel">
+        <div class="client-ledger-topline">
+            <div>
+                <h3 class="client-ledger-title">Cuenta corriente</h3>
+                <p class="client-sales-kicker">Historial comercial del cliente con saldo acumulado y acciones directas.</p>
+            </div>
+            <div class="client-foot-actions">
+                {% if quick_invoice_available and not operations_locked %}
+                <form method="post" action="{% url 'admin_client_quick_order' client.pk %}" style="margin:0;">{% csrf_token %}<input type="hidden" name="company_id" value="{{ selected_company_id }}"><input type="hidden" name="action" value="invoice"><button type="submit" class="client-action-compact" style="font:inherit; cursor:pointer;"><span aria-hidden="true">&#128196;</span> Facturar</button></form>
+                {% endif %}
+                {% if quick_remito_available and not operations_locked %}
+                <form method="post" action="{% url 'admin_client_quick_order' client.pk %}" style="margin:0;">{% csrf_token %}<input type="hidden" name="company_id" value="{{ selected_company_id }}"><input type="hidden" name="action" value="remito"><button type="submit" class="client-action-compact" style="font:inherit; cursor:pointer;"><span aria-hidden="true">&#128666;</span> Remito</button></form>
+                {% endif %}
+            </div>
+        </div>
+        <div class="client-ledger-summary">
+            <div class="client-ledger-chip"><span>Deuda</span><strong>${{ balance_summary.orders_total|floatformat:2 }}</strong></div>
+            <div class="client-ledger-chip"><span>Pago</span><strong>${{ balance_summary.total_paid|floatformat:2 }}</strong></div>
+            <div class="client-ledger-chip"><span>Saldo</span><strong>${{ balance_summary.current_balance|floatformat:2 }}</strong></div>
+            <div class="client-ledger-chip"><span>Movimientos</span><strong>{{ ledger_rows_total }}</strong></div>
         </div>
         <nav class="client-subtab-nav" style="margin-bottom:14px;">{% for tab in ledger_tabs %}<a href="{{ tab.url }}" class="client-subtab-link {% if tab.is_active %}is-active{% endif %}">{{ tab.label }}</a>{% endfor %}</nav>
         {% if ledger_warning %}<div class="alert alert-warning" style="margin-bottom:14px;">{{ ledger_warning }}</div>{% endif %}
-        <div class="client-table-card">
+        <div class="client-table-card is-ledger">
             <table class="admin-table">
-                <thead><tr><th>Fecha</th><th>Tipo</th><th>Numero</th><th>Referencia</th><th>Debe</th><th>Haber</th><th>Saldo</th><th>Accion</th></tr></thead>
+                <thead><tr><th>Fecha</th><th>Tipo comercial</th><th>Numero</th><th>Referencia</th><th>Debe</th><th>Haber</th><th>Saldo</th><th>Acciones</th></tr></thead>
                 <tbody>
                     {% for row in ledger_rows %}
                     <tr>
                         <td>{{ row.tx.occurred_at|date:"d/m/Y H:i" }}</td>
-                        <td>{{ row.type_label }}</td>
-                        <td><strong>{{ row.number_label }}</strong></td>
-                        <td>{% if row.tx.order_id %}{{ row.tx.company.name|default:"-" }} | Pedido #{{ row.tx.order_id }}{% elif row.tx.payment_id %}{{ row.tx.payment.reference|default:row.tx.description|default:"Pago registrado" }}{% else %}{{ row.tx.description|default:"-" }}{% endif %}</td>
+                        <td>
+                            <div class="client-cell-stack">
+                                <strong>{{ row.type_label }}</strong>
+                                {% if row.type_family_label and row.type_family_label != row.type_label %}
+                                <small>{{ row.type_family_label }}</small>
+                                {% endif %}
+                            </div>
+                        </td>
+                        <td>
+                            <div class="client-cell-stack">
+                                <strong>{{ row.number_label }}</strong>
+                                <span class="client-inline-badge {% if row.source_origin_label == 'Fiscal' %}is-fiscal{% elif row.source_origin_label == 'Interno' %}is-internal{% elif row.source_origin_label == 'SaaS' %}is-saas{% elif row.source_origin_label == 'Pago' %}is-payment{% else %}is-movement{% endif %}">{{ row.source_origin_label }}</span>
+                            </div>
+                        </td>
+                        <td>
+                            <div class="client-cell-stack">
+                                <strong>{{ row.reference_title }}</strong>
+                                {% if row.reference_meta %}<small>{{ row.reference_meta }}</small>{% endif %}
+                            </div>
+                        </td>
                         <td>{% if row.debit > 0 %}${{ row.debit|floatformat:2 }}{% else %}-{% endif %}</td>
                         <td>{% if row.credit > 0 %}${{ row.credit|floatformat:2 }}{% else %}-{% endif %}</td>
                         <td><strong>${{ row.running_balance|floatformat:2 }}</strong></td>
-                        <td>{% if row.detail_url %}<a href="{{ row.detail_url }}" class="btn btn-outline btn-sm">{{ row.detail_label|default:"Abrir" }}</a>{% else %}-{% endif %}</td>
+                        <td class="actions">
+                            <div class="client-row-actions">
+                                {% if row.document_url %}
+                                <a href="{{ row.document_url }}" class="client-icon-action" title="{{ row.document_action_label }}" {% if row.document_target_blank %}data-print-window="1" target="_blank" rel="noopener noreferrer"{% endif %}><span aria-hidden="true">&#128196;</span></a>
+                                {% endif %}
+                                {% if row.detail_url %}
+                                <a href="{{ row.detail_url }}" class="client-icon-action" title="{{ row.detail_label|default:'Abrir' }}"><span aria-hidden="true">&#128279;</span></a>
+                                {% endif %}
+                                {% if not row.document_url and not row.detail_url %}
+                                <span class="client-icon-action is-danger" title="Sin accion disponible"><span aria-hidden="true">&#10005;</span></span>
+                                {% endif %}
+                            </div>
+                        </td>
                     </tr>
                     {% empty %}
                     <tr><td colspan="8" class="text-center text-muted">No hay movimientos para este filtro.</td></tr>
@@ -292,17 +684,40 @@
         </div>
         <div class="client-table-card">
             <table class="admin-table">
-                <thead><tr><th>Fecha</th><th>Empresa</th><th>Pedido</th><th>Monto</th><th>Medio</th><th>Referencia</th><th>Estado</th></tr></thead>
+                <thead><tr><th>Fecha</th><th>Recibo comercial</th><th>Aplicado a</th><th>Monto</th><th>Medio</th><th>Estado</th><th>Acciones</th></tr></thead>
                 <tbody>
-                    {% for payment in payments_recent %}
+                    {% for row in payment_history_rows %}
                     <tr>
-                        <td>{{ payment.paid_at|date:"d/m/Y H:i" }}</td>
-                        <td>{{ payment.company.name|default:"-" }}</td>
-                        <td>{% if payment.order_id %}<a href="{% url 'admin_order_detail' payment.order_id %}" class="btn btn-outline btn-sm">#{{ payment.order_id }}</a>{% else %}-{% endif %}</td>
-                        <td>${{ payment.amount|floatformat:2 }}</td>
-                        <td>{{ payment.get_method_display }}</td>
-                        <td>{{ payment.reference|default:"-" }}</td>
-                        <td>{% if payment.is_cancelled %}<span class="badge badge-danger">Anulado</span>{% else %}<span class="badge badge-success">Activo</span>{% endif %}</td>
+                        <td>{{ row.payment.paid_at|date:"d/m/Y H:i" }}</td>
+                        <td>
+                            <div class="client-cell-stack">
+                                <strong>{{ row.receipt_label }}</strong>
+                                <small>{{ row.receipt_number }}</small>
+                                <span class="client-inline-badge {% if row.receipt_origin_label == 'Interno' %}is-internal{% else %}is-payment{% endif %}">{{ row.receipt_origin_label }}</span>
+                            </div>
+                        </td>
+                        <td>
+                            <div class="client-cell-stack">
+                                <strong>{{ row.applied_title }}</strong>
+                                {% if row.applied_meta %}<small>{{ row.applied_meta }}</small>{% endif %}
+                            </div>
+                        </td>
+                        <td><strong>${{ row.payment.amount|floatformat:2 }}</strong></td>
+                        <td>{{ row.payment.get_method_display }}</td>
+                        <td>{% if row.payment.is_cancelled %}<span class="badge badge-danger">Anulado</span>{% else %}<span class="badge badge-success">Activo</span>{% endif %}</td>
+                        <td class="actions">
+                            <div class="client-row-actions">
+                                {% if row.document_url %}
+                                <a href="{{ row.document_url }}" class="client-icon-action" title="Recibo" data-print-window="1" target="_blank" rel="noopener noreferrer"><span aria-hidden="true">&#128196;</span></a>
+                                {% endif %}
+                                {% if row.applied_url %}
+                                <a href="{{ row.applied_url }}" class="client-icon-action" title="{{ row.applied_label }}"><span aria-hidden="true">&#128279;</span></a>
+                                {% endif %}
+                                {% if not row.document_url and not row.applied_url %}
+                                <span class="client-icon-action is-danger" title="Sin accion disponible"><span aria-hidden="true">&#10005;</span></span>
+                                {% endif %}
+                            </div>
+                        </td>
                     </tr>
                     {% empty %}
                     <tr><td colspan="7" class="text-center text-muted">No hay pagos para este cliente.</td></tr>
@@ -317,16 +732,17 @@
         <article class="history-metric-card is-warning"><span class="history-metric-label">Internos</span><strong class="history-metric-value">{{ documents_summary.internal_count }}</strong></article>
         <article class="history-metric-card is-info"><span class="history-metric-label">Fiscales</span><strong class="history-metric-value">{{ documents_summary.fiscal_count }}</strong></article>
         <article class="history-metric-card is-primary"><span class="history-metric-label">SaaS</span><strong class="history-metric-value">{{ documents_summary.official_count }}</strong></article>
+        <article class="history-metric-card is-secondary"><span class="history-metric-label">Ultimo movimiento</span><strong class="history-metric-value" style="font-size:1.05rem;">{{ documents_summary.latest_document_label }}</strong><small class="text-muted">{{ documents_summary.latest_document_hint }}</small></article>
     </section>
 
     <section class="client-hub-card">
-        <div class="client-section-head"><div><h3>Documentos internos</h3><p>Ultimos documentos operativos del cliente.</p></div></div>
-        <div class="client-table-card"><table class="admin-table"><thead><tr><th>Fecha</th><th>Tipo</th><th>Empresa</th><th>Numero</th><th>Pedido</th><th>Acciones</th></tr></thead><tbody>{% for doc in recent_internal_documents %}<tr><td>{{ doc.issued_at|date:"d/m/Y H:i" }}</td><td>{{ doc.get_doc_type_display }}</td><td>{{ doc.company.name|default:"-" }}</td><td>{{ doc.number|stringformat:"07d" }}</td><td>{% if doc.order_id %}<a href="{% url 'admin_order_detail' doc.order_id %}" class="btn btn-outline btn-sm">#{{ doc.order_id }}</a>{% else %}-{% endif %}</td><td class="actions"><a href="{% url 'admin_internal_document_print' doc.pk %}?copy=original" class="btn btn-outline btn-sm" data-print-window="1" target="_blank" rel="noopener noreferrer">Original</a><a href="{% url 'admin_internal_document_print' doc.pk %}?copy=duplicado" class="btn btn-outline btn-sm" data-print-window="1" target="_blank" rel="noopener noreferrer">Duplicado</a></td></tr>{% empty %}<tr><td colspan="6" class="text-center text-muted">Sin documentos internos recientes.</td></tr>{% endfor %}</tbody></table></div>
+        <div class="client-section-head"><div><h3>Documentos internos</h3><p>Ultimos documentos operativos del cliente con su nombre y numeracion comercial.</p></div></div>
+        <div class="client-table-card"><table class="admin-table"><thead><tr><th>Fecha</th><th>Tipo comercial</th><th>Numero comercial</th><th>Origen</th><th>Pedido</th><th>Acciones</th></tr></thead><tbody>{% for doc in recent_internal_documents %}<tr><td>{{ doc.issued_at|date:"d/m/Y H:i" }}</td><td><div class="client-cell-stack"><strong>{{ doc.commercial_type_label }}</strong><small>{{ doc.get_doc_type_display }}</small></div></td><td><div class="client-cell-stack"><strong>{{ doc.display_number }}</strong><span class="client-inline-badge is-internal">Interno</span></div></td><td><div class="client-cell-stack"><strong>{{ doc.company.name|default:"-" }}</strong>{% if doc.payment_id %}<small>Pago #{{ doc.payment_id }}</small>{% elif doc.transaction_id %}<small>Ajuste #{{ doc.transaction_id }}</small>{% else %}<small>Pedido #{{ doc.order_id|default:"-" }}</small>{% endif %}</div></td><td>{% if doc.order_id %}<a href="{% url 'admin_order_detail' doc.order_id %}" class="btn btn-outline btn-sm">#{{ doc.order_id }}</a>{% else %}-{% endif %}</td><td class="actions"><a href="{% url 'admin_internal_document_print' doc.pk %}?copy=original" class="btn btn-outline btn-sm" data-print-window="1" target="_blank" rel="noopener noreferrer">Original</a><a href="{% url 'admin_internal_document_print' doc.pk %}?copy=duplicado" class="btn btn-outline btn-sm" data-print-window="1" target="_blank" rel="noopener noreferrer">Duplicado</a></td></tr>{% empty %}<tr><td colspan="6" class="text-center text-muted">Sin documentos internos recientes.</td></tr>{% endfor %}</tbody></table></div>
     </section>
 
     <section class="client-hub-card">
-        <div class="client-section-head"><div><h3>Comprobantes fiscales</h3><p>Documentos fiscales locales y su estado operativo.</p></div></div>
-        <div class="client-table-card"><table class="admin-table"><thead><tr><th>Fecha</th><th>Tipo</th><th>Punto de venta</th><th>Numero</th><th>Estado</th><th>Pedido</th><th>Acciones</th></tr></thead><tbody>{% for doc in recent_fiscal_documents %}<tr><td>{{ doc.created_at|date:"d/m/Y H:i" }}</td><td>{{ doc.get_doc_type_display }}</td><td>{{ doc.point_of_sale.number|default:"-" }}</td><td>{% if doc.number %}{{ doc.number }}{% elif doc.external_number %}{{ doc.external_number }}{% else %}-{% endif %}</td><td>{{ doc.get_status_display }}</td><td>{% if doc.order_id %}<a href="{% url 'admin_order_detail' doc.order_id %}" class="btn btn-outline btn-sm">#{{ doc.order_id }}</a>{% else %}-{% endif %}</td><td class="actions"><a href="{% url 'admin_fiscal_document_detail' doc.pk %}" class="btn btn-outline btn-sm">Ver</a><a href="{% url 'admin_fiscal_document_print' doc.pk %}?copy=original" class="btn btn-outline btn-sm" data-print-window="1" target="_blank" rel="noopener noreferrer">Original</a></td></tr>{% empty %}<tr><td colspan="7" class="text-center text-muted">No hay comprobantes fiscales recientes para este cliente.</td></tr>{% endfor %}</tbody></table></div>
+        <div class="client-section-head"><div><h3>Comprobantes fiscales</h3><p>Documentos fiscales locales y su capa comercial configurada.</p></div></div>
+        <div class="client-table-card"><table class="admin-table"><thead><tr><th>Fecha</th><th>Tipo comercial</th><th>Numero comercial</th><th>Origen fiscal</th><th>Estado</th><th>Pedido</th><th>Acciones</th></tr></thead><tbody>{% for doc in recent_fiscal_documents %}<tr><td>{{ doc.created_at|date:"d/m/Y H:i" }}</td><td><div class="client-cell-stack"><strong>{{ doc.commercial_type_label }}</strong><small>{{ doc.get_doc_type_display }}</small></div></td><td><div class="client-cell-stack"><strong>{{ doc.display_number }}</strong><span class="client-inline-badge is-fiscal">Fiscal</span></div></td><td><div class="client-cell-stack"><strong>PV {{ doc.point_of_sale.number|default:"-" }}</strong><small>{{ doc.company.name|default:"-" }}</small></div></td><td>{{ doc.get_status_display }}</td><td>{% if doc.order_id %}<a href="{% url 'admin_order_detail' doc.order_id %}" class="btn btn-outline btn-sm">#{{ doc.order_id }}</a>{% else %}-{% endif %}</td><td class="actions"><a href="{% url 'admin_fiscal_document_detail' doc.pk %}" class="btn btn-outline btn-sm">Ver</a><a href="{% url 'admin_fiscal_document_print' doc.pk %}?copy=original" class="btn btn-outline btn-sm" data-print-window="1" target="_blank" rel="noopener noreferrer">Original</a></td></tr>{% empty %}<tr><td colspan="7" class="text-center text-muted">No hay comprobantes fiscales recientes para este cliente.</td></tr>{% endfor %}</tbody></table></div>
     </section>
 
     <section class="client-hub-card">
