@@ -1,0 +1,70 @@
+{% extends 'admin_panel/base.html' %}
+
+{% block page_title %}Clientes{% endblock %}
+
+{% block content %}
+{% include 'admin_panel/clients/_module_panel.html' with client_panel='dashboard' client_module_subtitle='Vista general del modulo: indicadores rapidos, actividad reciente y atajos de gestion.' %}
+
+<div class="dashboard-grid">
+    <div class="stat-card">
+        <h3>Total clientes</h3>
+        <span class="number">{{ total_clients }}</span>
+        <small>Perfiles vinculados al contexto activo.</small>
+    </div>
+    <div class="stat-card">
+        <h3>Aprobados</h3>
+        <span class="number">{{ approved_clients }}</span>
+        <small>Clientes habilitados para operar.</small>
+    </div>
+    <div class="stat-card">
+        <h3>Portal habilitado</h3>
+        <span class="number">{{ portal_enabled_clients }}</span>
+        <small>Usuarios con acceso activo.</small>
+    </div>
+    <div class="stat-card">
+        <h3>Nuevos este mes</h3>
+        <span class="number">{{ new_this_month }}</span>
+        <small>Altas creadas en el periodo actual.</small>
+    </div>
+</div>
+
+<div class="dashboard-sections compact-top-gap">
+    <div class="dashboard-section">
+        <h2>Clientes recientes</h2>
+        {% if recent_clients %}
+        <ul class="quick-list">
+            {% for client in recent_clients %}
+            <li>
+                <span>
+                    <strong>{{ client.company_name|default:"(Sin nombre)" }}</strong><br>
+                    <small>{{ client.user.username|default:"-" }}{% if client.cuit_dni %} - {{ client.cuit_dni }}{% endif %}</small>
+                </span>
+                <a href="{% url 'admin_client_order_history' client.pk %}" class="btn btn-outline">Abrir</a>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="text-muted">No hay clientes recientes.</p>
+        {% endif %}
+    </div>
+
+    <div class="dashboard-section">
+        <h2>Tipos mas usados</h2>
+        {% if top_categories %}
+        <ul class="quick-list">
+            {% for row in top_categories %}
+            <li>
+                <span>
+                    <strong>{{ row.client_category__name|default:"Sin categoria" }}</strong><br>
+                    <small>Distribucion actual</small>
+                </span>
+                <span class="badge badge-info">{{ row.total }}</span>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="text-muted">Todavia no hay categorias asignadas.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

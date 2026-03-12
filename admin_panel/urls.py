@@ -29,7 +29,8 @@ urlpatterns = [
     path('abrazaderas-a-medida/<int:pk>/', views.clamp_request_detail, name='admin_clamp_request_detail'),
     
     # Clients
-    path('clientes/', views.client_list, name='admin_client_list'),
+    path('clientes/', views.client_dashboard, name='admin_client_dashboard'),
+    path('clientes/buscar/', views.client_list, name='admin_client_list'),
     path('clientes/nuevo/', views.client_create, name='admin_client_create'),
     path('clientes/categorias/', views.client_category_list, name='admin_client_category_list'),
     path('clientes/categorias/nueva/', views.client_category_create, name='admin_client_category_create'),

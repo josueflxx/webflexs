@@ -128,6 +128,9 @@ class ActiveCompanyMiddleware:
         "/media/",
         "/django-admin/",
     )
+    EXEMPT_EXACT_PATHS = {
+        "/",
+    }
 
     def __init__(self, get_response):
         self.get_response = get_response
@@ -135,7 +138,7 @@ class ActiveCompanyMiddleware:
     def __call__(self, request):
         if request.user.is_authenticated:
             path = request.path or ""
-            if not path.startswith(self.EXEMPT_PREFIXES):
+            if path not in self.EXEMPT_EXACT_PATHS and not path.startswith(self.EXEMPT_PREFIXES):
                 from core.services.company_context import get_active_company, get_user_companies
 
                 companies = list(get_user_companies(request.user))

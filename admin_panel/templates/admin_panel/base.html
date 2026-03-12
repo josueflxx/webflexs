@@ -9,7 +9,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{% static 'core/css/base.css' %}">
-    <link rel="stylesheet" href="{% static 'core/css/admin.css' %}?v=17">
+    <link rel="stylesheet" href="{% static 'core/css/admin.css' %}?v=21">
     <link rel="stylesheet" href="{% static 'core/css/admin_right_sidebar.css' %}?v=3">
     <link rel="stylesheet" href="{% static 'core/css/search_suggestions.css' %}?v=3">
     <link rel="icon" type="image/x-icon" href="{% static 'core/img/favicon.ico' %}">
@@ -64,7 +64,7 @@
                 </a>
 
                 <div class="nav-section">Clientes</div>
-                <a href="{% url 'admin_client_list' %}"
+                <a href="{% url 'admin_client_dashboard' %}"
                     class="nav-item {% if 'client' in request.resolver_match.url_name and 'client_category' not in request.resolver_match.url_name %}active{% endif %}">
                     <span class="nav-icon" aria-hidden="true">&#128101;</span>
                     Clientes
@@ -191,15 +191,30 @@
                     <div class="top-nav-group">
                         <span class="top-nav-group-label">Clientes</span>
                         <div class="top-nav-group-links">
-                            <a href="{% url 'admin_client_list' %}" class="top-nav-item {% if 'client' in request.resolver_match.url_name and 'client_category' not in request.resolver_match.url_name %}active{% endif %}">
-                                <span aria-hidden="true">&#128101;</span> Clientes
-                            </a>
-                            <a href="{% url 'admin_client_category_list' %}" class="top-nav-item {% if 'client_category' in request.resolver_match.url_name %}active{% endif %}">
-                                <span aria-hidden="true">&#128203;</span> Tipos clientes
-                            </a>
-                            <a href="{% url 'admin_request_list' %}" class="top-nav-item {% if 'admin_request' in request.resolver_match.url_name %}active{% endif %}">
-                                <span aria-hidden="true">&#128221;</span> Solicitudes
-                            </a>
+                            <div class="top-nav-menu top-nav-menu-clients">
+                                <a href="{% url 'admin_client_dashboard' %}" class="top-nav-item {% if 'client' in request.resolver_match.url_name or 'admin_request' in request.resolver_match.url_name %}active{% endif %}">
+                                    <span aria-hidden="true">&#128101;</span> Clientes
+                                    <span class="top-nav-caret" aria-hidden="true">&#9662;</span>
+                                </a>
+                                <div class="top-nav-submenu" aria-label="Panel de clientes">
+                                    <a href="{% url 'admin_client_list' %}" class="top-nav-submenu-item {% if request.resolver_match.url_name == 'admin_client_list' or request.resolver_match.url_name == 'admin_client_order_history' or request.resolver_match.url_name == 'admin_client_edit' or request.resolver_match.url_name == 'admin_client_password' %}is-active{% endif %}">
+                                        <strong>Buscar</strong>
+                                        <small>Listado, filtros e historial del cliente</small>
+                                    </a>
+                                    <a href="{% url 'admin_client_create' %}" class="top-nav-submenu-item {% if request.resolver_match.url_name == 'admin_client_create' %}is-active{% endif %}">
+                                        <strong>Agregar</strong>
+                                        <small>Alta rapida de usuario, perfil y empresa</small>
+                                    </a>
+                                    <a href="{% url 'admin_client_category_list' %}" class="top-nav-submenu-item {% if 'client_category' in request.resolver_match.url_name %}is-active{% endif %}">
+                                        <strong>Informes</strong>
+                                        <small>Tipos de cliente, descuentos y clasificacion</small>
+                                    </a>
+                                    <a href="{% url 'admin_request_list' %}" class="top-nav-submenu-item {% if 'admin_request' in request.resolver_match.url_name %}is-active{% endif %}">
+                                        <strong>Herramientas</strong>
+                                        <small>Solicitudes pendientes y aprobaciones</small>
+                                    </a>
+                                </div>
+                            </div>
                         </div>
                     </div>
 

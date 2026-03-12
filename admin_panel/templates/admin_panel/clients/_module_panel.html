@@ -1,0 +1,65 @@
+<section class="client-module-shell">
+    <div class="client-module-ribbon">
+        <span class="client-module-ribbon-dot" aria-hidden="true"></span>
+        <span>Panel de clientes</span>
+    </div>
+
+    <div class="client-module-head">
+        <div class="client-module-icon" aria-hidden="true">&#128101;</div>
+        <div class="client-module-copy">
+            <span class="client-module-kicker">Modulo comercial</span>
+            <h2>Clientes</h2>
+            <p>
+                {% if client_module_subtitle %}
+                {{ client_module_subtitle }}
+                {% else %}
+                Busqueda, alta, clasificacion y herramientas operativas para gestionar la cartera.
+                {% endif %}
+            </p>
+        </div>
+        {% if active_company %}
+        <div class="client-module-company">
+            <span>Empresa activa</span>
+            <strong>{{ active_company.name }}</strong>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="client-module-grid">
+        <a href="{% url 'admin_client_list' %}" class="client-module-card {% if client_panel == 'search' %}is-active{% endif %}">
+            <div class="client-module-card-icon" aria-hidden="true">&#128269;</div>
+            <div class="client-module-card-copy">
+                <span class="client-module-card-label">Buscar</span>
+                <strong>Clientes</strong>
+                <small>Listado, filtros, historial y acciones rapidas.</small>
+            </div>
+        </a>
+
+        <a href="{% url 'admin_client_create' %}" class="client-module-card {% if client_panel == 'add' %}is-active{% endif %}">
+            <div class="client-module-card-icon" aria-hidden="true">&#10010;</div>
+            <div class="client-module-card-copy">
+                <span class="client-module-card-label">Agregar</span>
+                <strong>Nuevo cliente</strong>
+                <small>Alta de usuario, perfil fiscal y relacion comercial.</small>
+            </div>
+        </a>
+
+        <a href="{% url 'admin_client_category_list' %}" class="client-module-card {% if client_panel == 'reports' %}is-active{% endif %}">
+            <div class="client-module-card-icon" aria-hidden="true">&#128202;</div>
+            <div class="client-module-card-copy">
+                <span class="client-module-card-label">Informes</span>
+                <strong>Tipos de cliente</strong>
+                <small>Clasificacion, descuentos y reglas base del modulo.</small>
+            </div>
+        </a>
+
+        <a href="{% url 'admin_request_list' %}" class="client-module-card {% if client_panel == 'tools' %}is-active{% endif %}">
+            <div class="client-module-card-icon" aria-hidden="true">&#9881;</div>
+            <div class="client-module-card-copy">
+                <span class="client-module-card-label">Herramientas</span>
+                <strong>Solicitudes</strong>
+                <small>Aprobaciones y cola de ingresos pendientes.</small>
+            </div>
+        </a>
+    </div>
+</section>

@@ -16,7 +16,7 @@
         rel="stylesheet">
 
     <!-- Base CSS -->
-    <link rel="stylesheet" href="{% static 'core/css/base.css' %}">
+    <link rel="stylesheet" href="{% static 'core/css/base.css' %}?v=3">
     <link rel="stylesheet" href="{% static 'core/css/search_suggestions.css' %}?v=3">
     <link rel="icon" type="image/x-icon" href="{% static 'core/img/favicon.ico' %}">
     <link rel="icon" type="image/png" sizes="32x32" href="{% static 'core/img/favicon-32.png' %}">
@@ -69,9 +69,9 @@
                     <li class="nav-divider"></li>
                     {% if user.is_authenticated %}
                     {% if active_company %}
-                    <li>
-                        <span class="text-muted" style="margin-right:8px;">Empresa: {{ active_company.name }}</span>
-                        <a href="{% url 'select_company' %}?next={{ request.get_full_path|urlencode }}" class="btn btn-ghost">Cambiar</a>
+                    <li class="nav-company-item">
+                        <span class="nav-company-label">Empresa: {{ active_company.name }}</span>
+                        <a href="{% url 'select_company' %}?next={{ request.get_full_path|urlencode }}" class="btn btn-ghost nav-company-switch">Cambiar</a>
                     </li>
                     {% endif %}
 
@@ -161,7 +161,7 @@
     </footer>
 
     <!-- JavaScript -->
-    <script src="{% static 'core/js/main.js' %}"></script>
+    <script src="{% static 'core/js/main.js' %}?v=2"></script>
     <script src="{% static 'core/js/search_suggestions.js' %}?v=3"></script>
     <script>
         // Load cart count on page load

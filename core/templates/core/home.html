@@ -13,7 +13,7 @@
 {% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="{% static 'core/css/home.css' %}">
+<link rel="stylesheet" href="{% static 'core/css/home.css' %}?v=3">
 {% endblock %}
 
 {% block content %}
@@ -42,9 +42,6 @@
                 {% endif %}
             </div>
         </div>
-        <div class="hero-visual">
-            <div class="hero-circle"></div>
-        </div>
     </div>
     <div class="hero-scroll">
         <a href="#nosotros">
@@ -59,7 +56,10 @@
     <div class="container">
         <div class="section-header">
             <span class="section-number">01</span>
-            <h2 class="section-title">Nosotros</h2>
+            <div>
+                <h2 class="section-title">Nosotros</h2>
+                <p class="section-subtitle">Una estructura comercial y productiva preparada para resolver compras rapidas con criterio tecnico.</p>
+            </div>
         </div>
         <div class="about-grid">
             <div class="about-content">
@@ -106,7 +106,10 @@
     <div class="container">
         <div class="section-header">
             <span class="section-number">02</span>
-            <h2 class="section-title">&iquest;C&oacute;mo podemos ayudarlo?</h2>
+            <div>
+                <h2 class="section-title">&iquest;C&oacute;mo podemos ayudarlo?</h2>
+                <p class="section-subtitle">Atencion comercial directa, fabricacion propia y un catalogo amplio para operar sin friccion.</p>
+            </div>
         </div>
         <div class="services-grid">
             <div class="service-card">
@@ -145,7 +148,10 @@
     <div class="container">
         <div class="section-header">
             <span class="section-number">03</span>
-            <h2 class="section-title">Nuestros Productos</h2>
+            <div>
+                <h2 class="section-title">Nuestros Productos</h2>
+                <p class="section-subtitle">Familias clave del catalogo con foco en transporte, suspension y reposicion cotidiana.</p>
+            </div>
         </div>
         <div class="products-grid">
             <div class="product-category-card">
@@ -197,7 +203,10 @@
     <div class="container">
         <div class="section-header">
             <span class="section-number">04</span>
-            <h2 class="section-title">Contacto</h2>
+            <div>
+                <h2 class="section-title">Contacto</h2>
+                <p class="section-subtitle">Si ya sabes lo que necesitas, te ayudamos a convertir esa busqueda en un pedido concreto.</p>
+            </div>
         </div>
         <div class="contact-grid">
             <div class="contact-info">

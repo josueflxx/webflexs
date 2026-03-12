@@ -3,6 +3,7 @@
 {% block page_title %}Cliente {{ client.company_name }}{% endblock %}
 
 {% block content %}
+{% include 'admin_panel/clients/_module_panel.html' with client_panel='search' client_module_subtitle='Historial comercial, cuenta corriente y documentos del cliente seleccionado.' %}
 <div class="admin-table-container client-hub-page">
     <style>
         .client-hub-page { display: grid; gap: 18px; }

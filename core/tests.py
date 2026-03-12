@@ -117,6 +117,38 @@ class ObservabilityMiddlewareTests(TestCase):
         self.assertTrue(str(response["X-Request-ID"]).strip())
 
 
+class ActiveCompanyMiddlewareTests(TestCase):
+    def test_staff_with_multiple_companies_can_access_home_without_selecting_company(self):
+        default_company = get_default_company()
+        Company.objects.create(name="Empresa Secundaria Home", slug="empresa-secundaria-home", is_active=True)
+        staff = User.objects.create_user(
+            username="staff_home_access",
+            password="secret123",
+            is_staff=True,
+        )
+        self.client.force_login(staff)
+
+        response = self.client.get(reverse("home"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "productos FLEXS")
+
+    def test_staff_with_multiple_companies_still_needs_company_for_admin_panel(self):
+        default_company = get_default_company()
+        Company.objects.create(name="Empresa Secundaria Admin", slug="empresa-secundaria-admin", is_active=True)
+        staff = User.objects.create_user(
+            username="staff_admin_requires_company",
+            password="secret123",
+            is_staff=True,
+        )
+        self.client.force_login(staff)
+
+        response = self.client.get(reverse("admin_dashboard"))
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(reverse("select_company"), response["Location"])
+
+
 class SalesDocumentTypeSeedTests(TestCase):
     def test_defaults_are_seeded_for_each_company(self):
         companies = list(Company.objects.all())

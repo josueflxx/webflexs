@@ -3,6 +3,7 @@
 {% block page_title %}Solicitudes de Cuenta{% endblock %}
 
 {% block content %}
+{% include 'admin_panel/clients/_module_panel.html' with client_panel='tools' client_module_subtitle='Revision y aprobacion de nuevos ingresos al modulo de clientes.' %}
 <div class="admin-table-container">
     <div class="admin-toolbar">
         <form method="get" class="toolbar-search">

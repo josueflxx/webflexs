@@ -3,6 +3,7 @@
 {% block page_title %}Clientes{% endblock %}
 
 {% block content %}
+{% include 'admin_panel/clients/_module_panel.html' with client_panel='search' client_module_subtitle='Acceso central a la cartera: buscar, revisar historial y operar sobre cada cliente.' %}
 <div class="admin-table-container">
     <style>
         .client-history-link {

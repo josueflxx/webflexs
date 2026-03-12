@@ -3,6 +3,7 @@
  */
 
 document.addEventListener('DOMContentLoaded', function () {
+    const PUBLIC_NAV_MOBILE_BREAKPOINT = 1360;
     // Mobile menu toggle
     const mobileMenuToggle = document.getElementById('mobileMenuToggle');
     const navMenu = document.getElementById('navMenu');
@@ -28,7 +29,7 @@ document.addEventListener('DOMContentLoaded', function () {
             mobileMenuToggle.classList.toggle('active', isOpen);
             mobileMenuToggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
             mobileMenuToggle.setAttribute('aria-label', isOpen ? 'Cerrar menu' : 'Abrir menu');
-            const isMobile = window.innerWidth <= 1240;
+            const isMobile = window.innerWidth <= PUBLIC_NAV_MOBILE_BREAKPOINT;
             navMenu.setAttribute('aria-hidden', isMobile && !isOpen ? 'true' : 'false');
         }
 
@@ -47,7 +48,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         // Keep layout consistent when resizing between mobile/desktop breakpoints.
         window.addEventListener('resize', () => {
-            if (window.innerWidth > 1240) {
+            if (window.innerWidth > PUBLIC_NAV_MOBILE_BREAKPOINT) {
                 setMenuState(false);
             }
         });

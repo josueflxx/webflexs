@@ -556,6 +556,7 @@ def _build_client_form_values(client=None, active_company=None, client_company=N
             "phone": str(form_data.get("phone", "")).strip(),
             "client_type": str(form_data.get("client_type", "")).strip(),
             "iva_condition": str(form_data.get("iva_condition", "")).strip(),
+            "notes": str(form_data.get("notes", "")).strip(),
         }
 
     effective_category = None
@@ -593,6 +594,7 @@ def _build_client_form_values(client=None, active_company=None, client_company=N
         "phone": getattr(client, "phone", "") or "",
         "client_type": getattr(client, "client_type", "") or "",
         "iva_condition": getattr(client, "iva_condition", "") or "",
+        "notes": getattr(client, "notes", "") or "",
     }
 
 
@@ -4068,6 +4070,45 @@ def clamp_request_detail(request, pk):
 # ===================== CLIENTS =====================
 
 @staff_member_required
+def client_dashboard(request):
+    """Simple dashboard for the clients module."""
+    active_company = get_active_company(request)
+
+    clients = ClientProfile.objects.select_related("user", "client_category")
+    if active_company:
+        clients = clients.filter(company_links__company=active_company).distinct()
+
+    total_clients = clients.count()
+    approved_clients = clients.filter(is_approved=True).count()
+    portal_enabled_clients = clients.filter(user__is_active=True).count()
+    new_this_month = clients.filter(created_at__date__gte=timezone.now().date().replace(day=1)).count()
+    pending_requests = AccountRequest.objects.filter(status="pending").count()
+
+    top_categories = (
+        clients.values("client_category__name")
+        .annotate(total=Count("id"))
+        .order_by("-total", "client_category__name")[:5]
+    )
+    recent_clients = clients.order_by("-created_at")[:8]
+
+    return render(
+        request,
+        "admin_panel/clients/dashboard.html",
+        {
+            "total_clients": total_clients,
+            "approved_clients": approved_clients,
+            "portal_enabled_clients": portal_enabled_clients,
+            "new_this_month": new_this_month,
+            "pending_requests": pending_requests,
+            "top_categories": top_categories,
+            "recent_clients": recent_clients,
+            "can_create_client": can_edit_client_profile(request.user),
+            "can_manage_client_categories": can_edit_client_profile(request.user),
+        },
+    )
+
+
+@staff_member_required
 def client_list(request):
     """Client list with search."""
     active_company = get_active_company(request)
@@ -4534,6 +4575,7 @@ def client_create(request):
                 client_type=form_values.get("client_type", "") if form_values.get("client_type", "") in client_type_choices else "",
                 client_category=selected_category if should_update_legacy else None,
                 is_approved=client_is_approved,
+                notes=form_values.get("notes", ""),
             )
             client_company = ClientCompany.objects.create(
                 client_profile=client,
@@ -4712,6 +4754,7 @@ def client_edit(request, pk):
                     'iva_condition',
                     'client_category_id',
                     'is_approved',
+                    'notes',
                 ],
             ),
             "client_company": model_snapshot(
@@ -4741,6 +4784,7 @@ def client_edit(request, pk):
         client.postal_code = form_values.get('postal_code', '')
         client.phone = form_values.get('phone', '')
         client.is_approved = form_values.get("client_is_approved", True)
+        client.notes = form_values.get("notes", "")
         default_company = get_default_client_origin_company()
         should_update_legacy = (
             not company
@@ -4799,6 +4843,7 @@ def client_edit(request, pk):
                     'iva_condition',
                     'client_category_id',
                     'is_approved',
+                    'notes',
                 ],
             ),
             "client_company": model_snapshot(

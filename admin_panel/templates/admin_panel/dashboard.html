@@ -4,38 +4,93 @@
 
 {% block content %}
 <div class="dashboard-compact">
+<section class="dashboard-showcase">
+    <div class="dashboard-showcase-main">
+        <span class="dashboard-showcase-kicker">Centro de operaciones</span>
+        <h2>Control comercial y administrativo en una sola vista</h2>
+        <p>
+            Seguimiento rapido de pedidos, clientes, cobranza y catalogo
+            {% if active_company %}
+            para <strong>{{ active_company.name }}</strong>.
+            {% else %}
+            para toda la operacion.
+            {% endif %}
+        </p>
+        <div class="dashboard-showcase-badges">
+            <span class="dashboard-showcase-badge">Pedidos hoy: {{ kpi_orders_today_count }}</span>
+            <span class="dashboard-showcase-badge">Pendientes: {{ pending_orders }}</span>
+            <span class="dashboard-showcase-badge">Solicitudes: {{ pending_requests }}</span>
+            <span class="dashboard-showcase-badge">Clientes activos 30d: {{ kpi_active_clients_30d }}</span>
+        </div>
+        <div class="dashboard-actions-wrap">
+            <a href="{% url 'admin_order_list' %}" class="btn btn-primary">Ver pedidos</a>
+            <a href="{% url 'admin_client_dashboard' %}" class="btn btn-outline">Clientes</a>
+            <a href="{% url 'admin_payment_list' %}" class="btn btn-outline">Pagos</a>
+            <a href="{% url 'admin_product_list' %}" class="btn btn-outline">Catalogo</a>
+            {% if user.is_superuser and user.username|lower == 'josueflexs' %}
+            <a href="{% url 'admin_settings' %}" class="btn btn-ghost">Configuracion</a>
+            {% endif %}
+        </div>
+    </div>
+    <div class="dashboard-showcase-side">
+        <div class="dashboard-spotlight-card">
+            <span class="dashboard-spotlight-label">Venta estimada hoy</span>
+            <strong>${{ kpi_orders_today_total|floatformat:2 }}</strong>
+            <p>Pedidos confirmados y actividad reciente para reaccionar rapido sobre la operacion diaria.</p>
+        </div>
+        <div class="dashboard-spotlight-grid">
+            <div class="dashboard-spotlight-mini">
+                <span>Auditoria 30d</span>
+                <strong>{{ audit_count_last_30 }}</strong>
+            </div>
+            <div class="dashboard-spotlight-mini">
+                <span>Entrega prom.</span>
+                <strong>{% if kpi_avg_delivery_cycle_hours %}{{ kpi_avg_delivery_cycle_hours|floatformat:1 }}h{% else %}-{% endif %}</strong>
+            </div>
+        </div>
+    </div>
+</section>
+
 <div class="dashboard-grid">
     <div class="stat-card">
         <h3>Productos activos</h3>
         <span class="number">{{ active_product_count }}</span>
+        <small>Listos para venta y visibilidad comercial</small>
     </div>
     <div class="stat-card">
         <h3>Total productos</h3>
         <span class="number">{{ product_count }}</span>
+        <small>Catalogo total disponible en el sistema</small>
     </div>
     <div class="stat-card">
         <h3>Clientes</h3>
         <span class="number">{{ client_count }}</span>
+        <small>Perfiles comerciales cargados</small>
     </div>
     <div class="stat-card">
         <h3>Categorias</h3>
         <span class="number">{{ category_count }}</span>
+        <small>Estructura base del catalogo</small>
     </div>
     <div class="stat-card">
         <h3>Proveedores</h3>
         <span class="number">{{ supplier_count }}</span>
+        <small>Relacionados a productos y compras</small>
     </div>
     <div class="stat-card">
         <h3>Pedidos pendientes</h3>
         <span class="number">{{ pending_orders }}</span>
+        <small>Requieren seguimiento del equipo</small>
     </div>
     <div class="stat-card">
         <h3>Solicitudes pendientes</h3>
         <span class="number">{{ pending_requests }}</span>
+        <small>Cuentas nuevas esperando revision</small>
     </div>
     <div class="stat-card">
         <h3>Eventos de auditoria (30 dias)</h3>
         <span class="number">{{ audit_count_last_30 }}</span>
+        <small>Actividad administrativa reciente</small>
     </div>
 </div>
 
@@ -43,20 +98,24 @@
     <div class="stat-card">
         <h3>Pedidos hoy</h3>
         <span class="number">{{ kpi_orders_today_count }}</span>
+        <small>Actividad comercial del dia</small>
     </div>
     <div class="stat-card">
         <h3>Venta estimada hoy</h3>
         <span class="number">${{ kpi_orders_today_total|floatformat:2 }}</span>
+        <small>Base operativa de facturacion</small>
     </div>
     <div class="stat-card">
         <h3>Clientes activos (30 dias)</h3>
         <span class="number">{{ kpi_active_clients_30d }}</span>
+        <small>Clientes con movimiento reciente</small>
     </div>
     <div class="stat-card">
         <h3>Ciclo prom. entrega (h)</h3>
         <span class="number">
             {% if kpi_avg_delivery_cycle_hours %}{{ kpi_avg_delivery_cycle_hours|floatformat:2 }}{% else %}-{% endif %}
         </span>
+        <small>Velocidad promedio de cumplimiento</small>
     </div>
 </div>
 
