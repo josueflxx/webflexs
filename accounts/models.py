@@ -296,11 +296,7 @@ class ClientProfile(models.Model):
         link = self.get_company_link(company)
         if not link or not link.is_active:
             return False
-        if link.client_category_id:
-            return True
-        if link.discount_percentage and link.discount_percentage != 0:
-            return True
-        return False
+        return True
 
     def get_total_paid(self, company=None):
         payments = self.payments.filter(is_cancelled=False)

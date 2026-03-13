@@ -130,7 +130,7 @@
             <div class="client-intake-section-title">Comercial y acceso</div>
             <div class="client-intake-grid client-intake-grid-commercial">
                 <div class="form-group">
-                    <label for="company_id" class="form-label">Empresa operativa</label>
+                    <label for="company_id" class="form-label">Empresa en edicion</label>
                     <select name="company_id" id="company_id" class="form-select">
                         {% for company in companies %}
                         <option value="{{ company.pk }}" {% if form_values.company_id == company.pk|stringformat:"s" %}selected{% endif %}>
@@ -138,6 +138,7 @@
                         </option>
                         {% endfor %}
                     </select>
+                    <small class="text-muted">Los datos comerciales de abajo se guardan sobre esta empresa.</small>
                 </div>
                 <div class="form-group">
                     <label for="discount" class="form-label">Descuento (%)</label>
@@ -175,7 +176,7 @@
                     <label class="form-label">Estado en empresa</label>
                     <label class="client-intake-checkbox">
                         <input type="checkbox" id="company_is_active" name="company_is_active" {% if form_values.company_is_active %}checked{% endif %}>
-                        Cliente habilitado en esta empresa
+                        Empresa en edicion habilitada para operar
                     </label>
                 </div>
                 {% if is_create %}
@@ -188,6 +189,48 @@
                     <input type="password" name="password_confirm" id="password_confirm" class="form-input" required>
                 </div>
                 {% endif %}
+            </div>
+            <div class="client-company-links-panel">
+                <div class="client-company-links-header">
+                    <div>
+                        <strong>Empresas habilitadas</strong>
+                        <p>Selecciona todas las empresas con las que este cliente puede operar. La empresa en edicion queda marcada y usa la configuracion comercial visible arriba.</p>
+                    </div>
+                </div>
+                <div class="client-company-links-grid">
+                    {% for company_card in company_cards %}
+                    <label class="client-company-link-card {% if company_card.is_selected %}is-selected{% endif %} {% if company_card.is_current %}is-current{% endif %}" data-company-card data-company-id="{{ company_card.company.pk }}">
+                        <input
+                            type="checkbox"
+                            name="linked_company_ids"
+                            value="{{ company_card.company.pk }}"
+                            {% if company_card.is_selected %}checked{% endif %}
+                            data-company-checkbox
+                        >
+                        <div class="client-company-link-copy">
+                            <div class="client-company-link-topline">
+                                <strong>{{ company_card.company.name }}</strong>
+                                {% if company_card.is_current %}
+                                <span class="client-company-link-badge">En edicion</span>
+                                {% endif %}
+                            </div>
+                            {% if company_card.link %}
+                            <small>
+                                {% if company_card.link.client_category %}
+                                {{ company_card.link.client_category.name }}
+                                {% else %}
+                                Sin categoria
+                                {% endif %}
+                                | Desc. {{ company_card.link.discount_percentage|floatformat:2 }}%
+                                | {% if company_card.link.is_active %}Activo{% else %}Inactivo{% endif %}
+                            </small>
+                            {% else %}
+                            <small>Se creara la relacion comercial para esta empresa.</small>
+                            {% endif %}
+                        </div>
+                    </label>
+                    {% endfor %}
+                </div>
             </div>
         </section>
 
@@ -323,14 +366,67 @@
             });
         }
 
+        function setupCompanyLinkSync() {
+            const companySelect = document.getElementById('company_id');
+            const companyActive = document.getElementById('company_is_active');
+            const cards = Array.from(document.querySelectorAll('[data-company-card]'));
+            if (!companySelect || !companyActive || !cards.length) return;
+
+            function getCurrentCard() {
+                return cards.find((card) => card.dataset.companyId === companySelect.value) || null;
+            }
+
+            function refreshCurrentState() {
+                cards.forEach((card) => {
+                    card.classList.toggle('is-current', card.dataset.companyId === companySelect.value);
+                });
+                const currentCard = getCurrentCard();
+                const currentCheckbox = currentCard ? currentCard.querySelector('[data-company-checkbox]') : null;
+                companyActive.checked = Boolean(currentCheckbox && currentCheckbox.checked);
+            }
+
+            companySelect.addEventListener('change', function () {
+                const currentCard = getCurrentCard();
+                const currentCheckbox = currentCard ? currentCard.querySelector('[data-company-checkbox]') : null;
+                if (currentCheckbox && !currentCheckbox.checked) {
+                    currentCheckbox.checked = true;
+                    currentCard.classList.add('is-selected');
+                }
+                refreshCurrentState();
+            });
+
+            companyActive.addEventListener('change', function () {
+                const currentCard = getCurrentCard();
+                const currentCheckbox = currentCard ? currentCard.querySelector('[data-company-checkbox]') : null;
+                if (!currentCheckbox) return;
+                currentCheckbox.checked = companyActive.checked;
+                currentCard.classList.toggle('is-selected', currentCheckbox.checked);
+            });
+
+            cards.forEach((card) => {
+                const checkbox = card.querySelector('[data-company-checkbox]');
+                if (!checkbox) return;
+                checkbox.addEventListener('change', function () {
+                    card.classList.toggle('is-selected', checkbox.checked);
+                    if (card.dataset.companyId === companySelect.value) {
+                        companyActive.checked = checkbox.checked;
+                    }
+                });
+            });
+
+            refreshCurrentState();
+        }
+
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', function () {
                 setupAutoDiscount('client_category', 'discount');
                 setupCuitAutofill();
+                setupCompanyLinkSync();
             });
         } else {
             setupAutoDiscount('client_category', 'discount');
             setupCuitAutofill();
+            setupCompanyLinkSync();
         }
     }());
 </script>

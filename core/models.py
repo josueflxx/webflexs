@@ -1237,9 +1237,19 @@ class ImportExecution(models.Model):
     created_count = models.IntegerField(default=0)
     updated_count = models.IntegerField(default=0)
     error_count = models.IntegerField(default=0)
+    # Legacy columns kept in sync with historical databases used in active environments.
+    metrics = models.JSONField(default=dict, blank=True)
     result_summary = models.JSONField(default=dict, blank=True)
     created_refs = models.JSONField(default=list, blank=True)
     rollback_summary = models.JSONField(default=dict, blank=True)
+    supplier = models.ForeignKey(
+        "catalog.Supplier",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="import_executions",
+    )
+    supplier_name = models.CharField(max_length=120, blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
     finished_at = models.DateTimeField(null=True, blank=True)
     rollback_at = models.DateTimeField(null=True, blank=True)

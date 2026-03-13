@@ -5,6 +5,7 @@ from django.urls import reverse
 
 from accounts.models import ClientCategory, ClientCompany, ClientPayment, ClientProfile, ClientTransaction
 from accounts.services.client_importer import ClientImporter
+from core.models import Company
 from orders.models import Order
 from core.services.company_context import get_default_company
 
@@ -70,6 +71,7 @@ class ClientLedgerTests(TestCase):
             company=self.company,
             is_active=True,
         )
+        self.second_company = Company.objects.create(name="Ledger Company 2")
 
     def test_current_balance_prefers_ledger_when_available(self):
         ClientTransaction.objects.create(
@@ -133,9 +135,24 @@ class ClientLedgerTests(TestCase):
         self.profile.refresh_from_db()
         self.assertEqual(self.profile.get_discount_decimal(), 0.25)
 
+    def test_can_operate_in_any_active_company_link_without_extra_rules(self):
+        second_link = ClientCompany.objects.create(
+            client_profile=self.profile,
+            company=self.second_company,
+            is_active=True,
+        )
+
+        self.assertTrue(self.profile.can_operate_in_company(self.company))
+        self.assertTrue(self.profile.can_operate_in_company(self.second_company))
+        self.assertTrue(second_link.is_active)
+
 
 class ClientImporterCategoryTests(TestCase):
     def setUp(self):
+        self.import_company_a = get_default_company()
+        self.import_company_b = Company.objects.filter(slug="ubolt").first()
+        if not self.import_company_b:
+            self.import_company_b = Company.objects.create(name="Ubolt Import", slug="ubolt")
         self.category_n2, _ = ClientCategory.objects.get_or_create(
             name="N°2",
             defaults={
@@ -177,3 +194,24 @@ class ClientImporterCategoryTests(TestCase):
         result = importer.process_row(row, dry_run=True)
         self.assertFalse(result.success)
         self.assertTrue(any("no coincide" in err.lower() for err in result.errors))
+
+    @override_settings(DEFAULT_CLIENT_IMPORT_COMPANY_SLUGS=["flexs", "ubolt"])
+    def test_import_creates_links_for_both_default_import_companies(self):
+        importer = ClientImporter(file=None)
+        row = {
+            "Usuario": "cliente_import_multi",
+            "Nombre": "Cliente Import Multi",
+            "Tipo de cliente": self.category_n2.name,
+            "Cond. IVA": "consumidor final",
+        }
+
+        result = importer.process_row(row, dry_run=False)
+
+        self.assertTrue(result.success)
+        profile = User.objects.get(username="cliente_import_multi").client_profile
+        self.assertEqual(
+            ClientCompany.objects.filter(client_profile=profile, is_active=True).count(),
+            2,
+        )
+        self.assertTrue(profile.can_operate_in_company(self.import_company_a))
+        self.assertTrue(profile.can_operate_in_company(self.import_company_b))

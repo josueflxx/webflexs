@@ -4230,3 +4230,111 @@
 .admin-body .drag-scroll-active * {
     cursor: grabbing !important;
 }
+
+.client-company-links-panel {
+    margin-top: 18px;
+    padding: 18px;
+    border-radius: 18px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(8, 16, 30, 0.64);
+}
+
+.client-company-links-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 14px;
+    margin-bottom: 14px;
+}
+
+.client-company-links-header strong {
+    display: block;
+    margin-bottom: 4px;
+    font-size: 1rem;
+    color: var(--color-white);
+}
+
+.client-company-links-header p {
+    margin: 0;
+    color: var(--color-gray-light);
+    line-height: 1.55;
+}
+
+.client-company-links-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 12px;
+}
+
+.client-company-link-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 14px 16px;
+    border-radius: 16px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.02);
+    transition: border-color 0.18s ease, background 0.18s ease, transform 0.18s ease;
+    cursor: pointer;
+}
+
+.client-company-link-card:hover {
+    transform: translateY(-1px);
+    border-color: rgba(255, 109, 61, 0.25);
+}
+
+.client-company-link-card.is-selected {
+    border-color: rgba(255, 109, 61, 0.45);
+    background: linear-gradient(180deg, rgba(255, 109, 61, 0.14), rgba(8, 16, 30, 0.78));
+}
+
+.client-company-link-card.is-current {
+    box-shadow: 0 0 0 1px rgba(63, 186, 255, 0.28) inset;
+}
+
+.client-company-link-card input[type="checkbox"] {
+    margin-top: 4px;
+}
+
+.client-company-link-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+
+.client-company-link-topline {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.client-company-link-topline strong {
+    color: var(--color-white);
+}
+
+.client-company-link-copy small {
+    color: var(--color-gray-light);
+    line-height: 1.45;
+}
+
+.client-company-link-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 8px;
+    border-radius: 999px;
+    background: rgba(63, 186, 255, 0.12);
+    border: 1px solid rgba(63, 186, 255, 0.22);
+    color: #8fdcff;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+@media (max-width: 768px) {
+    .client-company-links-grid {
+        grid-template-columns: 1fr;
+    }
+}

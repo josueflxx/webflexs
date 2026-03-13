@@ -48,6 +48,14 @@ ALLOWED_HOSTS = os.getenv('DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1').split('
 
 # Default company for new client origin (Ubolt by default).
 DEFAULT_CLIENT_ORIGIN_COMPANY_SLUG = os.getenv('DEFAULT_CLIENT_ORIGIN_COMPANY_SLUG', 'ubolt')
+DEFAULT_CLIENT_IMPORT_COMPANY_SLUGS = [
+    slug.strip()
+    for slug in os.getenv(
+        'DEFAULT_CLIENT_IMPORT_COMPANY_SLUGS',
+        f"{DEFAULT_CLIENT_ORIGIN_COMPANY_SLUG},flexs",
+    ).split(',')
+    if slug.strip()
+]
 
 # Application definition
 INSTALLED_APPS = [

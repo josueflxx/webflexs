@@ -1054,8 +1054,27 @@ def _is_checked(form_data, field_name, default=False):
     return str(form_data.get(field_name, "")).strip().lower() in {"1", "true", "on", "yes"}
 
 
+def _extract_linked_company_ids(form_data):
+    if form_data is None or not hasattr(form_data, "getlist"):
+        return []
+    selected = []
+    seen = set()
+    for raw_value in form_data.getlist("linked_company_ids"):
+        normalized = str(raw_value or "").strip()
+        if not normalized.isdigit() or normalized in seen:
+            continue
+        selected.append(normalized)
+        seen.add(normalized)
+    return selected
+
+
 def _resolve_client_editor_company(request, client=None):
     companies = Company.objects.filter(is_active=True).order_by("name")
+    requested_company_id = str(request.GET.get("company_id", "")).strip()
+    if requested_company_id.isdigit():
+        requested_company = companies.filter(pk=int(requested_company_id)).first()
+        if requested_company:
+            return requested_company, companies
     active_company = get_admin_selected_company(request)
     if active_company:
         return active_company, companies
@@ -1099,10 +1118,12 @@ def _build_client_form_values(client=None, active_company=None, client_company=N
             "client_type": str(form_data.get("client_type", "")).strip(),
             "iva_condition": str(form_data.get("iva_condition", "")).strip(),
             "notes": str(form_data.get("notes", "")).strip(),
+            "linked_company_ids": _extract_linked_company_ids(form_data),
         }
 
     effective_category = None
     effective_discount = Decimal("0")
+    linked_company_ids = []
     if client:
         effective_category = (
             client_company.client_category
@@ -1110,6 +1131,12 @@ def _build_client_form_values(client=None, active_company=None, client_company=N
             else client.client_category
         )
         effective_discount = client.get_effective_discount_percentage(company=active_company)
+        linked_company_ids = [
+            str(link.company_id)
+            for link in client.company_links.filter(company__is_active=True, is_active=True).order_by("company__name", "company_id")
+        ]
+    elif active_company:
+        linked_company_ids = [str(active_company.pk)]
 
     user = getattr(client, "user", None)
     return {
@@ -1137,7 +1164,30 @@ def _build_client_form_values(client=None, active_company=None, client_company=N
         "client_type": getattr(client, "client_type", "") or "",
         "iva_condition": getattr(client, "iva_condition", "") or "",
         "notes": getattr(client, "notes", "") or "",
+        "linked_company_ids": linked_company_ids,
     }
+
+
+def _resolve_linked_companies(form_values, companies):
+    company_map = {str(company.pk): company for company in companies}
+    selected = []
+    seen = set()
+    for raw_company_id in form_values.get("linked_company_ids", []):
+        normalized = str(raw_company_id or "").strip()
+        if normalized in company_map and normalized not in seen:
+            selected.append(company_map[normalized])
+            seen.add(normalized)
+
+    current_company_id = str(form_values.get("company_id", "")).strip()
+    if (
+        form_values.get("company_is_active", True)
+        and current_company_id in company_map
+        and current_company_id not in seen
+    ):
+        selected.append(company_map[current_company_id])
+        seen.add(current_company_id)
+
+    return selected
 
 
 def _render_client_form(
@@ -1171,6 +1221,27 @@ def _render_client_form(
     )
     company_is_active = form_values.get("company_is_active", True)
     uses_legacy = client.uses_legacy_commercial_rules(active_company) if client else False
+    selected_company_ids = {str(company_id) for company_id in form_values.get("linked_company_ids", [])}
+    current_company_id = str(form_values.get("company_id", "")).strip()
+    if company_is_active and current_company_id:
+        selected_company_ids.add(current_company_id)
+    links_by_company_id = {}
+    if client:
+        links_by_company_id = {
+            link.company_id: link
+            for link in client.company_links.select_related("company", "client_category").filter(company__is_active=True)
+        }
+    company_cards = []
+    for company in companies:
+        link = links_by_company_id.get(company.pk)
+        company_cards.append(
+            {
+                "company": company,
+                "link": link,
+                "is_selected": str(company.pk) in selected_company_ids,
+                "is_current": current_company_id == str(company.pk),
+            }
+        )
 
     return render(
         request,
@@ -1187,6 +1258,7 @@ def _render_client_form(
             "effective_discount": effective_discount,
             "company_is_active": company_is_active,
             "uses_legacy_rules": uses_legacy,
+            "company_cards": company_cards,
             "can_manage_client_credentials": can_manage_client_credentials(request.user),
             "document_type_choices": ClientProfile.DOCUMENT_TYPE_CHOICES,
             "client_type_choices": ClientProfile.CLIENT_TYPE_CHOICES,
@@ -5557,6 +5629,26 @@ def client_create(request):
                 form_values=form_values,
             )
 
+        selected_companies = _resolve_linked_companies(form_values, companies)
+        if not selected_companies:
+            messages.error(request, "Selecciona al menos una empresa habilitada para este cliente.")
+            return _render_client_form(
+                request,
+                active_company=company,
+                companies=companies,
+                client_company=None,
+                form_values=form_values,
+            )
+        if company not in selected_companies:
+            messages.error(request, "La empresa en edicion tambien debe estar habilitada para el cliente.")
+            return _render_client_form(
+                request,
+                active_company=company,
+                companies=companies,
+                client_company=None,
+                form_values=form_values,
+            )
+
         try:
             selected_category = parse_optional_client_category(form_values.get("client_category", ""))
             discount_value = parse_admin_decimal_input(
@@ -5679,13 +5771,18 @@ def client_create(request):
                 is_approved=client_is_approved,
                 notes=form_values.get("notes", ""),
             )
-            client_company = ClientCompany.objects.create(
-                client_profile=client,
-                company=company,
-                client_category=selected_category,
-                discount_percentage=selected_category.discount_percentage if selected_category else discount_value,
-                is_active=company_is_active,
-            )
+            client_links = []
+            for linked_company in selected_companies:
+                client_link = ClientCompany.objects.create(
+                    client_profile=client,
+                    company=linked_company,
+                    client_category=selected_category,
+                    discount_percentage=selected_category.discount_percentage if selected_category else discount_value,
+                    is_active=True,
+                )
+                client_links.append(client_link)
+
+        client_company = next((link for link in client_links if link.company_id == company.id), None)
 
         log_admin_action(
             request,
@@ -5697,13 +5794,14 @@ def client_create(request):
                 "email": user.email,
                 "company_name": client.company_name,
                 "company_id": company.pk,
-                "client_company_id": client_company.pk,
+                "client_company_id": client_company.pk if client_company else None,
+                "linked_company_ids": [link.company_id for link in client_links],
                 "client_category_id": selected_category.pk if selected_category else None,
                 "discount": str(client_company.discount_percentage),
             },
         )
         messages.success(request, f'Cliente "{client.company_name}" creado correctamente.')
-        return redirect("admin_client_edit", pk=client.pk)
+        return redirect(f"{reverse('admin_client_edit', args=[client.pk])}?company_id={company.pk}")
 
     return _render_client_form(
         request,
@@ -5829,6 +5927,28 @@ def client_edit(request, pk):
                 form_values=form_values,
             )
 
+        selected_companies = _resolve_linked_companies(form_values, companies)
+        if not selected_companies:
+            messages.error(request, "Selecciona al menos una empresa habilitada para este cliente.")
+            return _render_client_form(
+                request,
+                client=client,
+                active_company=company or active_company,
+                companies=companies,
+                client_company=client_company,
+                form_values=form_values,
+            )
+        if company not in selected_companies:
+            messages.error(request, "La empresa en edicion tambien debe estar habilitada para el cliente.")
+            return _render_client_form(
+                request,
+                client=client,
+                active_company=company or active_company,
+                companies=companies,
+                client_company=client_company,
+                form_values=form_values,
+            )
+
         document_type_choices = {choice[0] for choice in ClientProfile.DOCUMENT_TYPE_CHOICES}
         client_type_choices = {choice[0] for choice in ClientProfile.CLIENT_TYPE_CHOICES}
         iva_choices = {choice[0] for choice in ClientProfile.IVA_CHOICES}
@@ -5903,24 +6023,43 @@ def client_edit(request, pk):
         client.iva_condition = form_values.get('iva_condition', '') if form_values.get("iva_condition", "") in iva_choices else ''
         client.save()
 
-        if company:
-            link, _ = ClientCompany.objects.get_or_create(
+        link = None
+        selected_company_ids = {linked_company.id for linked_company in selected_companies}
+        ClientCompany.objects.filter(
+            client_profile=client,
+            company__is_active=True,
+        ).exclude(company_id__in=selected_company_ids).update(is_active=False)
+
+        for linked_company in selected_companies:
+            current_link, created = ClientCompany.objects.get_or_create(
                 client_profile=client,
-                company=company,
+                company=linked_company,
                 defaults={
-                    "is_active": bool(client.is_approved),
+                    "is_active": True,
+                    "client_category": selected_category,
+                    "discount_percentage": (
+                        selected_category.discount_percentage if selected_category else discount_value
+                    ),
                 },
             )
-            link.client_category = selected_category
-            link.discount_percentage = (
-                selected_category.discount_percentage
-                if selected_category
-                else discount_value
-            )
-            link.is_active = form_values.get("company_is_active", True)
-            link.save()
-        else:
-            link = client_company
+            if linked_company.id == company.id:
+                current_link.client_category = selected_category
+                current_link.discount_percentage = (
+                    selected_category.discount_percentage
+                    if selected_category
+                    else discount_value
+                )
+            elif created:
+                current_link.client_category = selected_category
+                current_link.discount_percentage = (
+                    selected_category.discount_percentage
+                    if selected_category
+                    else discount_value
+                )
+            current_link.is_active = True
+            current_link.save()
+            if linked_company.id == company.id:
+                link = current_link
         after = {
             "user": model_snapshot(
                 client.user,
@@ -5972,7 +6111,7 @@ def client_edit(request, pk):
             )
         else:
             messages.success(request, f'Cliente "{client.company_name}" actualizado.')
-        return redirect('admin_client_edit', pk=client.pk)
+        return redirect(f"{reverse('admin_client_edit', args=[client.pk])}?company_id={company.pk}")
     
     return _render_client_form(
         request,
@@ -10474,6 +10613,8 @@ def import_process(request, import_type):
                     file_name=file_basename,
                     dry_run=dry_run,
                     status=ImportExecution.STATUS_PROCESSING,
+                    metrics={},
+                    supplier_name="",
                 )
 
                 importer_class_path = f"{ImporterClass.__module__}.{ImporterClass.__name__}"

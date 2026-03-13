@@ -2,7 +2,10 @@ from decimal import Decimal
 from core.services.importer import BaseImporter, ImportRowResult
 from django.contrib.auth.models import User
 from accounts.models import ClientCompany, ClientProfile, ClientCategory
-from core.services.company_context import get_default_client_origin_company
+from core.services.company_context import (
+    get_default_client_import_companies,
+    get_default_client_origin_company,
+)
 from django.db import transaction
 from django.utils.text import slugify
 import pandas as pd
@@ -280,11 +283,18 @@ class ClientImporter(BaseImporter):
                 
                 profile.save()
 
-                default_company = getattr(self, "company", None) or get_default_client_origin_company()
-                if default_company:
+                import_companies = get_default_client_import_companies()
+                explicit_company = getattr(self, "company", None)
+                if explicit_company and explicit_company.id not in {company.id for company in import_companies}:
+                    import_companies = [explicit_company, *import_companies]
+                if not import_companies:
+                    fallback_company = explicit_company or get_default_client_origin_company()
+                    import_companies = [fallback_company] if fallback_company else []
+
+                for target_company in import_companies:
                     link, _ = ClientCompany.objects.get_or_create(
                         client_profile=profile,
-                        company=default_company,
+                        company=target_company,
                         defaults={
                             "is_active": bool(profile.is_approved),
                         },

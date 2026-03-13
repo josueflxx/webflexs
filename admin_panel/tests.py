@@ -3,11 +3,12 @@ from decimal import Decimal
 from io import BytesIO
 
 from django.contrib.auth.models import User
-from django.test import TestCase
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.db import connection
 from django.utils import timezone
-from openpyxl import load_workbook
+from openpyxl import Workbook, load_workbook
 
 from accounts.models import AccountRequest, ClientCategory, ClientCompany, ClientPayment, ClientProfile, ClientTransaction
 from catalog.models import Category, ClampMeasureRequest, Product, Supplier
@@ -16,6 +17,7 @@ from core.models import (
     CatalogExcelTemplate,
     CatalogExcelTemplateSheet,
     CatalogExcelTemplateColumn,
+    Company,
     FiscalDocument,
     FiscalDocumentItem,
     FiscalPointOfSale,
@@ -1903,6 +1905,7 @@ class ClientManagementViewTests(TestCase):
             company=self.company,
             is_active=True,
         )
+        self.company_b = Company.objects.create(name='Flexs Secundaria')
 
     def _activate_company(self):
         session = self.client.session
@@ -1960,6 +1963,38 @@ class ClientManagementViewTests(TestCase):
         self.assertEqual(client_link.discount_percentage, Decimal('12.5'))
         self.assertContains(response, 'Editar cliente')
 
+    def test_staff_can_create_client_with_multiple_company_links(self):
+        self.client.force_login(self.staff)
+        self._activate_company()
+        response = self.client.post(
+            reverse('admin_client_create'),
+            data={
+                'username': 'cliente_multi_empresa',
+                'email': 'cliente_multi@example.com',
+                'first_name': 'Multi',
+                'last_name': 'Empresa',
+                'password': 'ClaveSegura123!',
+                'password_confirm': 'ClaveSegura123!',
+                'user_is_active': 'on',
+                'client_is_approved': 'on',
+                'company_is_active': 'on',
+                'company_id': str(self.company.pk),
+                'linked_company_ids': [str(self.company.pk), str(self.company_b.pk)],
+                'company_name': 'Cliente Multiempresa',
+                'discount': '8',
+            },
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        new_user = User.objects.get(username='cliente_multi_empresa')
+        new_profile = ClientProfile.objects.get(user=new_user)
+        self.assertEqual(
+            ClientCompany.objects.filter(client_profile=new_profile, is_active=True).count(),
+            2,
+        )
+        self.assertTrue(new_profile.can_operate_in_company(self.company_b))
+
     def test_staff_can_update_client_user_fields_from_client_edit(self):
         self.client.force_login(self.staff)
         self._activate_company()
@@ -1996,6 +2031,39 @@ class ClientManagementViewTests(TestCase):
         self.assertTrue(self.client_user.is_active)
         self.assertTrue(self.client_profile.is_approved)
         self.assertTrue(self.client_company.is_active)
+
+    def test_staff_can_enable_client_in_multiple_companies_from_edit_form(self):
+        self.client.force_login(self.staff)
+        self._activate_company()
+        response = self.client.post(
+            reverse('admin_client_edit', args=[self.client_profile.pk]),
+            data={
+                'username': 'cliente_management',
+                'email': 'cliente_old@example.com',
+                'first_name': 'Cliente',
+                'last_name': 'Gestion',
+                'company_id': str(self.company_b.pk),
+                'linked_company_ids': [str(self.company.pk), str(self.company_b.pk)],
+                'company_name': 'Cliente Gestion',
+                'cuit_dni': '',
+                'discount': '5',
+                'user_is_active': 'on',
+                'client_is_approved': 'on',
+                'company_is_active': 'on',
+                'client_type': '',
+                'iva_condition': '',
+            },
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        second_link = ClientCompany.objects.filter(
+            client_profile=self.client_profile,
+            company=self.company_b,
+        ).first()
+        self.assertIsNotNone(second_link)
+        self.assertTrue(second_link.is_active)
+        self.assertTrue(self.client_profile.can_operate_in_company(self.company_b))
 
 class CatalogExcelTemplateExportTests(TestCase):
     def setUp(self):
@@ -2419,3 +2487,84 @@ class ClientReportsViewTests(TestCase):
         self.assertContains(response, 'Imprimir')
         self.assertContains(response, 'FLEXS Admin')
         self.assertNotContains(response, 'Panel de clientes')
+
+
+@override_settings(
+    IMPORTS_FORCE_SYNC=True,
+    FEATURE_BACKGROUND_JOBS_ENABLED=False,
+    DEFAULT_CLIENT_IMPORT_COMPANY_SLUGS=["flexs", "ubolt"],
+)
+class ClientImportProcessTests(TestCase):
+    def setUp(self):
+        self.primary_superadmin = User.objects.create_superuser(
+            username="josueflexs",
+            email="josueflexs@example.com",
+            password="secret123",
+        )
+        self.company = get_default_company()
+        ClientCategory.objects.get_or_create(name="N°1")
+
+    def _activate_company(self):
+        session = self.client.session
+        session["active_company_id"] = self.company.pk
+        session.save()
+
+    def _build_import_file(self):
+        workbook = Workbook()
+        sheet = workbook.active
+        sheet.title = "Clientes"
+        sheet.append(
+            [
+                "Usuario",
+                "Nombre",
+                "Email",
+                "Tipo de cliente",
+                "Cond. IVA",
+                "Descuento",
+                "Provincia",
+                "Domicilio",
+                "Telefonos",
+                "Contacto",
+            ]
+        )
+        sheet.append(
+            [
+                "import_test_user_admin",
+                "Cliente Importado Admin",
+                "import_test_user_admin@example.com",
+                "N°1",
+                "Consumidor final",
+                0,
+                "Buenos Aires",
+                "Calle 123",
+                "123456",
+                "Contacto Test",
+            ]
+        )
+        output = BytesIO()
+        workbook.save(output)
+        output.seek(0)
+        return SimpleUploadedFile(
+            "clientes.xlsx",
+            output.read(),
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+
+    def test_real_client_import_can_start_successfully(self):
+        self.client.force_login(self.primary_superadmin)
+        self._activate_company()
+
+        response = self.client.post(
+            reverse("admin_import_process", args=["clients"]),
+            {
+                "file": self._build_import_file(),
+                "dry_run": "",
+                "confirm_apply": "on",
+            },
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload["success"])
+        self.assertIn("execution_id", payload)

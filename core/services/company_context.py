@@ -16,7 +16,7 @@ SESSION_COMPANY_KEY = "active_company_id"
 
 def get_default_company():
     if DEFAULT_COMPANY_SLUG:
-        company = Company.objects.filter(slug=DEFAULT_COMPANY_SLUG, is_active=True).first()
+        company = Company.objects.filter(slug__iexact=DEFAULT_COMPANY_SLUG, is_active=True).first()
         if company:
             return company
     return Company.objects.filter(is_active=True).order_by("id").first()
@@ -25,12 +25,39 @@ def get_default_company():
 def get_default_client_origin_company():
     if DEFAULT_CLIENT_ORIGIN_COMPANY_SLUG:
         company = Company.objects.filter(
-            slug=DEFAULT_CLIENT_ORIGIN_COMPANY_SLUG,
+            slug__iexact=DEFAULT_CLIENT_ORIGIN_COMPANY_SLUG,
             is_active=True,
         ).first()
         if company:
             return company
     return get_default_company()
+
+
+def get_default_client_import_companies():
+    companies = []
+    seen_ids = set()
+    configured_slugs = getattr(
+        settings,
+        "DEFAULT_CLIENT_IMPORT_COMPANY_SLUGS",
+        [DEFAULT_CLIENT_ORIGIN_COMPANY_SLUG, DEFAULT_COMPANY_SLUG],
+    ) or [DEFAULT_CLIENT_ORIGIN_COMPANY_SLUG]
+
+    for raw_slug in configured_slugs:
+        slug = str(raw_slug or "").strip()
+        if not slug:
+            continue
+        company = Company.objects.filter(slug__iexact=slug, is_active=True).first()
+        if company and company.id not in seen_ids:
+            companies.append(company)
+            seen_ids.add(company.id)
+
+    if companies:
+        return companies
+
+    fallback_company = get_default_client_origin_company()
+    if fallback_company:
+        return [fallback_company]
+    return []
 
 
 def get_user_companies(user):
