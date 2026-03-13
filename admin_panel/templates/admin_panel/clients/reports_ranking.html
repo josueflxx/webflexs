@@ -1,0 +1,120 @@
+{% extends 'admin_panel/base.html' %}
+
+{% block page_title %}Ranking de clientes{% endblock %}
+
+{% block content %}
+{% include 'admin_panel/clients/_module_panel.html' with client_panel='reports' client_module_subtitle='Medicion comercial de la cartera por periodos y volumen de ventas.' %}
+{% include 'admin_panel/clients/_reports_nav.html' with client_report_panel=client_report_panel client_report_nav_items=client_report_nav_items %}
+
+<section class="admin-table-container compact-top-gap">
+    <div class="report-frame-header">
+        <div>
+            <span class="client-module-kicker">Filtro por fechas</span>
+            <h2>Ranking de clientes</h2>
+            <p>Analiza los clientes con mayor o menor volumen de ventas dentro del periodo elegido.</p>
+        </div>
+    </div>
+
+    {% if reports_requires_company %}
+    <p class="text-muted">Elegí una empresa activa para generar este informe.</p>
+    {% else %}
+    <form method="get" class="client-report-form">
+        <input type="hidden" name="standalone" value="0" class="report-standalone-flag">
+        <div class="client-report-filter-grid">
+            <label class="client-report-field">
+                <span>Seleccione fechas</span>
+                <select name="date_range" class="form-select">
+                    {% for value, label in date_range_choices %}
+                    <option value="{{ value }}" {% if selected_range == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+
+            <label class="client-report-field">
+                <span>Mostrar</span>
+                <select name="ranking" class="form-select">
+                    {% for value, label in ranking_choices %}
+                    <option value="{{ value }}" {% if selected_ranking == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+
+            <label class="client-report-field">
+                <span>Desde</span>
+                <input type="date" name="start_date" value="{{ start_date }}" class="form-input">
+            </label>
+
+            <label class="client-report-field">
+                <span>Hasta</span>
+                <input type="date" name="end_date" value="{{ end_date }}" class="form-input">
+            </label>
+        </div>
+
+        <div class="client-report-actions">
+            <button
+                type="submit"
+                name="action"
+                value="generate"
+                class="btn btn-primary"
+                formtarget="_blank"
+                onclick="this.form.querySelector('.report-standalone-flag').value='1';"
+            >Generar informe</button>
+            <button
+                type="submit"
+                name="action"
+                value="download"
+                class="btn btn-outline"
+                onclick="this.form.querySelector('.report-standalone-flag').value='0';"
+            >Descargar informe</button>
+        </div>
+    </form>
+
+    {% if report_requested %}
+    <div class="client-report-results">
+        <div class="report-results-meta">
+            <strong>{{ rows|length }} registros</strong>
+            <span class="text-muted">Periodo: {{ range_label }}</span>
+        </div>
+        <table class="admin-table">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Cliente</th>
+                    <th>Usuario</th>
+                    <th>CUIT/DNI</th>
+                    <th>Categoria</th>
+                    <th>Pedidos</th>
+                    <th>Total comprado</th>
+                    <th>Ticket promedio</th>
+                    <th>Ultimo pedido</th>
+                    <th>Accion</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in rows %}
+                <tr>
+                    <td>{{ row.position }}</td>
+                    <td><strong>{{ row.company_name }}</strong></td>
+                    <td>{{ row.username }}</td>
+                    <td>{{ row.cuit_dni }}</td>
+                    <td>{{ row.category }}</td>
+                    <td>{{ row.orders_count }}</td>
+                    <td>${{ row.total_sales|floatformat:2 }}</td>
+                    <td>${{ row.average_ticket|floatformat:2 }}</td>
+                    <td>{{ row.last_order_at|date:'d/m/Y H:i'|default:'-' }}</td>
+                    <td>
+                        <a href="{% url 'admin_client_order_history' row.client_id %}" class="btn btn-outline btn-sm">Historial</a>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="10" class="text-center text-muted">No hubo ventas en el periodo seleccionado.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+    {% endif %}
+</section>
+{% endblock %}

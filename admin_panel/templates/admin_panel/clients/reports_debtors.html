@@ -1,0 +1,115 @@
+{% extends 'admin_panel/base.html' %}
+
+{% block page_title %}Clientes deudores{% endblock %}
+
+{% block content %}
+{% include 'admin_panel/clients/_module_panel.html' with client_panel='reports' client_module_subtitle='Seguimiento de saldos deudores, acreedores y cuentas inactivas con diferencia pendiente.' %}
+{% include 'admin_panel/clients/_reports_nav.html' with client_report_panel=client_report_panel client_report_nav_items=client_report_nav_items %}
+
+<section class="admin-table-container compact-top-gap">
+    <div class="report-frame-header">
+        <div>
+            <span class="client-module-kicker">Tipo de informe</span>
+            <h2>Clientes deudores</h2>
+            <p>Filtra por saldo deudor, acreedor o cuentas no habilitadas con diferencia distinta de cero.</p>
+        </div>
+    </div>
+
+    {% if reports_requires_company %}
+    <p class="text-muted">Elegí una empresa activa para generar este informe.</p>
+    {% else %}
+    <form method="get" class="client-report-form">
+        <input type="hidden" name="standalone" value="0" class="report-standalone-flag">
+        <div class="client-report-filter-grid">
+            <label class="client-report-field">
+                <span>Seleccionar tipo de informe</span>
+                <select name="report_type" class="form-select">
+                    {% for value, label in debtor_type_choices %}
+                    <option value="{{ value }}" {% if report_type == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+
+            <label class="client-report-field">
+                <span>Tolerancia para considerar deuda</span>
+                <input type="number" name="tolerance" value="{{ tolerance }}" min="0" step="0.01" class="form-input">
+            </label>
+
+            <label class="client-report-field">
+                <span>Seleccionar moneda</span>
+                <select name="currency" class="form-select">
+                    {% for value, label in currency_choices %}
+                    <option value="{{ value }}" {% if selected_currency == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+        </div>
+
+        <div class="client-report-actions">
+            <button
+                type="submit"
+                name="action"
+                value="generate"
+                class="btn btn-primary"
+                formtarget="_blank"
+                onclick="this.form.querySelector('.report-standalone-flag').value='1';"
+            >Generar informe</button>
+            <button
+                type="submit"
+                name="action"
+                value="download"
+                class="btn btn-outline"
+                onclick="this.form.querySelector('.report-standalone-flag').value='0';"
+            >Descargar informe</button>
+        </div>
+    </form>
+
+    {% if report_requested %}
+    <div class="client-report-results">
+        <div class="report-results-meta">
+            <strong>{{ rows|length }} clientes</strong>
+            <span class="text-muted">Saldo acumulado del informe: ${{ total_balance|floatformat:2 }}</span>
+        </div>
+        <table class="admin-table">
+            <thead>
+                <tr>
+                    <th>Cliente</th>
+                    <th>Usuario</th>
+                    <th>CUIT/DNI</th>
+                    <th>Categoria</th>
+                    <th>Estado</th>
+                    <th>Saldo</th>
+                    <th>Ultimo movimiento</th>
+                    <th>Accion</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in rows %}
+                <tr>
+                    <td><strong>{{ row.company_name }}</strong></td>
+                    <td>{{ row.username }}</td>
+                    <td>{{ row.cuit_dni }}</td>
+                    <td>{{ row.category }}</td>
+                    <td>
+                        <span class="badge {% if row.state == 'Habilitado' %}badge-success{% else %}badge-danger{% endif %}">
+                            {{ row.state }}
+                        </span>
+                    </td>
+                    <td>${{ row.balance|floatformat:2 }}</td>
+                    <td>{{ row.last_event_at|date:'d/m/Y H:i'|default:'-' }}</td>
+                    <td>
+                        <a href="{% url 'admin_client_order_history' row.client.pk %}" class="btn btn-outline btn-sm">Historial</a>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="8" class="text-center text-muted">No hay clientes que cumplan con ese criterio.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+    {% endif %}
+</section>
+{% endblock %}

@@ -1,0 +1,28 @@
+{% extends 'admin_panel/base.html' %}
+
+{% block page_title %}Herramientas de clientes{% endblock %}
+
+{% block content %}
+{% include 'admin_panel/clients/_module_panel.html' with client_panel='tools' client_module_subtitle='Exporta base, ejecuta importaciones y resuelve herramientas operativas del modulo.' %}
+{% include 'admin_panel/clients/_tools_nav.html' with client_tools_panel=client_tools_panel client_tools_nav_items=client_tools_nav_items %}
+
+{% if tools_requires_company %}
+<div class="dashboard-section compact-top-gap">
+    <h2>Elegi una empresa para usar herramientas</h2>
+    <p class="text-muted">Las herramientas de clientes operan por empresa activa para no mezclar cartera entre Flexs y Ubolt.</p>
+</div>
+{% endif %}
+
+<div class="client-reports-card-grid compact-top-gap">
+    {% for card in tool_cards %}
+    <a href="{{ card.url }}" class="client-report-card">
+        <div class="client-report-card-icon" aria-hidden="true">{{ card.icon|safe }}</div>
+        <div class="client-report-card-copy">
+            <strong>{{ card.title }}</strong>
+            <p>{{ card.description }}</p>
+            <span class="client-report-card-cta">Abrir herramienta</span>
+        </div>
+    </a>
+    {% endfor %}
+</div>
+{% endblock %}

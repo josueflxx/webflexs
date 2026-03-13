@@ -1,0 +1,50 @@
+{% extends 'admin_panel/clients/report_output_base.html' %}
+
+{% block report_summary %}
+<div class="report-standalone-summary">
+    <span><strong>Tolerancia:</strong> ${{ tolerance }}</span>
+    <span><strong>Moneda:</strong> {{ selected_currency_label }}</span>
+    <span><strong>Saldo acumulado:</strong> ${{ total_balance|floatformat:2 }}</span>
+</div>
+{% endblock %}
+
+{% block report_table %}
+<div class="client-report-results report-standalone-results">
+    <div class="report-results-meta">
+        <strong>{{ rows|length }} clientes</strong>
+        <span class="report-standalone-scroll-hint no-print">Desplazate con la barra inferior o mantene el click derecho para mover la tabla.</span>
+    </div>
+    <div class="admin-table-container report-standalone-table-wrap" data-drag-scroll>
+        <table class="admin-table">
+            <thead>
+                <tr>
+                    <th>Cliente</th>
+                    <th>Usuario</th>
+                    <th>CUIT/DNI</th>
+                    <th>Categoria</th>
+                    <th>Estado</th>
+                    <th>Saldo</th>
+                    <th>Ultimo movimiento</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in rows %}
+                <tr>
+                    <td><strong>{{ row.company_name }}</strong></td>
+                    <td>{{ row.username }}</td>
+                    <td>{{ row.cuit_dni }}</td>
+                    <td>{{ row.category }}</td>
+                    <td>{{ row.state }}</td>
+                    <td>${{ row.balance|floatformat:2 }}</td>
+                    <td>{{ row.last_event_at|date:'d/m/Y H:i'|default:'-' }}</td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="7" class="text-center text-muted">No hay clientes que cumplan con ese criterio.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

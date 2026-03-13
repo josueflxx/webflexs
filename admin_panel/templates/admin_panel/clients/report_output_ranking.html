@@ -1,0 +1,53 @@
+{% extends 'admin_panel/clients/report_output_base.html' %}
+
+{% block report_summary %}
+<div class="report-standalone-summary">
+    <span><strong>Periodo:</strong> {{ range_label }}</span>
+    <span><strong>Resultados:</strong> {{ rows|length }}</span>
+</div>
+{% endblock %}
+
+{% block report_table %}
+<div class="client-report-results report-standalone-results">
+    <div class="report-results-meta">
+        <strong>{{ rows|length }} resultados</strong>
+        <span class="report-standalone-scroll-hint no-print">Desplazate con la barra inferior o mantene el click derecho para mover la tabla.</span>
+    </div>
+    <div class="admin-table-container report-standalone-table-wrap" data-drag-scroll>
+        <table class="admin-table">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Cliente</th>
+                    <th>Usuario</th>
+                    <th>CUIT/DNI</th>
+                    <th>Categoria</th>
+                    <th>Pedidos</th>
+                    <th>Total comprado</th>
+                    <th>Ticket promedio</th>
+                    <th>Ultimo pedido</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in rows %}
+                <tr>
+                    <td>{{ row.position }}</td>
+                    <td><strong>{{ row.company_name }}</strong></td>
+                    <td>{{ row.username }}</td>
+                    <td>{{ row.cuit_dni }}</td>
+                    <td>{{ row.category }}</td>
+                    <td>{{ row.orders_count }}</td>
+                    <td>${{ row.total_sales|floatformat:2 }}</td>
+                    <td>${{ row.average_ticket|floatformat:2 }}</td>
+                    <td>{{ row.last_order_at|date:'d/m/Y H:i'|default:'-' }}</td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="9" class="text-center text-muted">No hubo ventas en el periodo seleccionado.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

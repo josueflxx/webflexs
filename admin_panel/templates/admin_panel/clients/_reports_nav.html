@@ -1,0 +1,10 @@
+<div class="client-reports-nav">
+    {% for item in client_report_nav_items %}
+    <a
+        href="{{ item.url }}"
+        class="client-reports-nav-item {% if client_report_panel == item.key %}is-active{% endif %}"
+    >
+        {{ item.label }}
+    </a>
+    {% endfor %}
+</div>

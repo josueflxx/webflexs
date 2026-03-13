@@ -1,0 +1,175 @@
+{% extends 'admin_panel/base.html' %}
+
+{% block page_title %}Lista de clientes{% endblock %}
+
+{% block content %}
+{% include 'admin_panel/clients/_module_panel.html' with client_panel='reports' client_module_subtitle='Arma una lista dinamica, elegi filtros y decidí que columnas queres ver o descargar.' %}
+{% include 'admin_panel/clients/_reports_nav.html' with client_report_panel=client_report_panel client_report_nav_items=client_report_nav_items %}
+
+<section class="admin-table-container compact-top-gap">
+    <div class="report-frame-header">
+        <div>
+            <span class="client-module-kicker">Filtro por datos</span>
+            <h2>Lista de clientes</h2>
+            <p>Usa filtros operativos, texto y columnas opcionales para generar el informe.</p>
+        </div>
+    </div>
+
+    {% if reports_requires_company %}
+    <p class="text-muted">Elegí una empresa activa para generar este informe.</p>
+    {% else %}
+    <form method="get" class="client-report-form">
+        <input type="hidden" name="standalone" value="0" class="report-standalone-flag">
+        <div class="client-report-filter-grid">
+            <label class="client-report-field">
+                <span>Seleccionar localidad</span>
+                <select name="locality" class="form-select">
+                    <option value="">Todas las localidades</option>
+                    {% for locality in locality_choices %}
+                    <option value="{{ locality }}" {% if selected_locality == locality %}selected{% endif %}>{{ locality }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+
+            <label class="client-report-field">
+                <span>Seleccionar categoria del cliente</span>
+                <select name="category" class="form-select">
+                    <option value="">Todas las categorias de cliente</option>
+                    {% for category in categories %}
+                    <option value="{{ category.pk }}" {% if selected_category == category.pk|stringformat:'s' %}selected{% endif %}>{{ category.name }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+
+            <label class="client-report-field">
+                <span>Seleccionar estado del cliente</span>
+                <select name="state" class="form-select">
+                    {% for value, label in state_choices %}
+                    <option value="{{ value }}" {% if selected_state == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+
+            <label class="client-report-field">
+                <span>Seleccionar condicion de IVA</span>
+                <select name="iva_condition" class="form-select">
+                    <option value="all" {% if selected_iva == 'all' %}selected{% endif %}>Todas las condiciones de IVA</option>
+                    {% for value, label in iva_choices %}
+                    <option value="{{ value }}" {% if selected_iva == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+        </div>
+
+        <div class="client-report-dual-grid">
+            <div class="client-report-columns-block">
+                <span class="client-module-kicker">Campos para mostrar</span>
+                <p class="text-muted">Los campos base siempre se muestran. Elegí extras para enriquecer la tabla o la descarga.</p>
+                <div class="client-report-columns-grid">
+                    {% for value, label in optional_columns %}
+                    <label class="client-report-check">
+                        <input type="checkbox" name="columns" value="{{ value }}" {% if value in selected_columns %}checked{% endif %}>
+                        <span>{{ label }}</span>
+                    </label>
+                    {% endfor %}
+                    <label class="client-report-check is-disabled" title="Campo todavia no modelado en el sistema">
+                        <input type="checkbox" disabled>
+                        <span>Vendedor</span>
+                        <small class="client-module-beta-tag">BETA</small>
+                    </label>
+                </div>
+            </div>
+
+            <div class="client-report-text-block">
+                <span class="client-module-kicker">Filtro por texto</span>
+                <div class="client-report-filter-grid single-row">
+                    <label class="client-report-field">
+                        <span>Texto para filtrar</span>
+                        <input type="text" name="text" value="{{ selected_text }}" class="form-input" placeholder="Buscar valor">
+                    </label>
+                    <label class="client-report-field">
+                        <span>Seleccione el campo</span>
+                        <select name="text_field" class="form-select">
+                            {% for value, label in text_field_choices %}
+                            <option value="{{ value }}" {% if selected_text_field == value %}selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        <div class="client-report-actions">
+            <button
+                type="submit"
+                name="action"
+                value="generate"
+                class="btn btn-primary"
+                formtarget="_blank"
+                onclick="this.form.querySelector('.report-standalone-flag').value='1';"
+            >Generar informe</button>
+            <button
+                type="submit"
+                name="action"
+                value="download"
+                class="btn btn-outline"
+                onclick="this.form.querySelector('.report-standalone-flag').value='0';"
+            >Descargar informe</button>
+        </div>
+    </form>
+
+    {% if report_requested %}
+    <div class="client-report-results">
+        <div class="report-results-meta">
+            <strong>{{ rows|length }} clientes</strong>
+            <span class="text-muted">Filtrados para la empresa activa.</span>
+        </div>
+        <table class="admin-table">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Cliente</th>
+                    <th>Usuario</th>
+                    <th>Estado</th>
+                    <th>Cond. IVA</th>
+                    <th>CUIT/DNI</th>
+                    {% for value, label in optional_columns %}
+                        {% if value in selected_columns %}
+                        <th>{{ label }}</th>
+                        {% endif %}
+                    {% endfor %}
+                    <th>Accion</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in rows %}
+                <tr>
+                    <td>#{{ row.client_id }}</td>
+                    <td><strong>{{ row.company_name }}</strong></td>
+                    <td>{{ row.username }}</td>
+                    <td>
+                        <span class="badge {% if row.is_enabled %}badge-success{% else %}badge-danger{% endif %}">
+                            {{ row.state }}
+                        </span>
+                    </td>
+                    <td>{{ row.iva_condition }}</td>
+                    <td>{{ row.cuit_dni }}</td>
+                    {% for value in row.selected_values %}
+                        <td>{{ value }}</td>
+                    {% endfor %}
+                    <td>
+                        <a href="{% url 'admin_client_order_history' row.client_id %}" class="btn btn-outline btn-sm">Historial</a>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="20" class="text-center text-muted">No se encontraron clientes con esos filtros.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+    {% endif %}
+</section>
+{% endblock %}

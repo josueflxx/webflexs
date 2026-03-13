@@ -1,0 +1,115 @@
+{% extends 'admin_panel/base.html' %}
+
+{% block page_title %}Exportar clientes{% endblock %}
+
+{% block content %}
+{% include 'admin_panel/clients/_module_panel.html' with client_panel='tools' client_module_subtitle='Descarga la base de clientes por empresa activa en formato operativo o compatible con importacion.' %}
+{% include 'admin_panel/clients/_tools_nav.html' with client_tools_panel=client_tools_panel client_tools_nav_items=client_tools_nav_items %}
+
+<section class="admin-table-container compact-top-gap">
+    <div class="report-frame-header">
+        <div>
+            <span class="client-module-kicker">Exportar base de clientes</span>
+            <h2>Exportar clientes</h2>
+            <p>Elegi codificacion y preset para descargar una base plana lista para Excel o para volver a importar.</p>
+        </div>
+    </div>
+
+    {% if tools_requires_company %}
+    <p class="text-muted">Elegi una empresa activa para exportar clientes.</p>
+    {% else %}
+    <form method="get" class="client-report-form">
+        <div class="client-report-filter-grid single-row">
+            <label class="client-report-field">
+                <span>Tipo de exportacion</span>
+                <select name="preset" class="form-select">
+                    {% for value, label in preset_choices %}
+                    <option value="{{ value }}" {% if selected_preset == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+
+            <label class="client-report-field">
+                <span>Seleccione codificacion de caracteres</span>
+                <select name="encoding" class="form-select">
+                    {% for value, label in encoding_choices %}
+                    <option value="{{ value }}" {% if selected_encoding == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+        </div>
+
+        <div class="client-report-dual-grid">
+            <div class="client-report-columns-block">
+                <span class="client-module-kicker">Preset seleccionado</span>
+                {% if selected_preset == 'import_compatible' %}
+                <p class="text-muted">Genera columnas compatibles con el importador actual de clientes para corregir y volver a cargar desde Excel.</p>
+                <div class="client-report-columns-grid">
+                    <div class="client-report-check"><span>Usuario</span></div>
+                    <div class="client-report-check"><span>Contrasena</span></div>
+                    <div class="client-report-check"><span>Nombre</span></div>
+                    <div class="client-report-check"><span>Email</span></div>
+                    <div class="client-report-check"><span>CUIT/DNI</span></div>
+                    <div class="client-report-check"><span>Tipo de cliente</span></div>
+                    <div class="client-report-check"><span>Rubro</span></div>
+                    <div class="client-report-check"><span>Cond. IVA</span></div>
+                    <div class="client-report-check"><span>Descuento</span></div>
+                    <div class="client-report-check"><span>Provincia</span></div>
+                    <div class="client-report-check"><span>Domicilio</span></div>
+                    <div class="client-report-check"><span>Telefonos</span></div>
+                    <div class="client-report-check"><span>Contacto</span></div>
+                </div>
+                {% else %}
+                <p class="text-muted">Base operativa pensada para administracion diaria, con categoria, estado, lista, saldo y datos fiscales/comerciales.</p>
+                <div class="client-report-columns-grid">
+                    <div class="client-report-check"><span>Nro de cliente</span></div>
+                    <div class="client-report-check"><span>Categoria de cliente</span></div>
+                    <div class="client-report-check"><span>Estado</span></div>
+                    <div class="client-report-check"><span>Nombre y usuario</span></div>
+                    <div class="client-report-check"><span>Contacto y telefonos</span></div>
+                    <div class="client-report-check"><span>Domicilio y localidad</span></div>
+                    <div class="client-report-check"><span>Provincia y mail</span></div>
+                    <div class="client-report-check"><span>Condicion IVA / CUIT</span></div>
+                    <div class="client-report-check"><span>Documento</span></div>
+                    <div class="client-report-check"><span>Lista de precios</span></div>
+                    <div class="client-report-check"><span>Descuento</span></div>
+                    <div class="client-report-check"><span>Saldo</span></div>
+                    <div class="client-report-check"><span>Moneda</span></div>
+                    <div class="client-report-check"><span>Observaciones</span></div>
+                </div>
+                {% endif %}
+            </div>
+
+            <div class="client-report-text-block">
+                <span class="client-module-kicker">Resumen</span>
+                <div class="quick-list">
+                    <li>
+                        <span>
+                            <strong>Empresa activa</strong><br>
+                            <small>{{ active_company.name }}</small>
+                        </span>
+                    </li>
+                    <li>
+                        <span>
+                            <strong>Clientes incluidos</strong><br>
+                            <small>{{ export_count|default:0 }} registros listos para exportar</small>
+                        </span>
+                    </li>
+                    <li>
+                        <span>
+                            <strong>Formato</strong><br>
+                            <small>CSV separado por punto y coma para mejor compatibilidad con Excel.</small>
+                        </span>
+                    </li>
+                </div>
+            </div>
+        </div>
+
+        <div class="client-report-actions">
+            <button type="submit" name="action" value="download" class="btn btn-primary">Exportar base de clientes</button>
+            <a href="{% url 'admin_import_process' 'clients' %}" class="btn btn-outline">Importar o actualizar</a>
+        </div>
+    </form>
+    {% endif %}
+</section>
+{% endblock %}

@@ -15,7 +15,7 @@ from django.core.files.base import ContentFile
 from django.core.paginator import Paginator
 from django.db import transaction
 from django.db import DatabaseError
-from django.db.models import Q, Count, Sum, Max, Avg, F, DecimalField, ExpressionWrapper, Value
+from django.db.models import Q, Count, Sum, Max, Avg, F, DecimalField, ExpressionWrapper, Value, Prefetch
 from django.db.models.functions import Coalesce
 from django.http import JsonResponse, HttpResponse
 from django.views.decorators.csrf import csrf_protect
@@ -26,7 +26,7 @@ from django.utils.text import slugify
 import json
 import os
 import re
-from io import BytesIO
+from io import BytesIO, StringIO
 from datetime import datetime, time, timedelta
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from urllib.parse import urlencode, parse_qs
@@ -189,6 +189,548 @@ ORDER_INTERNAL_DOC_STATUS_RULES = {
     },
     DocumentSeries.DOC_REM: CLIENT_REMITO_READY_STATUSES,
 }
+
+CLIENT_REPORT_TEXT_FIELD_CHOICES = [
+    ("company_name", "Nombre"),
+    ("client_id", "N° de cliente"),
+    ("username", "Usuario"),
+    ("email", "Mail"),
+    ("phone", "Telefonos"),
+    ("document", "CUIT/DNI"),
+]
+CLIENT_REPORT_OPTIONAL_COLUMNS = [
+    ("category", "Categoria del cliente"),
+    ("price_list", "Lista de precios"),
+    ("locality", "Localidades"),
+    ("province", "Provincias"),
+    ("address", "Domicilio"),
+    ("document_detail", "Tipo y numero de documento"),
+    ("phones", "Telefonos"),
+    ("email", "Mail"),
+    ("extra", "Datos extra"),
+    ("balance", "Saldo"),
+]
+CLIENT_REPORT_STATE_CHOICES = [
+    ("all", "Todos los estados de cliente"),
+    ("enabled", "Habilitado"),
+    ("disabled", "No habilitado"),
+]
+CLIENT_REPORT_DATE_RANGE_CHOICES = [
+    ("all", "Todas las fechas"),
+    ("today", "Hoy"),
+    ("yesterday", "Ayer"),
+    ("this_week", "Esta semana"),
+    ("last_week", "Semana anterior"),
+    ("last_7_days", "Ultimos 7 dias"),
+    ("this_month", "Este mes"),
+    ("last_month", "Mes anterior"),
+    ("last_30_days", "Ultimos 30 dias"),
+    ("this_year", "Este ano"),
+    ("last_year", "Ano anterior"),
+    ("last_12_months", "Ultimos 12 meses"),
+    ("custom", "Personalizado"),
+]
+CLIENT_REPORT_RANKING_CHOICES = [
+    ("top_10", "Los 10 mas facturados"),
+    ("top_100", "Los 100 mas facturados"),
+    ("bottom_10", "Los 10 menos facturados"),
+    ("bottom_100", "Los 100 menos facturados"),
+]
+CLIENT_REPORT_DEBTOR_CHOICES = [
+    ("enabled_debtors", "Clientes habilitados con saldo deudor en sus cuentas corrientes"),
+    ("enabled_creditors", "Clientes habilitados con saldo acreedor en sus cuentas corrientes"),
+    ("disabled_non_zero", "Clientes deshabilitados con saldo diferente de cero"),
+]
+CLIENT_REPORT_CURRENCY_CHOICES = [
+    ("all", "Todas las monedas"),
+    ("ars", "Pesos"),
+]
+CLIENT_EXPORT_ENCODING_CHOICES = [
+    ("utf8", "UTF-8"),
+    ("latin1", "ISO-8859-1 (compatibilidad con Excel)"),
+]
+CLIENT_EXPORT_PRESET_CHOICES = [
+    ("operational", "Base operativa de clientes"),
+    ("import_compatible", "Compatible con importacion / actualizacion"),
+]
+CLIENT_REPORT_ORDER_STATUSES = (
+    Order.STATUS_CONFIRMED,
+    Order.STATUS_PREPARING,
+    Order.STATUS_SHIPPED,
+    Order.STATUS_DELIVERED,
+)
+CLIENT_REPORT_RESULTS_SORT_FIELDS = {
+    "top_10": ("-total_sales", "user__client_profile__company_name"),
+    "top_100": ("-total_sales", "user__client_profile__company_name"),
+    "bottom_10": ("total_sales", "user__client_profile__company_name"),
+    "bottom_100": ("total_sales", "user__client_profile__company_name"),
+}
+
+
+def _build_client_report_queryset(active_company=None, include_balance_prefetch=False):
+    clients = ClientProfile.objects.select_related("user", "client_category")
+    client_company_queryset = ClientCompany.objects.select_related(
+        "company",
+        "client_category",
+        "price_list",
+    )
+
+    if active_company:
+        clients = clients.filter(company_links__company=active_company).distinct()
+        client_company_queryset = client_company_queryset.filter(company=active_company)
+
+    prefetches = [
+        Prefetch(
+            "company_links",
+            queryset=client_company_queryset,
+            to_attr="report_company_links",
+        )
+    ]
+
+    if include_balance_prefetch and active_company:
+        prefetches.extend(
+            [
+                Prefetch(
+                    "transactions",
+                    queryset=ClientTransaction.objects.filter(company=active_company).order_by("-occurred_at", "-id"),
+                    to_attr="report_transactions",
+                ),
+                Prefetch(
+                    "payments",
+                    queryset=ClientPayment.objects.filter(
+                        company=active_company,
+                        is_cancelled=False,
+                    ).order_by("-paid_at", "-id"),
+                    to_attr="report_payments",
+                ),
+                Prefetch(
+                    "user__orders",
+                    queryset=Order.objects.filter(
+                        company=active_company,
+                        status__in=CLIENT_REPORT_ORDER_STATUSES,
+                    ).order_by("-created_at", "-id"),
+                    to_attr="report_balance_orders",
+                ),
+            ]
+        )
+
+    return clients.prefetch_related(*prefetches)
+
+
+def _get_report_company_link(client, active_company=None):
+    prefetched_links = getattr(client, "report_company_links", None)
+    if prefetched_links is not None:
+        if active_company:
+            for link in prefetched_links:
+                if link.company_id == active_company.id:
+                    return link
+        return prefetched_links[0] if prefetched_links else None
+    return client.get_company_link(active_company)
+
+
+def _get_report_client_category(client, active_company=None, company_link=None):
+    if company_link and company_link.client_category_id:
+        return company_link.client_category
+    return client.client_category
+
+
+def _get_report_client_locality(client):
+    value = (client.fiscal_city or "").strip() or (client.province or "").strip()
+    return value or "Sin especificar"
+
+
+def _get_report_client_province(client):
+    value = (client.fiscal_province or "").strip() or (client.province or "").strip()
+    return value or "Sin especificar"
+
+
+def _get_report_client_address(client):
+    value = (client.fiscal_address or "").strip() or (client.address or "").strip()
+    return value or "-"
+
+
+def _get_report_client_document_detail(client):
+    if client.document_type and client.document_number:
+        return f"{client.get_document_type_display()}: {client.document_number}"
+    if client.cuit_dni:
+        return client.cuit_dni
+    return "-"
+
+
+def _get_report_client_state(client, active_company=None, company_link=None):
+    company_link = company_link or _get_report_company_link(client, active_company)
+    enabled = bool(client.user and client.user.is_active and client.is_approved)
+    if active_company:
+        enabled = enabled and bool(company_link and company_link.is_active)
+    return {
+        "enabled": enabled,
+        "label": "Habilitado" if enabled else "No habilitado",
+    }
+
+
+def _sum_decimal_values(values):
+    total = Decimal("0.00")
+    for value in values:
+        if value is None:
+            continue
+        total += Decimal(str(value))
+    return total
+
+
+def _get_report_client_balance(client, active_company=None):
+    transactions = getattr(client, "report_transactions", None)
+    if transactions is not None:
+        if transactions:
+            return _sum_decimal_values(tx.amount for tx in transactions)
+        payments = getattr(client, "report_payments", None)
+        orders = getattr(getattr(client, "user", None), "report_balance_orders", None)
+        if payments is not None and orders is not None:
+            orders_total = _sum_decimal_values(order.total for order in orders)
+            paid_total = _sum_decimal_values(payment.amount for payment in payments)
+            return orders_total - paid_total
+    return client.get_current_balance(company=active_company)
+
+
+def _get_report_client_price_list_name(client, active_company=None, company_link=None):
+    if not active_company:
+        return "Sin lista"
+    company_link = company_link or _get_report_company_link(client, active_company)
+    category = _get_report_client_category(client, active_company=active_company, company_link=company_link)
+    from core.services.pricing import resolve_effective_price_list
+
+    price_list = resolve_effective_price_list(
+        company=active_company,
+        client_company=company_link,
+        client_category=category,
+    )
+    return getattr(price_list, "name", "") or "Sin lista"
+
+
+def _get_client_report_locality_choices(active_company=None):
+    clients = list(_build_client_report_queryset(active_company).order_by("company_name", "user__username"))
+    choices = []
+    seen = set()
+    for client in clients:
+        value = _get_report_client_locality(client)
+        if value not in seen:
+            seen.add(value)
+            choices.append(value)
+    if "Sin especificar" in choices:
+        choices.remove("Sin especificar")
+        choices.insert(0, "Sin especificar")
+    return choices
+
+
+def _client_report_matches_text(client_row, text_query):
+    if not text_query:
+        return True
+    haystack = str(client_row or "").strip().lower()
+    return text_query.lower() in haystack
+
+
+def _resolve_report_date_range(range_key, start_raw="", end_raw=""):
+    today = timezone.localdate()
+    start_date = None
+    end_date = None
+    normalized_key = range_key or "all"
+
+    if normalized_key == "today":
+        start_date = end_date = today
+    elif normalized_key == "yesterday":
+        start_date = end_date = today - timedelta(days=1)
+    elif normalized_key == "this_week":
+        start_date = today - timedelta(days=today.weekday())
+        end_date = today
+    elif normalized_key == "last_week":
+        this_week_start = today - timedelta(days=today.weekday())
+        end_date = this_week_start - timedelta(days=1)
+        start_date = end_date - timedelta(days=6)
+    elif normalized_key == "last_7_days":
+        start_date = today - timedelta(days=6)
+        end_date = today
+    elif normalized_key == "this_month":
+        start_date = today.replace(day=1)
+        end_date = today
+    elif normalized_key == "last_month":
+        this_month_start = today.replace(day=1)
+        end_date = this_month_start - timedelta(days=1)
+        start_date = end_date.replace(day=1)
+    elif normalized_key == "last_30_days":
+        start_date = today - timedelta(days=29)
+        end_date = today
+    elif normalized_key == "this_year":
+        start_date = today.replace(month=1, day=1)
+        end_date = today
+    elif normalized_key == "last_year":
+        start_date = today.replace(year=today.year - 1, month=1, day=1)
+        end_date = today.replace(year=today.year - 1, month=12, day=31)
+    elif normalized_key == "last_12_months":
+        start_date = today - timedelta(days=365)
+        end_date = today
+    elif normalized_key == "custom":
+        start_date = parse_date(start_raw) if start_raw else None
+        end_date = parse_date(end_raw) if end_raw else None
+        if start_date and end_date and start_date > end_date:
+            start_date, end_date = end_date, start_date
+
+    return start_date, end_date
+
+
+def _client_report_date_label(range_key, start_date=None, end_date=None):
+    labels = dict(CLIENT_REPORT_DATE_RANGE_CHOICES)
+    if range_key == "custom":
+        if start_date and end_date:
+            return f"{start_date.strftime('%d/%m/%Y')} al {end_date.strftime('%d/%m/%Y')}"
+        if start_date:
+            return f"Desde {start_date.strftime('%d/%m/%Y')}"
+        if end_date:
+            return f"Hasta {end_date.strftime('%d/%m/%Y')}"
+    return labels.get(range_key or "all", "Todas las fechas")
+
+
+def _client_report_csv_response(filename, headers, rows):
+    buffer = StringIO(newline="")
+    writer = csv.writer(buffer)
+    writer.writerow(headers)
+    for row in rows:
+        writer.writerow(row)
+    payload = ("\ufeff" + buffer.getvalue()).encode("utf-8")
+    response = HttpResponse(payload, content_type="text/csv; charset=utf-8")
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    return response
+
+
+def _is_standalone_report_request(request):
+    return str(request.GET.get("standalone", "")).strip().lower() in {"1", "true", "yes"}
+
+
+def _build_client_report_row(client, active_company=None, company_link=None, include_balance=False):
+    company_link = company_link or _get_report_company_link(client, active_company)
+    category = _get_report_client_category(client, active_company=active_company, company_link=company_link)
+    state = _get_report_client_state(client, active_company=active_company, company_link=company_link)
+    balance = _get_report_client_balance(client, active_company=active_company) if include_balance else None
+    price_list_name = _get_report_client_price_list_name(
+        client,
+        active_company=active_company,
+        company_link=company_link,
+    )
+    extra_values = [client.get_client_type_display() if client.client_type else ""]
+    if client.notes:
+        extra_values.append(client.notes)
+
+    return {
+        "client": client,
+        "client_id": client.pk,
+        "company_name": client.company_name or "-",
+        "username": getattr(client.user, "username", "-") or "-",
+        "email": getattr(client.user, "email", "-") or "-",
+        "cuit_dni": client.cuit_dni or client.document_number or "-",
+        "state": state["label"],
+        "is_enabled": state["enabled"],
+        "iva_condition": client.get_iva_condition_display() if client.iva_condition else "-",
+        "category": category.name if category else "Sin categoria",
+        "category_id": getattr(category, "pk", None),
+        "price_list": price_list_name,
+        "locality": _get_report_client_locality(client),
+        "province": _get_report_client_province(client),
+        "address": _get_report_client_address(client),
+        "document_detail": _get_report_client_document_detail(client),
+        "phones": client.phone or "-",
+        "extra": " | ".join([value for value in extra_values if value]) or "-",
+        "balance": balance,
+    }
+
+
+def _client_reports_nav():
+    return [
+        {
+            "label": "Centro de informes",
+            "url": reverse("admin_client_reports_hub"),
+            "key": "hub",
+        },
+        {
+            "label": "Lista de clientes",
+            "url": reverse("admin_client_report_list"),
+            "key": "list",
+        },
+        {
+            "label": "Ranking de clientes",
+            "url": reverse("admin_client_report_ranking"),
+            "key": "ranking",
+        },
+        {
+            "label": "Clientes deudores",
+            "url": reverse("admin_client_report_debtors"),
+            "key": "debtors",
+        },
+    ]
+
+
+def _client_tools_nav():
+    return [
+        {
+            "label": "Centro de herramientas",
+            "url": reverse("admin_client_tools_hub"),
+            "key": "hub",
+        },
+        {
+            "label": "Exportar clientes",
+            "url": reverse("admin_client_export"),
+            "key": "export",
+        },
+        {
+            "label": "Importar o actualizar",
+            "url": reverse("admin_import_process", args=["clients"]),
+            "key": "import",
+        },
+        {
+            "label": "Solicitudes",
+            "url": reverse("admin_request_list"),
+            "key": "requests",
+        },
+    ]
+
+
+def _get_report_client_contact_name(client):
+    user = getattr(client, "user", None)
+    if not user:
+        return "-"
+    full_name = user.get_full_name().strip()
+    if full_name:
+        return full_name
+    if user.first_name:
+        return user.first_name.strip()
+    return user.username or "-"
+
+
+def _get_client_export_rows(active_company, preset="operational"):
+    include_balance = preset == "operational"
+    clients = list(
+        _build_client_report_queryset(active_company, include_balance_prefetch=include_balance).order_by(
+            "company_name",
+            "user__username",
+        )
+    )
+    rows = []
+
+    if preset == "import_compatible":
+        headers = [
+            "Usuario",
+            "Contrasena",
+            "Nombre",
+            "Email",
+            "CUIT/DNI",
+            "Tipo de cliente",
+            "Rubro",
+            "Cond. IVA",
+            "Descuento",
+            "Provincia",
+            "Domicilio",
+            "Telefonos",
+            "Contacto",
+        ]
+
+        for client in clients:
+            company_link = _get_report_company_link(client, active_company)
+            category = _get_report_client_category(client, active_company=active_company, company_link=company_link)
+            rows.append(
+                [
+                    getattr(client.user, "username", "") or "",
+                    "",
+                    client.company_name or "",
+                    getattr(client.user, "email", "") or "",
+                    client.cuit_dni or client.document_number or "",
+                    getattr(category, "name", "") or "",
+                    client.get_client_type_display() if client.client_type else "",
+                    client.get_iva_condition_display() if client.iva_condition else "",
+                    f"{client.get_effective_discount_percentage(company=active_company):.2f}",
+                    _get_report_client_province(client) or "",
+                    _get_report_client_address(client) or "",
+                    client.phone or "",
+                    _get_report_client_contact_name(client) or "",
+                ]
+            )
+        return headers, rows
+
+    headers = [
+        "Nro de cliente",
+        "Categoria de cliente",
+        "Estado",
+        "Nombre",
+        "Usuario",
+        "Contacto",
+        "Telefonos",
+        "Domicilio",
+        "Localidad",
+        "Provincia",
+        "Mail",
+        "Condicion de IVA",
+        "Razon social",
+        "CUIT",
+        "Tipo de documento",
+        "Nro de documento",
+        "Lista de precios",
+        "Descuento",
+        "Saldo",
+        "Moneda",
+        "Observaciones",
+    ]
+
+    for client in clients:
+        company_link = _get_report_company_link(client, active_company)
+        row = _build_client_report_row(
+            client,
+            active_company=active_company,
+            company_link=company_link,
+            include_balance=True,
+        )
+        rows.append(
+            [
+                row["client_id"],
+                row["category"] or "Sin categoria",
+                row["state"],
+                row["company_name"],
+                row["username"],
+                _get_report_client_contact_name(client),
+                row["phones"],
+                row["address"],
+                row["locality"],
+                row["province"],
+                row["email"],
+                row["iva_condition"],
+                client.company_name or "",
+                client.cuit_dni or "",
+                client.get_document_type_display() if client.document_type else "",
+                client.document_number or "",
+                row["price_list"],
+                f"{client.get_effective_discount_percentage(company=active_company):.2f}",
+                f"{row['balance']:.2f}" if row["balance"] is not None else "0.00",
+                "Pesos",
+                client.notes or "",
+            ]
+        )
+    return headers, rows
+
+
+def _client_export_csv_response(filename, headers, rows, encoding_key="utf8"):
+    delimiter = ";"
+    buffer = StringIO(newline="")
+    writer = csv.writer(buffer, delimiter=delimiter)
+    writer.writerow(headers)
+    for row in rows:
+        writer.writerow(row)
+
+    charset = "utf-8"
+    payload = buffer.getvalue()
+    if encoding_key == "latin1":
+        charset = "iso-8859-1"
+        content = payload.encode(charset, errors="replace")
+    else:
+        content = ("\ufeff" + payload).encode("utf-8")
+
+    response = HttpResponse(content, content_type=f"text/csv; charset={charset}")
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    return response
 FISCAL_PRINT_COPY_LABELS = {
     "original": "ORIGINAL",
     "duplicado": "DUPLICADO",
@@ -4104,6 +4646,566 @@ def client_dashboard(request):
             "recent_clients": recent_clients,
             "can_create_client": can_edit_client_profile(request.user),
             "can_manage_client_categories": can_edit_client_profile(request.user),
+        },
+    )
+
+
+@staff_member_required
+def client_tools_hub(request):
+    """Hub for client operational tools."""
+    active_company = get_active_company(request)
+    tool_cards = [
+        {
+            "title": "Exportar clientes",
+            "description": "Descarga la base plana de clientes por empresa activa para trabajo operativo o compatibilidad externa.",
+            "url": reverse("admin_client_export"),
+            "icon": "&#128228;",
+        },
+        {
+            "title": "Importar o actualizar",
+            "description": "Reutiliza el importador existente para altas masivas o actualizaciones desde Excel.",
+            "url": reverse("admin_import_process", args=["clients"]),
+            "icon": "&#128229;",
+        },
+        {
+            "title": "Solicitudes",
+            "description": "Gestiona aprobaciones y cola de ingresos pendientes del portal.",
+            "url": reverse("admin_request_list"),
+            "icon": "&#128221;",
+        },
+    ]
+
+    return render(
+        request,
+        "admin_panel/clients/tools_hub.html",
+        {
+            "tool_cards": tool_cards,
+            "client_tools_panel": "hub",
+            "client_tools_nav_items": _client_tools_nav(),
+            "tools_requires_company": not bool(active_company),
+        },
+    )
+
+
+@staff_member_required
+def client_export(request):
+    """Export client base using operational or import-compatible presets."""
+    active_company = get_active_company(request)
+    action = str(request.GET.get("action", "")).strip().lower()
+    selected_encoding = str(request.GET.get("encoding", "utf8")).strip() or "utf8"
+    selected_preset = str(request.GET.get("preset", "operational")).strip() or "operational"
+    if selected_encoding not in dict(CLIENT_EXPORT_ENCODING_CHOICES):
+        selected_encoding = "utf8"
+    if selected_preset not in dict(CLIENT_EXPORT_PRESET_CHOICES):
+        selected_preset = "operational"
+
+    export_count = None
+    if active_company:
+        export_count = _build_client_report_queryset(
+            active_company,
+            include_balance_prefetch=selected_preset == "operational",
+        ).count()
+
+    if action == "download" and active_company:
+        headers, rows = _get_client_export_rows(active_company, preset=selected_preset)
+        filename_prefix = "clientes_base_operativa" if selected_preset == "operational" else "clientes_importacion"
+        filename = (
+            f"{filename_prefix}_{getattr(active_company, 'slug', 'sin-empresa')}_"
+            f"{timezone.now().strftime('%Y%m%d_%H%M')}.csv"
+        )
+        return _client_export_csv_response(
+            filename,
+            headers,
+            rows,
+            encoding_key=selected_encoding,
+        )
+
+    return render(
+        request,
+        "admin_panel/clients/export.html",
+        {
+            "client_tools_panel": "export",
+            "client_tools_nav_items": _client_tools_nav(),
+            "tools_requires_company": not bool(active_company),
+            "encoding_choices": CLIENT_EXPORT_ENCODING_CHOICES,
+            "preset_choices": CLIENT_EXPORT_PRESET_CHOICES,
+            "selected_encoding": selected_encoding,
+            "selected_preset": selected_preset,
+            "export_count": export_count,
+            "active_company": active_company,
+        },
+    )
+
+
+@staff_member_required
+def client_reports_hub(request):
+    active_company = get_active_company(request)
+    report_cards = [
+        {
+            "title": "Lista de clientes",
+            "description": "Filtra la cartera, elegi columnas y genera una vista operativa o una descarga.",
+            "url": reverse("admin_client_report_list"),
+            "icon": "&#128196;",
+        },
+        {
+            "title": "Ranking de clientes",
+            "description": "Mide volumen comercial por periodos y detecta a los clientes con mayor o menor movimiento.",
+            "url": reverse("admin_client_report_ranking"),
+            "icon": "&#128200;",
+        },
+        {
+            "title": "Clientes deudores",
+            "description": "Controla saldos deudores, acreedores y cuentas no habilitadas con diferencia pendiente.",
+            "url": reverse("admin_client_report_debtors"),
+            "icon": "&#128184;",
+        },
+    ]
+
+    return render(
+        request,
+        "admin_panel/clients/reports_hub.html",
+        {
+            "report_cards": report_cards,
+            "client_report_panel": "hub",
+            "client_report_nav_items": _client_reports_nav(),
+            "reports_requires_company": not bool(active_company),
+        },
+    )
+
+
+@staff_member_required
+def client_report_list(request):
+    active_company = get_active_company(request)
+    action = str(request.GET.get("action", "")).strip().lower()
+    report_requested = action in {"generate", "download"}
+    standalone_report = report_requested and action == "generate" and _is_standalone_report_request(request)
+    selected_columns = [
+        column
+        for column in request.GET.getlist("columns")
+        if column in dict(CLIENT_REPORT_OPTIONAL_COLUMNS)
+    ]
+    selected_locality = str(request.GET.get("locality", "")).strip()
+    selected_category = str(request.GET.get("category", "")).strip()
+    selected_state = str(request.GET.get("state", "all")).strip() or "all"
+    selected_iva = str(request.GET.get("iva_condition", "all")).strip() or "all"
+    selected_text_field = str(request.GET.get("text_field", "company_name")).strip() or "company_name"
+    if selected_text_field not in dict(CLIENT_REPORT_TEXT_FIELD_CHOICES):
+        selected_text_field = "company_name"
+    selected_text = str(request.GET.get("text", "")).strip()
+
+    locality_choices = []
+    categories = ClientCategory.objects.order_by("sort_order", "name")
+    rows = []
+
+    if active_company:
+        clients = list(_build_client_report_queryset(active_company).order_by("company_name", "user__username"))
+        locality_choices = _get_client_report_locality_choices(active_company)
+
+        if report_requested:
+            for client in clients:
+                company_link = _get_report_company_link(client, active_company)
+                row = _build_client_report_row(
+                    client,
+                    active_company=active_company,
+                    company_link=company_link,
+                    include_balance="balance" in selected_columns,
+                )
+
+                if selected_locality and row["locality"] != selected_locality:
+                    continue
+                if selected_category and str(row["category_id"] or "") != selected_category:
+                    continue
+                if selected_state == "enabled" and not row["is_enabled"]:
+                    continue
+                if selected_state == "disabled" and row["is_enabled"]:
+                    continue
+                if selected_iva != "all" and (client.iva_condition or "") != selected_iva:
+                    continue
+
+                if selected_text:
+                    lookup_map = {
+                        "company_name": row["company_name"],
+                        "client_id": row["client_id"],
+                        "username": row["username"],
+                        "email": row["email"],
+                        "phone": row["phones"],
+                        "document": row["document_detail"],
+                    }
+                    if not _client_report_matches_text(lookup_map.get(selected_text_field, ""), selected_text):
+                        continue
+
+                rows.append(row)
+
+        for row in rows:
+            row["selected_values"] = []
+            for column_key, _label in CLIENT_REPORT_OPTIONAL_COLUMNS:
+                if column_key not in selected_columns:
+                    continue
+                value = row.get(column_key)
+                if isinstance(value, Decimal):
+                    value = f"${value:.2f}"
+                row["selected_values"].append(value or "-")
+
+    if action == "download":
+        filename = f"clientes_lista_{getattr(active_company, 'slug', 'sin-empresa')}_{timezone.now().strftime('%Y%m%d_%H%M')}.csv"
+        headers = ["ID", "Cliente", "Usuario", "Estado", "Condicion IVA", "CUIT/DNI"]
+        for key, label in CLIENT_REPORT_OPTIONAL_COLUMNS:
+            if key in selected_columns:
+                headers.append(label)
+
+        csv_rows = []
+        for row in rows:
+            csv_row = [
+                row["client_id"],
+                row["company_name"],
+                row["username"],
+                row["state"],
+                row["iva_condition"],
+                row["cuit_dni"],
+            ]
+            for column_key, _label in CLIENT_REPORT_OPTIONAL_COLUMNS:
+                if column_key not in selected_columns:
+                    continue
+                value = row.get(column_key)
+                if isinstance(value, Decimal):
+                    value = f"{value:.2f}"
+                csv_row.append(value or "-")
+            csv_rows.append(csv_row)
+        return _client_report_csv_response(filename, headers, csv_rows)
+
+    if standalone_report:
+        visible_headers = ["ID", "Cliente", "Usuario", "Estado", "Cond. IVA", "CUIT/DNI"]
+        visible_headers.extend(
+            [label for key, label in CLIENT_REPORT_OPTIONAL_COLUMNS if key in selected_columns]
+        )
+        return render(
+            request,
+            "admin_panel/clients/report_output_list.html",
+            {
+                "report_title": "Lista de clientes",
+                "report_subtitle": "Cartera filtrada por empresa, categoria, estado y condiciones comerciales.",
+                "report_generated_at": timezone.now(),
+                "report_company": active_company,
+                "visible_headers": visible_headers,
+                "rows": rows,
+                "selected_locality": selected_locality or "Todas las localidades",
+                "selected_state_label": dict(CLIENT_REPORT_STATE_CHOICES).get(selected_state, "Todos los estados"),
+                "selected_iva_label": dict([("all", "Todas las condiciones de IVA"), *ClientProfile.IVA_CHOICES]).get(
+                    selected_iva,
+                    "Todas las condiciones de IVA",
+                ),
+                "selected_text": selected_text,
+                "selected_text_field_label": dict(CLIENT_REPORT_TEXT_FIELD_CHOICES).get(selected_text_field, "Nombre"),
+            },
+        )
+
+    return render(
+        request,
+        "admin_panel/clients/reports_list.html",
+        {
+            "client_report_panel": "list",
+            "client_report_nav_items": _client_reports_nav(),
+            "reports_requires_company": not bool(active_company),
+            "report_requested": report_requested,
+            "rows": rows,
+            "selected_columns": selected_columns,
+            "locality_choices": locality_choices,
+            "categories": categories,
+            "state_choices": CLIENT_REPORT_STATE_CHOICES,
+            "iva_choices": ClientProfile.IVA_CHOICES,
+            "text_field_choices": CLIENT_REPORT_TEXT_FIELD_CHOICES,
+            "optional_columns": CLIENT_REPORT_OPTIONAL_COLUMNS,
+            "selected_locality": selected_locality,
+            "selected_category": selected_category,
+            "selected_state": selected_state,
+            "selected_iva": selected_iva,
+            "selected_text_field": selected_text_field,
+            "selected_text": selected_text,
+        },
+    )
+
+
+@staff_member_required
+def client_report_ranking(request):
+    active_company = get_active_company(request)
+    action = str(request.GET.get("action", "")).strip().lower()
+    report_requested = action in {"generate", "download"}
+    standalone_report = report_requested and action == "generate" and _is_standalone_report_request(request)
+    selected_range = str(request.GET.get("date_range", "all")).strip() or "all"
+    if selected_range not in dict(CLIENT_REPORT_DATE_RANGE_CHOICES):
+        selected_range = "all"
+    selected_ranking = str(request.GET.get("ranking", "top_10")).strip() or "top_10"
+    if selected_ranking not in dict(CLIENT_REPORT_RANKING_CHOICES):
+        selected_ranking = "top_10"
+    start_date_raw = str(request.GET.get("start_date", "")).strip()
+    end_date_raw = str(request.GET.get("end_date", "")).strip()
+    start_date, end_date = _resolve_report_date_range(selected_range, start_date_raw, end_date_raw)
+    range_label = _client_report_date_label(selected_range, start_date, end_date)
+    rows = []
+
+    if active_company and report_requested:
+        ranking_queryset = Order.objects.filter(
+            company=active_company,
+            status__in=CLIENT_REPORT_ORDER_STATUSES,
+            user__client_profile__isnull=False,
+        )
+        if start_date:
+            ranking_queryset = ranking_queryset.filter(created_at__date__gte=start_date)
+        if end_date:
+            ranking_queryset = ranking_queryset.filter(created_at__date__lte=end_date)
+
+        limit = 100 if selected_ranking.endswith("100") else 10
+        direction = CLIENT_REPORT_RESULTS_SORT_FIELDS[selected_ranking]
+        ranking_rows = list(
+            ranking_queryset.values(
+                "user__client_profile",
+                "user__client_profile__company_name",
+                "user__username",
+                "user__client_profile__cuit_dni",
+            )
+            .annotate(
+                total_sales=Coalesce(
+                    Sum("total"),
+                    Value(Decimal("0.00")),
+                    output_field=DecimalField(max_digits=12, decimal_places=2),
+                ),
+                orders_count=Count("id"),
+                last_order_at=Max("created_at"),
+                average_ticket=Coalesce(
+                    Avg("total"),
+                    Value(Decimal("0.00")),
+                    output_field=DecimalField(max_digits=12, decimal_places=2),
+                ),
+            )
+            .order_by(*direction)[:limit]
+        )
+
+        profile_map = {
+            client.pk: client
+            for client in _build_client_report_queryset(active_company).filter(
+                pk__in=[row["user__client_profile"] for row in ranking_rows]
+            )
+        }
+
+        for position, row in enumerate(ranking_rows, start=1):
+            client = profile_map.get(row["user__client_profile"])
+            company_link = _get_report_company_link(client, active_company) if client else None
+            category = _get_report_client_category(client, active_company, company_link) if client else None
+            rows.append(
+                {
+                    "position": position,
+                    "client_id": row["user__client_profile"],
+                    "company_name": row["user__client_profile__company_name"] or "-",
+                    "username": row["user__username"] or "-",
+                    "cuit_dni": row["user__client_profile__cuit_dni"] or "-",
+                    "category": category.name if category else "Sin categoria",
+                    "orders_count": row["orders_count"],
+                    "total_sales": row["total_sales"] or Decimal("0.00"),
+                    "average_ticket": row["average_ticket"] or Decimal("0.00"),
+                    "last_order_at": row["last_order_at"],
+                }
+            )
+
+    if action == "download":
+        filename = f"clientes_ranking_{getattr(active_company, 'slug', 'sin-empresa')}_{timezone.now().strftime('%Y%m%d_%H%M')}.csv"
+        headers = [
+            "Posicion",
+            "Cliente",
+            "Usuario",
+            "CUIT/DNI",
+            "Categoria",
+            "Pedidos",
+            "Total comprado",
+            "Ticket promedio",
+            "Ultimo pedido",
+        ]
+        csv_rows = [
+            [
+                row["position"],
+                row["company_name"],
+                row["username"],
+                row["cuit_dni"],
+                row["category"],
+                row["orders_count"],
+                f"{row['total_sales']:.2f}",
+                f"{row['average_ticket']:.2f}",
+                timezone.localtime(row["last_order_at"]).strftime("%d/%m/%Y %H:%M") if row["last_order_at"] else "-",
+            ]
+            for row in rows
+        ]
+        return _client_report_csv_response(filename, headers, csv_rows)
+
+    if standalone_report:
+        return render(
+            request,
+            "admin_panel/clients/report_output_ranking.html",
+            {
+                "report_title": "Ranking de clientes",
+                "report_subtitle": dict(CLIENT_REPORT_RANKING_CHOICES).get(
+                    selected_ranking,
+                    "Ranking comercial",
+                ),
+                "report_generated_at": timezone.now(),
+                "report_company": active_company,
+                "range_label": range_label,
+                "rows": rows,
+            },
+        )
+
+    return render(
+        request,
+        "admin_panel/clients/reports_ranking.html",
+        {
+            "client_report_panel": "ranking",
+            "client_report_nav_items": _client_reports_nav(),
+            "reports_requires_company": not bool(active_company),
+            "report_requested": report_requested,
+            "rows": rows,
+            "date_range_choices": CLIENT_REPORT_DATE_RANGE_CHOICES,
+            "ranking_choices": CLIENT_REPORT_RANKING_CHOICES,
+            "selected_range": selected_range,
+            "selected_ranking": selected_ranking,
+            "start_date": start_date_raw,
+            "end_date": end_date_raw,
+            "range_label": range_label,
+        },
+    )
+
+
+@staff_member_required
+def client_report_debtors(request):
+    active_company = get_active_company(request)
+    action = str(request.GET.get("action", "")).strip().lower()
+    report_requested = action in {"generate", "download"}
+    standalone_report = report_requested and action == "generate" and _is_standalone_report_request(request)
+    report_type = str(request.GET.get("report_type", "enabled_debtors")).strip() or "enabled_debtors"
+    if report_type not in dict(CLIENT_REPORT_DEBTOR_CHOICES):
+        report_type = "enabled_debtors"
+    selected_currency = str(request.GET.get("currency", "all")).strip() or "all"
+    if selected_currency not in dict(CLIENT_REPORT_CURRENCY_CHOICES):
+        selected_currency = "all"
+    tolerance_raw = str(request.GET.get("tolerance", "1.00")).strip() or "1.00"
+    try:
+        tolerance = parse_admin_decimal_input(tolerance_raw, "Tolerancia para considerar deuda", min_value="0")
+    except ValueError:
+        tolerance = Decimal("1.00")
+        tolerance_raw = "1.00"
+
+    rows = []
+    total_balance = Decimal("0.00")
+
+    if active_company and report_requested:
+        clients = list(
+            _build_client_report_queryset(active_company, include_balance_prefetch=True).order_by(
+                "company_name",
+                "user__username",
+            )
+        )
+
+        for client in clients:
+            company_link = _get_report_company_link(client, active_company)
+            client_state = _get_report_client_state(client, active_company, company_link)
+            balance = _get_report_client_balance(client, active_company)
+            include_row = False
+
+            if report_type == "enabled_debtors":
+                include_row = client_state["enabled"] and balance > tolerance
+            elif report_type == "enabled_creditors":
+                include_row = client_state["enabled"] and balance < (tolerance * Decimal("-1"))
+            elif report_type == "disabled_non_zero":
+                include_row = (not client_state["enabled"]) and abs(balance) > tolerance
+
+            if not include_row:
+                continue
+
+            latest_transaction = getattr(client, "report_transactions", [])
+            latest_order = getattr(getattr(client, "user", None), "report_balance_orders", [])
+            latest_event_at = None
+            if latest_transaction:
+                latest_event_at = latest_transaction[0].occurred_at
+            elif latest_order:
+                latest_event_at = latest_order[0].created_at
+
+            category = _get_report_client_category(client, active_company, company_link)
+            rows.append(
+                {
+                    "client": client,
+                    "company_name": client.company_name or "-",
+                    "username": getattr(client.user, "username", "-") or "-",
+                    "category": category.name if category else "Sin categoria",
+                    "state": client_state["label"],
+                    "cuit_dni": client.cuit_dni or client.document_number or "-",
+                    "balance": balance,
+                    "last_event_at": latest_event_at,
+                }
+            )
+
+        if report_type == "enabled_creditors":
+            rows.sort(key=lambda item: item["balance"])
+        else:
+            rows.sort(key=lambda item: abs(item["balance"]), reverse=True)
+
+        total_balance = _sum_decimal_values(row["balance"] for row in rows)
+
+    if action == "download":
+        filename = f"clientes_deudores_{getattr(active_company, 'slug', 'sin-empresa')}_{timezone.now().strftime('%Y%m%d_%H%M')}.csv"
+        headers = [
+            "Cliente",
+            "Usuario",
+            "CUIT/DNI",
+            "Categoria",
+            "Estado",
+            "Saldo",
+            "Ultimo movimiento",
+        ]
+        csv_rows = [
+            [
+                row["company_name"],
+                row["username"],
+                row["cuit_dni"],
+                row["category"],
+                row["state"],
+                f"{row['balance']:.2f}",
+                timezone.localtime(row["last_event_at"]).strftime("%d/%m/%Y %H:%M") if row["last_event_at"] else "-",
+            ]
+            for row in rows
+        ]
+        return _client_report_csv_response(filename, headers, csv_rows)
+
+    if standalone_report:
+        return render(
+            request,
+            "admin_panel/clients/report_output_debtors.html",
+            {
+                "report_title": "Clientes deudores",
+                "report_subtitle": dict(CLIENT_REPORT_DEBTOR_CHOICES).get(
+                    report_type,
+                    "Estado de cuenta corriente por cliente",
+                ),
+                "report_generated_at": timezone.now(),
+                "report_company": active_company,
+                "tolerance": tolerance_raw,
+                "selected_currency_label": dict(CLIENT_REPORT_CURRENCY_CHOICES).get(selected_currency, "Todas las monedas"),
+                "rows": rows,
+                "total_balance": total_balance,
+            },
+        )
+
+    return render(
+        request,
+        "admin_panel/clients/reports_debtors.html",
+        {
+            "client_report_panel": "debtors",
+            "client_report_nav_items": _client_reports_nav(),
+            "reports_requires_company": not bool(active_company),
+            "report_requested": report_requested,
+            "rows": rows,
+            "debtor_type_choices": CLIENT_REPORT_DEBTOR_CHOICES,
+            "currency_choices": CLIENT_REPORT_CURRENCY_CHOICES,
+            "report_type": report_type,
+            "selected_currency": selected_currency,
+            "tolerance": tolerance_raw,
+            "total_balance": total_balance,
         },
     )
 

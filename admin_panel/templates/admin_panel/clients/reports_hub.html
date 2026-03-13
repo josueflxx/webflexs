@@ -1,0 +1,28 @@
+{% extends 'admin_panel/base.html' %}
+
+{% block page_title %}Informes de clientes{% endblock %}
+
+{% block content %}
+{% include 'admin_panel/clients/_module_panel.html' with client_panel='reports' client_module_subtitle='Centro de reportes comerciales para analizar cartera, volumen y deuda por empresa.' %}
+{% include 'admin_panel/clients/_reports_nav.html' with client_report_panel=client_report_panel client_report_nav_items=client_report_nav_items %}
+
+{% if reports_requires_company %}
+<div class="dashboard-section compact-top-gap">
+    <h2>Elegi una empresa para generar informes</h2>
+    <p class="text-muted">Los reportes se calculan por empresa activa para evitar mezclar cartera, ranking y saldos entre Flexs y Ubolt.</p>
+</div>
+{% else %}
+<div class="client-reports-card-grid compact-top-gap">
+    {% for card in report_cards %}
+    <a href="{{ card.url }}" class="client-report-card">
+        <div class="client-report-card-icon" aria-hidden="true">{{ card.icon|safe }}</div>
+        <div class="client-report-card-copy">
+            <strong>{{ card.title }}</strong>
+            <p>{{ card.description }}</p>
+            <span class="client-report-card-cta">Abrir reporte</span>
+        </div>
+    </a>
+    {% endfor %}
+</div>
+{% endif %}
+{% endblock %}

@@ -3,7 +3,7 @@
 {% block page_title %}{% if category %}Editar Tipo de Cliente{% else %}Nuevo Tipo de Cliente{% endif %}{% endblock %}
 
 {% block content %}
-{% include 'admin_panel/clients/_module_panel.html' with client_panel='reports' client_module_subtitle='Configuracion de categorias comerciales y reglas base para la cartera de clientes.' %}
+{% include 'admin_panel/clients/_module_panel.html' with client_panel='settings' client_module_subtitle='Configuracion de categorias comerciales y reglas base para la cartera de clientes.' %}
 <div class="admin-form-container">
     <h2>{% if category %}Editar Tipo de Cliente{% else %}Nuevo Tipo de Cliente{% endif %}</h2>
 

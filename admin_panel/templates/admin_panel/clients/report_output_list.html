@@ -1,0 +1,51 @@
+{% extends 'admin_panel/clients/report_output_base.html' %}
+
+{% block report_summary %}
+<div class="report-standalone-summary">
+    <span><strong>Localidad:</strong> {{ selected_locality }}</span>
+    <span><strong>Estado:</strong> {{ selected_state_label }}</span>
+    <span><strong>IVA:</strong> {{ selected_iva_label }}</span>
+    {% if selected_text %}
+    <span><strong>Texto:</strong> {{ selected_text_field_label }} = {{ selected_text }}</span>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block report_table %}
+<div class="client-report-results report-standalone-results">
+    <div class="report-results-meta">
+        <strong>{{ rows|length }} clientes</strong>
+        <span class="report-standalone-scroll-hint no-print">Desplazate con la barra inferior o mantene el click derecho para mover la tabla.</span>
+    </div>
+    <div class="admin-table-container report-standalone-table-wrap" data-drag-scroll>
+        <table class="admin-table">
+            <thead>
+                <tr>
+                    {% for header in visible_headers %}
+                    <th>{{ header }}</th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in rows %}
+                <tr>
+                    <td>#{{ row.client_id }}</td>
+                    <td><strong>{{ row.company_name }}</strong></td>
+                    <td>{{ row.username }}</td>
+                    <td>{{ row.state }}</td>
+                    <td>{{ row.iva_condition }}</td>
+                    <td>{{ row.cuit_dni }}</td>
+                    {% for value in row.selected_values %}
+                    <td>{{ value }}</td>
+                    {% endfor %}
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="20" class="text-center text-muted">No se encontraron clientes con esos filtros.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

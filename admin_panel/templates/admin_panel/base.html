@@ -9,7 +9,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{% static 'core/css/base.css' %}">
-    <link rel="stylesheet" href="{% static 'core/css/admin.css' %}?v=24">
+    <link rel="stylesheet" href="{% static 'core/css/admin.css' %}?v=28">
     <link rel="stylesheet" href="{% static 'core/css/admin_right_sidebar.css' %}?v=3">
     <link rel="stylesheet" href="{% static 'core/css/search_suggestions.css' %}?v=3">
     <link rel="icon" type="image/x-icon" href="{% static 'core/img/favicon.ico' %}">
@@ -65,9 +65,14 @@
 
                 <div class="nav-section">Clientes</div>
                 <a href="{% url 'admin_client_dashboard' %}"
-                    class="nav-item {% if 'client' in request.resolver_match.url_name and 'client_category' not in request.resolver_match.url_name %}active{% endif %}">
+                    class="nav-item {% if 'client' in request.resolver_match.url_name and 'client_category' not in request.resolver_match.url_name and 'client_report' not in request.resolver_match.url_name %}active{% endif %}">
                     <span class="nav-icon" aria-hidden="true">&#128101;</span>
                     Clientes
+                </a>
+                <a href="{% url 'admin_client_reports_hub' %}"
+                    class="nav-item {% if request.resolver_match.url_name == 'admin_client_reports_hub' or request.resolver_match.url_name == 'admin_client_report_list' or request.resolver_match.url_name == 'admin_client_report_ranking' or request.resolver_match.url_name == 'admin_client_report_debtors' %}active{% endif %}">
+                    <span class="nav-icon" aria-hidden="true">&#128202;</span>
+                    Informes clientes
                 </a>
                 <a href="{% url 'admin_client_category_list' %}"
                     class="nav-item {% if 'client_category' in request.resolver_match.url_name %}active{% endif %}">
@@ -205,19 +210,17 @@
                                         <strong>Agregar</strong>
                                         <small>Alta rapida de usuario, perfil y empresa</small>
                                     </a>
-                                    <a href="{% url 'admin_client_category_list' %}" class="top-nav-submenu-item {% if 'client_category' in request.resolver_match.url_name %}is-active{% endif %}">
-                                        <strong class="top-nav-submenu-title">
-                                            <span>Informes</span>
-                                            <span class="top-nav-beta-tag">BETA</span>
-                                        </strong>
-                                        <small>Tipos de cliente, descuentos y clasificacion</small>
+                                    <a href="{% url 'admin_client_reports_hub' %}" class="top-nav-submenu-item {% if request.resolver_match.url_name == 'admin_client_reports_hub' or request.resolver_match.url_name == 'admin_client_report_list' or request.resolver_match.url_name == 'admin_client_report_ranking' or request.resolver_match.url_name == 'admin_client_report_debtors' %}is-active{% endif %}">
+                                        <strong>Informes</strong>
+                                        <small>Lista, ranking y clientes deudores</small>
                                     </a>
-                                    <a href="{% url 'admin_request_list' %}" class="top-nav-submenu-item {% if 'admin_request' in request.resolver_match.url_name %}is-active{% endif %}">
-                                        <strong class="top-nav-submenu-title">
-                                            <span>Herramientas</span>
-                                            <span class="top-nav-beta-tag">BETA</span>
-                                        </strong>
-                                        <small>Solicitudes pendientes y aprobaciones</small>
+                                    <a href="{% url 'admin_client_category_list' %}" class="top-nav-submenu-item {% if 'client_category' in request.resolver_match.url_name %}is-active{% endif %}">
+                                        <strong>Tipos</strong>
+                                        <small>Configuracion comercial y categorias base</small>
+                                    </a>
+                                    <a href="{% url 'admin_client_tools_hub' %}" class="top-nav-submenu-item {% if request.resolver_match.url_name == 'admin_client_tools_hub' or request.resolver_match.url_name == 'admin_client_export' or request.resolver_match.url_name == 'admin_import_process' or 'admin_request' in request.resolver_match.url_name %}is-active{% endif %}">
+                                        <strong>Herramientas</strong>
+                                        <small>Exportar, importar o gestionar solicitudes del modulo</small>
                                     </a>
                                 </div>
                             </div>

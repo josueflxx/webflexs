@@ -1,0 +1,57 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ report_title }} - FLEXS</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{% static 'core/css/base.css' %}">
+    <link rel="stylesheet" href="{% static 'core/css/admin.css' %}?v=28">
+</head>
+<body class="admin-body report-standalone-body">
+    <main class="report-standalone-shell">
+        <section class="report-standalone-card">
+            <div class="report-standalone-toolbar no-print">
+                <span class="report-standalone-toolbar-label">Vista independiente del informe</span>
+                <button type="button" class="btn btn-primary report-standalone-print-btn" onclick="window.print()">
+                    Imprimir
+                </button>
+            </div>
+
+            <header class="report-standalone-head">
+                <div class="report-standalone-brand">
+                    <img src="{% static 'core/img/flexs-logo.png' %}" alt="FLEXS" class="report-standalone-brand-logo">
+                    <div class="report-standalone-brand-copy">
+                        <span class="client-module-kicker">Informe generado</span>
+                        <h1>{{ report_title }}</h1>
+                        <p>{{ report_subtitle }}</p>
+                    </div>
+                </div>
+
+                <div class="report-standalone-meta">
+                    <div class="report-standalone-meta-item">
+                        <span class="report-standalone-meta-label">Sistema</span>
+                        <strong>FLEXS Admin</strong>
+                    </div>
+                    {% if report_company %}
+                    <div class="report-standalone-meta-item">
+                        <span class="report-standalone-meta-label">Empresa</span>
+                        <strong>{{ report_company.name }}</strong>
+                    </div>
+                    {% endif %}
+                    <div class="report-standalone-meta-item">
+                        <span class="report-standalone-meta-label">Generado</span>
+                        <strong>{{ report_generated_at|date:'d/m/Y H:i' }}</strong>
+                    </div>
+                </div>
+            </header>
+
+            {% block report_summary %}{% endblock %}
+            {% block report_table %}{% endblock %}
+        </section>
+    </main>
+    <script src="{% static 'core/js/main.js' %}?v=2"></script>
+</body>
+</html>

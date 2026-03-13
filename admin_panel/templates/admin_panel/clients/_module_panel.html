@@ -44,27 +44,32 @@
             </div>
         </a>
 
-        <a href="{% url 'admin_client_category_list' %}" class="client-module-card {% if client_panel == 'reports' %}is-active{% endif %}">
+        <a href="{% url 'admin_client_reports_hub' %}" class="client-module-card {% if client_panel == 'reports' %}is-active{% endif %}">
             <div class="client-module-card-icon" aria-hidden="true">&#128202;</div>
             <div class="client-module-card-copy">
-                <span class="client-module-card-label-row">
-                    <span class="client-module-card-label">Informes</span>
-                    <span class="client-module-beta-tag">BETA</span>
-                </span>
+                <span class="client-module-card-label">Informes</span>
+                <strong>Reportes de clientes</strong>
+                <small>Lista, ranking comercial y clientes con saldo pendiente.</small>
+            </div>
+        </a>
+
+        <a href="{% url 'admin_client_category_list' %}" class="client-module-card {% if client_panel == 'settings' %}is-active{% endif %}">
+            <div class="client-module-card-icon" aria-hidden="true">&#128203;</div>
+            <div class="client-module-card-copy">
+                <span class="client-module-card-label">Configuracion</span>
                 <strong>Tipos de cliente</strong>
                 <small>Clasificacion, descuentos y reglas base del modulo.</small>
             </div>
         </a>
 
-        <a href="{% url 'admin_request_list' %}" class="client-module-card {% if client_panel == 'tools' %}is-active{% endif %}">
+        <a href="{% url 'admin_client_tools_hub' %}" class="client-module-card {% if client_panel == 'tools' %}is-active{% endif %}">
             <div class="client-module-card-icon" aria-hidden="true">&#9881;</div>
             <div class="client-module-card-copy">
                 <span class="client-module-card-label-row">
                     <span class="client-module-card-label">Herramientas</span>
-                    <span class="client-module-beta-tag">BETA</span>
                 </span>
-                <strong>Solicitudes</strong>
-                <small>Aprobaciones y cola de ingresos pendientes.</small>
+                <strong>Exportar e importar</strong>
+                <small>Intercambio de base, cargas masivas y accesos operativos del modulo.</small>
             </div>
         </a>
     </div>

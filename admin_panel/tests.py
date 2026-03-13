@@ -9,7 +9,7 @@ from django.db import connection
 from django.utils import timezone
 from openpyxl import load_workbook
 
-from accounts.models import AccountRequest, ClientCompany, ClientPayment, ClientProfile
+from accounts.models import AccountRequest, ClientCategory, ClientCompany, ClientPayment, ClientProfile, ClientTransaction
 from catalog.models import Category, ClampMeasureRequest, Product, Supplier
 from catalog.services.clamp_quoter import calculate_clamp_quote
 from core.models import (
@@ -2173,3 +2173,249 @@ class CatalogExcelTemplateExportTests(TestCase):
 
         self.assertFalse(self.template.is_client_download_enabled)
         self.assertTrue(second_template.is_client_download_enabled)
+
+
+class ClientReportsViewTests(TestCase):
+    def setUp(self):
+        self.staff = User.objects.create_user(
+            username='staff_reports',
+            password='secret123',
+            is_staff=True,
+        )
+        self.company = get_default_company()
+        self.category_a = ClientCategory.objects.create(name='Mayorista Reportes A')
+        self.category_b = ClientCategory.objects.create(name='Mayorista Reportes B')
+
+        self.client_user_a = User.objects.create_user(
+            username='cliente_report_a',
+            email='a@example.com',
+            password='secret123',
+            first_name='Ana',
+        )
+        self.client_profile_a = ClientProfile.objects.create(
+            user=self.client_user_a,
+            company_name='Cliente Reporte A',
+            cuit_dni='20-11111111-1',
+            fiscal_city='San Martin',
+            fiscal_province='Buenos Aires',
+            fiscal_address='Calle A 123',
+            phone='1111-1111',
+            iva_condition='responsable_inscripto',
+            client_category=self.category_a,
+            is_approved=True,
+        )
+        self.client_company_a = ClientCompany.objects.create(
+            client_profile=self.client_profile_a,
+            company=self.company,
+            client_category=self.category_a,
+            is_active=True,
+        )
+
+        self.client_user_b = User.objects.create_user(
+            username='cliente_report_b',
+            email='b@example.com',
+            password='secret123',
+            first_name='Beto',
+            is_active=False,
+        )
+        self.client_profile_b = ClientProfile.objects.create(
+            user=self.client_user_b,
+            company_name='Cliente Reporte B',
+            cuit_dni='20-22222222-2',
+            province='Sin especificar',
+            phone='2222-2222',
+            iva_condition='monotributista',
+            client_category=self.category_b,
+            is_approved=False,
+        )
+        self.client_company_b = ClientCompany.objects.create(
+            client_profile=self.client_profile_b,
+            company=self.company,
+            client_category=self.category_b,
+            is_active=False,
+        )
+
+        Order.objects.create(
+            user=self.client_user_a,
+            company=self.company,
+            status=Order.STATUS_CONFIRMED,
+            subtotal=Decimal('200.00'),
+            total=Decimal('200.00'),
+            client_company='Cliente Reporte A',
+            client_company_ref=self.client_company_a,
+        )
+        Order.objects.create(
+            user=self.client_user_a,
+            company=self.company,
+            status=Order.STATUS_DELIVERED,
+            subtotal=Decimal('80.00'),
+            total=Decimal('80.00'),
+            client_company='Cliente Reporte A',
+            client_company_ref=self.client_company_a,
+        )
+        ClientPayment.objects.create(
+            client_profile=self.client_profile_a,
+            company=self.company,
+            amount=Decimal('50.00'),
+            method=ClientPayment.METHOD_TRANSFER,
+            reference='Pago reporte',
+        )
+        ClientTransaction.objects.create(
+            client_profile=self.client_profile_b,
+            company=self.company,
+            amount=Decimal('35.00'),
+            transaction_type=ClientTransaction.TYPE_ADJUSTMENT,
+            description='Saldo pendiente inactivo',
+        )
+
+    def _activate_company(self):
+        session = self.client.session
+        session['active_company_id'] = self.company.pk
+        session.save()
+
+    def test_reports_hub_loads(self):
+        self.client.force_login(self.staff)
+        self._activate_company()
+        response = self.client.get(reverse('admin_client_reports_hub'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Lista de clientes')
+        self.assertContains(response, 'Ranking de clientes')
+        self.assertContains(response, 'Clientes deudores')
+
+    def test_client_tools_hub_loads(self):
+        self.client.force_login(self.staff)
+        self._activate_company()
+        response = self.client.get(reverse('admin_client_tools_hub'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Exportar clientes')
+        self.assertContains(response, 'Importar o actualizar')
+        self.assertContains(response, 'Solicitudes')
+
+    def test_client_list_report_filters_and_renders_rows(self):
+        self.client.force_login(self.staff)
+        self._activate_company()
+        response = self.client.get(
+            reverse('admin_client_report_list'),
+            {
+                'action': 'generate',
+                'locality': 'San Martin',
+                'category': str(self.category_a.pk),
+                'state': 'enabled',
+                'iva_condition': 'responsable_inscripto',
+                'text_field': 'company_name',
+                'text': 'Reporte A',
+                'columns': ['locality', 'price_list', 'balance'],
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Cliente Reporte A')
+        self.assertNotContains(response, 'Cliente Reporte B')
+        self.assertContains(response, 'San Martin')
+
+    def test_client_ranking_report_uses_orders(self):
+        self.client.force_login(self.staff)
+        self._activate_company()
+        response = self.client.get(
+            reverse('admin_client_report_ranking'),
+            {
+                'action': 'generate',
+                'date_range': 'all',
+                'ranking': 'top_10',
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Cliente Reporte A')
+        self.assertEqual(response.context['rows'][0]['total_sales'], Decimal('280.00'))
+
+    def test_client_debtors_report_uses_balance_logic(self):
+        self.client.force_login(self.staff)
+        self._activate_company()
+        response = self.client.get(
+            reverse('admin_client_report_debtors'),
+            {
+                'action': 'generate',
+                'report_type': 'disabled_non_zero',
+                'tolerance': '1.00',
+                'currency': 'all',
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Cliente Reporte B')
+        self.assertNotContains(response, 'Cliente Reporte A')
+
+    def test_client_reports_support_csv_download(self):
+        self.client.force_login(self.staff)
+        self._activate_company()
+        response = self.client.get(
+            reverse('admin_client_report_ranking'),
+            {
+                'action': 'download',
+                'date_range': 'all',
+                'ranking': 'top_10',
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], 'text/csv; charset=utf-8')
+        self.assertIn('Cliente Reporte A', response.content.decode('utf-8-sig'))
+
+    def test_client_export_operational_download(self):
+        self.client.force_login(self.staff)
+        self._activate_company()
+        response = self.client.get(
+            reverse('admin_client_export'),
+            {
+                'action': 'download',
+                'preset': 'operational',
+                'encoding': 'utf8',
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], 'text/csv; charset=utf-8')
+        content = response.content.decode('utf-8-sig')
+        self.assertIn('Nro de cliente;Categoria de cliente;Estado;Nombre', content)
+        self.assertIn('Cliente Reporte A', content)
+
+    def test_client_export_import_compatible_download_uses_selected_encoding(self):
+        self.client.force_login(self.staff)
+        self._activate_company()
+        response = self.client.get(
+            reverse('admin_client_export'),
+            {
+                'action': 'download',
+                'preset': 'import_compatible',
+                'encoding': 'latin1',
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], 'text/csv; charset=iso-8859-1')
+        content = response.content.decode('iso-8859-1')
+        self.assertIn('Usuario;Contrasena;Nombre;Email', content)
+        self.assertIn('cliente_report_a', content)
+
+    def test_client_reports_generate_standalone_output(self):
+        self.client.force_login(self.staff)
+        self._activate_company()
+        response = self.client.get(
+            reverse('admin_client_report_ranking'),
+            {
+                'action': 'generate',
+                'standalone': '1',
+                'date_range': 'all',
+                'ranking': 'top_10',
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Informe generado')
+        self.assertContains(response, 'Ranking de clientes')
+        self.assertContains(response, 'Imprimir')
+        self.assertContains(response, 'FLEXS Admin')
+        self.assertNotContains(response, 'Panel de clientes')

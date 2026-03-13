@@ -784,6 +784,20 @@ img {
     box-shadow: 0 0 0 3px rgba(255, 107, 53, 0.2);
 }
 
+/*
+   Native select dropdowns on Windows/Chrome often render with a light
+   system popup. If the option text inherits the dark-theme white color,
+   the list looks blank. Force dark text inside the popup so all selects
+   remain legible across the project.
+*/
+.form-select option,
+.form-select optgroup,
+select option,
+select optgroup {
+    color: #10151f;
+    background-color: #f4f6fa;
+}
+
 .form-input::placeholder {
     color: var(--color-gray-light);
 }

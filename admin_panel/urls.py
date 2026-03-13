@@ -31,6 +31,12 @@ urlpatterns = [
     # Clients
     path('clientes/', views.client_dashboard, name='admin_client_dashboard'),
     path('clientes/buscar/', views.client_list, name='admin_client_list'),
+    path('clientes/herramientas/', views.client_tools_hub, name='admin_client_tools_hub'),
+    path('clientes/exportar/', views.client_export, name='admin_client_export'),
+    path('clientes/informes/', views.client_reports_hub, name='admin_client_reports_hub'),
+    path('clientes/informes/lista/', views.client_report_list, name='admin_client_report_list'),
+    path('clientes/informes/ranking/', views.client_report_ranking, name='admin_client_report_ranking'),
+    path('clientes/informes/deudores/', views.client_report_debtors, name='admin_client_report_debtors'),
     path('clientes/nuevo/', views.client_create, name='admin_client_create'),
     path('clientes/categorias/', views.client_category_list, name='admin_client_category_list'),
     path('clientes/categorias/nueva/', views.client_category_create, name='admin_client_category_create'),

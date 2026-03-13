@@ -504,6 +504,14 @@
     outline: none;
 }
 
+.form-select-mini option,
+.form-select-mini optgroup,
+.order-select option,
+.order-select optgroup {
+    color: #10151f;
+    background-color: #f4f6fa;
+}
+
 /* Scrollbar for select dropdown (Chrome/Edge/Safari) */
 .form-select-mini::-webkit-scrollbar {
     width: 8px;

@@ -1,0 +1,7 @@
+<nav class="client-reports-nav compact-top-gap" aria-label="Herramientas de clientes">
+    {% for item in client_tools_nav_items %}
+    <a href="{{ item.url }}" class="client-reports-nav-item {% if client_tools_panel == item.key %}is-active{% endif %}">
+        {{ item.label }}
+    </a>
+    {% endfor %}
+</nav>
