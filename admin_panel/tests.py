@@ -1,6 +1,7 @@
 import json
 from decimal import Decimal
 from io import BytesIO
+from unittest.mock import patch
 
 from django.contrib.auth.models import Group, User
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -2234,6 +2235,16 @@ class AdminUserPermissionsViewTests(TestCase):
         self.assertTrue(self.primary_superadmin.is_active)
         self.assertTrue(self.primary_superadmin.is_staff)
         self.assertTrue(self.primary_superadmin.is_superuser)
+
+    @patch("admin_panel.views.admin_company_access_table_available", return_value=False)
+    def test_admin_list_still_loads_when_admin_scope_table_is_missing(self, _mock_scope_table):
+        self.client.force_login(self.primary_superadmin)
+        self._activate_company()
+
+        response = self.client.get(reverse("admin_user_list"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, self.primary_superadmin.username)
 
 class CatalogExcelTemplateExportTests(TestCase):
     def setUp(self):

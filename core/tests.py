@@ -1,4 +1,5 @@
 from decimal import Decimal
+from unittest.mock import patch
 
 from django.contrib.auth.models import User
 from django.template import Context, Template
@@ -201,6 +202,25 @@ class StaffCompanyAccessModelTests(TestCase):
 
         self.assertEqual([company.pk for company in companies], [company_ubolt.pk])
         self.assertNotIn(company_flexs.pk, [company.pk for company in companies])
+
+    @patch("core.services.company_context.admin_company_access_table_available", return_value=False)
+    def test_staff_company_scope_falls_back_gracefully_when_scope_table_is_missing(self, _mock_scope_table):
+        company_flexs = Company.objects.filter(slug__iexact="flexs").first() or get_default_company()
+        company_ubolt = Company.objects.filter(slug__iexact="ubolt").first()
+        if not company_ubolt:
+            company_ubolt = Company.objects.create(name="Ubolt Missing Table", slug="ubolt", is_active=True)
+        staff = User.objects.create_user(
+            username="staff_db_acl_missing_table",
+            password="secret123",
+            is_staff=True,
+        )
+
+        companies = list(get_user_companies(staff))
+
+        self.assertEqual(
+            {company.pk for company in companies},
+            {company_flexs.pk, company_ubolt.pk},
+        )
 
 
 class ApiCompanyScopeTests(TestCase):

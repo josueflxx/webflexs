@@ -1,7 +1,11 @@
 """Helpers for resolving the active company context."""
 
+from functools import lru_cache
+
 from django.conf import settings
+from django.db import connections
 from django.db.models import Q
+from django.db.utils import OperationalError, ProgrammingError
 
 from core.models import AdminCompanyAccess, Company
 
@@ -13,6 +17,18 @@ DEFAULT_CLIENT_ORIGIN_COMPANY_SLUG = getattr(
     DEFAULT_COMPANY_SLUG,
 )
 SESSION_COMPANY_KEY = "active_company_id"
+
+
+@lru_cache(maxsize=8)
+def admin_company_access_table_available(using="default"):
+    """Return True when the optional admin-company scope table is present."""
+    try:
+        connection = connections[using]
+        table_name = AdminCompanyAccess._meta.db_table
+        with connection.cursor() as cursor:
+            return table_name in connection.introspection.table_names(cursor)
+    except (ProgrammingError, OperationalError):
+        return False
 
 
 def get_default_company():
@@ -66,7 +82,7 @@ def get_user_companies(user):
         return Company.objects.none()
     if getattr(user, "is_staff", False):
         queryset = Company.objects.filter(is_active=True)
-        if not getattr(user, "is_superuser", False):
+        if not getattr(user, "is_superuser", False) and admin_company_access_table_available():
             scoped_company_ids = list(
                 AdminCompanyAccess.objects.filter(
                     user=user,

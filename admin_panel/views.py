@@ -94,6 +94,7 @@ from core.models import (
     Warehouse,
 )
 from core.services.company_context import (
+    admin_company_access_table_available,
     get_active_company,
     get_default_company,
     get_default_client_origin_company,
@@ -280,6 +281,8 @@ def set_admin_role_for_user(user, role_value):
 def get_admin_company_scope_mode(user):
     if not user or not getattr(user, "is_staff", False) or getattr(user, "is_superuser", False):
         return "all"
+    if not admin_company_access_table_available():
+        return "all"
     has_db_scope = AdminCompanyAccess.objects.filter(
         user=user,
         is_active=True,
@@ -289,6 +292,8 @@ def get_admin_company_scope_mode(user):
 
 
 def get_admin_user_scope_ids(user):
+    if not admin_company_access_table_available():
+        return set()
     return set(
         AdminCompanyAccess.objects.filter(
             user=user,
@@ -324,16 +329,10 @@ def get_recent_admin_user_audit_logs(user, limit=8):
 
 def get_managed_admin_users_queryset():
     valid_roles = [choice[0] for choice in ADMIN_ROLE_CHOICES]
-    return (
-        User.objects.filter(
-            Q(is_staff=True)
-            | Q(is_superuser=True)
-            | Q(groups__name__in=valid_roles)
-            | Q(company_access_links__is_active=True)
-        )
-        .distinct()
-        .order_by("username")
-    )
+    query = Q(is_staff=True) | Q(is_superuser=True) | Q(groups__name__in=valid_roles)
+    if admin_company_access_table_available():
+        query |= Q(company_access_links__is_active=True)
+    return User.objects.filter(query).distinct().order_by("username")
 
 CLIENT_REPORT_TEXT_FIELD_CHOICES = [
     ("company_name", "Nombre"),
@@ -9917,7 +9916,8 @@ def admin_user_delete(request, user_id):
         admin_user.is_superuser = False
         admin_user.save(update_fields=['is_active', 'is_staff', 'is_superuser'])
         set_admin_role_for_user(admin_user, '')
-        AdminCompanyAccess.objects.filter(user=admin_user).update(is_active=False)
+        if admin_company_access_table_available():
+            AdminCompanyAccess.objects.filter(user=admin_user).update(is_active=False)
 
         after = build_admin_user_snapshot(admin_user)
         log_admin_change(
@@ -9960,9 +9960,15 @@ def admin_user_permissions(request, user_id):
     admin_user = get_object_or_404(get_managed_admin_users_queryset(), pk=user_id)
     ensure_admin_role_groups()
     available_companies = list(Company.objects.filter(is_active=True).order_by("name"))
-    current_scope_links = list(
-        AdminCompanyAccess.objects.filter(user=admin_user, is_active=True, company__is_active=True).select_related("company")
-    )
+    current_scope_links = []
+    if admin_company_access_table_available():
+        current_scope_links = list(
+            AdminCompanyAccess.objects.filter(
+                user=admin_user,
+                is_active=True,
+                company__is_active=True,
+            ).select_related("company")
+        )
     current_scope_ids = {link.company_id for link in current_scope_links}
     current_roles = get_admin_role_values(admin_user) or [ROLE_ADMIN]
     current_scope_mode = get_admin_company_scope_mode(admin_user)
@@ -10046,8 +10052,9 @@ def admin_user_permissions(request, user_id):
 
         if admin_user.is_staff and not admin_user.is_superuser:
             set_admin_roles_for_user(admin_user, selected_roles)
-            AdminCompanyAccess.objects.filter(user=admin_user).update(is_active=False)
-            if selected_scope_mode == "limited":
+            if admin_company_access_table_available():
+                AdminCompanyAccess.objects.filter(user=admin_user).update(is_active=False)
+            if selected_scope_mode == "limited" and admin_company_access_table_available():
                 for company in available_companies:
                     if company.pk not in selected_company_ids:
                         continue
@@ -10057,7 +10064,8 @@ def admin_user_permissions(request, user_id):
                         defaults={"is_active": True},
                     )
         else:
-            AdminCompanyAccess.objects.filter(user=admin_user).update(is_active=False)
+            if admin_company_access_table_available():
+                AdminCompanyAccess.objects.filter(user=admin_user).update(is_active=False)
             set_admin_roles_for_user(admin_user, [])
 
         after = build_admin_user_snapshot(admin_user)
