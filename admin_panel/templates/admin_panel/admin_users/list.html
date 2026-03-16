@@ -19,19 +19,38 @@
         <thead>
             <tr>
                 <th>Usuario</th>
+                <th>Rol</th>
                 <th>Nombre</th>
                 <th>Email</th>
                 <th>Estado</th>
                 <th>Panel</th>
                 <th>Superadmin</th>
+                <th>Empresas</th>
                 <th>Ultimo acceso</th>
                 <th>Acciones</th>
             </tr>
         </thead>
         <tbody>
-            {% for admin_user in admins %}
+            {% for row in admin_rows %}
+            {% with admin_user=row.user %}
             <tr>
                 <td><strong>{{ admin_user.username }}</strong></td>
+                <td>
+                    <div class="admin-cell-stack">
+                        <div class="admin-scope-badges">
+                            {% for role_label in row.role_labels %}
+                            <span class="client-inline-badge is-live">{{ role_label }}</span>
+                            {% empty %}
+                            <span class="text-muted">Sin rol</span>
+                            {% endfor %}
+                        </div>
+                        {% if row.company_scope_mode == 'limited' %}
+                        <small>Empresas especificas</small>
+                        {% else %}
+                        <small>Acceso general</small>
+                        {% endif %}
+                    </div>
+                </td>
                 <td>{{ admin_user.first_name }} {{ admin_user.last_name }}</td>
                 <td>{{ admin_user.email|default:"-" }}</td>
                 <td>
@@ -55,14 +74,34 @@
                     <span class="badge badge-secondary">No</span>
                     {% endif %}
                 </td>
+                <td>
+                    <div class="admin-scope-badges">
+                        {% if row.visible_companies %}
+                            {% for company in row.visible_companies|slice:":3" %}
+                            <span class="client-inline-badge is-internal">{{ company.name }}</span>
+                            {% endfor %}
+                            {% if row.visible_companies|length > 3 %}
+                            <span class="client-inline-badge">+{{ row.visible_companies|length|add:"-3" }}</span>
+                            {% endif %}
+                        {% else %}
+                        <span class="text-muted">Sin acceso</span>
+                        {% endif %}
+                    </div>
+                </td>
                 <td>{{ admin_user.last_login|date:"d/m/Y H:i"|default:"-" }}</td>
                 <td class="actions">
+                    <a href="{% url 'admin_user_edit' admin_user.pk %}" class="btn btn-outline">Editar</a>
+                    <a href="{% url 'admin_user_password_change' admin_user.pk %}" class="btn btn-outline">Clave</a>
                     <a href="{% url 'admin_user_permissions' admin_user.pk %}" class="btn btn-outline">Permisos</a>
+                    {% if admin_user.username|lower != 'josueflexs' and admin_user.pk != request.user.pk %}
+                    <a href="{% url 'admin_user_delete' admin_user.pk %}" class="btn btn-danger">Eliminar</a>
+                    {% endif %}
                 </td>
             </tr>
+            {% endwith %}
             {% empty %}
             <tr>
-                <td colspan="8" class="text-center text-muted">No hay cuentas admin.</td>
+                <td colspan="10" class="text-center text-muted">No hay cuentas admin.</td>
             </tr>
             {% endfor %}
         </tbody>

@@ -47,8 +47,16 @@ from accounts.services.ledger import (
     sync_order_charge_transaction,
 )
 from orders.models import ClampQuotation, Order, OrderItem, OrderStatusHistory
-from orders.services.workflow import can_user_transition_order
+from orders.services.workflow import (
+    ROLE_ADMIN,
+    ROLE_DEPOSITO,
+    ROLE_FACTURACION,
+    ROLE_VENTAS,
+    can_user_transition_order,
+    resolve_user_order_role,
+)
 from core.models import (
+    AdminCompanyAccess,
     Company,
     DocumentSeries,
     FISCAL_DOC_TYPE_FA,
@@ -89,10 +97,11 @@ from core.services.company_context import (
     get_active_company,
     get_default_company,
     get_default_client_origin_company,
+    get_user_companies,
     set_active_company,
     user_has_company_access,
 )
-from django.contrib.auth.models import User
+from django.contrib.auth.models import Group, User
 from admin_panel.forms.import_forms import ProductImportForm, ClientImportForm, CategoryImportForm
 from admin_panel.forms.category_forms import CategoryForm
 from admin_panel.forms.export_forms import (
@@ -157,12 +166,20 @@ from core.services.advanced_search import (
 )
 from core.services.catalog_excel_exporter import build_catalog_workbook, build_export_filename
 from core.services.audit import log_admin_action, log_admin_change, model_snapshot
+from core.services.pricing import resolve_effective_price_list
 import traceback
 import logging
 from core.decorators import superuser_required_for_modifications
 
 logger = logging.getLogger(__name__)
 PRIMARY_SUPERADMIN_USERNAME = "josueflexs"
+ADMIN_ROLE_CHOICES = [
+    (ROLE_ADMIN, "Administracion"),
+    (ROLE_VENTAS, "Ventas"),
+    (ROLE_DEPOSITO, "Deposito"),
+    (ROLE_FACTURACION, "Facturacion"),
+]
+ADMIN_ROLE_LABELS = dict(ADMIN_ROLE_CHOICES)
 CLIENT_FACTURABLE_STATUSES = {
     Order.STATUS_CONFIRMED,
     Order.STATUS_PREPARING,
@@ -189,6 +206,134 @@ ORDER_INTERNAL_DOC_STATUS_RULES = {
     },
     DocumentSeries.DOC_REM: CLIENT_REMITO_READY_STATUSES,
 }
+
+
+def ensure_admin_role_groups():
+    for role_value, role_label in ADMIN_ROLE_CHOICES:
+        Group.objects.get_or_create(name=role_value)
+
+
+def get_admin_role_values(user):
+    if not user or not getattr(user, "is_authenticated", False):
+        return []
+    if getattr(user, "is_superuser", False):
+        return [ROLE_ADMIN]
+    active_roles = [
+        role_value
+        for role_value, _role_label in ADMIN_ROLE_CHOICES
+        if user.groups.filter(name=role_value).exists()
+    ]
+    if active_roles:
+        return active_roles
+    resolved_role = resolve_user_order_role(user)
+    return [resolved_role] if resolved_role else []
+
+
+def get_admin_role_value(user):
+    if not user or not getattr(user, "is_authenticated", False):
+        return ""
+    if getattr(user, "is_superuser", False):
+        return ROLE_ADMIN
+    return resolve_user_order_role(user) or ""
+
+
+def get_admin_role_label(user):
+    if getattr(user, "is_superuser", False):
+        return "Superadmin"
+    role_labels = get_admin_role_labels(user)
+    if not role_labels:
+        return "Sin rol"
+    return " + ".join(role_labels)
+
+
+def get_admin_role_labels(user):
+    if getattr(user, "is_superuser", False):
+        return ["Superadmin"]
+    return [ADMIN_ROLE_LABELS.get(role_value, role_value) for role_value in get_admin_role_values(user)]
+
+
+def set_admin_roles_for_user(user, role_values):
+    ensure_admin_role_groups()
+    normalized_roles = {
+        str(role_value or "").strip().lower()
+        for role_value in (role_values or [])
+        if str(role_value or "").strip()
+    }
+    valid_roles = {choice[0] for choice in ADMIN_ROLE_CHOICES}
+    role_groups = Group.objects.filter(name__in=valid_roles)
+    user.groups.remove(*role_groups)
+    for role_value, _role_label in ADMIN_ROLE_CHOICES:
+        if role_value not in normalized_roles or role_value not in valid_roles:
+            continue
+        target_group = role_groups.filter(name=role_value).first() or Group.objects.get(name=role_value)
+        user.groups.add(target_group)
+
+
+def set_admin_role_for_user(user, role_value):
+    """
+    Backward-compatible wrapper for places that still think in singular role.
+    """
+    roles = [role_value] if role_value else []
+    set_admin_roles_for_user(user, roles)
+
+
+def get_admin_company_scope_mode(user):
+    if not user or not getattr(user, "is_staff", False) or getattr(user, "is_superuser", False):
+        return "all"
+    has_db_scope = AdminCompanyAccess.objects.filter(
+        user=user,
+        is_active=True,
+        company__is_active=True,
+    ).exists()
+    return "limited" if has_db_scope else "all"
+
+
+def get_admin_user_scope_ids(user):
+    return set(
+        AdminCompanyAccess.objects.filter(
+            user=user,
+            is_active=True,
+            company__is_active=True,
+        ).values_list("company_id", flat=True)
+    )
+
+
+def build_admin_user_snapshot(user):
+    return {
+        "username": user.username,
+        "email": user.email,
+        "first_name": user.first_name,
+        "last_name": user.last_name,
+        "is_active": user.is_active,
+        "is_staff": user.is_staff,
+        "is_superuser": user.is_superuser,
+        "role": get_admin_role_value(user),
+        "roles": get_admin_role_values(user),
+        "company_scope_mode": get_admin_company_scope_mode(user),
+        "company_ids": sorted(get_admin_user_scope_ids(user)),
+    }
+
+
+def get_recent_admin_user_audit_logs(user, limit=8):
+    return list(
+        AdminAuditLog.objects.filter(target_type="auth_user", target_id=str(user.pk))
+        .select_related("user")
+        .order_by("-created_at")[:limit]
+    )
+
+
+def get_managed_admin_users_queryset():
+    valid_roles = [choice[0] for choice in ADMIN_ROLE_CHOICES]
+    return (
+        User.objects.filter(
+            Q(is_staff=True)
+            | Q(is_superuser=True)
+            | Q(groups__name__in=valid_roles)
+            | Q(company_access_links__is_active=True)
+        )
+        .distinct()
+        .order_by("username")
+    )
 
 CLIENT_REPORT_TEXT_FIELD_CHOICES = [
     ("company_name", "Nombre"),
@@ -1069,7 +1214,7 @@ def _extract_linked_company_ids(form_data):
 
 
 def _resolve_client_editor_company(request, client=None):
-    companies = Company.objects.filter(is_active=True).order_by("name")
+    companies = get_user_companies(getattr(request, "user", None)).filter(is_active=True).order_by("name")
     requested_company_id = str(request.GET.get("company_id", "")).strip()
     if requested_company_id.isdigit():
         requested_company = companies.filter(pk=int(requested_company_id)).first()
@@ -1190,6 +1335,64 @@ def _resolve_linked_companies(form_values, companies):
     return selected
 
 
+def _build_client_company_summary_rows(client, companies):
+    if not client:
+        return []
+
+    company_list = list(companies or [])
+    if not company_list:
+        return []
+
+    company_ids = [company.pk for company in company_list]
+    links = {
+        link.company_id: link
+        for link in client.company_links.select_related("company", "client_category", "price_list").filter(
+            company_id__in=company_ids
+        )
+    }
+    order_stats = {
+        row["company_id"]: row
+        for row in (
+            Order.objects.filter(
+                user_id=client.user_id,
+                company_id__in=company_ids,
+            )
+            .values("company_id")
+            .annotate(
+                total_orders=Count("id"),
+                total_volume=Coalesce(Sum("total"), Decimal("0.00")),
+                last_order_at=Max("created_at"),
+            )
+        )
+    }
+
+    rows = []
+    for company in company_list:
+        link = links.get(company.pk)
+        category = client.get_effective_client_category(company=company)
+        price_list = resolve_effective_price_list(
+            company=company,
+            client_company=link,
+            client_category=category,
+        )
+        stats = order_stats.get(company.pk, {})
+        rows.append(
+            {
+                "company": company,
+                "link": link,
+                "is_enabled": client.can_operate_in_company(company),
+                "category_name": getattr(category, "name", "Sin categoria"),
+                "discount_percentage": client.get_effective_discount_percentage(company=company),
+                "price_list_name": getattr(price_list, "name", "Lista base"),
+                "balance": client.get_current_balance(company=company),
+                "total_orders": stats.get("total_orders", 0) or 0,
+                "total_volume": stats.get("total_volume", Decimal("0.00")) or Decimal("0.00"),
+                "last_order_at": stats.get("last_order_at"),
+            }
+        )
+    return rows
+
+
 def _render_client_form(
     request,
     *,
@@ -1243,6 +1446,17 @@ def _render_client_form(
             }
         )
 
+    recent_client_audit_logs = []
+    if client and client.pk:
+        recent_client_audit_logs = list(
+            AdminAuditLog.objects.filter(
+                Q(target_type="client_profile", target_id=str(client.pk))
+                | Q(target_type="accounts.clientprofile", target_id=str(client.pk))
+            )
+            .select_related("user")
+            .order_by("-created_at")[:6]
+        )
+
     return render(
         request,
         "admin_panel/clients/form.html",
@@ -1259,6 +1473,8 @@ def _render_client_form(
             "company_is_active": company_is_active,
             "uses_legacy_rules": uses_legacy,
             "company_cards": company_cards,
+            "client_company_summary_rows": _build_client_company_summary_rows(client, companies),
+            "recent_client_audit_logs": recent_client_audit_logs,
             "can_manage_client_credentials": can_manage_client_credentials(request.user),
             "document_type_choices": ClientProfile.DOCUMENT_TYPE_CHOICES,
             "client_type_choices": ClientProfile.CLIENT_TYPE_CHOICES,
@@ -5602,7 +5818,7 @@ def client_create(request):
         company = None
         company_id = form_values.get("company_id", "")
         if company_id.isdigit():
-            company = Company.objects.filter(pk=int(company_id), is_active=True).first()
+            company = companies.filter(pk=int(company_id), is_active=True).first()
         if not company:
             company = active_company or get_default_client_origin_company()
             if company:
@@ -5845,7 +6061,7 @@ def client_edit(request, pk):
         company = None
         company_id = form_values.get("company_id", "")
         if company_id.isdigit():
-            company = Company.objects.filter(pk=int(company_id), is_active=True).first()
+            company = companies.filter(pk=int(company_id), is_active=True).first()
         if not company:
             company = active_company or get_default_client_origin_company()
             if company:
@@ -5983,6 +6199,15 @@ def client_edit(request, pk):
                 client_company,
                 ["client_category_id", "discount_percentage", "is_active"],
             ) if client_company else {},
+            "linked_companies": [
+                {
+                    "company_id": link.company_id,
+                    "is_active": link.is_active,
+                    "client_category_id": link.client_category_id,
+                    "discount_percentage": str(link.discount_percentage or Decimal("0")),
+                }
+                for link in client.company_links.filter(company__is_active=True).order_by("company__name", "company_id")
+            ],
         }
 
         user = client.user
@@ -6091,6 +6316,15 @@ def client_edit(request, pk):
                 link,
                 ["client_category_id", "discount_percentage", "is_active"],
             ) if link else {},
+            "linked_companies": [
+                {
+                    "company_id": company_link.company_id,
+                    "is_active": company_link.is_active,
+                    "client_category_id": company_link.client_category_id,
+                    "discount_percentage": str(company_link.discount_percentage or Decimal("0")),
+                }
+                for company_link in client.company_links.filter(company__is_active=True).order_by("company__name", "company_id")
+            ],
         }
         log_admin_change(
             request,
@@ -6101,6 +6335,7 @@ def client_edit(request, pk):
             after=after,
             extra={
                 'username': client.user.username if client.user_id else '',
+                'company_id': company.pk,
             },
         )
         
@@ -9518,7 +9753,7 @@ def admin_user_list(request):
     Superadmin-only list to manage admin accounts and permissions.
     """
     search = sanitize_search_token(request.GET.get('q', ''))
-    admins = User.objects.filter(is_staff=True).order_by('username')
+    admins = get_managed_admin_users_queryset()
     if search:
         admins = apply_parsed_text_search(
             admins,
@@ -9527,13 +9762,192 @@ def admin_user_list(request):
             order_by_similarity=False,
         )
 
+    admin_rows = []
+    for admin_user in admins:
+        visible_companies = list(get_user_companies(admin_user))
+        admin_rows.append(
+            {
+                "user": admin_user,
+                "role_label": get_admin_role_label(admin_user),
+                "role_labels": get_admin_role_labels(admin_user),
+                "company_scope_mode": get_admin_company_scope_mode(admin_user),
+                "visible_companies": visible_companies,
+            }
+        )
+
     return render(
         request,
         'admin_panel/admin_users/list.html',
         {
-            'admins': admins,
+            'admin_rows': admin_rows,
             'search': search,
             'total_admins': admins.count(),
+        },
+    )
+
+
+@user_passes_test(is_primary_superadmin)
+def admin_user_edit(request, user_id):
+    """
+    Superadmin-only edit for admin identity fields.
+    """
+    admin_user = get_object_or_404(get_managed_admin_users_queryset(), pk=user_id)
+    is_primary_account = admin_user.username.lower() == PRIMARY_SUPERADMIN_USERNAME
+
+    if request.method == 'POST':
+        submitted_username = str(request.POST.get('username', admin_user.username)).strip()
+        submitted_email = str(request.POST.get('email', admin_user.email or '')).strip()
+        submitted_first_name = str(request.POST.get('first_name', admin_user.first_name or '')).strip()
+        submitted_last_name = str(request.POST.get('last_name', admin_user.last_name or '')).strip()
+
+        if not submitted_username:
+            messages.error(request, 'El usuario no puede quedar vacio.')
+            return redirect('admin_user_edit', user_id=admin_user.pk)
+
+        username_field = admin_user._meta.get_field('username')
+        try:
+            cleaned_username = username_field.clean(submitted_username, admin_user)
+        except ValidationError as exc:
+            messages.error(request, exc.messages[0] if exc.messages else 'Usuario invalido.')
+            return redirect('admin_user_edit', user_id=admin_user.pk)
+
+        if is_primary_account and cleaned_username.lower() != PRIMARY_SUPERADMIN_USERNAME:
+            messages.error(
+                request,
+                f'La cuenta "{PRIMARY_SUPERADMIN_USERNAME}" debe conservar su usuario principal.',
+            )
+            return redirect('admin_user_edit', user_id=admin_user.pk)
+
+        if User.objects.exclude(pk=admin_user.pk).filter(username__iexact=cleaned_username).exists():
+            messages.error(request, f'Ya existe otro usuario con el nombre "{cleaned_username}".')
+            return redirect('admin_user_edit', user_id=admin_user.pk)
+
+        before = build_admin_user_snapshot(admin_user)
+        admin_user.username = cleaned_username
+        admin_user.email = submitted_email
+        admin_user.first_name = submitted_first_name
+        admin_user.last_name = submitted_last_name
+        admin_user.save(update_fields=['username', 'email', 'first_name', 'last_name'])
+        after = build_admin_user_snapshot(admin_user)
+
+        log_admin_change(
+            request,
+            action='admin_user_profile_update',
+            target_type='auth_user',
+            target_id=admin_user.pk,
+            before=before,
+            after=after,
+            extra={
+                'username': admin_user.username,
+            },
+        )
+        messages.success(request, f'Informacion actualizada para "{admin_user.username}".')
+        return redirect('admin_user_list')
+
+    return render(
+        request,
+        'admin_panel/admin_users/profile_form.html',
+        {
+            'admin_user': admin_user,
+            'recent_admin_audit_logs': get_recent_admin_user_audit_logs(admin_user),
+        },
+    )
+
+
+@user_passes_test(is_primary_superadmin)
+def admin_user_password_change(request, user_id):
+    """
+    Superadmin-only password reset for operator/admin accounts.
+    """
+    admin_user = get_object_or_404(get_managed_admin_users_queryset(), pk=user_id)
+
+    if request.method == 'POST':
+        form = SetPasswordForm(admin_user, request.POST)
+        if form.is_valid():
+            form.save()
+            log_admin_action(
+                request,
+                action='admin_user_password_reset',
+                target_type='auth_user',
+                target_id=admin_user.pk,
+                details={
+                    'username': admin_user.username,
+                },
+            )
+            messages.success(request, f'Contrasena actualizada para "{admin_user.username}".')
+            return redirect('admin_user_list')
+    else:
+        form = SetPasswordForm(admin_user)
+
+    return render(
+        request,
+        'admin_panel/admin_users/password_form.html',
+        {
+            'form': form,
+            'admin_user': admin_user,
+            'recent_admin_audit_logs': get_recent_admin_user_audit_logs(admin_user),
+        },
+    )
+
+
+@user_passes_test(is_primary_superadmin)
+def admin_user_delete(request, user_id):
+    """
+    Safe delete/deactivate for operator accounts while preserving audit trail.
+    """
+    admin_user = get_object_or_404(get_managed_admin_users_queryset(), pk=user_id)
+
+    if admin_user.username.lower() == PRIMARY_SUPERADMIN_USERNAME:
+        messages.error(
+            request,
+            f'La cuenta "{PRIMARY_SUPERADMIN_USERNAME}" no se puede eliminar ni desactivar desde el panel.',
+        )
+        return redirect('admin_user_list')
+
+    if admin_user.pk == request.user.pk:
+        messages.error(request, 'No puedes eliminar tu propia cuenta mientras estas operando en el panel.')
+        return redirect('admin_user_list')
+
+    if request.method == 'POST':
+        reason = request.POST.get('cancel_reason', '').strip()
+        before = build_admin_user_snapshot(admin_user)
+
+        admin_user.is_active = False
+        admin_user.is_staff = False
+        admin_user.is_superuser = False
+        admin_user.save(update_fields=['is_active', 'is_staff', 'is_superuser'])
+        set_admin_role_for_user(admin_user, '')
+        AdminCompanyAccess.objects.filter(user=admin_user).update(is_active=False)
+
+        after = build_admin_user_snapshot(admin_user)
+        log_admin_change(
+            request,
+            action='admin_user_deactivate',
+            target_type='auth_user',
+            target_id=admin_user.pk,
+            before=before,
+            after=after,
+            extra={
+                'username': admin_user.username,
+                'reason': reason,
+            },
+        )
+        messages.success(request, f'La cuenta "{admin_user.username}" fue dada de baja del panel.')
+        return redirect('admin_user_list')
+
+    return render(
+        request,
+        'admin_panel/delete_confirm.html',
+        {
+            'object': f'{admin_user.username} ({admin_user.first_name} {admin_user.last_name})'.strip(),
+            'cancel_url': reverse('admin_user_list'),
+            'title': 'Confirmar baja de cuenta operadora',
+            'question': 'Estas por dar de baja esta cuenta del panel.',
+            'warning': 'No se borrara historial ni auditoria. Se desactivara el acceso y se quitaran permisos de panel.',
+            'confirm_label': 'Confirmar baja',
+            'show_reason_input': True,
+            'reason_label': 'Motivo (opcional)',
+            'reason_name': 'cancel_reason',
         },
     )
 
@@ -9543,12 +9957,42 @@ def admin_user_permissions(request, user_id):
     """
     Superadmin-only edit for core admin flags.
     """
-    admin_user = get_object_or_404(User, pk=user_id)
+    admin_user = get_object_or_404(get_managed_admin_users_queryset(), pk=user_id)
+    ensure_admin_role_groups()
+    available_companies = list(Company.objects.filter(is_active=True).order_by("name"))
+    current_scope_links = list(
+        AdminCompanyAccess.objects.filter(user=admin_user, is_active=True, company__is_active=True).select_related("company")
+    )
+    current_scope_ids = {link.company_id for link in current_scope_links}
+    current_roles = get_admin_role_values(admin_user) or [ROLE_ADMIN]
+    current_scope_mode = get_admin_company_scope_mode(admin_user)
+    visible_companies = list(get_user_companies(admin_user))
 
     if request.method == 'POST':
         new_is_active = request.POST.get('is_active') == 'on'
         new_is_staff = request.POST.get('is_staff') == 'on'
         new_is_superuser = request.POST.get('is_superuser') == 'on'
+        selected_roles = []
+        seen_roles = set()
+        valid_roles = {choice[0] for choice in ADMIN_ROLE_CHOICES}
+        for raw_role in request.POST.getlist("admin_roles"):
+            normalized_role = str(raw_role or "").strip().lower()
+            if normalized_role in valid_roles and normalized_role not in seen_roles:
+                selected_roles.append(normalized_role)
+                seen_roles.add(normalized_role)
+        selected_scope_mode = str(request.POST.get("company_scope_mode", current_scope_mode or "all")).strip().lower()
+        selected_company_ids = []
+        seen_company_ids = set()
+        for raw_company_id in request.POST.getlist("allowed_company_ids"):
+            normalized = str(raw_company_id or "").strip()
+            if not normalized.isdigit():
+                continue
+            company_id = int(normalized)
+            if company_id in seen_company_ids:
+                continue
+            if any(company.pk == company_id for company in available_companies):
+                selected_company_ids.append(company_id)
+                seen_company_ids.add(company_id)
 
         if new_is_superuser and admin_user.username.lower() != PRIMARY_SUPERADMIN_USERNAME:
             messages.error(
@@ -9581,31 +10025,72 @@ def admin_user_permissions(request, user_id):
                 messages.error(request, 'No puedes desactivar tu propia cuenta.')
                 return redirect('admin_user_permissions', user_id=admin_user.pk)
 
+        if new_is_staff and not new_is_superuser:
+            if not selected_roles:
+                messages.error(request, "Selecciona al menos un rol operativo.")
+                return redirect('admin_user_permissions', user_id=admin_user.pk)
+            if selected_scope_mode == "limited" and not selected_company_ids:
+                messages.error(request, "Selecciona al menos una empresa para acceso limitado.")
+                return redirect('admin_user_permissions', user_id=admin_user.pk)
+        else:
+            selected_roles = []
+            selected_scope_mode = "all"
+            selected_company_ids = []
+
+        before = build_admin_user_snapshot(admin_user)
+
         admin_user.is_active = new_is_active
         admin_user.is_staff = new_is_staff
         admin_user.is_superuser = new_is_superuser
         admin_user.save(update_fields=['is_active', 'is_staff', 'is_superuser'])
 
-        log_admin_action(
+        if admin_user.is_staff and not admin_user.is_superuser:
+            set_admin_roles_for_user(admin_user, selected_roles)
+            AdminCompanyAccess.objects.filter(user=admin_user).update(is_active=False)
+            if selected_scope_mode == "limited":
+                for company in available_companies:
+                    if company.pk not in selected_company_ids:
+                        continue
+                    AdminCompanyAccess.objects.update_or_create(
+                        user=admin_user,
+                        company=company,
+                        defaults={"is_active": True},
+                    )
+        else:
+            AdminCompanyAccess.objects.filter(user=admin_user).update(is_active=False)
+            set_admin_roles_for_user(admin_user, [])
+
+        after = build_admin_user_snapshot(admin_user)
+
+        log_admin_change(
             request,
             action='admin_user_permissions_update',
             target_type='auth_user',
             target_id=admin_user.pk,
-            details={
+            before=before,
+            after=after,
+            extra={
                 'username': admin_user.username,
-                'is_active': admin_user.is_active,
-                'is_staff': admin_user.is_staff,
-                'is_superuser': admin_user.is_superuser,
             },
         )
         messages.success(request, f'Permisos actualizados para "{admin_user.username}".')
         return redirect('admin_user_list')
+
+    recent_admin_audit_logs = get_recent_admin_user_audit_logs(admin_user)
 
     return render(
         request,
         'admin_panel/admin_users/form.html',
         {
             'admin_user': admin_user,
+            'role_choices': ADMIN_ROLE_CHOICES,
+            'current_roles': current_roles,
+            'current_scope_mode': current_scope_mode,
+            'available_companies': available_companies,
+            'current_scope_ids': current_scope_ids,
+            'visible_companies': visible_companies,
+            'current_role_labels': get_admin_role_labels(admin_user),
+            'recent_admin_audit_logs': recent_admin_audit_logs,
         },
     )
 

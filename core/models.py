@@ -181,6 +181,39 @@ class Company(models.Model):
         return self.name
 
 
+class AdminCompanyAccess(models.Model):
+    """Optional company scoping for staff users inside the internal admin."""
+
+    user = models.ForeignKey(
+        "auth.User",
+        on_delete=models.CASCADE,
+        related_name="company_access_links",
+        verbose_name="Admin",
+    )
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name="admin_access_links",
+        verbose_name="Empresa",
+    )
+    is_active = models.BooleanField(default=True, verbose_name="Activo")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Acceso admin por empresa"
+        verbose_name_plural = "Accesos admin por empresa"
+        unique_together = [("user", "company")]
+        ordering = ["user__username", "company__name"]
+        indexes = [
+            models.Index(fields=["user", "is_active"]),
+            models.Index(fields=["company", "is_active"]),
+        ]
+
+    def __str__(self):
+        return f"{self.user.username} -> {self.company.name}"
+
+
 class Warehouse(models.Model):
     """Logical warehouse/deposit per company for document configuration."""
 

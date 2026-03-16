@@ -1,6 +1,6 @@
 from decimal import Decimal
 
-from django.contrib.auth.models import User
+from django.contrib.auth.models import Group, User
 from django.core.exceptions import ValidationError
 from django.test import TestCase
 from django.urls import reverse
@@ -8,6 +8,7 @@ from django.urls import reverse
 from accounts.models import ClientCompany, ClientPayment, ClientProfile
 from catalog.models import ClampMeasureRequest, Product
 from orders.models import Cart, CartItem, Order, OrderItem
+from orders.services.workflow import can_user_transition_order, get_order_queue_queryset_for_user
 from core.services.company_context import get_default_company
 
 
@@ -221,3 +222,115 @@ class OrderItemMutationGuardTests(TestCase):
         item.save()
         item.refresh_from_db()
         self.assertEqual(item.quantity, 2)
+
+
+class OrderWorkflowRolesTests(TestCase):
+    def setUp(self):
+        self.staff_user = User.objects.create_user(
+            username='staff_multi_role_workflow',
+            password='secret123',
+            is_staff=True,
+        )
+        ventas_group, _ = Group.objects.get_or_create(name='ventas')
+        deposito_group, _ = Group.objects.get_or_create(name='deposito')
+        self.staff_user.groups.add(ventas_group, deposito_group)
+        self.client_user = User.objects.create_user(
+            username='cliente_multi_role_workflow',
+            password='secret123',
+        )
+        self.client_profile = ClientProfile.objects.create(
+            user=self.client_user,
+            company_name='Cliente Multi Rol Workflow',
+        )
+        self.company = get_default_company()
+        self.client_company = ClientCompany.objects.create(
+            client_profile=self.client_profile,
+            company=self.company,
+            is_active=True,
+        )
+
+    def test_combined_sales_and_deposit_roles_expand_allowed_transitions(self):
+        draft_order = Order.objects.create(
+            user=self.client_user,
+            company=self.company,
+            status=Order.STATUS_DRAFT,
+            subtotal=Decimal('100.00'),
+            total=Decimal('100.00'),
+            client_company='Cliente Multi Rol Workflow',
+            client_company_ref=self.client_company,
+        )
+        confirmed_order = Order.objects.create(
+            user=self.client_user,
+            company=self.company,
+            status=Order.STATUS_CONFIRMED,
+            subtotal=Decimal('100.00'),
+            total=Decimal('100.00'),
+            client_company='Cliente Multi Rol Workflow',
+            client_company_ref=self.client_company,
+        )
+        preparing_order = Order.objects.create(
+            user=self.client_user,
+            company=self.company,
+            status=Order.STATUS_PREPARING,
+            subtotal=Decimal('100.00'),
+            total=Decimal('100.00'),
+            client_company='Cliente Multi Rol Workflow',
+            client_company_ref=self.client_company,
+        )
+
+        allowed_confirm, _ = can_user_transition_order(
+            self.staff_user,
+            draft_order,
+            Order.STATUS_CONFIRMED,
+        )
+        allowed_prepare, _ = can_user_transition_order(
+            self.staff_user,
+            confirmed_order,
+            Order.STATUS_PREPARING,
+        )
+        allowed_ship, _ = can_user_transition_order(
+            self.staff_user,
+            preparing_order,
+            Order.STATUS_SHIPPED,
+        )
+
+        self.assertTrue(allowed_confirm)
+        self.assertTrue(allowed_prepare)
+        self.assertTrue(allowed_ship)
+
+    def test_combined_roles_expand_order_queue_statuses(self):
+        draft_order = Order.objects.create(
+            user=self.client_user,
+            company=self.company,
+            status=Order.STATUS_DRAFT,
+            subtotal=Decimal('100.00'),
+            total=Decimal('100.00'),
+            client_company='Cliente Multi Rol Workflow',
+            client_company_ref=self.client_company,
+        )
+        confirmed_order = Order.objects.create(
+            user=self.client_user,
+            company=self.company,
+            status=Order.STATUS_CONFIRMED,
+            subtotal=Decimal('100.00'),
+            total=Decimal('100.00'),
+            client_company='Cliente Multi Rol Workflow',
+            client_company_ref=self.client_company,
+        )
+        preparing_order = Order.objects.create(
+            user=self.client_user,
+            company=self.company,
+            status=Order.STATUS_PREPARING,
+            subtotal=Decimal('100.00'),
+            total=Decimal('100.00'),
+            client_company='Cliente Multi Rol Workflow',
+            client_company_ref=self.client_company,
+        )
+
+        queryset, primary_role = get_order_queue_queryset_for_user(Order.objects.all(), self.staff_user)
+
+        self.assertEqual(primary_role, 'deposito')
+        self.assertEqual(
+            set(queryset.values_list('id', flat=True)),
+            {draft_order.id, confirmed_order.id, preparing_order.id},
+        )

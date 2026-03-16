@@ -3,11 +3,14 @@ from decimal import Decimal
 from django.contrib.auth.models import User
 from django.template import Context, Template
 from django.test import TestCase
+from django.test import override_settings
 from django.urls import reverse
 
+from accounts.models import ClientCompany, ClientProfile
 from catalog.models import Category, Product
-from core.models import Company, SalesDocumentType, Warehouse
-from core.services.company_context import get_default_company
+from core.models import AdminCompanyAccess, Company, SalesDocumentType, Warehouse
+from core.services.company_context import get_default_company, get_user_companies
+from orders.models import Order
 
 
 class GlobalNumberFormatTests(TestCase):
@@ -116,6 +119,14 @@ class ObservabilityMiddlewareTests(TestCase):
         self.assertIn("X-Request-ID", response)
         self.assertTrue(str(response["X-Request-ID"]).strip())
 
+    def test_security_policy_headers_are_present(self):
+        response = self.client.get(reverse("home"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Content-Security-Policy", response)
+        self.assertIn("Permissions-Policy", response)
+        self.assertIn("frame-ancestors 'none'", response["Content-Security-Policy"])
+
 
 class ActiveCompanyMiddlewareTests(TestCase):
     def test_staff_with_multiple_companies_can_access_home_without_selecting_company(self):
@@ -147,6 +158,121 @@ class ActiveCompanyMiddlewareTests(TestCase):
 
         self.assertEqual(response.status_code, 302)
         self.assertIn(reverse("select_company"), response["Location"])
+
+
+class StaffCompanyAccessConfigTests(TestCase):
+    @override_settings(
+        ADMIN_COMPANY_ACCESS={"staff_acl": ["flexs"]},
+        ADMIN_COMPANY_ACCESS_REQUIRE_EXPLICIT=True,
+    )
+    def test_staff_company_mapping_limits_access(self):
+        company_flexs = Company.objects.filter(slug__iexact="flexs").first() or get_default_company()
+        company_ubolt = Company.objects.filter(slug__iexact="ubolt").first()
+        if not company_ubolt:
+            company_ubolt = Company.objects.create(name="Ubolt ACL", slug="ubolt", is_active=True)
+
+        staff = User.objects.create_user(
+            username="staff_acl",
+            password="secret123",
+            is_staff=True,
+        )
+
+        companies = list(get_user_companies(staff))
+
+        self.assertEqual([company.pk for company in companies], [company_flexs.pk])
+        self.assertNotIn(company_ubolt.pk, [company.pk for company in companies])
+
+
+class StaffCompanyAccessModelTests(TestCase):
+    def test_staff_company_db_scope_limits_access(self):
+        company_flexs = Company.objects.filter(slug__iexact="flexs").first() or get_default_company()
+        company_ubolt = Company.objects.filter(slug__iexact="ubolt").first()
+        if not company_ubolt:
+            company_ubolt = Company.objects.create(name="Ubolt DB ACL", slug="ubolt", is_active=True)
+
+        staff = User.objects.create_user(
+            username="staff_db_acl",
+            password="secret123",
+            is_staff=True,
+        )
+        AdminCompanyAccess.objects.create(user=staff, company=company_ubolt, is_active=True)
+
+        companies = list(get_user_companies(staff))
+
+        self.assertEqual([company.pk for company in companies], [company_ubolt.pk])
+        self.assertNotIn(company_flexs.pk, [company.pk for company in companies])
+
+
+class ApiCompanyScopeTests(TestCase):
+    def setUp(self):
+        self.company_a = Company.objects.filter(slug__iexact="flexs").first() or get_default_company()
+        self.company_b = Company.objects.filter(slug__iexact="ubolt").first()
+        if not self.company_b:
+            self.company_b = Company.objects.create(name="Ubolt API", slug="ubolt", is_active=True)
+
+        self.staff = User.objects.create_user("staff_api_scope", password="secret123", is_staff=True)
+        self.client.force_login(self.staff)
+
+        self.client_user_a = User.objects.create_user("cliente_api_a", password="secret123")
+        self.profile_a = ClientProfile.objects.create(user=self.client_user_a, company_name="Cliente API A")
+        self.client_company_a = ClientCompany.objects.create(
+            client_profile=self.profile_a,
+            company=self.company_a,
+            is_active=True,
+        )
+
+        self.client_user_b = User.objects.create_user("cliente_api_b", password="secret123")
+        self.profile_b = ClientProfile.objects.create(user=self.client_user_b, company_name="Cliente API B")
+        self.client_company_b = ClientCompany.objects.create(
+            client_profile=self.profile_b,
+            company=self.company_b,
+            is_active=True,
+        )
+
+        Order.objects.create(
+            user=self.client_user_a,
+            company=self.company_a,
+            status=Order.STATUS_CONFIRMED,
+            subtotal=Decimal("100.00"),
+            total=Decimal("100.00"),
+            client_company="Cliente API A",
+            client_company_ref=self.client_company_a,
+        )
+        Order.objects.create(
+            user=self.client_user_b,
+            company=self.company_b,
+            status=Order.STATUS_CONFIRMED,
+            subtotal=Decimal("200.00"),
+            total=Decimal("200.00"),
+            client_company="Cliente API B",
+            client_company_ref=self.client_company_b,
+        )
+
+    def _set_active_company(self, company):
+        session = self.client.session
+        session["active_company_id"] = company.pk
+        session.save()
+
+    def test_staff_client_api_uses_active_company_scope(self):
+        self._set_active_company(self.company_a)
+
+        response = self.client.get(reverse("api_v1:clients"))
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["count"], 1)
+        self.assertEqual(payload["results"][0]["company_name"], "Cliente API A")
+
+    def test_staff_order_api_requires_active_company_when_multiple_companies(self):
+        session = self.client.session
+        session.pop("active_company_id", None)
+        session.save()
+
+        response = self.client.get(reverse("api_v1:orders"))
+
+        self.assertEqual(response.status_code, 400)
+        payload = response.json()
+        self.assertTrue(payload["requires_company"])
 
 
 class SalesDocumentTypeSeedTests(TestCase):

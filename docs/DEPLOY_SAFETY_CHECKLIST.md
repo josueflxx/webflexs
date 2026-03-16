@@ -37,6 +37,12 @@ sudo systemctl restart gunicorn
 sudo systemctl restart nginx
 ```
 
+Checklist adicional de seguridad en produccion:
+- `REDIS_URL` debe estar definido en `.env`
+- `DJANGO_SECRET_KEY` debe ser fuerte y unica
+- Gunicorn no debe correr como `root`
+- si usas el script de deploy, ejecutalo con el usuario de la app y no con `root`
+
 ## 3) Smoke test (despues de deploy)
 
 ```bash

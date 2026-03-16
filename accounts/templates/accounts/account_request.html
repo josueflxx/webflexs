@@ -13,6 +13,10 @@
 
             <form method="post" class="request-form">
                 {% csrf_token %}
+                <div class="request-honeypot" aria-hidden="true">
+                    <label for="{{ honeypot_field_name }}">No completar</label>
+                    <input type="text" name="{{ honeypot_field_name }}" id="{{ honeypot_field_name }}" tabindex="-1" autocomplete="off">
+                </div>
 
                 <div class="form-row">
                     <div class="form-group">
@@ -98,6 +102,16 @@
 
     .request-form {
         margin-bottom: var(--spacing-xl);
+    }
+
+    .request-honeypot {
+        position: absolute;
+        left: -9999px;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        opacity: 0;
+        pointer-events: none;
     }
 
     .btn-block {

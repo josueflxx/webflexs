@@ -38,6 +38,34 @@ class RequestIDMiddleware:
         return response
 
 
+class SecurityHeadersMiddleware:
+    """
+    Apply extra browser security policies consistently across responses.
+    """
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        response = self.get_response(request)
+
+        permissions_policy = str(getattr(settings, "SECURITY_PERMISSIONS_POLICY", "") or "").strip()
+        if permissions_policy:
+            response.setdefault("Permissions-Policy", permissions_policy)
+
+        csp = str(getattr(settings, "SECURITY_CONTENT_SECURITY_POLICY", "") or "").strip()
+        if csp:
+            response.setdefault("Content-Security-Policy", csp)
+
+        csp_report_only = str(
+            getattr(settings, "SECURITY_CONTENT_SECURITY_POLICY_REPORT_ONLY", "") or ""
+        ).strip()
+        if csp_report_only:
+            response.setdefault("Content-Security-Policy-Report-Only", csp_report_only)
+
+        return response
+
+
 class ReadOnlyModeMiddleware:
     """
     Global read-only maintenance mode for unsafe HTTP methods.

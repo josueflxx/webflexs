@@ -3,7 +3,7 @@ Django production settings.
 Uses PostgreSQL database.
 """
 
-import hashlib
+from django.core.exceptions import ImproperlyConfigured
 
 from .base import *
 
@@ -19,21 +19,15 @@ def _is_weak_secret(value):
         or secret.startswith("django-insecure-")
     )
 
+if _is_weak_secret(SECRET_KEY):
+    raise ImproperlyConfigured(
+        "DJANGO_SECRET_KEY es debil o invalida para produccion. Define una clave fuerte real."
+    )
 
-def _harden_secret(value):
-    """
-    Keep compatibility with existing environments while avoiding weak keys in deploy checks.
-    """
-    secret = str(value or "").strip()
-    if not secret:
-        return secret
-    if not _is_weak_secret(secret):
-        return secret
-    pepper = os.getenv("DJANGO_SECRET_PEPPER", "flexs-prod-pepper-v1")
-    return hashlib.sha512(f"{pepper}:{secret}".encode("utf-8")).hexdigest()
-
-
-SECRET_KEY = _harden_secret(SECRET_KEY)
+if not REDIS_URL:
+    raise ImproperlyConfigured(
+        "REDIS_URL es obligatorio en produccion para cache compartida, lockout y throttling consistentes."
+    )
 
 # PostgreSQL for production
 DATABASES = {

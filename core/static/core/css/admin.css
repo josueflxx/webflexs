@@ -1508,6 +1508,87 @@
     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
+.admin-user-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 16px;
+    margin-bottom: 18px;
+}
+
+.admin-user-header h2 {
+    margin-bottom: 8px;
+}
+
+.admin-user-header p {
+    margin: 0;
+    color: rgba(210, 217, 226, 0.76);
+}
+
+.admin-user-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+.form-grid-2 {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+}
+
+.admin-role-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 12px;
+}
+
+.admin-role-card {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 12px;
+    align-items: center;
+    padding: 14px 16px;
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    cursor: pointer;
+    transition: border-color 0.18s ease, transform 0.18s ease, background 0.18s ease;
+}
+
+.admin-role-card:hover {
+    border-color: rgba(255, 109, 61, 0.45);
+    transform: translateY(-1px);
+}
+
+.admin-role-card:has(input:checked),
+.admin-role-card.is-selected {
+    border-color: rgba(255, 109, 61, 0.52);
+    background: linear-gradient(180deg, rgba(255, 109, 61, 0.14), rgba(255, 255, 255, 0.03));
+}
+
+.admin-role-card input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    margin: 0;
+}
+
+.admin-role-card-copy {
+    display: grid;
+    gap: 4px;
+}
+
+.admin-role-card-copy strong {
+    display: block;
+}
+
+.admin-role-card-copy small {
+    color: rgba(210, 217, 226, 0.68);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
 .client-module-shell {
     display: grid;
     gap: 14px;
@@ -3692,6 +3773,19 @@
         overflow-x: auto;
     }
 
+    .admin-user-header {
+        flex-direction: column;
+    }
+
+    .admin-user-actions {
+        width: 100%;
+        justify-content: flex-start;
+    }
+
+    .form-grid-2 {
+        grid-template-columns: 1fr;
+    }
+
     .dashboard-sections {
         grid-template-columns: 1fr;
     }
@@ -4333,8 +4427,109 @@
     text-transform: uppercase;
 }
 
+.admin-cell-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.admin-cell-stack small {
+    color: var(--color-gray-light);
+}
+
+.admin-scope-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.client-inline-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--color-white);
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+}
+
+.client-inline-badge.is-live {
+    background: rgba(25, 209, 127, 0.12);
+    border-color: rgba(25, 209, 127, 0.22);
+    color: #b2f3d0;
+}
+
+.client-inline-badge.is-internal {
+    background: rgba(255, 107, 53, 0.12);
+    border-color: rgba(255, 107, 53, 0.24);
+    color: #ffd7c6;
+}
+
+.client-company-summary {
+    margin-top: 18px;
+    padding: 18px;
+    border-radius: 18px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.client-company-summary-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 14px;
+    margin-bottom: 14px;
+}
+
+.client-company-summary-head h3 {
+    margin: 0 0 6px;
+    color: var(--color-white);
+    font-size: 1rem;
+}
+
+.client-company-summary-head p {
+    margin: 0;
+    color: var(--color-gray-light);
+}
+
+.client-company-summary-table {
+    overflow-x: auto;
+}
+
+.client-audit-list {
+    display: grid;
+    gap: 10px;
+}
+
+.client-audit-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    padding: 12px 14px;
+    border-radius: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(8, 16, 30, 0.48);
+}
+
+.client-audit-item small {
+    display: block;
+    margin-top: 4px;
+    color: var(--color-gray-light);
+}
+
 @media (max-width: 768px) {
     .client-company-links-grid {
         grid-template-columns: 1fr;
+    }
+
+    .client-audit-item {
+        flex-direction: column;
+        align-items: flex-start;
     }
 }

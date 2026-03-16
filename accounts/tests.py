@@ -3,7 +3,7 @@ from django.core.cache import cache
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
-from accounts.models import ClientCategory, ClientCompany, ClientPayment, ClientProfile, ClientTransaction
+from accounts.models import AccountRequest, ClientCategory, ClientCompany, ClientPayment, ClientProfile, ClientTransaction
 from accounts.services.client_importer import ClientImporter
 from core.models import Company
 from orders.models import Order
@@ -215,3 +215,43 @@ class ClientImporterCategoryTests(TestCase):
         )
         self.assertTrue(profile.can_operate_in_company(self.import_company_a))
         self.assertTrue(profile.can_operate_in_company(self.import_company_b))
+
+
+class AccountRequestSecurityTests(TestCase):
+    def setUp(self):
+        cache.clear()
+        self.url = reverse("account_request")
+        self.payload = {
+            "company_name": "Empresa Seguridad",
+            "contact_name": "Brian",
+            "email": "seguridad@example.com",
+            "phone": "11111111",
+            "cuit_dni": "20333444556",
+        }
+
+    @override_settings(
+        ACCOUNT_REQUEST_HONEYPOT_FIELD="website",
+        ACCOUNT_REQUEST_MIN_INTERVAL_SECONDS=0,
+    )
+    def test_honeypot_submission_is_ignored_but_returns_success_feedback(self):
+        response = self.client.post(
+            self.url,
+            {**self.payload, "website": "https://spam.invalid"},
+            follow=True,
+        )
+
+        self.assertEqual(AccountRequest.objects.count(), 0)
+        self.assertContains(response, "Solicitud enviada")
+
+    @override_settings(
+        ACCOUNT_REQUEST_MAX_SUBMISSIONS=2,
+        ACCOUNT_REQUEST_WINDOW_SECONDS=3600,
+        ACCOUNT_REQUEST_MIN_INTERVAL_SECONDS=0,
+    )
+    def test_rate_limit_blocks_excessive_submissions(self):
+        self.client.post(self.url, self.payload, follow=True)
+        self.client.post(self.url, self.payload, follow=True)
+        response = self.client.post(self.url, self.payload, follow=True)
+
+        self.assertEqual(AccountRequest.objects.count(), 2)
+        self.assertContains(response, "solicitudes", status_code=200)

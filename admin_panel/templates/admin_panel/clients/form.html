@@ -232,6 +232,54 @@
                     {% endfor %}
                 </div>
             </div>
+            {% if client and client_company_summary_rows %}
+            <div class="client-company-summary">
+                <div class="client-company-summary-head">
+                    <div>
+                        <h3>Resumen por empresa</h3>
+                        <p>Vista rapida del estado comercial del cliente en cada empresa habilitada.</p>
+                    </div>
+                </div>
+                <div class="client-company-summary-table">
+                    <table class="admin-table">
+                        <thead>
+                            <tr>
+                                <th>Empresa</th>
+                                <th>Estado</th>
+                                <th>Categoria</th>
+                                <th>Descuento</th>
+                                <th>Lista</th>
+                                <th>Saldo</th>
+                                <th>Pedidos</th>
+                                <th>Ultimo pedido</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in client_company_summary_rows %}
+                            <tr>
+                                <td><strong>{{ row.company.name }}</strong></td>
+                                <td>
+                                    {% if row.is_enabled %}
+                                    <span class="client-inline-badge is-live">Operativo</span>
+                                    {% elif row.link %}
+                                    <span class="client-inline-badge">Inactivo</span>
+                                    {% else %}
+                                    <span class="client-inline-badge">Sin vinculo</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ row.category_name }}</td>
+                                <td>{{ row.discount_percentage|floatformat:2 }}%</td>
+                                <td>{{ row.price_list_name }}</td>
+                                <td>${{ row.balance|floatformat:2 }}</td>
+                                <td>{{ row.total_orders }}</td>
+                                <td>{{ row.last_order_at|date:"d/m/Y H:i"|default:"-" }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            {% endif %}
         </section>
 
         <section class="client-intake-section">
@@ -275,6 +323,28 @@
             <a href="{% url 'admin_client_list' %}" class="btn btn-outline">Cancelar</a>
         </div>
     </form>
+
+    {% if recent_client_audit_logs %}
+    <div class="client-company-summary" style="margin-top:24px;">
+        <div class="client-company-summary-head">
+            <div>
+                <h3>Auditoria reciente</h3>
+                <p>Ultimos cambios registrados sobre el cliente y su configuracion comercial.</p>
+            </div>
+        </div>
+        <div class="client-audit-list">
+            {% for log in recent_client_audit_logs %}
+            <article class="client-audit-item">
+                <div>
+                    <strong>{{ log.action }}</strong>
+                    <small>{{ log.created_at|date:"d/m/Y H:i" }}{% if log.user %} · {{ log.user.username }}{% endif %}</small>
+                </div>
+                <div class="text-muted">Objetivo {{ log.target_type }} #{{ log.target_id }}</div>
+            </article>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
 </div>
 <script>
     (function () {

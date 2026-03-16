@@ -3,7 +3,7 @@
 {% block page_title %}Permisos Admin{% endblock %}
 
 {% block content %}
-<div class="admin-form-container" style="max-width: 720px;">
+<div class="admin-form-container" style="max-width: 860px;">
     <h2>Permisos: {{ admin_user.username }}</h2>
 
     <div class="card" style="margin-bottom: 16px;">
@@ -12,6 +12,55 @@
             <strong>Email:</strong> {{ admin_user.email|default:"-" }}<br>
             <strong>Ultimo acceso:</strong> {{ admin_user.last_login|date:"d/m/Y H:i"|default:"-" }}
         </p>
+    </div>
+
+    <div class="client-company-summary" style="margin-bottom: 18px;">
+        <div class="client-company-summary-head">
+            <div>
+                <h3>Resumen operativo</h3>
+                <p>Vista rapida del alcance actual de esta cuenta en el panel.</p>
+            </div>
+        </div>
+        <table class="client-company-summary-table">
+            <tbody>
+                <tr>
+                    <th>Roles activos</th>
+                    <td>
+                        <div class="admin-scope-badges">
+                            {% for role_label in current_role_labels %}
+                            <span class="client-inline-badge is-live">{{ role_label }}</span>
+                            {% empty %}
+                            <span class="text-muted">Sin rol</span>
+                            {% endfor %}
+                        </div>
+                    </td>
+                </tr>
+                <tr>
+                    <th>Empresas visibles</th>
+                    <td>
+                        <div class="admin-scope-badges">
+                            {% for company in visible_companies %}
+                            <span class="client-inline-badge is-internal">{{ company.name }}</span>
+                            {% empty %}
+                            <span class="text-muted">Sin acceso</span>
+                            {% endfor %}
+                        </div>
+                    </td>
+                </tr>
+                <tr>
+                    <th>Tipo de alcance</th>
+                    <td>{% if current_scope_mode == 'limited' %}Limitado por empresa{% else %}Acceso general{% endif %}</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="toolbar-actions" style="margin-bottom: 16px;">
+        <a href="{% url 'admin_user_edit' admin_user.pk %}" class="btn btn-outline">Editar informacion</a>
+        <a href="{% url 'admin_user_password_change' admin_user.pk %}" class="btn btn-outline">Cambiar clave</a>
+        {% if admin_user.username|lower != 'josueflexs' and admin_user.pk != request.user.pk %}
+        <a href="{% url 'admin_user_delete' admin_user.pk %}" class="btn btn-danger">Eliminar cuenta</a>
+        {% endif %}
     </div>
 
     <form method="post">
@@ -34,6 +83,30 @@
         </div>
 
         <div class="form-group">
+            <label class="form-label">Roles operativos</label>
+            <div class="admin-role-grid" {% if admin_user.is_superuser %}style="opacity:.7;"{% endif %}>
+                {% for value, label in role_choices %}
+                <label class="admin-role-card {% if value in current_roles %}is-selected{% endif %}">
+                    <input
+                        type="checkbox"
+                        name="admin_roles"
+                        value="{{ value }}"
+                        {% if value in current_roles %}checked{% endif %}
+                        {% if admin_user.is_superuser %}disabled{% endif %}
+                    >
+                    <div class="admin-role-card-copy">
+                        <strong>{{ label }}</strong>
+                        <small>{{ value }}</small>
+                    </div>
+                </label>
+                {% endfor %}
+            </div>
+            <small class="text-muted">
+                Puedes combinar varios roles. Ejemplo: una cuenta puede ser Ventas y Deposito al mismo tiempo.
+            </small>
+        </div>
+
+        <div class="form-group">
             <label class="form-label">
                 <input
                     type="checkbox"
@@ -48,9 +121,52 @@
             </small>
         </div>
 
+        <div class="form-group">
+            <label class="form-label">Alcance por empresa</label>
+            <label class="client-intake-checkbox">
+                <input type="radio" name="company_scope_mode" value="all" {% if current_scope_mode != 'limited' %}checked{% endif %} {% if admin_user.is_superuser %}disabled{% endif %}>
+                Acceso a todas las empresas habilitadas
+            </label>
+            <label class="client-intake-checkbox">
+                <input type="radio" name="company_scope_mode" value="limited" {% if current_scope_mode == 'limited' %}checked{% endif %} {% if admin_user.is_superuser %}disabled{% endif %}>
+                Acceso solo a empresas especificas
+            </label>
+            <small class="text-muted">
+                Sirve para separar operadores de Flexs y Ubolt sin duplicar usuarios.
+            </small>
+        </div>
+
+        <div class="client-company-links-panel" {% if admin_user.is_superuser %}style="opacity:.7;"{% endif %}>
+            <div class="client-company-links-header">
+                <div>
+                    <strong>Empresas permitidas</strong>
+                    <p>Estas empresas se usan en el panel, clientes, reportes y operaciones sensibles.</p>
+                </div>
+            </div>
+            <div class="client-company-links-grid">
+                {% for company in available_companies %}
+                <label class="client-company-link-card {% if company.pk in current_scope_ids %}is-selected{% endif %}">
+                    <input
+                        type="checkbox"
+                        name="allowed_company_ids"
+                        value="{{ company.pk }}"
+                        {% if company.pk in current_scope_ids %}checked{% endif %}
+                        {% if admin_user.is_superuser %}disabled{% endif %}
+                    >
+                    <div class="client-company-link-copy">
+                        <div class="client-company-link-topline">
+                            <strong>{{ company.name }}</strong>
+                        </div>
+                        <small>Disponible como contexto operativo del usuario.</small>
+                    </div>
+                </label>
+                {% endfor %}
+            </div>
+        </div>
+
         {% if admin_user.pk == request.user.pk %}
         <div class="alert alert-warning">
-            Estás editando tu propia cuenta. No se permite quitarte permisos criticos por seguridad.
+            Estas editando tu propia cuenta. No se permite quitarte permisos criticos por seguridad.
         </div>
         {% endif %}
 
@@ -59,5 +175,27 @@
             <a href="{% url 'admin_user_list' %}" class="btn btn-outline">Cancelar</a>
         </div>
     </form>
+
+    {% if recent_admin_audit_logs %}
+    <div class="client-company-summary" style="margin-top:24px;">
+        <div class="client-company-summary-head">
+            <div>
+                <h3>Auditoria reciente</h3>
+                <p>Ultimos cambios registrados sobre esta cuenta admin.</p>
+            </div>
+        </div>
+        <div class="client-audit-list">
+            {% for log in recent_admin_audit_logs %}
+            <article class="client-audit-item">
+                <div>
+                    <strong>{{ log.action }}</strong>
+                    <small>{{ log.created_at|date:"d/m/Y H:i" }}{% if log.user %} · {{ log.user.username }}{% endif %}</small>
+                </div>
+                <div class="text-muted">ID {{ log.target_id }}</div>
+            </article>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
 </div>
 {% endblock %}

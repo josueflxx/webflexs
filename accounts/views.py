@@ -44,6 +44,14 @@ def _get_lock_remaining_seconds(lock_payload):
         return 0
 
 
+def _build_account_request_keys(request):
+    ip = _get_client_ip(request)
+    return (
+        f"account-request:{ip}:count",
+        "account_request_last_submit_ts",
+    )
+
+
 def login_view(request):
     """User login view."""
     if request.user.is_authenticated:
@@ -204,6 +212,44 @@ def account_request(request):
         return redirect("catalog")
 
     if request.method == "POST":
+        honeypot_name = getattr(settings, "ACCOUNT_REQUEST_HONEYPOT_FIELD", "website")
+        honeypot_value = request.POST.get(honeypot_name, "").strip()
+        if honeypot_value:
+            messages.success(
+                request,
+                "Solicitud enviada. Nos pondremos en contacto pronto para activar tu cuenta.",
+            )
+            return redirect("home")
+
+        submissions_key, last_submit_session_key = _build_account_request_keys(request)
+        current_ts = int(timezone.now().timestamp())
+        min_interval = int(getattr(settings, "ACCOUNT_REQUEST_MIN_INTERVAL_SECONDS", 0))
+        last_submit_ts = int(request.session.get(last_submit_session_key, 0) or 0)
+        if min_interval and last_submit_ts and current_ts - last_submit_ts < min_interval:
+            messages.error(
+                request,
+                "Espera unos segundos antes de volver a enviar la solicitud.",
+            )
+            return render(
+                request,
+                "accounts/account_request.html",
+                {"honeypot_field_name": honeypot_name},
+            )
+
+        max_submissions = int(getattr(settings, "ACCOUNT_REQUEST_MAX_SUBMISSIONS", 5))
+        window_seconds = int(getattr(settings, "ACCOUNT_REQUEST_WINDOW_SECONDS", 3600))
+        submissions_count = int(cache.get(submissions_key, 0))
+        if submissions_count >= max_submissions:
+            messages.error(
+                request,
+                "Se alcanzó el límite de solicitudes para esta conexión. Intenta nuevamente más tarde.",
+            )
+            return render(
+                request,
+                "accounts/account_request.html",
+                {"honeypot_field_name": honeypot_name},
+            )
+
         company_name = request.POST.get("company_name", "").strip()
         contact_name = request.POST.get("contact_name", "").strip()
         cuit_dni = request.POST.get("cuit_dni", "").strip()
@@ -237,10 +283,16 @@ def account_request(request):
                 address=address,
                 message=message,
             )
+            cache.set(submissions_key, submissions_count + 1, timeout=window_seconds)
+            request.session[last_submit_session_key] = current_ts
             messages.success(
                 request,
                 "Solicitud enviada. Nos pondremos en contacto pronto para activar tu cuenta.",
             )
             return redirect("home")
 
-    return render(request, "accounts/account_request.html")
+    return render(
+        request,
+        "accounts/account_request.html",
+        {"honeypot_field_name": getattr(settings, "ACCOUNT_REQUEST_HONEYPOT_FIELD", "website")},
+    )

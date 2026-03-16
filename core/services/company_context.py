@@ -1,8 +1,9 @@
 """Helpers for resolving the active company context."""
 
 from django.conf import settings
+from django.db.models import Q
 
-from core.models import Company
+from core.models import AdminCompanyAccess, Company
 
 
 DEFAULT_COMPANY_SLUG = getattr(settings, "DEFAULT_COMPANY_SLUG", "flexs")
@@ -64,7 +65,27 @@ def get_user_companies(user):
     if not user or not getattr(user, "is_authenticated", False):
         return Company.objects.none()
     if getattr(user, "is_staff", False):
-        return Company.objects.filter(is_active=True).order_by("name")
+        queryset = Company.objects.filter(is_active=True)
+        if not getattr(user, "is_superuser", False):
+            scoped_company_ids = list(
+                AdminCompanyAccess.objects.filter(
+                    user=user,
+                    is_active=True,
+                    company__is_active=True,
+                ).values_list("company_id", flat=True)
+            )
+            if scoped_company_ids:
+                queryset = queryset.filter(pk__in=scoped_company_ids)
+        access_map = getattr(settings, "ADMIN_COMPANY_ACCESS", {}) or {}
+        allowed_slugs = access_map.get(str(getattr(user, "username", "")).strip().lower())
+        if allowed_slugs:
+            query = Q()
+            for slug in allowed_slugs:
+                query |= Q(slug__iexact=slug)
+            queryset = queryset.filter(query)
+        elif getattr(settings, "ADMIN_COMPANY_ACCESS_REQUIRE_EXPLICIT", False) and not getattr(user, "is_superuser", False):
+            return Company.objects.none()
+        return queryset.order_by("name")
     profile = getattr(user, "client_profile", None)
     if not profile:
         return Company.objects.none()
@@ -85,7 +106,7 @@ def user_has_company_access(user, company):
     if not company or not getattr(company, "is_active", False):
         return False
     if getattr(user, "is_staff", False):
-        return True
+        return get_user_companies(user).filter(pk=company.pk).exists()
     profile = getattr(user, "client_profile", None)
     if not profile:
         return False
@@ -117,6 +138,8 @@ def get_active_company(request):
             return None
         return None
 
+    if getattr(settings, "ADMIN_COMPANY_ACCESS_REQUIRE_EXPLICIT", False):
+        return None
     return get_default_company()
 
 

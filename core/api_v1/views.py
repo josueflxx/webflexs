@@ -23,8 +23,10 @@ from orders.services.workflow import (
     get_allowed_next_statuses_for_user,
     get_order_queue_queryset_for_user,
     get_role_queue_statuses,
+    get_user_order_roles,
     resolve_user_order_role,
 )
+from core.services.company_context import get_active_company, get_user_companies, user_has_company_access
 
 
 def _parse_bool_param(raw_value):
@@ -36,6 +38,23 @@ def _parse_bool_param(raw_value):
     if value in {"0", "false", "no", "off"}:
         return False
     return None
+
+
+def _resolve_request_company(request):
+    company = get_active_company(request)
+    user = getattr(request, "user", None)
+    if not user or not getattr(user, "is_authenticated", False):
+        return company
+
+    requested_company_id = (request.query_params.get("company_id") or "").strip()
+    if requested_company_id.isdigit():
+        from core.models import Company
+
+        requested_company = Company.objects.filter(pk=int(requested_company_id), is_active=True).first()
+        if requested_company and user_has_company_access(user, requested_company):
+            return requested_company
+
+    return company
 
 
 class ApiV1BaseListView(generics.ListAPIView):
@@ -169,6 +188,16 @@ class ApiClientListView(ApiV1BaseListView):
 
     def get_queryset(self):
         queryset = ClientProfile.objects.select_related("user").order_by("company_name")
+        company = _resolve_request_company(self.request)
+        if self.request.user.is_staff:
+            allowed_companies = list(get_user_companies(self.request.user))
+            if allowed_companies and company is None and len(allowed_companies) > 1:
+                return queryset.none()
+            if company is not None:
+                queryset = queryset.filter(
+                    company_links__company=company,
+                    company_links__is_active=True,
+                ).distinct()
 
         q = (self.request.query_params.get("q") or "").strip()
         if q:
@@ -210,9 +239,18 @@ class ApiOrderListView(ApiV1BaseListView):
     def get_queryset(self):
         user = self.request.user
         queryset = Order.objects.select_related("user").prefetch_related("items").order_by("-created_at")
+        company = _resolve_request_company(self.request)
 
         if not user.is_staff:
             queryset = queryset.filter(user=user)
+            if company is not None:
+                queryset = queryset.filter(company=company)
+        else:
+            allowed_companies = list(get_user_companies(user))
+            if allowed_companies and company is None and len(allowed_companies) > 1:
+                return queryset.none()
+            if company is not None:
+                queryset = queryset.filter(company=company)
 
         status = (self.request.query_params.get("status") or "").strip().lower()
         if status:
@@ -233,6 +271,12 @@ class ApiOrderQueueView(ApiV1BaseListView):
 
     def get_queryset(self):
         queryset = Order.objects.select_related("user").prefetch_related("items").order_by("-updated_at")
+        company = _resolve_request_company(self.request)
+        allowed_companies = list(get_user_companies(self.request.user))
+        if allowed_companies and company is None and len(allowed_companies) > 1:
+            return queryset.none()
+        if company is not None:
+            queryset = queryset.filter(company=company)
         filtered_qs, role = get_order_queue_queryset_for_user(queryset, self.request.user)
         self._resolved_role = role
 
@@ -247,7 +291,8 @@ class ApiOrderQueueView(ApiV1BaseListView):
         serializer = self.get_serializer(page if page is not None else queryset, many=True)
 
         role = getattr(self, "_resolved_role", None) or resolve_user_order_role(request.user)
-        queue_statuses = get_role_queue_statuses(role)
+        roles = get_user_order_roles(request.user)
+        queue_statuses = get_role_queue_statuses(roles or role)
         counts = {
             status: queryset.filter(status=status).count()
             for status in queue_statuses
@@ -255,6 +300,7 @@ class ApiOrderQueueView(ApiV1BaseListView):
 
         payload = {
             "role": role,
+            "roles": roles,
             "queue_statuses": queue_statuses,
             "counts": counts,
             "results": serializer.data,
@@ -263,6 +309,7 @@ class ApiOrderQueueView(ApiV1BaseListView):
         if page is not None:
             paginated = self.get_paginated_response(serializer.data)
             paginated.data["role"] = role
+            paginated.data["roles"] = roles
             paginated.data["queue_statuses"] = queue_statuses
             paginated.data["counts"] = counts
             return paginated
@@ -289,5 +336,6 @@ class ApiOrderWorkflowView(APIView):
                 "current_status": order.status,
                 "allowed_next_statuses": allowed_statuses,
                 "resolved_role": resolve_user_order_role(request.user),
+                "resolved_roles": get_user_order_roles(request.user),
             }
         )

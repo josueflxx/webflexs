@@ -131,7 +131,10 @@ urlpatterns = [
     path('empresas/', views.company_list, name='admin_company_list'),
     path('empresas/<int:pk>/', views.company_edit, name='admin_company_edit'),
     path('admins/', views.admin_user_list, name='admin_user_list'),
+    path('admins/<int:user_id>/editar/', views.admin_user_edit, name='admin_user_edit'),
+    path('admins/<int:user_id>/password/', views.admin_user_password_change, name='admin_user_password_change'),
     path('admins/<int:user_id>/permisos/', views.admin_user_permissions, name='admin_user_permissions'),
+    path('admins/<int:user_id>/eliminar/', views.admin_user_delete, name='admin_user_delete'),
     
     # API
     path('api/category-attributes/<int:category_id>/', views.get_category_attributes, name='api_category_attributes'),

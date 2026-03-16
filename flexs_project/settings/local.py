@@ -30,3 +30,9 @@ ALLOWED_HOSTS = ['*']
 
 # Show emails in console during development
 EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+
+# Keep login lockout behavior softer in local development so testing flows
+# does not leave the main admin user blocked for long periods.
+LOGIN_MAX_FAILED_ATTEMPTS = 10
+LOGIN_LOCKOUT_SECONDS = 60
+LOGIN_ATTEMPT_WINDOW_SECONDS = 5 * 60

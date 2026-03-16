@@ -32,6 +32,11 @@ def _env_json(name, default):
     except json.JSONDecodeError:
         return default
 
+
+def _env_csv(name, default=""):
+    raw = os.getenv(name, default)
+    return [item.strip() for item in str(raw).split(",") if item.strip()]
+
 # Build paths inside the project
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
@@ -56,6 +61,20 @@ DEFAULT_CLIENT_IMPORT_COMPANY_SLUGS = [
     ).split(',')
     if slug.strip()
 ]
+_admin_company_access_raw = _env_json("ADMIN_COMPANY_ACCESS_JSON", {})
+ADMIN_COMPANY_ACCESS = {
+    str(username).strip().lower(): [
+        str(slug).strip().lower()
+        for slug in (slugs or [])
+        if str(slug).strip()
+    ]
+    for username, slugs in (_admin_company_access_raw or {}).items()
+    if str(username).strip()
+}
+ADMIN_COMPANY_ACCESS_REQUIRE_EXPLICIT = os.getenv(
+    "ADMIN_COMPANY_ACCESS_REQUIRE_EXPLICIT",
+    "False",
+).lower() == "true"
 
 # Application definition
 INSTALLED_APPS = [
@@ -80,6 +99,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
+    'core.middleware.SecurityHeadersMiddleware',
     'core.middleware.RequestIDMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -170,12 +190,43 @@ X_FRAME_OPTIONS = os.getenv('DJANGO_X_FRAME_OPTIONS', 'DENY')
 SECURE_REFERRER_POLICY = os.getenv('DJANGO_SECURE_REFERRER_POLICY', 'strict-origin-when-cross-origin')
 SECURE_CROSS_ORIGIN_OPENER_POLICY = os.getenv('DJANGO_SECURE_COOP', 'same-origin')
 SECURE_CROSS_ORIGIN_RESOURCE_POLICY = os.getenv('DJANGO_SECURE_CORP', 'same-origin')
+SECURITY_PERMISSIONS_POLICY = os.getenv(
+    "DJANGO_PERMISSIONS_POLICY",
+    "accelerometer=(), autoplay=(), camera=(), geolocation=(), gyroscope=(), "
+    "magnetometer=(), microphone=(), payment=(), usb=(), browsing-topics=()",
+).strip()
+SECURITY_CONTENT_SECURITY_POLICY = os.getenv(
+    "DJANGO_CONTENT_SECURITY_POLICY",
+    "default-src 'self'; "
+    "base-uri 'self'; "
+    "form-action 'self'; "
+    "frame-ancestors 'none'; "
+    "object-src 'none'; "
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://unpkg.com https://dolarapi.com; "
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://unpkg.com; "
+    "font-src 'self' https://fonts.gstatic.com data:; "
+    "img-src 'self' data: https:; "
+    "connect-src 'self' https://fonts.googleapis.com https://fonts.gstatic.com "
+    "https://nominatim.openstreetmap.org https://photon.komoot.io https://dolarapi.com; "
+    "frame-src 'none';",
+).strip()
+SECURITY_CONTENT_SECURITY_POLICY_REPORT_ONLY = os.getenv(
+    "DJANGO_CONTENT_SECURITY_POLICY_REPORT_ONLY",
+    "",
+).strip()
 
 # Session idle timeout / login lockout controls
 SESSION_IDLE_TIMEOUT_SECONDS = max(_env_int('DJANGO_SESSION_IDLE_TIMEOUT_SECONDS', 60 * 45), 300)
 LOGIN_MAX_FAILED_ATTEMPTS = max(_env_int('DJANGO_LOGIN_MAX_FAILED_ATTEMPTS', 5), 3)
 LOGIN_LOCKOUT_SECONDS = max(_env_int('DJANGO_LOGIN_LOCKOUT_SECONDS', 15 * 60), 60)
 LOGIN_ATTEMPT_WINDOW_SECONDS = max(_env_int('DJANGO_LOGIN_ATTEMPT_WINDOW_SECONDS', 15 * 60), 60)
+ACCOUNT_REQUEST_MAX_SUBMISSIONS = max(_env_int("ACCOUNT_REQUEST_MAX_SUBMISSIONS", 5), 1)
+ACCOUNT_REQUEST_WINDOW_SECONDS = max(_env_int("ACCOUNT_REQUEST_WINDOW_SECONDS", 60 * 60), 60)
+ACCOUNT_REQUEST_MIN_INTERVAL_SECONDS = max(
+    _env_int("ACCOUNT_REQUEST_MIN_INTERVAL_SECONDS", 10),
+    0,
+)
+ACCOUNT_REQUEST_HONEYPOT_FIELD = os.getenv("ACCOUNT_REQUEST_HONEYPOT_FIELD", "website").strip() or "website"
 ALERT_PREPARING_STALE_DAYS = max(_env_int('ALERT_PREPARING_STALE_DAYS', 3), 1)
 ALERT_HIGH_DEBT_THRESHOLD = _env_int('ALERT_HIGH_DEBT_THRESHOLD', 500000)
 ALERT_IMPORT_ERROR_RATE_PERCENT = max(_env_int('ALERT_IMPORT_ERROR_RATE_PERCENT', 30), 1)
@@ -219,7 +270,6 @@ REST_FRAMEWORK = {
     'PAGE_SIZE': 20,
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'rest_framework.authentication.SessionAuthentication',
-        'rest_framework.authentication.BasicAuthentication',
     ],
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',
@@ -281,6 +331,18 @@ else:
             "TIMEOUT": 300,
         }
     }
+
+IMPORT_MAX_FILE_SIZE_BYTES = max(
+    _env_int("IMPORT_MAX_FILE_SIZE_BYTES", 10 * 1024 * 1024),
+    1024 * 1024,
+)
+IMPORT_ALLOWED_CONTENT_TYPES = tuple(
+    _env_csv(
+        "IMPORT_ALLOWED_CONTENT_TYPES",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,"
+        "application/octet-stream,application/zip",
+    )
+)
 
 # Background jobs (Phase 2)
 CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", REDIS_URL or "redis://127.0.0.1:6379/0")

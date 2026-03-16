@@ -2,7 +2,7 @@ import json
 from decimal import Decimal
 from io import BytesIO
 
-from django.contrib.auth.models import User
+from django.contrib.auth.models import Group, User
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.urls import reverse
@@ -10,10 +10,13 @@ from django.db import connection
 from django.utils import timezone
 from openpyxl import Workbook, load_workbook
 
+from admin_panel.forms.import_forms import ClientImportForm
 from accounts.models import AccountRequest, ClientCategory, ClientCompany, ClientPayment, ClientProfile, ClientTransaction
 from catalog.models import Category, ClampMeasureRequest, Product, Supplier
 from catalog.services.clamp_quoter import calculate_clamp_quote
 from core.models import (
+    AdminAuditLog,
+    AdminCompanyAccess,
     CatalogExcelTemplate,
     CatalogExcelTemplateSheet,
     CatalogExcelTemplateColumn,
@@ -2065,6 +2068,173 @@ class ClientManagementViewTests(TestCase):
         self.assertTrue(second_link.is_active)
         self.assertTrue(self.client_profile.can_operate_in_company(self.company_b))
 
+    def test_scoped_staff_only_sees_allowed_company_in_client_form(self):
+        AdminCompanyAccess.objects.create(
+            user=self.staff,
+            company=self.company,
+            is_active=True,
+        )
+        self.client.force_login(self.staff)
+        self._activate_company()
+
+        response = self.client.get(reverse('admin_client_create'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, self.company.name)
+        self.assertNotContains(response, self.company_b.name)
+
+    def test_client_edit_shows_company_summary_and_recent_audit(self):
+        AdminAuditLog.objects.create(
+            user=self.staff,
+            action='client_update',
+            target_type='client_profile',
+            target_id=str(self.client_profile.pk),
+            details={'after': {'company_name': self.client_profile.company_name}},
+        )
+        self.client.force_login(self.staff)
+        self._activate_company()
+
+        response = self.client.get(reverse('admin_client_edit', args=[self.client_profile.pk]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Resumen por empresa')
+        self.assertContains(response, 'Auditoria reciente')
+
+
+class AdminUserPermissionsViewTests(TestCase):
+    def setUp(self):
+        self.primary_superadmin = User.objects.create_superuser(
+            username='josueflexs',
+            email='josue@example.com',
+            password='secret123',
+        )
+        self.target_admin = User.objects.create_user(
+            username='operador_interno',
+            password='secret123',
+            is_staff=True,
+        )
+        self.company_a = get_default_company()
+        self.company_b = Company.objects.create(name='Ubolt Interna', slug='ubolt-interna')
+
+    def _activate_company(self):
+        session = self.client.session
+        session['active_company_id'] = self.company_a.pk
+        session.save()
+
+    def test_superadmin_can_assign_role_and_company_scope(self):
+        self.client.force_login(self.primary_superadmin)
+        self._activate_company()
+
+        response = self.client.post(
+            reverse('admin_user_permissions', args=[self.target_admin.pk]),
+            data={
+                'is_active': 'on',
+                'is_staff': 'on',
+                'admin_roles': ['ventas', 'deposito'],
+                'company_scope_mode': 'limited',
+                'allowed_company_ids': [str(self.company_b.pk)],
+            },
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.target_admin.refresh_from_db()
+        self.assertTrue(self.target_admin.groups.filter(name='ventas').exists())
+        self.assertTrue(self.target_admin.groups.filter(name='deposito').exists())
+        self.assertFalse(self.target_admin.groups.filter(name='admin').exists())
+        self.assertEqual(
+            list(
+                AdminCompanyAccess.objects.filter(user=self.target_admin, is_active=True).values_list('company_id', flat=True)
+            ),
+            [self.company_b.pk],
+        )
+        self.assertContains(response, 'Permisos actualizados')
+
+    def test_superadmin_can_edit_admin_identity_fields(self):
+        self.client.force_login(self.primary_superadmin)
+        self._activate_company()
+
+        response = self.client.post(
+            reverse('admin_user_edit', args=[self.target_admin.pk]),
+            data={
+                'username': 'operador_editado',
+                'email': 'operador_editado@example.com',
+                'first_name': 'Operador',
+                'last_name': 'Editado',
+            },
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.target_admin.refresh_from_db()
+        self.assertEqual(self.target_admin.username, 'operador_editado')
+        self.assertEqual(self.target_admin.email, 'operador_editado@example.com')
+        self.assertEqual(self.target_admin.first_name, 'Operador')
+        self.assertEqual(self.target_admin.last_name, 'Editado')
+        self.assertContains(response, 'Informacion actualizada')
+
+    def test_superadmin_can_reset_admin_password(self):
+        self.client.force_login(self.primary_superadmin)
+        self._activate_company()
+
+        response = self.client.post(
+            reverse('admin_user_password_change', args=[self.target_admin.pk]),
+            data={
+                'new_password1': 'ClaveNuevaSegura123!',
+                'new_password2': 'ClaveNuevaSegura123!',
+            },
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.target_admin.refresh_from_db()
+        self.assertTrue(self.target_admin.check_password('ClaveNuevaSegura123!'))
+        self.assertContains(response, 'Contrasena actualizada')
+
+    def test_superadmin_can_deactivate_operator_account(self):
+        ventas_group, _ = Group.objects.get_or_create(name='ventas')
+        self.target_admin.groups.add(ventas_group)
+        AdminCompanyAccess.objects.create(
+            user=self.target_admin,
+            company=self.company_b,
+            is_active=True,
+        )
+        self.client.force_login(self.primary_superadmin)
+        self._activate_company()
+
+        response = self.client.post(
+            reverse('admin_user_delete', args=[self.target_admin.pk]),
+            data={'cancel_reason': 'Baja de operador'},
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.target_admin.refresh_from_db()
+        self.assertFalse(self.target_admin.is_active)
+        self.assertFalse(self.target_admin.is_staff)
+        self.assertFalse(self.target_admin.is_superuser)
+        self.assertFalse(self.target_admin.groups.filter(name='ventas').exists())
+        self.assertFalse(
+            AdminCompanyAccess.objects.filter(user=self.target_admin, is_active=True).exists()
+        )
+        self.assertContains(response, 'fue dada de baja del panel')
+
+    def test_superadmin_cannot_delete_primary_account(self):
+        self.client.force_login(self.primary_superadmin)
+        self._activate_company()
+
+        response = self.client.post(
+            reverse('admin_user_delete', args=[self.primary_superadmin.pk]),
+            data={'cancel_reason': 'Intento invalido'},
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.primary_superadmin.refresh_from_db()
+        self.assertTrue(self.primary_superadmin.is_active)
+        self.assertTrue(self.primary_superadmin.is_staff)
+        self.assertTrue(self.primary_superadmin.is_superuser)
+
 class CatalogExcelTemplateExportTests(TestCase):
     def setUp(self):
         self.primary_superadmin = User.objects.create_superuser(
@@ -2568,3 +2738,52 @@ class ClientImportProcessTests(TestCase):
         payload = response.json()
         self.assertTrue(payload["success"])
         self.assertIn("execution_id", payload)
+
+
+class ImportFormSecurityTests(TestCase):
+    def _build_xlsx_payload(self):
+        workbook = Workbook()
+        sheet = workbook.active
+        sheet.title = "Importacion"
+        sheet.append(["Usuario", "Nombre"])
+        sheet.append(["cliente_seguro", "Cliente Seguro"])
+        output = BytesIO()
+        workbook.save(output)
+        output.seek(0)
+        return output.read()
+
+    @override_settings(IMPORT_MAX_FILE_SIZE_BYTES=32)
+    def test_import_form_rejects_oversized_file(self):
+        upload = SimpleUploadedFile(
+            "clientes.xlsx",
+            b"x" * 64,
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+
+        form = ClientImportForm(data={}, files={"file": upload})
+
+        self.assertFalse(form.is_valid())
+        self.assertIn("file", form.errors)
+
+    def test_import_form_rejects_invalid_content_type(self):
+        upload = SimpleUploadedFile(
+            "clientes.xlsx",
+            self._build_xlsx_payload(),
+            content_type="text/plain",
+        )
+
+        form = ClientImportForm(data={}, files={"file": upload})
+
+        self.assertFalse(form.is_valid())
+        self.assertIn("file", form.errors)
+
+    def test_import_form_accepts_valid_xlsx_payload(self):
+        upload = SimpleUploadedFile(
+            "clientes.xlsx",
+            self._build_xlsx_payload(),
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+
+        form = ClientImportForm(data={}, files={"file": upload})
+
+        self.assertTrue(form.is_valid(), form.errors)

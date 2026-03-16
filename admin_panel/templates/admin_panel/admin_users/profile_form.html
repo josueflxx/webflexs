@@ -1,0 +1,97 @@
+{% extends 'admin_panel/base.html' %}
+
+{% block page_title %}Editar Admin{% endblock %}
+
+{% block content %}
+<div class="admin-form-container" style="max-width: 860px;">
+    <div class="admin-user-header">
+        <div>
+            <h2>Editar cuenta: {{ admin_user.username }}</h2>
+            <p>Actualiza usuario, nombre visible y email de la cuenta operadora.</p>
+        </div>
+        <div class="admin-user-actions">
+            <a href="{% url 'admin_user_password_change' admin_user.pk %}" class="btn btn-outline">Cambiar clave</a>
+            <a href="{% url 'admin_user_permissions' admin_user.pk %}" class="btn btn-outline">Permisos</a>
+            {% if admin_user.username|lower != 'josueflexs' and admin_user.pk != request.user.pk %}
+            <a href="{% url 'admin_user_delete' admin_user.pk %}" class="btn btn-danger">Eliminar cuenta</a>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="card" style="margin-bottom: 16px;">
+        <p style="margin: 0;">
+            <strong>Estado:</strong>
+            {% if admin_user.is_active %}Activa{% else %}Inactiva{% endif %}
+            <br>
+            <strong>Ultimo acceso:</strong> {{ admin_user.last_login|date:"d/m/Y H:i"|default:"-" }}
+        </p>
+    </div>
+
+    <form method="post">
+        {% csrf_token %}
+
+        <div class="form-group">
+            <label for="id_username" class="form-label">Usuario</label>
+            <input
+                type="text"
+                id="id_username"
+                name="username"
+                class="form-input"
+                value="{{ admin_user.username }}"
+                {% if admin_user.username|lower == 'josueflexs' %}readonly{% endif %}
+            >
+            <small class="text-muted">
+                {% if admin_user.username|lower == 'josueflexs' %}
+                La cuenta principal mantiene este usuario fijo por seguridad.
+                {% else %}
+                Se usa para iniciar sesion y para identificar la cuenta en auditoria.
+                {% endif %}
+            </small>
+        </div>
+
+        <div class="form-group">
+            <label for="id_email" class="form-label">Email</label>
+            <input type="email" id="id_email" name="email" class="form-input" value="{{ admin_user.email|default:'' }}">
+        </div>
+
+        <div class="form-grid-2">
+            <div class="form-group">
+                <label for="id_first_name" class="form-label">Nombre</label>
+                <input type="text" id="id_first_name" name="first_name" class="form-input" value="{{ admin_user.first_name|default:'' }}">
+            </div>
+
+            <div class="form-group">
+                <label for="id_last_name" class="form-label">Apellido</label>
+                <input type="text" id="id_last_name" name="last_name" class="form-input" value="{{ admin_user.last_name|default:'' }}">
+            </div>
+        </div>
+
+        <div class="form-actions">
+            <a href="{% url 'admin_user_list' %}" class="btn btn-outline">Cancelar</a>
+            <button type="submit" class="btn btn-primary">Guardar cambios</button>
+        </div>
+    </form>
+
+    {% if recent_admin_audit_logs %}
+    <div class="client-company-summary" style="margin-top:24px;">
+        <div class="client-company-summary-head">
+            <div>
+                <h3>Auditoria reciente</h3>
+                <p>Ultimos cambios registrados sobre esta cuenta admin.</p>
+            </div>
+        </div>
+        <div class="client-audit-list">
+            {% for log in recent_admin_audit_logs %}
+            <article class="client-audit-item">
+                <div>
+                    <strong>{{ log.action }}</strong>
+                    <small>{{ log.created_at|date:"d/m/Y H:i" }}{% if log.user %} · {{ log.user.username }}{% endif %}</small>
+                </div>
+                <div class="text-muted">ID {{ log.target_id }}</div>
+            </article>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
