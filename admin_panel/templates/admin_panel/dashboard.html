@@ -27,7 +27,7 @@
             <a href="{% url 'admin_client_dashboard' %}" class="btn btn-outline">Clientes</a>
             <a href="{% url 'admin_payment_list' %}" class="btn btn-outline">Pagos</a>
             <a href="{% url 'admin_product_list' %}" class="btn btn-outline">Catalogo</a>
-            {% if user.is_superuser and user.username|lower == 'josueflexs' %}
+            {% if user.is_superuser %}
             <a href="{% url 'admin_settings' %}" class="btn btn-ghost">Configuracion</a>
             {% endif %}
         </div>
@@ -51,16 +51,21 @@
     </div>
 </section>
 
-<div class="dashboard-grid">
+<div class="dashboard-section compact-top-gap" style="margin-top: 14px;">
+    <h2>Acciones rapidas</h2>
+    <div class="flex gap-3 dashboard-actions-wrap" style="display: flex; gap: 12px; flex-wrap: wrap;">
+        <a href="{% url 'admin_product_create' %}" class="btn btn-primary">+ Nuevo producto</a>
+        <a href="{% url 'admin_category_create' %}" class="btn btn-outline">+ Nueva categoria</a>
+        <a href="{% url 'admin_import_dashboard' %}" class="btn btn-outline">Importaciones</a>
+        <a href="{% url 'admin_settings' %}" class="btn btn-outline">Configuracion General</a>
+    </div>
+</div>
+
+<div class="dashboard-grid" style="margin-top: 24px;">
     <div class="stat-card">
         <h3>Productos activos</h3>
         <span class="number">{{ active_product_count }}</span>
         <small>Listos para venta y visibilidad comercial</small>
-    </div>
-    <div class="stat-card">
-        <h3>Total productos</h3>
-        <span class="number">{{ product_count }}</span>
-        <small>Catalogo total disponible en el sistema</small>
     </div>
     <div class="stat-card">
         <h3>Clientes</h3>
@@ -73,47 +78,9 @@
         <small>Estructura base del catalogo</small>
     </div>
     <div class="stat-card">
-        <h3>Proveedores</h3>
-        <span class="number">{{ supplier_count }}</span>
-        <small>Relacionados a productos y compras</small>
-    </div>
-    <div class="stat-card">
-        <h3>Pedidos pendientes</h3>
-        <span class="number">{{ pending_orders }}</span>
-        <small>Requieren seguimiento del equipo</small>
-    </div>
-    <div class="stat-card">
-        <h3>Solicitudes pendientes</h3>
-        <span class="number">{{ pending_requests }}</span>
-        <small>Cuentas nuevas esperando revision</small>
-    </div>
-    <div class="stat-card">
-        <h3>Eventos de auditoria (30 dias)</h3>
-        <span class="number">{{ audit_count_last_30 }}</span>
-        <small>Actividad administrativa reciente</small>
-    </div>
-</div>
-
-<div class="dashboard-grid" style="margin-top: 12px;">
-    <div class="stat-card">
-        <h3>Pedidos hoy</h3>
-        <span class="number">{{ kpi_orders_today_count }}</span>
-        <small>Actividad comercial del dia</small>
-    </div>
-    <div class="stat-card">
-        <h3>Venta estimada hoy</h3>
-        <span class="number">${{ kpi_orders_today_total|floatformat:2 }}</span>
-        <small>Base operativa de facturacion</small>
-    </div>
-    <div class="stat-card">
-        <h3>Clientes activos (30 dias)</h3>
-        <span class="number">{{ kpi_active_clients_30d }}</span>
-        <small>Clientes con movimiento reciente</small>
-    </div>
-    <div class="stat-card">
         <h3>Ciclo prom. entrega (h)</h3>
         <span class="number">
-            {% if kpi_avg_delivery_cycle_hours %}{{ kpi_avg_delivery_cycle_hours|floatformat:2 }}{% else %}-{% endif %}
+            {% if kpi_avg_delivery_cycle_hours %}{{ kpi_avg_delivery_cycle_hours|floatformat:1 }}{% else %}-{% endif %}
         </span>
         <small>Velocidad promedio de cumplimiento</small>
     </div>
@@ -313,7 +280,7 @@
             {% for item in top_category_views %}
             <li>
                 <span>
-                    <strong>{{ item.category_slug }}</strong><br>
+                    <strong>{{ item.category_name }}</strong><br>
                     <small>Vista de categoria</small>
                 </span>
                 <span class="badge badge-info">{{ item.total }}</span>
@@ -361,16 +328,6 @@
         {% else %}
         <p class="text-muted">Sin datos por ahora.</p>
         {% endif %}
-    </div>
-</div>
-
-<div class="dashboard-section mt-4 compact-full-width">
-    <h2>Acciones rapidas</h2>
-    <div class="flex gap-3 dashboard-actions-wrap">
-        <a href="{% url 'admin_product_create' %}" class="btn btn-primary">+ Nuevo producto</a>
-        <a href="{% url 'admin_category_create' %}" class="btn btn-outline">+ Nueva categoria</a>
-        <a href="{% url 'admin_import_dashboard' %}" class="btn btn-outline">Importaciones</a>
-        <a href="{% url 'admin_settings' %}" class="btn btn-outline">Configuracion</a>
     </div>
 </div>
 </div>

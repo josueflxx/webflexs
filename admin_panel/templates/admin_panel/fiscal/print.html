@@ -481,7 +481,11 @@
                 </div>
 
                 <div class="arca-box">
+                    {% if qr_base64 %}
+                    <img src="{{ qr_base64 }}" alt="QR AFIP" style="width: 29mm; height: 29mm; border: 1px solid var(--line); display: block;">
+                    {% else %}
                     <div class="arca-mark">ARCA</div>
+                    {% endif %}
                     <div class="arca-details">
                         <strong>Comprobante autorizado</strong><br>
                         CAE: {{ fiscal_document.cae|default:"-" }}<br>

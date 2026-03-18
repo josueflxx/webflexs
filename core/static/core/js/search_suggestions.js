@@ -1,7 +1,7 @@
 (function () {
     const MIN_CHARS = 2;
     const DEBOUNCE_MS = 170;
-    const MAX_ITEMS = 8;
+    const MAX_ITEMS = 12;
     const API_URL = window.FLEXS_SEARCH_SUGGEST_URL || '/api/search-suggestions/';
 
     let openInstance = null;
@@ -242,9 +242,10 @@
                     const label = escapeHtml(item.label || item.value || '');
                     const value = escapeHtml(item.value || '');
                     const meta = escapeHtml(item.meta || '');
+                    const price = item.price ? escapeHtml(item.price) : '';
                     return `
                         <button type="button" class="flex-search-suggest-item${activeClass}" data-index="${index}" data-value="${value}">
-                            <span class="flex-search-suggest-label">${label}</span>
+                            <span class="flex-search-suggest-label">${label}${price ? ` <span class="flex-search-suggest-price">$${price}</span>` : ''}</span>
                             ${meta ? `<span class="flex-search-suggest-meta">${meta}</span>` : ''}
                         </button>
                     `;
@@ -307,11 +308,26 @@
                 return;
             }
 
+            // If a target input exists (e.g. hidden product_id), we only needed
+            // to fill it — do NOT navigate away from the page.
+            // Dispatch a custom event so page scripts can react (e.g. fill price).
+            if (this.targetSelector) {
+                const target = this.getTargetInput();
+                if (target) {
+                    target.dispatchEvent(new CustomEvent('flex-suggest-pick', {
+                        bubbles: true,
+                        detail: item,
+                    }));
+                }
+                return;
+            }
+
             const url = new URL(window.location.href);
             const name = this.input.getAttribute('name') || 'q';
             url.searchParams.set(name, this.input.value);
             window.location.assign(url.toString());
         }
+
 
         getTargetInput() {
             if (!this.targetSelector) {

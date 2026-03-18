@@ -237,7 +237,7 @@
             </div>
 
             {% if order.status == 'draft' %}
-            <form method="post" action="{% url 'admin_order_item_add' order.pk %}" class="order-record-add-item-grid">
+            <form method="post" action="{% url 'admin_order_item_add' order.pk %}" class="order-record-add-item-grid" autocomplete="off">
                 {% csrf_token %}
                 <div class="form-group" style="margin:0;">
                     <label for="sku" class="form-label">Producto</label>
@@ -246,22 +246,27 @@
                         id="sku"
                         name="sku"
                         class="form-input"
-                        placeholder="Busca por SKU, nombre, medida o marca"
+                        placeholder="SKU, nombre, medida o marca…"
                         data-suggest="1"
                         data-suggest-scope="admin_products"
                         data-suggest-submit="manual"
                         data-suggest-query-item="0"
-                        data-suggest-target="#order-product-id">
+                        data-suggest-target="#order-product-id"
+                        autocomplete="off">
                     <input type="hidden" name="product_id" id="order-product-id">
-                    <small class="form-help">Ej: BA03041, "bisagra capot", "iveco 5/8" o "F14000".</small>
                 </div>
                 <div class="form-group" style="margin:0;">
                     <label for="quantity" class="form-label">Cant.</label>
                     <input type="number" min="1" name="quantity" id="quantity" class="form-input" value="1">
                 </div>
-                <button type="submit" class="btn btn-primary">Agregar item</button>
+                <div class="form-group" style="margin:0;">
+                    <label for="price" class="form-label">Precio</label>
+                    <input type="number" step="0.01" min="0" name="price" id="order-item-price" class="form-input" placeholder="Auto">
+                </div>
+                <button type="submit" class="btn btn-primary" id="order-add-item-btn">+ Agregar</button>
             </form>
             {% endif %}
+
 
             <div class="sales-record-table-wrap">
                 <table class="admin-table sales-record-table order-record-products-table">
@@ -598,3 +603,71 @@
     </div>
 </div>
 {% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const skuInput = document.getElementById('sku');
+    const quantityInput = document.getElementById('quantity');
+    const priceInput = document.getElementById('order-item-price');
+    const productIdInput = document.getElementById('order-product-id');
+
+    // Auto-focus the search field on page load
+    if (skuInput) skuInput.focus();
+
+    // Listen for the custom event dispatched by the suggest engine
+    // when a product suggestion is picked. This carries the full item
+    // data, including the 'price' field from the backend.
+    if (productIdInput) {
+        productIdInput.addEventListener('flex-suggest-pick', (e) => {
+            const item = e.detail;
+            if (!item) return;
+
+            // Auto-fill price (editable by the user)
+            if (item.price && priceInput) {
+                priceInput.value = item.price;
+            }
+
+            // Move focus to quantity
+            setTimeout(() => {
+                quantityInput.focus();
+                quantityInput.select();
+            }, 30);
+        });
+    }
+
+    // Keyboard navigation: Enter on SKU -> Quantity (if product set)
+    if (skuInput) {
+        skuInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && productIdInput && productIdInput.value) {
+                e.preventDefault();
+                quantityInput.focus();
+                quantityInput.select();
+            }
+        });
+    }
+
+    // Enter on Quantity -> Price
+    if (quantityInput) {
+        quantityInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                priceInput.focus();
+                priceInput.select();
+            }
+        });
+    }
+
+    // Enter on Price -> Submit form
+    if (priceInput) {
+        priceInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                priceInput.form.submit();
+            }
+        });
+    }
+});
+</script>
+{% endblock %}
+

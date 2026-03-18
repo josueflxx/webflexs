@@ -1,4 +1,4 @@
-﻿"""
+"""
 Admin Panel views - Custom admin interface.
 """
 from django.shortcuts import render, redirect, get_object_or_404
@@ -150,7 +150,7 @@ from core.services.fiscal_documents import (
     register_external_fiscal_document_for_order,
     void_fiscal_document,
 )
-from core.services.fiscal_emission import emit_fiscal_document_now
+
 from core.services.documents import ensure_document_for_adjustment, ensure_document_for_payment
 from core.services.sales_documents import (
     create_fiscal_document_from_sales_type,
@@ -173,7 +173,7 @@ import logging
 from core.decorators import superuser_required_for_modifications
 
 logger = logging.getLogger(__name__)
-PRIMARY_SUPERADMIN_USERNAME = "josueflexs"
+PRIMARY_SUPERADMIN_USERNAME = getattr(settings, "ADMIN_PRIMARY_SUPERADMIN_USERNAME", "josueflexs")
 ADMIN_ROLE_CHOICES = [
     (ROLE_ADMIN, "Administracion"),
     (ROLE_VENTAS, "Ventas"),
@@ -1031,11 +1031,10 @@ def _find_products_for_order_query(raw_value, *, limit=6):
 
 
 def is_primary_superadmin(user):
-    """Allow only the designated primary superadmin account."""
+    """Allow any superadmin."""
     return bool(
         getattr(user, "is_authenticated", False)
         and user.is_superuser
-        and user.username.lower() == PRIMARY_SUPERADMIN_USERNAME
     )
 
 
@@ -1726,13 +1725,25 @@ def dashboard(request):
         .annotate(total=Count("id"))
         .order_by("-total")[:5]
     )
-    top_category_views = (
+    top_category_views_raw = list(
         analytics_qs.filter(event_type=CatalogAnalyticsEvent.EVENT_CATEGORY_VIEW)
         .exclude(category_slug="")
         .values("category_slug")
         .annotate(total=Count("id"))
         .order_by("-total")[:5]
     )
+    _category_slug_set = {item["category_slug"] for item in top_category_views_raw}
+    _category_names_map = dict(
+        Category.objects.filter(slug__in=_category_slug_set).values_list("slug", "name")
+    )
+    top_category_views = [
+        {
+            "category_slug": item["category_slug"],
+            "category_name": _category_names_map.get(item["category_slug"]) or item["category_slug"].replace("-", " ").title(),
+            "total": item["total"],
+        }
+        for item in top_category_views_raw
+    ]
     top_filter_sets = (
         analytics_qs.filter(event_type=CatalogAnalyticsEvent.EVENT_FILTER)
         .exclude(query="")
@@ -4339,7 +4350,6 @@ def clamp_quoter(request):
                     base_cost=result["base_cost"],
                     price_list=selected_price["key"],
                     final_price=selected_price["final_price"],
-                    quantity=quote_quantity,
                     created_by=request.user if request.user.is_authenticated else None,
                 )
                 log_admin_action(
@@ -4351,7 +4361,7 @@ def clamp_quoter(request):
                         "price_list": selected_price["label"],
                         "final_price": f"{selected_price['final_price']:.2f}",
                         "quantity": quote_quantity,
-                        "total_price": f"{saved_quote.total_price:.2f}",
+                        "total_price": f"{saved_quote.final_price:.2f}",
                         "description": result["description"],
                         "generated_code": result.get("generated_code", ""),
                         "client_name": result["inputs"]["client_name"],
@@ -4359,13 +4369,73 @@ def clamp_quoter(request):
                 )
                 messages.success(
                     request,
-                    f"Cotizacion guardada en {selected_price['label']} por ${_format_currency_ars(saved_quote.total_price)}.",
+                    f"Cotizacion guardada en {selected_price['label']} por ${_format_currency_ars(saved_quote.final_price)}.",
                 )
                 return redirect("admin_clamp_quoter")
             except ValueError as exc:
                 messages.error(request, str(exc))
+        elif action == "create_product":
+            try:
+                result = calculate_clamp_quote(request.POST)
+                selected_key = str(request.POST.get("price_list_key", "")).strip()
+                selected_map = {row["key"]: row for row in result["price_rows"]}
+                selected_price = selected_map.get(selected_key)
+                if not selected_price:
+                    raise ValueError("Selecciona una lista valida para crear el producto.")
+
+                stock_value = parse_int_value(request.POST.get("product_stock", "0"), "Stock inicial", min_value=0)
+                sku = result["generated_code"]
+                
+                if Product.objects.filter(sku=sku).exists():
+                    raise ValueError(f"Ya existe un producto con el SKU {sku}.")
+
+                category_name = "ABRAZADERAS"
+                if result["inputs"]["clamp_type"] == "laminada":
+                    category_name = "ABRAZADERAS LAMINADAS"
+                else:
+                    category_name = "ABRAZADERAS TREFILADAS"
+                
+                category, _ = Category.objects.get_or_create(name=category_name)
+                
+                with transaction.atomic():
+                    product = Product.objects.create(
+                        sku=sku,
+                        name=result["description"],
+                        supplier="COTIZADOR",
+                        cost=result["base_cost"],
+                        price=selected_price["final_price"],
+                        stock=stock_value,
+                        category=category,
+                        description=result["description"],
+                    )
+                    product.categories.add(category)
+                    
+                    from catalog.models import ClampSpecs
+                    ClampSpecs.objects.create(
+                        product=product,
+                        fabrication=result["inputs"]["clamp_type"].upper(),
+                        diameter=result["inputs"]["diameter"],
+                        width=result["inputs"]["width_mm"],
+                        length=result["inputs"]["length_mm"],
+                        shape=result["inputs"]["profile_type"],
+                    )
+                
+                log_admin_action(
+                    request,
+                    action="clamp_product_created",
+                    target_type="product",
+                    target_id=product.pk,
+                    details={
+                        "sku": sku,
+                        "price": f"{product.price:.2f}",
+                    }
+                )
+                messages.success(request, f"Producto {sku} creado exitosamente.")
+                return redirect("admin_clamp_quoter")
+            except ValueError as exc:
+                messages.error(request, str(exc))
         else:
-            messages.error(request, "Este modulo ahora solo permite generar y guardar cotizaciones.")
+            messages.error(request, "Accion no reconocida por el cotizador.")
 
     saved_quotes = list(ClampQuotation.objects.select_related("created_by").all()[:30])
     for quote in saved_quotes:
@@ -6491,10 +6561,31 @@ def client_quick_order(request, pk):
                         f"Se abrio el pedido #{order.pk}. No se pudo emitir {selected_sales_document_type.name}: {errors_preview}",
                     )
                     return redirect("admin_order_detail", pk=order.pk)
-                messages.success(
-                    request,
-                    f"Se genero {fiscal_doc.commercial_type_label} para el pedido #{order.pk}.",
-                )
+                
+                # Check if it should be emitted automatically
+                if fiscal_doc.issue_mode == "arca_wsfe" and fiscal_doc.status == "ready_to_issue":
+                    try:
+                        from core.tasks import emit_fiscal_document_async_task
+                        from core.models import FISCAL_STATUS_SUBMITTING
+                        from core.services.fiscal_emission import _validate_before_submit
+                        _validate_before_submit(fiscal_doc)
+                        fiscal_doc.status = FISCAL_STATUS_SUBMITTING
+                        fiscal_doc.save(update_fields=["status", "updated_at"])
+                        emit_fiscal_document_async_task.delay(document_id=fiscal_doc.pk, actor_id=request.user.pk)
+                        messages.success(
+                            request,
+                            f"Se genero y encolo en AFIP la factura {fiscal_doc.commercial_type_label} para el pedido #{order.pk}.",
+                        )
+                    except Exception as exc:
+                        messages.warning(
+                            request,
+                            f"Se genero {fiscal_doc.commercial_type_label} localmente, pero no se pudo encolar: {str(exc)}",
+                        )
+                else:
+                    messages.success(
+                        request,
+                        f"Se genero {fiscal_doc.commercial_type_label} para el pedido #{order.pk}.",
+                    )
                 return redirect("admin_fiscal_document_detail", pk=fiscal_doc.pk)
             if invoice_ready:
                 messages.success(
@@ -7468,10 +7559,10 @@ def client_password_change(request, pk):
     """Change client password."""
     client = get_object_or_404(ClientProfile, pk=pk)
 
-    if not can_manage_client_credentials(request.user):
+    if not request.user.is_superuser:
         messages.error(
             request,
-            f'Solo "{PRIMARY_SUPERADMIN_USERNAME}" puede cambiar credenciales de clientes.',
+            'Solo un administrador puede cambiar credenciales de clientes.',
         )
         return redirect('admin_client_order_history', pk=client.pk)
 
@@ -7509,10 +7600,10 @@ def client_delete(request, pk):
     """Deactivate single client without hard delete."""
     client = get_object_or_404(ClientProfile, pk=pk)
 
-    if not can_delete_client_record(request.user):
+    if not request.user.is_superuser:
         messages.error(
             request,
-            f'Solo "{PRIMARY_SUPERADMIN_USERNAME}" puede desactivar clientes.',
+            'Solo un administrador puede desactivar clientes.',
         )
         return redirect('admin_client_order_history', pk=client.pk)
 
@@ -8538,30 +8629,24 @@ def fiscal_document_emit(request, pk):
     if fiscal_document.company_id != active_company.id:
         messages.error(request, "No podes emitir comprobantes de otra empresa.")
         return redirect("admin_fiscal_document_list")
-
     try:
-        outcome = emit_fiscal_document_now(
-            fiscal_document=fiscal_document,
-            actor=request.user,
-        )
+        from core.tasks import emit_fiscal_document_async_task
+        from core.models import FISCAL_STATUS_SUBMITTING
+        
+        # We pre-validate to fail fast before queueing if something is obviously wrong
+        from core.services.fiscal_emission import _validate_before_submit
+        _validate_before_submit(fiscal_document)
+
+        fiscal_document.status = FISCAL_STATUS_SUBMITTING
+        fiscal_document.save(update_fields=["status", "updated_at"])
+
+        emit_fiscal_document_async_task.delay(document_id=fiscal_document.pk, actor_id=request.user.pk)
+        
+        messages.info(request, "Comprobante encolado para emision fiscal en AFIP. Esto puede demorar unos segundos.")
     except ValidationError as exc:
         messages.error(request, "; ".join(exc.messages))
-        return redirect("admin_fiscal_document_detail", pk=fiscal_document.pk)
     except Exception as exc:
-        messages.error(request, f"Fallo inesperado al emitir: {exc}")
-        return redirect("admin_fiscal_document_detail", pk=fiscal_document.pk)
-
-    if outcome.state == "authorized":
-        messages.success(
-            request,
-            f"Comprobante autorizado. CAE: {outcome.document.cae or '-'}",
-        )
-    elif outcome.state == "pending_retry":
-        messages.warning(request, outcome.message)
-    elif outcome.state == "rejected":
-        messages.error(request, outcome.message)
-    else:
-        messages.info(request, outcome.message)
+        messages.error(request, f"Error al encolar emision: {str(exc)}")
 
     return redirect("admin_fiscal_document_detail", pk=fiscal_document.pk)
 
@@ -8742,41 +8827,65 @@ def fiscal_document_print(request, pk):
     if order and getattr(order, "discount_percentage", None):
         order_total_discount_percentage = Decimal(order.discount_percentage or 0)
 
-    return render(
-        request,
-        "admin_panel/fiscal/print.html",
-        {
-            "fiscal_document": fiscal_document,
-            "items": fiscal_document.items.all().order_by("line_number"),
-            "copy_type": copy_type,
-            "copy_label": copy_label,
-            "document_letter": company_meta["letter"],
-            "document_code": company_meta["code"],
-            "document_number_display": (
-                f"{str(fiscal_document.point_of_sale.number or '').zfill(5)}-"
-                f"{str(fiscal_document.number or 0).zfill(8)}"
-            ),
-            "company_address_line": " / ".join(bit for bit in company_address_bits if bit),
-            "company_contact_line": " / ".join(
-                bit for bit in [site_settings.company_phone, site_settings.company_phone_2, company.email or site_settings.company_email] if bit
-            ),
-            "company_contact_site": site_settings.company_address,
-            "client_profile": client_profile,
-            "client_address_line": " / ".join(bit for bit in client_address_bits if bit),
-            "client_document_label": (
-                client_profile.get_document_type_display() if client_profile and client_profile.document_type else "CUIT/DNI"
-            ) if client_profile else "CUIT/DNI",
-            "client_document_value": (
-                client_profile.document_number or client_profile.cuit_dni
-            ) if client_profile else "",
-            "sale_condition_label": sale_condition_label,
-            "operator_label": operator_label,
-            "observations_text": "\n".join(bit for bit in observations if bit).strip(),
-            "subtotal_before_discount": subtotal_before_discount,
-            "taxable_net": taxable_net,
-            "order_total_discount_percentage": order_total_discount_percentage,
-        },
-    )
+    # Generate QR Code
+    qr_base64 = ""
+    qr_url = ""
+    try:
+        from core.services.pdf_generator import generate_afip_qr_data, generate_qr_image_base64
+        qr_url = generate_afip_qr_data(fiscal_document)
+        qr_base64 = generate_qr_image_base64(qr_url)
+    except Exception as exc:
+        pass
+
+    context = {
+        "fiscal_document": fiscal_document,
+        "items": fiscal_document.items.all().order_by("line_number"),
+        "copy_type": copy_type,
+        "copy_label": copy_label,
+        "document_letter": company_meta["letter"],
+        "document_code": company_meta["code"],
+        "document_number_display": (
+            f"{str(fiscal_document.point_of_sale.number or '').zfill(5)}-"
+            f"{str(fiscal_document.number or 0).zfill(8)}"
+        ),
+        "company_address_line": " / ".join(bit for bit in company_address_bits if bit),
+        "company_contact_line": " / ".join(
+            bit for bit in [site_settings.company_phone, site_settings.company_phone_2, company.email or site_settings.company_email] if bit
+        ),
+        "company_contact_site": site_settings.company_address,
+        "client_profile": client_profile,
+        "client_address_line": " / ".join(bit for bit in client_address_bits if bit),
+        "client_document_label": (
+            client_profile.get_document_type_display() if client_profile and client_profile.document_type else "CUIT/DNI"
+        ) if client_profile else "CUIT/DNI",
+        "client_document_value": (
+            client_profile.document_number or client_profile.cuit_dni
+        ) if client_profile else "",
+        "sale_condition_label": sale_condition_label,
+        "operator_label": operator_label,
+        "observations_text": "\n".join(bit for bit in observations if bit).strip(),
+        "subtotal_before_discount": subtotal_before_discount,
+        "taxable_net": taxable_net,
+        "order_total_discount_percentage": order_total_discount_percentage,
+        "qr_base64": qr_base64,
+        "qr_url": qr_url,
+    }
+
+    if request.GET.get('format') == 'pdf':
+        try:
+            from core.services.pdf_generator import generate_fiscal_pdf
+            from django.template.loader import render_to_string
+            html_string = render_to_string("admin_panel/fiscal/print.html", context)
+            pdf_bytes = generate_fiscal_pdf(html_string, base_url=request.build_absolute_uri("/"))
+            response = HttpResponse(pdf_bytes, content_type='application/pdf')
+            response['Content-Disposition'] = f'inline; filename="{fiscal_document.commercial_type_label}_{fiscal_document.display_number}_{copy_type}.pdf"'
+            return response
+        except ImportError:
+             messages.error(request, "El generador de PDF no esta instalado correctamente.")
+        except Exception as exc:
+            messages.error(request, f"Error al generar PDF: {str(exc)}")
+
+    return render(request, "admin_panel/fiscal/print.html", context)
 
 
 @staff_member_required
@@ -8816,6 +8925,12 @@ def order_item_add(request, pk):
         messages.error(request, "Producto no encontrado.")
         return redirect("admin_order_detail", pk=order.pk)
 
+    price_raw = request.POST.get("price", "").strip()
+    try:
+        manual_price = Decimal(price_raw) if price_raw else None
+    except (ValueError, InvalidOperation):
+        manual_price = None
+
     try:
         from core.services.pricing import (
             resolve_pricing_context,
@@ -8845,8 +8960,12 @@ def order_item_add(request, pk):
         pricing = None
 
     unit_price_base = pricing.base_price if pricing else product.price
-    final_price = pricing.final_price if pricing else product.price
+    final_price = manual_price if manual_price is not None else (pricing.final_price if pricing else product.price)
     discount_used = pricing.discount_percentage if pricing else discount_percentage
+
+    # If manual price is used, we might want to recalculate the discount or just use it as is.
+    # For now, we use the manual price as the final price at purchase.
+    
     OrderItem.objects.create(
         order=order,
         product=product,
@@ -10000,12 +10119,7 @@ def admin_user_permissions(request, user_id):
                 selected_company_ids.append(company_id)
                 seen_company_ids.add(company_id)
 
-        if new_is_superuser and admin_user.username.lower() != PRIMARY_SUPERADMIN_USERNAME:
-            messages.error(
-                request,
-                f'Solo "{PRIMARY_SUPERADMIN_USERNAME}" puede tener permisos de superadmin.',
-            )
-            return redirect('admin_user_permissions', user_id=admin_user.pk)
+        # Any superuser can theoretically make others superusers now, but the views check superuser_required_for_modifications
 
         if admin_user.username.lower() == PRIMARY_SUPERADMIN_USERNAME:
             if not new_is_superuser or not new_is_staff or not new_is_active:

@@ -89,7 +89,7 @@ def go_offline(request):
     return JsonResponse({'status': 'ignored'})
 
 
-SUGGESTION_LIMIT = 8
+SUGGESTION_LIMIT = 12
 
 
 def _normalize_search_scope(raw_scope):
@@ -205,13 +205,13 @@ def _suggest_admin_products_legacy(query):
     return _unique_trim_suggestions(items)
 
 
-def _suggest_admin_products(query):
+def _suggest_admin_products(query, request=None):
     items = []
     parsed_query = _parse_suggestion_query(query)
     if not parsed_query.get("raw"):
         return items
 
-    base_queryset = Product.objects.filter(is_active=True).select_related("supplier_ref")
+    base_queryset = Product.objects.filter(is_active=True)
     search_fields = ["sku", "name", "supplier", "supplier_ref__name", "description"]
     raw_query = parsed_query["raw"]
     compact_query = compact_search_token(raw_query)
@@ -244,6 +244,40 @@ def _suggest_admin_products(query):
             .order_by("name")[:8]
         )
 
+    # For pricing resolution if request/company is available
+    company = None
+    if request:
+        from core.services.company_context import get_active_company
+        company = get_active_company(request)
+
+    from core.services import pricing
+
+    # Pre-fetch all product IDs for a single bulk query
+    all_product_ids = set()
+    for product_id, sku, name, supplier_text, supplier_ref_name in [
+        *exact_rows, *prefix_rows, *parsed_rows, *compact_rows,
+    ]:
+        all_product_ids.add(product_id)
+
+    # Bulk fetch product prices
+    product_price_map = {}
+    if all_product_ids:
+        for p in base_queryset.filter(pk__in=all_product_ids).only("id", "price"):
+            product_price_map[p.id] = p.price
+
+    # Resolve price list if company context is available
+    price_list = None
+    price_list_item_map = {}
+    if company:
+        try:
+            price_list = pricing.resolve_effective_price_list(company=company)
+            if price_list:
+                price_list_item_map = pricing.build_price_list_item_map(
+                    price_list, list(all_product_ids)
+                )
+        except Exception:
+            pass
+
     for product_id, sku, name, supplier_text, supplier_ref_name in [
         *exact_rows,
         *prefix_rows,
@@ -251,16 +285,29 @@ def _suggest_admin_products(query):
         *compact_rows,
     ]:
         supplier = supplier_ref_name or supplier_text or "-"
+
+        # Determine price: price list > product default
+        product_price = product_price_map.get(product_id)
+        if price_list_item_map and product_id in price_list_item_map:
+            product_price = price_list_item_map[product_id].price
+
+        extra_payload = {
+            "target_value": product_id,
+            "input_value": f"{sku} - {name}",
+        }
+        if product_price is not None:
+            extra_payload["price"] = str(product_price)
+
         _append_suggestion(
             items,
             sku,
             name,
             meta=f"SKU {sku} · {supplier}",
             kind="product",
-            target_value=product_id,
-            input_value=f"{sku} - {name}",
+            **extra_payload
         )
     return _unique_trim_suggestions(items)
+
 
 
 def _suggest_admin_categories(query):
@@ -449,7 +496,7 @@ def search_suggestions(request):
         if scope == "catalog":
             suggestions = _suggest_catalog(query)
         elif scope in {"admin_products", "admin_supplier_products"}:
-            suggestions = _suggest_admin_products(query)
+            suggestions = _suggest_admin_products(query, request=request)
         elif scope == "admin_categories":
             suggestions = _suggest_admin_categories(query)
         elif scope == "admin_clients":
@@ -467,7 +514,7 @@ def search_suggestions(request):
         else:
             # Safe fallback by context.
             if request.user.is_authenticated and request.user.is_staff:
-                suggestions = _suggest_admin_products(query)
+                suggestions = _suggest_admin_products(query, request=request)
             else:
                 suggestions = _suggest_catalog(query)
         cache.set(cache_key, suggestions, 90)

@@ -351,6 +351,14 @@ CELERY_TASK_DEFAULT_QUEUE = os.getenv("CELERY_TASK_DEFAULT_QUEUE", "flexs-defaul
 CELERY_TASK_ALWAYS_EAGER = os.getenv("CELERY_TASK_ALWAYS_EAGER", "False").lower() == "true"
 CELERY_TASK_EAGER_PROPAGATES = os.getenv("CELERY_TASK_EAGER_PROPAGATES", "False").lower() == "true"
 
+from celery.schedules import crontab
+CELERY_BEAT_SCHEDULE = {
+    "retry_stuck_fiscal_documents": {
+        "task": "core.retry_stuck_fiscal_documents_task",
+        "schedule": crontab(minute="*/10"),
+    },
+}
+
 # Logging / observability (Phase 5)
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
 LOGGING = {

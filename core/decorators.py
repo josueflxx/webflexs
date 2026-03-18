@@ -2,14 +2,11 @@ from functools import wraps
 from django.contrib import messages
 from django.shortcuts import redirect
 
-PRIMARY_SUPERADMIN_USERNAME = "josueflexs"
-
 
 def superuser_required_for_modifications(view_func):
     """
     Decorator that strictly forbids non-superusers from making 
     state-changing requests (POST, PUT, DELETE).
-    GET, HEAD, OPTIONS are allowed if the user is otherwise authorized.
     """
     @wraps(view_func)
     def _wrapped_view(request, *args, **kwargs):
@@ -17,15 +14,12 @@ def superuser_required_for_modifications(view_func):
         if request.method in ['GET', 'HEAD', 'OPTIONS']:
             return view_func(request, *args, **kwargs)
         
-        # For unsafe methods, allow only the designated primary superadmin account.
-        if (
-            request.user.is_superuser
-            and request.user.username.lower() == PRIMARY_SUPERADMIN_USERNAME
-        ):
+        # For unsafe methods, allow any superuser.
+        if request.user.is_superuser:
             return view_func(request, *args, **kwargs)
         
         # If not superuser, deny access
-        messages.error(request, "No tienes permisos para realizar modificaciones. Contacta al administrador principal (josueflexs).")
+        messages.error(request, "No tienes permisos para realizar modificaciones importantes. Contacta a un administrador.")
         
         # Redirect back to previous page or dashboard if referer is missing
         referer = request.META.get('HTTP_REFERER')

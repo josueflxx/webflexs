@@ -6,13 +6,13 @@
     border-radius: 10px;
     box-shadow: 0 14px 32px rgba(0, 0, 0, 0.45);
     overflow: hidden;
-    max-height: 320px;
+    max-height: 420px;
 }
 
 .flex-search-suggest-list {
     display: flex;
     flex-direction: column;
-    max-height: 320px;
+    max-height: 420px;
     overflow-y: auto;
     -ms-overflow-style: none;
     scrollbar-width: none;
@@ -30,11 +30,12 @@
     color: #f5f7fa;
     text-align: left;
     width: 100%;
-    padding: 10px 12px;
+    padding: 9px 12px;
     cursor: pointer;
     display: flex;
     flex-direction: column;
     gap: 2px;
+    transition: background 0.12s ease;
 }
 
 .flex-search-suggest-item + .flex-search-suggest-item {
@@ -50,9 +51,28 @@
     font-size: 0.92rem;
     font-weight: 600;
     line-height: 1.25;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.flex-search-suggest-price {
+    display: inline-flex;
+    align-items: center;
+    padding: 1px 7px;
+    border-radius: 6px;
+    background: rgba(25, 209, 127, 0.14);
+    border: 1px solid rgba(25, 209, 127, 0.22);
+    color: #b2f3d0;
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
 }
 
 .flex-search-suggest-meta {
     font-size: 0.78rem;
     color: rgba(255, 255, 255, 0.68);
 }
+

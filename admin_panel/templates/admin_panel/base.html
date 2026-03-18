@@ -1,4 +1,4 @@
-﻿{% load static %}
+{% load static %}
 <!DOCTYPE html>
 <html lang="es">
 
@@ -107,7 +107,7 @@
                     Cotizador
                 </a>
 
-                {% if user.is_superuser and user.username|lower == 'josueflexs' %}
+                {% if user.is_superuser %}
                 <div class="nav-section">Configuracion</div>
                 <a href="{% url 'admin_settings' %}"
                     class="nav-item {% if request.resolver_match.url_name == 'admin_settings' or request.resolver_match.url_name == 'admin_user_list' or request.resolver_match.url_name == 'admin_user_permissions' or request.resolver_match.url_name == 'admin_company_list' or request.resolver_match.url_name == 'admin_company_edit' or request.resolver_match.url_name == 'admin_fiscal_config' or request.resolver_match.url_name == 'admin_fiscal_point_create' or request.resolver_match.url_name == 'admin_fiscal_point_edit' or request.resolver_match.url_name == 'admin_fiscal_point_toggle_active' or request.resolver_match.url_name == 'admin_fiscal_point_set_default' or 'import' in request.resolver_match.url_name or 'catalog_excel' in request.resolver_match.url_name %}active{% endif %}">
@@ -167,7 +167,7 @@
                             <a href="{% url 'admin_dashboard' %}" class="top-nav-item {% if request.resolver_match.url_name == 'admin_dashboard' %}active{% endif %}">
                                 <span aria-hidden="true">&#128202;</span> Dashboard
                             </a>
-                            {% if user.is_superuser and user.username|lower == 'josueflexs' %}
+                            {% if user.is_superuser %}
                             <a href="{% url 'admin_settings' %}" class="top-nav-item {% if request.resolver_match.url_name == 'admin_settings' or request.resolver_match.url_name == 'admin_user_list' or request.resolver_match.url_name == 'admin_user_permissions' or request.resolver_match.url_name == 'admin_company_list' or request.resolver_match.url_name == 'admin_company_edit' or request.resolver_match.url_name == 'admin_fiscal_config' or request.resolver_match.url_name == 'admin_fiscal_point_create' or request.resolver_match.url_name == 'admin_fiscal_point_edit' or request.resolver_match.url_name == 'admin_fiscal_point_toggle_active' or request.resolver_match.url_name == 'admin_fiscal_point_set_default' or 'import' in request.resolver_match.url_name or 'catalog_excel' in request.resolver_match.url_name %}active{% endif %}">
                                 <span aria-hidden="true">&#9881;</span> Configuracion
                             </a>

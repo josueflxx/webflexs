@@ -2680,12 +2680,16 @@
 
 .order-record-add-item-grid {
     display: grid;
-    grid-template-columns: minmax(0, 1.6fr) minmax(110px, 180px) auto;
-    gap: 12px;
+    grid-template-columns: minmax(0, 1.6fr) minmax(80px, 120px) minmax(100px, 160px) auto;
+    gap: 10px;
     align-items: end;
     margin-bottom: 16px;
-    padding-bottom: 16px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    padding: 14px 16px 16px;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 107, 53, 0.14);
+    background:
+        radial-gradient(ellipse at 10% 50%, rgba(255, 107, 53, 0.06), transparent 55%),
+        rgba(255, 255, 255, 0.02);
 }
 
 .order-record-products-table td a {
