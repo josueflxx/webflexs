@@ -28,8 +28,8 @@ from core.models import (
     InternalDocument,
     SalesDocumentType,
 )
-from core.services.company_context import get_default_company
-from orders.models import ClampQuotation, Order, OrderItem, OrderStatusHistory
+from core.services.company_context import get_default_company, get_default_client_origin_company
+from orders.models import ClampQuotation, Order, OrderItem, OrderRequest, OrderStatusHistory
 
 
 class ClientOrderHistoryViewTests(TestCase):
@@ -309,6 +309,28 @@ class ClientOrderHistoryViewTests(TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertEqual(response.url, reverse('admin_order_detail', args=[billable_order.pk]))
 
+    def test_quick_quote_respects_selected_origin_channel(self):
+        self.client.force_login(self.staff)
+        self._activate_company()
+
+        response = self.client.post(
+            reverse('admin_client_quick_order', args=[self.client_profile.pk]),
+            data={
+                'action': 'quote',
+                'company_id': self.company.pk,
+                'origin_channel': Order.ORIGIN_WHATSAPP,
+            },
+        )
+
+        created_order = Order.objects.filter(
+            user=self.client_user,
+            company=self.company,
+        ).order_by('-pk').first()
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIsNotNone(created_order)
+        self.assertEqual(created_order.origin_channel, Order.ORIGIN_WHATSAPP)
+
     def test_quick_credit_note_opens_latest_invoice_document(self):
         invoice_order = Order.objects.create(
             user=self.client_user,
@@ -348,6 +370,90 @@ class ClientOrderHistoryViewTests(TestCase):
 
         self.assertEqual(response.status_code, 302)
         self.assertEqual(response.url, reverse('admin_fiscal_document_detail', args=[invoice_document.pk]))
+
+
+class DashboardHubRankingTests(TestCase):
+    def setUp(self):
+        self.staff = User.objects.create_user(
+            username='staff_dashboard_rankings',
+            password='secret123',
+            is_staff=True,
+        )
+        self.company = get_default_company()
+        self.client_user = User.objects.create_user(
+            username='cliente_dashboard_rankings',
+            password='secret123',
+        )
+        self.client_profile = ClientProfile.objects.create(
+            user=self.client_user,
+            company_name='Cliente Ranking',
+        )
+        self.client_company = ClientCompany.objects.create(
+            client_profile=self.client_profile,
+            company=self.company,
+            is_active=True,
+        )
+        self.product = Product.objects.create(
+            sku='RANK-001',
+            name='Producto Ranking',
+            price=Decimal('150.00'),
+            stock=10,
+            is_active=True,
+        )
+        self.point = FiscalPointOfSale.objects.create(
+            company=self.company,
+            number='11',
+            is_active=True,
+            is_default=True,
+        )
+        self.fiscal_document = FiscalDocument.objects.create(
+            source_key='dashboard-ranking-invoice',
+            company=self.company,
+            client_company_ref=self.client_company,
+            client_profile=self.client_profile,
+            point_of_sale=self.point,
+            doc_type='FA',
+            issue_mode='manual',
+            status='external_recorded',
+            issued_at=timezone.now(),
+            subtotal_net=Decimal('150.00'),
+            total=Decimal('150.00'),
+        )
+        FiscalDocumentItem.objects.create(
+            fiscal_document=self.fiscal_document,
+            line_number=1,
+            product=self.product,
+            sku=self.product.sku,
+            description=self.product.name,
+            quantity=Decimal('3.000'),
+            unit_price_net=Decimal('50.00'),
+            net_amount=Decimal('150.00'),
+            total_amount=Decimal('150.00'),
+        )
+        ClientTransaction.objects.create(
+            client_profile=self.client_profile,
+            company=self.company,
+            transaction_type=ClientTransaction.TYPE_ORDER_CHARGE,
+            source_key='dashboard-ranking-debt',
+            amount=Decimal('150.00'),
+            occurred_at=timezone.now(),
+            description='Saldo de prueba',
+        )
+
+    def _activate_company(self):
+        session = self.client.session
+        session['active_company_id'] = self.company.pk
+        session.save()
+
+    def test_dashboard_rankings_link_to_client_history_and_product(self):
+        self.client.force_login(self.staff)
+        self._activate_company()
+
+        response = self.client.get(reverse('admin_dashboard'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, reverse('admin_client_order_history', args=[self.client_profile.pk]))
+        self.assertContains(response, reverse('admin_product_edit', args=[self.product.pk]))
 
 
 class ClientCorePermissionsTests(TestCase):
@@ -506,7 +612,36 @@ class PaymentPanelTests(TestCase):
         self.assertIsNotNone(payment)
         self.assertEqual(payment.amount, Decimal('120.00'))
 
-    def test_client_balance_uses_confirmed_orders_minus_payments(self):
+    def test_client_balance_uses_billed_documents_minus_payments(self):
+        from accounts.services.ledger import sync_order_charge_transaction
+
+        point = FiscalPointOfSale.objects.create(
+            company=self.company,
+            number='51',
+            is_active=True,
+            is_default=True,
+        )
+        sales_type = SalesDocumentType.objects.filter(
+            company=self.company,
+            document_behavior='Factura',
+        ).first()
+        FiscalDocument.objects.create(
+            source_key='payment-panel-balance-invoice',
+            company=self.company,
+            client_company_ref=self.client_company,
+            client_profile=self.client_profile,
+            order=self.order_confirmed,
+            point_of_sale=point,
+            sales_document_type=sales_type,
+            doc_type='FA',
+            issue_mode='manual',
+            status='external_recorded',
+            issued_at=timezone.now(),
+            subtotal_net=Decimal('80.00'),
+            total=Decimal('80.00'),
+        )
+        sync_order_charge_transaction(order=self.order_confirmed)
+
         self.client.force_login(self.staff)
         self._activate_company()
         response = self.client.post(
@@ -529,6 +664,10 @@ class PaymentPanelTests(TestCase):
         self.assertEqual(self.client_profile.get_total_orders_for_balance(), Decimal('80.00'))
         self.assertEqual(self.client_profile.get_total_paid(), Decimal('30.00'))
         self.assertEqual(self.client_profile.get_current_balance(), Decimal('50.00'))
+
+    def test_client_balance_ignores_confirmed_order_without_invoice(self):
+        self.assertEqual(self.client_profile.get_total_orders_for_balance(), Decimal('0.00'))
+        self.assertEqual(self.client_profile.get_current_balance(), Decimal('0.00'))
 
     def test_payment_panel_shows_configured_receipt_label(self):
         self.client.force_login(self.staff)
@@ -947,6 +1086,77 @@ class ConfiguredSalesDocumentTypeFlowTests(TestCase):
         self.assertEqual(response.status_code, 302)
         fiscal_document.refresh_from_db()
         self.assertEqual(fiscal_document.status, 'voided')
+
+    def test_safe_fiscal_document_can_be_deleted(self):
+        fiscal_document = FiscalDocument.objects.create(
+            source_key='detail-manual-delete-test',
+            company=self.company,
+            client_company_ref=self.client_company,
+            client_profile=self.client_profile,
+            order=self.order,
+            point_of_sale=self.point,
+            doc_type='FA',
+            issue_mode='manual',
+            status='ready_to_issue',
+            sales_document_type=self.sales_document_type,
+            subtotal_net=Decimal('100.00'),
+            total=Decimal('100.00'),
+        )
+
+        self.client.force_login(self.staff)
+        self._activate_company()
+
+        response = self.client.post(reverse('admin_fiscal_document_delete', args=[fiscal_document.pk]))
+
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(FiscalDocument.objects.filter(pk=fiscal_document.pk).exists())
+
+    def test_closed_fiscal_document_cannot_be_deleted(self):
+        fiscal_document = FiscalDocument.objects.create(
+            source_key='detail-manual-delete-blocked-test',
+            company=self.company,
+            client_company_ref=self.client_company,
+            client_profile=self.client_profile,
+            order=self.order,
+            point_of_sale=self.point,
+            doc_type='FA',
+            issue_mode='manual',
+            status='external_recorded',
+            sales_document_type=self.sales_document_type,
+            subtotal_net=Decimal('100.00'),
+            total=Decimal('100.00'),
+        )
+
+        self.client.force_login(self.staff)
+        self._activate_company()
+
+        response = self.client.post(
+            reverse('admin_fiscal_document_delete', args=[fiscal_document.pk]),
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(FiscalDocument.objects.filter(pk=fiscal_document.pk).exists())
+        self.assertContains(response, 'No se puede eliminar el comprobante fiscal')
+
+    def test_internal_document_can_be_deleted_when_unlinked(self):
+        internal_document = InternalDocument.objects.create(
+            source_key='internal-delete-test',
+            doc_type='COT',
+            number=412,
+            company=self.company,
+            client_company_ref=self.client_company,
+            client_profile=self.client_profile,
+            order=self.order,
+        )
+
+        self.client.force_login(self.staff)
+        self._activate_company()
+
+        response = self.client.post(reverse('admin_internal_document_delete', args=[internal_document.pk]))
+
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(InternalDocument.objects.filter(pk=internal_document.pk).exists())
 
     def test_internal_document_print_shows_configured_type_label(self):
         internal_type = SalesDocumentType.objects.create(
@@ -1709,6 +1919,68 @@ class OrderDeleteTests(TestCase):
                 linked_count = cursor.fetchone()[0]
             self.assertEqual(linked_count, 1)
 
+    def test_hard_delete_is_blocked_when_order_has_payments(self):
+        self.client.force_login(self.staff)
+        session = self.client.session
+        session['active_company_id'] = self.company.pk
+        session.save()
+
+        response = self.client.post(
+            reverse('admin_order_hard_delete', args=[self.order.pk]),
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(Order.objects.filter(pk=self.order.pk).exists())
+        self.assertContains(response, 'No se puede eliminar el pedido')
+
+    def test_hard_delete_removes_safe_order_and_reopens_source_request(self):
+        source_request = OrderRequest.objects.create(
+            user=self.client_user,
+            company=self.company,
+            client_company_ref=self.client_company,
+            status=OrderRequest.STATUS_CONVERTED,
+            requested_total=Decimal('50.00'),
+            requested_subtotal=Decimal('50.00'),
+            submitted_at=timezone.now(),
+            converted_at=timezone.now(),
+        )
+        deletable_order = Order.objects.create(
+            user=self.client_user,
+            company=self.company,
+            source_request=source_request,
+            status=Order.STATUS_DRAFT,
+            subtotal=Decimal('50.00'),
+            total=Decimal('50.00'),
+            client_company='Cliente Delete',
+            client_company_ref=self.client_company,
+        )
+        OrderItem.objects.create(
+            order=deletable_order,
+            product=self.product,
+            product_sku=self.product.sku,
+            product_name=self.product.name,
+            quantity=1,
+            price_at_purchase=Decimal('50.00'),
+            subtotal=Decimal('50.00'),
+        )
+
+        self.client.force_login(self.staff)
+        session = self.client.session
+        session['active_company_id'] = self.company.pk
+        session.save()
+
+        response = self.client.post(
+            reverse('admin_order_hard_delete', args=[deletable_order.pk]),
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(Order.objects.filter(pk=deletable_order.pk).exists())
+        source_request.refresh_from_db()
+        self.assertEqual(source_request.status, OrderRequest.STATUS_CONFIRMED)
+        self.assertIsNone(source_request.converted_at)
+
 
 class CategoryManageProductsTests(TestCase):
     def setUp(self):
@@ -1894,6 +2166,7 @@ class ClientManagementViewTests(TestCase):
             is_staff=True,
         )
         self.company = get_default_company()
+        self.default_client_company = get_default_client_origin_company()
         self.client_user = User.objects.create_user(
             username='cliente_management',
             password='secret123',
@@ -1924,6 +2197,17 @@ class ClientManagementViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Nuevo cliente')
         self.assertContains(response, 'Contrasena inicial')
+
+    def test_client_create_form_defaults_to_default_client_company(self):
+        self.client.force_login(self.staff)
+        self._activate_company()
+
+        response = self.client.get(reverse('admin_client_create'))
+
+        self.assertEqual(response.status_code, 200)
+        expected_company = self.default_client_company or self.company
+        self.assertEqual(response.context['form_values']['company_id'], str(expected_company.pk))
+        self.assertIn(str(expected_company.pk), response.context['form_values']['linked_company_ids'])
 
     def test_staff_can_create_client_with_user_profile_and_company_link(self):
         self.client.force_login(self.staff)

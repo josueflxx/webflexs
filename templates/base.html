@@ -16,7 +16,7 @@
         rel="stylesheet">
 
     <!-- Base CSS -->
-    <link rel="stylesheet" href="{% static 'core/css/base.css' %}?v=3">
+    <link rel="stylesheet" href="{% static 'core/css/base.css' %}?v=4">
     <link rel="stylesheet" href="{% static 'core/css/search_suggestions.css' %}?v=3">
     <link rel="icon" type="image/x-icon" href="{% static 'core/img/favicon.ico' %}">
     <link rel="icon" type="image/png" sizes="32x32" href="{% static 'core/img/favicon-32.png' %}">
@@ -85,6 +85,7 @@
                         </a>
                     </li>
                     <li><a href="{% url 'client_portal' %}">Portal Cliente</a></li>
+                    <li><a href="{% url 'order_request_list' %}">Solicitudes</a></li>
                     <li><a href="{% url 'order_list' %}">Pedidos</a></li>
                     {% if user.is_staff %}
                     <li><a href="{% url 'admin_dashboard' %}" class="btn btn-primary">Panel Admin</a></li>

@@ -167,11 +167,29 @@ class ActiveCompanyMiddleware:
         if request.user.is_authenticated:
             path = request.path or ""
             if path not in self.EXEMPT_EXACT_PATHS and not path.startswith(self.EXEMPT_PREFIXES):
-                from core.services.company_context import get_active_company, get_user_companies
+                from core.services.company_context import (
+                    get_active_company,
+                    get_default_company,
+                    get_user_companies,
+                    set_active_company,
+                )
 
                 companies = list(get_user_companies(request.user))
                 active_company = get_active_company(request)
                 if companies and active_company is None:
+                    requires_explicit_company = (
+                        (path.startswith("/api/") or path == reverse("admin_dashboard"))
+                        and not getattr(request.user, "is_superuser", False)
+                    )
+                    if not requires_explicit_company:
+                        fallback_company = get_default_company()
+                        if fallback_company and any(company.pk == fallback_company.pk for company in companies):
+                            set_active_company(request, fallback_company)
+                            return self.get_response(request)
+                        if companies:
+                            set_active_company(request, companies[0])
+                            return self.get_response(request)
+
                     wants_json = "application/json" in request.headers.get("Accept", "")
                     if wants_json or path.startswith("/api/"):
                         return JsonResponse(

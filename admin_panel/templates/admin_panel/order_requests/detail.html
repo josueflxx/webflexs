@@ -1,0 +1,525 @@
+{% extends 'admin_panel/base.html' %}
+
+{% block page_title %}Solicitud Comercial #{{ order_request.pk }}{% endblock %}
+
+{% block content %}
+<div class="admin-detail-page">
+    <div class="admin-card">
+        <div class="detail-header">
+            <div>
+                <h2>Solicitud #{{ order_request.pk }}</h2>
+                <p class="text-muted">
+                    {{ order_request.company.name|default:"-" }}
+                    {% if order_request.user %} | Usuario: {{ order_request.user.username }}{% endif %}
+                </p>
+            </div>
+            <span class="badge badge-info">{{ order_request.get_status_display }}</span>
+        </div>
+
+        <div class="detail-grid">
+            <div>
+                <strong>Cliente</strong>
+                <p>{{ order_request.client_company_ref.client_profile.company_name|default:"-" }}</p>
+            </div>
+            <div>
+                <strong>Fecha de envio</strong>
+                <p>{{ order_request.submitted_at|default:order_request.created_at|date:"d/m/Y H:i" }}</p>
+            </div>
+            <div>
+                <strong>Total solicitado</strong>
+                <p>${{ order_request.requested_total|floatformat:2 }}</p>
+            </div>
+            <div>
+                <strong>Canal origen</strong>
+                <p>{{ order_request.get_origin_channel_display }}</p>
+            </div>
+        </div>
+    </div>
+
+    {% if can_confirm_request or can_reject_request or can_convert_request or can_generate_documents %}
+    <div class="admin-card">
+        <div class="detail-header">
+            <h3>Acciones comerciales</h3>
+            {% if request_order %}
+            <a href="{% url 'admin_order_detail' request_order.pk %}" class="btn btn-outline">Pedido #{{ request_order.pk }}</a>
+            {% endif %}
+        </div>
+        <div class="action-grid">
+            {% if can_confirm_request %}
+            <form method="post" action="{% url 'admin_order_request_confirm' order_request.pk %}" class="stack-form">
+                {% csrf_token %}
+                <label class="form-label" for="confirm-admin-note">Nota interna</label>
+                <textarea id="confirm-admin-note" name="admin_note" class="form-textarea" rows="3" placeholder="Comentario interno opcional."></textarea>
+                <button type="submit" class="btn btn-primary">Confirmar tal cual</button>
+            </form>
+            {% endif %}
+
+            {% if can_reject_request %}
+            <form method="post" action="{% url 'admin_order_request_reject' order_request.pk %}" class="stack-form">
+                {% csrf_token %}
+                <label class="form-label" for="reject-reason">Motivo visible para el cliente</label>
+                <textarea id="reject-reason" name="rejection_reason" class="form-textarea" rows="3" placeholder="Ejemplo: sin stock, condiciones no disponibles, etc."></textarea>
+                <button type="submit" class="btn btn-outline">Rechazar solicitud</button>
+            </form>
+            {% endif %}
+
+            {% if can_convert_request %}
+            <form method="post" action="{% url 'admin_order_request_convert' order_request.pk %}" class="stack-form">
+                {% csrf_token %}
+                <p class="text-muted">Crea el pedido operativo reutilizando el snapshot comercial confirmado.</p>
+                <button type="submit" class="btn btn-primary">Convertir a pedido draft</button>
+            </form>
+            {% endif %}
+
+            {% if can_generate_documents %}
+            <form method="post" action="{% url 'admin_order_request_generate_quote' order_request.pk %}" class="stack-form">
+                {% csrf_token %}
+                <label class="form-label" for="quote-sales-document-type">Tipo comercial para cotizacion</label>
+                <select id="quote-sales-document-type" name="sales_document_type_id" class="form-select">
+                    <option value="">Default / auto</option>
+                    {% for configured_type in quote_document_types %}
+                    <option value="{{ configured_type.pk }}">
+                        {{ configured_type.name }}{% if configured_type.internal_doc_type %} · {{ configured_type.get_internal_doc_type_display|default:configured_type.internal_doc_type }}{% endif %}
+                    </option>
+                    {% endfor %}
+                </select>
+                <p class="text-muted">Convierte la solicitud en pedido draft si todavia no existe y reutiliza sus items para la cotizacion.</p>
+                <button type="submit" class="btn btn-outline">Generar cotizacion</button>
+            </form>
+
+            <form method="post" action="{% url 'admin_order_request_generate_invoice' order_request.pk %}" class="stack-form">
+                {% csrf_token %}
+                <label class="form-label" for="invoice-sales-document-type">Tipo comercial para factura</label>
+                <select id="invoice-sales-document-type" name="sales_document_type_id" class="form-select">
+                    <option value="">Default / auto</option>
+                    {% for configured_type in invoice_document_types %}
+                    <option value="{{ configured_type.pk }}">
+                        {{ configured_type.name }}{% if configured_type.fiscal_doc_type %} · {{ configured_type.get_fiscal_doc_type_display|default:configured_type.fiscal_doc_type }}{% endif %}
+                    </option>
+                    {% endfor %}
+                </select>
+                <p class="text-muted">Si el pedido operativo sigue en borrador, se confirma al abrir la factura para mantener coherencia contable.</p>
+                <button type="submit" class="btn btn-primary">Generar factura</button>
+            </form>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="admin-card">
+        <h3>Items solicitados</h3>
+        <table class="admin-table">
+            <thead>
+                <tr>
+                    <th>SKU</th>
+                    <th>Producto</th>
+                    <th>Cantidad</th>
+                    <th>Precio Unit.</th>
+                    <th>Subtotal</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in order_request.items.all %}
+                <tr>
+                    <td><code>{{ item.product_sku }}</code></td>
+                    <td>{{ item.product_name }}</td>
+                    <td>{{ item.quantity }}</td>
+                    <td>${{ item.price_at_snapshot|floatformat:2 }}</td>
+                    <td>${{ item.subtotal|floatformat:2 }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    {% if request_events %}
+    <div class="admin-card">
+        <h3>Trazabilidad comercial</h3>
+        <ul class="proposal-history">
+            {% for event in request_events %}
+            <li>
+                <div>
+                    <strong>{{ event.get_event_type_display }}</strong>
+                    {% if event.message %}
+                    <small>{{ event.message }}</small>
+                    {% endif %}
+                    {% if event.actor %}
+                    <small>Actor: {{ event.actor.get_full_name|default:event.actor.username }}</small>
+                    {% endif %}
+                </div>
+                <span class="badge badge-info">{{ event.created_at|date:"d/m/Y H:i" }}</span>
+            </li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+
+    {% if can_send_proposal %}
+    <div class="admin-card">
+        <div class="detail-header">
+            <div>
+                <h3>Armar propuesta para el cliente</h3>
+                <p class="text-muted">Primer paso: ajuste de cantidades y precios sobre el snapshot ya solicitado.</p>
+            </div>
+            {% if current_proposal %}
+            <span class="badge badge-warning">Editando sobre version {{ current_proposal.version_number }}</span>
+            {% endif %}
+        </div>
+        <form method="post" action="{% url 'admin_order_request_propose' order_request.pk %}" class="stack-form">
+            {% csrf_token %}
+            <div class="detail-grid">
+                <div>
+                    <label class="form-label" for="message_to_client">Mensaje al cliente</label>
+                    <textarea id="message_to_client" name="message_to_client" class="form-textarea" rows="3" placeholder="Explica los cambios o la razon comercial.">{{ current_proposal.message_to_client|default:"" }}</textarea>
+                </div>
+                <div>
+                    <label class="form-label" for="internal_note">Nota interna</label>
+                    <textarea id="internal_note" name="internal_note" class="form-textarea" rows="3" placeholder="Uso interno del equipo comercial.">{{ current_proposal.internal_note|default:"" }}</textarea>
+                </div>
+            </div>
+
+            <div class="proposal-lines">
+                <table class="admin-table">
+                    <thead>
+                        <tr>
+                            <th>Incluir</th>
+                            <th>Actual</th>
+                            <th>Alternativo</th>
+                            <th>Cantidad</th>
+                            <th>Precio base</th>
+                            <th>Precio final</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in proposal_source_rows %}
+                        <tr>
+                            <td>
+                                <input type="checkbox" name="row_enabled_{{ row.line_number }}" checked>
+                            </td>
+                            <td>
+                                <div class="proposal-product-cell">
+                                    <code>{{ row.product_sku }}</code>
+                                    <strong>{{ row.product_name }}</strong>
+                                    <small class="text-muted">Original</small>
+                                </div>
+                            </td>
+                            <td>
+                                <div class="proposal-replacement-cell">
+                                    <input
+                                        type="search"
+                                        name="replacement_label_{{ row.line_number }}"
+                                        class="form-input proposal-replacement-input"
+                                        placeholder="Buscar reemplazo opcional"
+                                        data-suggest="1"
+                                        data-suggest-scope="admin_products"
+                                        data-suggest-submit="manual"
+                                        data-suggest-query-item="0"
+                                        data-suggest-target="#proposal-product-id-{{ row.line_number }}"
+                                        autocomplete="off"
+                                    >
+                                    <input
+                                        type="hidden"
+                                        id="proposal-product-id-{{ row.line_number }}"
+                                        name="replacement_product_id_{{ row.line_number }}"
+                                        class="proposal-replacement-target"
+                                        data-line-number="{{ row.line_number }}"
+                                    >
+                                    <small class="text-muted">Si elegis uno, reemplaza el item original en la propuesta.</small>
+                                </div>
+                            </td>
+                            <td>
+                                <input
+                                    type="number"
+                                    min="1"
+                                    name="quantity_{{ row.line_number }}"
+                                    value="{{ row.quantity }}"
+                                    class="form-input compact-input"
+                                    id="proposal-quantity-{{ row.line_number }}"
+                                >
+                            </td>
+                            <td>
+                                <input
+                                    type="text"
+                                    name="unit_price_base_{{ row.line_number }}"
+                                    value="{{ row.unit_price_base|floatformat:2 }}"
+                                    class="form-input compact-input"
+                                    id="proposal-unit-price-base-{{ row.line_number }}"
+                                >
+                            </td>
+                            <td>
+                                <input
+                                    type="text"
+                                    name="price_at_snapshot_{{ row.line_number }}"
+                                    value="{{ row.price_at_snapshot|floatformat:2 }}"
+                                    class="form-input compact-input"
+                                    id="proposal-price-at-snapshot-{{ row.line_number }}"
+                                >
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="toolbar-actions">
+                <button type="submit" class="btn btn-primary">Enviar propuesta</button>
+            </div>
+        </form>
+    </div>
+    {% endif %}
+
+    {% if current_proposal %}
+    <div class="admin-card">
+        <div class="detail-header">
+            <h3>Propuesta vigente</h3>
+            <span class="badge badge-warning">Version {{ current_proposal.version_number }}</span>
+        </div>
+        <p><strong>Estado:</strong> {{ current_proposal.get_status_display }}</p>
+        {% if current_proposal.message_to_client %}
+        <p><strong>Mensaje al cliente:</strong> {{ current_proposal.message_to_client }}</p>
+        {% endif %}
+        {% if current_proposal.internal_note %}
+        <p><strong>Nota interna:</strong> {{ current_proposal.internal_note }}</p>
+        {% endif %}
+        <table class="admin-table">
+            <thead>
+                <tr>
+                    <th>SKU</th>
+                    <th>Producto</th>
+                    <th>Cantidad</th>
+                    <th>Precio Unit.</th>
+                    <th>Subtotal</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in current_proposal.items.all %}
+                <tr>
+                    <td><code>{{ item.product_sku }}</code></td>
+                    <td>{{ item.product_name }}</td>
+                    <td>{{ item.quantity }}</td>
+                    <td>${{ item.price_at_snapshot|floatformat:2 }}</td>
+                    <td>${{ item.subtotal|floatformat:2 }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        <p class="proposal-total"><strong>Total propuesto:</strong> ${{ current_proposal.proposed_total|floatformat:2 }}</p>
+    </div>
+    {% endif %}
+
+    {% if proposals %}
+    <div class="admin-card">
+        <h3>Historial de propuestas</h3>
+        <ul class="proposal-history">
+            {% for proposal in proposals %}
+            <li>
+                <div>
+                    <strong>Version {{ proposal.version_number }}</strong>
+                    <small>{{ proposal.sent_at|date:"d/m/Y H:i" }}</small>
+                </div>
+                <span class="badge badge-info">{{ proposal.get_status_display }}</span>
+            </li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+
+    {% if request_order %}
+    <div class="admin-card">
+        <div class="detail-header">
+            <div>
+                <h3>Documentos vinculados</h3>
+                <p class="text-muted">Resultado comercial generado desde la solicitud confirmada.</p>
+            </div>
+            <a href="{% url 'admin_order_detail' request_order.pk %}" class="btn btn-outline">Abrir pedido #{{ request_order.pk }}</a>
+        </div>
+        <div class="action-grid">
+            <div>
+                <strong>Internos</strong>
+                {% if request_order_documents %}
+                <ul class="proposal-history doc-history">
+                    {% for doc in request_order_documents %}
+                    <li>
+                        <div>
+                            <strong>{{ doc.commercial_type_label }} · {{ doc.display_number }}</strong>
+                            <small>{{ doc.issued_at|date:"d/m/Y H:i" }}</small>
+                        </div>
+                        <div class="order-inline-actions">
+                            <a href="{% url 'admin_internal_document_print' doc.pk %}?copy=original" class="btn btn-outline btn-sm" target="_blank" rel="noopener noreferrer">Abrir</a>
+                            {% if doc.can_safe_delete %}
+                            <a href="{% url 'admin_internal_document_delete' doc.pk %}" class="btn btn-danger-outline btn-sm">Eliminar</a>
+                            {% endif %}
+                        </div>
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <p class="text-muted">Sin documentos internos generados todavia.</p>
+                {% endif %}
+            </div>
+            <div>
+                <strong>Fiscales</strong>
+                {% if request_order_fiscal_documents %}
+                <ul class="proposal-history doc-history">
+                    {% for doc in request_order_fiscal_documents %}
+                    <li>
+                        <div>
+                            <strong>{{ doc.commercial_type_label }} · {{ doc.display_number }}</strong>
+                            <small>{{ doc.get_status_display }} / {{ doc.get_issue_mode_display }}</small>
+                        </div>
+                        <div class="order-inline-actions">
+                            <a href="{% url 'admin_fiscal_document_detail' doc.pk %}" class="btn btn-outline btn-sm">Abrir</a>
+                            {% if doc.can_safe_delete %}
+                            <a href="{% url 'admin_fiscal_document_delete' doc.pk %}" class="btn btn-danger-outline btn-sm">Eliminar</a>
+                            {% endif %}
+                        </div>
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <p class="text-muted">Sin documentos fiscales generados todavia.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if order_request.client_note %}
+    <div class="admin-card">
+        <h3>Nota del cliente</h3>
+        <p>{{ order_request.client_note }}</p>
+    </div>
+    {% endif %}
+
+    {% if order_request.rejection_reason %}
+    <div class="admin-card">
+        <h3>Motivo de rechazo</h3>
+        <p>{{ order_request.rejection_reason }}</p>
+    </div>
+    {% endif %}
+
+    {% if order_request.converted_order %}
+    <div class="admin-card">
+        <h3>Pedido operativo generado</h3>
+        <p>La solicitud ya se convirtio en el pedido #{{ order_request.converted_order.pk }}.</p>
+        <a href="{% url 'admin_order_detail' order_request.converted_order.pk %}" class="btn btn-primary">Abrir pedido</a>
+    </div>
+    {% endif %}
+
+    <div class="toolbar-actions">
+        {% if can_delete_request %}
+        <a href="{% url 'admin_order_request_delete' order_request.pk %}" class="btn btn-danger">Eliminar solicitud</a>
+        {% elif request_delete_blockers %}
+        <span class="text-muted">No eliminable: {{ request_delete_blockers|join:" " }}</span>
+        {% endif %}
+        <a href="{% url 'admin_order_request_list' %}" class="btn btn-outline"><- Volver</a>
+    </div>
+</div>
+
+<style>
+    .admin-detail-page {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+    }
+    .admin-card {
+        background: var(--admin-card-bg, #121824);
+        border: 1px solid var(--admin-border, rgba(255, 255, 255, 0.08));
+        border-radius: 14px;
+        padding: 16px;
+    }
+    .detail-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: start;
+        gap: 12px;
+        margin-bottom: 12px;
+    }
+    .detail-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 14px;
+    }
+    .detail-grid p,
+    .detail-header h2,
+    .detail-header h3 {
+        margin: 0;
+    }
+    .action-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        gap: 14px;
+    }
+    .stack-form {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+    .form-textarea {
+        min-height: 92px;
+    }
+    .proposal-lines {
+        overflow-x: auto;
+    }
+    .compact-input {
+        min-width: 96px;
+    }
+    .proposal-product-cell,
+    .proposal-replacement-cell {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+    .proposal-total {
+        margin-top: 12px;
+        text-align: right;
+    }
+    .proposal-history {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+    .proposal-history li {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        padding-bottom: 10px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .proposal-history small {
+        display: block;
+        color: var(--color-gray-light);
+    }
+    .doc-history li {
+        padding-bottom: 8px;
+    }
+</style>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('.proposal-replacement-target').forEach((target) => {
+        target.addEventListener('flex-suggest-pick', (event) => {
+            const item = event.detail || {};
+            const lineNumber = target.dataset.lineNumber;
+            if (!lineNumber) {
+                return;
+            }
+            const baseInput = document.getElementById(`proposal-unit-price-base-${lineNumber}`);
+            const finalInput = document.getElementById(`proposal-price-at-snapshot-${lineNumber}`);
+            if (item.price) {
+                if (baseInput) {
+                    baseInput.value = item.price;
+                }
+                if (finalInput) {
+                    finalInput.value = item.price;
+                }
+            }
+        });
+    });
+});
+</script>
+{% endblock %}
+

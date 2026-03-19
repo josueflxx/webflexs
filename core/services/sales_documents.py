@@ -354,6 +354,13 @@ def apply_sales_document_type_to_fiscal_document(*, document, sales_document_typ
         sales_document_type=sales_document_type,
         actor=actor,
     )
+    if document.order_id:
+        try:
+            from accounts.services.ledger import sync_order_charge_transaction
+
+            sync_order_charge_transaction(order=document.order, actor=actor)
+        except Exception:
+            pass
     return document
 
 

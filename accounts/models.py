@@ -320,18 +320,19 @@ class ClientProfile(models.Model):
 
     def get_orders_queryset_for_balance(self, company=None):
         """
-        Orders that impact client debt/saldo:
-        confirmed and subsequent operational states (except draft/cancelled).
+        Orders that impact current account because they already have a final billable invoice.
         """
         Order = apps.get_model('orders', 'Order')
-        queryset = Order.objects.filter(
-            user_id=self.user_id,
-            status__in=[
-                Order.STATUS_CONFIRMED,
-                Order.STATUS_PREPARING,
-                Order.STATUS_SHIPPED,
-                Order.STATUS_DELIVERED,
-            ],
+        FiscalDocument = apps.get_model('core', 'FiscalDocument')
+        billed_order_ids = FiscalDocument.objects.filter(
+            client_profile=self,
+            doc_type__in=['FA', 'FB'],
+            status__in=['authorized', 'external_recorded'],
+        ).exclude(status='voided').values_list('order_id', flat=True)
+        queryset = Order.objects.filter(user_id=self.user_id).filter(
+            models.Q(pk__in=billed_order_ids)
+            | models.Q(saas_document_number__gt='')
+            | models.Q(saas_document_type__gt='')
         )
         if company:
             queryset = queryset.filter(company=company)

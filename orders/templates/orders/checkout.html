@@ -5,7 +5,7 @@
 {% block content %}
 <div class="checkout-page">
     <div class="container">
-        <h1>Confirmar Pedido</h1>
+        <h1>Enviar Solicitud Comercial</h1>
 
         <form method="post" class="checkout-layout">
             {% csrf_token %}
@@ -28,7 +28,7 @@
             </div>
 
             <div class="checkout-summary">
-                <h3>Resumen del Pedido</h3>
+                <h3>Resumen de la Solicitud</h3>
                 <div class="summary-row">
                     <span>Subtotal</span>
                     <span>${{ subtotal|floatformat:2 }}</span>
@@ -44,13 +44,11 @@
                     <span>${{ total|floatformat:2 }}</span>
                 </div>
 
-                <button type="submit" class="btn btn-primary btn-lg btn-block" disabled>
-                    <span class="beta-strike">Confirmar Pedido</span>
-                    <span class="beta-pill">BETA</span>
+                <button type="submit" class="btn btn-primary btn-lg btn-block">
+                    Enviar solicitud
                 </button>
-                <a href="#" class="btn btn-outline btn-block beta-control" aria-disabled="true">
-                    <span class="beta-strike">Volver al Carrito</span>
-                    <span class="beta-pill">BETA</span>
+                <a href="{% url 'cart' %}" class="btn btn-outline btn-block">
+                    Volver al carrito
                 </a>
             </div>
         </form>
@@ -71,40 +69,6 @@
     .summary-row.total { font-size: var(--font-size-xl); font-weight: 700; color: var(--color-primary); border-bottom: none; }
     .checkout-summary .btn { margin-top: var(--spacing-md); }
     .btn-block { width: 100%; text-align: center; }
-    .checkout-summary button[type="submit"] {
-        pointer-events: none;
-        cursor: not-allowed !important;
-        opacity: 0.7;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        gap: 8px;
-    }
-    .beta-control {
-        pointer-events: none;
-        cursor: not-allowed !important;
-        opacity: 0.7;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        gap: 8px;
-        text-decoration: none;
-    }
-    .beta-strike {
-        text-decoration: line-through;
-        text-decoration-thickness: 2px;
-    }
-    .beta-pill {
-        font-size: 0.62rem;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.06em;
-        color: #ffc896;
-        border: 1px solid rgba(255, 122, 64, 0.45);
-        background: rgba(255, 122, 64, 0.18);
-        border-radius: 999px;
-        padding: 2px 6px;
-    }
     @media (max-width: 768px) { .checkout-layout { grid-template-columns: 1fr; } }
 </style>
 {% endblock %}

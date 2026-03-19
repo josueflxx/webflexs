@@ -5,9 +5,9 @@ from django.urls import reverse
 
 from accounts.models import AccountRequest, ClientCategory, ClientCompany, ClientPayment, ClientProfile, ClientTransaction
 from accounts.services.client_importer import ClientImporter
-from core.models import Company
+from core.models import Company, FiscalDocument, FiscalPointOfSale, SalesDocumentType
 from orders.models import Order
-from core.services.company_context import get_default_company
+from core.services.company_context import get_default_company, get_default_client_origin_company
 
 
 class LoginSecurityTests(TestCase):
@@ -56,6 +56,61 @@ class LoginSecurityTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertIn("_auth_user_id", self.client.session)
+
+
+class LoginRedirectCompanySelectionTests(TestCase):
+    def setUp(self):
+        self.default_company = get_default_company()
+        self.default_client_company = get_default_client_origin_company()
+        self.second_company = Company.objects.create(
+            name="Cliente Multi Empresa",
+            slug="cliente-multi-empresa",
+            is_active=True,
+        )
+
+    def test_client_with_multiple_companies_goes_to_catalog_without_selector(self):
+        user = User.objects.create_user(username="cliente_multi_redirect", password="secret123")
+        profile = ClientProfile.objects.create(user=user, company_name="Cliente Multi Redirect")
+        primary_link_company = self.default_client_company or self.default_company
+        secondary_link_company = (
+            self.default_company
+            if primary_link_company.pk != self.default_company.pk
+            else self.second_company
+        )
+        ClientCompany.objects.create(
+            client_profile=profile,
+            company=primary_link_company,
+            is_active=True,
+        )
+        ClientCompany.objects.create(
+            client_profile=profile,
+            company=secondary_link_company,
+            is_active=True,
+        )
+        self.client.force_login(user)
+
+        response = self.client.get(reverse("login_redirect"))
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse("catalog"))
+        self.assertEqual(
+            self.client.session.get("active_company_id"),
+            primary_link_company.pk,
+        )
+
+    def test_staff_with_multiple_companies_still_goes_to_company_selector(self):
+        staff = User.objects.create_user(
+            username="staff_multi_redirect",
+            password="secret123",
+            is_staff=True,
+        )
+        self.client.force_login(staff)
+
+        response = self.client.get(reverse("login_redirect"))
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(reverse("select_company"), response.url)
+        self.assertNotIn("active_company_id", self.client.session)
 
 
 class ClientLedgerTests(TestCase):
@@ -118,6 +173,57 @@ class ClientLedgerTests(TestCase):
         payment.save(update_fields=["is_cancelled", "updated_at"])
         tx.refresh_from_db()
         self.assertEqual(tx.amount, 0)
+
+    def test_balance_fallback_ignores_confirmed_order_without_invoice(self):
+        Order.objects.create(
+            user=self.user,
+            company=self.company,
+            status=Order.STATUS_CONFIRMED,
+            subtotal="100.00",
+            total="100.00",
+            client_company="Cliente Ledger",
+            client_company_ref=self.client_company,
+        )
+
+        self.assertEqual(self.profile.get_total_orders_for_balance(), 0)
+        self.assertEqual(self.profile.get_current_balance(), 0)
+
+    def test_balance_fallback_uses_billed_invoice_order(self):
+        order = Order.objects.create(
+            user=self.user,
+            company=self.company,
+            status=Order.STATUS_CONFIRMED,
+            subtotal="100.00",
+            total="100.00",
+            client_company="Cliente Ledger",
+            client_company_ref=self.client_company,
+        )
+        point = FiscalPointOfSale.objects.create(
+            company=self.company,
+            number="81",
+            is_active=True,
+            is_default=True,
+        )
+        sales_type = SalesDocumentType.objects.filter(
+            company=self.company,
+            document_behavior="Factura",
+        ).first()
+        FiscalDocument.objects.create(
+            source_key="ledger-fallback-invoice",
+            company=self.company,
+            client_company_ref=self.client_company,
+            client_profile=self.profile,
+            order=order,
+            point_of_sale=point,
+            sales_document_type=sales_type,
+            doc_type="FA",
+            issue_mode="manual",
+            status="external_recorded",
+            subtotal_net="100.00",
+            total="100.00",
+        )
+
+        self.assertEqual(self.profile.get_total_orders_for_balance(), 100)
 
     def test_discount_decimal_uses_client_category_when_assigned(self):
         category = ClientCategory.objects.create(
@@ -215,6 +321,25 @@ class ClientImporterCategoryTests(TestCase):
         )
         self.assertTrue(profile.can_operate_in_company(self.import_company_a))
         self.assertTrue(profile.can_operate_in_company(self.import_company_b))
+
+    def test_import_defaults_to_origin_company_only(self):
+        importer = ClientImporter(file=None)
+        row = {
+            "Usuario": "cliente_import_default_ubolt",
+            "Nombre": "Cliente Import Default",
+            "Tipo de cliente": self.category_n2.name,
+            "Cond. IVA": "consumidor final",
+        }
+
+        result = importer.process_row(row, dry_run=False)
+
+        self.assertTrue(result.success)
+        profile = User.objects.get(username="cliente_import_default_ubolt").client_profile
+        active_links = list(
+            ClientCompany.objects.filter(client_profile=profile, is_active=True).values_list("company__slug", flat=True)
+        )
+        self.assertEqual(len(active_links), 1)
+        self.assertIn("ubolt", [str(slug).lower() for slug in active_links])
 
 
 class AccountRequestSecurityTests(TestCase):

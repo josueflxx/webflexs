@@ -9,28 +9,19 @@
 
         <div class="portal-grid">
             <div class="portal-card">
-                <h3>Pedidos en curso</h3>
-                <p class="portal-number">{{ active_orders_count }}</p>
-                <a href="#" class="btn btn-outline beta-control" aria-disabled="true">
-                    <span class="beta-strike">Ver pedidos</span>
-                    <span class="beta-pill">BETA</span>
-                </a>
+                <h3>Solicitudes abiertas</h3>
+                <p class="portal-number">{{ open_request_count }}</p>
+                <a href="{% url 'order_request_list' %}" class="btn btn-outline">Ver solicitudes</a>
             </div>
             <div class="portal-card">
-                <h3>Pedidos totales</h3>
-                <p class="portal-number">{{ total_orders_count }}</p>
-                <a href="#" class="btn btn-outline beta-control" aria-disabled="true">
-                    <span class="beta-strike">Historial</span>
-                    <span class="beta-pill">BETA</span>
-                </a>
+                <h3>Pedidos operativos</h3>
+                <p class="portal-number">{{ active_orders_count }}</p>
+                <a href="{% url 'order_list' %}" class="btn btn-outline">Ver pedidos</a>
             </div>
             <div class="portal-card">
                 <h3>Favoritos</h3>
                 <p class="portal-number">{{ favorites|length }}</p>
-                <a href="#" class="btn btn-outline beta-control" aria-disabled="true">
-                    <span class="beta-strike">Ver catalogo</span>
-                    <span class="beta-pill">BETA</span>
-                </a>
+                <a href="{% url 'catalog' %}" class="btn btn-outline">Ver catalogo</a>
             </div>
             <div class="portal-card">
                 <h3>Saldo actual</h3>
@@ -39,21 +30,53 @@
                 </p>
                 <small class="text-muted">Cuenta corriente</small>
             </div>
+            <div class="portal-card">
+                <h3>Historial de pedidos</h3>
+                <p class="portal-number">{{ total_orders_count }}</p>
+                <a href="{% url 'order_list' %}" class="btn btn-outline">Ir al historial</a>
+            </div>
+            <div class="portal-card">
+                <h3>Solicitudes enviadas</h3>
+                <p class="portal-number">{{ total_request_count }}</p>
+                <a href="{% url 'order_request_list' %}" class="btn btn-outline">Ver seguimiento</a>
+            </div>
             {% if client_catalog_excel_download_enabled %}
             <div class="portal-card">
                 <h3>Catalogo Excel</h3>
                 <p class="portal-number">XLSX</p>
-                <a href="#" class="btn btn-outline beta-control" aria-disabled="true">
-                    <span class="beta-strike">{{ client_catalog_excel_download_label|default:"Descargar catalogo Excel" }}</span>
-                    <span class="beta-pill">BETA</span>
-                </a>
+                <span class="text-muted">{{ client_catalog_excel_download_label|default:"Descargar catalogo Excel" }}</span>
             </div>
             {% endif %}
         </div>
 
         <div class="portal-sections">
             <section class="portal-panel">
-                <h2>Recompras rapidas</h2>
+                <div class="panel-header">
+                    <h2>Solicitudes recientes</h2>
+                    <a href="{% url 'order_request_list' %}" class="btn btn-outline btn-sm">Ver todas</a>
+                </div>
+                {% if recent_requests %}
+                <ul class="portal-list">
+                    {% for order_request in recent_requests %}
+                    <li>
+                        <div>
+                            <strong>Solicitud #{{ order_request.pk }}</strong>
+                            <small>{{ order_request.created_at|date:"d/m/Y H:i" }} - {{ order_request.get_status_display }}</small>
+                        </div>
+                        <a href="{% url 'order_request_detail' order_request.pk %}" class="btn btn-outline btn-sm">Ver detalle</a>
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <p class="text-muted">Todavia no enviaste solicitudes comerciales.</p>
+                {% endif %}
+            </section>
+
+            <section class="portal-panel">
+                <div class="panel-header">
+                    <h2>Recompras rapidas</h2>
+                    <a href="{% url 'order_list' %}" class="btn btn-outline btn-sm">Ver pedidos</a>
+                </div>
                 {% if recent_orders %}
                 <ul class="portal-list">
                     {% for order in recent_orders %}
@@ -64,10 +87,7 @@
                         </div>
                         <form method="post" action="{% url 'reorder_to_cart' order.pk %}">
                             {% csrf_token %}
-                            <button type="submit" class="btn btn-primary btn-sm beta-control-button" disabled>
-                                <span class="beta-strike">Recomprar</span>
-                                <span class="beta-pill">BETA</span>
-                            </button>
+                            <button type="submit" class="btn btn-primary btn-sm">Recomprar</button>
                         </form>
                     </li>
                     {% endfor %}
@@ -78,7 +98,10 @@
             </section>
 
             <section class="portal-panel">
-                <h2>Favoritos</h2>
+                <div class="panel-header">
+                    <h2>Favoritos</h2>
+                    <a href="{% url 'catalog' %}" class="btn btn-outline btn-sm">Ir al catalogo</a>
+                </div>
                 {% if favorites %}
                 <ul class="portal-list">
                     {% for favorite in favorites %}
@@ -87,10 +110,7 @@
                             <strong>{{ favorite.product.sku }}</strong>
                             <small>{{ favorite.product.name }}</small>
                         </div>
-                        <a href="#" class="btn btn-outline btn-sm beta-control" aria-disabled="true">
-                            <span class="beta-strike">Ver</span>
-                            <span class="beta-pill">BETA</span>
-                        </a>
+                        <a href="{% url 'catalog' %}?q={{ favorite.product.sku|urlencode }}" class="btn btn-outline btn-sm">Buscar</a>
                     </li>
                     {% endfor %}
                 </ul>
@@ -110,10 +130,7 @@
                             <small>{{ payment.paid_at|date:"d/m/Y H:i" }} - {{ payment.get_method_display }}</small>
                         </div>
                         {% if payment.order_id %}
-                        <a href="#" class="btn btn-outline btn-sm beta-control" aria-disabled="true">
-                            <span class="beta-strike">Pedido #{{ payment.order_id }}</span>
-                            <span class="beta-pill">BETA</span>
-                        </a>
+                        <a href="{% url 'order_detail' payment.order_id %}" class="btn btn-outline btn-sm">Pedido #{{ payment.order_id }}</a>
                         {% else %}
                         <span class="text-muted">Pago general</span>
                         {% endif %}
@@ -135,7 +152,7 @@
     }
     .portal-grid {
         display: grid;
-        grid-template-columns: repeat(4, minmax(160px, 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
         gap: 12px;
         margin-bottom: 16px;
     }
@@ -144,13 +161,16 @@
         border-radius: 12px;
         padding: 14px;
         border: 1px solid rgba(255, 255, 255, 0.1);
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
     }
     .portal-card h3 {
-        margin: 0 0 6px;
+        margin: 0;
         font-size: 0.95rem;
     }
     .portal-number {
-        margin: 0 0 10px;
+        margin: 0;
         font-size: 1.4rem;
         font-weight: 700;
         color: var(--color-primary);
@@ -169,8 +189,15 @@
         padding: 14px;
         border: 1px solid rgba(255, 255, 255, 0.1);
     }
+    .panel-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 10px;
+    }
     .portal-panel h2 {
-        margin: 0 0 10px;
+        margin: 0;
         font-size: 1rem;
     }
     .portal-list {
@@ -190,44 +217,7 @@
         display: block;
         color: var(--color-gray-light);
     }
-    .beta-control {
-        pointer-events: none;
-        cursor: not-allowed !important;
-        opacity: 0.72;
-        text-decoration: none;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        gap: 8px;
-    }
-    .beta-control-button {
-        pointer-events: none;
-        cursor: not-allowed !important;
-        opacity: 0.72;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        gap: 8px;
-    }
-    .beta-strike {
-        text-decoration: line-through;
-        text-decoration-thickness: 2px;
-    }
-    .beta-pill {
-        font-size: 0.62rem;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.06em;
-        color: #ffc896;
-        border: 1px solid rgba(255, 122, 64, 0.45);
-        background: rgba(255, 122, 64, 0.18);
-        border-radius: 999px;
-        padding: 2px 6px;
-    }
     @media (max-width: 900px) {
-        .portal-grid {
-            grid-template-columns: repeat(2, minmax(140px, 1fr));
-        }
         .portal-sections {
             grid-template-columns: 1fr;
         }

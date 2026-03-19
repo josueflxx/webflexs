@@ -5,8 +5,8 @@
 {% block content %}
 <div class="admin-table-container">
     <div class="admin-toolbar">
-        <form method="get" class="toolbar-search">
-            <input type="text" name="client" value="{{ client }}" placeholder="Buscar cliente..." class="form-input">
+        <form method="get" class="toolbar-search order-filters-grid" id="orderFiltersForm">
+            <input type="text" name="client" value="{{ client }}" placeholder="Buscar cliente..." class="form-input" data-suggest="1" data-suggest-scope="admin_clients" autocomplete="off">
             <select name="company_id" class="form-select">
                 {% for company in companies %}
                 <option value="{{ company.pk }}" {% if selected_company_id == company.pk|stringformat:'s' %}selected{% endif %}>
@@ -32,10 +32,10 @@
                 href="{% url 'admin_order_export_saas' %}?company_id={{ selected_company_id }}&status={{ status }}&sync_status={{ sync_status|default:'pending' }}"
                 class="btn btn-outline"
             >
-                Exportar pendientes SaaS
+                Exportar SaaS
             </a>
             {% else %}
-            <span class="text-muted">Selecciona empresa para exportar</span>
+            <span class="text-muted" style="font-size:12px;">Selecciona empresa para exportar</span>
             {% endif %}
         </form>
     </div>

@@ -1,0 +1,94 @@
+{% extends 'admin_panel/base.html' %}
+
+{% block page_title %}Solicitudes Comerciales{% endblock %}
+
+{% block content %}
+<div class="admin-table-container">
+    <div class="admin-toolbar">
+        <form method="get" class="toolbar-search order-filters-grid">
+            <input type="text" name="client" value="{{ client }}" placeholder="Buscar cliente..." class="form-input">
+            <select name="company_id" class="form-select">
+                {% for company in companies %}
+                <option value="{{ company.pk }}" {% if selected_company_id == company.pk|stringformat:'s' %}selected{% endif %}>
+                    {{ company.name }}
+                </option>
+                {% endfor %}
+            </select>
+            <select name="status" class="form-select">
+                <option value="">Todos los estados</option>
+                {% for value, label in status_choices %}
+                <option value="{{ value }}" {% if status == value %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+            <button type="submit" class="btn btn-primary">Filtrar</button>
+            <a href="{% url 'admin_order_request_list' %}" class="btn btn-outline">Limpiar</a>
+        </form>
+    </div>
+
+    <table class="admin-table">
+        <thead>
+            <tr>
+                <th>#</th>
+                <th>Fecha</th>
+                <th>Empresa</th>
+                <th>Cliente</th>
+                <th>Items</th>
+                <th>Total</th>
+                <th>Estado</th>
+                <th>Propuesta</th>
+                <th>Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for order_request in page_obj %}
+            <tr>
+                <td><strong>{{ order_request.pk }}</strong></td>
+                <td>{{ order_request.created_at|date:"d/m/Y H:i" }}</td>
+                <td>{{ order_request.company.name|default:"-" }}</td>
+                <td>
+                    {{ order_request.client_company_ref.client_profile.company_name|default:order_request.user.username|default:"-" }}
+                    {% if order_request.user %}
+                    <div class="text-muted" style="font-size:0.85rem;">{{ order_request.user.username }}</div>
+                    {% endif %}
+                </td>
+                <td>{{ order_request.get_item_count }}</td>
+                <td>${{ order_request.requested_total|floatformat:2 }}</td>
+                <td><span class="badge badge-info">{{ order_request.get_status_display }}</span></td>
+                <td>
+                    {% if order_request.current_proposal %}
+                    <span class="badge badge-warning">V{{ order_request.current_proposal.version_number }}</span>
+                    <div class="text-muted" style="font-size:0.85rem;">{{ order_request.current_proposal.get_status_display }}</div>
+                    {% else %}
+                    <span class="text-muted">Sin propuesta</span>
+                    {% endif %}
+                </td>
+                <td class="actions">
+                    <a href="{% url 'admin_order_request_detail' order_request.pk %}" class="btn btn-outline">Ver</a>
+                    {% if order_request.converted_order %}
+                    <a href="{% url 'admin_order_detail' order_request.converted_order.pk %}" class="btn btn-primary">Pedido</a>
+                    {% endif %}
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="9" class="text-center text-muted">No hay solicitudes comerciales</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    {% if page_obj.paginator.num_pages > 1 %}
+    <div class="admin-toolbar">
+        <span>Pagina {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
+        <div class="toolbar-actions">
+            {% if page_obj.has_previous %}
+            <a href="?page={{ page_obj.previous_page_number }}&client={{ client }}&company_id={{ selected_company_id }}&status={{ status }}" class="btn btn-outline"><- Anterior</a>
+            {% endif %}
+            {% if page_obj.has_next %}
+            <a href="?page={{ page_obj.next_page_number }}&client={{ client }}&company_id={{ selected_company_id }}&status={{ status }}" class="btn btn-outline">Siguiente -></a>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

@@ -381,6 +381,13 @@ def close_fiscal_document(*, fiscal_document, actor=None):
         fiscal_document.save(update_fields=["status", "issued_at", "updated_at"])
     else:
         fiscal_document.save(update_fields=["status", "updated_at"])
+    if fiscal_document.order_id:
+        try:
+            from accounts.services.ledger import sync_order_charge_transaction
+
+            sync_order_charge_transaction(order=fiscal_document.order, actor=actor)
+        except Exception:
+            pass
     return fiscal_document, True
 
 
@@ -399,6 +406,13 @@ def reopen_fiscal_document(*, fiscal_document, actor=None):
 
     fiscal_document.status = FISCAL_STATUS_READY_TO_ISSUE
     fiscal_document.save(update_fields=["status", "updated_at"])
+    if fiscal_document.order_id:
+        try:
+            from accounts.services.ledger import sync_order_charge_transaction
+
+            sync_order_charge_transaction(order=fiscal_document.order, actor=actor)
+        except Exception:
+            pass
     return fiscal_document, True
 
 
@@ -417,4 +431,11 @@ def void_fiscal_document(*, fiscal_document, actor=None):
 
     fiscal_document.status = FISCAL_STATUS_VOIDED
     fiscal_document.save(update_fields=["status", "updated_at"])
+    if fiscal_document.order_id:
+        try:
+            from accounts.services.ledger import sync_order_charge_transaction
+
+            sync_order_charge_transaction(order=fiscal_document.order, actor=actor)
+        except Exception:
+            pass
     return fiscal_document, True

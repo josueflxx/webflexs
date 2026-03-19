@@ -8,6 +8,7 @@ from decimal import Decimal
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.apps import apps
+from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db.models import Prefetch
 from django.http import JsonResponse
@@ -15,20 +16,50 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from accounts.models import ClientPayment
+from accounts.models import ClientCategory, ClientPayment
 from catalog.models import Product
+from core.models import FiscalDocument, InternalDocument, SiteSettings
 from core.services.company_context import get_active_company
 from core.services.pricing import (
     calculate_cart_pricing,
     calculate_final_price,
+    get_base_price_for_product,
     resolve_effective_discount_percentage,
     resolve_pricing_context,
-    get_base_price_for_product,
 )
 
-from .models import Cart, CartItem, ClientFavoriteProduct, Order, OrderItem, OrderStatusHistory
+from .models import (
+    Cart,
+    CartItem,
+    ClientFavoriteProduct,
+    Order,
+    OrderItem,
+    OrderProposal,
+    OrderProposalItem,
+    OrderRequest,
+    OrderRequestEvent,
+    OrderRequestItem,
+    OrderStatusHistory,
+)
+from .services.request_workflow import (
+    accept_order_proposal,
+    build_order_request_from_cart,
+    reject_order_proposal,
+)
 
 logger = logging.getLogger(__name__)
+
+FISCAL_PRINT_DOC_META = {
+    "FA": {"letter": "A", "code": "001"},
+    "FB": {"letter": "B", "code": "006"},
+    "NCA": {"letter": "A", "code": "003"},
+    "NCB": {"letter": "B", "code": "008"},
+}
+FISCAL_PRINT_COPY_LABELS = {
+    "original": "ORIGINAL",
+    "duplicado": "DUPLICADO",
+    "triplicado": "TRIPLICADO",
+}
 
 
 def _get_client_profile(user):
@@ -56,6 +87,171 @@ def _get_cart_for_company(user, company, create=False):
     return Cart.objects.filter(user=user, company=company).first(), False
 
 
+def _get_client_internal_documents(order):
+    if not order:
+        return []
+    return list(
+        InternalDocument.objects.select_related("sales_document_type")
+        .filter(order=order)
+        .order_by("issued_at", "id")
+    )
+
+
+def _get_client_fiscal_documents(order):
+    if not order:
+        return []
+    return list(
+        FiscalDocument.objects.select_related("sales_document_type", "point_of_sale")
+        .filter(order=order)
+        .order_by("-created_at", "-id")
+    )
+
+
+def _get_client_internal_document_queryset(user, company=None):
+    queryset = InternalDocument.objects.select_related(
+        "company",
+        "client_company_ref__client_profile",
+        "client_profile",
+        "order",
+        "payment",
+        "sales_document_type",
+    ).filter(order__user=user)
+    if company:
+        queryset = queryset.filter(company=company)
+    return queryset
+
+
+def _get_client_fiscal_document_queryset(user, company=None):
+    queryset = FiscalDocument.objects.select_related(
+        "company",
+        "point_of_sale",
+        "client_company_ref__client_profile",
+        "client_profile",
+        "order",
+        "sales_document_type",
+    ).prefetch_related("items__product").filter(order__user=user)
+    if company:
+        queryset = queryset.filter(company=company)
+    return queryset
+
+
+def _build_client_fiscal_print_context(fiscal_document):
+    site_settings = SiteSettings.get_settings()
+    client_profile = fiscal_document.client_profile
+    if not client_profile and getattr(fiscal_document, "client_company_ref", None):
+        client_profile = fiscal_document.client_company_ref.client_profile
+
+    company = fiscal_document.company
+    order = fiscal_document.order
+    company_meta = FISCAL_PRINT_DOC_META.get(fiscal_document.doc_type, {"letter": "-", "code": "---"})
+    sale_condition_label = "-"
+    operator_label = "-"
+    observations = []
+
+    if order:
+        if order.notes:
+            observations.append(order.notes)
+        if order.admin_notes:
+            observations.append(order.admin_notes)
+        if getattr(order, "assigned_to", None):
+            operator_label = order.assigned_to.get_full_name() or order.assigned_to.username
+
+    client_company_link = getattr(fiscal_document, "client_company_ref", None)
+    effective_category = None
+    if client_company_link and getattr(client_company_link, "client_category_id", None):
+        effective_category = client_company_link.client_category
+    elif client_profile:
+        try:
+            effective_category = client_profile.get_effective_client_category(company=company)
+        except Exception:
+            effective_category = None
+    if effective_category and getattr(effective_category, "default_sale_condition", None):
+        sale_condition_label = dict(ClientCategory.SALE_CONDITION_CHOICES).get(
+            effective_category.default_sale_condition,
+            effective_category.default_sale_condition,
+        )
+    elif getattr(order, "billing_mode", "") == "official":
+        sale_condition_label = "Cuenta corriente"
+
+    company_address_bits = [
+        company.fiscal_address,
+        company.fiscal_city,
+        company.fiscal_province,
+        company.postal_code,
+    ]
+    client_address_bits = []
+    if client_profile:
+        client_address_bits = [
+            client_profile.fiscal_address or client_profile.address,
+            client_profile.fiscal_city or client_profile.province,
+            client_profile.fiscal_province,
+            client_profile.postal_code,
+        ]
+
+    subtotal_before_discount = Decimal(fiscal_document.subtotal_net or 0)
+    discount_total = Decimal(fiscal_document.discount_total or 0)
+    taxable_net = subtotal_before_discount - discount_total
+    if taxable_net < 0:
+        taxable_net = Decimal("0.00")
+
+    order_total_discount_percentage = Decimal("0.00")
+    if order and getattr(order, "discount_percentage", None):
+        order_total_discount_percentage = Decimal(order.discount_percentage or 0)
+
+    qr_base64 = ""
+    qr_url = ""
+    try:
+        from core.services.pdf_generator import generate_afip_qr_data, generate_qr_image_base64
+
+        qr_url = generate_afip_qr_data(fiscal_document)
+        qr_base64 = generate_qr_image_base64(qr_url)
+    except Exception:
+        qr_base64 = ""
+        qr_url = ""
+
+    return {
+        "fiscal_document": fiscal_document,
+        "items": fiscal_document.items.all().order_by("line_number"),
+        "document_letter": company_meta["letter"],
+        "document_code": company_meta["code"],
+        "document_number_display": (
+            f"{str(fiscal_document.point_of_sale.number or '').zfill(5)}-"
+            f"{str(fiscal_document.number or 0).zfill(8)}"
+        ),
+        "company_address_line": " / ".join(bit for bit in company_address_bits if bit),
+        "company_contact_line": " / ".join(
+            bit
+            for bit in [
+                site_settings.company_phone,
+                site_settings.company_phone_2,
+                company.email or site_settings.company_email,
+            ]
+            if bit
+        ),
+        "company_contact_site": site_settings.company_address,
+        "client_profile": client_profile,
+        "client_address_line": " / ".join(bit for bit in client_address_bits if bit),
+        "client_document_label": (
+            client_profile.get_document_type_display() if client_profile and client_profile.document_type else "CUIT/DNI"
+        )
+        if client_profile
+        else "CUIT/DNI",
+        "client_document_value": (
+            client_profile.document_number or client_profile.cuit_dni
+        )
+        if client_profile
+        else "",
+        "sale_condition_label": sale_condition_label,
+        "operator_label": operator_label,
+        "observations_text": "\n".join(bit for bit in observations if bit).strip(),
+        "subtotal_before_discount": subtotal_before_discount,
+        "taxable_net": taxable_net,
+        "order_total_discount_percentage": order_total_discount_percentage,
+        "qr_base64": qr_base64,
+        "qr_url": qr_url,
+    }
+
+
 def _build_order_totals_from_cart(cart, user, company):
     pricing = calculate_cart_pricing(cart, user=user, company=company)
     return pricing["subtotal"], pricing["discount_amount"], pricing["total"], pricing
@@ -79,6 +275,7 @@ def _build_order_from_cart(cart, user, notes="", status=Order.STATUS_CONFIRMED, 
     order = Order.objects.create(
         user=user,
         company=company,
+        origin_channel=Order.ORIGIN_CATALOG,
         status=status,
         priority=Order.PRIORITY_NORMAL,
         notes=(notes or "").strip(),
@@ -308,7 +505,7 @@ def remove_from_cart(request):
 
 @login_required
 def checkout(request):
-    """Checkout view - confirm order."""
+    """Checkout view - submit a commercial request for review."""
     company = get_active_company(request)
     if not company:
         messages.error(request, "No se pudo resolver la empresa activa.")
@@ -342,19 +539,25 @@ def checkout(request):
         with transaction.atomic():
             cart = Cart.objects.select_for_update().get(pk=cart.pk)
             try:
-                order = _build_order_from_cart(
+                order_request = build_order_request_from_cart(
                     cart=cart,
                     user=request.user,
-                    notes=notes,
-                    status=Order.STATUS_CONFIRMED,
                     company=company,
+                    client_note=notes,
+                    origin_channel=Order.ORIGIN_CATALOG,
                 )
+            except ValidationError as exc:
+                messages.error(request, str(exc))
+                return redirect("cart")
             except ValueError as exc:
                 messages.error(request, str(exc))
                 return redirect("cart")
             cart.clear()
-        messages.success(request, f"Pedido #{order.pk} creado exitosamente.")
-        return redirect("order_detail", order_id=order.pk)
+        messages.success(
+            request,
+            f"Solicitud #{order_request.pk} enviada. La revisaremos antes de confirmar la operacion.",
+        )
+        return redirect("order_request_detail", request_id=order_request.pk)
 
     context = {
         "cart": cart,
@@ -369,8 +572,144 @@ def checkout(request):
 
 
 @login_required
+def order_request_list(request):
+    """List of the client's submitted commercial requests."""
+    status = request.GET.get("status", "").strip()
+    company = get_active_company(request)
+    order_requests = (
+        OrderRequest.objects.select_related("company")
+        .prefetch_related("items", "proposals", "generated_orders")
+        .filter(user=request.user)
+    )
+    if company:
+        order_requests = order_requests.filter(company=company)
+    if status:
+        order_requests = order_requests.filter(status=status)
+    order_requests = order_requests.order_by("-created_at")
+    return render(
+        request,
+        "orders/order_request_list.html",
+        {
+            "order_requests": order_requests,
+            "status": status,
+            "status_choices": OrderRequest.STATUS_CHOICES,
+        },
+    )
+
+
+@login_required
+def order_request_detail(request, request_id):
+    """Detailed view of one commercial request and its latest proposal."""
+    company = get_active_company(request)
+    order_request_qs = OrderRequest.objects.select_related(
+        "company",
+        "client_company_ref",
+        "client_company_ref__client_profile",
+    ).prefetch_related(
+        Prefetch(
+            "items",
+            queryset=OrderRequestItem.objects.select_related("product", "clamp_request", "price_list"),
+        ),
+        Prefetch(
+            "proposals",
+            queryset=OrderProposal.objects.select_related("created_by", "responded_by")
+            .prefetch_related(
+                Prefetch(
+                    "items",
+                    queryset=OrderProposalItem.objects.select_related("product", "clamp_request", "price_list"),
+                )
+            )
+            .order_by("-version_number", "-id"),
+        ),
+        Prefetch(
+            "events",
+            queryset=OrderRequestEvent.objects.select_related("actor").order_by("-created_at", "-id"),
+        ),
+        "generated_orders",
+    )
+    if company:
+        order_request_qs = order_request_qs.filter(company=company)
+    order_request = get_object_or_404(
+        order_request_qs,
+        pk=request_id,
+        user=request.user,
+    )
+    proposals = list(order_request.proposals.all())
+    current_proposal = next((proposal for proposal in proposals if proposal.is_current), None)
+    request_order = order_request.converted_order
+    return render(
+        request,
+        "orders/order_request_detail.html",
+        {
+            "order_request": order_request,
+            "request_order": request_order,
+            "request_order_documents": _get_client_internal_documents(request_order),
+            "request_order_fiscal_documents": _get_client_fiscal_documents(request_order),
+            "current_proposal": current_proposal,
+            "request_events": list(order_request.events.all()[:20]),
+            "can_accept_proposal": bool(
+                current_proposal
+                and current_proposal.status == OrderProposal.STATUS_PENDING
+                and order_request.status == OrderRequest.STATUS_WAITING_CLIENT
+            ),
+            "proposals": proposals,
+        },
+    )
+
+
+@login_required
+@require_POST
+def order_request_accept_proposal(request, request_id, proposal_id):
+    """Allow the client to accept the current commercial proposal."""
+    company = get_active_company(request)
+    order_request_qs = OrderRequest.objects.filter(pk=request_id, user=request.user)
+    if company:
+        order_request_qs = order_request_qs.filter(company=company)
+    order_request = get_object_or_404(order_request_qs)
+    proposal = get_object_or_404(
+        OrderProposal.objects.filter(order_request=order_request),
+        pk=proposal_id,
+    )
+    try:
+        accept_order_proposal(order_proposal=proposal, actor=request.user)
+    except ValidationError as exc:
+        messages.error(request, str(exc))
+    else:
+        messages.success(
+            request,
+            "Aceptaste la propuesta comercial. La solicitud ya quedo confirmada para continuar el circuito.",
+        )
+    return redirect("order_request_detail", request_id=order_request.pk)
+
+
+@login_required
+@require_POST
+def order_request_reject_proposal(request, request_id, proposal_id):
+    """Allow the client to reject the current commercial proposal."""
+    company = get_active_company(request)
+    order_request_qs = OrderRequest.objects.filter(pk=request_id, user=request.user)
+    if company:
+        order_request_qs = order_request_qs.filter(company=company)
+    order_request = get_object_or_404(order_request_qs)
+    proposal = get_object_or_404(
+        OrderProposal.objects.filter(order_request=order_request),
+        pk=proposal_id,
+    )
+    try:
+        reject_order_proposal(order_proposal=proposal, actor=request.user)
+    except ValidationError as exc:
+        messages.error(request, str(exc))
+    else:
+        messages.info(
+            request,
+            "Rechazaste la propuesta. La solicitud vuelve a revision comercial para un nuevo ajuste.",
+        )
+    return redirect("order_request_detail", request_id=order_request.pk)
+
+
+@login_required
 def order_list(request):
-    """List of user's orders."""
+    """List of user's operational orders."""
     status = request.GET.get("status", "").strip()
     company = get_active_company(request)
     orders = Order.objects.filter(user=request.user).prefetch_related("items")
@@ -421,8 +760,66 @@ def order_detail(request, order_id):
             "order_paid_amount": order.get_paid_amount(),
             "order_pending_amount": order.get_pending_amount(),
             "payments": payments,
+            "order_documents": _get_client_internal_documents(order),
+            "order_fiscal_documents": _get_client_fiscal_documents(order),
         },
     )
+
+
+@login_required
+def order_internal_document_print(request, doc_id):
+    """Client-safe printable view of one internal document linked to their own order."""
+    company = get_active_company(request)
+    document = get_object_or_404(
+        _get_client_internal_document_queryset(request.user, company=company),
+        pk=doc_id,
+    )
+    copy_key = str(request.GET.get("copy", "original")).strip().lower()
+    copy_labels = {
+        "original": "ORIGINAL",
+        "duplicado": "DUPLICADO",
+        "triplicado": "TRIPLICADO",
+    }
+    copy_label = copy_labels.get(copy_key, "ORIGINAL")
+    order_items = []
+    if document.order_id:
+        order_items = list(document.order.items.select_related("product").all())
+
+    response = render(
+        request,
+        "admin_panel/documents/print.html",
+        {
+            "document": document,
+            "copy_label": copy_label,
+            "order_items": order_items,
+        },
+    )
+    if request.GET.get("download") == "1":
+        filename = f"{document.doc_type}_{document.number:07d}.html"
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    return response
+
+
+@login_required
+def order_fiscal_document_print(request, doc_id):
+    """Client-safe printable view of one fiscal document linked to their own order."""
+    company = get_active_company(request)
+    fiscal_document = get_object_or_404(
+        _get_client_fiscal_document_queryset(request.user, company=company),
+        pk=doc_id,
+    )
+    copy_type = str(request.GET.get("copy", "original")).strip().lower()
+    if copy_type not in {"original", "duplicado", "triplicado"}:
+        copy_type = "original"
+
+    context = _build_client_fiscal_print_context(fiscal_document)
+    context.update(
+        {
+            "copy_type": copy_type,
+            "copy_label": FISCAL_PRINT_COPY_LABELS.get(copy_type, "ORIGINAL"),
+        }
+    )
+    return render(request, "admin_panel/fiscal/print.html", context)
 
 
 @login_required
@@ -469,6 +866,9 @@ def client_portal(request):
     orders_qs = Order.objects.filter(user=request.user)
     if company:
         orders_qs = orders_qs.filter(company=company)
+    request_qs = OrderRequest.objects.filter(user=request.user)
+    if company:
+        request_qs = request_qs.filter(company=company)
     client_profile = _get_client_profile(request.user)
     favorites = (
         ClientFavoriteProduct.objects.filter(user=request.user)
@@ -483,6 +883,15 @@ def client_portal(request):
         recent_payments = list(payments_qs.select_related("order").order_by("-paid_at")[:8])
 
     context = {
+        "open_request_count": request_qs.exclude(
+            status__in=[
+                OrderRequest.STATUS_REJECTED,
+                OrderRequest.STATUS_CANCELLED,
+                OrderRequest.STATUS_CONVERTED,
+            ]
+        ).count(),
+        "total_request_count": request_qs.count(),
+        "recent_requests": request_qs.prefetch_related("proposals", "generated_orders").order_by("-created_at")[:6],
         "active_orders_count": orders_qs.exclude(
             status__in=[Order.STATUS_DELIVERED, Order.STATUS_CANCELLED]
         ).count(),

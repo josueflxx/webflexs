@@ -57,7 +57,7 @@ DEFAULT_CLIENT_IMPORT_COMPANY_SLUGS = [
     slug.strip()
     for slug in os.getenv(
         'DEFAULT_CLIENT_IMPORT_COMPANY_SLUGS',
-        f"{DEFAULT_CLIENT_ORIGIN_COMPANY_SLUG},flexs",
+        DEFAULT_CLIENT_ORIGIN_COMPANY_SLUG,
     ).split(',')
     if slug.strip()
 ]

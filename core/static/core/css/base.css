@@ -233,10 +233,39 @@ img {
     gap: var(--spacing-lg);
     list-style: none;
     min-width: 0;
+    flex: 1 1 auto;
+    justify-content: flex-end;
+    flex-wrap: nowrap;
+    white-space: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding-bottom: 4px;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.28) rgba(255, 255, 255, 0.08);
+    scrollbar-gutter: stable;
+    -webkit-overflow-scrolling: touch;
 }
 
 .nav-menu>li {
     flex: 0 0 auto;
+}
+
+.nav-menu::-webkit-scrollbar {
+    height: 8px;
+}
+
+.nav-menu::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 999px;
+}
+
+.nav-menu::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.28);
+    border-radius: 999px;
+}
+
+.nav-menu::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.42);
 }
 
 .nav-company-item {
@@ -373,8 +402,8 @@ img {
 
     .nav-menu {
         flex: 1 1 auto;
-        justify-content: flex-end;
-        flex-wrap: wrap;
+        justify-content: flex-start;
+        flex-wrap: nowrap;
         gap: 0.7rem 1rem;
     }
 
@@ -431,11 +460,16 @@ img {
         gap: var(--spacing-md);
         max-height: calc(100vh - var(--header-offset));
         overflow-y: auto;
+        overflow-x: hidden;
         transform: translateY(-150%);
         opacity: 0;
         transition: var(--transition-normal);
         z-index: 999;
         flex-wrap: nowrap;
+        white-space: normal;
+        justify-content: flex-start;
+        padding-bottom: var(--spacing-xl);
+        scrollbar-gutter: auto;
     }
 
     .nav-menu.active {

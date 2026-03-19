@@ -1,50 +1,55 @@
 {% extends 'base.html' %}
 
-{% block title %}Mis Pedidos Operativos - FLEXS{% endblock %}
+{% block title %}Mis Solicitudes - FLEXS{% endblock %}
 
 {% block content %}
 <div class="orders-page">
     <div class="container">
-        <h1>Mis Pedidos</h1>
-        <p class="text-muted" style="margin-bottom:16px;">Operaciones ya confirmadas dentro del circuito comercial. Para seguimiento previo, usa la seccion de solicitudes.</p>
+        <div class="page-header">
+            <div>
+                <h1>Mis Solicitudes</h1>
+                <p class="text-muted">Seguimiento de pedidos enviados desde el catalogo antes de su confirmacion comercial.</p>
+            </div>
+            <a href="{% url 'catalog' %}" class="btn btn-primary">Volver al catalogo</a>
+        </div>
 
         <form method="get" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;">
-            <select name="status" class="form-select" style="max-width:240px;">
+            <select name="status" class="form-select" style="max-width:260px;">
                 <option value="">Todos los estados</option>
                 {% for value, label in status_choices %}
                 <option value="{{ value }}" {% if status == value %}selected{% endif %}>{{ label }}</option>
                 {% endfor %}
             </select>
             <button type="submit" class="btn btn-primary">Filtrar</button>
+            <a href="{% url 'order_request_list' %}" class="btn btn-outline">Limpiar</a>
         </form>
 
-        {% if orders %}
+        {% if order_requests %}
         <div class="orders-list">
-            {% for order in orders %}
+            {% for order_request in order_requests %}
             <div class="order-card">
                 <div class="order-header">
-                    <span class="order-number">Pedido #{{ order.pk }}</span>
-                    <span class="badge badge-info">{{ order.get_status_display }}</span>
+                    <span class="order-number">Solicitud #{{ order_request.pk }}</span>
+                    <span class="badge badge-info">{{ order_request.get_status_display }}</span>
                 </div>
                 <div class="order-info">
-                    <span>{{ order.created_at|date:"d/m/Y H:i" }}</span>
-                    <span>{{ order.get_item_count }} productos</span>
-                    <span class="order-total">${{ order.total|floatformat:2 }}</span>
+                    <span>{{ order_request.created_at|date:"d/m/Y H:i" }}</span>
+                    <span>{{ order_request.get_item_count }} productos</span>
+                    <span class="order-total">${{ order_request.requested_total|floatformat:2 }}</span>
                 </div>
-                <div style="display:flex;gap:8px;flex-wrap:wrap;">
-                    <a href="{% url 'order_detail' order.pk %}" class="btn btn-outline">Ver Detalles</a>
-                    <form method="post" action="{% url 'reorder_to_cart' order.pk %}">
-                        {% csrf_token %}
-                        <button type="submit" class="btn btn-primary">Recomprar</button>
-                    </form>
+                <div class="order-actions">
+                    <a href="{% url 'order_request_detail' order_request.pk %}" class="btn btn-outline">Ver detalle</a>
+                    {% if order_request.converted_order %}
+                    <a href="{% url 'order_detail' order_request.converted_order.pk %}" class="btn btn-primary">Ver pedido final</a>
+                    {% endif %}
                 </div>
             </div>
             {% endfor %}
         </div>
         {% else %}
         <div class="empty-orders">
-            <p>No tenes pedidos todavia</p>
-            <a href="{% url 'catalog' %}" class="btn btn-primary">Ver Catalogo</a>
+            <p>No tenes solicitudes comerciales todavia.</p>
+            <a href="{% url 'catalog' %}" class="btn btn-primary">Explorar catalogo</a>
         </div>
         {% endif %}
     </div>
@@ -54,17 +59,22 @@
     .orders-page {
         padding: var(--spacing-2xl) 0;
     }
-
-    .orders-page h1 {
-        margin-bottom: var(--spacing-lg);
+    .page-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: end;
+        gap: 12px;
+        flex-wrap: wrap;
+        margin-bottom: 16px;
     }
-
+    .page-header h1 {
+        margin-bottom: 4px;
+    }
     .orders-list {
         display: flex;
         flex-direction: column;
         gap: var(--spacing-lg);
     }
-
     .order-card {
         background: var(--color-dark-light);
         padding: var(--spacing-xl);
@@ -74,19 +84,16 @@
         gap: var(--spacing-xl);
         flex-wrap: wrap;
     }
-
     .order-header {
         display: flex;
         flex-direction: column;
         gap: var(--spacing-xs);
         min-width: 180px;
     }
-
     .order-number {
         font-weight: 700;
         font-size: var(--font-size-lg);
     }
-
     .order-info {
         flex: 1;
         display: flex;
@@ -94,12 +101,15 @@
         color: var(--color-gray-light);
         flex-wrap: wrap;
     }
-
+    .order-actions {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
     .order-total {
         font-weight: 700;
         color: var(--color-primary);
     }
-
     .empty-orders {
         text-align: center;
         padding: var(--spacing-3xl);

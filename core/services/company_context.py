@@ -77,6 +77,19 @@ def get_default_client_import_companies():
     return []
 
 
+def get_preferred_client_company(companies):
+    companies = list(companies or [])
+    if not companies:
+        return None
+
+    default_company = get_default_client_origin_company()
+    if default_company:
+        for company in companies:
+            if company.pk == default_company.pk:
+                return company
+    return companies[0]
+
+
 def get_user_companies(user):
     if not user or not getattr(user, "is_authenticated", False):
         return Company.objects.none()
@@ -134,8 +147,7 @@ def user_has_company_access(user, company):
 
 
 def get_active_company(request):
-    import sys
-    if request is None or getattr(settings, "TESTING", False) or "test" in sys.argv:
+    if request is None:
         return get_default_company()
 
     company_id = request.session.get(SESSION_COMPANY_KEY)
@@ -152,6 +164,11 @@ def get_active_company(request):
             set_active_company(request, companies[0])
             return companies[0]
         if len(companies) > 1:
+            if not getattr(user, "is_staff", False):
+                preferred_company = get_preferred_client_company(companies)
+                if preferred_company:
+                    set_active_company(request, preferred_company)
+                    return preferred_company
             return None
         return None
 

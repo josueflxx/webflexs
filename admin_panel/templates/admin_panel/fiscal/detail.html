@@ -48,12 +48,21 @@
                     </button>
                 </form>
                 {% endif %}
+                {% if can_delete_document %}
+                <a href="{% url 'admin_fiscal_document_delete' fiscal_document.pk %}" class="sales-record-action">Eliminar</a>
+                {% endif %}
                 <a href="{% url 'admin_fiscal_document_print' fiscal_document.pk %}?copy=original" class="sales-record-action" data-print-window="1" target="_blank" rel="noopener noreferrer">Original</a>
                 <a href="{% url 'admin_fiscal_document_print' fiscal_document.pk %}?copy=duplicado" class="sales-record-action" data-print-window="1" target="_blank" rel="noopener noreferrer">Duplicado</a>
                 <a href="{% url 'admin_fiscal_document_print' fiscal_document.pk %}?copy=triplicado" class="sales-record-action" data-print-window="1" target="_blank" rel="noopener noreferrer">Triplicado</a>
                 <a href="{% url 'admin_fiscal_document_list' %}" class="sales-record-action">Volver</a>
             </div>
         </div>
+
+        {% if fiscal_delete_blockers %}
+        <div class="alert alert-warning" style="margin-bottom:16px;">
+            Eliminacion bloqueada: {{ fiscal_delete_blockers|join:" " }}
+        </div>
+        {% endif %}
 
         <div class="sales-record-top-grid">
             <section class="sales-record-panel">

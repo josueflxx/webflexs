@@ -113,6 +113,19 @@ class Order(models.Model):
     Customer order with explicit workflow states.
     """
 
+    ORIGIN_CATALOG = "catalog"
+    ORIGIN_ADMIN = "admin"
+    ORIGIN_WHATSAPP = "whatsapp"
+    ORIGIN_PHONE = "phone"
+    ORIGIN_OTHER = "other"
+    ORIGIN_CHOICES = [
+        (ORIGIN_CATALOG, "Catalogo"),
+        (ORIGIN_ADMIN, "Admin"),
+        (ORIGIN_WHATSAPP, "WhatsApp"),
+        (ORIGIN_PHONE, "Telefono"),
+        (ORIGIN_OTHER, "Otro"),
+    ]
+
     STATUS_DRAFT = "draft"
     STATUS_CONFIRMED = "confirmed"
     STATUS_PREPARING = "preparing"
@@ -177,6 +190,29 @@ class Order(models.Model):
         blank=True,
         related_name="orders",
         verbose_name="Empresa",
+    )
+    origin_channel = models.CharField(
+        max_length=20,
+        choices=ORIGIN_CHOICES,
+        default=ORIGIN_ADMIN,
+        verbose_name="Canal origen",
+        db_index=True,
+    )
+    source_request = models.ForeignKey(
+        "OrderRequest",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="generated_orders",
+        verbose_name="Solicitud origen",
+    )
+    source_proposal = models.ForeignKey(
+        "OrderProposal",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="generated_orders",
+        verbose_name="Propuesta origen",
     )
     status = models.CharField(
         max_length=20,
@@ -327,6 +363,7 @@ class Order(models.Model):
             models.Index(fields=["created_at"]),
             models.Index(fields=["status", "created_at"]),
             models.Index(fields=["status", "updated_at"]),
+            models.Index(fields=["origin_channel", "created_at"]),
             models.Index(fields=["company", "created_at"]),
             models.Index(fields=["sync_status", "created_at"]),
             models.Index(fields=["external_system", "external_id"]),
@@ -592,6 +629,431 @@ class OrderItem(models.Model):
                 "No se pueden eliminar items en pedidos confirmados o en estados posteriores."
             )
         return super().delete(*args, **kwargs)
+
+
+class OrderRequest(models.Model):
+    """Pre-order request created before the operational order exists."""
+
+    STATUS_DRAFT = "draft"
+    STATUS_SUBMITTED = "submitted"
+    STATUS_IN_REVIEW = "in_review"
+    STATUS_PROPOSAL_SENT = "proposal_sent"
+    STATUS_WAITING_CLIENT = "waiting_client"
+    STATUS_CONFIRMED = "confirmed"
+    STATUS_REJECTED = "rejected"
+    STATUS_CANCELLED = "cancelled"
+    STATUS_CONVERTED = "converted"
+
+    STATUS_CHOICES = [
+        (STATUS_DRAFT, "Borrador"),
+        (STATUS_SUBMITTED, "Enviado"),
+        (STATUS_IN_REVIEW, "En revision"),
+        (STATUS_PROPOSAL_SENT, "Propuesta enviada"),
+        (STATUS_WAITING_CLIENT, "Esperando respuesta del cliente"),
+        (STATUS_CONFIRMED, "Confirmado"),
+        (STATUS_REJECTED, "Rechazado"),
+        (STATUS_CANCELLED, "Cancelado"),
+        (STATUS_CONVERTED, "Convertido a documento"),
+    ]
+
+    user = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="order_requests",
+        verbose_name="Cliente",
+    )
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.PROTECT,
+        related_name="order_requests",
+        verbose_name="Empresa",
+    )
+    client_company_ref = models.ForeignKey(
+        "accounts.ClientCompany",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="order_requests",
+        verbose_name="Cliente empresa",
+    )
+    status = models.CharField(
+        max_length=24,
+        choices=STATUS_CHOICES,
+        default=STATUS_DRAFT,
+        verbose_name="Estado",
+        db_index=True,
+    )
+    origin_channel = models.CharField(
+        max_length=20,
+        choices=Order.ORIGIN_CHOICES,
+        default=Order.ORIGIN_CATALOG,
+        verbose_name="Canal origen",
+        db_index=True,
+    )
+    client_note = models.TextField(blank=True, verbose_name="Nota del cliente")
+    admin_note = models.TextField(blank=True, verbose_name="Nota interna")
+    rejection_reason = models.CharField(max_length=255, blank=True, verbose_name="Motivo rechazo")
+    requested_subtotal = models.DecimalField(max_digits=12, decimal_places=2, default=0, verbose_name="Subtotal")
+    requested_discount_percentage = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=0,
+        verbose_name="Descuento aplicado (%)",
+    )
+    requested_discount_amount = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=0,
+        verbose_name="Monto descuento",
+    )
+    requested_total = models.DecimalField(max_digits=12, decimal_places=2, default=0, verbose_name="Total")
+    submitted_at = models.DateTimeField(null=True, blank=True, verbose_name="Enviado el")
+    reviewed_at = models.DateTimeField(null=True, blank=True, verbose_name="Tomado en revision el")
+    decided_at = models.DateTimeField(null=True, blank=True, verbose_name="Resuelto el")
+    converted_at = models.DateTimeField(null=True, blank=True, verbose_name="Convertido el")
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Solicitud comercial"
+        verbose_name_plural = "Solicitudes comerciales"
+        ordering = ["-created_at", "-id"]
+        indexes = [
+            models.Index(fields=["company", "status", "created_at"]),
+            models.Index(fields=["user", "status", "created_at"]),
+            models.Index(fields=["origin_channel", "created_at"]),
+        ]
+
+    def __str__(self):
+        company_label = self.company.name if self.company_id else "-"
+        return f"Solicitud #{self.pk} - {company_label}"
+
+    def clean(self):
+        if self.client_company_ref_id and self.client_company_ref.company_id != self.company_id:
+            raise ValidationError("La empresa de la solicitud no coincide con el cliente empresa.")
+        if (
+            self.client_company_ref_id
+            and self.user_id
+            and self.client_company_ref.client_profile.user_id != self.user_id
+        ):
+            raise ValidationError("El cliente empresa no corresponde al usuario de la solicitud.")
+
+    def save(self, *args, **kwargs):
+        if not kwargs.get("raw"):
+            self.clean()
+        super().save(*args, **kwargs)
+
+    def get_item_count(self):
+        """Total number of items in the request snapshot."""
+        return sum(item.quantity for item in self.items.all())
+
+    @property
+    def current_proposal(self):
+        prefetched = getattr(self, "_prefetched_objects_cache", {})
+        proposals = prefetched.get("proposals")
+        if proposals is not None:
+            current = [proposal for proposal in proposals if proposal.is_current]
+            if current:
+                return sorted(current, key=lambda row: (row.version_number, row.id), reverse=True)[0]
+            return None
+        return self.proposals.filter(is_current=True).order_by("-version_number", "-id").first()
+
+    @property
+    def converted_order(self):
+        prefetched = getattr(self, "_prefetched_objects_cache", {})
+        generated_orders = prefetched.get("generated_orders")
+        if generated_orders is not None:
+            if not generated_orders:
+                return None
+            return sorted(generated_orders, key=lambda row: (row.created_at, row.id), reverse=True)[0]
+        return self.generated_orders.order_by("-created_at", "-id").first()
+
+
+class OrderRequestEvent(models.Model):
+    """Minimal timeline/audit trail for the commercial request lifecycle."""
+
+    EVENT_CREATED = "created"
+    EVENT_REVIEW_STARTED = "review_started"
+    EVENT_PROPOSAL_SENT = "proposal_sent"
+    EVENT_PROPOSAL_ACCEPTED = "proposal_accepted"
+    EVENT_PROPOSAL_REJECTED = "proposal_rejected"
+    EVENT_CONFIRMED = "confirmed"
+    EVENT_REJECTED = "rejected"
+    EVENT_CONVERTED = "converted"
+    EVENT_QUOTE_GENERATED = "quote_generated"
+    EVENT_INVOICE_GENERATED = "invoice_generated"
+
+    EVENT_CHOICES = [
+        (EVENT_CREATED, "Solicitud creada"),
+        (EVENT_REVIEW_STARTED, "Revision iniciada"),
+        (EVENT_PROPOSAL_SENT, "Propuesta enviada"),
+        (EVENT_PROPOSAL_ACCEPTED, "Propuesta aceptada"),
+        (EVENT_PROPOSAL_REJECTED, "Propuesta rechazada"),
+        (EVENT_CONFIRMED, "Solicitud confirmada"),
+        (EVENT_REJECTED, "Solicitud rechazada"),
+        (EVENT_CONVERTED, "Solicitud convertida"),
+        (EVENT_QUOTE_GENERATED, "Cotizacion generada"),
+        (EVENT_INVOICE_GENERATED, "Factura generada"),
+    ]
+
+    order_request = models.ForeignKey(
+        OrderRequest,
+        on_delete=models.CASCADE,
+        related_name="events",
+        verbose_name="Solicitud",
+    )
+    event_type = models.CharField(
+        max_length=32,
+        choices=EVENT_CHOICES,
+        verbose_name="Evento",
+        db_index=True,
+    )
+    from_status = models.CharField(max_length=24, blank=True, verbose_name="Estado anterior")
+    to_status = models.CharField(max_length=24, blank=True, verbose_name="Estado nuevo")
+    message = models.CharField(max_length=255, blank=True, verbose_name="Mensaje")
+    metadata = models.JSONField(default=dict, blank=True, verbose_name="Metadata")
+    actor = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="order_request_events",
+        verbose_name="Actor",
+    )
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        verbose_name = "Evento de solicitud comercial"
+        verbose_name_plural = "Eventos de solicitudes comerciales"
+        ordering = ["-created_at", "-id"]
+        indexes = [
+            models.Index(fields=["order_request", "created_at"]),
+            models.Index(fields=["event_type", "created_at"]),
+        ]
+
+    def __str__(self):
+        return f"Solicitud #{self.order_request_id} - {self.get_event_type_display()}"
+
+
+class OrderRequestItem(models.Model):
+    """Snapshot of one requested item before commercial approval."""
+
+    order_request = models.ForeignKey(
+        OrderRequest,
+        on_delete=models.CASCADE,
+        related_name="items",
+        verbose_name="Solicitud",
+    )
+    line_number = models.PositiveIntegerField(verbose_name="Linea")
+    product = models.ForeignKey(
+        Product,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="order_request_items",
+        verbose_name="Producto",
+    )
+    clamp_request = models.ForeignKey(
+        "catalog.ClampMeasureRequest",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="order_request_items",
+        verbose_name="Solicitud de medida",
+    )
+    product_sku = models.CharField(max_length=50, verbose_name="SKU")
+    product_name = models.CharField(max_length=255, verbose_name="Nombre")
+    quantity = models.PositiveIntegerField(verbose_name="Cantidad")
+    unit_price_base = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=0,
+        verbose_name="Precio base unitario",
+    )
+    discount_percentage_used = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=0,
+        verbose_name="Descuento aplicado (%)",
+    )
+    price_list = models.ForeignKey(
+        "catalog.PriceList",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="order_request_items",
+        verbose_name="Lista de precio",
+    )
+    price_at_snapshot = models.DecimalField(max_digits=12, decimal_places=2, verbose_name="Precio unitario")
+    subtotal = models.DecimalField(max_digits=12, decimal_places=2, verbose_name="Subtotal")
+
+    class Meta:
+        verbose_name = "Item de solicitud comercial"
+        verbose_name_plural = "Items de solicitudes comerciales"
+        ordering = ["order_request_id", "line_number"]
+        unique_together = [("order_request", "line_number")]
+        indexes = [
+            models.Index(fields=["order_request", "line_number"]),
+        ]
+
+    def __str__(self):
+        return f"Solicitud #{self.order_request_id} - linea {self.line_number}"
+
+    def save(self, *args, **kwargs):
+        self.subtotal = self.price_at_snapshot * self.quantity
+        super().save(*args, **kwargs)
+
+
+class OrderProposal(models.Model):
+    """Commercial response prepared by admin for one request."""
+
+    STATUS_PENDING = "pending"
+    STATUS_ACCEPTED = "accepted"
+    STATUS_REJECTED = "rejected"
+    STATUS_EXPIRED = "expired"
+    STATUS_CHOICES = [
+        (STATUS_PENDING, "Pendiente"),
+        (STATUS_ACCEPTED, "Aceptada"),
+        (STATUS_REJECTED, "Rechazada"),
+        (STATUS_EXPIRED, "Vencida"),
+    ]
+
+    order_request = models.ForeignKey(
+        OrderRequest,
+        on_delete=models.CASCADE,
+        related_name="proposals",
+        verbose_name="Solicitud",
+    )
+    version_number = models.PositiveIntegerField(verbose_name="Version")
+    status = models.CharField(
+        max_length=16,
+        choices=STATUS_CHOICES,
+        default=STATUS_PENDING,
+        verbose_name="Estado",
+        db_index=True,
+    )
+    is_current = models.BooleanField(default=True, verbose_name="Version vigente")
+    message_to_client = models.TextField(blank=True, verbose_name="Mensaje al cliente")
+    internal_note = models.TextField(blank=True, verbose_name="Nota interna")
+    proposed_subtotal = models.DecimalField(max_digits=12, decimal_places=2, default=0, verbose_name="Subtotal")
+    proposed_discount_percentage = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=0,
+        verbose_name="Descuento aplicado (%)",
+    )
+    proposed_discount_amount = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=0,
+        verbose_name="Monto descuento",
+    )
+    proposed_total = models.DecimalField(max_digits=12, decimal_places=2, default=0, verbose_name="Total")
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="order_proposals_created",
+        verbose_name="Creado por",
+    )
+    responded_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="order_proposals_responded",
+        verbose_name="Respondido por",
+    )
+    sent_at = models.DateTimeField(default=timezone.now, verbose_name="Enviado el")
+    responded_at = models.DateTimeField(null=True, blank=True, verbose_name="Respondido el")
+    expires_at = models.DateTimeField(null=True, blank=True, verbose_name="Vence el")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Propuesta comercial"
+        verbose_name_plural = "Propuestas comerciales"
+        ordering = ["-created_at", "-id"]
+        unique_together = [("order_request", "version_number")]
+        indexes = [
+            models.Index(fields=["order_request", "status", "created_at"]),
+            models.Index(fields=["order_request", "is_current"]),
+        ]
+
+    def __str__(self):
+        return f"Propuesta #{self.pk} - solicitud #{self.order_request_id}"
+
+
+class OrderProposalItem(models.Model):
+    """Snapshot of the admin proposed item mix for one request."""
+
+    order_proposal = models.ForeignKey(
+        OrderProposal,
+        on_delete=models.CASCADE,
+        related_name="items",
+        verbose_name="Propuesta",
+    )
+    line_number = models.PositiveIntegerField(verbose_name="Linea")
+    product = models.ForeignKey(
+        Product,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="order_proposal_items",
+        verbose_name="Producto",
+    )
+    clamp_request = models.ForeignKey(
+        "catalog.ClampMeasureRequest",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="order_proposal_items",
+        verbose_name="Solicitud de medida",
+    )
+    product_sku = models.CharField(max_length=50, verbose_name="SKU")
+    product_name = models.CharField(max_length=255, verbose_name="Nombre")
+    quantity = models.PositiveIntegerField(verbose_name="Cantidad")
+    unit_price_base = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=0,
+        verbose_name="Precio base unitario",
+    )
+    discount_percentage_used = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=0,
+        verbose_name="Descuento aplicado (%)",
+    )
+    price_list = models.ForeignKey(
+        "catalog.PriceList",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="order_proposal_items",
+        verbose_name="Lista de precio",
+    )
+    price_at_snapshot = models.DecimalField(max_digits=12, decimal_places=2, verbose_name="Precio unitario")
+    subtotal = models.DecimalField(max_digits=12, decimal_places=2, verbose_name="Subtotal")
+
+    class Meta:
+        verbose_name = "Item de propuesta comercial"
+        verbose_name_plural = "Items de propuestas comerciales"
+        ordering = ["order_proposal_id", "line_number"]
+        unique_together = [("order_proposal", "line_number")]
+        indexes = [
+            models.Index(fields=["order_proposal", "line_number"]),
+        ]
+
+    def __str__(self):
+        return f"Propuesta #{self.order_proposal_id} - linea {self.line_number}"
+
+    def save(self, *args, **kwargs):
+        self.subtotal = self.price_at_snapshot * self.quantity
+        super().save(*args, **kwargs)
 
 
 class ClampQuotation(models.Model):

@@ -490,6 +490,14 @@
                     <p>Tipos comerciales configurados para {{ active_company_label }}.</p>
                 </div>
             </div>
+            <div style="margin:14px 0 10px;">
+                <label for="clientOriginChannel" class="form-label">Canal de origen</label>
+                <select id="clientOriginChannel" class="form-select">
+                    {% for value, label in manual_origin_channel_choices %}
+                    <option value="{{ value }}"{% if value == 'admin' %} selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
             <div class="client-doc-launcher-list">
                 {% for item in quick_sales_document_actions %}
                     {% if item.method == 'get' %}
@@ -502,6 +510,7 @@
                         <input type="hidden" name="company_id" value="{{ selected_company_id }}">
                         <input type="hidden" name="action" value="{{ item.action_value }}">
                         <input type="hidden" name="sales_document_type_id" value="{{ item.sales_document_type.pk }}">
+                        <input type="hidden" name="origin_channel" value="admin" data-origin-channel-field="1">
                         <button type="submit" class="{{ item.css_class }}" {% if item.disabled %}disabled{% endif %}>
                             <span class="client-doc-launcher-text"><strong>{{ item.label }}</strong><small>{{ item.help_text }}</small></span>
                             <span class="client-doc-launcher-arrow" aria-hidden="true">&#10132;</span>
@@ -752,4 +761,23 @@
     </section>
     {% endif %}
 </div>
+{% endblock %}
+
+{% block extra_js %}
+{{ block.super }}
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const originSelect = document.getElementById('clientOriginChannel');
+    if (!originSelect) {
+        return;
+    }
+    const syncOriginValue = () => {
+        document.querySelectorAll('[data-origin-channel-field="1"]').forEach((input) => {
+            input.value = originSelect.value || 'admin';
+        });
+    };
+    originSelect.addEventListener('change', syncOriginValue);
+    syncOriginValue();
+});
+</script>
 {% endblock %}

@@ -15,6 +15,11 @@ BILLABLE_ORDER_STATUSES = {
     Order.STATUS_DELIVERED,
 }
 
+BILLABLE_FISCAL_DOCUMENT_STATUSES = {
+    "authorized",
+    "external_recorded",
+}
+
 
 def _to_decimal(value):
     if value is None:
@@ -30,10 +35,62 @@ def _resolve_client_profile_from_order(order):
     return ClientProfile.objects.filter(user_id=order.user_id).first()
 
 
+def _get_order_billable_fiscal_document(order):
+    if not order:
+        return None
+    from core.models import FiscalDocument
+
+    return (
+        FiscalDocument.objects.select_related("sales_document_type", "point_of_sale")
+        .filter(
+            order=order,
+            doc_type__in={"FA", "FB"},
+            status__in=BILLABLE_FISCAL_DOCUMENT_STATUSES,
+        )
+        .exclude(status="voided")
+        .order_by("-issued_at", "-created_at", "-id")
+        .first()
+    )
+
+
+def _get_order_charge_snapshot(order):
+    """Resolve whether one order should currently impact current account."""
+    billable_document = _get_order_billable_fiscal_document(order)
+    if billable_document:
+        return {
+            "amount": _to_decimal(order.total).quantize(Decimal("0.01")),
+            "occurred_at": getattr(billable_document, "issued_at", None)
+            or getattr(billable_document, "created_at", None)
+            or getattr(order, "status_updated_at", None)
+            or timezone.now(),
+            "description": (
+                f"Venta facturada {billable_document.commercial_type_label} "
+                f"{billable_document.display_number}"
+            ).strip(),
+        }
+
+    if order and (getattr(order, "saas_document_number", "") or getattr(order, "saas_document_type", "")):
+        return {
+            "amount": _to_decimal(order.total).quantize(Decimal("0.01")),
+            "occurred_at": getattr(order, "status_updated_at", None) or timezone.now(),
+            "description": (
+                f"Venta facturada en SaaS "
+                f"{getattr(order, 'saas_document_type', '')} "
+                f"{getattr(order, 'saas_document_number', '')}"
+            ).strip(),
+        }
+
+    return {
+        "amount": Decimal("0.00"),
+        "occurred_at": getattr(order, "status_updated_at", None) or timezone.now(),
+        "description": f"Pedido #{order.pk} sin comprobante imputable a cuenta corriente",
+    }
+
+
 def sync_order_charge_transaction(order, actor=None):
     """
-    Upsert one idempotent ledger row for order charge.
-    Positive amount increases debt; zero means no charge for current status.
+    Upsert one idempotent ledger row for billed sales linked to an order.
+    Positive amount increases debt; zero means the order has no final billable document yet.
     """
     client_profile = _resolve_client_profile_from_order(order)
     if not client_profile:
@@ -48,8 +105,9 @@ def sync_order_charge_transaction(order, actor=None):
             company = get_default_company()
         except Exception:
             company = None
-    amount = _to_decimal(order.total if order.status in BILLABLE_ORDER_STATUSES else 0).quantize(Decimal("0.01"))
-    occurred_at = getattr(order, "status_updated_at", None) or timezone.now()
+    charge_snapshot = _get_order_charge_snapshot(order)
+    amount = charge_snapshot["amount"]
+    occurred_at = charge_snapshot["occurred_at"]
 
     defaults = {
         "client_profile": client_profile,
@@ -58,7 +116,7 @@ def sync_order_charge_transaction(order, actor=None):
         "order": order,
         "transaction_type": ClientTransaction.TYPE_ORDER_CHARGE,
         "amount": amount,
-        "description": f"Cargo pedido #{order.pk} ({order.get_status_display()})",
+        "description": charge_snapshot["description"],
         "occurred_at": occurred_at,
         "created_by": actor if getattr(actor, "is_authenticated", False) else None,
     }

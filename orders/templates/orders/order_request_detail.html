@@ -1,0 +1,326 @@
+{% extends 'base.html' %}
+
+{% block title %}Solicitud #{{ order_request.pk }} - FLEXS{% endblock %}
+
+{% block content %}
+<div class="order-detail-page">
+    <div class="container">
+        <div class="order-header">
+            <div>
+                <h1>Solicitud #{{ order_request.pk }}</h1>
+                <p class="text-muted">Pedido enviado desde el catalogo y pendiente de definicion comercial.</p>
+            </div>
+            <span class="badge badge-info" style="font-size: 1rem; padding: 0.5rem 1rem;">
+                {{ order_request.get_status_display }}
+            </span>
+        </div>
+
+        <div class="order-meta">
+            <p>Fecha de envio: {{ order_request.submitted_at|default:order_request.created_at|date:"d/m/Y H:i" }}</p>
+            {% if order_request.reviewed_at %}
+            <p>Tomada en revision: {{ order_request.reviewed_at|date:"d/m/Y H:i" }}</p>
+            {% endif %}
+            {% if order_request.decided_at %}
+            <p>Resolucion comercial: {{ order_request.decided_at|date:"d/m/Y H:i" }}</p>
+            {% endif %}
+        </div>
+
+        <div class="order-items">
+            <h3>Productos solicitados</h3>
+            <table class="items-table">
+                <thead>
+                    <tr>
+                        <th>SKU</th>
+                        <th>Producto</th>
+                        <th>Cantidad</th>
+                        <th>Precio Unit.</th>
+                        <th>Subtotal</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in order_request.items.all %}
+                    <tr>
+                        <td><code>{{ item.product_sku }}</code></td>
+                        <td>{{ item.product_name }}</td>
+                        <td>{{ item.quantity }}</td>
+                        <td>${{ item.price_at_snapshot|floatformat:2 }}</td>
+                        <td>${{ item.subtotal|floatformat:2 }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <div class="order-totals">
+            <div class="total-row">
+                <span>Subtotal</span>
+                <span>${{ order_request.requested_subtotal|floatformat:2 }}</span>
+            </div>
+            {% if order_request.requested_discount_percentage %}
+            <div class="total-row discount">
+                <span>Descuento ({{ order_request.requested_discount_percentage|floatformat:0 }}%)</span>
+                <span>-${{ order_request.requested_discount_amount|floatformat:2 }}</span>
+            </div>
+            {% endif %}
+            <div class="total-row total">
+                <span>Total solicitado</span>
+                <span>${{ order_request.requested_total|floatformat:2 }}</span>
+            </div>
+        </div>
+
+        {% if current_proposal %}
+        <div class="order-notes">
+            <h4>Propuesta comercial vigente</h4>
+            <p><strong>Estado:</strong> {{ current_proposal.get_status_display }}</p>
+            <p><strong>Version:</strong> {{ current_proposal.version_number }}</p>
+            {% if current_proposal.message_to_client %}
+            <p><strong>Mensaje:</strong> {{ current_proposal.message_to_client }}</p>
+            {% endif %}
+            <table class="items-table">
+                <thead>
+                    <tr>
+                        <th>SKU</th>
+                        <th>Producto</th>
+                        <th>Cantidad</th>
+                        <th>Precio Unit.</th>
+                        <th>Subtotal</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in current_proposal.items.all %}
+                    <tr>
+                        <td><code>{{ item.product_sku }}</code></td>
+                        <td>{{ item.product_name }}</td>
+                        <td>{{ item.quantity }}</td>
+                        <td>${{ item.price_at_snapshot|floatformat:2 }}</td>
+                        <td>${{ item.subtotal|floatformat:2 }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            <div class="proposal-total">
+                <strong>Total propuesto:</strong> ${{ current_proposal.proposed_total|floatformat:2 }}
+            </div>
+            {% if can_accept_proposal %}
+            <div class="proposal-actions">
+                <form method="post" action="{% url 'order_request_accept_proposal' order_request.pk current_proposal.pk %}">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-primary">Aceptar propuesta</button>
+                </form>
+                <form method="post" action="{% url 'order_request_reject_proposal' order_request.pk current_proposal.pk %}">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-outline">Rechazar propuesta</button>
+                </form>
+            </div>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        {% if proposals|length > 1 %}
+        <div class="order-notes">
+            <h4>Historial de propuestas</h4>
+            <ul class="proposal-history">
+                {% for proposal in proposals %}
+                <li>
+                    <strong>Version {{ proposal.version_number }}</strong>
+                    <span>{{ proposal.get_status_display }}</span>
+                    <span>{{ proposal.sent_at|date:"d/m/Y H:i" }}</span>
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+
+        {% if order_request.rejection_reason %}
+        <div class="order-notes">
+            <h4>Motivo de rechazo</h4>
+            <p>{{ order_request.rejection_reason }}</p>
+        </div>
+        {% endif %}
+
+        {% if order_request.client_note %}
+        <div class="order-notes">
+            <h4>Tu nota</h4>
+            <p>{{ order_request.client_note }}</p>
+        </div>
+        {% endif %}
+
+        {% if request_events %}
+        <div class="order-notes">
+            <h4>Seguimiento comercial</h4>
+            <ul class="proposal-history">
+                {% for event in request_events %}
+                <li>
+                    <div>
+                        <strong>{{ event.get_event_type_display }}</strong>
+                        {% if event.message %}
+                        <div class="text-muted">{{ event.message }}</div>
+                        {% endif %}
+                        {% if event.actor %}
+                        <small>{{ event.actor.get_full_name|default:event.actor.username }}</small>
+                        {% endif %}
+                    </div>
+                    <span>{{ event.created_at|date:"d/m/Y H:i" }}</span>
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+
+        {% if request_order %}
+        <div class="order-notes">
+            <h4>Operacion generada</h4>
+            <p>Esta solicitud ya fue convertida a pedido operativo.</p>
+            <a href="{% url 'order_detail' request_order.pk %}" class="btn btn-primary">Ver pedido #{{ request_order.pk }}</a>
+        </div>
+        {% endif %}
+
+        {% if request_order %}
+        <div class="order-notes">
+            <h4>Documentos asociados</h4>
+            {% if request_order_documents or request_order_fiscal_documents %}
+            <div class="linked-doc-grid">
+                <div>
+                    <strong>Internos</strong>
+                    <ul class="linked-doc-list">
+                        {% for doc in request_order_documents %}
+                        <li>
+                            <span>{{ doc.commercial_type_label }} - {{ doc.display_number }}</span>
+                            <a href="{% url 'order_internal_document_print' doc.pk %}?copy=original" class="btn btn-outline btn-sm" target="_blank" rel="noopener noreferrer">Abrir</a>
+                        </li>
+                        {% empty %}
+                        <li><span class="text-muted">Todavia no hay documentos internos.</span></li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                <div>
+                    <strong>Fiscales</strong>
+                    <ul class="linked-doc-list">
+                        {% for doc in request_order_fiscal_documents %}
+                        <li>
+                            <span>{{ doc.commercial_type_label }} - {{ doc.display_number }} ({{ doc.get_status_display }})</span>
+                            <a href="{% url 'order_fiscal_document_print' doc.pk %}?copy=original" class="btn btn-outline btn-sm" target="_blank" rel="noopener noreferrer">Abrir</a>
+                        </li>
+                        {% empty %}
+                        <li><span class="text-muted">Todavia no hay comprobantes fiscales.</span></li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+            {% else %}
+            <p class="text-muted">La operacion ya existe, pero todavia no se generaron documentos.</p>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        <div style="display:flex;gap:10px;flex-wrap:wrap;">
+            <a href="{% url 'order_request_list' %}" class="btn btn-outline"><- Volver a Mis Solicitudes</a>
+            <a href="{% url 'catalog' %}" class="btn btn-primary">Seguir comprando</a>
+        </div>
+    </div>
+</div>
+
+<style>
+    .order-detail-page {
+        padding: var(--spacing-2xl) 0;
+    }
+    .order-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: start;
+        gap: 16px;
+        margin-bottom: var(--spacing-lg);
+    }
+    .order-header h1 {
+        margin-bottom: 4px;
+    }
+    .order-meta {
+        color: var(--color-gray-light);
+        margin-bottom: var(--spacing-2xl);
+    }
+    .order-items {
+        background: var(--color-dark-light);
+        padding: var(--spacing-xl);
+        border-radius: var(--radius-lg);
+        margin-bottom: var(--spacing-xl);
+    }
+    .items-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+    .items-table th,
+    .items-table td {
+        padding: var(--spacing-md);
+        text-align: left;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    .order-totals {
+        background: var(--color-dark-light);
+        padding: var(--spacing-xl);
+        border-radius: var(--radius-lg);
+        max-width: 380px;
+        margin-left: auto;
+        margin-bottom: var(--spacing-xl);
+    }
+    .total-row {
+        display: flex;
+        justify-content: space-between;
+        padding: var(--spacing-sm) 0;
+    }
+    .total-row.discount {
+        color: var(--color-success);
+    }
+    .total-row.total {
+        font-size: var(--font-size-xl);
+        font-weight: 700;
+        color: var(--color-primary);
+        padding-top: var(--spacing-md);
+        border-top: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    .order-notes {
+        background: var(--color-dark);
+        padding: var(--spacing-lg);
+        border-radius: var(--radius-md);
+        margin-bottom: var(--spacing-xl);
+    }
+    .proposal-total {
+        margin-top: 12px;
+        text-align: right;
+        color: var(--color-primary);
+    }
+    .proposal-actions {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-top: 14px;
+    }
+    .proposal-history {
+        margin: 0;
+        padding-left: 18px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+    .linked-doc-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(220px, 1fr));
+        gap: 16px;
+    }
+    .linked-doc-list {
+        list-style: none;
+        margin: 10px 0 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+    .linked-doc-list li {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 10px;
+        padding-bottom: 8px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+</style>
+{% endblock %}

@@ -9,7 +9,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{% static 'core/css/base.css' %}">
-    <link rel="stylesheet" href="{% static 'core/css/admin.css' %}?v=31">
+    <link rel="stylesheet" href="{% static 'core/css/admin.css' %}?v=35">
     <link rel="stylesheet" href="{% static 'core/css/admin_right_sidebar.css' %}?v=3">
     <link rel="stylesheet" href="{% static 'core/css/search_suggestions.css' %}?v=3">
     <link rel="icon" type="image/x-icon" href="{% static 'core/img/favicon.ico' %}">
@@ -87,9 +87,14 @@
 
                 <div class="nav-section">Ventas</div>
                 <a href="{% url 'admin_order_list' %}"
-                    class="nav-item {% if 'order' in request.resolver_match.url_name %}active{% endif %}">
+                    class="nav-item {% if 'order' in request.resolver_match.url_name and 'admin_order_request' not in request.resolver_match.url_name %}active{% endif %}">
                     <span class="nav-icon" aria-hidden="true">&#128722;</span>
                     Pedidos
+                </a>
+                <a href="{% url 'admin_order_request_list' %}"
+                    class="nav-item {% if 'admin_order_request' in request.resolver_match.url_name %}active{% endif %}">
+                    <span class="nav-icon" aria-hidden="true">&#128221;</span>
+                    Pedidos web
                 </a>
                 <a href="{% url 'admin_payment_list' %}"
                     class="nav-item {% if 'payment' in request.resolver_match.url_name %}active{% endif %}">
@@ -230,8 +235,11 @@
                     <div class="top-nav-group">
                         <span class="top-nav-group-label">Ventas</span>
                         <div class="top-nav-group-links">
-                            <a href="{% url 'admin_order_list' %}" class="top-nav-item {% if 'order' in request.resolver_match.url_name %}active{% endif %}">
+                            <a href="{% url 'admin_order_list' %}" class="top-nav-item {% if 'order' in request.resolver_match.url_name and 'admin_order_request' not in request.resolver_match.url_name %}active{% endif %}">
                                 <span aria-hidden="true">&#128722;</span> Pedidos
+                            </a>
+                            <a href="{% url 'admin_order_request_list' %}" class="top-nav-item {% if 'admin_order_request' in request.resolver_match.url_name %}active{% endif %}">
+                                <span aria-hidden="true">&#128221;</span> Pedidos web
                             </a>
                             <a href="{% url 'admin_payment_list' %}" class="top-nav-item {% if 'payment' in request.resolver_match.url_name %}active{% endif %}">
                                 <span aria-hidden="true">&#128179;</span> Pagos

@@ -83,6 +83,10 @@
                         <span class="sales-record-field-value">{{ order.created_at|date:"d/m/Y H:i" }}</span>
                     </div>
                     <div class="sales-record-field">
+                        <span class="sales-record-field-label">Canal de origen</span>
+                        <span class="sales-record-field-value">{{ order.get_origin_channel_display }}</span>
+                    </div>
+                    <div class="sales-record-field">
                         <span class="sales-record-field-label">Condicion de venta</span>
                         <span class="sales-record-field-value">{{ pricing_snapshot.sale_condition|default:"-" }}</span>
                     </div>
@@ -150,6 +154,12 @@
                     <div class="sales-record-field">
                         <span class="sales-record-field-label">Lista</span>
                         <span class="sales-record-field-value">{{ pricing_snapshot.price_list.name|default:"-" }}</span>
+                    </div>
+                    <div class="sales-record-field">
+                        <span class="sales-record-field-label">Solicitud origen</span>
+                        <span class="sales-record-field-value">
+                            {% if order.source_request_id %}#{{ order.source_request_id }}{% else %}-{% endif %}
+                        </span>
                     </div>
                 </div>
             </section>
@@ -506,6 +516,9 @@
                                 <a href="{% url 'admin_internal_document_print' doc.pk %}?copy=original&download=1" class="btn btn-outline btn-sm" data-print-window="1" target="_blank" rel="noopener noreferrer">PDF</a>
                                 <a href="{% url 'admin_internal_document_print' doc.pk %}?copy=duplicado" class="btn btn-outline btn-sm" data-print-window="1" target="_blank" rel="noopener noreferrer">Duplicado</a>
                                 <a href="{% url 'admin_internal_document_print' doc.pk %}?copy=triplicado" class="btn btn-outline btn-sm" data-print-window="1" target="_blank" rel="noopener noreferrer">Triplicado</a>
+                                {% if doc.can_safe_delete %}
+                                <a href="{% url 'admin_internal_document_delete' doc.pk %}" class="btn btn-danger-outline btn-sm">Eliminar</a>
+                                {% endif %}
                             </div>
                         </li>
                         {% endfor %}
@@ -543,6 +556,9 @@
                                 <a href="{% url 'admin_fiscal_document_detail' doc.pk %}" class="btn btn-outline btn-sm">Ver</a>
                                 <a href="{% url 'admin_fiscal_document_print' doc.pk %}?copy=original" class="btn btn-outline btn-sm" data-print-window="1" target="_blank" rel="noopener noreferrer">Original</a>
                                 <a href="{% url 'admin_fiscal_document_print' doc.pk %}?copy=duplicado" class="btn btn-outline btn-sm" data-print-window="1" target="_blank" rel="noopener noreferrer">Duplicado</a>
+                                {% if doc.can_safe_delete %}
+                                <a href="{% url 'admin_fiscal_document_delete' doc.pk %}" class="btn btn-danger-outline btn-sm">Eliminar</a>
+                                {% endif %}
                             </div>
                         </li>
                         {% endfor %}
@@ -599,6 +615,11 @@
             {% csrf_token %}
             <button type="submit" class="btn btn-danger">Cancelar pedido</button>
         </form>
+        {% if can_hard_delete_order %}
+        <a href="{% url 'admin_order_hard_delete' order.pk %}" class="btn btn-danger-outline">Eliminar definitivo</a>
+        {% elif hard_delete_blockers %}
+        <span class="text-muted">No eliminable: {{ hard_delete_blockers|join:" " }}</span>
+        {% endif %}
         {% endif %}
     </div>
 </div>

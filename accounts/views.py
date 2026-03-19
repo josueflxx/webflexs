@@ -17,6 +17,7 @@ from .models import AccountRequest
 from core.models import Company
 from core.services.company_context import (
     get_active_company,
+    get_default_client_origin_company,
     get_user_companies,
     set_active_company,
     user_has_company_access,
@@ -129,11 +130,17 @@ def login_redirect(request):
     """
     companies = list(get_user_companies(request.user))
     active_company = get_active_company(request)
-    if len(companies) > 1 and not active_company:
+    if request.user.is_staff and len(companies) > 1 and not active_company:
         target = reverse("admin_dashboard") if request.user.is_staff else reverse("catalog")
         return redirect(f"{reverse('select_company')}?next={target}")
     if request.user.is_staff:
         return render(request, "accounts/admin_redirect.html")
+    if not active_company and companies:
+        preferred_company = get_default_client_origin_company()
+        if preferred_company and any(company.pk == preferred_company.pk for company in companies):
+            set_active_company(request, preferred_company)
+        else:
+            set_active_company(request, companies[0])
     return redirect("catalog")
 
 

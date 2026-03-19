@@ -55,23 +55,20 @@
                     <span>${{ total|floatformat:2 }}</span>
                 </div>
 
-                <a href="#" class="btn btn-primary btn-lg btn-block beta-control" aria-disabled="true">
-                    <span class="beta-strike">Continuar al Checkout</span>
-                    <span class="beta-pill">BETA</span>
+                <a href="{% url 'checkout' %}" class="btn btn-primary btn-lg btn-block">
+                    Continuar al checkout
                 </a>
 
-                <a href="#" class="btn btn-outline btn-block beta-control" aria-disabled="true">
-                    <span class="beta-strike">Seguir Comprando</span>
-                    <span class="beta-pill">BETA</span>
+                <a href="{% url 'catalog' %}" class="btn btn-outline btn-block">
+                    Seguir comprando
                 </a>
             </div>
         </div>
         {% else %}
         <div class="empty-cart">
             <p>Tu carrito esta vacio</p>
-            <a href="#" class="btn btn-primary beta-control" aria-disabled="true">
-                <span class="beta-strike">Ver Catalogo</span>
-                <span class="beta-pill">BETA</span>
+            <a href="{% url 'catalog' %}" class="btn btn-primary">
+                Ver catalogo
             </a>
         </div>
         {% endif %}
@@ -109,33 +106,6 @@
     .cart-summary .btn { margin-top: var(--spacing-md); }
     .btn-block { width: 100%; text-align: center; }
     .empty-cart { text-align: center; padding: var(--spacing-3xl); }
-    .beta-control {
-        position: relative;
-        pointer-events: none;
-        user-select: none;
-        cursor: not-allowed !important;
-        opacity: 0.7;
-        text-decoration: none;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        gap: 8px;
-    }
-    .beta-strike {
-        text-decoration: line-through;
-        text-decoration-thickness: 2px;
-    }
-    .beta-pill {
-        font-size: 0.62rem;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.06em;
-        color: #ffc896;
-        border: 1px solid rgba(255, 122, 64, 0.45);
-        background: rgba(255, 122, 64, 0.18);
-        border-radius: 999px;
-        padding: 2px 6px;
-    }
     .beta-control-compact {
         pointer-events: none;
         cursor: not-allowed !important;

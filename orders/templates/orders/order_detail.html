@@ -15,6 +15,9 @@
         <div class="order-meta">
             <p>Fecha: {{ order.created_at|date:"d/m/Y H:i" }}</p>
             <p>Ultimo cambio de estado: {{ order.status_updated_at|date:"d/m/Y H:i" }}</p>
+            {% if order.source_request %}
+            <p>Origen: solicitud comercial #{{ order.source_request.pk }}</p>
+            {% endif %}
         </div>
 
         <div class="order-items">
@@ -114,6 +117,38 @@
             {% endif %}
         </div>
 
+        <div class="order-notes">
+            <h4>Documentos asociados</h4>
+            <div class="linked-doc-grid">
+                <div>
+                    <strong>Internos</strong>
+                    <ul class="linked-doc-list">
+                        {% for doc in order_documents %}
+                        <li>
+                            <span>{{ doc.commercial_type_label }} - {{ doc.display_number }}</span>
+                            <a href="{% url 'order_internal_document_print' doc.pk %}?copy=original" class="btn btn-outline btn-sm" target="_blank" rel="noopener noreferrer">Abrir</a>
+                        </li>
+                        {% empty %}
+                        <li><span class="text-muted">Todavia no hay documentos internos.</span></li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                <div>
+                    <strong>Fiscales</strong>
+                    <ul class="linked-doc-list">
+                        {% for doc in order_fiscal_documents %}
+                        <li>
+                            <span>{{ doc.commercial_type_label }} - {{ doc.display_number }} ({{ doc.get_status_display }})</span>
+                            <a href="{% url 'order_fiscal_document_print' doc.pk %}?copy=original" class="btn btn-outline btn-sm" target="_blank" rel="noopener noreferrer">Abrir</a>
+                        </li>
+                        {% empty %}
+                        <li><span class="text-muted">Todavia no hay comprobantes fiscales.</span></li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+        </div>
+
         <div style="display:flex;gap:10px;flex-wrap:wrap;">
             <a href="{% url 'order_list' %}" class="btn btn-outline"><- Volver a Mis Pedidos</a>
             <form method="post" action="{% url 'reorder_to_cart' order.pk %}">
@@ -197,6 +232,27 @@
         padding: var(--spacing-lg);
         border-radius: var(--radius-md);
         margin-bottom: var(--spacing-xl);
+    }
+    .linked-doc-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(220px, 1fr));
+        gap: 16px;
+    }
+    .linked-doc-list {
+        list-style: none;
+        margin: 10px 0 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+    .linked-doc-list li {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 10px;
+        padding-bottom: 8px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
     }
 </style>
 {% endblock %}

@@ -85,6 +85,9 @@
                     {% endif %}
                     <a href="{% url 'admin_fiscal_document_detail' doc.pk %}" class="btn btn-outline btn-sm">Ver</a>
                     <a href="{% url 'admin_fiscal_document_print' doc.pk %}?copy=original" class="btn btn-outline btn-sm" data-print-window="1" target="_blank" rel="noopener noreferrer">Imprimir</a>
+                    {% if doc.can_safe_delete %}
+                    <a href="{% url 'admin_fiscal_document_delete' doc.pk %}" class="btn btn-danger-outline btn-sm">Eliminar</a>
+                    {% endif %}
                 </td>
             </tr>
             {% empty %}
