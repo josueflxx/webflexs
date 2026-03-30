@@ -7,7 +7,7 @@
     <div class="admin-toolbar">
         <div class="toolbar-search">
             <strong>Configuracion fiscal de empresa activa</strong>
-            <div class="text-muted" style="margin-top:4px;">
+            <div class="text-muted fiscal-config-subtitle">
                 Empresa activa: <strong>{{ active_company.name }}</strong>
             </div>
         </div>
@@ -18,8 +18,8 @@
         </div>
     </div>
 
-    <div class="card" style="padding: 1rem; margin-bottom: 1rem;">
-        <div style="display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+    <div class="card fiscal-config-card">
+        <div class="fiscal-config-grid">
             <div>
                 <div><strong>Razon social:</strong> {{ active_company.legal_name|default:"-" }}</div>
                 <div><strong>CUIT:</strong> {{ active_company.cuit|default:"-" }}</div>
@@ -35,7 +35,7 @@
                     <strong>POS default (modelo):</strong>
                     {% if default_point %}{{ default_point.number }}{% else %}-{% endif %}
                 </div>
-                <div style="margin-top:8px;">
+                <div class="fiscal-status-block">
                     {% if is_ready %}
                     <span class="badge badge-success">Lista para emitir</span>
                     {% else %}
@@ -45,9 +45,9 @@
             </div>
         </div>
         {% if not is_ready %}
-        <div class="alert alert-warning" style="margin-top: 1rem;">
+        <div class="alert alert-warning fiscal-readiness-alert">
             <strong>Faltantes detectados:</strong>
-            <ul style="margin:8px 0 0 16px;">
+            <ul class="fiscal-readiness-list">
                 {% for item in readiness_errors %}
                 <li>{{ item }}</li>
                 {% endfor %}
@@ -89,14 +89,14 @@
                 </td>
                 <td class="actions">
                     <a href="{% url 'admin_fiscal_point_edit' point.pk %}" class="btn btn-outline btn-sm">Editar</a>
-                    <form method="post" action="{% url 'admin_fiscal_point_toggle_active' point.pk %}" style="display:inline;">
+                    <form method="post" action="{% url 'admin_fiscal_point_toggle_active' point.pk %}" class="inline-form">
                         {% csrf_token %}
                         <button type="submit" class="btn btn-outline btn-sm">
                             {% if point.is_active %}Desactivar{% else %}Activar{% endif %}
                         </button>
                     </form>
                     {% if not point.is_default %}
-                    <form method="post" action="{% url 'admin_fiscal_point_set_default' point.pk %}" style="display:inline;">
+                    <form method="post" action="{% url 'admin_fiscal_point_set_default' point.pk %}" class="inline-form">
                         {% csrf_token %}
                         <button type="submit" class="btn btn-primary btn-sm">Marcar default</button>
                     </form>

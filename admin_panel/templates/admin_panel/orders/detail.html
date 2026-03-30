@@ -25,7 +25,7 @@
                 {% if order_invoice_document %}
                 <a href="{% url 'admin_fiscal_document_detail' order_invoice_document.pk %}" class="sales-record-action is-primary">Abrir factura</a>
                 {% elif order_can_invoice %}
-                <form method="post" action="{% url 'admin_order_invoice_open' order.pk %}" style="display:inline;">
+                <form method="post" action="{% url 'admin_order_invoice_open' order.pk %}" class="sales-record-action-form">
                     {% csrf_token %}
                     <button type="submit" class="sales-record-action is-primary">{{ order_invoice_action_label }}</button>
                 </form>
@@ -243,40 +243,8 @@
                     <h3>Productos de la venta</h3>
                     <p>Detalle comercial con cantidades, descuentos y acciones del documento.</p>
                 </div>
-                <span class="sales-record-tag">{{ order_items|length }} item{{ order_items|length|pluralize }}</span>
+                <span class="sales-record-tag" id="order-items-count-tag">{{ order_items|length }} item{{ order_items|length|pluralize }}</span>
             </div>
-
-            {% if order.status == 'draft' %}
-            <form method="post" action="{% url 'admin_order_item_add' order.pk %}" class="order-record-add-item-grid" autocomplete="off">
-                {% csrf_token %}
-                <div class="form-group" style="margin:0;">
-                    <label for="sku" class="form-label">Producto</label>
-                    <input
-                        type="search"
-                        id="sku"
-                        name="sku"
-                        class="form-input"
-                        placeholder="SKU, nombre, medida o marca…"
-                        data-suggest="1"
-                        data-suggest-scope="admin_products"
-                        data-suggest-submit="manual"
-                        data-suggest-query-item="0"
-                        data-suggest-target="#order-product-id"
-                        autocomplete="off">
-                    <input type="hidden" name="product_id" id="order-product-id">
-                </div>
-                <div class="form-group" style="margin:0;">
-                    <label for="quantity" class="form-label">Cant.</label>
-                    <input type="number" min="1" name="quantity" id="quantity" class="form-input" value="1">
-                </div>
-                <div class="form-group" style="margin:0;">
-                    <label for="price" class="form-label">Precio</label>
-                    <input type="number" step="0.01" min="0" name="price" id="order-item-price" class="form-input" placeholder="Auto">
-                </div>
-                <button type="submit" class="btn btn-primary" id="order-add-item-btn">+ Agregar</button>
-            </form>
-            {% endif %}
-
 
             <div class="sales-record-table-wrap">
                 <table class="admin-table sales-record-table order-record-products-table">
@@ -292,77 +260,49 @@
                             <th>Acciones</th>
                         </tr>
                     </thead>
-                    <tbody>
-                        {% for item in order_items %}
-                        <tr>
-                            <td><a href="#" onclick="return false;">{{ item.product_sku }}</a></td>
-                            <td>{{ item.quantity }}</td>
-                            <td>{{ item.product_name }}</td>
-                            <td>
-                                {% if item.clamp_request_id %}
-                                <div class="order-clamp-meta">
-                                    <strong>#{{ item.clamp_request_id }}</strong>
-                                    <small class="text-muted">
-                                        {{ item.clamp_request.get_clamp_type_display|upper }}
-                                        {{ item.clamp_request.diameter }} x {{ item.clamp_request.width_mm }} x {{ item.clamp_request.length_mm }}
-                                        {{ item.clamp_request.profile_type }}
-                                    </small>
-                                    {% if item.published_to_catalog %}
-                                    <span class="badge badge-success">Publicada</span>
-                                    {% endif %}
-                                </div>
-                                {% else %}
-                                <span class="text-muted">-</span>
-                                {% endif %}
-                            </td>
-                            <td>${{ item.price_at_purchase|floatformat:2 }}</td>
-                            <td>
-                                {% if order.discount_percentage %}
-                                {{ order.discount_percentage|floatformat:0 }}%<br>
-                                <small class="text-muted">-${{ item.unit_discount_amount|floatformat:2 }}</small>
-                                {% else %}
-                                0.00%
-                                {% endif %}
-                            </td>
-                            <td><strong>${{ item.subtotal|floatformat:2 }}</strong></td>
-                            <td>
-                                <div class="order-inline-actions">
-                                    {% if item.clamp_request_id and item.can_publish_to_catalog %}
-                                    <form method="post" action="{% url 'admin_order_item_publish_clamp' order.pk item.pk %}">
-                                        {% csrf_token %}
-                                        <button
-                                            type="submit"
-                                            class="btn btn-primary btn-sm"
-                                            onclick="return confirm('Publicar esta abrazadera como producto del catalogo?');"
-                                        >
-                                            Anadir
-                                        </button>
-                                    </form>
-                                    {% elif item.clamp_request_id %}
-                                    <span class="text-muted">Publicada</span>
-                                    {% else %}
-                                    <span class="text-muted">-</span>
-                                    {% endif %}
-
-                                    {% if order.status == 'draft' %}
-                                    <form method="post" action="{% url 'admin_order_item_delete' order.pk item.pk %}">
-                                        {% csrf_token %}
-                                        <button type="submit" class="btn btn-danger-outline btn-sm" onclick="return confirm('Eliminar este item?');">
-                                            Quitar
-                                        </button>
-                                    </form>
-                                    {% endif %}
-                                </div>
-                            </td>
-                        </tr>
-                        {% empty %}
-                        <tr>
-                            <td colspan="8" class="text-center text-muted">Este pedido todavia no tiene items cargados.</td>
-                        </tr>
-                        {% endfor %}
+                    <tbody id="order-items-tbody">
+                        {% include 'admin_panel/orders/_order_items_rows.html' %}
                     </tbody>
                 </table>
             </div>
+
+            {% if order.status == 'draft' %}
+            <form
+                method="post"
+                action="{% url 'admin_order_item_add' order.pk %}"
+                class="order-record-add-item-grid"
+                autocomplete="off"
+                id="order-item-add-form"
+            >
+                {% csrf_token %}
+                <div id="order-item-add-feedback" class="alert" style="display:none; grid-column: 1 / -1; margin: 0;"></div>
+                <div class="form-group form-group-tight">
+                    <label for="sku" class="form-label">Producto</label>
+                    <input
+                        type="search"
+                        id="sku"
+                        name="sku"
+                        class="form-input"
+                        placeholder="SKU, nombre, medida o marca..."
+                        data-suggest="1"
+                        data-suggest-scope="admin_products"
+                        data-suggest-submit="manual"
+                        data-suggest-query-item="0"
+                        data-suggest-target="#order-product-id"
+                        autocomplete="off">
+                    <input type="hidden" name="product_id" id="order-product-id">
+                </div>
+                <div class="form-group form-group-tight">
+                    <label for="quantity" class="form-label">Cant.</label>
+                    <input type="number" min="1" name="quantity" id="quantity" class="form-input" value="1">
+                </div>
+                <div class="form-group form-group-tight">
+                    <label for="price" class="form-label">Precio</label>
+                    <input type="number" step="0.01" min="0" name="price" id="order-item-price" class="form-input" placeholder="Auto">
+                </div>
+                <button type="submit" class="btn btn-primary" id="order-add-item-btn">+ Agregar</button>
+            </form>
+            {% endif %}
         </section>
 
         <div class="order-record-foot-grid">
@@ -397,27 +337,27 @@
                 <div class="sales-record-summary">
                     <div class="sales-record-summary-row">
                         <span>Subtotal</span>
-                        <strong>${{ order.subtotal|floatformat:2 }}</strong>
+                        <strong id="order-total-subtotal">${{ order.subtotal|floatformat:2 }}</strong>
                     </div>
                     <div class="sales-record-summary-row">
                         <span>Descuento</span>
-                        <strong>${{ order.discount_amount|floatformat:2 }}</strong>
+                        <strong id="order-total-discount">${{ order.discount_amount|floatformat:2 }}</strong>
                     </div>
                     <div class="sales-record-summary-row">
                         <span>Neto</span>
-                        <strong>${{ order.total|floatformat:2 }}</strong>
+                        <strong id="order-total-net">${{ order.total|floatformat:2 }}</strong>
                     </div>
                     <div class="sales-record-summary-row">
                         <span>Pagado</span>
-                        <strong>${{ order_paid_amount|floatformat:2 }}</strong>
+                        <strong id="order-total-paid">${{ order_paid_amount|floatformat:2 }}</strong>
                     </div>
                     <div class="sales-record-summary-row">
                         <span>Saldo</span>
-                        <strong>${{ order_pending_amount|floatformat:2 }}</strong>
+                        <strong id="order-total-pending">${{ order_pending_amount|floatformat:2 }}</strong>
                     </div>
                     <div class="sales-record-summary-row is-total">
                         <span>Total</span>
-                        <strong>${{ order.total|floatformat:2 }}</strong>
+                        <strong id="order-total-grand">${{ order.total|floatformat:2 }}</strong>
                     </div>
                 </div>
             </section>
@@ -430,29 +370,19 @@
             <div class="sales-record-card-head">
                 <div>
                     <h3>Workflow</h3>
-                    <p>Cambio de estado y notas internas del equipo.</p>
+                    <p>Cambio rapido de estado.</p>
                 </div>
             </div>
 
             <form method="post" class="order-workflow-form">
                 {% csrf_token %}
-                <div class="order-workflow-grid">
-                    <div class="form-group" style="margin:0;">
-                        <label for="status_select" class="form-label">Estado</label>
-                        <select name="status" id="status_select" class="form-select">
-                            {% for value, label in status_choices %}
-                            <option value="{{ value }}" {% if order.status == value %}selected{% endif %}>{{ label }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div class="form-group" style="margin:0;">
-                        <label for="status_note" class="form-label">Nota de cambio</label>
-                        <input type="text" name="status_note" id="status_note" class="form-input" placeholder="Motivo del cambio de estado">
-                    </div>
-                </div>
-                <div class="form-group" style="margin:0;">
-                    <label for="admin_notes" class="form-label">Notas internas</label>
-                    <textarea name="admin_notes" id="admin_notes" class="form-textarea" rows="4">{{ order.admin_notes }}</textarea>
+                <div class="form-group form-group-tight" style="max-width: 260px;">
+                    <label for="status_select" class="form-label">Estado</label>
+                    <select name="status" id="status_select" class="form-select">
+                        {% for value, label in status_choices %}
+                        <option value="{{ value }}" {% if order.status == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
                 </div>
                 <div class="order-inline-actions">
                     <button type="submit" class="btn btn-primary">Actualizar estado</button>
@@ -460,115 +390,6 @@
             </form>
         </section>
         {% endif %}
-
-        <section class="sales-record-card order-record-span-2">
-            <div class="sales-record-card-head">
-                <div>
-                    <h3>Documentos vinculados</h3>
-                    <p>Internos y fiscales generados a partir de esta venta.</p>
-                </div>
-            </div>
-
-            <div class="order-record-doc-grid">
-                <div class="order-side-group">
-                    <span class="order-info-label">Documentos internos</span>
-                    {% if sales_internal_document_types %}
-                    <form method="post" action="{% url 'admin_order_internal_document_create' order.pk %}" class="order-fiscal-form">
-                        {% csrf_token %}
-                        <div class="sales-record-card-head order-record-subhead">
-                            <div>
-                                <h3>Generar documento interno</h3>
-                                <p>Crea o reutiliza un documento segun el tipo comercial elegido.</p>
-                            </div>
-                        </div>
-                        <div class="order-fiscal-form-grid order-record-inline-create">
-                            <div>
-                                <label class="form-label">Tipo comercial interno</label>
-                                <select name="sales_document_type_id" class="form-select">
-                                    {% for configured_type in sales_internal_document_types %}
-                                    <option value="{{ configured_type.pk }}">
-                                        {{ configured_type.name }} &middot; {{ configured_type.get_internal_doc_type_display|default:configured_type.internal_doc_type }}
-                                    </option>
-                                    {% endfor %}
-                                </select>
-                            </div>
-                            <button type="submit" class="btn btn-outline">Generar interno</button>
-                        </div>
-                    </form>
-                    {% else %}
-                    <div class="order-empty-state">
-                        No hay tipos internos disponibles para el estado actual del pedido.
-                    </div>
-                    {% endif %}
-
-                    {% if order_documents %}
-                    <ul class="order-doc-list">
-                        {% for doc in order_documents %}
-                        <li class="order-doc-entry">
-                            <div class="order-doc-entry-main">
-                                <strong>{{ doc.commercial_type_label }} &middot; {{ doc.display_number }}</strong>
-                                <small class="text-muted">
-                                    Base {{ doc.get_doc_type_display }} &middot; {{ doc.issued_at|date:"d/m/Y H:i" }}
-                                </small>
-                            </div>
-                            <div class="order-doc-entry-actions">
-                                <a href="{% url 'admin_internal_document_print' doc.pk %}?copy=original" class="btn btn-outline btn-sm" data-print-window="1" target="_blank" rel="noopener noreferrer">Original</a>
-                                <a href="{% url 'admin_internal_document_print' doc.pk %}?copy=original&download=1" class="btn btn-outline btn-sm" data-print-window="1" target="_blank" rel="noopener noreferrer">PDF</a>
-                                <a href="{% url 'admin_internal_document_print' doc.pk %}?copy=duplicado" class="btn btn-outline btn-sm" data-print-window="1" target="_blank" rel="noopener noreferrer">Duplicado</a>
-                                <a href="{% url 'admin_internal_document_print' doc.pk %}?copy=triplicado" class="btn btn-outline btn-sm" data-print-window="1" target="_blank" rel="noopener noreferrer">Triplicado</a>
-                                {% if doc.can_safe_delete %}
-                                <a href="{% url 'admin_internal_document_delete' doc.pk %}" class="btn btn-danger-outline btn-sm">Eliminar</a>
-                                {% endif %}
-                            </div>
-                        </li>
-                        {% endfor %}
-                    </ul>
-                    {% else %}
-                    <div class="order-empty-state">Sin documentos internos generados.</div>
-                    {% endif %}
-                </div>
-
-                <div class="order-side-group">
-                    <span class="order-info-label">Documentos fiscales</span>
-                    {% if order_fiscal_documents %}
-                    <ul class="order-doc-list">
-                        {% for doc in order_fiscal_documents %}
-                        <li class="order-doc-entry">
-                            <div class="order-doc-entry-main">
-                                <strong>{{ doc.commercial_type_label }} &middot; {{ doc.display_number }}</strong>
-                                <small class="text-muted">
-                                    {{ doc.get_doc_type_display }} &middot; {{ doc.get_status_display }} / {{ doc.get_issue_mode_display }}
-                                </small>
-                            </div>
-                            <div class="order-doc-entry-actions">
-                                {% if doc.issue_mode == 'arca_wsfe' %}
-                                {% if doc.doc_type == 'FA' or doc.doc_type == 'FB' %}
-                                {% if doc.status == 'ready_to_issue' or doc.status == 'pending_retry' or doc.status == 'rejected' %}
-                                <form method="post" action="{% url 'admin_fiscal_document_emit' doc.pk %}">
-                                    {% csrf_token %}
-                                    <button type="submit" class="btn btn-primary btn-sm" onclick="return confirm('Emitir comprobante en ARCA ahora?');">
-                                        Emitir
-                                    </button>
-                                </form>
-                                {% endif %}
-                                {% endif %}
-                                {% endif %}
-                                <a href="{% url 'admin_fiscal_document_detail' doc.pk %}" class="btn btn-outline btn-sm">Ver</a>
-                                <a href="{% url 'admin_fiscal_document_print' doc.pk %}?copy=original" class="btn btn-outline btn-sm" data-print-window="1" target="_blank" rel="noopener noreferrer">Original</a>
-                                <a href="{% url 'admin_fiscal_document_print' doc.pk %}?copy=duplicado" class="btn btn-outline btn-sm" data-print-window="1" target="_blank" rel="noopener noreferrer">Duplicado</a>
-                                {% if doc.can_safe_delete %}
-                                <a href="{% url 'admin_fiscal_document_delete' doc.pk %}" class="btn btn-danger-outline btn-sm">Eliminar</a>
-                                {% endif %}
-                            </div>
-                        </li>
-                        {% endfor %}
-                    </ul>
-                    {% else %}
-                    <div class="order-empty-state">Sin documentos fiscales registrados.</div>
-                    {% endif %}
-                </div>
-            </div>
-        </section>
 
         <section class="sales-record-card order-record-span-2">
             <div class="sales-record-card-head">
@@ -628,10 +449,47 @@
 {% block extra_js %}
 <script>
 document.addEventListener('DOMContentLoaded', () => {
+    const addForm = document.getElementById('order-item-add-form');
     const skuInput = document.getElementById('sku');
     const quantityInput = document.getElementById('quantity');
     const priceInput = document.getElementById('order-item-price');
     const productIdInput = document.getElementById('order-product-id');
+    const submitButton = document.getElementById('order-add-item-btn');
+    const feedbackBox = document.getElementById('order-item-add-feedback');
+    const itemsTbody = document.getElementById('order-items-tbody');
+    const itemsCountTag = document.getElementById('order-items-count-tag');
+    const subtotalEl = document.getElementById('order-total-subtotal');
+    const discountEl = document.getElementById('order-total-discount');
+    const netEl = document.getElementById('order-total-net');
+    const paidEl = document.getElementById('order-total-paid');
+    const pendingEl = document.getElementById('order-total-pending');
+    const grandEl = document.getElementById('order-total-grand');
+
+    const formatArs = (value) => {
+        const num = Number(value || 0);
+        return '$' + new Intl.NumberFormat('es-AR', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+        }).format(Number.isFinite(num) ? num : 0);
+    };
+
+    const showFeedback = (message, type) => {
+        if (!feedbackBox) return;
+        feedbackBox.textContent = message || '';
+        feedbackBox.classList.remove('alert-success', 'alert-danger');
+        feedbackBox.classList.add(type === 'error' ? 'alert-danger' : 'alert-success');
+        feedbackBox.style.display = message ? 'block' : 'none';
+    };
+
+    const updateTotals = (totals) => {
+        if (!totals) return;
+        if (subtotalEl) subtotalEl.textContent = formatArs(totals.subtotal);
+        if (discountEl) discountEl.textContent = formatArs(totals.discount_amount);
+        if (netEl) netEl.textContent = formatArs(totals.total);
+        if (paidEl) paidEl.textContent = formatArs(totals.paid);
+        if (pendingEl) pendingEl.textContent = formatArs(totals.pending);
+        if (grandEl) grandEl.textContent = formatArs(totals.total);
+    };
 
     // Auto-focus the search field on page load
     if (skuInput) skuInput.focus();
@@ -651,8 +509,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Move focus to quantity
             setTimeout(() => {
-                quantityInput.focus();
-                quantityInput.select();
+                if (quantityInput) {
+                    quantityInput.focus();
+                    quantityInput.select();
+                }
             }, 30);
         });
     }
@@ -673,8 +533,10 @@ document.addEventListener('DOMContentLoaded', () => {
         quantityInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') {
                 e.preventDefault();
-                priceInput.focus();
-                priceInput.select();
+                if (priceInput) {
+                    priceInput.focus();
+                    priceInput.select();
+                }
             }
         });
     }
@@ -685,6 +547,62 @@ document.addEventListener('DOMContentLoaded', () => {
             if (e.key === 'Enter') {
                 e.preventDefault();
                 priceInput.form.submit();
+            }
+        });
+    }
+
+    if (addForm && submitButton && window.fetch) {
+        addForm.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            showFeedback('', 'success');
+
+            const csrfInput = addForm.querySelector('[name=csrfmiddlewaretoken]');
+            const csrfToken = csrfInput ? csrfInput.value : '';
+            const submitLabel = submitButton.textContent;
+            submitButton.disabled = true;
+            submitButton.textContent = 'AGREGANDO...';
+
+            try {
+                const response = await fetch(addForm.action, {
+                    method: 'POST',
+                    body: new FormData(addForm),
+                    credentials: 'same-origin',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'X-CSRFToken': csrfToken,
+                    },
+                });
+                let payload = null;
+                try {
+                    payload = await response.json();
+                } catch (_) {
+                    payload = null;
+                }
+
+                if (!response.ok || !payload || !payload.ok) {
+                    throw new Error((payload && payload.error) || 'No se pudo agregar el item.');
+                }
+
+                if (itemsTbody && typeof payload.items_tbody_html === 'string') {
+                    itemsTbody.innerHTML = payload.items_tbody_html;
+                }
+                if (itemsCountTag && payload.items_label) {
+                    itemsCountTag.textContent = payload.items_label;
+                }
+                updateTotals(payload.totals || {});
+
+                if (productIdInput) productIdInput.value = '';
+                if (skuInput) skuInput.value = '';
+                if (quantityInput) quantityInput.value = '1';
+                if (priceInput) priceInput.value = '';
+                if (skuInput) skuInput.focus();
+
+                showFeedback(payload.message || 'Item agregado al documento.', 'success');
+            } catch (error) {
+                showFeedback(error && error.message ? error.message : 'No se pudo agregar el item.', 'error');
+            } finally {
+                submitButton.disabled = false;
+                submitButton.textContent = submitLabel;
             }
         });
     }

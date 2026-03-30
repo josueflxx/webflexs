@@ -1,5 +1,8 @@
+import re
+
 from django.contrib.auth.models import User
 from django.core.cache import cache
+from django.core import mail
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
@@ -113,6 +116,85 @@ class LoginRedirectCompanySelectionTests(TestCase):
         self.assertNotIn("active_company_id", self.client.session)
 
 
+@override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
+class PasswordResetFlowTests(TestCase):
+    def setUp(self):
+        mail.outbox = []
+
+    def _extract_confirm_path(self, email_body):
+        match = re.search(
+            r"/accounts/password-reset-confirm/[0-9A-Za-z_\-]+/[0-9A-Za-z\-]+/",
+            email_body,
+        )
+        self.assertIsNotNone(match)
+        return match.group(0)
+
+    def test_password_reset_sends_email_and_allows_new_password(self):
+        user = User.objects.create_user(
+            username="cliente_recovery",
+            email="cliente_recovery@example.com",
+            password="oldpass123",
+        )
+
+        response = self.client.post(
+            reverse("password_reset"),
+            {"email": user.email},
+        )
+
+        self.assertRedirects(response, reverse("password_reset_done"))
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, [user.email])
+
+        confirm_path = self._extract_confirm_path(mail.outbox[0].body)
+        confirm_get = self.client.get(confirm_path, follow=True)
+        self.assertEqual(confirm_get.status_code, 200)
+        confirm_submit_path = confirm_get.request.get("PATH_INFO", confirm_path)
+
+        confirm_post = self.client.post(
+            confirm_submit_path,
+            {
+                "new_password1": "NuevaClaveSegura123!",
+                "new_password2": "NuevaClaveSegura123!",
+            },
+            follow=True,
+        )
+        self.assertContains(confirm_post, "Contrasena actualizada")
+
+        login_response = self.client.post(
+            reverse("login"),
+            {"username": user.username, "password": "NuevaClaveSegura123!"},
+            follow=True,
+        )
+        self.assertEqual(login_response.status_code, 200)
+        self.assertIn("_auth_user_id", self.client.session)
+
+    def test_password_reset_for_unknown_email_does_not_reveal_user_existence(self):
+        response = self.client.post(
+            reverse("password_reset"),
+            {"email": "noexiste@example.com"},
+        )
+
+        self.assertRedirects(response, reverse("password_reset_done"))
+        self.assertEqual(len(mail.outbox), 0)
+
+    def test_staff_user_can_use_password_reset_flow(self):
+        staff = User.objects.create_user(
+            username="staff_recovery",
+            email="staff_recovery@example.com",
+            password="oldpass123",
+            is_staff=True,
+        )
+
+        response = self.client.post(
+            reverse("password_reset"),
+            {"email": staff.email},
+        )
+
+        self.assertRedirects(response, reverse("password_reset_done"))
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, [staff.email])
+
+
 class ClientLedgerTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(username="ledger_client", password="secret123")
@@ -136,6 +218,7 @@ class ClientLedgerTests(TestCase):
             amount="100.00",
             description="Cargo pedido #1",
             source_key="test:order:1",
+            movement_state=ClientTransaction.STATE_CLOSED,
         )
         ClientTransaction.objects.create(
             client_profile=self.profile,
@@ -144,9 +227,54 @@ class ClientLedgerTests(TestCase):
             amount="-35.00",
             description="Pago #1",
             source_key="test:payment:1",
+            movement_state=ClientTransaction.STATE_CLOSED,
         )
 
         self.assertEqual(self.profile.get_current_balance(), 65)
+
+    def test_current_balance_excludes_voided_ledger_movements(self):
+        ClientTransaction.objects.create(
+            client_profile=self.profile,
+            company=self.company,
+            transaction_type=ClientTransaction.TYPE_ORDER_CHARGE,
+            amount="100.00",
+            description="Cargo activo",
+            source_key="test:order:active",
+            movement_state=ClientTransaction.STATE_CLOSED,
+        )
+        ClientTransaction.objects.create(
+            client_profile=self.profile,
+            company=self.company,
+            transaction_type=ClientTransaction.TYPE_ADJUSTMENT,
+            amount="40.00",
+            description="Ajuste anulado",
+            source_key="test:adjustment:voided",
+            movement_state=ClientTransaction.STATE_VOIDED,
+        )
+
+        self.assertEqual(self.profile.get_current_balance(), 100)
+
+    def test_current_balance_ignores_open_ledger_movements(self):
+        ClientTransaction.objects.create(
+            client_profile=self.profile,
+            company=self.company,
+            transaction_type=ClientTransaction.TYPE_ORDER_CHARGE,
+            amount="100.00",
+            description="Cargo pendiente",
+            source_key="test:order:open",
+            movement_state=ClientTransaction.STATE_OPEN,
+        )
+        ClientTransaction.objects.create(
+            client_profile=self.profile,
+            company=self.company,
+            transaction_type=ClientTransaction.TYPE_PAYMENT,
+            amount="-30.00",
+            description="Pago pendiente",
+            source_key="test:payment:open",
+            movement_state=ClientTransaction.STATE_OPEN,
+        )
+
+        self.assertEqual(self.profile.get_current_balance(), 0)
 
     def test_client_payment_save_creates_or_updates_ledger_transaction(self):
         order = Order.objects.create(

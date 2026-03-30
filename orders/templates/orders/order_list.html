@@ -6,10 +6,10 @@
 <div class="orders-page">
     <div class="container">
         <h1>Mis Pedidos</h1>
-        <p class="text-muted" style="margin-bottom:16px;">Operaciones ya confirmadas dentro del circuito comercial. Para seguimiento previo, usa la seccion de solicitudes.</p>
+        <p class="text-muted orders-intro">Operaciones ya confirmadas dentro del circuito comercial. Para seguimiento previo, usa la seccion de solicitudes.</p>
 
-        <form method="get" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;">
-            <select name="status" class="form-select" style="max-width:240px;">
+        <form method="get" class="orders-filter-form">
+            <select name="status" class="form-select orders-filter-select">
                 <option value="">Todos los estados</option>
                 {% for value, label in status_choices %}
                 <option value="{{ value }}" {% if status == value %}selected{% endif %}>{{ label }}</option>
@@ -31,7 +31,7 @@
                     <span>{{ order.get_item_count }} productos</span>
                     <span class="order-total">${{ order.total|floatformat:2 }}</span>
                 </div>
-                <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                <div class="order-actions">
                     <a href="{% url 'order_detail' order.pk %}" class="btn btn-outline">Ver Detalles</a>
                     <form method="post" action="{% url 'reorder_to_cart' order.pk %}">
                         {% csrf_token %}
@@ -59,6 +59,21 @@
         margin-bottom: var(--spacing-lg);
     }
 
+    .orders-intro {
+        margin-bottom: 16px;
+    }
+
+    .orders-filter-form {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-bottom: 16px;
+    }
+
+    .orders-filter-select {
+        max-width: 240px;
+    }
+
     .orders-list {
         display: flex;
         flex-direction: column;
@@ -73,6 +88,7 @@
         align-items: center;
         gap: var(--spacing-xl);
         flex-wrap: wrap;
+        min-width: 0;
     }
 
     .order-header {
@@ -93,6 +109,14 @@
         gap: var(--spacing-xl);
         color: var(--color-gray-light);
         flex-wrap: wrap;
+        min-width: 0;
+    }
+
+    .order-actions {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        min-width: 0;
     }
 
     .order-total {
@@ -103,6 +127,36 @@
     .empty-orders {
         text-align: center;
         padding: var(--spacing-3xl);
+    }
+
+    @media (max-width: 760px) {
+        .orders-filter-form {
+            flex-direction: column;
+            align-items: stretch;
+        }
+
+        .orders-filter-select {
+            max-width: none;
+        }
+
+        .order-card {
+            padding: var(--spacing-lg);
+            gap: var(--spacing-md);
+        }
+
+        .order-header {
+            min-width: 0;
+        }
+
+        .order-actions {
+            width: 100%;
+        }
+
+        .order-actions .btn,
+        .order-actions form,
+        .order-actions form .btn {
+            width: 100%;
+        }
     }
 </style>
 {% endblock %}

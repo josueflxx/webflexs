@@ -38,6 +38,13 @@
             </article>
 
             <article class="settings-link-card">
+                <span class="settings-link-kicker">Fiscal</span>
+                <h4>Reportes fiscales</h4>
+                <p>Seguimiento de totales, rechazos, reintentos y comprobantes vencidos.</p>
+                <a href="{% url 'admin_fiscal_report' %}" class="btn btn-outline btn-sm">Ver reportes</a>
+            </article>
+
+            <article class="settings-link-card">
                 <span class="settings-link-kicker">Sistema</span>
                 <h4>Empresas</h4>
                 <p>Razones sociales, datos maestros y configuracion base por compania.</p>
@@ -46,9 +53,9 @@
 
             <article class="settings-link-card">
                 <span class="settings-link-kicker">Ventas</span>
-                <h4>Tipos de documento</h4>
-                <p>Motor configurable de comprobantes comerciales, numeracion y comportamiento operativo.</p>
-                <a href="{% url 'admin_sales_document_type_list' %}" class="btn btn-outline btn-sm">Abrir documentos</a>
+                <h4>Tipos de venta</h4>
+                <p>Motor configurable de comprobantes y movimientos comerciales: numeracion, stock, cuenta y fiscal.</p>
+                <a href="{% url 'admin_sales_document_type_list' %}" class="btn btn-outline btn-sm">Abrir tipos</a>
             </article>
 
             <article class="settings-link-card">

@@ -62,6 +62,13 @@ class ArcaEmissionResult:
 DOC_TYPE_TO_CBTE_TYPE = {
     "FA": 1,   # Factura A
     "FB": 6,   # Factura B
+    "FC": 11,  # Factura C
+    "NCA": 3,  # Nota de credito A
+    "NCB": 8,  # Nota de credito B
+    "NCC": 13, # Nota de credito C
+    "NDA": 2,  # Nota de debito A
+    "NDB": 7,  # Nota de debito B
+    "NDC": 12, # Nota de debito C
 }
 
 DOC_TYPE_TO_ARCA_DOC = {
@@ -461,6 +468,24 @@ class ArcaWsfeClient:
                 }
             ]
 
+        associated_documents = []
+        if getattr(fiscal_document, "related_document_id", None):
+            related_document = fiscal_document.related_document
+            related_cbte_type = DOC_TYPE_TO_CBTE_TYPE.get(getattr(related_document, "doc_type", ""))
+            related_pos = getattr(getattr(related_document, "point_of_sale", None), "number", "")
+            related_number = getattr(related_document, "number", None)
+            if not related_cbte_type or not related_pos or not related_number:
+                raise ArcaConfigurationError(
+                    "El comprobante relacionado no tiene datos suficientes para ARCA (tipo, punto de venta o numero)."
+                )
+            associated_documents.append(
+                {
+                    "tipo": int(related_cbte_type),
+                    "pto_vta": int(related_pos),
+                    "nro": int(related_number),
+                }
+            )
+
         issue_date = timezone.localdate().strftime("%Y%m%d")
         currency_code = str(getattr(fiscal_document, "currency", "ARS") or "ARS").upper()
         if currency_code == "ARS":
@@ -492,6 +517,7 @@ class ArcaWsfeClient:
                 "mon_id": currency_code,
                 "mon_cotiz": _to_decimal(getattr(fiscal_document, "exchange_rate", 1)).quantize(Decimal("0.000001")),
                 "iva": iva_items,
+                "cbtes_asoc": associated_documents,
             },
         }
         return payload
@@ -514,6 +540,19 @@ class ArcaWsfeClient:
                 )
             iva_xml = f"<Iva>{''.join(iva_rows)}</Iva>"
 
+        associated_xml = ""
+        if det.get("cbtes_asoc"):
+            associated_rows = []
+            for associated in det["cbtes_asoc"]:
+                associated_rows.append(
+                    "<CbteAsoc>"
+                    f"<Tipo>{int(associated['tipo'])}</Tipo>"
+                    f"<PtoVta>{int(associated['pto_vta'])}</PtoVta>"
+                    f"<Nro>{int(associated['nro'])}</Nro>"
+                    "</CbteAsoc>"
+                )
+            associated_xml = f"<CbtesAsoc>{''.join(associated_rows)}</CbtesAsoc>"
+
         return (
             '<FECAESolicitar xmlns="http://ar.gov.afip.dif.FEV1/">'
             "<Auth>"
@@ -535,6 +574,7 @@ class ArcaWsfeClient:
             f"<CbteDesde>{int(det['cbte_desde'])}</CbteDesde>"
             f"<CbteHasta>{int(det['cbte_hasta'])}</CbteHasta>"
             f"<CbteFch>{det['cbte_fch']}</CbteFch>"
+            f"{associated_xml}"
             f"<ImpTotal>{det['imp_total']:.2f}</ImpTotal>"
             f"<ImpTotConc>{det['imp_tot_conc']:.2f}</ImpTotConc>"
             f"<ImpNeto>{det['imp_neto']:.2f}</ImpNeto>"

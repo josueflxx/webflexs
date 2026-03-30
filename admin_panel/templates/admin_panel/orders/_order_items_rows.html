@@ -1,0 +1,70 @@
+{% for item in order_items %}
+<tr>
+    <td><a href="#" onclick="return false;">{{ item.product_sku }}</a></td>
+    <td>{{ item.quantity }}</td>
+    <td>{{ item.product_name }}</td>
+    <td>
+        {% if item.clamp_request_id %}
+        <div class="order-clamp-meta">
+            <strong>#{{ item.clamp_request_id }}</strong>
+            <small class="text-muted">
+                {{ item.clamp_request.get_clamp_type_display|upper }}
+                {{ item.clamp_request.diameter }} x {{ item.clamp_request.width_mm }} x {{ item.clamp_request.length_mm }}
+                {{ item.clamp_request.profile_type }}
+            </small>
+            {% if item.published_to_catalog %}
+            <span class="badge badge-success">Publicada</span>
+            {% endif %}
+        </div>
+        {% else %}
+        <span class="text-muted">-</span>
+        {% endif %}
+    </td>
+    <td>${{ item.price_at_purchase|floatformat:2 }}</td>
+    <td>
+        {% if order.discount_percentage %}
+        {{ order.discount_percentage|floatformat:0 }}%<br>
+        <small class="text-muted">-${{ item.unit_discount_amount|floatformat:2 }}</small>
+        {% else %}
+        0.00%
+        {% endif %}
+    </td>
+    <td><strong>${{ item.subtotal|floatformat:2 }}</strong></td>
+    <td>
+        <div class="order-inline-actions">
+            {% if item.clamp_request_id and item.can_publish_to_catalog %}
+            <form method="post" action="{% url 'admin_order_item_publish_clamp' order.pk item.pk %}">
+                {% csrf_token %}
+                <button
+                    type="submit"
+                    class="btn btn-primary btn-sm"
+                    onclick="return confirm('Publicar esta abrazadera como producto del catalogo?');"
+                >
+                    Anadir
+                </button>
+            </form>
+            {% elif item.clamp_request_id %}
+            <span class="text-muted">Publicada</span>
+            {% else %}
+            <span class="text-muted">-</span>
+            {% endif %}
+
+            {% if order.status == 'draft' %}
+            <a href="{% url 'admin_order_item_edit' order.pk item.pk %}" class="btn btn-outline btn-sm">
+                Editar
+            </a>
+            <form method="post" action="{% url 'admin_order_item_delete' order.pk item.pk %}">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-danger-outline btn-sm" onclick="return confirm('Eliminar este item?');">
+                    Quitar
+                </button>
+            </form>
+            {% endif %}
+        </div>
+    </td>
+</tr>
+{% empty %}
+<tr>
+    <td colspan="8" class="text-center text-muted">Este pedido todavia no tiene items cargados.</td>
+</tr>
+{% endfor %}

@@ -83,6 +83,7 @@ def ensure_document_for_order(order, *, doc_type, sales_document_type=None, acto
         sales_document_type = resolve_sales_document_type_for_internal_doc(
             company=order.company,
             doc_type=doc_type,
+            origin_channel=getattr(order, "origin_channel", ""),
         )
     source_key = f"order:{order.pk}:{doc_type}"
     return _ensure_document(

@@ -5,7 +5,7 @@
 {% block content %}
 <div class="admin-table-container">
     <div class="admin-toolbar">
-        <form method="get" class="toolbar-search">
+        <form method="get" class="toolbar-search payments-filter-form">
             <input type="text" name="q" value="{{ search }}" placeholder="Buscar cliente, CUIT, referencia o pedido..." class="form-input">
             <select name="client_id" class="form-select">
                 <option value="">Todos los clientes</option>
@@ -28,7 +28,7 @@
                 <option value="{{ value }}" {% if sync_status == value %}selected{% endif %}>{{ label }}</option>
                 {% endfor %}
             </select>
-            <input type="text" name="order_id" value="{{ order_id }}" placeholder="Pedido # (opcional)" class="form-input" style="max-width:180px;">
+            <input type="text" name="order_id" value="{{ order_id }}" placeholder="Pedido # (opcional)" class="form-input payments-order-id-input">
             <button type="submit" class="btn btn-primary">Filtrar</button>
             <a href="{% url 'admin_payment_list' %}" class="btn btn-outline">Limpiar</a>
             {% if selected_company_id != 'all' %}
@@ -44,7 +44,7 @@
         </form>
     </div>
 
-    <div class="admin-toolbar payments-summary-toolbar" style="border-top:1px solid rgba(255,255,255,.08);">
+    <div class="admin-toolbar payments-summary-toolbar admin-toolbar-separator">
         <div class="payments-summary-grid">
             <article class="doc-type-metric">
                 <span class="doc-type-metric-label">Pagos visibles</span>
@@ -82,12 +82,12 @@
         </div>
     </div>
 
-    <div class="admin-toolbar" style="border-top:1px solid rgba(255,255,255,.08);">
-        <form method="post" style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px;align-items:end;width:100%;">
+    <div class="admin-toolbar admin-toolbar-separator">
+        <form method="post" class="payment-create-form">
             {% csrf_token %}
             <input type="hidden" id="paymentActionInput" name="action" value="{% if suggested_action == 'adjust' %}adjust{% else %}create{% endif %}">
 
-            <div class="form-group" style="margin:0;">
+            <div class="form-group form-group-tight">
                 <label for="client_profile_id" class="form-label">Cliente</label>
                 <select name="client_profile_id" id="client_profile_id" class="form-select" required>
                     <option value="">-- Seleccionar --</option>
@@ -99,12 +99,12 @@
                 </select>
             </div>
 
-            <div class="form-group" style="margin:0;">
+            <div class="form-group form-group-tight">
                 <label for="order_id_input" class="form-label">Pedido (opcional)</label>
                 <input id="order_id_input" type="text" name="order_id" class="form-input" value="{{ order_id }}" placeholder="Ej: 245">
             </div>
 
-            <div class="form-group" style="margin:0;">
+            <div class="form-group form-group-tight">
                 <label for="company_id" class="form-label">Empresa</label>
                 <select name="company_id" id="company_id" class="form-select" {% if selected_company_id == 'all' and not selected_order %}required{% endif %}>
                     <option value="">-- Seleccionar --</option>
@@ -116,12 +116,12 @@
                 </select>
             </div>
 
-            <div class="form-group" style="margin:0;">
+            <div class="form-group form-group-tight">
                 <label for="amount" class="form-label">Monto</label>
                 <input id="amount" type="text" name="amount" class="form-input" required placeholder="Ej: 15000.50 (ajuste: usar negativo)">
             </div>
 
-            <div class="form-group" style="margin:0;">
+            <div class="form-group form-group-tight">
                 <label for="method" class="form-label">Medio</label>
                 <select id="method" name="method" class="form-select" required>
                     {% for value, label in payment_methods %}
@@ -130,7 +130,7 @@
                 </select>
             </div>
 
-            <div class="form-group" style="margin:0;">
+            <div class="form-group form-group-tight">
                 <label for="sales_document_type_id" class="form-label">Tipo comercial</label>
                 <select id="sales_document_type_id" name="sales_document_type_id" class="form-select">
                     <option value="">Automatico por configuracion</option>
@@ -142,24 +142,24 @@
                 </select>
             </div>
 
-            <div class="form-group" style="margin:0;">
+            <div class="form-group form-group-tight">
                 <label for="paid_at" class="form-label">Fecha/Hora</label>
                 <input id="paid_at" type="datetime-local" name="paid_at" class="form-input">
             </div>
 
-            <div class="form-group" style="margin:0;">
+            <div class="form-group form-group-tight">
                 <label for="reference" class="form-label">Referencia</label>
                 <input id="reference" type="text" name="reference" class="form-input" placeholder="Nro transferencia/recibo">
             </div>
 
-            <div class="form-group" style="margin:0; grid-column: span 2;">
+            <div class="form-group form-group-tight payment-field-span-2">
                 <label for="notes" class="form-label">Notas</label>
                 <input id="notes" type="text" name="notes" class="form-input" placeholder="Observaciones del pago">
             </div>
 
-            <div class="form-group" style="margin:0; grid-column: 1 / -1;">
-                <button type="submit" class="btn btn-primary" onclick="document.querySelector('#paymentActionInput').value='create';" {% if suggested_action == 'adjust' %}style="opacity:.75;"{% endif %}>Registrar Pago</button>
-                <button type="submit" class="btn btn-outline" onclick="document.querySelector('#paymentActionInput').value='adjust';" {% if suggested_action == 'adjust' %}style="border-color:rgba(255,107,53,.38);color:#fff0e6;"{% endif %}>
+            <div class="form-group form-group-tight payment-field-full payment-create-actions">
+                <button type="submit" class="btn btn-primary {% if suggested_action == 'adjust' %}payment-btn-muted{% endif %}" onclick="document.querySelector('#paymentActionInput').value='create';">Registrar Pago</button>
+                <button type="submit" class="btn btn-outline {% if suggested_action == 'adjust' %}payment-btn-active{% endif %}" onclick="document.querySelector('#paymentActionInput').value='adjust';">
                     Registrar Ajuste (+/-)
                 </button>
             </div>
@@ -229,13 +229,13 @@
                     <span class="badge badge-warning">Pendiente</span>
                     {% endif %}
                     {% if payment.external_number %}
-                    <div class="text-muted" style="font-size:0.85rem;">Ext: {{ payment.external_number }}</div>
+                    <div class="text-muted admin-meta-text">Ext: {{ payment.external_number }}</div>
                     {% endif %}
                 </td>
                 <td class="actions">
                     <a href="{% url 'admin_client_order_history' payment.client_profile_id %}" class="btn btn-outline btn-sm">Historial</a>
                     {% if not payment.is_cancelled %}
-                    <form method="post" class="cancel-payment-form" style="display:inline;">
+                    <form method="post" class="cancel-payment-form inline-form">
                         {% csrf_token %}
                         <input type="hidden" name="action" value="cancel">
                         <input type="hidden" name="payment_id" value="{{ payment.pk }}">

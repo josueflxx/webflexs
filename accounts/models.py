@@ -11,7 +11,7 @@ from django.utils import timezone
 from django.core.exceptions import ValidationError
 from django.utils.text import slugify
 
-from core.models import Company
+from core.models import Company, FISCAL_BILLABLE_DOC_TYPES
 
 class ClientCategory(models.Model):
     """
@@ -312,7 +312,7 @@ class ClientProfile(models.Model):
         return queryset.order_by('occurred_at', 'id')
 
     def get_ledger_balance(self, company=None):
-        queryset = self.transactions
+        queryset = self.transactions.filter(movement_state='closed')
         if company:
             queryset = queryset.filter(company=company)
         total = queryset.aggregate(total=Sum('amount'))['total']
@@ -326,7 +326,7 @@ class ClientProfile(models.Model):
         FiscalDocument = apps.get_model('core', 'FiscalDocument')
         billed_order_ids = FiscalDocument.objects.filter(
             client_profile=self,
-            doc_type__in=['FA', 'FB'],
+            doc_type__in=FISCAL_BILLABLE_DOC_TYPES,
             status__in=['authorized', 'external_recorded'],
         ).exclude(status='voided').values_list('order_id', flat=True)
         queryset = Order.objects.filter(user_id=self.user_id).filter(
@@ -343,12 +343,15 @@ class ClientProfile(models.Model):
         return total or Decimal('0.00')
 
     def get_current_balance(self, company=None):
-        # Prefer ledger when available (auditable + robust to adjustments/reversals).
-        transactions = self.transactions
+        # Posted (closed) movements are the only ones that impact current account.
+        transactions = self.transactions.all()
         if company:
             transactions = transactions.filter(company=company)
-        if transactions.exists():
+        posted_transactions = transactions.filter(movement_state='closed')
+        if posted_transactions.exists():
             return self.get_ledger_balance(company=company)
+        if transactions.exclude(movement_state='voided').exists():
+            return Decimal('0.00')
         return self.get_total_orders_for_balance(company=company) - self.get_total_paid(company=company)
 
 
@@ -718,6 +721,15 @@ class ClientTransaction(models.Model):
         (TYPE_ADJUSTMENT, 'Ajuste manual'),
     ]
 
+    STATE_OPEN = "open"
+    STATE_CLOSED = "closed"
+    STATE_VOIDED = "voided"
+    STATE_CHOICES = [
+        (STATE_OPEN, "Abierto"),
+        (STATE_CLOSED, "Cerrado"),
+        (STATE_VOIDED, "Anulado"),
+    ]
+
     client_profile = models.ForeignKey(
         ClientProfile,
         on_delete=models.CASCADE,
@@ -781,6 +793,15 @@ class ClientTransaction(models.Model):
         related_name='client_transactions_created',
         verbose_name='Generado por',
     )
+    movement_state = models.CharField(
+        max_length=12,
+        choices=STATE_CHOICES,
+        default=STATE_OPEN,
+        db_index=True,
+        verbose_name="Estado operativo",
+    )
+    closed_at = models.DateTimeField(null=True, blank=True, verbose_name="Fecha cierre")
+    voided_at = models.DateTimeField(null=True, blank=True, verbose_name="Fecha anulacion")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -794,6 +815,14 @@ class ClientTransaction(models.Model):
             models.Index(fields=['order']),
             models.Index(fields=['payment']),
             models.Index(fields=['company', 'occurred_at']),
+            models.Index(
+                fields=['client_profile', 'movement_state', 'occurred_at'],
+                name='acct_tx_client_state_occ_idx',
+            ),
+            models.Index(
+                fields=['company', 'movement_state', 'occurred_at'],
+                name='acct_tx_company_state_occ_idx',
+            ),
         ]
 
     def __str__(self):

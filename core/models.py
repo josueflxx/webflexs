@@ -11,14 +11,40 @@ from django.utils.text import slugify
 
 FISCAL_DOC_TYPE_FA = "FA"
 FISCAL_DOC_TYPE_FB = "FB"
+FISCAL_DOC_TYPE_FC = "FC"
 FISCAL_DOC_TYPE_NCA = "NCA"
 FISCAL_DOC_TYPE_NCB = "NCB"
+FISCAL_DOC_TYPE_NCC = "NCC"
+FISCAL_DOC_TYPE_NDA = "NDA"
+FISCAL_DOC_TYPE_NDB = "NDB"
+FISCAL_DOC_TYPE_NDC = "NDC"
 FISCAL_DOC_TYPE_CHOICES = [
     (FISCAL_DOC_TYPE_FA, "Factura A"),
     (FISCAL_DOC_TYPE_FB, "Factura B"),
+    (FISCAL_DOC_TYPE_FC, "Factura C"),
     (FISCAL_DOC_TYPE_NCA, "Nota de Credito A"),
     (FISCAL_DOC_TYPE_NCB, "Nota de Credito B"),
+    (FISCAL_DOC_TYPE_NCC, "Nota de Credito C"),
+    (FISCAL_DOC_TYPE_NDA, "Nota de Debito A"),
+    (FISCAL_DOC_TYPE_NDB, "Nota de Debito B"),
+    (FISCAL_DOC_TYPE_NDC, "Nota de Debito C"),
 ]
+FISCAL_INVOICE_DOC_TYPES = {
+    FISCAL_DOC_TYPE_FA,
+    FISCAL_DOC_TYPE_FB,
+    FISCAL_DOC_TYPE_FC,
+}
+FISCAL_CREDIT_NOTE_DOC_TYPES = {
+    FISCAL_DOC_TYPE_NCA,
+    FISCAL_DOC_TYPE_NCB,
+    FISCAL_DOC_TYPE_NCC,
+}
+FISCAL_DEBIT_NOTE_DOC_TYPES = {
+    FISCAL_DOC_TYPE_NDA,
+    FISCAL_DOC_TYPE_NDB,
+    FISCAL_DOC_TYPE_NDC,
+}
+FISCAL_BILLABLE_DOC_TYPES = set(FISCAL_INVOICE_DOC_TYPES)
 
 FISCAL_ISSUE_MODE_ARCA_WSFE = "arca_wsfe"
 FISCAL_ISSUE_MODE_MANUAL = "manual"
@@ -83,6 +109,38 @@ SALES_BILLING_MODE_CHOICES = [
     (SALES_BILLING_MODE_AFIP_WSFE, "ARCA WSFE"),
     (SALES_BILLING_MODE_MANUAL_FISCAL, "Comprobante fiscal manual"),
     (SALES_BILLING_MODE_AFIP_ONLINE, "Factura online AFIP"),
+]
+
+SALES_DEFAULT_USER_CURRENT = "CURRENT_USER"
+SALES_DEFAULT_USER_SPECIFIC = "SPECIFIC_USER"
+SALES_DEFAULT_USER_NONE = "UNSPECIFIED"
+SALES_DEFAULT_USER_CHOICES = [
+    (SALES_DEFAULT_USER_CURRENT, "El usuario que agrega la venta"),
+    (SALES_DEFAULT_USER_SPECIFIC, "Usuario/Vendedor especifico"),
+    (SALES_DEFAULT_USER_NONE, "Sin especificar"),
+]
+
+SALES_PRINT_BASE_DEFAULT = "default"
+SALES_PRINT_BASE_COMPACT = "compact"
+SALES_PRINT_BASE_EXTENDED = "extended"
+SALES_PRINT_BASE_CHOICES = [
+    (SALES_PRINT_BASE_DEFAULT, "Predeterminado"),
+    (SALES_PRINT_BASE_COMPACT, "Compacto"),
+    (SALES_PRINT_BASE_EXTENDED, "Extendido"),
+]
+
+SALES_ORIGIN_CATALOG = "catalog"
+SALES_ORIGIN_ADMIN = "admin"
+SALES_ORIGIN_WHATSAPP = "whatsapp"
+SALES_ORIGIN_PHONE = "phone"
+SALES_ORIGIN_OTHER = "other"
+SALES_DOCUMENT_ORIGIN_CHANNEL_CHOICES = [
+    ("", "Todos los canales"),
+    (SALES_ORIGIN_CATALOG, "Catalogo"),
+    (SALES_ORIGIN_ADMIN, "Admin"),
+    (SALES_ORIGIN_WHATSAPP, "WhatsApp"),
+    (SALES_ORIGIN_PHONE, "Telefono"),
+    (SALES_ORIGIN_OTHER, "Otro"),
 ]
 
 STOCK_MOVEMENT_IN = "in"
@@ -396,12 +454,19 @@ class SalesDocumentType(models.Model):
         related_name="default_sales_document_types",
         verbose_name="Vendedor predeterminado",
     )
+    default_sales_user_mode = models.CharField(
+        max_length=20,
+        choices=SALES_DEFAULT_USER_CHOICES,
+        default=SALES_DEFAULT_USER_CURRENT,
+        verbose_name="Modo vendedor predeterminado",
+    )
     billing_mode = models.CharField(
         max_length=32,
         choices=SALES_BILLING_MODE_CHOICES,
         default=SALES_BILLING_MODE_INTERNAL_DOCUMENT,
         verbose_name="Modo de facturacion",
     )
+    use_document_situation = models.BooleanField(default=False, verbose_name="Usa funcionalidad de situacion")
     internal_doc_type = models.CharField(
         max_length=3,
         blank=True,
@@ -414,8 +479,27 @@ class SalesDocumentType(models.Model):
         choices=FISCAL_DOC_TYPE_CHOICES,
         verbose_name="Tipo fiscal asociado",
     )
+    print_address = models.CharField(max_length=180, blank=True, verbose_name="Domicilio personalizado")
+    print_email = models.EmailField(blank=True, verbose_name="Email personalizado")
+    print_phones = models.CharField(max_length=120, blank=True, verbose_name="Telefonos personalizados")
+    print_locality = models.CharField(max_length=120, blank=True, verbose_name="Localidad personalizada")
+    print_signature = models.TextField(blank=True, verbose_name="Firma personalizada")
+    base_design = models.CharField(
+        max_length=20,
+        choices=SALES_PRINT_BASE_CHOICES,
+        default=SALES_PRINT_BASE_DEFAULT,
+        verbose_name="Diseno base",
+    )
+    notes = models.TextField(blank=True, verbose_name="Observaciones")
     is_default = models.BooleanField(default=False, verbose_name="Predeterminado")
     display_order = models.PositiveIntegerField(default=0, verbose_name="Orden")
+    default_origin_channel = models.CharField(
+        max_length=20,
+        choices=SALES_DOCUMENT_ORIGIN_CHANNEL_CHOICES,
+        blank=True,
+        default="",
+        verbose_name="Canal default",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -434,7 +518,7 @@ class SalesDocumentType(models.Model):
                 name="uniq_sales_document_type_company_code",
             ),
             models.UniqueConstraint(
-                fields=["company", "document_behavior"],
+                fields=["company", "document_behavior", "default_origin_channel"],
                 condition=models.Q(is_default=True),
                 name="uniq_default_sales_document_type_per_behavior",
             ),
@@ -445,6 +529,10 @@ class SalesDocumentType(models.Model):
             raise ValidationError("El punto de venta no pertenece a la empresa del tipo de documento.")
         if self.default_warehouse_id and self.default_warehouse.company_id != self.company_id:
             raise ValidationError("El deposito no pertenece a la empresa del tipo de documento.")
+        if self.default_sales_user_mode == SALES_DEFAULT_USER_SPECIFIC and not self.default_sales_user_id:
+            raise ValidationError("Debes seleccionar un usuario vendedor cuando el modo es especifico.")
+        if self.default_sales_user_mode != SALES_DEFAULT_USER_SPECIFIC:
+            self.default_sales_user = None
         if self.document_behavior in {
             SALES_BEHAVIOR_FACTURA,
             SALES_BEHAVIOR_NOTA_CREDITO,
@@ -490,14 +578,36 @@ class SalesDocumentType(models.Model):
     def __str__(self):
         return f"{self.company.name} - {self.name}"
 
+    @property
+    def default_sales_user_label(self):
+        if self.default_sales_user_mode == SALES_DEFAULT_USER_CURRENT:
+            return "El usuario que agrega la venta"
+        if self.default_sales_user_mode == SALES_DEFAULT_USER_NONE:
+            return "Sin especificar"
+        if self.default_sales_user_id:
+            return self.default_sales_user.get_username()
+        return "Sin especificar"
+
+    @property
+    def default_origin_channel_label(self):
+        return dict(SALES_DOCUMENT_ORIGIN_CHANNEL_CHOICES).get(
+            self.default_origin_channel or "",
+            "Todos los canales",
+        )
+
 
 class FiscalDocumentSeries(models.Model):
     """Fiscal numbering series per company and point of sale."""
 
     DOC_FA = FISCAL_DOC_TYPE_FA
     DOC_FB = FISCAL_DOC_TYPE_FB
+    DOC_FC = FISCAL_DOC_TYPE_FC
     DOC_NCA = FISCAL_DOC_TYPE_NCA
     DOC_NCB = FISCAL_DOC_TYPE_NCB
+    DOC_NCC = FISCAL_DOC_TYPE_NCC
+    DOC_NDA = FISCAL_DOC_TYPE_NDA
+    DOC_NDB = FISCAL_DOC_TYPE_NDB
+    DOC_NDC = FISCAL_DOC_TYPE_NDC
     DOC_TYPE_CHOICES = FISCAL_DOC_TYPE_CHOICES
 
     company = models.ForeignKey(
@@ -650,6 +760,11 @@ class FiscalDocument(models.Model):
         blank=True,
         verbose_name="Fecha de emision",
     )
+    payment_due_date = models.DateField(
+        null=True,
+        blank=True,
+        verbose_name="Vencimiento de cobro",
+    )
     cae = models.CharField(
         max_length=40,
         blank=True,
@@ -683,6 +798,27 @@ class FiscalDocument(models.Model):
     error_message = models.TextField(blank=True, default="", verbose_name="Mensaje error")
     attempts_count = models.PositiveIntegerField(default=0, verbose_name="Intentos")
     last_attempt_at = models.DateTimeField(null=True, blank=True, verbose_name="Ultimo intento")
+    next_retry_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="Proximo reintento sugerido",
+    )
+    email_last_sent_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="Ultimo envio por email",
+    )
+    email_last_recipient = models.EmailField(
+        blank=True,
+        default="",
+        verbose_name="Ultimo destinatario email",
+    )
+    email_last_error = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        verbose_name="Ultimo error de email",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -739,6 +875,14 @@ class FiscalDocument(models.Model):
         if point:
             return f"{str(point).zfill(5)}-{str(self.number).zfill(8)}"
         return str(self.number).zfill(8)
+
+    @property
+    def can_retry_now(self):
+        if self.status != FISCAL_STATUS_PENDING_RETRY:
+            return False
+        if not self.next_retry_at:
+            return True
+        return self.next_retry_at <= timezone.now()
 
 
 class FiscalDocumentItem(models.Model):
@@ -807,6 +951,9 @@ class FiscalEmissionAttempt(models.Model):
     )
     request_payload = models.JSONField(default=dict, blank=True, verbose_name="Request payload")
     response_payload = models.JSONField(default=dict, blank=True, verbose_name="Response payload")
+    attempt_number = models.PositiveIntegerField(default=1, verbose_name="Numero de intento")
+    duration_ms = models.PositiveIntegerField(null=True, blank=True, verbose_name="Duracion (ms)")
+    will_retry = models.BooleanField(default=False, verbose_name="Permite reintento")
     result_status = models.CharField(
         max_length=20,
         choices=RESULT_STATUS_CHOICES,
@@ -824,10 +971,11 @@ class FiscalEmissionAttempt(models.Model):
         indexes = [
             models.Index(fields=["fiscal_document", "created_at"]),
             models.Index(fields=["result_status", "created_at"]),
+            models.Index(fields=["fiscal_document", "attempt_number"]),
         ]
 
     def __str__(self):
-        return f"Intento {self.fiscal_document_id} - {self.result_status}"
+        return f"Intento {self.fiscal_document_id} #{self.attempt_number} - {self.result_status}"
 
 
 class InternalDocument(models.Model):

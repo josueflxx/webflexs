@@ -36,42 +36,15 @@
         </div>
     </div>
 
-    {% if can_confirm_request or can_reject_request or can_convert_request or can_generate_documents %}
+    {% if can_generate_documents %}
     <div class="admin-card">
         <div class="detail-header">
-            <h3>Acciones comerciales</h3>
+            <h3>Documentos comerciales</h3>
             {% if request_order %}
             <a href="{% url 'admin_order_detail' request_order.pk %}" class="btn btn-outline">Pedido #{{ request_order.pk }}</a>
             {% endif %}
         </div>
         <div class="action-grid">
-            {% if can_confirm_request %}
-            <form method="post" action="{% url 'admin_order_request_confirm' order_request.pk %}" class="stack-form">
-                {% csrf_token %}
-                <label class="form-label" for="confirm-admin-note">Nota interna</label>
-                <textarea id="confirm-admin-note" name="admin_note" class="form-textarea" rows="3" placeholder="Comentario interno opcional."></textarea>
-                <button type="submit" class="btn btn-primary">Confirmar tal cual</button>
-            </form>
-            {% endif %}
-
-            {% if can_reject_request %}
-            <form method="post" action="{% url 'admin_order_request_reject' order_request.pk %}" class="stack-form">
-                {% csrf_token %}
-                <label class="form-label" for="reject-reason">Motivo visible para el cliente</label>
-                <textarea id="reject-reason" name="rejection_reason" class="form-textarea" rows="3" placeholder="Ejemplo: sin stock, condiciones no disponibles, etc."></textarea>
-                <button type="submit" class="btn btn-outline">Rechazar solicitud</button>
-            </form>
-            {% endif %}
-
-            {% if can_convert_request %}
-            <form method="post" action="{% url 'admin_order_request_convert' order_request.pk %}" class="stack-form">
-                {% csrf_token %}
-                <p class="text-muted">Crea el pedido operativo reutilizando el snapshot comercial confirmado.</p>
-                <button type="submit" class="btn btn-primary">Convertir a pedido draft</button>
-            </form>
-            {% endif %}
-
-            {% if can_generate_documents %}
             <form method="post" action="{% url 'admin_order_request_generate_quote' order_request.pk %}" class="stack-form">
                 {% csrf_token %}
                 <label class="form-label" for="quote-sales-document-type">Tipo comercial para cotizacion</label>
@@ -79,7 +52,7 @@
                     <option value="">Default / auto</option>
                     {% for configured_type in quote_document_types %}
                     <option value="{{ configured_type.pk }}">
-                        {{ configured_type.name }}{% if configured_type.internal_doc_type %} · {{ configured_type.get_internal_doc_type_display|default:configured_type.internal_doc_type }}{% endif %}
+                        {{ configured_type.name }}{% if configured_type.internal_doc_type %} · {{ configured_type.get_internal_doc_type_display|default:configured_type.internal_doc_type }}{% endif %} · {{ configured_type.default_origin_channel_label }}
                     </option>
                     {% endfor %}
                 </select>
@@ -94,42 +67,43 @@
                     <option value="">Default / auto</option>
                     {% for configured_type in invoice_document_types %}
                     <option value="{{ configured_type.pk }}">
-                        {{ configured_type.name }}{% if configured_type.fiscal_doc_type %} · {{ configured_type.get_fiscal_doc_type_display|default:configured_type.fiscal_doc_type }}{% endif %}
+                        {{ configured_type.name }}{% if configured_type.fiscal_doc_type %} · {{ configured_type.get_fiscal_doc_type_display|default:configured_type.fiscal_doc_type }}{% endif %} · {{ configured_type.default_origin_channel_label }}
                     </option>
                     {% endfor %}
                 </select>
                 <p class="text-muted">Si el pedido operativo sigue en borrador, se confirma al abrir la factura para mantener coherencia contable.</p>
                 <button type="submit" class="btn btn-primary">Generar factura</button>
             </form>
-            {% endif %}
         </div>
     </div>
     {% endif %}
 
     <div class="admin-card">
         <h3>Items solicitados</h3>
-        <table class="admin-table">
-            <thead>
-                <tr>
-                    <th>SKU</th>
-                    <th>Producto</th>
-                    <th>Cantidad</th>
-                    <th>Precio Unit.</th>
-                    <th>Subtotal</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for item in order_request.items.all %}
-                <tr>
-                    <td><code>{{ item.product_sku }}</code></td>
-                    <td>{{ item.product_name }}</td>
-                    <td>{{ item.quantity }}</td>
-                    <td>${{ item.price_at_snapshot|floatformat:2 }}</td>
-                    <td>${{ item.subtotal|floatformat:2 }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+        <div class="admin-detail-table-wrap">
+            <table class="admin-table">
+                <thead>
+                    <tr>
+                        <th>SKU</th>
+                        <th>Producto</th>
+                        <th>Cantidad</th>
+                        <th>Precio Unit.</th>
+                        <th>Subtotal</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in order_request.items.all %}
+                    <tr>
+                        <td><code>{{ item.product_sku }}</code></td>
+                        <td>{{ item.product_name }}</td>
+                        <td>{{ item.quantity }}</td>
+                        <td>${{ item.price_at_snapshot|floatformat:2 }}</td>
+                        <td>${{ item.subtotal|floatformat:2 }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
     </div>
 
     {% if request_events %}
@@ -178,7 +152,7 @@
                 </div>
             </div>
 
-            <div class="proposal-lines">
+            <div class="proposal-lines admin-detail-table-wrap">
                 <table class="admin-table">
                     <thead>
                         <tr>
@@ -281,28 +255,30 @@
         {% if current_proposal.internal_note %}
         <p><strong>Nota interna:</strong> {{ current_proposal.internal_note }}</p>
         {% endif %}
-        <table class="admin-table">
-            <thead>
-                <tr>
-                    <th>SKU</th>
-                    <th>Producto</th>
-                    <th>Cantidad</th>
-                    <th>Precio Unit.</th>
-                    <th>Subtotal</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for item in current_proposal.items.all %}
-                <tr>
-                    <td><code>{{ item.product_sku }}</code></td>
-                    <td>{{ item.product_name }}</td>
-                    <td>{{ item.quantity }}</td>
-                    <td>${{ item.price_at_snapshot|floatformat:2 }}</td>
-                    <td>${{ item.subtotal|floatformat:2 }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+        <div class="admin-detail-table-wrap">
+            <table class="admin-table">
+                <thead>
+                    <tr>
+                        <th>SKU</th>
+                        <th>Producto</th>
+                        <th>Cantidad</th>
+                        <th>Precio Unit.</th>
+                        <th>Subtotal</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in current_proposal.items.all %}
+                    <tr>
+                        <td><code>{{ item.product_sku }}</code></td>
+                        <td>{{ item.product_name }}</td>
+                        <td>{{ item.quantity }}</td>
+                        <td>${{ item.price_at_snapshot|floatformat:2 }}</td>
+                        <td>${{ item.subtotal|floatformat:2 }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
         <p class="proposal-total"><strong>Total propuesto:</strong> ${{ current_proposal.proposed_total|floatformat:2 }}</p>
     </div>
     {% endif %}
@@ -378,6 +354,26 @@
                 </ul>
                 {% else %}
                 <p class="text-muted">Sin documentos fiscales generados todavia.</p>
+                {% endif %}
+            </div>
+            <div>
+                <strong>Cuenta corriente</strong>
+                {% if request_order_charge %}
+                <p class="text-muted">{{ request_order_charge.description }}</p>
+                <p><strong>Importe actual:</strong> ${{ request_order_charge.amount|floatformat:2 }}</p>
+                <p>
+                    <strong>Estado:</strong>
+                    {% if request_order_charge_is_billable %}
+                    Impacta deuda del cliente (factura cerrada/emitida).
+                    {% else %}
+                    Sin impacto por ahora (falta cierre/emision fiscal).
+                    {% endif %}
+                </p>
+                {% else %}
+                <p class="text-muted">
+                    Aun no hay movimiento de cuenta corriente para este pedido.
+                    Se genera cuando existe comprobante fiscal valido.
+                </p>
                 {% endif %}
             </div>
         </div>

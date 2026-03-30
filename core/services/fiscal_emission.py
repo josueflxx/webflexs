@@ -3,13 +3,16 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import timedelta
 from typing import Optional
 
+from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.utils import timezone
 
 from core.models import (
+    FISCAL_INVOICE_DOC_TYPES,
     FISCAL_ISSUE_MODE_ARCA_WSFE,
     FISCAL_STATUS_AUTHORIZED,
     FISCAL_STATUS_PENDING_RETRY,
@@ -25,11 +28,16 @@ from core.services.arca_client import (
     ArcaTemporaryError,
     ArcaWsfeClient,
 )
-from core.services.fiscal import is_company_fiscal_ready, is_invoice_ready
+from core.services.fiscal import (
+    is_company_fiscal_ready,
+    is_invoice_ready,
+    resolve_payment_due_date,
+    validate_credit_note_relationship,
+)
 from core.services.sales_documents import sync_sales_document_type_counter
 
 
-ALLOWED_DOC_TYPES_FOR_EMISSION = {"FA", "FB"}
+ALLOWED_DOC_TYPES_FOR_EMISSION = {code for code, _label in FiscalDocument.DOC_TYPE_CHOICES}
 RETRYABLE_DOCUMENT_STATUSES = {
     FISCAL_STATUS_READY_TO_ISSUE,
     FISCAL_STATUS_PENDING_RETRY,
@@ -71,7 +79,7 @@ def _validate_before_submit(document: FiscalDocument):
     if document.issue_mode != FISCAL_ISSUE_MODE_ARCA_WSFE:
         raise ValidationError("Solo se puede emitir por ARCA cuando el modo es ARCA WSFE.")
     if document.doc_type not in ALLOWED_DOC_TYPES_FOR_EMISSION:
-        raise ValidationError("En esta fase solo se permite emitir Factura A y Factura B.")
+        raise ValidationError("Tipo de comprobante fiscal no permitido para emision ARCA.")
     if document.status not in RETRYABLE_DOCUMENT_STATUSES:
         raise ValidationError(
             f"Estado fiscal no emitible: {document.get_status_display()}."
@@ -98,6 +106,16 @@ def _validate_before_submit(document: FiscalDocument):
         invoice_ready, invoice_errors = is_invoice_ready(document.order)
         if not invoice_ready:
             raise ValidationError("Pedido no listo para facturar: " + " | ".join(invoice_errors))
+    if not document.items.exists():
+        raise ValidationError("El comprobante fiscal no tiene items cargados.")
+    if document.total is None or document.total <= 0:
+        raise ValidationError("El comprobante fiscal debe tener total mayor a cero.")
+    if document.doc_type in FISCAL_INVOICE_DOC_TYPES and document.related_document_id:
+        raise ValidationError("Las facturas no deben vincularse a otro comprobante base.")
+
+    relation_ok, relation_errors = validate_credit_note_relationship(document)
+    if not relation_ok:
+        raise ValidationError("Relacion fiscal invalida: " + " | ".join(relation_errors))
 
     company_ready, company_errors = is_company_fiscal_ready(document.company)
     if not company_ready:
@@ -161,6 +179,7 @@ def emit_fiscal_document_now(*, fiscal_document: FiscalDocument, actor=None) -> 
             sales_document_type=locked_doc.sales_document_type,
             number=reserved_number,
         )
+        attempt_number = int(locked_doc.attempts_count or 1)
 
     request_payload = {}
     response_payload = {}
@@ -215,13 +234,35 @@ def emit_fiscal_document_now(*, fiscal_document: FiscalDocument, actor=None) -> 
         error_code = "unexpected_error"
         error_message = f"Fallo inesperado en emision fiscal: {exc}"
 
+    finished_at = timezone.now()
+    duration_ms = max(int((finished_at - started_at).total_seconds() * 1000), 0)
+    retry_minutes = int(getattr(settings, "FISCAL_RETRY_MINUTES", 10) or 10)
+    max_retry_attempts = int(getattr(settings, "FISCAL_MAX_AUTO_RETRIES", 5) or 5)
+
     with transaction.atomic():
         locked_doc = FiscalDocument.objects.select_for_update().get(pk=document_id)
+        will_retry = final_state == FISCAL_STATUS_PENDING_RETRY
+        next_retry_at = None
+        if will_retry:
+            if int(locked_doc.attempts_count or 0) >= max_retry_attempts:
+                final_state = FISCAL_STATUS_REJECTED
+                will_retry = False
+                if not error_code:
+                    error_code = "retry_limit_reached"
+                if not error_message:
+                    error_message = "Se alcanzo el maximo de reintentos automaticos."
+            else:
+                retry_delay = retry_minutes if retry_minutes >= 1 else 1
+                next_retry_at = timezone.now() + timedelta(minutes=retry_delay)
+
         FiscalEmissionAttempt.objects.create(
             fiscal_document=locked_doc,
             triggered_by=actor if getattr(actor, "is_authenticated", False) else None,
             request_payload=request_payload or {},
             response_payload=response_payload or {},
+            attempt_number=attempt_number,
+            duration_ms=duration_ms,
+            will_retry=will_retry,
             result_status=result_status,
             error_code=error_code,
             error_message=error_message,
@@ -230,9 +271,26 @@ def emit_fiscal_document_now(*, fiscal_document: FiscalDocument, actor=None) -> 
         locked_doc.status = final_state
         locked_doc.error_code = error_code or ""
         locked_doc.error_message = error_message or ""
-        locked_doc.request_payload = request_payload or {}
-        locked_doc.response_payload = response_payload or {}
-        locked_doc.last_attempt_at = timezone.now()
+        existing_request_payload = (
+            dict(locked_doc.request_payload)
+            if isinstance(locked_doc.request_payload, dict)
+            else {}
+        )
+        existing_response_payload = (
+            dict(locked_doc.response_payload)
+            if isinstance(locked_doc.response_payload, dict)
+            else {}
+        )
+        existing_request_payload["arca_request"] = request_payload or {}
+        existing_request_payload["arca_attempt"] = {
+            "attempt_number": attempt_number,
+            "at": finished_at.isoformat(),
+        }
+        existing_response_payload["arca_response"] = response_payload or {}
+        locked_doc.request_payload = existing_request_payload
+        locked_doc.response_payload = existing_response_payload
+        locked_doc.last_attempt_at = finished_at
+        locked_doc.next_retry_at = next_retry_at
 
         update_fields = [
             "status",
@@ -241,6 +299,7 @@ def emit_fiscal_document_now(*, fiscal_document: FiscalDocument, actor=None) -> 
             "request_payload",
             "response_payload",
             "last_attempt_at",
+            "next_retry_at",
             "updated_at",
         ]
 
@@ -250,6 +309,12 @@ def emit_fiscal_document_now(*, fiscal_document: FiscalDocument, actor=None) -> 
             if not locked_doc.issued_at:
                 locked_doc.issued_at = timezone.now()
                 update_fields.append("issued_at")
+            if not locked_doc.payment_due_date:
+                locked_doc.payment_due_date = resolve_payment_due_date(
+                    order=locked_doc.order,
+                    issued_at=locked_doc.issued_at or locked_doc.created_at,
+                )
+                update_fields.append("payment_due_date")
             update_fields.extend(["cae", "cae_due_date"])
 
         locked_doc.save(update_fields=update_fields)

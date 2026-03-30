@@ -21,19 +21,19 @@
             </div>
             <div class="sales-record-actions">
                 {% if can_close_document %}
-                <form method="post" action="{% url 'admin_fiscal_document_close' fiscal_document.pk %}" style="display:inline;">
+                <form method="post" action="{% url 'admin_fiscal_document_close' fiscal_document.pk %}" class="sales-record-action-form">
                     {% csrf_token %}
                     <button type="submit" class="sales-record-action is-primary">Cerrar</button>
                 </form>
                 {% endif %}
                 {% if can_reopen_document %}
-                <form method="post" action="{% url 'admin_fiscal_document_reopen' fiscal_document.pk %}" style="display:inline;">
+                <form method="post" action="{% url 'admin_fiscal_document_reopen' fiscal_document.pk %}" class="sales-record-action-form">
                     {% csrf_token %}
                     <button type="submit" class="sales-record-action">Reabrir</button>
                 </form>
                 {% endif %}
                 {% if can_emit %}
-                <form method="post" action="{% url 'admin_fiscal_document_emit' fiscal_document.pk %}" style="display:inline;">
+                <form method="post" action="{% url 'admin_fiscal_document_emit' fiscal_document.pk %}" class="sales-record-action-form">
                     {% csrf_token %}
                     <button type="submit" class="sales-record-action is-primary" onclick="return confirm('Emitir este comprobante en ARCA ahora?');">
                         Emitir ARCA
@@ -41,26 +41,46 @@
                 </form>
                 {% endif %}
                 {% if can_void_document %}
-                <form method="post" action="{% url 'admin_fiscal_document_void' fiscal_document.pk %}" style="display:inline;">
+                <form method="post" action="{% url 'admin_fiscal_document_void' fiscal_document.pk %}" class="sales-record-action-form">
                     {% csrf_token %}
                     <button type="submit" class="sales-record-action" onclick="return confirm('Anular este comprobante?');">
                         Anular
                     </button>
                 </form>
                 {% endif %}
+                {% if can_send_email %}
+                <form method="post" action="{% url 'admin_fiscal_document_send_email' fiscal_document.pk %}" class="sales-record-action-form">
+                    {% csrf_token %}
+                    <button type="submit" class="sales-record-action">Enviar email</button>
+                </form>
+                {% endif %}
                 {% if can_delete_document %}
                 <a href="{% url 'admin_fiscal_document_delete' fiscal_document.pk %}" class="sales-record-action">Eliminar</a>
                 {% endif %}
+                {% if can_print_document %}
                 <a href="{% url 'admin_fiscal_document_print' fiscal_document.pk %}?copy=original" class="sales-record-action" data-print-window="1" target="_blank" rel="noopener noreferrer">Original</a>
                 <a href="{% url 'admin_fiscal_document_print' fiscal_document.pk %}?copy=duplicado" class="sales-record-action" data-print-window="1" target="_blank" rel="noopener noreferrer">Duplicado</a>
                 <a href="{% url 'admin_fiscal_document_print' fiscal_document.pk %}?copy=triplicado" class="sales-record-action" data-print-window="1" target="_blank" rel="noopener noreferrer">Triplicado</a>
+                {% else %}
+                <span class="sales-record-action is-disabled">Cerrar movimiento para imprimir</span>
+                {% endif %}
                 <a href="{% url 'admin_fiscal_document_list' %}" class="sales-record-action">Volver</a>
             </div>
         </div>
 
         {% if fiscal_delete_blockers %}
-        <div class="alert alert-warning" style="margin-bottom:16px;">
+        <div class="alert alert-warning fiscal-detail-warning">
             Eliminacion bloqueada: {{ fiscal_delete_blockers|join:" " }}
+        </div>
+        {% endif %}
+        {% if not can_operate_fiscal %}
+        <div class="alert alert-warning fiscal-detail-warning">
+            Tu usuario solo tiene acceso de lectura para esta venta fiscal.
+        </div>
+        {% endif %}
+        {% if movement_transaction and not can_print_document %}
+        <div class="alert alert-warning fiscal-detail-warning">
+            Este comprobante todavia tiene movimiento abierto. Cerra el movimiento en cuenta corriente para habilitar impresion y descarga.
         </div>
         {% endif %}
 
@@ -131,7 +151,7 @@
                         </span>
                     </div>
                     <div class="sales-record-field">
-                        <span class="sales-record-field-label">N° de cliente</span>
+                        <span class="sales-record-field-label">Nro de cliente</span>
                         <span class="sales-record-field-value">
                             {% if fiscal_document.client_company_ref_id %}{{ fiscal_document.client_company_ref_id }}{% else %}-{% endif %}
                         </span>
@@ -163,7 +183,7 @@
         </div>
 
         {% if not document_invoice_ready and document_invoice_errors %}
-        <section class="sales-record-panel" style="margin-top:16px;">
+        <section class="sales-record-panel sales-record-panel-spaced">
             <div class="sales-record-panel-header">
                 <h3 class="sales-record-panel-title">Pendientes para cerrar o emitir</h3>
                 <span class="sales-record-tag">Incompleto</span>
@@ -171,7 +191,7 @@
             <div class="sales-record-panel-collapsed">
                 Esta factura puede quedar abierta, pero todavia no puede cerrarse ni emitirse.
             </div>
-            <ul class="order-readiness-list" style="margin-top:12px;">
+            <ul class="order-readiness-list order-readiness-list-spaced">
                 {% for error in document_invoice_errors %}
                 <li>{{ error }}</li>
                 {% endfor %}
@@ -276,6 +296,22 @@
                         <span>Total</span>
                         <strong>${{ fiscal_document.total|floatformat:2 }}</strong>
                     </div>
+                    <div class="sales-record-summary-row">
+                        <span>Pagado</span>
+                        <strong>${{ collection_snapshot.paid|floatformat:2 }}</strong>
+                    </div>
+                    <div class="sales-record-summary-row">
+                        <span>Pendiente</span>
+                        <strong>${{ collection_snapshot.pending|floatformat:2 }}</strong>
+                    </div>
+                    <div class="sales-record-summary-row">
+                        <span>Vencimiento</span>
+                        <strong>{{ collection_snapshot.due_date|date:"d/m/Y"|default:"-" }}</strong>
+                    </div>
+                    <div class="sales-record-summary-row">
+                        <span>Estado cobranza</span>
+                        <strong>{{ collection_snapshot.status_label }}</strong>
+                    </div>
                 </div>
             </section>
 
@@ -340,6 +376,33 @@
                         <span class="sales-record-side-label">Ultimo intento</span>
                         <span class="sales-record-side-value">{{ fiscal_document.last_attempt_at|date:"d/m/Y H:i"|default:"-" }}</span>
                     </div>
+                    <div class="sales-record-side-row">
+                        <span class="sales-record-side-label">Proximo reintento</span>
+                        <span class="sales-record-side-value">{{ fiscal_document.next_retry_at|date:"d/m/Y H:i"|default:"-" }}</span>
+                    </div>
+                </div>
+            </section>
+
+            <section class="sales-record-card">
+                <div class="sales-record-card-head">
+                    <div>
+                        <h3>Envio por email</h3>
+                        <p>Ultimo envio del comprobante al contacto del cliente.</p>
+                    </div>
+                </div>
+                <div class="sales-record-side-list">
+                    <div class="sales-record-side-row">
+                        <span class="sales-record-side-label">Ultimo envio</span>
+                        <span class="sales-record-side-value">{{ fiscal_document.email_last_sent_at|date:"d/m/Y H:i"|default:"-" }}</span>
+                    </div>
+                    <div class="sales-record-side-row">
+                        <span class="sales-record-side-label">Destinatario</span>
+                        <span class="sales-record-side-value">{{ fiscal_document.email_last_recipient|default:"-" }}</span>
+                    </div>
+                    <div class="sales-record-side-row">
+                        <span class="sales-record-side-label">Ultimo error</span>
+                        <span class="sales-record-side-value">{{ fiscal_document.email_last_error|default:"-" }}</span>
+                    </div>
                 </div>
             </section>
 
@@ -356,7 +419,9 @@
                     <li class="sales-record-attempt-item">
                         <strong>{{ attempt.get_result_status_display }} · {{ attempt.created_at|date:"d/m/Y H:i" }}</strong>
                         <small>
-                            Usuario: {{ attempt.triggered_by.username|default:"Sistema" }} ·
+                            Usuario: {{ attempt.triggered_by.username|default:"Sistema" }} &middot;
+                            Intento #{{ attempt.attempt_number }} &middot;
+                            Duracion {{ attempt.duration_ms|default:0 }} ms &middot;
                             Codigo: {{ attempt.error_code|default:"-" }}<br>
                             {{ attempt.error_message|default:"Sin mensaje adicional." }}
                         </small>

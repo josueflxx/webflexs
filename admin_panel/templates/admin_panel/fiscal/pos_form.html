@@ -13,15 +13,15 @@
         Nuevo punto de venta fiscal
         {% endif %}
     </h2>
-    <p class="text-muted" style="margin-bottom:1rem;">
+    <p class="text-muted fiscal-pos-company">
         Empresa activa: <strong>{{ active_company.name }}</strong>
     </p>
 
     <form method="post">
         {% csrf_token %}
 
-        <div class="flex gap-3" style="flex-wrap: wrap;">
-            <div class="form-group" style="flex:1; min-width:220px;">
+        <div class="fiscal-pos-top-grid">
+            <div class="form-group fiscal-pos-field">
                 <label for="number" class="form-label">Numero</label>
                 <input
                     type="text"
@@ -33,7 +33,7 @@
                     required
                 >
             </div>
-            <div class="form-group" style="flex:1; min-width:220px;">
+            <div class="form-group fiscal-pos-field">
                 <label for="name" class="form-label">Nombre</label>
                 <input
                     type="text"
@@ -44,7 +44,7 @@
                     placeholder="PV 1"
                 >
             </div>
-            <div class="form-group" style="flex:1; min-width:220px;">
+            <div class="form-group fiscal-pos-field">
                 <label for="environment" class="form-label">Entorno</label>
                 <select id="environment" name="environment" class="form-select">
                     {% for key, label in environment_choices %}
@@ -61,12 +61,12 @@
             <textarea id="notes" name="notes" class="form-textarea">{% if point %}{{ point.notes }}{% endif %}</textarea>
         </div>
 
-        <div class="flex gap-3" style="flex-wrap: wrap; margin-bottom: 1rem;">
-            <label style="display:flex; align-items:center; gap:8px;">
+        <div class="fiscal-pos-switches">
+            <label class="fiscal-pos-switch">
                 <input type="checkbox" name="is_active" {% if point and point.is_active %}checked{% elif not point %}checked{% endif %}>
                 Activo
             </label>
-            <label style="display:flex; align-items:center; gap:8px;">
+            <label class="fiscal-pos-switch">
                 <input type="checkbox" name="is_default" {% if point and point.is_default %}checked{% endif %}>
                 Default
             </label>

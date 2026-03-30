@@ -48,8 +48,19 @@ def generate_afip_qr_data(fiscal_document):
     else:
         doc_nro = 0
 
-    # AFIP document types
-    cbte_tipo = 1 if fiscal_document.doc_type == "FA" else (6 if fiscal_document.doc_type == "FB" else 0)
+    # AFIP document types (WSFE CbteTipo)
+    cbte_map = {
+        "FA": 1,
+        "FB": 6,
+        "FC": 11,
+        "NCA": 3,
+        "NCB": 8,
+        "NCC": 13,
+        "NDA": 2,
+        "NDB": 7,
+        "NDC": 12,
+    }
+    cbte_tipo = cbte_map.get(fiscal_document.doc_type, 0)
 
     qr_data = {
         "ver": 1, 

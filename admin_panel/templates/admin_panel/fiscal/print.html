@@ -374,7 +374,7 @@
             <section class="brand-block">
                 <img src="{% static 'core/img/flexs-logo.png' %}" alt="FLEXS" class="brand-logo">
                 <div class="brand-meta">
-                    {{ fiscal_document.company.legal_name|default:fiscal_document.company.name }}<br>
+                    {{ company_legal_name|default:fiscal_document.company.name }}<br>
                     {{ company_address_line|default:"-" }}<br>
                     {{ company_contact_line|default:"-" }}<br>
                     {{ company_contact_site|default:"-" }}
@@ -396,20 +396,20 @@
 
         <section class="issuer-grid">
             <div>
-                <strong>CUIT:</strong> {{ fiscal_document.company.cuit|default:"-" }}<br>
-                <strong>Condicion fiscal:</strong> {{ fiscal_document.company.get_tax_condition_display|default:"-" }}
+                <strong>CUIT:</strong> {{ emitter_cuit|default:"-" }}<br>
+                <strong>Condicion fiscal:</strong> {{ emitter_tax_condition_label|default:"-" }}
             </div>
             <div>
-                <strong>Punto de venta:</strong> {{ fiscal_document.point_of_sale.number|default:"-" }}<br>
+                <strong>Punto de venta:</strong> {{ point_of_sale_display|default:"-" }}<br>
                 <strong>Estado fiscal:</strong> {{ fiscal_document.get_status_display }}
             </div>
         </section>
 
         <section class="client-panel">
             <div>
-                <strong>Razon social:</strong> {{ client_profile.company_name|default:"-" }}<br>
+                <strong>Razon social:</strong> {{ client_name_display|default:"-" }}<br>
                 <strong>{{ client_document_label }}:</strong> {{ client_document_value|default:"-" }}<br>
-                <strong>Cond. de IVA:</strong> {{ client_profile.get_iva_condition_display|default:"-" }}<br>
+                <strong>Cond. de IVA:</strong> {{ client_tax_condition_display|default:"-" }}<br>
                 <strong>Domicilio:</strong> {{ client_address_line|default:"-" }}
             </div>
             <div>

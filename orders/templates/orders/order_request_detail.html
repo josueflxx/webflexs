@@ -10,7 +10,7 @@
                 <h1>Solicitud #{{ order_request.pk }}</h1>
                 <p class="text-muted">Pedido enviado desde el catalogo y pendiente de definicion comercial.</p>
             </div>
-            <span class="badge badge-info" style="font-size: 1rem; padding: 0.5rem 1rem;">
+            <span class="badge badge-info request-status-badge">
                 {{ order_request.get_status_display }}
             </span>
         </div>
@@ -27,28 +27,30 @@
 
         <div class="order-items">
             <h3>Productos solicitados</h3>
-            <table class="items-table">
-                <thead>
-                    <tr>
-                        <th>SKU</th>
-                        <th>Producto</th>
-                        <th>Cantidad</th>
-                        <th>Precio Unit.</th>
-                        <th>Subtotal</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for item in order_request.items.all %}
-                    <tr>
-                        <td><code>{{ item.product_sku }}</code></td>
-                        <td>{{ item.product_name }}</td>
-                        <td>{{ item.quantity }}</td>
-                        <td>${{ item.price_at_snapshot|floatformat:2 }}</td>
-                        <td>${{ item.subtotal|floatformat:2 }}</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+            <div class="items-table-wrap">
+                <table class="items-table">
+                    <thead>
+                        <tr>
+                            <th>SKU</th>
+                            <th>Producto</th>
+                            <th>Cantidad</th>
+                            <th>Precio Unit.</th>
+                            <th>Subtotal</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in order_request.items.all %}
+                        <tr>
+                            <td><code>{{ item.product_sku }}</code></td>
+                            <td>{{ item.product_name }}</td>
+                            <td>{{ item.quantity }}</td>
+                            <td>${{ item.price_at_snapshot|floatformat:2 }}</td>
+                            <td>${{ item.subtotal|floatformat:2 }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
         </div>
 
         <div class="order-totals">
@@ -76,28 +78,30 @@
             {% if current_proposal.message_to_client %}
             <p><strong>Mensaje:</strong> {{ current_proposal.message_to_client }}</p>
             {% endif %}
-            <table class="items-table">
-                <thead>
-                    <tr>
-                        <th>SKU</th>
-                        <th>Producto</th>
-                        <th>Cantidad</th>
-                        <th>Precio Unit.</th>
-                        <th>Subtotal</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for item in current_proposal.items.all %}
-                    <tr>
-                        <td><code>{{ item.product_sku }}</code></td>
-                        <td>{{ item.product_name }}</td>
-                        <td>{{ item.quantity }}</td>
-                        <td>${{ item.price_at_snapshot|floatformat:2 }}</td>
-                        <td>${{ item.subtotal|floatformat:2 }}</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+            <div class="items-table-wrap">
+                <table class="items-table">
+                    <thead>
+                        <tr>
+                            <th>SKU</th>
+                            <th>Producto</th>
+                            <th>Cantidad</th>
+                            <th>Precio Unit.</th>
+                            <th>Subtotal</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in current_proposal.items.all %}
+                        <tr>
+                            <td><code>{{ item.product_sku }}</code></td>
+                            <td>{{ item.product_name }}</td>
+                            <td>{{ item.quantity }}</td>
+                            <td>${{ item.price_at_snapshot|floatformat:2 }}</td>
+                            <td>${{ item.subtotal|floatformat:2 }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
             <div class="proposal-total">
                 <strong>Total propuesto:</strong> ${{ current_proposal.proposed_total|floatformat:2 }}
             </div>
@@ -213,7 +217,7 @@
         </div>
         {% endif %}
 
-        <div style="display:flex;gap:10px;flex-wrap:wrap;">
+        <div class="request-detail-actions">
             <a href="{% url 'order_request_list' %}" class="btn btn-outline"><- Volver a Mis Solicitudes</a>
             <a href="{% url 'catalog' %}" class="btn btn-primary">Seguir comprando</a>
         </div>
@@ -228,8 +232,13 @@
         display: flex;
         justify-content: space-between;
         align-items: start;
+        flex-wrap: wrap;
         gap: 16px;
         margin-bottom: var(--spacing-lg);
+    }
+    .request-status-badge {
+        font-size: 1rem;
+        padding: 0.5rem 1rem;
     }
     .order-header h1 {
         margin-bottom: 4px;
@@ -247,6 +256,11 @@
     .items-table {
         width: 100%;
         border-collapse: collapse;
+        min-width: 640px;
+    }
+    .items-table-wrap {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
     }
     .items-table th,
     .items-table td {
@@ -317,10 +331,39 @@
     .linked-doc-list li {
         display: flex;
         justify-content: space-between;
-        align-items: center;
+        align-items: flex-start;
+        flex-wrap: wrap;
         gap: 10px;
         padding-bottom: 8px;
         border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .request-detail-actions {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+    }
+    @media (max-width: 900px) {
+        .order-totals {
+            max-width: none;
+            margin-left: 0;
+        }
+
+        .linked-doc-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+    @media (max-width: 640px) {
+        .order-detail-page {
+            padding: var(--spacing-xl) 0;
+        }
+
+        .order-header h1 {
+            font-size: 1.5rem;
+        }
+
+        .request-detail-actions .btn {
+            width: 100%;
+        }
     }
 </style>
 {% endblock %}

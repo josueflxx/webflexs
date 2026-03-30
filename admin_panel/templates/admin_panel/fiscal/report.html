@@ -1,0 +1,137 @@
+{% extends 'admin_panel/base.html' %}
+
+{% block page_title %}Reporte fiscal{% endblock %}
+
+{% block content %}
+<div class="admin-table-container">
+    <div class="admin-toolbar">
+        <form method="get" class="toolbar-search">
+            <input type="date" name="date_from" value="{{ date_from }}" class="form-input">
+            <input type="date" name="date_to" value="{{ date_to }}" class="form-input">
+            <select name="doc_type" class="form-select">
+                <option value="">Tipo (todos)</option>
+                {% for value, label in doc_type_choices %}
+                <option value="{{ value }}" {% if doc_type == value %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+            <select name="issue_mode" class="form-select">
+                <option value="">Modo (todos)</option>
+                {% for value, label in issue_mode_choices %}
+                <option value="{{ value }}" {% if issue_mode == value %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+            <select name="status" class="form-select">
+                <option value="">Estado (todos)</option>
+                {% for value, label in status_choices %}
+                <option value="{{ value }}" {% if status == value %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+            <button type="submit" class="btn btn-primary">Filtrar</button>
+            <a href="{% url 'admin_fiscal_report' %}" class="btn btn-outline">Limpiar</a>
+        </form>
+        <div class="toolbar-actions">
+            <a href="{% url 'admin_fiscal_report' %}?date_from={{ date_from }}&date_to={{ date_to }}&doc_type={{ doc_type }}&issue_mode={{ issue_mode }}&status={{ status }}&export=csv" class="btn btn-outline">Exportar CSV</a>
+            <a href="{% url 'admin_fiscal_document_list' %}" class="btn btn-outline">Volver a comprobantes</a>
+        </div>
+    </div>
+
+    <div class="admin-stats-grid" style="margin-bottom:16px;">
+        <article class="admin-stat-card">
+            <span class="admin-stat-label">Comprobantes</span>
+            <strong class="admin-stat-value">{{ summary.documents_count }}</strong>
+        </article>
+        <article class="admin-stat-card">
+            <span class="admin-stat-label">Total</span>
+            <strong class="admin-stat-value">${{ summary.total_amount|floatformat:2 }}</strong>
+        </article>
+        <article class="admin-stat-card">
+            <span class="admin-stat-label">Autorizados</span>
+            <strong class="admin-stat-value">{{ summary.authorized_count }}</strong>
+        </article>
+        <article class="admin-stat-card">
+            <span class="admin-stat-label">Pendiente retry</span>
+            <strong class="admin-stat-value">{{ summary.pending_retry_count }}</strong>
+        </article>
+        <article class="admin-stat-card">
+            <span class="admin-stat-label">Rechazados</span>
+            <strong class="admin-stat-value">{{ summary.rejected_count }}</strong>
+        </article>
+        <article class="admin-stat-card">
+            <span class="admin-stat-label">Vencidos</span>
+            <strong class="admin-stat-value">{{ summary.overdue_count }}</strong>
+        </article>
+    </div>
+
+    <h3 style="margin:0 0 10px;">Resumen por tipo fiscal</h3>
+    <table class="admin-table" style="margin-bottom:20px;">
+        <thead>
+            <tr>
+                <th>Tipo</th>
+                <th>Cantidad</th>
+                <th>Total</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in grouped %}
+            <tr>
+                <td>{{ row.doc_type_label }}</td>
+                <td>{{ row.documents_count }}</td>
+                <td>${{ row.total_amount|floatformat:2 }}</td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="3" class="text-center text-muted">Sin datos para el filtro actual.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <h3 style="margin:0 0 10px;">Ultimos comprobantes del periodo</h3>
+    <table class="admin-table">
+        <thead>
+            <tr>
+                <th>Fecha</th>
+                <th>Tipo</th>
+                <th>Numero</th>
+                <th>Cliente</th>
+                <th>Estado fiscal</th>
+                <th>Cobranza</th>
+                <th>Total</th>
+                <th>Vencimiento</th>
+                <th>Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for doc in documents %}
+            <tr>
+                <td>{{ doc.created_at|date:"d/m/Y H:i" }}</td>
+                <td>{{ doc.commercial_type_label }}</td>
+                <td>{{ doc.display_number }}</td>
+                <td>{{ doc.client_company_ref.client_profile.company_name|default:"-" }}</td>
+                <td><span class="badge badge-info">{{ doc.get_status_display }}</span></td>
+                <td>
+                    {% if doc.collection_snapshot.status_key == 'overdue' %}
+                    <span class="badge badge-danger">{{ doc.collection_snapshot.status_label }}</span>
+                    {% elif doc.collection_snapshot.status_key == 'paid' %}
+                    <span class="badge badge-success">{{ doc.collection_snapshot.status_label }}</span>
+                    {% elif doc.collection_snapshot.status_key == 'due_soon' %}
+                    <span class="badge badge-warning">{{ doc.collection_snapshot.status_label }}</span>
+                    {% else %}
+                    <span class="badge badge-secondary">{{ doc.collection_snapshot.status_label }}</span>
+                    {% endif %}
+                </td>
+                <td>${{ doc.total|floatformat:2 }}</td>
+                <td>{{ doc.payment_due_date|date:"d/m/Y"|default:"-" }}</td>
+                <td class="actions">
+                    <a href="{% url 'admin_fiscal_document_detail' doc.pk %}" class="btn btn-outline btn-sm">Ver</a>
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="9" class="text-center text-muted">No hay comprobantes para mostrar.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

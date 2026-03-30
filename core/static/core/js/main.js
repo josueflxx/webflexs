@@ -3,7 +3,7 @@
  */
 
 document.addEventListener('DOMContentLoaded', function () {
-    const PUBLIC_NAV_MOBILE_BREAKPOINT = 1360;
+    const PUBLIC_NAV_MOBILE_BREAKPOINT = 900;
     // Mobile menu toggle
     const mobileMenuToggle = document.getElementById('mobileMenuToggle');
     const navMenu = document.getElementById('navMenu');

@@ -1,15 +1,15 @@
 {% extends 'admin_panel/base.html' %}
 
-{% block page_title %}Tipos de documento{% endblock %}
+{% block page_title %}Tipos de venta{% endblock %}
 
 {% block content %}
 <div class="settings-hub">
     <section class="settings-hero">
         <div>
-            <p class="settings-eyebrow">Motor documental</p>
-            <h2>Tipos de documento comerciales</h2>
+            <p class="settings-eyebrow">Motor comercial</p>
+            <h2>Tipos de venta y movimiento</h2>
             <p class="settings-hero-copy">
-                Esta configuracion define como opera cada comprobante en la empresa activa:
+                Esta configuracion define como opera cada tipo de venta en la empresa activa:
                 numeracion, stock, cuenta corriente, fiscalidad y documentos internos.
             </p>
         </div>
@@ -61,7 +61,7 @@
         <div class="settings-section-header">
             <div>
                 <h3>Cobertura por comportamiento</h3>
-                <p>Que tipos existen para cada familia documental y cual esta marcado como predeterminado.</p>
+                <p>Que tipos existen para cada familia comercial y cual esta marcado como predeterminado.</p>
             </div>
         </div>
 
@@ -92,7 +92,83 @@
         <div class="settings-section-header">
             <div>
                 <h3>Tipos configurados</h3>
-                <p>Detalle operativo de cada comprobante, con sus reglas, numeracion y dependencias.</p>
+                <p>Vista operativa estilo SaaS: ultimo numero, nombre y comportamiento de cada tipo.</p>
+            </div>
+        </div>
+
+        <div class="doc-type-table-wrap">
+            <table class="doc-type-table">
+                <thead>
+                    <tr>
+                        <th>Estado</th>
+                        <th>Ultimo numero</th>
+                        <th>Nombre</th>
+                        <th>Canal default</th>
+                        <th>Comportamiento</th>
+                        <th>Modo</th>
+                        <th>Movimientos</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in document_types %}
+                    <tr class="{% if not item.enabled %}is-disabled{% endif %}">
+                        <td>
+                            <span class="doc-type-status-pill {% if item.enabled %}is-enabled{% else %}is-disabled{% endif %}">
+                                {% if item.enabled %}Activo{% else %}Off{% endif %}
+                            </span>
+                        </td>
+                        <td><strong>{{ item.format_number }}</strong></td>
+                        <td>
+                            <div class="doc-type-table-name">
+                                <strong>{{ item.name }}</strong>
+                                <small>{{ item.code }}</small>
+                            </div>
+                            {% if item.is_default %}
+                            <span class="badge badge-warning">Default</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ item.default_origin_channel_label }}</td>
+                        <td>{{ item.get_document_behavior_display }}</td>
+                        <td>{{ item.get_billing_mode_display }}</td>
+                        <td>
+                            <div class="doc-type-mini-rules">
+                                <span class="doc-type-rule {% if item.generate_stock_movement %}is-on{% endif %}">
+                                    Stock {% if item.generate_stock_movement %}si{% else %}no{% endif %}
+                                </span>
+                                <span class="doc-type-rule {% if item.generate_account_movement %}is-on{% endif %}">
+                                    Cuenta {% if item.generate_account_movement %}si{% else %}no{% endif %}
+                                </span>
+                            </div>
+                        </td>
+                        <td>
+                            <div class="doc-type-inline-actions">
+                                <a href="{% url 'admin_sales_document_type_edit' item.pk %}" class="btn btn-outline btn-sm">Editar</a>
+                                <form method="post" action="{% url 'admin_sales_document_type_toggle_enabled' item.pk %}">
+                                    {% csrf_token %}
+                                    <button type="submit" class="btn btn-outline btn-sm">
+                                        {% if item.enabled %}Deshabilitar{% else %}Habilitar{% endif %}
+                                    </button>
+                                </form>
+                                <a href="{% url 'admin_sales_document_type_delete' item.pk %}" class="btn btn-outline btn-sm">Eliminar</a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="8" class="order-empty-state">No hay tipos de venta configurados para la empresa activa.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <section class="settings-section">
+        <div class="settings-section-header">
+            <div>
+                <h3>Detalle operativo por tipo</h3>
+                <p>Snapshot completo de reglas logisticas, fiscales y comerciales.</p>
             </div>
         </div>
 
@@ -122,9 +198,9 @@
                     <strong class="doc-type-number-value">{{ item.format_number }}</strong>
                     <small>
                         {% if item.point_of_sale %}
-                        Punto de venta {{ item.point_of_sale.number }} · {{ item.get_billing_mode_display }}
+                        Punto de venta {{ item.point_of_sale.number }} - {{ item.get_billing_mode_display }}
                         {% else %}
-                        Documento interno · {{ item.get_billing_mode_display }}
+                        Documento interno - {{ item.get_billing_mode_display }}
                         {% endif %}
                     </small>
                 </div>
@@ -144,7 +220,15 @@
                     </div>
                     <div>
                         <span class="doc-type-info-label">Vendedor default</span>
-                        <strong>{{ item.default_sales_user.username|default:"-" }}</strong>
+                        <strong>{{ item.default_sales_user_label }}</strong>
+                    </div>
+                    <div>
+                        <span class="doc-type-info-label">Canal default</span>
+                        <strong>{{ item.default_origin_channel_label }}</strong>
+                    </div>
+                    <div>
+                        <span class="doc-type-info-label">Situacion</span>
+                        <strong>{% if item.use_document_situation %}Activa{% else %}No aplica{% endif %}</strong>
                     </div>
                 </div>
 
@@ -171,10 +255,11 @@
                             {% if item.enabled %}Deshabilitar{% else %}Habilitar{% endif %}
                         </button>
                     </form>
+                    <a href="{% url 'admin_sales_document_type_delete' item.pk %}" class="btn btn-outline btn-sm">Eliminar</a>
                 </div>
             </article>
             {% empty %}
-            <div class="order-empty-state">No hay tipos de documento configurados para la empresa activa.</div>
+            <div class="order-empty-state">No hay tipos de venta configurados para la empresa activa.</div>
             {% endfor %}
         </div>
     </section>

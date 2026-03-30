@@ -1,5 +1,8 @@
 """Background tasks (Celery-compatible with safe local fallback)."""
 
+from django.conf import settings
+from django.db.models import Q
+
 from core.services.import_execution_runner import run_import_execution
 
 
@@ -72,17 +75,16 @@ def retry_stuck_fiscal_documents_task():
     To be called by Celery Beat every N minutes.
     """
     from django.utils import timezone
-    from datetime import timedelta
     from core.models import FiscalDocument, FISCAL_STATUS_PENDING_RETRY
     from core.services.fiscal_emission import emit_fiscal_document_now
 
-    # We retry documents that have been stuck for at least 5 minutes, 
-    # and have less than 5 attempts, to prevent an infinite loop.
-    threshold = timezone.now() - timedelta(minutes=5)
+    max_retry_attempts = int(getattr(settings, "FISCAL_MAX_AUTO_RETRIES", 5) or 5)
+    now = timezone.now()
     stuck_docs = FiscalDocument.objects.filter(
         status=FISCAL_STATUS_PENDING_RETRY,
-        last_attempt_at__lte=threshold,
-        attempts_count__lt=5,
+        attempts_count__lt=max_retry_attempts,
+    ).filter(
+        Q(next_retry_at__isnull=True) | Q(next_retry_at__lte=now)
     )
 
     results = []

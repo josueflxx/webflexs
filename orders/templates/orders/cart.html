@@ -25,15 +25,39 @@
                         <span class="item-price">${{ item.unit_price|default:item.product.price|floatformat:2 }}</span>
                     </div>
                     <div class="item-quantity">
-                        <button class="qty-btn beta-control-compact" type="button" disabled title="Funcionalidad en BETA">-</button>
-                        <input type="number" id="qty-{{ item.pk }}" value="{{ item.quantity }}" min="1"
-                            class="qty-input" disabled>
-                        <button class="qty-btn beta-control-compact" type="button" disabled title="Funcionalidad en BETA">+</button>
+                        <button
+                            class="qty-btn js-qty-btn"
+                            type="button"
+                            data-item-id="{{ item.pk }}"
+                            data-delta="-1"
+                            aria-label="Disminuir cantidad"
+                        >-</button>
+                        <input
+                            type="number"
+                            id="qty-{{ item.pk }}"
+                            value="{{ item.quantity }}"
+                            min="1"
+                            class="qty-input js-qty-input"
+                            data-item-id="{{ item.pk }}"
+                            aria-label="Cantidad"
+                        >
+                        <button
+                            class="qty-btn js-qty-btn"
+                            type="button"
+                            data-item-id="{{ item.pk }}"
+                            data-delta="1"
+                            aria-label="Aumentar cantidad"
+                        >+</button>
                     </div>
                     <div class="item-subtotal">
                         ${{ item.subtotal|floatformat:2 }}
                     </div>
-                    <button class="item-remove beta-control-compact" type="button" disabled title="Funcionalidad en BETA">x</button>
+                    <button
+                        class="item-remove js-remove-btn"
+                        type="button"
+                        data-item-id="{{ item.pk }}"
+                        aria-label="Eliminar producto"
+                    >x</button>
                 </div>
                 {% endfor %}
             </div>
@@ -78,17 +102,20 @@
 <style>
     .cart-page { padding: var(--spacing-2xl) 0; }
     .cart-page h1 { margin-bottom: var(--spacing-2xl); }
-    .cart-layout { display: grid; grid-template-columns: 1fr 350px; gap: var(--spacing-2xl); }
-    .cart-items { display: flex; flex-direction: column; gap: var(--spacing-md); }
+    .cart-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 350px); gap: var(--spacing-2xl); align-items: start; }
+    .cart-items { display: flex; flex-direction: column; gap: var(--spacing-md); min-width: 0; }
     .cart-item {
         display: grid;
-        grid-template-columns: 80px 1fr auto auto auto;
+        grid-template-columns: 80px minmax(0, 1fr) auto auto auto;
         gap: var(--spacing-lg);
         align-items: center;
         background: var(--color-dark-light);
         padding: var(--spacing-lg);
         border-radius: var(--radius-lg);
+        min-width: 0;
     }
+    .item-info { min-width: 0; }
+    .item-name { overflow-wrap: anywhere; }
     .item-image { width: 80px; height: 80px; border-radius: var(--radius-md); overflow: hidden; background: var(--color-dark); }
     .item-image img { width: 100%; height: 100%; object-fit: cover; }
     .item-sku { font-size: var(--font-size-xs); color: var(--color-gray-light); }
@@ -99,24 +126,160 @@
     .qty-input { width: 60px; height: 32px; text-align: center; background: transparent; color: var(--color-white); border: 1px solid var(--color-gray); border-radius: var(--radius-sm); }
     .item-subtotal { font-weight: 700; font-size: var(--font-size-lg); }
     .item-remove { background: none; border: none; color: var(--color-danger); font-size: 1.5rem; cursor: pointer; }
-    .cart-summary { background: var(--color-dark-light); padding: var(--spacing-xl); border-radius: var(--radius-lg); height: fit-content; position: sticky; top: 120px; }
+    .cart-summary { background: var(--color-dark-light); padding: var(--spacing-xl); border-radius: var(--radius-lg); height: fit-content; position: sticky; top: 120px; min-width: 0; }
     .summary-row { display: flex; justify-content: space-between; padding: var(--spacing-md) 0; border-bottom: 1px solid rgba(255, 255, 255, 0.1); }
     .summary-row.discount { color: var(--color-success); }
     .summary-row.total { font-size: var(--font-size-xl); font-weight: 700; color: var(--color-primary); border-bottom: none; }
     .cart-summary .btn { margin-top: var(--spacing-md); }
     .btn-block { width: 100%; text-align: center; }
     .empty-cart { text-align: center; padding: var(--spacing-3xl); }
-    .beta-control-compact {
-        pointer-events: none;
-        cursor: not-allowed !important;
-        opacity: 0.45;
-        text-decoration: line-through;
-        text-decoration-thickness: 2px;
+    @media (max-width: 1100px) {
+        .cart-layout { grid-template-columns: 1fr; }
+        .cart-summary { position: static; }
     }
     @media (max-width: 768px) {
-        .cart-layout { grid-template-columns: 1fr; }
-        .cart-item { grid-template-columns: 60px 1fr auto; }
-        .item-subtotal { display: none; }
+        .cart-item {
+            grid-template-columns: 60px minmax(0, 1fr);
+            gap: 12px;
+        }
+        .item-image {
+            width: 60px;
+            height: 60px;
+        }
+        .item-quantity,
+        .item-subtotal,
+        .item-remove {
+            grid-column: 1 / -1;
+        }
+        .item-quantity {
+            justify-content: flex-start;
+        }
+        .item-subtotal {
+            font-size: var(--font-size-base);
+        }
+        .item-remove {
+            justify-self: start;
+            line-height: 1;
+            font-size: 1.25rem;
+        }
     }
 </style>
+
+<script>
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+
+    async function postCartAction(url, payload) {
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken'),
+            },
+            body: JSON.stringify(payload),
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || !data.success) {
+            throw new Error(data.error || 'No se pudo actualizar el carrito.');
+        }
+        return data;
+    }
+
+    async function updateCartQuantity(itemId, quantity) {
+        return postCartAction("{% url 'update_cart_item' %}", {
+            item_id: Number(itemId),
+            quantity: Number(quantity),
+        });
+    }
+
+    async function removeCartItem(itemId) {
+        return postCartAction("{% url 'remove_from_cart' %}", {
+            item_id: Number(itemId),
+        });
+    }
+
+    function setControlsDisabled(disabled) {
+        document.querySelectorAll('.js-qty-btn, .js-qty-input, .js-remove-btn').forEach((el) => {
+            el.disabled = !!disabled;
+        });
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        const qtyButtons = document.querySelectorAll('.js-qty-btn');
+        const qtyInputs = document.querySelectorAll('.js-qty-input');
+        const removeButtons = document.querySelectorAll('.js-remove-btn');
+
+        qtyButtons.forEach((button) => {
+            button.addEventListener('click', async () => {
+                const itemId = button.dataset.itemId;
+                const delta = Number(button.dataset.delta || 0);
+                const input = document.querySelector(`.js-qty-input[data-item-id="${itemId}"]`);
+                if (!input) return;
+                const currentQty = Math.max(Number(input.value || 1), 1);
+                const nextQty = Math.max(currentQty + delta, 1);
+                try {
+                    setControlsDisabled(true);
+                    await updateCartQuantity(itemId, nextQty);
+                    window.location.reload();
+                } catch (error) {
+                    setControlsDisabled(false);
+                    alert(error.message || 'No se pudo actualizar el carrito.');
+                }
+            });
+        });
+
+        qtyInputs.forEach((input) => {
+            const submitQuantity = async () => {
+                const itemId = input.dataset.itemId;
+                let quantity = Number(input.value || 1);
+                if (!Number.isFinite(quantity) || quantity < 1) {
+                    quantity = 1;
+                }
+                input.value = quantity;
+                try {
+                    setControlsDisabled(true);
+                    await updateCartQuantity(itemId, quantity);
+                    window.location.reload();
+                } catch (error) {
+                    setControlsDisabled(false);
+                    alert(error.message || 'No se pudo actualizar el carrito.');
+                }
+            };
+
+            input.addEventListener('change', submitQuantity);
+            input.addEventListener('keydown', (event) => {
+                if (event.key === 'Enter') {
+                    event.preventDefault();
+                    submitQuantity();
+                }
+            });
+        });
+
+        removeButtons.forEach((button) => {
+            button.addEventListener('click', async () => {
+                const itemId = button.dataset.itemId;
+                try {
+                    setControlsDisabled(true);
+                    await removeCartItem(itemId);
+                    window.location.reload();
+                } catch (error) {
+                    setControlsDisabled(false);
+                    alert(error.message || 'No se pudo eliminar el producto.');
+                }
+            });
+        });
+    });
+</script>
 {% endblock %}

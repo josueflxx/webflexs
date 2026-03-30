@@ -9,9 +9,26 @@ from django.urls import reverse
 
 from accounts.models import ClientCompany, ClientProfile
 from catalog.models import Category, Product
-from core.models import AdminCompanyAccess, Company, SalesDocumentType, Warehouse
+from core.models import (
+    AdminCompanyAccess,
+    Company,
+    FISCAL_DOC_TYPE_FC,
+    FISCAL_DOC_TYPE_FB,
+    FISCAL_DOC_TYPE_NCC,
+    FiscalPointOfSale,
+    FiscalDocument,
+    SALES_BEHAVIOR_FACTURA,
+    SALES_BEHAVIOR_PEDIDO,
+    SALES_BILLING_MODE_INTERNAL_DOCUMENT,
+    SalesDocumentType,
+    Warehouse,
+)
 from core.services.company_context import get_default_company, get_user_companies
+from core.services.fiscal import validate_credit_note_relationship
+from core.services.fiscal_documents import create_local_fiscal_document_from_order
+from core.services.sales_documents import resolve_sales_document_type
 from orders.models import Order
+from orders.models import OrderItem
 
 
 class GlobalNumberFormatTests(TestCase):
@@ -331,3 +348,293 @@ class SalesDocumentTypeSeedTests(TestCase):
                 1,
                 f"Debe existir un tipo factura predeterminado para {company}",
             )
+
+
+class SalesDocumentTypeChannelOverrideTests(TestCase):
+    def setUp(self):
+        self.company = get_default_company()
+
+    def test_allows_multiple_defaults_for_same_behavior_when_channel_differs(self):
+        base_kwargs = {
+            "company": self.company,
+            "document_behavior": SALES_BEHAVIOR_PEDIDO,
+            "billing_mode": SALES_BILLING_MODE_INTERNAL_DOCUMENT,
+            "internal_doc_type": "PED",
+            "enabled": True,
+            "is_default": True,
+        }
+        SalesDocumentType.objects.create(
+            code="pedido-default-catalogo-test",
+            name="Pedido Default Catalogo Test",
+            letter="PDT",
+            default_origin_channel="catalog",
+            display_order=2101,
+            **base_kwargs,
+        )
+        SalesDocumentType.objects.create(
+            code="pedido-default-whatsapp-test",
+            name="Pedido Default WhatsApp Test",
+            letter="PDW",
+            default_origin_channel="whatsapp",
+            display_order=2102,
+            **base_kwargs,
+        )
+
+        self.assertTrue(
+            SalesDocumentType.objects.filter(
+                company=self.company,
+                document_behavior=SALES_BEHAVIOR_PEDIDO,
+                is_default=True,
+                default_origin_channel="catalog",
+            ).exists()
+        )
+        self.assertTrue(
+            SalesDocumentType.objects.filter(
+                company=self.company,
+                document_behavior=SALES_BEHAVIOR_PEDIDO,
+                is_default=True,
+                default_origin_channel="whatsapp",
+            ).exists()
+        )
+
+    def test_resolver_prioritizes_channel_default_then_fallback_default(self):
+        general_default = SalesDocumentType.objects.filter(
+            company=self.company,
+            document_behavior=SALES_BEHAVIOR_FACTURA,
+            is_default=True,
+            default_origin_channel="",
+        ).first()
+        if not general_default:
+            general_default = SalesDocumentType.objects.create(
+                company=self.company,
+                code="factura-general-default-test",
+                name="Factura General Default Test",
+                letter="FG",
+                document_behavior=SALES_BEHAVIOR_FACTURA,
+                billing_mode=SALES_BILLING_MODE_INTERNAL_DOCUMENT,
+                internal_doc_type="PED",
+                enabled=True,
+                is_default=True,
+                default_origin_channel="",
+                display_order=2200,
+            )
+
+        catalog_default = SalesDocumentType.objects.create(
+            company=self.company,
+            code="factura-catalogo-default-test",
+            name="Factura Catalogo Default Test",
+            letter="FC",
+            document_behavior=SALES_BEHAVIOR_FACTURA,
+            billing_mode=SALES_BILLING_MODE_INTERNAL_DOCUMENT,
+            internal_doc_type="PED",
+            enabled=True,
+            is_default=True,
+            default_origin_channel="catalog",
+            display_order=2201,
+        )
+
+        resolved_catalog = resolve_sales_document_type(
+            company=self.company,
+            behavior=SALES_BEHAVIOR_FACTURA,
+            origin_channel="catalog",
+        )
+        resolved_whatsapp = resolve_sales_document_type(
+            company=self.company,
+            behavior=SALES_BEHAVIOR_FACTURA,
+            origin_channel="whatsapp",
+        )
+
+        self.assertIsNotNone(resolved_catalog)
+        self.assertEqual(resolved_catalog.pk, catalog_default.pk)
+        self.assertIsNotNone(resolved_whatsapp)
+        self.assertEqual(resolved_whatsapp.pk, general_default.pk)
+
+
+class FiscalDocumentSnapshotTests(TestCase):
+    def setUp(self):
+        self.company = get_default_company()
+        self.company.legal_name = self.company.legal_name or "Empresa Test Snapshot SA"
+        self.company.cuit = self.company.cuit or "30712345678"
+        self.company.tax_condition = self.company.tax_condition or "responsable_inscripto"
+        self.company.fiscal_address = self.company.fiscal_address or "Calle Fiscal 100"
+        self.company.fiscal_city = self.company.fiscal_city or "San Martin"
+        self.company.fiscal_province = self.company.fiscal_province or "Buenos Aires"
+        self.company.postal_code = self.company.postal_code or "1650"
+        self.company.save()
+
+        self.user = User.objects.create_user("snapshot_cliente", password="secret123")
+        self.client_profile = ClientProfile.objects.create(
+            user=self.user,
+            company_name="Cliente Snapshot SRL",
+            document_type="cuit",
+            document_number="30700111223",
+            iva_condition="responsable_inscripto",
+            fiscal_address="Domicilio Cliente 123",
+            fiscal_city="San Martin",
+            fiscal_province="Buenos Aires",
+            postal_code="1650",
+            phone="1122334455",
+        )
+        self.client_company = ClientCompany.objects.create(
+            client_profile=self.client_profile,
+            company=self.company,
+            is_active=True,
+        )
+        self.point_of_sale = FiscalPointOfSale.objects.create(
+            company=self.company,
+            number="7",
+            is_active=True,
+            is_default=True,
+        )
+        self.product = Product.objects.create(
+            sku="SNAP-001",
+            name="Producto Snapshot",
+            price=Decimal("100.00"),
+            cost=Decimal("60.00"),
+            stock=10,
+            is_active=True,
+        )
+        self.order = Order.objects.create(
+            user=self.user,
+            company=self.company,
+            status=Order.STATUS_CONFIRMED,
+            subtotal=Decimal("200.00"),
+            discount_amount=Decimal("10.00"),
+            discount_percentage=Decimal("5.00"),
+            total=Decimal("190.00"),
+            client_company=self.client_profile.company_name,
+            client_cuit=self.client_profile.document_number,
+            client_address=self.client_profile.fiscal_address,
+            client_phone=self.client_profile.phone,
+            client_company_ref=self.client_company,
+            origin_channel=Order.ORIGIN_ADMIN,
+        )
+        OrderItem.objects.create(
+            order=self.order,
+            product=self.product,
+            product_sku=self.product.sku,
+            product_name=self.product.name,
+            quantity=2,
+            unit_price_base=Decimal("100.00"),
+            discount_percentage_used=Decimal("5.00"),
+            price_at_purchase=Decimal("95.00"),
+            subtotal=Decimal("190.00"),
+        )
+
+    def test_local_fiscal_document_stores_snapshot_payload(self):
+        document, created = create_local_fiscal_document_from_order(
+            order=self.order,
+            company=self.company,
+            doc_type=FISCAL_DOC_TYPE_FB,
+            point_of_sale=self.point_of_sale,
+            issue_mode="manual",
+            require_invoice_ready=False,
+        )
+
+        self.assertTrue(created)
+        self.assertIsInstance(document.request_payload, dict)
+        snapshot = document.request_payload.get("snapshot")
+        self.assertIsInstance(snapshot, dict)
+        self.assertEqual(snapshot.get("version"), 1)
+        self.assertEqual(snapshot.get("emitter", {}).get("company_id"), self.company.id)
+        self.assertEqual(snapshot.get("emitter", {}).get("point_of_sale"), self.point_of_sale.number)
+        self.assertEqual(snapshot.get("client", {}).get("client_profile_id"), self.client_profile.id)
+        self.assertEqual(snapshot.get("operation", {}).get("order_id"), self.order.id)
+        self.assertEqual(snapshot.get("generation", {}).get("doc_type"), FISCAL_DOC_TYPE_FB)
+
+    def test_existing_fiscal_document_keeps_original_snapshot(self):
+        document, _ = create_local_fiscal_document_from_order(
+            order=self.order,
+            company=self.company,
+            doc_type=FISCAL_DOC_TYPE_FB,
+            point_of_sale=self.point_of_sale,
+            issue_mode="manual",
+            require_invoice_ready=False,
+        )
+        original_snapshot = dict(document.request_payload.get("snapshot", {}))
+        original_emitter_name = original_snapshot.get("emitter", {}).get("legal_name")
+
+        self.company.legal_name = "Empresa Renombrada"
+        self.company.save(update_fields=["legal_name", "updated_at"])
+        self.client_profile.company_name = "Cliente Renombrado"
+        self.client_profile.save(update_fields=["company_name", "updated_at"])
+
+        document_again, created_again = create_local_fiscal_document_from_order(
+            order=self.order,
+            company=self.company,
+            doc_type=FISCAL_DOC_TYPE_FB,
+            point_of_sale=self.point_of_sale,
+            issue_mode="manual",
+            require_invoice_ready=False,
+        )
+
+        self.assertFalse(created_again)
+        self.assertEqual(document_again.pk, document.pk)
+        current_snapshot = document_again.request_payload.get("snapshot", {})
+        self.assertEqual(current_snapshot.get("emitter", {}).get("legal_name"), original_emitter_name)
+        self.assertEqual(current_snapshot, original_snapshot)
+
+
+class FiscalTypeCompatibilityTests(TestCase):
+    def setUp(self):
+        self.company = get_default_company()
+
+    def test_resolver_supports_factura_c_types(self):
+        configured = SalesDocumentType.objects.create(
+            company=self.company,
+            code="factura-c-compat-test",
+            name="Factura C compat test",
+            letter="C",
+            document_behavior=SALES_BEHAVIOR_FACTURA,
+            billing_mode=SALES_BILLING_MODE_INTERNAL_DOCUMENT,
+            internal_doc_type="PED",
+            fiscal_doc_type=FISCAL_DOC_TYPE_FC,
+            enabled=True,
+            is_default=False,
+            display_order=9991,
+        )
+
+        resolved = resolve_sales_document_type(
+            company=self.company,
+            behavior=SALES_BEHAVIOR_FACTURA,
+            fiscal_doc_type=FISCAL_DOC_TYPE_FC,
+        )
+
+        self.assertIsNotNone(resolved)
+        self.assertEqual(resolved.pk, configured.pk)
+
+    def test_credit_note_c_requires_and_accepts_factura_c_base(self):
+        point = FiscalPointOfSale.objects.create(
+            company=self.company,
+            number="88",
+            is_active=True,
+            is_default=False,
+        )
+        invoice_c = FiscalDocument.objects.create(
+            source_key="test:fiscal:compat:fc",
+            company=self.company,
+            point_of_sale=point,
+            doc_type=FISCAL_DOC_TYPE_FC,
+            issue_mode="manual",
+            status="authorized",
+            number=10,
+            subtotal_net=Decimal("100.00"),
+            total=Decimal("100.00"),
+        )
+        credit_note_c = FiscalDocument.objects.create(
+            source_key="test:fiscal:compat:ncc",
+            company=self.company,
+            point_of_sale=point,
+            doc_type=FISCAL_DOC_TYPE_NCC,
+            issue_mode="manual",
+            status="ready_to_issue",
+            number=1,
+            related_document=invoice_c,
+            subtotal_net=Decimal("10.00"),
+            total=Decimal("10.00"),
+        )
+
+        is_valid, errors = validate_credit_note_relationship(credit_note_c)
+
+        self.assertTrue(is_valid)
+        self.assertEqual(errors, [])

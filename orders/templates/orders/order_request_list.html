@@ -13,8 +13,8 @@
             <a href="{% url 'catalog' %}" class="btn btn-primary">Volver al catalogo</a>
         </div>
 
-        <form method="get" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;">
-            <select name="status" class="form-select" style="max-width:260px;">
+        <form method="get" class="request-filter-form">
+            <select name="status" class="form-select request-filter-select">
                 <option value="">Todos los estados</option>
                 {% for value, label in status_choices %}
                 <option value="{{ value }}" {% if status == value %}selected{% endif %}>{{ label }}</option>
@@ -59,6 +59,15 @@
     .orders-page {
         padding: var(--spacing-2xl) 0;
     }
+    .request-filter-form {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-bottom: 16px;
+    }
+    .request-filter-select {
+        max-width: 260px;
+    }
     .page-header {
         display: flex;
         justify-content: space-between;
@@ -83,6 +92,7 @@
         align-items: center;
         gap: var(--spacing-xl);
         flex-wrap: wrap;
+        min-width: 0;
     }
     .order-header {
         display: flex;
@@ -100,11 +110,13 @@
         gap: var(--spacing-xl);
         color: var(--color-gray-light);
         flex-wrap: wrap;
+        min-width: 0;
     }
     .order-actions {
         display: flex;
         gap: 8px;
         flex-wrap: wrap;
+        min-width: 0;
     }
     .order-total {
         font-weight: 700;
@@ -113,6 +125,33 @@
     .empty-orders {
         text-align: center;
         padding: var(--spacing-3xl);
+    }
+    @media (max-width: 760px) {
+        .request-filter-form {
+            flex-direction: column;
+            align-items: stretch;
+        }
+
+        .request-filter-select {
+            max-width: none;
+        }
+
+        .order-card {
+            padding: var(--spacing-lg);
+            gap: var(--spacing-md);
+        }
+
+        .order-header {
+            min-width: 0;
+        }
+
+        .order-actions {
+            width: 100%;
+        }
+
+        .order-actions .btn {
+            width: 100%;
+        }
     }
 </style>
 {% endblock %}

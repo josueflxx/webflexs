@@ -7,7 +7,7 @@ from decimal import Decimal
 
 from django.core.exceptions import ValidationError
 from django.db import transaction
-from django.db.models import F
+from django.db.models import Case, F, IntegerField, Q, Value, When
 
 from accounts.services.ledger import ensure_adjustment_transaction
 from core.models import (
@@ -44,8 +44,13 @@ INTERNAL_DOC_BEHAVIOR_MAP = {
 FISCAL_DOC_BEHAVIOR_MAP = {
     "FA": SALES_BEHAVIOR_FACTURA,
     "FB": SALES_BEHAVIOR_FACTURA,
+    "FC": SALES_BEHAVIOR_FACTURA,
     "NCA": SALES_BEHAVIOR_NOTA_CREDITO,
     "NCB": SALES_BEHAVIOR_NOTA_CREDITO,
+    "NCC": SALES_BEHAVIOR_NOTA_CREDITO,
+    "NDA": SALES_BEHAVIOR_NOTA_DEBITO,
+    "NDB": SALES_BEHAVIOR_NOTA_DEBITO,
+    "NDC": SALES_BEHAVIOR_NOTA_DEBITO,
 }
 
 BEHAVIOR_STOCK_RULES = {
@@ -74,6 +79,7 @@ def resolve_sales_document_type(
     internal_doc_type="",
     fiscal_doc_type="",
     billing_mode="",
+    origin_channel="",
     enabled_only=True,
 ):
     """Resolve configured document type for a company without duplicating business rules."""
@@ -95,11 +101,29 @@ def resolve_sales_document_type(
         queryset = queryset.filter(fiscal_doc_type=fiscal_doc_type)
     if billing_mode:
         queryset = queryset.filter(billing_mode=billing_mode)
+    origin_channel = str(origin_channel or "").strip().lower()
+    if not origin_channel:
+        return queryset.order_by("-is_default", "display_order", "name").first()
 
+    prioritized_queryset = queryset.filter(
+        Q(default_origin_channel="") | Q(default_origin_channel=origin_channel)
+    ).annotate(
+        _origin_priority=Case(
+            When(is_default=True, default_origin_channel=origin_channel, then=Value(0)),
+            When(is_default=True, default_origin_channel="", then=Value(1)),
+            When(default_origin_channel=origin_channel, then=Value(2)),
+            When(default_origin_channel="", then=Value(3)),
+            default=Value(9),
+            output_field=IntegerField(),
+        )
+    )
+    resolved = prioritized_queryset.order_by("_origin_priority", "display_order", "name").first()
+    if resolved:
+        return resolved
     return queryset.order_by("-is_default", "display_order", "name").first()
 
 
-def resolve_sales_document_type_for_internal_doc(*, company, doc_type):
+def resolve_sales_document_type_for_internal_doc(*, company, doc_type, origin_channel=""):
     behavior = INTERNAL_DOC_BEHAVIOR_MAP.get(doc_type)
     if not behavior:
         return None
@@ -107,10 +131,11 @@ def resolve_sales_document_type_for_internal_doc(*, company, doc_type):
         company=company,
         behavior=behavior,
         internal_doc_type=doc_type,
+        origin_channel=origin_channel,
     )
 
 
-def resolve_sales_document_type_for_fiscal_doc(*, company, doc_type, billing_mode=""):
+def resolve_sales_document_type_for_fiscal_doc(*, company, doc_type, billing_mode="", origin_channel=""):
     behavior = FISCAL_DOC_BEHAVIOR_MAP.get(doc_type)
     if not behavior:
         return None
@@ -119,6 +144,7 @@ def resolve_sales_document_type_for_fiscal_doc(*, company, doc_type, billing_mod
         behavior=behavior,
         fiscal_doc_type=doc_type,
         billing_mode=billing_mode,
+        origin_channel=origin_channel,
     )
 
 
@@ -295,9 +321,11 @@ def apply_sales_document_type_to_internal_document(*, document, sales_document_t
     if not document:
         return None
     if sales_document_type is None and getattr(document, "company_id", None):
+        origin_channel = getattr(getattr(document, "order", None), "origin_channel", "")
         sales_document_type = resolve_sales_document_type_for_internal_doc(
             company=document.company,
             doc_type=document.doc_type,
+            origin_channel=origin_channel,
         )
     if not sales_document_type:
         return document
@@ -325,9 +353,11 @@ def apply_sales_document_type_to_fiscal_document(*, document, sales_document_typ
     if not document:
         return None
     if sales_document_type is None and getattr(document, "company_id", None):
+        origin_channel = getattr(getattr(document, "order", None), "origin_channel", "")
         sales_document_type = resolve_sales_document_type_for_fiscal_doc(
             company=document.company,
             doc_type=document.doc_type,
+            origin_channel=origin_channel,
         )
     if not sales_document_type:
         return document

@@ -35,7 +35,7 @@
                 Exportar SaaS
             </a>
             {% else %}
-            <span class="text-muted" style="font-size:12px;">Selecciona empresa para exportar</span>
+            <span class="text-muted order-export-hint">Selecciona empresa para exportar</span>
             {% endif %}
         </form>
     </div>
@@ -87,7 +87,7 @@
                     <span class="badge badge-warning">Pendiente</span>
                     {% endif %}
                     {% if order.external_number %}
-                    <div class="text-muted" style="font-size:0.85rem;">Ext: {{ order.external_number }}</div>
+                    <div class="text-muted admin-meta-text">Ext: {{ order.external_number }}</div>
                     {% endif %}
                 </td>
                 <td class="actions">

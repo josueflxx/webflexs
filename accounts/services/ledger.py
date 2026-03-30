@@ -5,6 +5,7 @@ from decimal import Decimal
 from django.utils import timezone
 
 from accounts.models import ClientPayment, ClientProfile, ClientTransaction
+from core.models import FISCAL_BILLABLE_DOC_TYPES
 from orders.models import Order
 
 
@@ -44,7 +45,7 @@ def _get_order_billable_fiscal_document(order):
         FiscalDocument.objects.select_related("sales_document_type", "point_of_sale")
         .filter(
             order=order,
-            doc_type__in={"FA", "FB"},
+            doc_type__in=FISCAL_BILLABLE_DOC_TYPES,
             status__in=BILLABLE_FISCAL_DOCUMENT_STATUSES,
         )
         .exclude(status="voided")

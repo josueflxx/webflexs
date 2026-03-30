@@ -3,6 +3,8 @@ Django local development settings.
 Uses SQLite database.
 """
 
+import os
+
 from .base import *
 
 DEBUG = True
@@ -28,8 +30,14 @@ DATABASES = {
 # Allow all hosts in development
 ALLOWED_HOSTS = ['*']
 
-# Show emails in console during development
-EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+# Email backend in local:
+# - default: console (safe for dev)
+# - set LOCAL_EMAIL_BACKEND=smtp in .env to send real emails
+local_email_backend = os.getenv('LOCAL_EMAIL_BACKEND', '').strip().lower()
+if local_email_backend == 'smtp':
+    EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+else:
+    EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 
 # Keep login lockout behavior softer in local development so testing flows
 # does not leave the main admin user blocked for long periods.

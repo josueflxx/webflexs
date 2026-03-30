@@ -1,0 +1,102 @@
+{% extends 'admin_panel/base.html' %}
+
+{% block page_title %}Editar item de pedido{% endblock %}
+
+{% block content %}
+<div class="admin-form-container sales-record-page">
+    <section class="sales-record-card" style="max-width: 900px; margin: 0 auto;">
+        <div class="sales-record-card-head">
+            <div>
+                <h3>Editar producto de la venta</h3>
+                <p>Pedido #{{ order.pk }} - Actualiza producto, cantidad y precio del item.</p>
+            </div>
+            <span class="sales-record-tag is-info">{{ order.get_status_display }}</span>
+        </div>
+
+        <div class="sales-record-grid" style="margin-bottom: 16px;">
+            <div class="sales-record-field">
+                <span class="sales-record-field-label">SKU actual</span>
+                <span class="sales-record-field-value">{{ order_item.product_sku }}</span>
+            </div>
+            <div class="sales-record-field">
+                <span class="sales-record-field-label">Producto actual</span>
+                <span class="sales-record-field-value">{{ order_item.product_name }}</span>
+            </div>
+            <div class="sales-record-field">
+                <span class="sales-record-field-label">Cantidad actual</span>
+                <span class="sales-record-field-value">{{ order_item.quantity }}</span>
+            </div>
+            <div class="sales-record-field">
+                <span class="sales-record-field-label">Precio actual</span>
+                <span class="sales-record-field-value">${{ order_item.price_at_purchase|floatformat:2 }}</span>
+            </div>
+        </div>
+
+        <form method="post" class="order-fiscal-form" autocomplete="off">
+            {% csrf_token %}
+            <div class="order-fiscal-form-grid is-external">
+                <div>
+                    <label for="sku" class="form-label">Producto</label>
+                    <input
+                        type="search"
+                        id="sku"
+                        name="sku"
+                        class="form-input"
+                        value="{{ form_sku }}"
+                        placeholder="SKU, nombre, medida o marca..."
+                        data-suggest="1"
+                        data-suggest-scope="admin_products"
+                        data-suggest-submit="manual"
+                        data-suggest-query-item="0"
+                        data-suggest-target="#order-item-product-id"
+                        autocomplete="off"
+                    >
+                    <input type="hidden" name="product_id" id="order-item-product-id" value="{{ form_product_id }}">
+                </div>
+                <div>
+                    <label for="quantity" class="form-label">Cantidad</label>
+                    <input type="number" min="1" name="quantity" id="quantity" class="form-input" value="{{ form_quantity }}">
+                </div>
+                <div>
+                    <label for="price" class="form-label">Precio</label>
+                    <input type="number" step="0.01" min="0" name="price" id="price" class="form-input" value="{{ form_price }}">
+                </div>
+                <button type="submit" class="btn btn-primary">Guardar cambios</button>
+                <a href="{% url 'admin_order_detail' order.pk %}" class="btn btn-outline">Cancelar</a>
+            </div>
+        </form>
+    </section>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const skuInput = document.getElementById('sku');
+    const quantityInput = document.getElementById('quantity');
+    const priceInput = document.getElementById('price');
+    const productIdInput = document.getElementById('order-item-product-id');
+
+    if (skuInput) {
+        skuInput.focus();
+        skuInput.select();
+    }
+
+    if (productIdInput) {
+        productIdInput.addEventListener('flex-suggest-pick', (e) => {
+            const item = e.detail;
+            if (!item) return;
+            if (item.price && priceInput) {
+                priceInput.value = item.price;
+            }
+            setTimeout(() => {
+                if (quantityInput) {
+                    quantityInput.focus();
+                    quantityInput.select();
+                }
+            }, 30);
+        });
+    }
+});
+</script>
+{% endblock %}

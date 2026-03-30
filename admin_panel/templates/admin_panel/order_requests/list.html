@@ -48,7 +48,7 @@
                 <td>
                     {{ order_request.client_company_ref.client_profile.company_name|default:order_request.user.username|default:"-" }}
                     {% if order_request.user %}
-                    <div class="text-muted" style="font-size:0.85rem;">{{ order_request.user.username }}</div>
+                    <div class="text-muted admin-meta-text">{{ order_request.user.username }}</div>
                     {% endif %}
                 </td>
                 <td>{{ order_request.get_item_count }}</td>
@@ -57,7 +57,7 @@
                 <td>
                     {% if order_request.current_proposal %}
                     <span class="badge badge-warning">V{{ order_request.current_proposal.version_number }}</span>
-                    <div class="text-muted" style="font-size:0.85rem;">{{ order_request.current_proposal.get_status_display }}</div>
+                    <div class="text-muted admin-meta-text">{{ order_request.current_proposal.get_status_display }}</div>
                     {% else %}
                     <span class="text-muted">Sin propuesta</span>
                     {% endif %}
