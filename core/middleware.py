@@ -76,6 +76,7 @@ class ReadOnlyModeMiddleware:
         "/accounts/login/",
         "/accounts/logout/",
         "/accounts/redirect/",
+        "/api/admin-presence-touch/",
         "/api/go-offline/",
         "/static/",
         "/media/",
@@ -150,6 +151,7 @@ class ActiveCompanyMiddleware:
         "/accounts/empresa/",
         "/accounts/solicitar/",
         "/api/admin-presence/",
+        "/api/admin-presence-touch/",
         "/api/admin-alerts/",
         "/api/go-offline/",
         "/static/",
@@ -211,7 +213,7 @@ class UserActivityMiddleware:
     
     def __call__(self, request):
         if request.user.is_authenticated and request.user.is_staff:
-            tracked_prefixes = ("/admin-panel/", "/api/admin-presence/")
+            tracked_prefixes = ("/admin-panel/",)
             if not request.path.startswith(tracked_prefixes):
                 return self.get_response(request)
 

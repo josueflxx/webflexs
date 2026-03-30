@@ -1,6 +1,9 @@
 """
 Core app views.
 """
+import hashlib
+import json
+
 from django.contrib.auth.models import User
 from django.core.cache import cache
 from django.db.models import Q
@@ -36,11 +39,38 @@ def admin_presence(request):
         return JsonResponse({"detail": "forbidden"}, status=403)
 
     config = get_presence_config()
+    admins = build_admin_presence_payload()
+    digest_base = [
+        {
+            "user_id": row.get("user_id"),
+            "status": row.get("status"),
+            "last_activity": row.get("last_activity"),
+        }
+        for row in admins
+    ]
+    digest = hashlib.sha1(
+        json.dumps(digest_base, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+    client_digest = (request.GET.get("digest") or "").strip()
+    if client_digest and client_digest == digest:
+        return JsonResponse(
+            {
+                "changed": False,
+                "digest": digest,
+                "refresh_seconds": config["refresh_seconds"],
+                "online_window_seconds": config["online_window_seconds"],
+                "idle_window_seconds": config["idle_window_seconds"],
+            }
+        )
+
     return JsonResponse(
         {
-            "admins": build_admin_presence_payload(),
+            "changed": True,
+            "admins": admins,
+            "digest": digest,
             "refresh_seconds": config["refresh_seconds"],
             "online_window_seconds": config["online_window_seconds"],
+            "idle_window_seconds": config["idle_window_seconds"],
         }
     )
 
@@ -87,6 +117,21 @@ def go_offline(request):
         )
         return JsonResponse({'status': 'ok'})
     return JsonResponse({'status': 'ignored'})
+
+
+@require_POST
+def admin_presence_touch(request):
+    """Update admin presence using explicit UI interaction heartbeat."""
+    if not request.user.is_authenticated or not request.user.is_staff:
+        return JsonResponse({"detail": "forbidden"}, status=403)
+    UserActivity.objects.update_or_create(
+        user=request.user,
+        defaults={
+            "is_online": True,
+            "last_activity": timezone.now(),
+        },
+    )
+    return JsonResponse({"status": "ok"})
 
 
 SUGGESTION_LIMIT = 12

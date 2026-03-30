@@ -312,18 +312,19 @@
             </div>
             <div class="admin-profiles" id="adminProfilesList">
                 {% for admin in active_admins %}
-                <div class="admin-profile {% if admin.is_online %}active{% else %}inactive{% endif %}">
+                <div class="admin-profile {{ admin.status|default:'offline' }}">
                     <div class="admin-avatar">
                         <span class="avatar-text">{{ admin.initials }}</span>
                         <span class="status-dot"></span>
                     </div>
                     <div class="admin-info">
                         <div class="admin-username">{{ admin.username }}</div>
-                        <div class="admin-status">{% if admin.is_online %}En linea{% else %}Desconectado{% endif %}</div>
+                        <div class="admin-status">{{ admin.status_label|default:"Desconectado" }}</div>
+                        <div class="admin-last-seen">{{ admin.last_seen_label|default:"Sin actividad reciente" }}</div>
                     </div>
                 </div>
                 {% empty %}
-                <div class="admin-profile inactive">
+                <div class="admin-profile offline">
                     <div class="admin-avatar">
                         <span class="avatar-text">--</span>
                         <span class="status-dot"></span>
@@ -331,6 +332,7 @@
                     <div class="admin-info">
                         <div class="admin-username">Sin usuarios</div>
                         <div class="admin-status">Desconectado</div>
+                        <div class="admin-last-seen">Sin actividad reciente</div>
                     </div>
                 </div>
                 {% endfor %}
@@ -345,6 +347,9 @@
     <script>
         const RIGHT_SIDEBAR_AUTO_BREAKPOINT = 1360;
         let rightSidebarAutoMode = false;
+        let adminPresenceDigest = '';
+        let adminPresenceTouchLastSentAt = 0;
+        const ADMIN_PRESENCE_TOUCH_URL = '{% url "admin_presence_touch" %}';
 
         function setSidebarState(collapsed) {
             const adminLayout = document.getElementById('adminLayout');
@@ -593,7 +598,7 @@
 
             if (!Array.isArray(admins) || admins.length === 0) {
                 container.innerHTML = `
-                    <div class="admin-profile inactive">
+                    <div class="admin-profile offline">
                         <div class="admin-avatar">
                             <span class="avatar-text">--</span>
                             <span class="status-dot"></span>
@@ -601,6 +606,7 @@
                         <div class="admin-info">
                             <div class="admin-username">Sin usuarios</div>
                             <div class="admin-status">Desconectado</div>
+                            <div class="admin-last-seen">Sin actividad reciente</div>
                         </div>
                     </div>
                 `;
@@ -608,8 +614,9 @@
             }
 
             container.innerHTML = admins.map((admin) => {
-                const statusClass = admin.is_online ? 'active' : 'inactive';
-                const statusText = admin.is_online ? 'En linea' : 'Desconectado';
+                const statusClass = escapeHtml(admin.status || 'offline');
+                const statusText = escapeHtml(admin.status_label || 'Desconectado');
+                const lastSeenText = escapeHtml(admin.last_seen_label || 'Sin actividad reciente');
                 const initials = escapeHtml(admin.initials || (admin.username || '').slice(0, 2).toUpperCase());
                 const username = escapeHtml(admin.username || '');
                 return `
@@ -621,15 +628,20 @@
                         <div class="admin-info">
                             <div class="admin-username">${username}</div>
                             <div class="admin-status">${statusText}</div>
+                            <div class="admin-last-seen">${lastSeenText}</div>
                         </div>
                     </div>
                 `;
             }).join('');
         }
 
-        async function refreshAdminPresence() {
+        async function refreshAdminPresence(force = false) {
+            if (document.hidden && !force) return;
             try {
-                const response = await fetch('{% url "admin_presence" %}', {
+                const params = new URLSearchParams();
+                if (adminPresenceDigest) params.set('digest', adminPresenceDigest);
+                const url = '{% url "admin_presence" %}' + (params.toString() ? `?${params.toString()}` : '');
+                const response = await fetch(url, {
                     method: 'GET',
                     credentials: 'same-origin',
                     cache: 'no-store',
@@ -637,12 +649,46 @@
                 });
                 if (!response.ok) return;
                 const data = await response.json();
+                if (typeof data.digest === 'string' && data.digest) {
+                    adminPresenceDigest = data.digest;
+                }
+                if (data.changed === false) {
+                    return;
+                }
                 if (Array.isArray(data.admins)) {
                     renderAdminProfiles(data.admins);
                 }
             } catch (error) {
                 // Ignore network hiccups; next poll will retry.
             }
+        }
+
+        async function touchAdminPresence() {
+            const token = getCookie('csrftoken');
+            try {
+                await fetch(ADMIN_PRESENCE_TOUCH_URL, {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    cache: 'no-store',
+                    headers: {
+                        'X-CSRFToken': token,
+                    },
+                });
+            } catch (error) {
+                // Keep interaction flow smooth.
+            }
+        }
+
+        function handleAdminInteractionTouch() {
+            if (document.hidden) return;
+            const touchSeconds = Math.max(
+                Number('{{ admin_presence_touch_interval_seconds|default:30 }}') || 30,
+                5
+            );
+            const now = Date.now();
+            if (now - adminPresenceTouchLastSentAt < touchSeconds * 1000) return;
+            adminPresenceTouchLastSentAt = now;
+            touchAdminPresence();
         }
 
         function sendOfflineBeacon() {
@@ -729,8 +775,15 @@
                 10
             );
             setupClientsTopNavFloatingSubmenu();
-            refreshAdminPresence();
-            window.__presenceTimer = setInterval(refreshAdminPresence, refreshSeconds * 1000);
+            const interactionEvents = ['pointerdown', 'keydown', 'mousemove', 'scroll', 'touchstart'];
+            interactionEvents.forEach((eventName) => {
+                document.addEventListener(eventName, handleAdminInteractionTouch, { passive: true });
+            });
+            handleAdminInteractionTouch();
+            refreshAdminPresence(true);
+            window.__presenceTimer = setInterval(function () {
+                refreshAdminPresence(false);
+            }, refreshSeconds * 1000);
 
             renderNotificationOptinPrompt();
             refreshAdminAlerts();
@@ -744,6 +797,13 @@
                 const syncedValue = normalizePositiveInt(event.newValue);
                 if (syncedValue > adminLastSeenAccountRequestId) {
                     adminLastSeenAccountRequestId = syncedValue;
+                }
+            });
+
+            document.addEventListener('visibilitychange', function () {
+                if (!document.hidden) {
+                    handleAdminInteractionTouch();
+                    refreshAdminPresence(true);
                 }
             });
         });

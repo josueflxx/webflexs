@@ -1,4 +1,5 @@
 from decimal import Decimal
+from datetime import timedelta
 from unittest.mock import patch
 
 from django.contrib.auth.models import User
@@ -6,6 +7,7 @@ from django.template import Context, Template
 from django.test import TestCase
 from django.test import override_settings
 from django.urls import reverse
+from django.utils import timezone
 
 from accounts.models import ClientCompany, ClientProfile
 from catalog.models import Category, Product
@@ -21,6 +23,7 @@ from core.models import (
     SALES_BEHAVIOR_PEDIDO,
     SALES_BILLING_MODE_INTERNAL_DOCUMENT,
     SalesDocumentType,
+    UserActivity,
     Warehouse,
 )
 from core.services.company_context import get_default_company, get_user_companies
@@ -128,6 +131,92 @@ class SearchSuggestionsTests(TestCase):
         payload = response.json()
         values = [item["value"] for item in payload["suggestions"]]
         self.assertIn("BA03041", values)
+
+
+class AdminPresenceTests(TestCase):
+    def setUp(self):
+        self.staff = User.objects.create_user(
+            username="staff_presence_owner",
+            password="secret123",
+            is_staff=True,
+        )
+        self.other_online = User.objects.create_user(
+            username="staff_presence_online",
+            password="secret123",
+            is_staff=True,
+        )
+        self.other_idle = User.objects.create_user(
+            username="staff_presence_idle",
+            password="secret123",
+            is_staff=True,
+        )
+        self.client.force_login(self.staff)
+
+    @override_settings(
+        ADMIN_ONLINE_WINDOW_SECONDS=300,
+        ADMIN_IDLE_WINDOW_SECONDS=90,
+        ADMIN_PRESENCE_EXCLUDED_USERS=(),
+    )
+    def test_admin_presence_exposes_online_idle_and_offline_statuses(self):
+        now = timezone.now()
+        owner_activity, _ = UserActivity.objects.update_or_create(
+            user=self.staff,
+            defaults={"is_online": True},
+        )
+        UserActivity.objects.filter(pk=owner_activity.pk).update(last_activity=now - timedelta(seconds=10))
+        online_activity, _ = UserActivity.objects.update_or_create(
+            user=self.other_online,
+            defaults={"is_online": True},
+        )
+        UserActivity.objects.filter(pk=online_activity.pk).update(last_activity=now - timedelta(seconds=25))
+        idle_activity, _ = UserActivity.objects.update_or_create(
+            user=self.other_idle,
+            defaults={"is_online": True},
+        )
+        UserActivity.objects.filter(pk=idle_activity.pk).update(last_activity=now - timedelta(seconds=150))
+
+        response = self.client.get(reverse("admin_presence"))
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload.get("changed"))
+        self.assertIn("digest", payload)
+        rows = {row["username"]: row for row in payload["admins"]}
+        self.assertEqual(rows["staff_presence_owner"]["status"], "online")
+        self.assertEqual(rows["staff_presence_online"]["status"], "online")
+        self.assertEqual(rows["staff_presence_idle"]["status"], "idle")
+        self.assertEqual(rows["staff_presence_idle"]["status_label"], "Inactivo")
+        self.assertIn("Ultima actividad", rows["staff_presence_idle"]["last_seen_label"])
+
+    @override_settings(ADMIN_PRESENCE_EXCLUDED_USERS=())
+    def test_admin_presence_returns_compact_payload_when_digest_matches(self):
+        UserActivity.objects.update_or_create(
+            user=self.staff,
+            defaults={"is_online": True, "last_activity": timezone.now()},
+        )
+        first = self.client.get(reverse("admin_presence"))
+        self.assertEqual(first.status_code, 200)
+        first_payload = first.json()
+        self.assertTrue(first_payload.get("changed"))
+        digest = first_payload.get("digest")
+        self.assertTrue(digest)
+
+        second = self.client.get(reverse("admin_presence"), {"digest": digest})
+        self.assertEqual(second.status_code, 200)
+        second_payload = second.json()
+        self.assertFalse(second_payload.get("changed"))
+        self.assertEqual(second_payload.get("digest"), digest)
+        self.assertNotIn("admins", second_payload)
+
+    def test_admin_presence_touch_marks_staff_as_online(self):
+        UserActivity.objects.update_or_create(
+            user=self.staff,
+            defaults={"is_online": False, "last_activity": timezone.now() - timedelta(minutes=30)},
+        )
+        response = self.client.post(reverse("admin_presence_touch"))
+        self.assertEqual(response.status_code, 200)
+        activity = UserActivity.objects.get(user=self.staff)
+        self.assertTrue(activity.is_online)
 
 
 class ObservabilityMiddlewareTests(TestCase):

@@ -136,6 +136,20 @@
     opacity: 0.6;
 }
 
+.admin-profile.idle {
+    border-color: rgba(255, 196, 87, 0.6);
+}
+
+.admin-profile.idle .admin-avatar {
+    background: linear-gradient(135deg, #d29f2a, #f0b84f);
+}
+
+.admin-profile.offline .admin-avatar,
+.admin-profile.inactive .admin-avatar {
+    background: linear-gradient(135deg, var(--color-gray), var(--color-gray-light));
+    opacity: 0.65;
+}
+
 .avatar-text {
     font-size: var(--font-size-base);
     font-weight: 700;
@@ -158,6 +172,25 @@
     background: var(--color-success);
     box-shadow: 0 0 12px var(--color-success);
     animation: pulse 2s ease-in-out infinite;
+}
+
+.admin-profile.online .status-dot,
+.admin-profile.active .status-dot {
+    background: var(--color-success);
+    box-shadow: 0 0 12px var(--color-success);
+    animation: pulse 2s ease-in-out infinite;
+}
+
+.admin-profile.idle .status-dot {
+    background: #f0b84f;
+    box-shadow: 0 0 10px rgba(240, 184, 79, 0.55);
+}
+
+.admin-profile.offline .status-dot,
+.admin-profile.inactive .status-dot {
+    background: var(--color-gray);
+    box-shadow: none;
+    animation: none;
 }
 
 .admin-info {
@@ -183,6 +216,29 @@
 .admin-profile.active .admin-status {
     color: var(--color-success);
     font-weight: 500;
+}
+
+.admin-profile.online .admin-status,
+.admin-profile.active .admin-status {
+    color: var(--color-success);
+    font-weight: 500;
+}
+
+.admin-profile.idle .admin-status {
+    color: #f0b84f;
+    font-weight: 500;
+}
+
+.admin-profile.offline .admin-status,
+.admin-profile.inactive .admin-status {
+    color: var(--color-gray-light);
+    font-weight: 500;
+}
+
+.admin-last-seen {
+    font-size: 0.72rem;
+    color: rgba(184, 193, 206, 0.85);
+    margin-top: 2px;
 }
 
 /* Adjust main content for right sidebar */

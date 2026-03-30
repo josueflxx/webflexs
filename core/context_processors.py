@@ -70,7 +70,9 @@ def active_admins(request):
         return {
             "active_admins": admins,
             "admin_presence_refresh_seconds": config["refresh_seconds"],
+            "admin_presence_touch_interval_seconds": config["touch_interval_seconds"],
             "admin_online_window_seconds": config["online_window_seconds"],
+            "admin_idle_window_seconds": config["idle_window_seconds"],
         }
     return {}
 
