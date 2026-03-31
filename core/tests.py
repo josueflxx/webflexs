@@ -132,6 +132,29 @@ class SearchSuggestionsTests(TestCase):
         values = [item["value"] for item in payload["suggestions"]]
         self.assertIn("BA03041", values)
 
+    def test_admin_scope_normalizes_query_item_label(self):
+        Product.objects.create(
+            sku="ZZ-ADMIN-LABEL-01",
+            name="Producto Admin Label",
+            price=Decimal("100.00"),
+            cost=Decimal("60.00"),
+            stock=1,
+            is_active=True,
+        )
+        staff = User.objects.create_user("admin_label_tester", password="secret123", is_staff=True)
+        self.client.force_login(staff)
+        self._activate_company()
+
+        response = self.client.get(
+            reverse("search_suggestions"),
+            {"scope": "admin_products", "q": 'Buscar "ZZ-ADMIN-LABEL"'},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        values = [item["value"] for item in payload["suggestions"]]
+        self.assertIn("ZZ-ADMIN-LABEL-01", values)
+
 
 class AdminPresenceTests(TestCase):
     def setUp(self):

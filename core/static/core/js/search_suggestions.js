@@ -1,7 +1,8 @@
 (function () {
     const MIN_CHARS = 2;
     const DEBOUNCE_MS = 170;
-    const MAX_ITEMS = 12;
+    const MAX_ITEMS_DEFAULT = 12;
+    const MAX_ITEMS_PRODUCTS = 300;
     const API_URL = window.FLEXS_SEARCH_SUGGEST_URL || '/api/search-suggestions/';
 
     let openInstance = null;
@@ -73,6 +74,7 @@
             this.abortController = null;
             this.debounceTimer = null;
             this.lastQuery = '';
+            this.maxItems = this.resolveMaxItems();
 
             this.dropdown = document.createElement('div');
             this.dropdown.className = 'flex-search-suggest';
@@ -92,6 +94,17 @@
             }
 
             this.bindEvents();
+        }
+
+        resolveMaxItems() {
+            const explicitMax = Number(this.input.dataset.suggestMax || '');
+            if (Number.isFinite(explicitMax) && explicitMax > 0) {
+                return explicitMax;
+            }
+            if (this.scope === 'admin_products' || this.scope === 'admin_supplier_products') {
+                return MAX_ITEMS_PRODUCTS;
+            }
+            return MAX_ITEMS_DEFAULT;
         }
 
         bindEvents() {
@@ -141,6 +154,9 @@
             const query = String(this.input.value || '').trim();
             this.lastQuery = query;
             this.clearTargetValue();
+            if (this.listEl) {
+                this.listEl.scrollTop = 0;
+            }
 
             if (query.length < MIN_CHARS) {
                 this.items = [];
@@ -166,6 +182,7 @@
             const queryItem = this.includeQueryItem
                 ? {
                       value: query,
+                      input_value: query,
                       label: `Buscar "${query}"`,
                       meta: 'Busqueda exacta',
                       kind: 'query',
@@ -200,7 +217,7 @@
 
                 const merged = (queryItem ? [queryItem, ...serverItems] : serverItems).slice(
                     0,
-                    queryItem ? MAX_ITEMS + 1 : MAX_ITEMS
+                    queryItem ? this.maxItems + 1 : this.maxItems
                 );
                 this.items = merged;
                 this.highlightIndex = -1;
@@ -233,6 +250,7 @@
 
             if (!this.items.length) {
                 this.listEl.innerHTML = '';
+                this.listEl.scrollTop = 0;
                 return;
             }
 
@@ -251,6 +269,7 @@
                     `;
                 })
                 .join('');
+            this.listEl.scrollTop = 0;
 
             this.listEl.querySelectorAll('.flex-search-suggest-item').forEach((btn) => {
                 btn.addEventListener('mouseenter', () => {

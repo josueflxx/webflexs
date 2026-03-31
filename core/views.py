@@ -135,6 +135,7 @@ def admin_presence_touch(request):
 
 
 SUGGESTION_LIMIT = 12
+PRODUCT_SUGGESTION_LIMIT = 300
 
 
 def _normalize_search_scope(raw_scope):
@@ -264,12 +265,12 @@ def _suggest_admin_products(query, request=None):
     exact_rows = list(
         base_queryset.filter(Q(sku__iexact=raw_query) | Q(name__iexact=raw_query))
         .values_list("pk", "sku", "name", "supplier", "supplier_ref__name")
-        .order_by("name")[:4]
+        .order_by("name")[:24]
     )
     prefix_rows = list(
         base_queryset.filter(Q(sku__istartswith=raw_query) | Q(name__istartswith=raw_query))
         .values_list("pk", "sku", "name", "supplier", "supplier_ref__name")
-        .order_by("name")[:6]
+        .order_by("name")[:80]
     )
     parsed_rows = list(
         apply_parsed_text_search(
@@ -279,14 +280,14 @@ def _suggest_admin_products(query, request=None):
             order_by_similarity=False,
         )
         .values_list("pk", "sku", "name", "supplier", "supplier_ref__name")
-        .order_by("name")[:10]
+        .order_by("name")[:PRODUCT_SUGGESTION_LIMIT]
     )
     compact_rows = []
     if compact_query:
         compact_rows = list(
             apply_compact_text_search(base_queryset, compact_query, ["sku", "name"])
             .values_list("pk", "sku", "name", "supplier", "supplier_ref__name")
-            .order_by("name")[:8]
+            .order_by("name")[:PRODUCT_SUGGESTION_LIMIT]
         )
 
     # For pricing resolution if request/company is available
@@ -351,7 +352,7 @@ def _suggest_admin_products(query, request=None):
             kind="product",
             **extra_payload
         )
-    return _unique_trim_suggestions(items)
+    return _unique_trim_suggestions(items, limit=PRODUCT_SUGGESTION_LIMIT)
 
 
 

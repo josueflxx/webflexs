@@ -15,6 +15,7 @@ except Exception:  # pragma: no cover - backend optional
 
 SEARCH_TOKEN_PATTERN = re.compile(r'"([^"]+)"|(\S+)')
 TOKEN_EDGE_TRIM_PATTERN = re.compile(r"^[,;|]+|[,;|]+$")
+SEARCH_ACTION_LABEL_PATTERN = re.compile(r'(?i)^buscar\s+"(.+)"$')
 COMPACT_SEARCH_PATTERN = re.compile(r"[^a-z0-9]+")
 COMPACT_SEARCH_REPLACE_CHARS = (
     " ",
@@ -53,6 +54,11 @@ def sanitize_search_token(value):
     cleaned = str(value or "").strip()
     if not cleaned:
         return ""
+    search_action_match = SEARCH_ACTION_LABEL_PATTERN.fullmatch(cleaned)
+    if search_action_match:
+        cleaned = search_action_match.group(1).strip()
+        if not cleaned:
+            return ""
     cleaned = TOKEN_EDGE_TRIM_PATTERN.sub("", cleaned).strip()
     cleaned = cleaned.replace("×", "x")
     cleaned = re.sub(r"\s+", " ", cleaned)

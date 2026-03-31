@@ -402,6 +402,16 @@ class CatalogAdvancedSearchTests(TestCase):
         skus = [product.sku for product in response.context["page_obj"].object_list]
         self.assertIn("ABT3480220S", skus)
 
+    def test_search_normalizes_query_item_label(self):
+        response = self.client.get(
+            reverse("catalog"),
+            {"q": 'Buscar "ABT3480220S"'},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        skus = [product.sku for product in response.context["page_obj"].object_list]
+        self.assertIn("ABT3480220S", skus)
+
 
 class ProductDetailTemplateTests(TestCase):
     def setUp(self):

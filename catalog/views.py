@@ -50,6 +50,7 @@ DIMENSIONS_PATTERN = re.compile(
 )
 SKU_CODE_PATTERN = re.compile(r"^AB[LT][A-Z0-9/\-]+$", re.IGNORECASE)
 TOKEN_EDGE_TRIM_PATTERN = re.compile(r"^[,;|]+|[,;|]+$")
+SEARCH_ACTION_LABEL_PATTERN = re.compile(r'(?i)^buscar\s+"(.+)"$')
 
 CLAMP_TYPE_ALIASES = {
     "t": "TREFILADA",
@@ -137,6 +138,11 @@ def sanitize_search_token(value):
     cleaned = str(value or "").strip()
     if not cleaned:
         return ""
+    search_action_match = SEARCH_ACTION_LABEL_PATTERN.fullmatch(cleaned)
+    if search_action_match:
+        cleaned = search_action_match.group(1).strip()
+        if not cleaned:
+            return ""
     cleaned = TOKEN_EDGE_TRIM_PATTERN.sub("", cleaned).strip()
     cleaned = cleaned.replace("×", "x")
     cleaned = re.sub(r"\s+", " ", cleaned)
@@ -196,7 +202,7 @@ def parse_catalog_search_query(raw_query):
     - compact dimensions: 7/16x80x220
     """
     parsed = {
-        "raw": str(raw_query or "").strip(),
+        "raw": sanitize_search_token(raw_query),
         "phrases": [],
         "include_terms": [],
         "exclude_terms": [],
@@ -654,7 +660,7 @@ def catalog(request):
     """
     products = get_catalog_product_queryset()
 
-    search_query = request.GET.get("q", "").strip()
+    search_query = sanitize_search_token(request.GET.get("q", ""))
     parsed_search = parse_catalog_search_query(search_query)
     if search_query:
         products = apply_catalog_text_search(products, parsed_search)

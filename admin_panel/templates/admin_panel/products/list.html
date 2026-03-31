@@ -7,49 +7,50 @@
 <div class="admin-table-container">
     <div class="products-control-board">
         <div class="admin-toolbar products-toolbar products-toolbar-main">
-            <form method="get" class="toolbar-search product-filters-grid" id="productFiltersForm">
-                <input type="text" name="q" id="filterQ" value="{{ search }}" placeholder="Buscar SKU, nombre o proveedor..." class="form-input" data-suggest="1" data-suggest-scope="admin_products" autocomplete="off">
-                <select name="category" id="filterCategory" class="form-select">
-                    <option value="">Todas las categorias</option>
-                    <option value="__uncategorized__" {% if current_category_id == '__uncategorized__' %}selected{% endif %}>
-                        Sin categorias
-                    </option>
-                    {% for cat in category_options %}
-                    {% if current_category_id == cat.id %}
-                    <option value="{{ cat.id }}" selected>{{ cat.label }}</option>
-                    {% else %}
-                    <option value="{{ cat.id }}">{{ cat.label }}</option>
-                    {% endif %}
-                    {% endfor %}
-                </select>
-                <select name="active" id="filterActive" class="form-select">
-                    <option value="">Todos</option>
-                    {% if active_filter == '1' %}
-                    <option value="1" selected>Activos</option>
-                    {% else %}
-                    <option value="1">Activos</option>
-                    {% endif %}
+            <form method="get" class="toolbar-search product-filters-layout" id="productFiltersForm">
+                <div class="product-filters-top-row">
+                    <select name="category" id="filterCategory" class="form-select">
+                        <option value="">Todas las categorias</option>
+                        <option value="__uncategorized__" {% if current_category_id == '__uncategorized__' %}selected{% endif %}>
+                            Sin categorias
+                        </option>
+                        {% for cat in category_options %}
+                        {% if current_category_id == cat.id %}
+                        <option value="{{ cat.id }}" selected>{{ cat.label }}</option>
+                        {% else %}
+                        <option value="{{ cat.id }}">{{ cat.label }}</option>
+                        {% endif %}
+                        {% endfor %}
+                    </select>
+                    <select name="active" id="filterActive" class="form-select">
+                        <option value="">Todos</option>
+                        {% if active_filter == '1' %}
+                        <option value="1" selected>Activos</option>
+                        {% else %}
+                        <option value="1">Activos</option>
+                        {% endif %}
 
-                    {% if active_filter == '0' %}
-                    <option value="0" selected>Inactivos</option>
-                    {% else %}
-                    <option value="0">Inactivos</option>
-                    {% endif %}
-                </select>
-                <select name="order" id="filterOrder" class="form-select">
-                    <option value="-updated_at" {% if order_by == '-updated_at' %}selected{% endif %}>Mas recientes</option>
-                    <option value="updated_at" {% if order_by == 'updated_at' %}selected{% endif %}>Mas antiguos</option>
-                    <option value="name" {% if order_by == 'name' %}selected{% endif %}>Nombre A-Z</option>
-                    <option value="-name" {% if order_by == '-name' %}selected{% endif %}>Nombre Z-A</option>
-                    <option value="price" {% if order_by == 'price' %}selected{% endif %}>Menor precio</option>
-                    <option value="-price" {% if order_by == '-price' %}selected{% endif %}>Mayor precio</option>
-                    <option value="stock" {% if order_by == 'stock' %}selected{% endif %}>Menor stock</option>
-                    <option value="-stock" {% if order_by == '-stock' %}selected{% endif %}>Mayor stock</option>
-                    <option value="sku" {% if order_by == 'sku' %}selected{% endif %}>SKU A-Z</option>
-                    <option value="-sku" {% if order_by == '-sku' %}selected{% endif %}>SKU Z-A</option>
-                </select>
-                <button type="submit" class="btn btn-primary">Filtrar</button>
-                <a href="{% url 'admin_product_list' %}" class="btn btn-outline">Limpiar</a>
+                        {% if active_filter == '0' %}
+                        <option value="0" selected>Inactivos</option>
+                        {% else %}
+                        <option value="0">Inactivos</option>
+                        {% endif %}
+                    </select>
+                    <select name="order" id="filterOrder" class="form-select">
+                        <option value="-updated_at" {% if order_by == '-updated_at' %}selected{% endif %}>Mas recientes</option>
+                        <option value="updated_at" {% if order_by == 'updated_at' %}selected{% endif %}>Mas antiguos</option>
+                        <option value="name" {% if order_by == 'name' %}selected{% endif %}>Nombre A-Z</option>
+                        <option value="-name" {% if order_by == '-name' %}selected{% endif %}>Nombre Z-A</option>
+                        <option value="price" {% if order_by == 'price' %}selected{% endif %}>Menor precio</option>
+                        <option value="-price" {% if order_by == '-price' %}selected{% endif %}>Mayor precio</option>
+                        <option value="stock" {% if order_by == 'stock' %}selected{% endif %}>Menor stock</option>
+                        <option value="-stock" {% if order_by == '-stock' %}selected{% endif %}>Mayor stock</option>
+                        <option value="sku" {% if order_by == 'sku' %}selected{% endif %}>SKU A-Z</option>
+                        <option value="-sku" {% if order_by == '-sku' %}selected{% endif %}>SKU Z-A</option>
+                    </select>
+                    <button type="submit" class="btn btn-primary">Filtrar</button>
+                    <a href="{% url 'admin_product_list' %}" class="btn btn-outline">Limpiar</a>
+                </div>
             </form>
             <div class="toolbar-actions products-quick-actions">
                 <button type="button" class="btn btn-outline btn-sm" onclick="saveProductFilters()">Guardar vista</button>
@@ -58,6 +59,9 @@
                 <a href="{% url 'admin_product_create' %}" class="btn btn-primary">+ Nuevo Producto</a>
                 {% endif %}
             </div>
+        </div>
+        <div class="product-filters-search-row">
+            <input type="text" name="q" id="filterQ" form="productFiltersForm" value="{{ search }}" placeholder="Buscar SKU, nombre o proveedor..." class="form-input product-search-input" data-suggest="1" data-suggest-scope="admin_products" autocomplete="off">
         </div>
 
         {% if user.is_superuser %}
@@ -163,6 +167,13 @@
     </div>
     {% endif %}
 
+    {% if search_results_truncated %}
+    <div class="alert alert-warning" style="margin-bottom: 14px;">
+        Mostrando las primeras {{ search_result_limit }} coincidencias para "{{ search }}".
+        Se encontraron {{ search_total_matches }} resultados.
+    </div>
+    {% endif %}
+
     <!-- Delete Modal -->
     <div id="deleteModal" class="modal"
         style="display:none; position:fixed; z-index:1000; left:0; top:0; width:100%; height:100%; background-color:rgba(0,0,0,0.5);">
@@ -204,6 +215,46 @@
     </div>
 
     <style>
+        .product-filters-layout {
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .product-filters-top-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .product-filters-top-row .form-select {
+            min-width: 180px;
+            max-width: 230px;
+            flex: 1 1 190px;
+        }
+
+        .product-filters-top-row .btn {
+            flex: 0 0 auto;
+        }
+
+        .product-filters-search-row {
+            width: 100%;
+        }
+
+        .product-search-input {
+            width: 100%;
+            min-width: 0;
+        }
+
+        @media (max-width: 820px) {
+            .product-filters-top-row .form-select {
+                max-width: none;
+                flex: 1 1 100%;
+            }
+        }
+
         .product-thumb {
             width: 44px;
             height: 44px;
@@ -226,6 +277,29 @@
             border-radius: 10px;
             border: 1px solid rgba(255, 255, 255, 0.16);
             background: rgba(255, 255, 255, 0.04);
+        }
+
+        .product-name-link {
+            color: var(--color-white);
+            text-decoration: none;
+            font-weight: 600;
+            transition: color .15s ease;
+            border-bottom: 1px dashed transparent;
+        }
+
+        .product-name-link:hover {
+            color: var(--color-primary);
+            border-bottom-color: rgba(255, 122, 56, 0.45);
+        }
+
+        .mobile-product-title-link {
+            color: inherit;
+            text-decoration: none;
+            transition: color .15s ease;
+        }
+
+        .mobile-product-title-link:hover {
+            color: var(--color-primary);
         }
     </style>
 
@@ -250,8 +324,10 @@
         }
 
         function saveProductFilters() {
+            const rawSearch = document.getElementById('filterQ')?.value || '';
+            const normalizedSearch = rawSearch.replace(/^buscar\s+"(.+)"$/i, '$1').trim();
             const payload = {
-                q: document.getElementById('filterQ')?.value || '',
+                q: normalizedSearch,
                 category: document.getElementById('filterCategory')?.value || '',
                 active: document.getElementById('filterActive')?.value || '',
                 order: document.getElementById('filterOrder')?.value || '-updated_at',
@@ -268,7 +344,8 @@
             }
             try {
                 const payload = JSON.parse(raw);
-                if (document.getElementById('filterQ')) document.getElementById('filterQ').value = payload.q || '';
+                const normalizedSearch = String(payload.q || '').replace(/^buscar\s+"(.+)"$/i, '$1').trim();
+                if (document.getElementById('filterQ')) document.getElementById('filterQ').value = normalizedSearch;
                 if (document.getElementById('filterCategory')) document.getElementById('filterCategory').value = payload.category || '';
                 if (document.getElementById('filterActive')) document.getElementById('filterActive').value = payload.active || '';
                 if (document.getElementById('filterOrder')) document.getElementById('filterOrder').value = payload.order || '-updated_at';
@@ -620,7 +697,12 @@
                     <td><input type="checkbox" name="product_ids" form="bulkCategoryForm" value="{{ product.pk|unlocalize }}" class="product-checkbox"
                             onclick="updateBulkButton()"></td>
                     <td><code>{{ product.sku }}</code></td>
-                    <td class="product-name-cell" title="{{ product.name }}">{{ product.name|truncatechars:52 }}</td>
+                    <td class="product-name-cell" title="{{ product.name }}">
+                        <a href="{% url 'admin_product_edit' product.pk %}" class="product-name-link"
+                            title="{% if user.is_superuser %}Editar{% else %}Ver{% endif %} {{ product.name }}">
+                            {{ product.name|truncatechars:52 }}
+                        </a>
+                    </td>
                     <td class="product-image-cell">
                         {% if product.image %}
                         <img src="{{ product.image.url }}" alt="{{ product.name }}" class="product-thumb">
@@ -699,7 +781,12 @@
                 <span class="badge badge-danger">Inactivo</span>
                 {% endif %}
             </div>
-            <h3>{{ product.name }}</h3>
+            <h3>
+                <a href="{% url 'admin_product_edit' product.pk %}" class="mobile-product-title-link"
+                    title="{% if user.is_superuser %}Editar{% else %}Ver{% endif %} {{ product.name }}">
+                    {{ product.name }}
+                </a>
+            </h3>
             <div class="mobile-product-image">
                 {% if product.image %}
                 <img src="{{ product.image.url }}" alt="{{ product.name }}">

@@ -2379,9 +2379,16 @@ def product_list(request):
     # Ordering
     order = request.GET.get('order', '-updated_at')
     products = products.order_by(order)
-    
+
+    search_result_limit = 300
+    search_total_matches = products.count() if search else 0
+    search_results_truncated = False
+    if search and search_total_matches > search_result_limit:
+        products = products[:search_result_limit]
+        search_results_truncated = True
+
     # Pagination
-    paginator = Paginator(products, 20)
+    paginator = Paginator(products, search_result_limit if search else 20)
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
 
@@ -2400,6 +2407,9 @@ def product_list(request):
         'active_filter_chips': filter_chips,
         'total_count': products.count(),
         'pagination_count': len(page_obj.object_list),
+        'search_result_limit': search_result_limit,
+        'search_total_matches': search_total_matches,
+        'search_results_truncated': search_results_truncated,
     }
     return render(request, 'admin_panel/products/list.html', context)
 
