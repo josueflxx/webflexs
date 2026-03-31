@@ -59,10 +59,12 @@ def login_view(request):
         return redirect("login_redirect")
 
     username_prefill = ""
+    remember_me_checked = True
 
     if request.method == "POST":
         username = request.POST.get("username", "").strip()
         password = request.POST.get("password", "")
+        remember_me_checked = request.POST.get("remember_me", "").strip().lower() in {"1", "true", "on", "yes"}
         username_prefill = username
         attempts_key, lock_key = _build_login_keys(request, username)
 
@@ -75,7 +77,14 @@ def login_view(request):
                     request,
                     f"Demasiados intentos fallidos. Espera {remaining_minutes} minuto(s) antes de reintentar.",
                 )
-                return render(request, "accounts/login.html", {"username_prefill": username_prefill})
+                return render(
+                    request,
+                    "accounts/login.html",
+                    {
+                        "username_prefill": username_prefill,
+                        "remember_me_checked": remember_me_checked,
+                    },
+                )
             cache.delete(lock_key)
 
         user = authenticate(request, username=username, password=password)
@@ -84,6 +93,14 @@ def login_view(request):
             cache.delete(attempts_key)
             cache.delete(lock_key)
             login(request, user)
+            if remember_me_checked:
+                remember_age = max(int(getattr(settings, "REMEMBER_ME_SESSION_AGE", 60 * 60 * 24 * 30)), 300)
+                request.session.set_expiry(remember_age)
+                request.session["_idle_timeout_seconds"] = remember_age
+            else:
+                idle_timeout = max(int(getattr(settings, "SESSION_IDLE_TIMEOUT_SECONDS", 60 * 45)), 300)
+                request.session.set_expiry(int(getattr(settings, "SESSION_COOKIE_AGE", 60 * 60 * 8)))
+                request.session["_idle_timeout_seconds"] = idle_timeout
             messages.success(request, f"Bienvenido, {user.first_name or user.username}!")
 
             next_url = request.GET.get("next", "")
@@ -119,7 +136,14 @@ def login_view(request):
                 f"Usuario o contrasena incorrectos. Intentos restantes antes de bloqueo: {remaining_attempts}.",
             )
 
-    return render(request, "accounts/login.html", {"username_prefill": username_prefill})
+    return render(
+        request,
+        "accounts/login.html",
+        {
+            "username_prefill": username_prefill,
+            "remember_me_checked": remember_me_checked,
+        },
+    )
 
 
 @login_required

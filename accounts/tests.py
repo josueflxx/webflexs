@@ -60,6 +60,32 @@ class LoginSecurityTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn("_auth_user_id", self.client.session)
 
+    @override_settings(SESSION_COOKIE_AGE=60 * 60 * 8, SESSION_IDLE_TIMEOUT_SECONDS=60 * 45)
+    def test_login_without_remember_me_keeps_default_timeout(self):
+        login_url = reverse("login")
+        response = self.client.post(
+            login_url,
+            {"username": self.user.username, "password": self.password},
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("_auth_user_id", self.client.session)
+        self.assertEqual(self.client.session.get("_idle_timeout_seconds"), 60 * 45)
+
+    @override_settings(REMEMBER_ME_SESSION_AGE=60 * 60 * 24 * 30)
+    def test_login_with_remember_me_uses_longer_timeout(self):
+        login_url = reverse("login")
+        response = self.client.post(
+            login_url,
+            {"username": self.user.username, "password": self.password, "remember_me": "1"},
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("_auth_user_id", self.client.session)
+        self.assertEqual(self.client.session.get("_idle_timeout_seconds"), 60 * 60 * 24 * 30)
+
 
 class LoginRedirectCompanySelectionTests(TestCase):
     def setUp(self):

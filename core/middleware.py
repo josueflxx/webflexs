@@ -124,7 +124,12 @@ class SessionIdleTimeoutMiddleware:
     def __call__(self, request):
         if request.user.is_authenticated and not request.path.startswith(self.EXCLUDED_PREFIXES):
             now_ts = int(timezone.now().timestamp())
-            timeout_seconds = max(int(getattr(settings, "SESSION_IDLE_TIMEOUT_SECONDS", 2700)), 300)
+            timeout_seconds = request.session.get("_idle_timeout_seconds")
+            try:
+                timeout_seconds = int(timeout_seconds)
+            except (TypeError, ValueError):
+                timeout_seconds = int(getattr(settings, "SESSION_IDLE_TIMEOUT_SECONDS", 2700))
+            timeout_seconds = max(timeout_seconds, 300)
             last_activity_ts = int(request.session.get(self.SESSION_TS_KEY, now_ts))
 
             if now_ts - last_activity_ts > timeout_seconds:
