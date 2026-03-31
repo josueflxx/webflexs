@@ -5,7 +5,14 @@ from decimal import Decimal
 from django.utils import timezone
 
 from accounts.models import ClientPayment, ClientProfile, ClientTransaction
-from core.models import FISCAL_BILLABLE_DOC_TYPES
+from core.models import (
+    FISCAL_BILLABLE_DOC_TYPES,
+    SALES_BEHAVIOR_COTIZACION,
+    SALES_BEHAVIOR_FACTURA,
+    SALES_BEHAVIOR_PEDIDO,
+    SALES_BEHAVIOR_PRESUPUESTO,
+    SALES_BEHAVIOR_REMITO,
+)
 from orders.models import Order
 
 
@@ -19,6 +26,13 @@ BILLABLE_ORDER_STATUSES = {
 BILLABLE_FISCAL_DOCUMENT_STATUSES = {
     "authorized",
     "external_recorded",
+}
+ACCOUNTABLE_INTERNAL_BEHAVIORS = {
+    SALES_BEHAVIOR_COTIZACION,
+    SALES_BEHAVIOR_PRESUPUESTO,
+    SALES_BEHAVIOR_PEDIDO,
+    SALES_BEHAVIOR_REMITO,
+    SALES_BEHAVIOR_FACTURA,
 }
 
 
@@ -54,6 +68,27 @@ def _get_order_billable_fiscal_document(order):
     )
 
 
+def _get_order_accountable_internal_document(order):
+    """Resolve one internal document configured to impact current account."""
+    if not order:
+        return None
+    from core.models import InternalDocument
+
+    return (
+        InternalDocument.objects.select_related("sales_document_type")
+        .filter(
+            order=order,
+            is_cancelled=False,
+            sales_document_type__isnull=False,
+            sales_document_type__enabled=True,
+            sales_document_type__generate_account_movement=True,
+            sales_document_type__document_behavior__in=ACCOUNTABLE_INTERNAL_BEHAVIORS,
+        )
+        .order_by("-issued_at", "-created_at", "-id")
+        .first()
+    )
+
+
 def _get_order_charge_snapshot(order):
     """Resolve whether one order should currently impact current account."""
     billable_document = _get_order_billable_fiscal_document(order)
@@ -78,6 +113,20 @@ def _get_order_charge_snapshot(order):
                 f"Venta facturada en SaaS "
                 f"{getattr(order, 'saas_document_type', '')} "
                 f"{getattr(order, 'saas_document_number', '')}"
+            ).strip(),
+        }
+
+    internal_document = _get_order_accountable_internal_document(order)
+    if internal_document:
+        return {
+            "amount": _to_decimal(order.total).quantize(Decimal("0.01")),
+            "occurred_at": getattr(internal_document, "issued_at", None)
+            or getattr(internal_document, "created_at", None)
+            or getattr(order, "status_updated_at", None)
+            or timezone.now(),
+            "description": (
+                f"Movimiento comercial {internal_document.commercial_type_label} "
+                f"{internal_document.display_number}"
             ).strip(),
         }
 

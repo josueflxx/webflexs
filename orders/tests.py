@@ -832,6 +832,32 @@ class OrderRequestReviewActionsTests(TestCase):
         self.assertIsNotNone(charge_tx)
         self.assertEqual(charge_tx.amount, Decimal('0.00'))
 
+    def test_admin_can_generate_quote_with_account_movement_type_impacts_current_account(self):
+        self.quote_type.generate_account_movement = True
+        self.quote_type.save(update_fields=['generate_account_movement', 'updated_at'])
+
+        self.client.force_login(self.staff_user)
+        self.client.post(
+            reverse('admin_order_request_confirm', args=[self.order_request.pk]),
+            data={'admin_note': 'Lista para cotizar con cuenta corriente'},
+        )
+
+        response = self.client.post(
+            reverse('admin_order_request_generate_quote', args=[self.order_request.pk]),
+            data={'sales_document_type_id': str(self.quote_type.pk)},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.order_request.refresh_from_db()
+        order = self.order_request.converted_order
+        self.assertIsNotNone(order)
+        charge_tx = ClientTransaction.objects.filter(
+            order=order,
+            transaction_type=ClientTransaction.TYPE_ORDER_CHARGE,
+        ).first()
+        self.assertIsNotNone(charge_tx)
+        self.assertEqual(charge_tx.amount, order.total)
+
     def test_admin_can_generate_invoice_from_confirmed_request(self):
         self.client.force_login(self.staff_user)
         self.client.post(

@@ -3,7 +3,7 @@
     position: fixed;
     top: 0;
     right: 0;
-    width: clamp(240px, 24vw, 280px);
+    width: clamp(260px, 24vw, 320px);
     height: 100vh;
     background: var(--color-secondary);
     border-left: 1px solid rgba(255, 255, 255, 0.1);
@@ -24,6 +24,11 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: linear-gradient(180deg, rgba(10, 14, 24, 0.98), rgba(10, 14, 24, 0.94));
+    backdrop-filter: blur(8px);
 }
 
 .right-sidebar-header h2 {
@@ -97,16 +102,17 @@
     display: flex;
     flex-direction: column;
     gap: var(--spacing-md);
+    padding-bottom: calc(var(--spacing-xl) + 8px);
 }
 
 .admin-profile {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: var(--spacing-md);
-    padding: var(--spacing-md);
+    padding: 14px 12px;
     border-radius: var(--radius-lg);
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.03));
+    border: 1px solid rgba(255, 255, 255, 0.12);
     transition: all var(--transition-fast);
 }
 
@@ -196,6 +202,9 @@
 .admin-info {
     flex: 1;
     min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
 }
 
 .admin-username {
@@ -211,6 +220,7 @@
 .admin-status {
     font-size: var(--font-size-sm);
     color: var(--color-gray-light);
+    line-height: 1.2;
 }
 
 .admin-profile.active .admin-status {
@@ -239,11 +249,29 @@
     font-size: 0.72rem;
     color: rgba(184, 193, 206, 0.85);
     margin-top: 2px;
+    line-height: 1.2;
+}
+
+.admin-right-sidebar::-webkit-scrollbar {
+    width: 10px;
+}
+
+.admin-right-sidebar::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.admin-right-sidebar::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.18);
+    border-radius: 999px;
+}
+
+.admin-right-sidebar::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.28);
 }
 
 /* Adjust main content for right sidebar */
 .admin-main {
-    margin-right: clamp(240px, 24vw, 280px);
+    margin-right: clamp(260px, 24vw, 320px);
     transition: margin-right 0.3s ease;
 }
 

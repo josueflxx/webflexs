@@ -203,11 +203,6 @@ class SalesDocumentTypeForm(forms.ModelForm):
             SALES_BEHAVIOR_NOTA_CREDITO,
             SALES_BEHAVIOR_NOTA_DEBITO,
         }
-        no_ledger_behaviors = {
-            SALES_BEHAVIOR_COTIZACION,
-            SALES_BEHAVIOR_PRESUPUESTO,
-        }
-
         if billing_mode != SALES_BILLING_MODE_INTERNAL_DOCUMENT and behavior not in fiscal_behaviors:
             self.add_error(
                 "billing_mode",
@@ -219,12 +214,11 @@ class SalesDocumentTypeForm(forms.ModelForm):
                 "Debes elegir un punto de venta para los modos fiscales.",
             )
 
-        if behavior in no_ledger_behaviors and generate_account_movement:
-            self.add_error(
-                "generate_account_movement",
-                "Cotizacion y Presupuesto no deben impactar cuenta corriente.",
-            )
-        if behavior in no_ledger_behaviors and generate_stock_movement:
+        no_stock_behaviors = {
+            SALES_BEHAVIOR_COTIZACION,
+            SALES_BEHAVIOR_PRESUPUESTO,
+        }
+        if behavior in no_stock_behaviors and generate_stock_movement:
             self.add_error(
                 "generate_stock_movement",
                 "Cotizacion y Presupuesto no deben generar stock.",

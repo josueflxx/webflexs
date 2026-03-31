@@ -346,6 +346,12 @@ def apply_sales_document_type_to_internal_document(*, document, sales_document_t
             actor=actor,
             internal_document=document,
         )
+        try:
+            from accounts.services.ledger import sync_order_charge_transaction
+
+            sync_order_charge_transaction(order=document.order, actor=actor)
+        except Exception:
+            pass
     return document
 
 

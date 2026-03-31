@@ -11210,6 +11210,13 @@ def internal_document_delete(request, doc_id):
         order_id = document.order_id
         label = f"{document.commercial_type_label} {document.display_number}"
         document.delete()
+        if order_id:
+            try:
+                linked_order = Order.objects.filter(pk=order_id).first()
+                if linked_order:
+                    sync_order_charge_transaction(order=linked_order, actor=request.user)
+            except Exception:
+                pass
         messages.success(request, f'Documento interno eliminado: {label}.')
         if order_id:
             return redirect('admin_order_detail', pk=order_id)
@@ -11746,6 +11753,10 @@ def sales_document_type_edit(request, pk):
                 "No se pudo guardar porque ya existe un predeterminado para ese comportamiento y canal.",
             )
         else:
+            synced_orders = _resync_order_charges_for_sales_document_type(
+                document_type,
+                actor=request.user,
+            )
             log_admin_change(
                 request,
                 action="sales_document_type_update",
@@ -11754,7 +11765,13 @@ def sales_document_type_edit(request, pk):
                 before=before,
                 after=model_snapshot(document_type, SALES_DOCUMENT_TYPE_SNAPSHOT_FIELDS),
             )
-            messages.success(request, "Tipo de venta actualizado.")
+            if synced_orders:
+                messages.success(
+                    request,
+                    f"Tipo de venta actualizado. Cuenta corriente resincronizada en {synced_orders} pedido(s).",
+                )
+            else:
+                messages.success(request, "Tipo de venta actualizado.")
             return redirect("admin_sales_document_type_list")
 
     return render(
@@ -11786,6 +11803,10 @@ def sales_document_type_toggle_enabled(request, pk):
     before = model_snapshot(document_type, ["enabled"])
     document_type.enabled = not document_type.enabled
     document_type.save(update_fields=["enabled", "updated_at"])
+    synced_orders = _resync_order_charges_for_sales_document_type(
+        document_type,
+        actor=request.user,
+    )
     log_admin_change(
         request,
         action="sales_document_type_toggle_enabled",
@@ -11798,6 +11819,11 @@ def sales_document_type_toggle_enabled(request, pk):
         request,
         "Tipo de venta habilitado." if document_type.enabled else "Tipo de venta deshabilitado.",
     )
+    if synced_orders:
+        messages.info(
+            request,
+            f"Cuenta corriente resincronizada en {synced_orders} pedido(s).",
+        )
     return redirect("admin_sales_document_type_list")
 
 
@@ -11807,6 +11833,30 @@ def _sales_document_type_usage(document_type):
         "fiscal_documents": FiscalDocument.objects.filter(sales_document_type=document_type).count(),
         "stock_movements": StockMovement.objects.filter(sales_document_type=document_type).count(),
     }
+
+
+def _resync_order_charges_for_sales_document_type(document_type, *, actor=None):
+    """Recalculate current-account charge rows for orders linked to one sales document type."""
+    if not document_type:
+        return 0
+    order_ids = list(
+        InternalDocument.objects.filter(
+            sales_document_type=document_type,
+            order_id__isnull=False,
+        )
+        .values_list("order_id", flat=True)
+        .distinct()
+    )
+    if not order_ids:
+        return 0
+    synced = 0
+    for order in Order.objects.filter(pk__in=order_ids).select_related("company"):
+        try:
+            sync_order_charge_transaction(order=order, actor=actor)
+            synced += 1
+        except Exception:
+            continue
+    return synced
 
 
 @user_passes_test(is_primary_superadmin)
@@ -11827,9 +11877,24 @@ def sales_document_type_delete(request, pk):
     has_usage = any(usage.values())
 
     if request.method == "POST":
+        affected_order_ids = list(
+            InternalDocument.objects.filter(
+                sales_document_type=document_type,
+                order_id__isnull=False,
+            )
+            .values_list("order_id", flat=True)
+            .distinct()
+        )
         snapshot = model_snapshot(document_type, SALES_DOCUMENT_TYPE_SNAPSHOT_FIELDS)
         name = document_type.name
         document_type.delete()
+        synced_orders = 0
+        for order in Order.objects.filter(pk__in=affected_order_ids).select_related("company"):
+            try:
+                sync_order_charge_transaction(order=order, actor=request.user)
+                synced_orders += 1
+            except Exception:
+                continue
         log_admin_action(
             request,
             action="sales_document_type_delete",
@@ -11841,12 +11906,24 @@ def sales_document_type_delete(request, pk):
             },
         )
         if has_usage:
-            messages.success(
-                request,
-                f"Tipo de venta '{name}' eliminado. Se mantuvo el historial, desvinculando referencias previas.",
-            )
+            if synced_orders:
+                messages.success(
+                    request,
+                    f"Tipo de venta '{name}' eliminado. Se mantuvo el historial, desvinculando referencias previas. Cuenta corriente resincronizada en {synced_orders} pedido(s).",
+                )
+            else:
+                messages.success(
+                    request,
+                    f"Tipo de venta '{name}' eliminado. Se mantuvo el historial, desvinculando referencias previas.",
+                )
         else:
-            messages.success(request, f"Tipo de venta '{name}' eliminado.")
+            if synced_orders:
+                messages.success(
+                    request,
+                    f"Tipo de venta '{name}' eliminado. Cuenta corriente resincronizada en {synced_orders} pedido(s).",
+                )
+            else:
+                messages.success(request, f"Tipo de venta '{name}' eliminado.")
         return redirect("admin_sales_document_type_list")
 
     usage_chunks = []
