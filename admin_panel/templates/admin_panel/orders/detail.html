@@ -388,6 +388,42 @@
                     <button type="submit" class="btn btn-primary">Actualizar estado</button>
                 </div>
             </form>
+
+            <hr style="border:0; border-top:1px solid rgba(255,255,255,.08); margin:14px 0;">
+            <div class="sales-record-field" style="margin-bottom:10px;">
+                <span class="sales-record-field-label">Estado del movimiento</span>
+                <span class="sales-record-field-value">{{ order_movement_state_label }}</span>
+            </div>
+            {% if order_movement_can_manage %}
+            <div class="order-inline-actions" style="flex-wrap:wrap; gap:8px;">
+                {% if order_movement_state != 'closed' %}
+                <form method="post" action="{% url 'admin_client_transaction_set_state' order_client_profile_id order_movement_transaction.pk %}" style="margin:0;">
+                    {% csrf_token %}
+                    <input type="hidden" name="next" value="{{ order_detail_next_url }}">
+                    <input type="hidden" name="state" value="closed">
+                    <button type="submit" class="btn btn-outline btn-sm">Cerrar registracion</button>
+                </form>
+                {% endif %}
+                {% if order_movement_state != 'open' and order_movement_can_reopen %}
+                <form method="post" action="{% url 'admin_client_transaction_set_state' order_client_profile_id order_movement_transaction.pk %}" style="margin:0;">
+                    {% csrf_token %}
+                    <input type="hidden" name="next" value="{{ order_detail_next_url }}">
+                    <input type="hidden" name="state" value="open">
+                    <button type="submit" class="btn btn-outline btn-sm">Dejar abierto</button>
+                </form>
+                {% endif %}
+                {% if order_movement_state != 'voided' %}
+                <form method="post" action="{% url 'admin_client_transaction_set_state' order_client_profile_id order_movement_transaction.pk %}" style="margin:0;">
+                    {% csrf_token %}
+                    <input type="hidden" name="next" value="{{ order_detail_next_url }}">
+                    <input type="hidden" name="state" value="voided">
+                    <button type="submit" class="btn btn-danger-outline btn-sm" onclick="return confirm('Anular este movimiento?');">Anular</button>
+                </form>
+                {% endif %}
+            </div>
+            {% else %}
+            <p class="text-muted" style="margin:0;">No hay movimiento de cuenta corriente disponible para gestionar desde este pedido.</p>
+            {% endif %}
         </section>
         {% endif %}
 

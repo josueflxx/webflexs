@@ -188,6 +188,7 @@ from core.services.fiscal import (
     resolve_payment_due_date,
 )
 from core.services.fiscal_notifications import send_fiscal_document_email
+from core.services.arca_client import ArcaConfigurationError, ArcaTemporaryError, ArcaWsfeClient
 from core.services.fiscal_documents import (
     close_fiscal_document,
     create_local_fiscal_document_from_order,
@@ -1089,6 +1090,9 @@ def _resolve_order_charge_transaction(order):
 def _resolve_internal_document_transaction(document):
     if not document:
         return None
+    sales_document_type = getattr(document, "sales_document_type", None)
+    if sales_document_type and not getattr(sales_document_type, "generate_account_movement", False):
+        return None
     if getattr(document, "transaction_id", None):
         return document.transaction
     if getattr(document, "payment_id", None):
@@ -1123,6 +1127,7 @@ def _is_transaction_reopen_locked(transaction_obj):
     Lock reopen for:
     - billed fiscal invoices (FA/FB/FC or external SaaS invoice), and
     - generated remitos.
+    - operational movements that are no longer in draft status.
     """
     if not transaction_obj:
         return False
@@ -1143,12 +1148,19 @@ def _is_transaction_reopen_locked(transaction_obj):
     order_obj = getattr(transaction_obj, "order", None)
     if order_obj is None:
         order_obj = (
-            Order.objects.only("id", "saas_document_type", "saas_document_number")
+            Order.objects.only("id", "status", "saas_document_type", "saas_document_number")
             .filter(pk=transaction_obj.order_id)
             .first()
         )
     if not order_obj:
         return False
+    normalized_status = (
+        order_obj.normalized_status()
+        if hasattr(order_obj, "normalized_status")
+        else Order.LEGACY_STATUS_MAP.get(getattr(order_obj, "status", ""), getattr(order_obj, "status", ""))
+    )
+    if normalized_status != Order.STATUS_DRAFT:
+        return True
     if order_obj.saas_document_type or order_obj.saas_document_number:
         return True
 
@@ -1448,6 +1460,78 @@ def _create_related_order_from_source(
         )
 
     return related_order
+
+
+def _create_draft_order_for_client(
+    *,
+    client,
+    client_company,
+    company,
+    origin_channel,
+    actor=None,
+    created_label="Pedido",
+    admin_note="",
+    history_note="",
+):
+    """Create a new draft order for a client using current commercial rules."""
+    if not company:
+        raise ValidationError("Debes seleccionar una empresa para crear el pedido.")
+    if not getattr(client, "user_id", None):
+        raise ValidationError("El cliente no tiene usuario vinculado para crear pedidos.")
+
+    try:
+        from core.services.pricing import (
+            resolve_pricing_context,
+            resolve_effective_discount_percentage,
+            resolve_effective_price_list,
+        )
+
+        _, _, client_category = resolve_pricing_context(client.user, company)
+        discount_percentage = resolve_effective_discount_percentage(
+            client_profile=client,
+            company=company,
+            client_company=client_company,
+            client_category=client_category,
+        )
+        price_list = resolve_effective_price_list(company, client_company, client_category)
+    except Exception:
+        discount_percentage = Decimal("0")
+        price_list = None
+
+    order = Order.objects.create(
+        user=client.user,
+        company=company,
+        origin_channel=origin_channel or Order.ORIGIN_ADMIN,
+        status=Order.STATUS_DRAFT,
+        priority=Order.PRIORITY_NORMAL,
+        notes="",
+        admin_notes=admin_note or f"{created_label} creada desde panel admin.",
+        subtotal=Decimal("0.00"),
+        discount_percentage=discount_percentage,
+        discount_amount=Decimal("0.00"),
+        total=Decimal("0.00"),
+        client_company=client.company_name or "",
+        client_cuit=client.cuit_dni or "",
+        client_address=client.address or "",
+        client_phone=client.phone or "",
+        client_company_ref=client_company,
+        saas_document_type="",
+        saas_document_number="",
+        saas_document_cae="",
+        follow_up_note="",
+    )
+    OrderStatusHistory.objects.create(
+        order=order,
+        from_status="",
+        to_status=order.status,
+        changed_by=actor if getattr(actor, "is_authenticated", False) else None,
+        note=history_note or f"{created_label} creado desde panel admin",
+    )
+    if price_list:
+        order.admin_notes = f"{order.admin_notes} Lista: {price_list.name}"
+        order.save(update_fields=["admin_notes", "updated_at"])
+
+    return order
 
 
 def _is_ajax_request(request):
@@ -7077,11 +7161,8 @@ def client_quick_order(request, pk):
                 if fiscal_doc.issue_mode == "arca_wsfe" and fiscal_doc.status == "ready_to_issue":
                     try:
                         from core.tasks import emit_fiscal_document_async_task
-                        from core.models import FISCAL_STATUS_SUBMITTING
                         from core.services.fiscal_emission import _validate_before_submit
                         _validate_before_submit(fiscal_doc)
-                        fiscal_doc.status = FISCAL_STATUS_SUBMITTING
-                        fiscal_doc.save(update_fields=["status", "updated_at"])
                         emit_fiscal_document_async_task.delay(document_id=fiscal_doc.pk, actor_id=request.user.pk)
                         messages.success(
                             request,
@@ -7274,56 +7355,19 @@ def client_quick_order(request, pk):
         return redirect("admin_order_detail", pk=order.pk)
 
     try:
-        from core.services.pricing import (
-            resolve_pricing_context,
-            resolve_effective_discount_percentage,
-            resolve_effective_price_list,
-        )
-
-        _, _, client_category = resolve_pricing_context(client.user, active_company)
-        discount_percentage = resolve_effective_discount_percentage(
-            client_profile=client,
-            company=active_company,
+        order = _create_draft_order_for_client(
+            client=client,
             client_company=client_company,
-            client_category=client_category,
+            company=active_company,
+            origin_channel=selected_origin_channel,
+            actor=request.user,
+            created_label=created_label,
+            admin_note=f"{created_label} creada desde ficha cliente.",
+            history_note=f"{created_label} creado desde ficha cliente",
         )
-        price_list = resolve_effective_price_list(active_company, client_company, client_category)
-    except Exception:
-        discount_percentage = Decimal("0")
-        price_list = None
-
-    order = Order.objects.create(
-        user=client.user,
-        company=active_company,
-        origin_channel=selected_origin_channel,
-        status=Order.STATUS_DRAFT,
-        priority=Order.PRIORITY_NORMAL,
-        notes="",
-        admin_notes=f"{created_label} creada desde ficha cliente.",
-        subtotal=Decimal("0.00"),
-        discount_percentage=discount_percentage,
-        discount_amount=Decimal("0.00"),
-        total=Decimal("0.00"),
-        client_company=client.company_name or "",
-        client_cuit=client.cuit_dni or "",
-        client_address=client.address or "",
-        client_phone=client.phone or "",
-        client_company_ref=client_company,
-        saas_document_type="",
-        saas_document_number="",
-        saas_document_cae="",
-        follow_up_note="",
-    )
-    OrderStatusHistory.objects.create(
-        order=order,
-        from_status="",
-        to_status=order.status,
-        changed_by=request.user if request.user.is_authenticated else None,
-        note=f"{created_label} creado desde ficha cliente",
-    )
-    if price_list:
-        order.admin_notes = f"{order.admin_notes} Lista: {price_list.name}"
-        order.save(update_fields=["admin_notes", "updated_at"])
+    except ValidationError as exc:
+        messages.error(request, "; ".join(exc.messages))
+        return _redirect_client_history(client, active_company)
 
     if (
         selected_sales_document_type
@@ -7562,14 +7606,9 @@ def client_order_history(request, pk):
                 order_documents_by_order.setdefault(doc.order_id, doc)
 
         fiscal_documents_by_order = {}
-        locked_invoice_order_ids = set()
         for doc in related_fiscal_documents:
             if doc.order_id:
                 fiscal_documents_by_order.setdefault(doc.order_id, doc)
-                if doc.status in {FISCAL_STATUS_AUTHORIZED, FISCAL_STATUS_EXTERNAL_RECORDED}:
-                    locked_invoice_order_ids.add(doc.order_id)
-
-        locked_remito_order_ids = set(remito_documents_by_order.keys())
 
         for tx in ledger_entries:
             movement_state = getattr(tx, "movement_state", ClientTransaction.STATE_OPEN) or ClientTransaction.STATE_OPEN
@@ -7710,17 +7749,7 @@ def client_order_history(request, pk):
                 related_order = tx.payment.order
             related_order_id = getattr(related_order, "pk", None)
             can_relate = bool(related_order_id)
-            reopen_locked = False
-            if tx.transaction_type == ClientTransaction.TYPE_ORDER_CHARGE and tx.order_id:
-                order_has_saas_invoice = bool(
-                    getattr(related_order, "saas_document_type", "")
-                    or getattr(related_order, "saas_document_number", "")
-                )
-                reopen_locked = (
-                    tx.order_id in locked_invoice_order_ids
-                    or tx.order_id in locked_remito_order_ids
-                    or order_has_saas_invoice
-                )
+            reopen_locked = _is_transaction_reopen_locked(tx)
             actor_obj = getattr(tx, "created_by", None)
             if not actor_obj and tx.transaction_type == ClientTransaction.TYPE_PAYMENT:
                 actor_obj = getattr(getattr(tx, "payment", None), "created_by", None)
@@ -8277,7 +8306,7 @@ def client_order_history(request, pk):
 def client_transaction_set_state(request, pk, tx_id):
     client = get_object_or_404(ClientProfile, pk=pk)
     transaction_obj = get_object_or_404(
-        ClientTransaction.objects.select_related("company", "client_profile"),
+        ClientTransaction.objects.select_related("company", "client_profile", "order"),
         pk=tx_id,
         client_profile=client,
     )
@@ -8305,10 +8334,34 @@ def client_transaction_set_state(request, pk, tx_id):
         reverse("admin_client_order_history", args=[client.pk]),
     )
     current_state = transaction_obj.movement_state or ClientTransaction.STATE_OPEN
+    linked_order = (
+        transaction_obj.order
+        if transaction_obj.transaction_type == ClientTransaction.TYPE_ORDER_CHARGE and transaction_obj.order_id
+        else None
+    )
+    linked_order_status = linked_order.normalized_status() if linked_order else ""
+
     if target_state == ClientTransaction.STATE_OPEN and _is_transaction_reopen_locked(transaction_obj):
         messages.error(
             request,
-            "Los movimientos cerrados vinculados a factura o remito no pueden volver a estado abierto.",
+            "Este movimiento ya esta en registracion final y no puede volver a estado abierto.",
+        )
+        return redirect(redirect_url)
+    if target_state == ClientTransaction.STATE_CLOSED and linked_order_status == Order.STATUS_CANCELLED:
+        messages.error(
+            request,
+            "No puedes cerrar el movimiento porque el pedido asociado ya esta cancelado.",
+        )
+        return redirect(redirect_url)
+    if (
+        target_state == ClientTransaction.STATE_VOIDED
+        and linked_order
+        and linked_order_status != Order.STATUS_CANCELLED
+        and not linked_order.can_transition_to(Order.STATUS_CANCELLED)
+    ):
+        messages.error(
+            request,
+            "No se puede anular el movimiento porque el pedido asociado ya esta en estado final.",
         )
         return redirect(redirect_url)
 
@@ -8319,35 +8372,78 @@ def client_transaction_set_state(request, pk, tx_id):
         )
         return redirect(redirect_url)
 
-    before = model_snapshot(transaction_obj, ["movement_state", "closed_at", "voided_at"])
-    transaction_obj.movement_state = target_state
-    now = timezone.now()
-    if target_state == ClientTransaction.STATE_CLOSED:
-        transaction_obj.closed_at = now
-        transaction_obj.voided_at = None
-    elif target_state == ClientTransaction.STATE_VOIDED:
-        transaction_obj.voided_at = now
-    else:
-        transaction_obj.closed_at = None
-        transaction_obj.voided_at = None
-    transaction_obj.save(update_fields=["movement_state", "closed_at", "voided_at", "updated_at"])
+    tracked_tx_fields = ["movement_state", "closed_at", "voided_at"]
+    before = model_snapshot(transaction_obj, tracked_tx_fields)
+    linked_order_before = None
+    linked_order_after = None
+    order_side_effect_note = ""
+    if linked_order:
+        linked_order_before = model_snapshot(linked_order, ["status", "status_updated_at"])
 
+    try:
+        with transaction.atomic():
+            transaction_obj.movement_state = target_state
+            now = timezone.now()
+            if target_state == ClientTransaction.STATE_CLOSED:
+                transaction_obj.closed_at = now
+                transaction_obj.voided_at = None
+            elif target_state == ClientTransaction.STATE_VOIDED:
+                transaction_obj.voided_at = now
+            else:
+                transaction_obj.closed_at = None
+                transaction_obj.voided_at = None
+            transaction_obj.save(update_fields=["movement_state", "closed_at", "voided_at", "updated_at"])
+
+            if linked_order:
+                normalized_status = linked_order.normalized_status()
+                if target_state == ClientTransaction.STATE_CLOSED and normalized_status == Order.STATUS_DRAFT:
+                    changed = linked_order.change_status(
+                        Order.STATUS_CONFIRMED,
+                        changed_by=request.user,
+                        note="Confirmado al cerrar movimiento en cuenta corriente.",
+                    )
+                    if changed:
+                        order_side_effect_note = " Pedido confirmado."
+                elif target_state == ClientTransaction.STATE_VOIDED and normalized_status != Order.STATUS_CANCELLED:
+                    changed = linked_order.change_status(
+                        Order.STATUS_CANCELLED,
+                        changed_by=request.user,
+                        note="Cancelado al anular movimiento en cuenta corriente.",
+                    )
+                    if changed:
+                        order_side_effect_note = " Pedido cancelado."
+
+            if linked_order:
+                linked_order_after = model_snapshot(linked_order, ["status", "status_updated_at"])
+    except (ValueError, ValidationError) as exc:
+        messages.error(request, f"No se pudo actualizar el movimiento: {exc}")
+        return redirect(redirect_url)
+
+    log_extra = {
+        "client_profile_id": client.pk,
+        "company_id": transaction_obj.company_id,
+        "source_key": transaction_obj.source_key,
+    }
+    if linked_order:
+        log_extra.update(
+            {
+                "order_id": linked_order.pk,
+                "order_status_before": (linked_order_before or {}).get("status"),
+                "order_status_after": (linked_order_after or {}).get("status"),
+            }
+        )
     log_admin_change(
         request,
         action="client_transaction_state_update",
         target_type="client_transaction",
         target_id=transaction_obj.pk,
         before=before,
-        after=model_snapshot(transaction_obj, ["movement_state", "closed_at", "voided_at"]),
-        extra={
-            "client_profile_id": client.pk,
-            "company_id": transaction_obj.company_id,
-            "source_key": transaction_obj.source_key,
-        },
+        after=model_snapshot(transaction_obj, tracked_tx_fields),
+        extra=log_extra,
     )
     messages.success(
         request,
-        f"Movimiento actualizado a {dict(ClientTransaction.STATE_CHOICES).get(target_state, target_state)}.",
+        f"Movimiento actualizado a {dict(ClientTransaction.STATE_CHOICES).get(target_state, target_state)}.{order_side_effect_note}",
     )
     return redirect(redirect_url)
 
@@ -9459,9 +9555,68 @@ def order_list(request):
         'client': client,
         'status_choices': Order.STATUS_CHOICES,
         'sync_status_choices': Order.SYNC_STATUS_CHOICES,
+        'origin_channel_choices': Order.ORIGIN_CHOICES,
         'companies': companies,
         'selected_company_id': selected_company_id,
     })
+
+
+@staff_member_required
+@require_POST
+def order_create_from_panel(request):
+    """Create a draft order from Orders panel selecting client + company."""
+    raw_client_id = str(request.POST.get("client_id", "")).strip()
+    if not raw_client_id.isdigit():
+        messages.error(request, "Selecciona un cliente valido para crear el pedido.")
+        return redirect("admin_order_list")
+
+    client = get_object_or_404(
+        ClientProfile.objects.select_related("user"),
+        pk=int(raw_client_id),
+    )
+    if not getattr(client, "user_id", None):
+        messages.error(request, "El cliente seleccionado no tiene usuario vinculado.")
+        return redirect("admin_order_list")
+
+    selected_origin_channel = str(
+        request.POST.get("origin_channel", Order.ORIGIN_ADMIN)
+    ).strip().lower()
+    if selected_origin_channel not in dict(Order.ORIGIN_CHOICES):
+        selected_origin_channel = Order.ORIGIN_ADMIN
+
+    active_company = get_admin_selected_company(request)
+    if not active_company:
+        messages.error(request, "Selecciona una empresa valida para crear el pedido.")
+        return redirect("admin_order_list")
+
+    client_company = client.get_company_link(active_company)
+    if not client_company:
+        messages.error(request, "El cliente no tiene relacion comercial activa con esta empresa.")
+        return redirect("admin_order_list")
+
+    try:
+        order = _create_draft_order_for_client(
+            client=client,
+            client_company=client_company,
+            company=active_company,
+            origin_channel=selected_origin_channel,
+            actor=request.user,
+            created_label="Pedido",
+            admin_note="Pedido creado desde panel de pedidos.",
+            history_note="Pedido creado desde panel de pedidos",
+        )
+    except ValidationError as exc:
+        messages.error(request, "; ".join(exc.messages))
+        return redirect("admin_order_list")
+
+    messages.success(
+        request,
+        (
+            f"Pedido #{order.pk} creado para {client.company_name or client.user.username}. "
+            "Ahora podes cargar productos."
+        ),
+    )
+    return redirect("admin_order_detail", pk=order.pk)
 
 
 @staff_member_required
@@ -9721,6 +9876,17 @@ def order_detail(request, pk):
     hard_delete_blockers = _get_order_hard_delete_blockers(order)
     order_movement_transaction = _resolve_order_charge_transaction(order)
     order_movement_closed = _movement_allows_print(order_movement_transaction)
+    order_movement_state = (
+        (order_movement_transaction.movement_state or ClientTransaction.STATE_OPEN)
+        if order_movement_transaction
+        else ClientTransaction.STATE_OPEN
+    )
+    order_movement_state_label = dict(ClientTransaction.STATE_CHOICES).get(order_movement_state, "Abierto")
+    order_movement_can_reopen = (
+        bool(order_movement_transaction)
+        and not _is_transaction_reopen_locked(order_movement_transaction)
+    )
+    order_movement_can_manage = bool(order_movement_transaction and order_client_profile)
     order_documents = list(
         InternalDocument.objects.select_related('sales_document_type').filter(order=order).order_by('issued_at')
     )
@@ -9753,6 +9919,11 @@ def order_detail(request, pk):
         'order_invoice_action_label': order_invoice_action_label,
         'order_movement_transaction': order_movement_transaction,
         'order_movement_closed': order_movement_closed,
+        'order_movement_state': order_movement_state,
+        'order_movement_state_label': order_movement_state_label,
+        'order_movement_can_reopen': order_movement_can_reopen,
+        'order_movement_can_manage': order_movement_can_manage,
+        'order_detail_next_url': request.get_full_path(),
         'can_hard_delete_order': not hard_delete_blockers,
         'hard_delete_blockers': hard_delete_blockers,
     })
@@ -10191,6 +10362,11 @@ def fiscal_document_detail(request, pk):
     )
     movement_transaction = _resolve_fiscal_document_transaction(fiscal_document)
     can_print_document = _movement_allows_print(movement_transaction)
+    subtotal_amount = Decimal(fiscal_document.subtotal_net or 0).quantize(Decimal("0.01"))
+    discount_amount = Decimal(fiscal_document.discount_total or 0).quantize(Decimal("0.01"))
+    net_amount = (subtotal_amount - discount_amount).quantize(Decimal("0.01"))
+    if net_amount < 0:
+        net_amount = Decimal("0.00")
 
     return render(
         request,
@@ -10214,6 +10390,9 @@ def fiscal_document_detail(request, pk):
             "document_invoice_errors": document_invoice_errors,
             "can_operate_fiscal": can_operate_fiscal,
             "collection_snapshot": collection_snapshot,
+            "subtotal_amount": subtotal_amount,
+            "discount_amount": discount_amount,
+            "net_amount": net_amount,
         },
     )
 
@@ -10248,17 +10427,13 @@ def fiscal_document_emit(request, pk):
         return denied_response
     try:
         from core.tasks import emit_fiscal_document_async_task
-        from core.models import FISCAL_STATUS_SUBMITTING
-        
+
         # We pre-validate to fail fast before queueing if something is obviously wrong
         from core.services.fiscal_emission import _validate_before_submit
         _validate_before_submit(fiscal_document)
 
-        fiscal_document.status = FISCAL_STATUS_SUBMITTING
-        fiscal_document.save(update_fields=["status", "updated_at"])
-
         emit_fiscal_document_async_task.delay(document_id=fiscal_document.pk, actor_id=request.user.pk)
-        
+
         messages.info(request, "Comprobante encolado para emision fiscal en AFIP. Esto puede demorar unos segundos.")
     except ValidationError as exc:
         messages.error(request, "; ".join(exc.messages))
@@ -11982,6 +12157,31 @@ def _get_fiscal_active_company(request):
     return active_company
 
 
+def _run_fiscal_pos_preflight(*, company, point_of_sale):
+    result = {
+        "ok": False,
+        "message": "",
+        "details": {},
+    }
+    try:
+        client = ArcaWsfeClient(company=company, point_of_sale=point_of_sale)
+        details = client.run_preflight()
+    except ArcaConfigurationError as exc:
+        result["message"] = f"Configuracion ARCA incompleta: {exc}"
+        return result
+    except ArcaTemporaryError as exc:
+        result["message"] = f"Conectividad ARCA temporalmente no disponible: {exc}"
+        return result
+    except Exception as exc:
+        result["message"] = f"Error inesperado en preflight ARCA: {exc}"
+        return result
+
+    result["ok"] = True
+    result["message"] = "Conexion ARCA verificada correctamente."
+    result["details"] = details
+    return result
+
+
 @user_passes_test(is_primary_superadmin)
 def fiscal_config(request):
     """Fiscal configuration dashboard scoped to active company."""
@@ -12007,6 +12207,59 @@ def fiscal_config(request):
             "environment_choices": FiscalPointOfSale.ENV_CHOICES,
         },
     )
+
+
+@user_passes_test(is_primary_superadmin)
+@require_POST
+def fiscal_point_preflight(request, pk):
+    """Run ARCA preflight (credentials + WSAA/WSFE connectivity) for one POS."""
+    active_company = _get_fiscal_active_company(request)
+    if not active_company:
+        return redirect("select_company")
+
+    point = get_object_or_404(FiscalPointOfSale, pk=pk, company=active_company)
+    preflight = _run_fiscal_pos_preflight(company=active_company, point_of_sale=point)
+    if preflight.get("ok"):
+        details = preflight.get("details", {}) or {}
+        last_auth = details.get("last_authorized_numbers", {}) or {}
+        short_last = ", ".join(
+            f"{doc}: {num if num is not None else '-'}"
+            for doc, num in last_auth.items()
+        )
+        messages.success(
+            request,
+            f"Preflight OK para PV {point.number} ({point.get_environment_display()}). Ultimos autorizados: {short_last}.",
+        )
+        log_admin_action(
+            request,
+            action="fiscal_pos_preflight_ok",
+            target_type="fiscal_point_of_sale",
+            target_id=point.pk,
+            details={
+                "company_id": active_company.pk,
+                "point_of_sale": point.number,
+                "environment": point.environment,
+                "last_authorized_numbers": last_auth,
+            },
+        )
+    else:
+        messages.error(
+            request,
+            f"Preflight ARCA fallido en PV {point.number}: {preflight.get('message')}",
+        )
+        log_admin_action(
+            request,
+            action="fiscal_pos_preflight_error",
+            target_type="fiscal_point_of_sale",
+            target_id=point.pk,
+            details={
+                "company_id": active_company.pk,
+                "point_of_sale": point.number,
+                "environment": point.environment,
+                "error": preflight.get("message", ""),
+            },
+        )
+    return redirect("admin_fiscal_config")
 
 
 @user_passes_test(is_primary_superadmin)

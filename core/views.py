@@ -384,13 +384,21 @@ def _suggest_admin_clients(query):
             order_by_similarity=False,
         )
         .select_related("user")
-        .values_list("company_name", "user__username", "cuit_dni")
+        .values_list("id", "company_name", "user__username", "cuit_dni")
         .order_by("company_name")[:8]
     )
-    for company_name, username, cuit in rows:
+    for client_id, company_name, username, cuit in rows:
         value = company_name or username or cuit
         meta_bits = [bit for bit in [username, cuit] if bit]
-        _append_suggestion(items, value, company_name or username, meta=" · ".join(meta_bits), kind="client")
+        _append_suggestion(
+            items,
+            value,
+            company_name or username,
+            meta=" · ".join(meta_bits),
+            kind="client",
+            target_value=client_id,
+            input_value=company_name or username or value,
+        )
     return _unique_trim_suggestions(items)
 
 

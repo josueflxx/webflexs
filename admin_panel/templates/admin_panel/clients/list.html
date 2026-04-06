@@ -31,7 +31,7 @@
             {% if can_manage_client_categories %}
             <a href="{% url 'admin_client_category_list' %}" class="btn btn-outline">Tipos de cliente</a>
             {% endif %}
-            <a href="{% url 'admin_client_list' %}?missing_email=1" class="btn btn-outline {% if missing_email_only %}is-active{% endif %}">
+            <a href="{% url 'admin_client_list' %}?missing_email=1" class="btn btn-outline {% if missing_email_only %}is-active{% endif %}" title="Filtrar clientes sin email para corregirlos rapido">
                 Sin email ({{ missing_email_total }})
             </a>
             {% if user.is_superuser %}
@@ -46,12 +46,17 @@
         {% if missing_email_only %}
         Mostrando solo clientes sin email. <a href="{% url 'admin_client_list' %}" class="btn btn-outline btn-sm" style="margin-left:8px;">Ver todos</a>
         {% else %}
-        Usa "Sin email" para corregirlos rapido.
+        Usa "Sin email" para filtrar y corregirlos rapido.
         {% endif %}
         {% if missing_email_sample %}
         <div style="margin-top:8px;">
+            <div class="text-muted" style="margin-bottom:6px;">
+                Cada boton abre la ficha del cliente para editar y guardar su email.
+            </div>
             {% for item in missing_email_sample %}
-            <a href="{% url 'admin_client_edit' item.pk %}" class="btn btn-outline btn-sm" style="margin:2px;">{{ item.company_name|default:item.user.username|default:"Cliente" }}</a>
+            <a href="{% url 'admin_client_edit' item.pk %}" class="btn btn-outline btn-sm" style="margin:2px;" title="Abrir ficha para completar email">
+                Editar email: {{ item.company_name|default:item.user.username|default:"Cliente" }}
+            </a>
             {% endfor %}
         </div>
         {% endif %}

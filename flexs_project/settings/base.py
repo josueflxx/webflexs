@@ -265,6 +265,47 @@ ARCA_WSFE_URL_PRODUCTION = os.getenv(
 # {"ubolt":{"homologation":{"cuit":"20123456789","cert_path":"C:/certs/ubolt_homo.crt","key_path":"C:/certs/ubolt_homo.key"}}}
 ARCA_COMPANY_CONFIG = _env_json("ARCA_COMPANY_CONFIG_JSON", {})
 
+# Fiscal emission behavior tuning
+FISCAL_RETRY_MINUTES = max(_env_int("FISCAL_RETRY_MINUTES", 10), 1)
+FISCAL_MAX_AUTO_RETRIES = max(_env_int("FISCAL_MAX_AUTO_RETRIES", 5), 1)
+FISCAL_SUBMITTING_TIMEOUT_MINUTES = max(_env_int("FISCAL_SUBMITTING_TIMEOUT_MINUTES", 20), 5)
+
+# ARCA numbering synchronization policy: never | first | always
+FISCAL_ARCA_LAST_AUTH_SYNC_POLICY = str(
+    os.getenv("FISCAL_ARCA_LAST_AUTH_SYNC_POLICY", "first") or "first"
+).strip().lower()
+if FISCAL_ARCA_LAST_AUTH_SYNC_POLICY not in {"never", "first", "always"}:
+    FISCAL_ARCA_LAST_AUTH_SYNC_POLICY = "first"
+FISCAL_ARCA_REQUIRE_LAST_AUTH_SYNC = os.getenv(
+    "FISCAL_ARCA_REQUIRE_LAST_AUTH_SYNC",
+    "False",
+).lower() == "true"
+
+# Automatic item tax breakdown for fiscal docs:
+# - net: order line prices are net and IVA is added
+# - gross: order line prices are final and IVA is split out
+FISCAL_AUTO_ITEM_TAX_ENABLED = os.getenv("FISCAL_AUTO_ITEM_TAX_ENABLED", "True").lower() == "true"
+FISCAL_ITEM_TAX_CALCULATION_MODE = str(
+    os.getenv("FISCAL_ITEM_TAX_CALCULATION_MODE", "gross") or "gross"
+).strip().lower()
+if FISCAL_ITEM_TAX_CALCULATION_MODE not in {"net", "gross"}:
+    FISCAL_ITEM_TAX_CALCULATION_MODE = "gross"
+FISCAL_APPLY_TAX_TO_MANUAL_DOCS = os.getenv("FISCAL_APPLY_TAX_TO_MANUAL_DOCS", "False").lower() == "true"
+FISCAL_DOC_TYPE_DEFAULT_IVA_RATES = _env_json(
+    "FISCAL_DOC_TYPE_DEFAULT_IVA_RATES_JSON",
+    {
+        "FA": "21.00",
+        "FB": "21.00",
+        "FC": "0.00",
+        "NCA": "21.00",
+        "NCB": "21.00",
+        "NCC": "0.00",
+        "NDA": "21.00",
+        "NDB": "21.00",
+        "NDC": "0.00",
+    },
+)
+
 # Django REST Framework
 REST_FRAMEWORK = {
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',

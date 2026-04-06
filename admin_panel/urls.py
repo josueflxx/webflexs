@@ -68,6 +68,7 @@ urlpatterns = [
     
     # Orders
     path('pedidos/', views.order_list, name='admin_order_list'),
+    path('pedidos/nuevo/', views.order_create_from_panel, name='admin_order_create_from_panel'),
     path('pedidos/exportar-saas/', views.order_export_saas, name='admin_order_export_saas'),
     path('pedidos/<int:pk>/', views.order_detail, name='admin_order_detail'),
     path('pedidos/<int:pk>/facturar/', views.order_invoice_open, name='admin_order_invoice_open'),
@@ -147,6 +148,7 @@ urlpatterns = [
     path('configuracion/depositos/nuevo/', views.warehouse_create, name='admin_warehouse_create'),
     path('configuracion/depositos/<int:pk>/editar/', views.warehouse_edit, name='admin_warehouse_edit'),
     path('fiscal/configuracion/', views.fiscal_config, name='admin_fiscal_config'),
+    path('fiscal/puntos-venta/<int:pk>/preflight/', views.fiscal_point_preflight, name='admin_fiscal_point_preflight'),
     path('fiscal/puntos-venta/nuevo/', views.fiscal_point_create, name='admin_fiscal_point_create'),
     path('fiscal/puntos-venta/<int:pk>/editar/', views.fiscal_point_edit, name='admin_fiscal_point_edit'),
     path('fiscal/puntos-venta/<int:pk>/toggle-activo/', views.fiscal_point_toggle_active, name='admin_fiscal_point_toggle_active'),

@@ -1,4 +1,4 @@
-{% extends 'admin_panel/base.html' %}
+﻿{% extends 'admin_panel/base.html' %}
 
 {% block page_title %}Cliente {{ client.company_name }}{% endblock %}
 
@@ -10,6 +10,133 @@
             display: grid;
             gap: 18px;
             overflow: visible !important;
+        }
+        .client-profile-shell {
+            display: grid;
+            gap: 14px;
+            padding: 18px 20px;
+            border-radius: 20px;
+            background:
+                radial-gradient(circle at 88% 8%, rgba(255,107,53,.16), transparent 28%),
+                linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.018)),
+                linear-gradient(180deg, rgba(15,21,34,.96), rgba(10,16,28,.985));
+            border: 1px solid rgba(255,255,255,.1);
+            box-shadow: 0 16px 34px rgba(0,0,0,.24);
+        }
+        .client-profile-head {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding-bottom: 14px;
+            border-bottom: 1px solid rgba(255,255,255,.08);
+        }
+        .client-profile-icon {
+            width: 44px;
+            height: 44px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 12px;
+            background: rgba(255,255,255,.06);
+            border: 1px solid rgba(255,255,255,.1);
+            font-size: 1.2rem;
+        }
+        .client-profile-title {
+            margin: 0;
+            font-size: 1.12rem;
+            color: #f4f7fb;
+        }
+        .client-profile-subtitle {
+            margin: 4px 0 0;
+            color: rgba(208,216,226,.74);
+            font-size: .84rem;
+            line-height: 1.4;
+        }
+        .client-profile-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(280px, 1fr));
+            gap: 14px;
+        }
+        .client-profile-card {
+            position: relative;
+            border-radius: 14px;
+            border: 1px solid rgba(255,255,255,.1);
+            background: linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.02));
+            padding: 13px 14px;
+            box-shadow: inset 0 1px 0 rgba(255,255,255,.06);
+            transition: border-color .18s ease, background .18s ease, transform .18s ease;
+        }
+        .client-profile-card::before {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            border-radius: 14px 14px 0 0;
+            background: linear-gradient(90deg, rgba(255,107,53,.65), rgba(255,107,53,.08));
+        }
+        .client-profile-card:hover {
+            border-color: rgba(255,255,255,.16);
+            background: linear-gradient(180deg, rgba(255,255,255,.055), rgba(255,255,255,.025));
+            transform: translateY(-1px);
+        }
+        .client-profile-card h3 {
+            margin: 0 0 10px;
+            font-size: .8rem;
+            text-transform: uppercase;
+            letter-spacing: .1em;
+            color: #ff8c62;
+        }
+        .client-profile-list {
+            list-style: none;
+            margin: 0;
+            padding: 0;
+            display: grid;
+            gap: 0;
+            font-size: .89rem;
+            color: #e6edf5;
+            line-height: 1.32;
+        }
+        .client-profile-list li {
+            padding: 6px 0;
+            border-bottom: 1px dashed rgba(255,255,255,.09);
+        }
+        .client-profile-list li:last-child {
+            border-bottom: 0;
+            padding-bottom: 0;
+        }
+        .client-profile-list strong {
+            display: inline-block;
+            min-width: 132px;
+            color: #fff;
+            margin-right: 8px;
+        }
+        .client-profile-status {
+            display: inline-flex;
+            align-items: center;
+            padding: 2px 9px;
+            border-radius: 999px;
+            font-size: .74rem;
+            font-weight: 600;
+            border: 1px solid rgba(255,255,255,.16);
+            background: rgba(255,255,255,.05);
+            color: #ecf2f9;
+        }
+        .client-profile-status.is-ok {
+            border-color: rgba(25,209,127,.3);
+            background: rgba(25,209,127,.12);
+            color: #b9f2d4;
+        }
+        .client-profile-status.is-warn {
+            border-color: rgba(255,193,7,.34);
+            background: rgba(255,193,7,.14);
+            color: #ffe9a9;
+        }
+        .client-profile-status.is-off {
+            border-color: rgba(220,53,69,.34);
+            background: rgba(220,53,69,.14);
+            color: #ffb7bf;
         }
         .client-sales-shell {
             display: grid;
@@ -546,6 +673,7 @@
             font-weight: 600;
         }
         @media (max-width: 1180px) {
+            .client-profile-grid,
             .client-sales-head,
             .client-hub-hero,
             .client-data-grid,
@@ -560,7 +688,82 @@
                 justify-content: flex-start;
             }
         }
+        @media (max-width: 640px) {
+            .client-profile-shell {
+                padding: 14px;
+            }
+            .client-profile-list strong {
+                display: block;
+                min-width: 0;
+                margin: 0 0 2px;
+            }
+        }
     </style>
+
+    <section class="client-profile-shell">
+        <div class="client-profile-head">
+            <div class="client-profile-icon" aria-hidden="true">&#128101;</div>
+            <div>
+                <h2 class="client-profile-title">Ver cliente {{ client.company_name }}</h2>
+                <p class="client-profile-subtitle">Resumen operativo y fiscal del cliente en la empresa activa.</p>
+            </div>
+        </div>
+        <div class="client-profile-grid">
+            <article class="client-profile-card">
+                <h3>Datos de contacto</h3>
+                <ul class="client-profile-list">
+                                        <li>
+                        <strong>Estado:</strong>
+                        {% if client.user and client.user.is_active and client.is_approved %}
+                        <span class="client-profile-status is-ok">Habilitado</span>
+                        {% elif client.user and client.user.is_active %}
+                        <span class="client-profile-status is-warn">Pendiente</span>
+                        {% else %}
+                        <span class="client-profile-status is-off">Inactivo</span>
+                        {% endif %}
+                    </li>
+                    <li><strong>N&ordm; de cliente:</strong> {{ client.pk }}</li>
+                    <li><strong>Nombre:</strong> {{ client.company_name|default:"-" }}</li>
+                    <li><strong>Contacto:</strong> {% if client.user %}{{ client.user.get_full_name|default:client.user.username }}{% else %}-{% endif %}</li>
+                    <li><strong>Mail:</strong> {% if client.user %}{{ client.user.email|default:"-" }}{% else %}-{% endif %}</li>
+                    <li><strong>Telefonos:</strong> {{ client.phone|default:"-" }}</li>
+                    <li><strong>Domicilio:</strong> {{ client.fiscal_address|default:"-" }}</li>
+                    <li><strong>Localidad:</strong> {{ client.fiscal_city|default:"-" }}</li>
+                    <li><strong>Provincia:</strong> {{ client.fiscal_province|default:"-" }}</li>
+                    <li><strong>Codigo postal:</strong> {{ client.postal_code|default:"-" }}</li>
+                </ul>
+            </article>
+            <article class="client-profile-card">
+                <h3>Datos de facturacion</h3>
+                <ul class="client-profile-list">
+                    <li><strong>Condicion de IVA:</strong> {{ client.get_iva_condition_display|default:"-" }}</li>
+                    <li><strong>Razon social:</strong> {{ client.company_name|default:"-" }}</li>
+                    <li><strong>CUIT/DNI:</strong> {{ client.cuit_dni|default:"-" }}</li>
+                    <li><strong>Condicion de venta:</strong> {{ sale_condition_label }}</li>
+                    <li><strong>Empresa activa:</strong> {{ active_company_label }}</li>
+                </ul>
+            </article>
+            <article class="client-profile-card">
+                <h3>Categoria del cliente</h3>
+                <ul class="client-profile-list">
+                    <li><strong>Categoria:</strong> {{ effective_category.name|default:"-" }}</li>
+                    <li><strong>Lista de precio:</strong> {{ effective_price_list.name|default:"-" }}</li>
+                    <li><strong>Descuento:</strong> {{ effective_discount|floatformat:2 }}%</li>
+                    <li><strong>Operacion:</strong> {% if operations_locked %}Bloqueada{% else %}Autorizada{% endif %}</li>
+                </ul>
+            </article>
+            <article class="client-profile-card">
+                <h3>Situacion del cliente</h3>
+                <ul class="client-profile-list">
+                    <li><strong>Pedidos registrados:</strong> {{ summary.orders_count }}</li>
+                    <li><strong>Total operado:</strong> ${{ summary.total_amount|floatformat:2 }}</li>
+                    <li><strong>Total pagado:</strong> ${{ payments_summary.total_paid|floatformat:2 }}</li>
+                    <li><strong>Saldo actual:</strong> ${{ balance_summary.current_balance|floatformat:2 }}</li>
+                    <li><strong>Ultimo movimiento:</strong> {{ balance_summary.last_order_at|date:"d/m/Y H:i"|default:"-" }}</li>
+                </ul>
+            </article>
+        </div>
+    </section>
 
     <section class="client-sales-shell">
         <div class="client-sales-head">
@@ -589,15 +792,6 @@
 
         <div class="client-sales-toolbar">
             <div class="client-toolbar-actions">
-                {% if operations_locked %}
-                <span class="client-action-compact is-primary is-disabled" aria-disabled="true"><span aria-hidden="true">&#128179;</span> Registrar pago</span>
-                <span class="client-action-compact is-disabled" aria-disabled="true"><span aria-hidden="true">&#128221;</span> Nuevo pedido</span>
-                <span class="client-action-compact is-disabled" aria-disabled="true"><span aria-hidden="true">&#128196;</span> Cotizacion</span>
-                {% else %}
-                <a href="{% url 'admin_payment_list' %}?client_id={{ client.pk }}&company_id={{ selected_company_id }}" class="client-action-compact is-primary"><span aria-hidden="true">&#128179;</span> Registrar pago</a>
-                <form method="post" action="{% url 'admin_client_quick_order' client.pk %}" style="margin:0;">{% csrf_token %}<input type="hidden" name="company_id" value="{{ selected_company_id }}"><input type="hidden" name="action" value="order"><button type="submit" class="client-action-compact" style="font:inherit; cursor:pointer;"><span aria-hidden="true">&#128221;</span> Nuevo pedido</button></form>
-                <form method="post" action="{% url 'admin_client_quick_order' client.pk %}" style="margin:0;">{% csrf_token %}<input type="hidden" name="company_id" value="{{ selected_company_id }}"><input type="hidden" name="action" value="quote"><button type="submit" class="client-action-compact" style="font:inherit; cursor:pointer;"><span aria-hidden="true">&#128196;</span> Cotizacion</button></form>
-                {% endif %}
                 {% if can_edit_client_profile %}
                 <a href="{% url 'admin_client_edit' client.pk %}" class="client-action-compact"><span aria-hidden="true">&#9998;</span> Editar</a>
                 {% endif %}
@@ -658,12 +852,6 @@
                 <p class="client-sales-kicker">{{ active_ledger_subtitle }}</p>
             </div>
             <div class="client-foot-actions">
-                {% if quick_invoice_available and not operations_locked %}
-                <form method="post" action="{% url 'admin_client_quick_order' client.pk %}" style="margin:0;">{% csrf_token %}<input type="hidden" name="company_id" value="{{ selected_company_id }}"><input type="hidden" name="action" value="invoice"><button type="submit" class="client-action-compact" style="font:inherit; cursor:pointer;"><span aria-hidden="true">&#128196;</span> Facturar</button></form>
-                {% endif %}
-                {% if quick_remito_available and not operations_locked %}
-                <form method="post" action="{% url 'admin_client_quick_order' client.pk %}" style="margin:0;">{% csrf_token %}<input type="hidden" name="company_id" value="{{ selected_company_id }}"><input type="hidden" name="action" value="remito"><button type="submit" class="client-action-compact" style="font:inherit; cursor:pointer;"><span aria-hidden="true">&#128666;</span> Remito</button></form>
-                {% endif %}
                 {% if quick_sales_document_actions %}
                 <div class="client-movement-menu" data-movement-menu>
                     <button type="button" class="client-action-compact is-primary" data-movement-toggle><span aria-hidden="true">&#10133;</span> Nuevo movimiento</button>
@@ -1210,3 +1398,4 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 </script>
 {% endblock %}
+

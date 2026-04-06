@@ -1,6 +1,7 @@
 """Fiscal readiness helpers (pre-ARCA)."""
 from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
+import os
 from typing import List, Tuple
 
 from django.conf import settings
@@ -20,6 +21,42 @@ from core.models import (
     FISCAL_STATUS_VOIDED,
     FiscalPointOfSale,
 )
+
+
+def _resolve_company_cfg(all_cfg, company):
+    if not isinstance(all_cfg, dict):
+        return {}
+
+    slug = str(getattr(company, "slug", "") or "").strip()
+    company_id = str(getattr(company, "id", "") or "").strip()
+
+    if slug and isinstance(all_cfg.get(slug), dict):
+        return all_cfg.get(slug) or {}
+    if company_id and isinstance(all_cfg.get(company_id), dict):
+        return all_cfg.get(company_id) or {}
+
+    slug_l = slug.lower()
+    id_l = company_id.lower()
+    for key, value in all_cfg.items():
+        if not isinstance(value, dict):
+            continue
+        key_l = str(key).strip().lower()
+        if slug_l and key_l == slug_l:
+            return value
+        if id_l and key_l == id_l:
+            return value
+    return {}
+
+
+def _get_company_arca_env_config(company, environment: str):
+    all_cfg = getattr(settings, "ARCA_COMPANY_CONFIG", {}) or {}
+    company_cfg = _resolve_company_cfg(all_cfg, company)
+    if not isinstance(company_cfg, dict):
+        return {}
+    env_key = str(environment or "homologation").strip().lower() or "homologation"
+    if env_key in company_cfg and isinstance(company_cfg.get(env_key), dict):
+        return company_cfg.get(env_key) or {}
+    return company_cfg if isinstance(company_cfg, dict) else {}
 
 
 def _is_blank(value) -> bool:
@@ -257,6 +294,17 @@ def is_company_fiscal_ready(company) -> Tuple[bool, List[str]]:
             errors.append(
                 "El punto de venta default de la empresa no coincide con el POS default marcado."
             )
+        env_cfg = _get_company_arca_env_config(company, getattr(default_point, "environment", "homologation"))
+        cert_path = str(env_cfg.get("cert_path", "") or "").strip()
+        key_path = str(env_cfg.get("key_path", "") or "").strip()
+        if not cert_path:
+            errors.append("Falta cert_path ARCA para el entorno del POS default.")
+        elif not os.path.exists(cert_path):
+            errors.append("El cert_path ARCA del POS default no existe en el servidor.")
+        if not key_path:
+            errors.append("Falta key_path ARCA para el entorno del POS default.")
+        elif not os.path.exists(key_path):
+            errors.append("El key_path ARCA del POS default no existe en el servidor.")
 
     return len(errors) == 0, errors
 

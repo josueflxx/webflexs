@@ -2,6 +2,7 @@
 
 from decimal import Decimal
 
+from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db.models import Q
@@ -86,17 +87,82 @@ def _get_discount_percentage(item, order):
     return Decimal(item_discount or 0)
 
 
-def _build_order_items_payload(order):
+def _to_decimal(value, default="0.00"):
+    try:
+        return Decimal(str(value if value is not None else default))
+    except Exception:
+        return Decimal(default)
+
+
+def _resolve_default_iva_rate_for_doc(doc_type):
+    raw_map = getattr(settings, "FISCAL_DOC_TYPE_DEFAULT_IVA_RATES", {}) or {}
+    if isinstance(raw_map, dict):
+        raw_rate = raw_map.get(str(doc_type or "").strip().upper(), "0.00")
+    else:
+        raw_rate = "0.00"
+    rate = _to_decimal(raw_rate, "0.00").quantize(Decimal("0.01"))
+    if rate < 0:
+        return Decimal("0.00")
+    return rate
+
+
+def _should_apply_item_tax(issue_mode):
+    if not bool(getattr(settings, "FISCAL_AUTO_ITEM_TAX_ENABLED", True)):
+        return False
+    if issue_mode == FISCAL_ISSUE_MODE_ARCA_WSFE:
+        return True
+    return bool(getattr(settings, "FISCAL_APPLY_TAX_TO_MANUAL_DOCS", False))
+
+
+def _apply_item_tax_breakdown(*, base_amount, iva_rate):
+    iva_rate = _to_decimal(iva_rate, "0.00").quantize(Decimal("0.01"))
+    amount = _to_decimal(base_amount, "0.00").quantize(Decimal("0.01"))
+    if iva_rate <= 0:
+        return amount, Decimal("0.00"), amount
+
+    mode = str(
+        getattr(settings, "FISCAL_ITEM_TAX_CALCULATION_MODE", "gross") or "gross"
+    ).strip().lower()
+    if mode == "net":
+        net_amount = amount
+        iva_amount = (net_amount * iva_rate / Decimal("100")).quantize(Decimal("0.01"))
+        total_amount = (net_amount + iva_amount).quantize(Decimal("0.01"))
+        return net_amount, iva_amount, total_amount
+
+    # gross (default): amount already includes IVA and gets split out.
+    divisor = Decimal("1.00") + (iva_rate / Decimal("100"))
+    if divisor <= 0:
+        return amount, Decimal("0.00"), amount
+    net_amount = (amount / divisor).quantize(Decimal("0.01"))
+    iva_amount = (amount - net_amount).quantize(Decimal("0.01"))
+    total_amount = amount
+    return net_amount, iva_amount, total_amount
+
+
+def _build_order_items_payload(order, *, doc_type, issue_mode):
     payload = []
     line_number = 1
+    apply_tax = _should_apply_item_tax(issue_mode)
+    default_iva_rate = _resolve_default_iva_rate_for_doc(doc_type) if apply_tax else Decimal("0.00")
+
     for item in order.items.select_related("product").all():
         quantity = Decimal(item.quantity or 0)
         unit_price_base = Decimal(getattr(item, "unit_price_base", None) or item.price_at_purchase or 0)
         line_gross = (unit_price_base * quantity).quantize(Decimal("0.01"))
-        line_total = Decimal(getattr(item, "subtotal", None) or 0).quantize(Decimal("0.01"))
-        discount_amount = (line_gross - line_total).quantize(Decimal("0.01"))
+        line_amount = Decimal(getattr(item, "subtotal", None) or 0).quantize(Decimal("0.01"))
+        discount_amount = (line_gross - line_amount).quantize(Decimal("0.01"))
         if discount_amount < 0:
             discount_amount = Decimal("0.00")
+
+        net_amount, iva_amount, total_amount = _apply_item_tax_breakdown(
+            base_amount=line_amount,
+            iva_rate=default_iva_rate,
+        )
+        if not apply_tax:
+            net_amount = line_amount
+            iva_amount = Decimal("0.00")
+            total_amount = line_amount
+
         payload.append(
             {
                 "line_number": line_number,
@@ -107,14 +173,32 @@ def _build_order_items_payload(order):
                 "unit_price_net": unit_price_base.quantize(Decimal("0.01")),
                 "discount_percentage": _get_discount_percentage(item, order).quantize(Decimal("0.01")),
                 "discount_amount": discount_amount,
-                "net_amount": line_total,
-                "iva_rate": Decimal("0.00"),
-                "iva_amount": Decimal("0.00"),
-                "total_amount": line_total,
+                "net_amount": net_amount,
+                "iva_rate": default_iva_rate,
+                "iva_amount": iva_amount,
+                "total_amount": total_amount,
             }
         )
         line_number += 1
     return payload
+
+
+def _compute_totals_from_payload(payload):
+    subtotal_net = Decimal("0.00")
+    discount_total = Decimal("0.00")
+    tax_total = Decimal("0.00")
+    total = Decimal("0.00")
+    for row in payload:
+        subtotal_net += _to_decimal(row.get("net_amount", 0))
+        discount_total += _to_decimal(row.get("discount_amount", 0))
+        tax_total += _to_decimal(row.get("iva_amount", 0))
+        total += _to_decimal(row.get("total_amount", 0))
+    return {
+        "subtotal_net": subtotal_net.quantize(Decimal("0.01")),
+        "discount_total": discount_total.quantize(Decimal("0.01")),
+        "tax_total": tax_total.quantize(Decimal("0.01")),
+        "total": total.quantize(Decimal("0.01")),
+    }
 
 
 def _build_fiscal_snapshot_payload(
@@ -297,7 +381,12 @@ def create_local_fiscal_document_from_order(
         point_of_sale_id=point_of_sale.id,
         doc_type=doc_type,
     )
-    payload = _build_order_items_payload(order)
+    payload = _build_order_items_payload(
+        order,
+        doc_type=doc_type,
+        issue_mode=issue_mode,
+    )
+    totals = _compute_totals_from_payload(payload)
     client_company_ref = getattr(order, "client_company_ref", None)
     if not client_company_ref:
         raise ValidationError("El pedido no tiene cliente empresa asignado.")
@@ -357,10 +446,10 @@ def create_local_fiscal_document_from_order(
             status=FISCAL_STATUS_READY_TO_ISSUE,
             payment_due_date=resolve_payment_due_date(order=order),
             sales_document_type=sales_document_type,
-            subtotal_net=Decimal(order.subtotal or 0),
-            discount_total=Decimal(order.discount_amount or 0),
-            tax_total=Decimal("0.00"),
-            total=Decimal(order.total or 0),
+            subtotal_net=totals["subtotal_net"],
+            discount_total=totals["discount_total"],
+            tax_total=totals["tax_total"],
+            total=totals["total"],
             currency="ARS",
             exchange_rate=Decimal("1.000000"),
             request_payload={"snapshot": snapshot_payload},
@@ -415,7 +504,12 @@ def register_external_fiscal_document_for_order(
         external_id=external_id,
         external_number=external_number,
     )
-    payload = _build_order_items_payload(order)
+    payload = _build_order_items_payload(
+        order,
+        doc_type=doc_type,
+        issue_mode=FISCAL_ISSUE_MODE_EXTERNAL_SAAS,
+    )
+    totals = _compute_totals_from_payload(payload)
     client_company_ref = getattr(order, "client_company_ref", None)
     if not client_company_ref:
         raise ValidationError("El pedido no tiene cliente empresa asignado.")
@@ -496,10 +590,10 @@ def register_external_fiscal_document_for_order(
             issued_at=issued_now,
             payment_due_date=resolve_payment_due_date(order=order, issued_at=issued_now),
             sales_document_type=sales_document_type,
-            subtotal_net=Decimal(order.subtotal or 0),
-            discount_total=Decimal(order.discount_amount or 0),
-            tax_total=Decimal("0.00"),
-            total=Decimal(order.total or 0),
+            subtotal_net=totals["subtotal_net"],
+            discount_total=totals["discount_total"],
+            tax_total=totals["tax_total"],
+            total=totals["total"],
             currency="ARS",
             exchange_rate=Decimal("1.000000"),
             external_system=external_system,

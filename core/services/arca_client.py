@@ -80,6 +80,39 @@ DOC_TYPE_TO_ARCA_DOC = {
     "otro": 99,
 }
 
+
+def _resolve_company_cfg(all_cfg: Dict[str, Any], company) -> Dict[str, Any]:
+    """
+    Resolve ARCA company config with tolerant key matching.
+    Accepted keys:
+    - exact slug (legacy behavior)
+    - company id as string
+    - case-insensitive slug match (e.g. Flexs/flexs)
+    - case-insensitive id match
+    """
+    if not isinstance(all_cfg, dict):
+        return {}
+
+    slug = str(getattr(company, "slug", "") or "").strip()
+    company_id = str(getattr(company, "id", "") or "").strip()
+
+    if slug and isinstance(all_cfg.get(slug), dict):
+        return all_cfg.get(slug) or {}
+    if company_id and isinstance(all_cfg.get(company_id), dict):
+        return all_cfg.get(company_id) or {}
+
+    slug_l = slug.lower()
+    id_l = company_id.lower()
+    for key, value in all_cfg.items():
+        if not isinstance(value, dict):
+            continue
+        key_l = str(key).strip().lower()
+        if slug_l and key_l == slug_l:
+            return value
+        if id_l and key_l == id_l:
+            return value
+    return {}
+
 IVA_RATE_TO_ID = {
     Decimal("0.00"): 3,
     Decimal("10.50"): 4,
@@ -149,6 +182,7 @@ class ArcaWsfeClient:
 
     WSAA_SOAP_ACTION = "loginCms"
     WSFE_SOAP_ACTION = "http://ar.gov.afip.dif.FEV1/FECAESolicitar"
+    WSFE_LAST_AUTH_SOAP_ACTION = "http://ar.gov.afip.dif.FEV1/FECompUltimoAutorizado"
 
     def __init__(self, *, company, point_of_sale):
         self.company = company
@@ -179,10 +213,8 @@ class ArcaWsfeClient:
         return str(getattr(settings, "ARCA_WSFE_URL_HOMOLOGATION", "") or "").strip()
 
     def _resolve_company_credentials(self):
-        company_cfg = {}
         all_cfg = getattr(settings, "ARCA_COMPANY_CONFIG", {}) or {}
-        if isinstance(all_cfg, dict):
-            company_cfg = all_cfg.get(self.company.slug) or all_cfg.get(str(self.company.id)) or {}
+        company_cfg = _resolve_company_cfg(all_cfg, self.company)
         env_cfg = {}
         if isinstance(company_cfg, dict):
             env_cfg = company_cfg.get(self.environment, {}) if self.environment in company_cfg else company_cfg
@@ -590,6 +622,57 @@ class ArcaWsfeClient:
             "</FECAESolicitar>"
         )
 
+    def _build_last_authorized_soap_body(self, *, token: str, sign: str, cbte_type: int) -> str:
+        return (
+            '<FECompUltimoAutorizado xmlns="http://ar.gov.afip.dif.FEV1/">'
+            "<Auth>"
+            f"<Token>{html.escape(str(token))}</Token>"
+            f"<Sign>{html.escape(str(sign))}</Sign>"
+            f"<Cuit>{int(self.issuer_cuit)}</Cuit>"
+            "</Auth>"
+            f"<PtoVta>{int(self.point_of_sale.number)}</PtoVta>"
+            f"<CbteTipo>{int(cbte_type)}</CbteTipo>"
+            "</FECompUltimoAutorizado>"
+        )
+
+    def _parse_last_authorized_response(self, response_xml: str) -> int:
+        try:
+            root = ET.fromstring(response_xml)
+        except ET.ParseError as exc:
+            raise ArcaTemporaryError(
+                "No se pudo interpretar FECompUltimoAutorizado.",
+                error_code="parse_last_authorized_error",
+                response_payload={"raw": response_xml},
+            ) from exc
+
+        result_node = _find_first(root, "FECompUltimoAutorizadoResult")
+        if result_node is None:
+            fault = _find_first(root, "faultstring")
+            fault_text = _node_text(fault) or "Respuesta SOAP sin FECompUltimoAutorizadoResult."
+            raise ArcaTemporaryError(
+                fault_text,
+                error_code="soap_fault_last_authorized",
+                response_payload={"raw": response_xml},
+            )
+
+        errors = self._extract_errors(result_node)
+        if errors:
+            first_error = errors[0]
+            raise ArcaTemporaryError(
+                first_error.get("msg", "") or "ARCA devolvio error consultando ultimo autorizado.",
+                error_code=first_error.get("code", "") or "last_authorized_error",
+                response_payload={"raw": response_xml, "errors": errors},
+            )
+
+        number_text = _node_text(_find_first(result_node, "CbteNro"))
+        digits = _sanitize_digits(number_text)
+        if not digits:
+            return 0
+        try:
+            return int(digits)
+        except Exception:
+            return 0
+
     def _extract_errors(self, node: ET.Element) -> List[Dict[str, str]]:
         errors = []
         for err in _find_all(node, "Err"):
@@ -706,3 +789,48 @@ class ArcaWsfeClient:
             response_xml=response_xml,
             request_payload=_to_json_safe(request_payload),
         )
+
+    def fetch_last_authorized_number(self, *, doc_type: str) -> int:
+        cbte_type = DOC_TYPE_TO_CBTE_TYPE.get(str(doc_type or "").strip().upper())
+        if not cbte_type:
+            raise ArcaConfigurationError(
+                f"Tipo fiscal {doc_type} no soportado para FECompUltimoAutorizado."
+            )
+
+        token, sign = self._login()
+        body = self._build_last_authorized_soap_body(
+            token=token,
+            sign=sign,
+            cbte_type=int(cbte_type),
+        )
+        response_xml = self._soap_post(
+            url=self.wsfe_url,
+            soap_action=self.WSFE_LAST_AUTH_SOAP_ACTION,
+            body_xml=body,
+        )
+        return self._parse_last_authorized_response(response_xml=response_xml)
+
+    def run_preflight(self) -> Dict[str, Any]:
+        """
+        Validate credentials + connectivity using WSAA login and one WSFE
+        last-number lookup for the current point of sale.
+        """
+        token, sign = self._login()
+        checks = {
+            "token_obtained": bool(token),
+            "sign_obtained": bool(sign),
+        }
+        last_numbers = {}
+        for doc_type in ("FA", "FB", "FC"):
+            try:
+                last_numbers[doc_type] = self.fetch_last_authorized_number(doc_type=doc_type)
+            except Exception:
+                last_numbers[doc_type] = None
+        return {
+            "ok": True,
+            "environment": self.environment,
+            "company_id": self.company.id,
+            "point_of_sale": self.point_of_sale.number,
+            "checks": checks,
+            "last_authorized_numbers": last_numbers,
+        }

@@ -89,6 +89,10 @@
                 </td>
                 <td class="actions">
                     <a href="{% url 'admin_fiscal_point_edit' point.pk %}" class="btn btn-outline btn-sm">Editar</a>
+                    <form method="post" action="{% url 'admin_fiscal_point_preflight' point.pk %}" class="inline-form">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-outline btn-sm">Probar ARCA</button>
+                    </form>
                     <form method="post" action="{% url 'admin_fiscal_point_toggle_active' point.pk %}" class="inline-form">
                         {% csrf_token %}
                         <button type="submit" class="btn btn-outline btn-sm">

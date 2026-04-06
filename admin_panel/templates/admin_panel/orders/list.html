@@ -40,6 +40,52 @@
         </form>
     </div>
 
+    <details class="order-create-panel" id="orderCreatePanel">
+        <summary>
+            <span>+ Nuevo pedido</span>
+        </summary>
+        <form method="post" action="{% url 'admin_order_create_from_panel' %}" id="orderCreateForm" class="order-create-grid">
+            {% csrf_token %}
+            <div class="order-create-field">
+                <label for="orderCreateCompany">Empresa</label>
+                <select id="orderCreateCompany" name="company_id" class="form-select" required>
+                    {% for company in companies %}
+                    <option value="{{ company.pk }}" {% if selected_company_id == company.pk|stringformat:'s' %}selected{% endif %}>
+                        {{ company.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="order-create-field order-create-field-client">
+                <label for="orderCreateClientSearch">Cliente</label>
+                <input
+                    type="text"
+                    id="orderCreateClientSearch"
+                    class="form-input"
+                    placeholder="Buscar cliente por nombre, usuario o CUIT..."
+                    data-suggest="1"
+                    data-suggest-scope="admin_clients"
+                    data-suggest-submit="manual"
+                    data-suggest-target="#orderCreateClientId"
+                    autocomplete="off"
+                    required
+                >
+                <input type="hidden" id="orderCreateClientId" name="client_id" required>
+            </div>
+            <div class="order-create-field">
+                <label for="orderCreateOrigin">Canal de origen</label>
+                <select id="orderCreateOrigin" name="origin_channel" class="form-select">
+                    {% for value, label in origin_channel_choices %}
+                    <option value="{{ value }}" {% if value == 'admin' %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="order-create-actions">
+                <button type="submit" class="btn btn-primary">Crear pedido</button>
+            </div>
+        </form>
+    </details>
+
     <table class="admin-table">
         <thead>
             <tr>
@@ -116,4 +162,100 @@
     </div>
     {% endif %}
 </div>
+
+<style>
+    .order-create-panel {
+        margin: 12px 0 14px;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 12px;
+        background: rgba(255, 255, 255, 0.02);
+        overflow: hidden;
+    }
+
+    .order-create-panel > summary {
+        list-style: none;
+        cursor: pointer;
+        user-select: none;
+        padding: 12px 14px;
+        font-weight: 700;
+        color: #eaf2ff;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .order-create-panel > summary::-webkit-details-marker {
+        display: none;
+    }
+
+    .order-create-grid {
+        padding: 12px 14px 14px;
+        display: grid;
+        grid-template-columns: 1fr 2fr 1fr auto;
+        gap: 10px;
+        align-items: end;
+    }
+
+    .order-create-field {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
+
+    .order-create-field label {
+        font-size: 0.78rem;
+        letter-spacing: 0.01em;
+        color: rgba(255, 255, 255, 0.78);
+    }
+
+    .order-create-actions {
+        display: flex;
+        align-items: end;
+    }
+
+    @media (max-width: 980px) {
+        .order-create-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .order-create-actions .btn {
+            width: 100%;
+        }
+    }
+</style>
+
+<script>
+    (function () {
+        const createForm = document.getElementById('orderCreateForm');
+        if (!createForm) return;
+
+        const clientInput = document.getElementById('orderCreateClientSearch');
+        const clientIdInput = document.getElementById('orderCreateClientId');
+        const companyFilterSelect = document.querySelector('#orderFiltersForm select[name="company_id"]');
+        const companyCreateSelect = document.getElementById('orderCreateCompany');
+
+        if (companyFilterSelect && companyCreateSelect) {
+            companyFilterSelect.addEventListener('change', () => {
+                companyCreateSelect.value = companyFilterSelect.value;
+            });
+        }
+
+        if (clientInput && clientIdInput) {
+            clientInput.addEventListener('input', () => {
+                clientIdInput.value = '';
+            });
+        }
+
+        createForm.addEventListener('submit', (event) => {
+            if (!clientIdInput || !String(clientIdInput.value || '').trim()) {
+                event.preventDefault();
+                alert('Selecciona un cliente desde las coincidencias antes de crear el pedido.');
+                if (clientInput) {
+                    clientInput.focus();
+                }
+            }
+        });
+    })();
+</script>
 {% endblock %}

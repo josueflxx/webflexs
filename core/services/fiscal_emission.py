@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import timedelta
+from decimal import Decimal
 from typing import Optional
 
 from django.conf import settings
@@ -52,6 +53,38 @@ class FiscalEmissionOutcome:
     message: str
 
 
+def _should_sync_series_with_arca(series: FiscalDocumentSeries) -> bool:
+    policy = str(getattr(settings, "FISCAL_ARCA_LAST_AUTH_SYNC_POLICY", "first") or "first").strip().lower()
+    if policy == "never":
+        return False
+    if policy == "always":
+        return True
+    # default: first
+    return int(series.next_number or 1) <= 1
+
+
+def _sync_series_with_arca_last_authorized(document: FiscalDocument, series: FiscalDocumentSeries) -> None:
+    if document.issue_mode != FISCAL_ISSUE_MODE_ARCA_WSFE:
+        return
+    if not _should_sync_series_with_arca(series):
+        return
+
+    require_sync = bool(getattr(settings, "FISCAL_ARCA_REQUIRE_LAST_AUTH_SYNC", False))
+    try:
+        client = ArcaWsfeClient(company=document.company, point_of_sale=document.point_of_sale)
+        remote_last = int(client.fetch_last_authorized_number(doc_type=document.doc_type) or 0)
+        remote_next = max(remote_last + 1, 1)
+        current_next = int(series.next_number or 1)
+        if remote_next > current_next:
+            series.next_number = remote_next
+            series.save(update_fields=["next_number", "updated_at"])
+    except Exception as exc:
+        if require_sync:
+            raise ValidationError(
+                f"No se pudo sincronizar numeracion ARCA antes de emitir: {exc}"
+            )
+
+
 def _reserve_fiscal_number(document: FiscalDocument) -> int:
     if document.number:
         return int(document.number)
@@ -68,6 +101,7 @@ def _reserve_fiscal_number(document: FiscalDocument) -> int:
     if series.point_of_sale != document.point_of_sale.number:
         series.point_of_sale = document.point_of_sale.number
         series.save(update_fields=["point_of_sale", "updated_at"])
+    _sync_series_with_arca_last_authorized(document, series)
 
     number = int(series.next_number or 1)
     series.next_number = number + 1
@@ -110,6 +144,14 @@ def _validate_before_submit(document: FiscalDocument):
         raise ValidationError("El comprobante fiscal no tiene items cargados.")
     if document.total is None or document.total <= 0:
         raise ValidationError("El comprobante fiscal debe tener total mayor a cero.")
+    allow_zero_iva = bool(getattr(settings, "FISCAL_ALLOW_ZERO_IVA_ARCA", False))
+    doc_supports_zero_iva = document.doc_type in {"FC", "NCC", "NDC"}
+    if not allow_zero_iva and not doc_supports_zero_iva:
+        iva_total = Decimal(document.tax_total or 0).quantize(Decimal("0.01"))
+        if iva_total <= 0:
+            raise ValidationError(
+                "El comprobante requiere IVA mayor a cero para emitir en ARCA."
+            )
     if document.doc_type in FISCAL_INVOICE_DOC_TYPES and document.related_document_id:
         raise ValidationError("Las facturas no deben vincularse a otro comprobante base.")
 

@@ -2127,10 +2127,10 @@
 
 .client-module-shell {
     display: grid;
-    gap: 14px;
-    margin-bottom: 18px;
-    padding: 18px 20px;
-    border-radius: 22px;
+    gap: 10px;
+    margin-bottom: 14px;
+    padding: 14px 16px;
+    border-radius: 18px;
     border: 1px solid rgba(255, 255, 255, 0.1);
     background:
         radial-gradient(circle at top right, rgba(255, 107, 53, 0.14), transparent 24%),
@@ -2164,18 +2164,18 @@
 .client-module-head {
     display: grid;
     grid-template-columns: auto minmax(0, 1fr) auto;
-    gap: 16px;
+    gap: 12px;
     align-items: center;
 }
 
 .client-module-icon {
-    width: 58px;
-    height: 58px;
+    width: 46px;
+    height: 46px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    border-radius: 18px;
-    font-size: 1.7rem;
+    border-radius: 12px;
+    font-size: 1.3rem;
     background:
         radial-gradient(circle at 30% 30%, rgba(255, 107, 53, 0.22), transparent 58%),
         rgba(255, 255, 255, 0.05);
@@ -2185,7 +2185,7 @@
 
 .client-module-kicker {
     display: inline-flex;
-    margin-bottom: 7px;
+    margin-bottom: 4px;
     color: rgba(208, 216, 226, 0.72);
     font-size: 0.72rem;
     text-transform: uppercase;
@@ -2194,30 +2194,31 @@
 
 .client-module-copy h2 {
     margin: 0;
-    font-size: 1.45rem;
+    font-size: 1.2rem;
     line-height: 1.1;
 }
 
 .client-module-copy p {
-    margin: 8px 0 0;
+    margin: 4px 0 0;
     color: rgba(210, 217, 226, 0.78);
-    line-height: 1.6;
+    line-height: 1.4;
+    font-size: 0.92rem;
     max-width: 56ch;
 }
 
 .client-module-company {
     display: grid;
-    gap: 4px;
-    min-width: 160px;
-    padding: 11px 13px;
-    border-radius: 16px;
+    gap: 2px;
+    min-width: 136px;
+    padding: 9px 11px;
+    border-radius: 12px;
     background: rgba(255, 255, 255, 0.04);
     border: 1px solid rgba(255, 255, 255, 0.08);
     text-align: right;
 }
 
 .client-module-company span {
-    font-size: 0.7rem;
+    font-size: 0.64rem;
     color: rgba(208, 216, 226, 0.68);
     text-transform: uppercase;
     letter-spacing: 0.08em;
@@ -2230,21 +2231,22 @@
 .client-module-grid {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 12px;
+    gap: 8px;
 }
 
 .client-module-card {
     display: grid;
     grid-template-columns: auto minmax(0, 1fr);
-    gap: 12px;
-    padding: 14px 15px;
-    border-radius: 18px;
+    gap: 8px;
+    padding: 10px 11px;
+    border-radius: 12px;
     border: 1px solid rgba(255, 255, 255, 0.08);
     background: rgba(255, 255, 255, 0.03);
     color: #eef3f8;
     text-decoration: none;
     transition: transform 0.18s ease, background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    min-height: 86px;
 }
 
 .client-module-card:hover {
@@ -2260,13 +2262,13 @@
 }
 
 .client-module-card-icon {
-    width: 44px;
-    height: 44px;
+    width: 32px;
+    height: 32px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    border-radius: 14px;
-    font-size: 1.15rem;
+    border-radius: 8px;
+    font-size: 0.9rem;
     background: rgba(255, 255, 255, 0.06);
     border: 1px solid rgba(255, 255, 255, 0.1);
     color: #fff5ef;
@@ -2280,11 +2282,11 @@
 
 .client-module-card-copy {
     display: grid;
-    gap: 6px;
+    gap: 3px;
 }
 
 .client-module-card-label {
-    font-size: 0.72rem;
+    font-size: 0.62rem;
     color: rgba(209, 216, 226, 0.72);
     text-transform: uppercase;
     letter-spacing: 0.08em;
@@ -2313,12 +2315,16 @@
 
 .client-module-card strong {
     color: #fff6ef;
-    font-size: 1rem;
+    font-size: 0.9rem;
+    line-height: 1.2;
 }
 
 .client-module-card small {
     color: rgba(210, 217, 226, 0.72);
-    line-height: 1.45;
+    line-height: 1.28;
+    font-size: 0.74rem;
+    display: block;
+    overflow: visible;
 }
 
 .form-actions {
@@ -4272,7 +4278,7 @@
     }
 
     .client-module-grid {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
+        grid-template-columns: repeat(3, minmax(0, 1fr));
     }
 
     .dashboard-grid {
@@ -4713,7 +4719,7 @@
     }
 
     .client-module-grid {
-        grid-template-columns: 1fr;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
     .admin-catalog-fab {
@@ -4726,6 +4732,12 @@
 
     .admin-logout-fab {
         bottom: 84px;
+    }
+}
+
+@media (max-width: 560px) {
+    .client-module-grid {
+        grid-template-columns: 1fr;
     }
 }
 
