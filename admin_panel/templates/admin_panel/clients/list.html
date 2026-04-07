@@ -4,7 +4,7 @@
 
 {% block content %}
 {% include 'admin_panel/clients/_module_panel.html' with client_panel='search' client_module_subtitle='Acceso central a la cartera: buscar, revisar historial y operar sobre cada cliente.' %}
-<div class="admin-table-container">
+<div class="admin-table-container clients-list-shell no-drag-scroll">
     <style>
         .client-history-link {
             color: inherit;
@@ -16,6 +16,32 @@
         .client-history-link:focus-visible {
             color: var(--color-primary);
             text-decoration: underline;
+        }
+
+        .clients-list-shell {
+            overflow-x: hidden;
+        }
+
+        .clients-list-scroll {
+            width: 100%;
+            overflow-x: auto;
+            overflow-y: hidden;
+            scrollbar-width: thin;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .clients-list-scroll::-webkit-scrollbar {
+            height: 8px;
+        }
+
+        .clients-list-scroll::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.06);
+            border-radius: 999px;
+        }
+
+        .clients-list-scroll::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.22);
+            border-radius: 999px;
         }
     </style>
 
@@ -95,66 +121,66 @@
         window.onclick = function (e) { if (e.target == document.getElementById('deleteModal')) closeDeleteModal(); }
     </script>
 
-    <table class="admin-table">
-        <thead>
-            <tr>
-                <th>Usuario</th>
-                <th>Empresa</th>
-                <th>Email</th>
-                <th>CUIT/DNI</th>
-                <th>Provincia</th>
-                <th>Tipo</th>
-                <th>Descuento</th>
-                <th>Acciones</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for client in page_obj %}
-            <tr>
-                <td>{{ client.user.username }}</td>
-                <td>
-                    <a href="{% url 'admin_client_order_history' client.pk %}" class="client-history-link">
-                        {{ client.company_name }}
-                    </a>
-                </td>
-                <td>{{ client.user.email|default:"-" }}</td>
-                <td>{{ client.cuit_dni|default:"-" }}</td>
-                <td>{{ client.province|default:"-" }}</td>
-                <td>{{ client.client_category.name|default:"-" }}</td>
-                <td>
-                    {% if client.get_effective_discount_percentage %}
-                    <span class="badge badge-success">{{ client.get_effective_discount_percentage|floatformat:0 }}%</span>
-                    {% else %}
-                    -
-                    {% endif %}
-                </td>
-                <td class="actions">
-                    <a href="{% url 'admin_payment_list' %}?client_id={{ client.pk }}" class="btn btn-primary btn-sm"
-                        title="Pagos">
-                        Pagos
-                    </a>
-                    {% if can_edit_client_profile %}
-                    <a href="{% url 'admin_client_edit' client.pk %}" class="btn btn-outline"
-                        title="Editar">
-                        Editar
-                    </a>
-                    {% if can_manage_client_credentials and client.user %}
-                    <a href="{% url 'admin_client_password' client.pk %}" class="btn btn-warning-outline"
-                        title="Cambiar Contrasena">Clave</a>
-                    {% endif %}
-                    {% if can_delete_client_record %}
-                    <a href="{% url 'admin_client_delete' client.pk %}" class="btn btn-danger-outline" title="Desactivar">Desactivar</a>
-                    {% endif %}
-                    {% endif %}
-                </td>
-            </tr>
-            {% empty %}
-            <tr>
-                <td colspan="8" class="text-center text-muted">No hay clientes</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+    <div class="clients-list-scroll" data-drag-scroll>
+        <table class="admin-table">
+            <thead>
+                <tr>
+                    <th>Usuario</th>
+                    <th>Empresa</th>
+                    <th>CUIT/DNI</th>
+                    <th>Provincia</th>
+                    <th>Tipo</th>
+                    <th>Descuento</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for client in page_obj %}
+                <tr>
+                    <td>{{ client.user.username }}</td>
+                    <td>
+                        <a href="{% url 'admin_client_order_history' client.pk %}" class="client-history-link">
+                            {{ client.company_name }}
+                        </a>
+                    </td>
+                    <td>{{ client.cuit_dni|default:"-" }}</td>
+                    <td>{{ client.province|default:"-" }}</td>
+                    <td>{{ client.client_category.name|default:"-" }}</td>
+                    <td>
+                        {% if client.get_effective_discount_percentage %}
+                        <span class="badge badge-success">{{ client.get_effective_discount_percentage|floatformat:0 }}%</span>
+                        {% else %}
+                        -
+                        {% endif %}
+                    </td>
+                    <td class="actions">
+                        <a href="{% url 'admin_payment_list' %}?client_id={{ client.pk }}" class="btn btn-primary btn-sm"
+                            title="Pagos">
+                            Pagos
+                        </a>
+                        {% if can_edit_client_profile %}
+                        <a href="{% url 'admin_client_edit' client.pk %}" class="btn btn-outline"
+                            title="Editar">
+                            Editar
+                        </a>
+                        {% if can_manage_client_credentials and client.user %}
+                        <a href="{% url 'admin_client_password' client.pk %}" class="btn btn-warning-outline"
+                            title="Cambiar Contrasena">Clave</a>
+                        {% endif %}
+                        {% if can_delete_client_record %}
+                        <a href="{% url 'admin_client_delete' client.pk %}" class="btn btn-danger-outline" title="Desactivar">Desactivar</a>
+                        {% endif %}
+                        {% endif %}
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="7" class="text-center text-muted">No hay clientes</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
 
     {% if page_obj.paginator.num_pages > 1 %}
     <div class="pagination-container">

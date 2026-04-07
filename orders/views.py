@@ -11,8 +11,9 @@ from django.apps import apps
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db.models import Prefetch
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.template.loader import render_to_string
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
@@ -780,19 +781,40 @@ def order_internal_document_print(request, doc_id):
         "duplicado": "DUPLICADO",
         "triplicado": "TRIPLICADO",
     }
+    if copy_key not in copy_labels:
+        copy_key = "original"
     copy_label = copy_labels.get(copy_key, "ORIGINAL")
     order_items = []
     if document.order_id:
         order_items = list(document.order.items.select_related("product").all())
 
+    context = {
+        "document": document,
+        "copy_key": copy_key,
+        "copy_label": copy_label,
+        "order_items": order_items,
+    }
+
+    if request.GET.get("format") == "pdf":
+        try:
+            from core.services.pdf_generator import generate_document_pdf
+
+            html_string = render_to_string("admin_panel/documents/print.html", context, request=request)
+            pdf_bytes = generate_document_pdf(html_string, base_url=request.build_absolute_uri("/"))
+            response = HttpResponse(pdf_bytes, content_type="application/pdf")
+            response["Content-Disposition"] = (
+                f'inline; filename="{document.doc_type}_{document.number:07d}_{copy_key}.pdf"'
+            )
+            return response
+        except ImportError:
+            messages.error(request, "El generador de PDF no esta instalado correctamente.")
+        except Exception as exc:
+            messages.error(request, f"Error al generar PDF: {exc}")
+
     response = render(
         request,
         "admin_panel/documents/print.html",
-        {
-            "document": document,
-            "copy_label": copy_label,
-            "order_items": order_items,
-        },
+        context,
     )
     if request.GET.get("download") == "1":
         filename = f"{document.doc_type}_{document.number:07d}.html"
@@ -819,6 +841,22 @@ def order_fiscal_document_print(request, doc_id):
             "copy_label": FISCAL_PRINT_COPY_LABELS.get(copy_type, "ORIGINAL"),
         }
     )
+    if request.GET.get("format") == "pdf":
+        try:
+            from core.services.pdf_generator import generate_document_pdf
+
+            html_string = render_to_string("admin_panel/fiscal/print.html", context, request=request)
+            pdf_bytes = generate_document_pdf(html_string, base_url=request.build_absolute_uri("/"))
+            response = HttpResponse(pdf_bytes, content_type="application/pdf")
+            response["Content-Disposition"] = (
+                f'inline; filename="{fiscal_document.commercial_type_label}_{fiscal_document.display_number}_{copy_type}.pdf"'
+            )
+            return response
+        except ImportError:
+            messages.error(request, "El generador de PDF no esta instalado correctamente.")
+        except Exception as exc:
+            messages.error(request, f"Error al generar PDF: {exc}")
+
     return render(request, "admin_panel/fiscal/print.html", context)
 
 

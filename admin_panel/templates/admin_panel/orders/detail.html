@@ -2,6 +2,54 @@
 
 {% block page_title %}Pedido #{{ order.pk }}{% endblock %}
 
+{% block extra_css %}
+<style>
+.sales-record-relate-details {
+    position: relative;
+}
+.sales-record-relate-details > summary {
+    list-style: none;
+}
+.sales-record-relate-details > summary::-webkit-details-marker {
+    display: none;
+}
+.sales-record-relate-menu {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 8px);
+    z-index: 40;
+    min-width: 260px;
+    max-height: 320px;
+    overflow-y: auto;
+    background: rgba(8, 14, 24, .98);
+    border: 1px solid rgba(96, 165, 250, .28);
+    border-radius: 12px;
+    padding: 10px;
+    display: grid;
+    gap: 8px;
+}
+.sales-record-relate-btn {
+    width: 100%;
+    text-align: left;
+    border: 1px solid rgba(148, 163, 184, .32);
+    background: rgba(15, 23, 42, .9);
+    color: #e5e7eb;
+    border-radius: 10px;
+    padding: 9px 11px;
+    font-size: .84rem;
+    cursor: pointer;
+}
+.sales-record-relate-btn:hover {
+    border-color: rgba(251, 146, 60, .6);
+    background: rgba(30, 41, 59, .95);
+}
+.sales-record-relate-btn:disabled {
+    opacity: .5;
+    cursor: not-allowed;
+}
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="admin-form-container sales-record-page order-record-page">
     <section class="sales-record-shell order-record-shell">
@@ -40,6 +88,29 @@
                 >
                     Registrar pago
                 </a>
+                {% if order_client_profile_id and related_sales_document_actions %}
+                <details class="sales-record-relate-details">
+                    <summary class="sales-record-action">Relacionar venta</summary>
+                    <div class="sales-record-relate-menu">
+                        {% for item in related_sales_document_actions %}
+                        <form method="post" action="{{ item.url }}" style="margin:0;">
+                            {% csrf_token %}
+                            <input type="hidden" name="company_id" value="{{ order.company_id }}">
+                            <input type="hidden" name="action" value="{{ item.action_value }}">
+                            <input type="hidden" name="sales_document_type_id" value="{{ item.sales_document_type.pk }}">
+                            <input type="hidden" name="origin_channel" value="admin">
+                            {% if order_related_source_tx_id %}
+                            <input type="hidden" name="source_tx_id" value="{{ order_related_source_tx_id }}">
+                            {% endif %}
+                            <input type="hidden" name="source_order_id" value="{{ order_related_source_order_id }}">
+                            <button type="submit" class="sales-record-relate-btn" {% if item.disabled %}disabled{% endif %}>
+                                {{ item.label }}
+                            </button>
+                        </form>
+                        {% endfor %}
+                    </div>
+                </details>
+                {% endif %}
                 <a href="{% url 'admin_fiscal_document_list' %}" class="sales-record-action">Comprobantes fiscales</a>
                 <a href="{% url 'admin_order_list' %}" class="sales-record-action">Volver</a>
             </div>
@@ -365,7 +436,7 @@
     </section>
 
     <section class="order-record-secondary-grid">
-        {% if user.is_staff %}
+        {% if user.is_staff and order.status != 'confirmed' %}
         <section class="sales-record-card">
             <div class="sales-record-card-head">
                 <div>

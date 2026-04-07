@@ -31,6 +31,7 @@
         </form>
         <div class="toolbar-actions">
             <a href="{% url 'admin_fiscal_report' %}?date_from={{ date_from }}&date_to={{ date_to }}&doc_type={{ doc_type }}&issue_mode={{ issue_mode }}&status={{ status }}&export=csv" class="btn btn-outline">Exportar CSV</a>
+            <a href="{% url 'admin_fiscal_health' %}" class="btn btn-outline">Salud fiscal</a>
             <a href="{% url 'admin_fiscal_document_list' %}" class="btn btn-outline">Volver a comprobantes</a>
         </div>
     </div>

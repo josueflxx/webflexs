@@ -291,6 +291,49 @@
     gap: 10px;
     flex-wrap: wrap;
 }
+.fiscal-related-details {
+    position: relative;
+}
+.fiscal-related-details > summary {
+    list-style: none;
+}
+.fiscal-related-details > summary::-webkit-details-marker {
+    display: none;
+}
+.fiscal-related-menu {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 8px);
+    z-index: 40;
+    min-width: 260px;
+    max-height: 320px;
+    overflow-y: auto;
+    background: #0f172a;
+    border: 1px solid #cbd5e1;
+    border-radius: 10px;
+    padding: 8px;
+    display: grid;
+    gap: 7px;
+}
+.fiscal-related-btn {
+    width: 100%;
+    text-align: left;
+    border: 1px solid #cbd5e1;
+    background: #ffffff;
+    color: #0f172a;
+    border-radius: 8px;
+    padding: 8px 9px;
+    font-size: 0.8rem;
+    cursor: pointer;
+}
+.fiscal-related-btn:hover {
+    border-color: #fb923c;
+    background: #fff7ed;
+}
+.fiscal-related-btn:disabled {
+    opacity: .5;
+    cursor: not-allowed;
+}
 @media (max-width: 1100px) {
     .fiscal-classic-grid,
     .fiscal-classic-collapsible-grid,
@@ -332,6 +375,29 @@
                 {% if fiscal_document.order_id and fiscal_document.client_profile_id %}
                 <a href="{% url 'admin_payment_list' %}?order_id={{ fiscal_document.order_id }}&company_id={{ fiscal_document.company_id }}&client_id={{ fiscal_document.client_profile_id }}" class="fiscal-classic-action">Registrar pago</a>
                 {% endif %}
+                {% if related_client_profile_id and related_sales_document_actions and related_source_order_id %}
+                <details class="fiscal-related-details">
+                    <summary class="fiscal-classic-action">Relacionar venta</summary>
+                    <div class="fiscal-related-menu">
+                        {% for item in related_sales_document_actions %}
+                        <form method="post" action="{{ item.url }}" style="margin:0;">
+                            {% csrf_token %}
+                            <input type="hidden" name="company_id" value="{{ fiscal_document.company_id }}">
+                            <input type="hidden" name="action" value="{{ item.action_value }}">
+                            <input type="hidden" name="sales_document_type_id" value="{{ item.sales_document_type.pk }}">
+                            <input type="hidden" name="origin_channel" value="admin">
+                            {% if related_source_tx_id %}
+                            <input type="hidden" name="source_tx_id" value="{{ related_source_tx_id }}">
+                            {% endif %}
+                            <input type="hidden" name="source_order_id" value="{{ related_source_order_id }}">
+                            <button type="submit" class="fiscal-related-btn" {% if item.disabled %}disabled{% endif %}>
+                                {{ item.label }}
+                            </button>
+                        </form>
+                        {% endfor %}
+                    </div>
+                </details>
+                {% endif %}
                 {% if can_close_document %}
                 <form method="post" action="{% url 'admin_fiscal_document_close' fiscal_document.pk %}" style="margin:0;">
                     {% csrf_token %}
@@ -369,6 +435,7 @@
                 <a href="{% url 'admin_fiscal_document_print' fiscal_document.pk %}?copy=original" class="fiscal-classic-action" data-print-window="1" target="_blank" rel="noopener noreferrer">Original</a>
                 <a href="{% url 'admin_fiscal_document_print' fiscal_document.pk %}?copy=duplicado" class="fiscal-classic-action" data-print-window="1" target="_blank" rel="noopener noreferrer">Duplicado</a>
                 <a href="{% url 'admin_fiscal_document_print' fiscal_document.pk %}?copy=triplicado" class="fiscal-classic-action" data-print-window="1" target="_blank" rel="noopener noreferrer">Triplicado</a>
+                <a href="{% url 'admin_fiscal_document_print' fiscal_document.pk %}?copy=original&format=pdf" class="fiscal-classic-action" data-print-window="1" target="_blank" rel="noopener noreferrer">PDF</a>
                 {% else %}
                 <span class="fiscal-classic-action is-disabled">Cerrar movimiento para imprimir</span>
                 {% endif %}

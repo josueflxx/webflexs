@@ -145,6 +145,7 @@ from core.services.company_context import (
 from django.contrib.auth.models import Group, User
 from admin_panel.forms.import_forms import ProductImportForm, ClientImportForm, CategoryImportForm
 from admin_panel.forms.category_forms import CategoryForm
+from admin_panel.fiscal_views import fiscal_health_view, fiscal_report_view
 from admin_panel.forms.export_forms import (
     CatalogExcelTemplateForm,
     CatalogExcelTemplateSheetForm,
@@ -1380,6 +1381,103 @@ def _resolve_related_order_for_quick_action(*, client, active_company, source_tx
         return None, source_tx, "El pedido base no coincide con el cliente seleccionado."
 
     return related_order, source_tx, ""
+
+
+def _resolve_related_order_from_order_id_for_quick_action(*, client, active_company, source_order_id):
+    """Resolve source order directly from order id for related sales actions."""
+    raw_value = str(source_order_id or "").strip()
+    if not raw_value:
+        return None, ""
+    if not raw_value.isdigit():
+        return None, "El pedido relacionado no es valido."
+
+    source_order = (
+        Order.objects.select_related("company", "user")
+        .filter(pk=int(raw_value))
+        .first()
+    )
+    if not source_order:
+        return None, "No se encontro el pedido seleccionado para relacionar."
+
+    if (
+        active_company
+        and source_order.company_id
+        and source_order.company_id != active_company.id
+    ):
+        return None, "El pedido seleccionado pertenece a otra empresa."
+
+    if (
+        client.user_id
+        and source_order.user_id
+        and source_order.user_id != client.user_id
+    ):
+        return None, "El pedido seleccionado no coincide con el cliente."
+
+    return source_order, ""
+
+
+def _build_related_sales_document_actions(*, company, operations_locked=False, quick_order_url=""):
+    """Build related-sale quick actions by configured sales document types."""
+    if not company:
+        return []
+
+    actions = []
+    quick_type_queryset = SalesDocumentType.objects.filter(
+        company=company,
+        enabled=True,
+        document_behavior__in=[
+            SALES_BEHAVIOR_RECIBO,
+            SALES_BEHAVIOR_COTIZACION,
+            SALES_BEHAVIOR_PRESUPUESTO,
+            SALES_BEHAVIOR_PEDIDO,
+            SALES_BEHAVIOR_REMITO,
+            SALES_BEHAVIOR_FACTURA,
+            SALES_BEHAVIOR_NOTA_CREDITO,
+            SALES_BEHAVIOR_NOTA_DEBITO,
+        ],
+    ).order_by("display_order", "name")
+
+    for item in quick_type_queryset:
+        behavior = item.document_behavior
+        relation_action_value = ""
+        relation_help_text = ""
+        relation_css_class = ""
+
+        if behavior in {SALES_BEHAVIOR_COTIZACION, SALES_BEHAVIOR_PRESUPUESTO}:
+            relation_action_value = "quote"
+            relation_help_text = "Copia productos del movimiento base y crea un nuevo borrador."
+            relation_css_class = "is-quote"
+        elif behavior == SALES_BEHAVIOR_PEDIDO:
+            relation_action_value = "order"
+            relation_help_text = "Duplica el pedido base con sus productos para un nuevo movimiento."
+            relation_css_class = "is-order"
+        elif behavior == SALES_BEHAVIOR_REMITO:
+            relation_action_value = "remito"
+            relation_help_text = "Genera o abre el remito para el pedido del movimiento base."
+            relation_css_class = "is-remito"
+        elif behavior == SALES_BEHAVIOR_FACTURA:
+            relation_action_value = "invoice"
+            relation_help_text = "Genera o abre la factura del pedido del movimiento base."
+            relation_css_class = "is-fiscal"
+        elif behavior == SALES_BEHAVIOR_NOTA_CREDITO:
+            relation_action_value = "credit_note"
+            relation_help_text = "Abre la factura base del movimiento para gestionar nota de credito."
+            relation_css_class = "is-credit-note"
+
+        if relation_action_value:
+            actions.append(
+                {
+                    "sales_document_type": item,
+                    "label": item.name,
+                    "help_text": relation_help_text,
+                    "url": quick_order_url,
+                    "action_value": relation_action_value,
+                    "disabled": operations_locked,
+                    "css_class": relation_css_class,
+                }
+            )
+
+    return actions
 
 
 def _create_related_order_from_source(
@@ -6988,6 +7086,7 @@ def client_quick_order(request, pk):
         return _redirect_client_history(client, active_company)
 
     source_tx_id = str(request.POST.get("source_tx_id", "")).strip()
+    source_order_id = str(request.POST.get("source_order_id", "")).strip()
     source_order = None
     source_transaction = None
     if source_tx_id:
@@ -6995,6 +7094,15 @@ def client_quick_order(request, pk):
             client=client,
             active_company=active_company,
             source_tx_id=source_tx_id,
+        )
+        if source_error:
+            messages.error(request, source_error)
+            return _redirect_client_history(client, active_company)
+    elif source_order_id:
+        source_order, source_error = _resolve_related_order_from_order_id_for_quick_action(
+            client=client,
+            active_company=active_company,
+            source_order_id=source_order_id,
         )
         if source_error:
             messages.error(request, source_error)
@@ -8101,37 +8209,11 @@ def client_order_history(request, pk):
                 continue
             quick_sales_document_actions.append(action_meta)
 
-            relation_action_value = ""
-            relation_help_text = ""
-            relation_css_class = action_meta["css_class"]
-            if behavior in {SALES_BEHAVIOR_COTIZACION, SALES_BEHAVIOR_PRESUPUESTO}:
-                relation_action_value = "quote"
-                relation_help_text = "Copia productos del movimiento base y crea un nuevo borrador."
-            elif behavior == SALES_BEHAVIOR_PEDIDO:
-                relation_action_value = "order"
-                relation_help_text = "Duplica el pedido base con sus productos para un nuevo movimiento."
-            elif behavior == SALES_BEHAVIOR_REMITO:
-                relation_action_value = "remito"
-                relation_help_text = "Genera o abre el remito para el pedido del movimiento base."
-            elif behavior == SALES_BEHAVIOR_FACTURA:
-                relation_action_value = "invoice"
-                relation_help_text = "Genera o abre la factura del pedido del movimiento base."
-            elif behavior == SALES_BEHAVIOR_NOTA_CREDITO:
-                relation_action_value = "credit_note"
-                relation_help_text = "Abre la factura base del movimiento para gestionar nota de credito."
-
-            if relation_action_value:
-                related_sales_document_actions.append(
-                    {
-                        "sales_document_type": item,
-                        "label": item.name,
-                        "help_text": relation_help_text,
-                        "url": reverse("admin_client_quick_order", args=[client.pk]),
-                        "action_value": relation_action_value,
-                        "disabled": operations_locked,
-                        "css_class": relation_css_class,
-                    }
-                )
+        related_sales_document_actions = _build_related_sales_document_actions(
+            company=active_company,
+            operations_locked=operations_locked,
+            quick_order_url=reverse("admin_client_quick_order", args=[client.pk]),
+        )
 
     client_tab = 'account'
     ledger_tab_config = [
@@ -9190,6 +9272,7 @@ def order_request_detail(request, pk):
         'can_confirm_request': order_request.status in {
             OrderRequest.STATUS_SUBMITTED,
             OrderRequest.STATUS_IN_REVIEW,
+            OrderRequest.STATUS_PROPOSAL_SENT,
             OrderRequest.STATUS_WAITING_CLIENT,
         },
         'can_reject_request': order_request.status not in {
@@ -9197,11 +9280,15 @@ def order_request_detail(request, pk):
             OrderRequest.STATUS_CANCELLED,
             OrderRequest.STATUS_CONVERTED,
         },
-        'can_send_proposal': order_request.status in {
-            OrderRequest.STATUS_SUBMITTED,
-            OrderRequest.STATUS_IN_REVIEW,
-            OrderRequest.STATUS_WAITING_CLIENT,
-        } and False,
+        'can_send_proposal': (
+            order_request.status
+            not in {
+                OrderRequest.STATUS_REJECTED,
+                OrderRequest.STATUS_CANCELLED,
+                OrderRequest.STATUS_CONVERTED,
+            }
+            and not request_order
+        ),
         'can_convert_request': order_request.status == OrderRequest.STATUS_CONFIRMED and not order_request.converted_order,
         'can_generate_documents': bool(
             order_request.status == OrderRequest.STATUS_CONFIRMED or request_order
@@ -9547,6 +9634,41 @@ def order_list(request):
     paginator = Paginator(orders.order_by('-created_at'), 50)
     page = request.GET.get('page', 1)
     page_obj = paginator.get_page(page)
+    page_orders = list(page_obj.object_list)
+
+    user_ids = {order.user_id for order in page_orders if order.user_id}
+    profile_by_user_id = {}
+    if user_ids:
+        for profile in ClientProfile.objects.only("pk", "user_id").filter(user_id__in=user_ids):
+            profile_by_user_id[profile.user_id] = profile.pk
+
+    actions_by_company_id = {}
+    if active_company:
+        actions_by_company_id[active_company.pk] = _build_related_sales_document_actions(
+            company=active_company,
+            operations_locked=False,
+            quick_order_url="",
+        )
+
+    for order in page_orders:
+        order.quick_client_profile_id = profile_by_user_id.get(order.user_id) or ""
+        if order.company_id not in actions_by_company_id:
+            company_obj = order.company if getattr(order, "company_id", None) else None
+            actions_by_company_id[order.company_id] = _build_related_sales_document_actions(
+                company=company_obj,
+                operations_locked=False,
+                quick_order_url="",
+            ) if company_obj else []
+        order.quick_related_actions = actions_by_company_id.get(order.company_id, [])
+        if order.quick_client_profile_id:
+            quick_url = reverse("admin_client_quick_order", args=[order.quick_client_profile_id])
+            order.quick_related_actions = [
+                {
+                    **item,
+                    "url": quick_url,
+                }
+                for item in order.quick_related_actions
+            ]
     
     return render(request, 'admin_panel/orders/list.html', {
         'page_obj': page_obj,
@@ -9897,6 +10019,15 @@ def order_detail(request, pk):
     for doc in order_fiscal_documents:
         doc.can_safe_delete = not _get_fiscal_document_delete_blockers(doc)
         doc.can_print = order_movement_closed
+    related_sales_document_actions = _build_related_sales_document_actions(
+        company=order.company,
+        operations_locked=False,
+        quick_order_url=(
+            reverse("admin_client_quick_order", args=[order_client_profile.pk])
+            if order_client_profile
+            else ""
+        ),
+    )
 
     return render(request, 'admin_panel/orders/detail.html', {
         'order': order,
@@ -9926,6 +10057,9 @@ def order_detail(request, pk):
         'order_detail_next_url': request.get_full_path(),
         'can_hard_delete_order': not hard_delete_blockers,
         'hard_delete_blockers': hard_delete_blockers,
+        'related_sales_document_actions': related_sales_document_actions,
+        'order_related_source_tx_id': order_movement_transaction.pk if order_movement_transaction else '',
+        'order_related_source_order_id': order.pk,
     })
 
 
@@ -10362,6 +10496,18 @@ def fiscal_document_detail(request, pk):
     )
     movement_transaction = _resolve_fiscal_document_transaction(fiscal_document)
     can_print_document = _movement_allows_print(movement_transaction)
+    related_client_profile = fiscal_document.client_profile
+    if not related_client_profile and getattr(fiscal_document, "client_company_ref", None):
+        related_client_profile = fiscal_document.client_company_ref.client_profile
+    related_sales_document_actions = _build_related_sales_document_actions(
+        company=fiscal_document.company,
+        operations_locked=False,
+        quick_order_url=(
+            reverse("admin_client_quick_order", args=[related_client_profile.pk])
+            if related_client_profile
+            else ""
+        ),
+    )
     subtotal_amount = Decimal(fiscal_document.subtotal_net or 0).quantize(Decimal("0.01"))
     discount_amount = Decimal(fiscal_document.discount_total or 0).quantize(Decimal("0.01"))
     net_amount = (subtotal_amount - discount_amount).quantize(Decimal("0.01"))
@@ -10393,6 +10539,10 @@ def fiscal_document_detail(request, pk):
             "subtotal_amount": subtotal_amount,
             "discount_amount": discount_amount,
             "net_amount": net_amount,
+            "related_client_profile_id": related_client_profile.pk if related_client_profile else "",
+            "related_sales_document_actions": related_sales_document_actions,
+            "related_source_tx_id": movement_transaction.pk if movement_transaction else "",
+            "related_source_order_id": fiscal_document.order_id or "",
         },
     )
 
@@ -10666,140 +10816,21 @@ def fiscal_document_send_email(request, pk):
 
 @staff_member_required
 def fiscal_report(request):
-    active_company = get_active_company(request)
-    if not active_company:
-        messages.error(request, "Selecciona una empresa activa para operar.")
-        return redirect("select_company")
-
-    denied_response = _deny_fiscal_operation_if_needed(
+    return fiscal_report_view(
         request,
-        redirect_url=reverse("admin_fiscal_document_list"),
-        action_label="ver reportes fiscales",
+        get_active_company_fn=get_active_company,
+        deny_if_needed_fn=_deny_fiscal_operation_if_needed,
+        build_collection_snapshot_fn=_build_fiscal_collection_snapshot,
+        can_manage_fiscal_operations_fn=can_manage_fiscal_operations,
     )
-    if denied_response:
-        return denied_response
 
-    status = str(request.GET.get("status", "")).strip()
-    doc_type = str(request.GET.get("doc_type", "")).strip()
-    issue_mode = str(request.GET.get("issue_mode", "")).strip()
-    export = str(request.GET.get("export", "")).strip().lower()
-    date_from = parse_date(str(request.GET.get("date_from", "")).strip()) if request.GET.get("date_from") else None
-    date_to = parse_date(str(request.GET.get("date_to", "")).strip()) if request.GET.get("date_to") else None
 
-    documents = (
-        FiscalDocument.objects.select_related(
-            "company",
-            "point_of_sale",
-            "order",
-            "client_company_ref__client_profile",
-        )
-        .filter(company=active_company)
-        .order_by("-created_at")
-    )
-    if status:
-        documents = documents.filter(status=status)
-    if doc_type:
-        documents = documents.filter(doc_type=doc_type)
-    if issue_mode:
-        documents = documents.filter(issue_mode=issue_mode)
-    if date_from:
-        documents = documents.filter(created_at__date__gte=date_from)
-    if date_to:
-        documents = documents.filter(created_at__date__lte=date_to)
-
-    today = timezone.localdate()
-    overdue_qs = documents.filter(
-        status__in=[FISCAL_STATUS_AUTHORIZED, FISCAL_STATUS_EXTERNAL_RECORDED],
-        payment_due_date__lt=today,
-    )
-    summary = {
-        "documents_count": documents.count(),
-        "total_amount": documents.aggregate(total=Coalesce(Sum("total"), Decimal("0.00"))).get("total")
-        or Decimal("0.00"),
-        "authorized_count": documents.filter(status=FISCAL_STATUS_AUTHORIZED).count(),
-        "pending_retry_count": documents.filter(status=FISCAL_STATUS_PENDING_RETRY).count(),
-        "rejected_count": documents.filter(status=FISCAL_STATUS_REJECTED).count(),
-        "overdue_count": overdue_qs.count(),
-    }
-    summary["overdue_amount"] = overdue_qs.aggregate(total=Coalesce(Sum("total"), Decimal("0.00"))).get("total") or Decimal("0.00")
-
-    grouped = list(
-        documents.values("doc_type").annotate(
-            documents_count=Count("id"),
-            total_amount=Coalesce(Sum("total"), Decimal("0.00")),
-        ).order_by("doc_type")
-    )
-    doc_type_label_map = dict(FiscalDocument.DOC_TYPE_CHOICES)
-    for row in grouped:
-        row["doc_type_label"] = doc_type_label_map.get(row["doc_type"], row["doc_type"])
-
-    rows = list(documents[:400])
-    for row in rows:
-        row.collection_snapshot = _build_fiscal_collection_snapshot(row)
-
-    if export == "csv":
-        output = StringIO()
-        writer = csv.writer(output)
-        writer.writerow(
-            [
-                "fecha",
-                "tipo_comercial",
-                "tipo_fiscal",
-                "numero",
-                "cliente",
-                "pedido",
-                "estado_fiscal",
-                "estado_cobranza",
-                "total",
-                "vencimiento",
-                "proximo_reintento",
-            ]
-        )
-        for doc in rows:
-            snapshot = getattr(doc, "collection_snapshot", _build_fiscal_collection_snapshot(doc))
-            writer.writerow(
-                [
-                    doc.created_at.strftime("%Y-%m-%d %H:%M"),
-                    doc.commercial_type_label,
-                    doc.get_doc_type_display(),
-                    doc.display_number,
-                    getattr(getattr(doc, "client_company_ref", None), "client_profile", None).company_name
-                    if getattr(doc, "client_company_ref", None)
-                    and getattr(doc.client_company_ref, "client_profile", None)
-                    else "-",
-                    doc.order_id or "",
-                    doc.get_status_display(),
-                    snapshot.get("status_label"),
-                    f"{Decimal(doc.total or 0):.2f}",
-                    doc.payment_due_date.strftime("%Y-%m-%d") if doc.payment_due_date else "",
-                    doc.next_retry_at.strftime("%Y-%m-%d %H:%M") if doc.next_retry_at else "",
-                ]
-            )
-        response = HttpResponse(output.getvalue(), content_type="text/csv; charset=utf-8")
-        response["Content-Disposition"] = (
-            f'attachment; filename="reporte_fiscal_{active_company.slug}_{timezone.now().strftime("%Y%m%d_%H%M%S")}.csv"'
-        )
-        return response
-
-    return render(
+@staff_member_required
+def fiscal_health(request):
+    return fiscal_health_view(
         request,
-        "admin_panel/fiscal/report.html",
-        {
-            "active_company": active_company,
-            "documents": rows,
-            "summary": summary,
-            "grouped": grouped,
-            "status": status,
-            "doc_type": doc_type,
-            "issue_mode": issue_mode,
-            "date_from": request.GET.get("date_from", ""),
-            "date_to": request.GET.get("date_to", ""),
-            "status_choices": FiscalDocument.STATUS_CHOICES,
-            "doc_type_choices": FiscalDocument.DOC_TYPE_CHOICES,
-            "issue_mode_choices": FiscalDocument.ISSUE_MODE_CHOICES,
-            "summary": summary,
-            "can_manage_fiscal_operations": can_manage_fiscal_operations(request.user),
-        },
+        get_active_company_fn=get_active_company,
+        deny_if_needed_fn=_deny_fiscal_operation_if_needed,
     )
 
 
@@ -10992,10 +11023,10 @@ def fiscal_document_print(request, pk):
 
     if request.GET.get('format') == 'pdf':
         try:
-            from core.services.pdf_generator import generate_fiscal_pdf
-            from django.template.loader import render_to_string
+            from core.services.pdf_generator import generate_document_pdf
+
             html_string = render_to_string("admin_panel/fiscal/print.html", context)
-            pdf_bytes = generate_fiscal_pdf(html_string, base_url=request.build_absolute_uri("/"))
+            pdf_bytes = generate_document_pdf(html_string, base_url=request.build_absolute_uri("/"))
             response = HttpResponse(pdf_bytes, content_type='application/pdf')
             response['Content-Disposition'] = f'inline; filename="{fiscal_document.commercial_type_label}_{fiscal_document.display_number}_{copy_type}.pdf"'
             return response
@@ -11344,12 +11375,14 @@ def internal_document_print(request, doc_id):
             return redirect("admin_client_order_history", pk=document.client_profile_id)
         return redirect("admin_order_list")
 
-    copy_key = request.GET.get("copy", "original").strip().lower()
+    copy_key = str(request.GET.get("copy", "original")).strip().lower()
     copy_labels = {
         "original": "ORIGINAL",
         "duplicado": "DUPLICADO",
         "triplicado": "TRIPLICADO",
     }
+    if copy_key not in copy_labels:
+        copy_key = "original"
     copy_label = copy_labels.get(copy_key, "ORIGINAL")
     order_items = []
     if document.order_id:
@@ -11357,14 +11390,34 @@ def internal_document_print(request, doc_id):
             document.order.items.select_related("product").all()
         )
 
+    context = {
+        "document": document,
+        "copy_key": copy_key,
+        "copy_label": copy_label,
+        "order_items": order_items,
+    }
+    if request.GET.get("format") == "pdf":
+        try:
+            from core.services.pdf_generator import generate_document_pdf
+
+            html_string = render_to_string("admin_panel/documents/print.html", context, request=request)
+            pdf_bytes = generate_document_pdf(html_string, base_url=request.build_absolute_uri("/"))
+            filename_label = slugify(document.commercial_type_label or document.doc_type) or "documento"
+            filename_number = slugify(str(document.display_number)) or str(document.number or "s-n")
+            response = HttpResponse(pdf_bytes, content_type="application/pdf")
+            response["Content-Disposition"] = (
+                f'inline; filename="{filename_label}_{filename_number}_{copy_key}.pdf"'
+            )
+            return response
+        except ImportError:
+            messages.error(request, "El generador de PDF no esta instalado correctamente.")
+        except Exception as exc:
+            messages.error(request, f"Error al generar PDF: {exc}")
+
     response = render(
         request,
         "admin_panel/documents/print.html",
-        {
-            "document": document,
-            "copy_label": copy_label,
-            "order_items": order_items,
-        },
+        context,
     )
     if request.GET.get("download") == "1":
         filename = f"{document.doc_type}_{document.number:07d}.html"
@@ -11488,6 +11541,8 @@ def order_delete(request, pk):
     if request.method == 'POST':
         cancel_reason = request.POST.get('cancel_reason', '').strip()
         status_note = cancel_reason or f"Pedido cancelado desde panel por {request.user.username}"
+        before = model_snapshot(order, ['status', 'admin_notes', 'status_updated_at'])
+        changed = False
         try:
             with transaction.atomic():
                 locked_order = Order.objects.select_for_update().get(pk=order.pk)
@@ -11506,13 +11561,21 @@ def order_delete(request, pk):
                         else reason_line
                     )
                     locked_order.save(update_fields=['admin_notes', 'updated_at'])
-                sync_order_charge_transaction(order=locked_order, actor=request.user)
                 order = locked_order
         except ValueError as exc:
             messages.error(
                 request,
                 str(exc),
             )
+            return redirect('admin_order_detail', pk=order.pk)
+        except DatabaseError as exc:
+            if "database is locked" in str(exc).lower():
+                messages.warning(
+                    request,
+                    "La base de datos esta ocupada en este momento. Reintenta en unos segundos.",
+                )
+            else:
+                messages.error(request, f"No se pudo cancelar el pedido: {exc}")
             return redirect('admin_order_detail', pk=order.pk)
 
         log_admin_change(
@@ -12192,7 +12255,121 @@ def fiscal_config(request):
     points = FiscalPointOfSale.objects.filter(company=active_company).order_by("number")
     is_ready, readiness_errors = is_company_fiscal_ready(active_company)
     default_point = points.filter(is_default=True).first()
-    active_points_count = points.filter(is_active=True).count()
+    active_points = points.filter(is_active=True)
+    active_points_count = active_points.count()
+    active_homologation_count = active_points.filter(
+        environment=FiscalPointOfSale.ENV_HOMOLOGATION
+    ).count()
+    active_production_count = active_points.filter(
+        environment=FiscalPointOfSale.ENV_PRODUCTION
+    ).count()
+
+    readiness_errors = readiness_errors or []
+
+    def _errors_by_keywords(keywords):
+        return [
+            err
+            for err in readiness_errors
+            if any(keyword in str(err).lower() for keyword in keywords)
+        ]
+
+    company_errors = _errors_by_keywords(
+        [
+            "razon social",
+            "cuit",
+            "condicion fiscal",
+            "domicilio fiscal",
+            "localidad fiscal",
+            "provincia fiscal",
+            "codigo postal",
+        ]
+    )
+    pos_errors = _errors_by_keywords(
+        [
+            "punto de venta",
+            "pos default",
+            "default",
+            "inactivo",
+            "activo",
+        ]
+    )
+    arca_errors = _errors_by_keywords(
+        [
+            "arca",
+            "cert_path",
+            "key_path",
+            "servidor",
+        ]
+    )
+
+    company_snapshot = [
+        ("Razon social", getattr(active_company, "legal_name", "") or "-"),
+        ("CUIT", getattr(active_company, "cuit", "") or "-"),
+        ("Condicion fiscal", active_company.get_tax_condition_display() or "-"),
+        ("Domicilio fiscal", getattr(active_company, "fiscal_address", "") or "-"),
+        (
+            "Ciudad / Provincia",
+            f"{getattr(active_company, 'fiscal_city', '') or '-'} / {getattr(active_company, 'fiscal_province', '') or '-'}",
+        ),
+        ("Codigo postal", getattr(active_company, "postal_code", "") or "-"),
+    ]
+
+    pos_snapshot = [
+        ("POS activos", str(active_points_count)),
+        ("Homologacion", str(active_homologation_count)),
+        ("Produccion", str(active_production_count)),
+        ("POS default empresa", getattr(active_company, "point_of_sale_default", "") or "-"),
+        ("POS default modelo", getattr(default_point, "number", "") if default_point else "-"),
+    ]
+
+    arca_snapshot = [
+        (
+            "Entorno default",
+            default_point.get_environment_display() if default_point else "-",
+        ),
+        (
+            "Preflight",
+            "Disponible para ejecutar" if default_point else "Definir POS default primero",
+        ),
+    ]
+
+    fiscal_wizard_steps = [
+        {
+            "number": 1,
+            "title": "Datos fiscales de empresa",
+            "description": "Completa razon social, CUIT, condicion fiscal y domicilio para habilitar emision.",
+            "is_ready": len(company_errors) == 0,
+            "errors": company_errors,
+            "snapshot": company_snapshot,
+            "cta_label": "Editar empresa",
+            "cta_url": reverse("admin_company_edit", args=[active_company.pk]),
+            "cta_is_form": False,
+        },
+        {
+            "number": 2,
+            "title": "Punto de venta fiscal",
+            "description": "Configura al menos un POS activo y define uno como default para operar.",
+            "is_ready": len(pos_errors) == 0 and active_points_count > 0 and bool(default_point),
+            "errors": pos_errors,
+            "snapshot": pos_snapshot,
+            "cta_label": "Agregar punto de venta",
+            "cta_url": reverse("admin_fiscal_point_create"),
+            "cta_is_form": False,
+        },
+        {
+            "number": 3,
+            "title": "Conexion ARCA",
+            "description": "Valida certificado, clave y conectividad WSAA/WSFE con preflight de ARCA.",
+            "is_ready": len(arca_errors) == 0 and bool(default_point),
+            "errors": arca_errors,
+            "snapshot": arca_snapshot,
+            "cta_label": "Probar ARCA",
+            "cta_url": reverse("admin_fiscal_point_preflight", args=[default_point.pk]) if default_point else "",
+            "cta_is_form": True if default_point else False,
+            "secondary_label": "Ver comprobantes",
+            "secondary_url": reverse("admin_fiscal_document_list"),
+        },
+    ]
 
     return render(
         request,
@@ -12205,6 +12382,7 @@ def fiscal_config(request):
             "default_point": default_point,
             "active_points_count": active_points_count,
             "environment_choices": FiscalPointOfSale.ENV_CHOICES,
+            "fiscal_wizard_steps": fiscal_wizard_steps,
         },
     )
 

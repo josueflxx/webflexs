@@ -72,6 +72,29 @@
             cursor: pointer;
         }
 
+        .print-toolbar-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .print-toolbar-link,
+        .print-toolbar-link:visited {
+            border: 1px solid #9fa7b2;
+            background: #ffffff;
+            padding: 7px 12px;
+            border-radius: 999px;
+            font-size: 11px;
+            color: #1e293b;
+            text-decoration: none;
+            line-height: 1;
+        }
+
+        .print-toolbar-link:hover {
+            background: #f8fafc;
+            border-color: #64748b;
+        }
+
         .sheet {
             width: var(--paper-width);
             min-height: var(--paper-min-height);
@@ -366,7 +389,10 @@
             <a href="?copy=duplicado" data-print-window="1" target="_blank" rel="noopener noreferrer">Duplicado</a>
             <a href="?copy=triplicado" data-print-window="1" target="_blank" rel="noopener noreferrer">Triplicado</a>
         </div>
-        <button type="button" onclick="window.print()">Imprimir</button>
+        <div class="print-toolbar-actions">
+            <a class="print-toolbar-link" href="?copy={{ copy_type }}&format=pdf" target="_blank" rel="noopener noreferrer">PDF</a>
+            <button type="button" onclick="window.print()">Imprimir</button>
+        </div>
     </div>
 
     <main class="sheet">

@@ -99,12 +99,19 @@ def generate_qr_image_base64(qr_url):
     return "data:image/png;base64," + base64.b64encode(buffer.getvalue()).decode("utf-8")
 
 
-def generate_fiscal_pdf(html_string, base_url=""):
+def generate_document_pdf(html_string, base_url=""):
     """
-    Generate PDF for the fiscal document from an HTML string. Returns the binary PDF content.
+    Generate a PDF from an HTML string. Returns binary PDF content.
     """
     if not HTML:
         raise ImportError("WeasyPrint no esta instalado. Instala weasyprint para generar PDFs.")
 
     pdf_file = HTML(string=html_string, base_url=base_url).write_pdf()
     return pdf_file
+
+
+def generate_fiscal_pdf(html_string, base_url=""):
+    """
+    Backward-compatible alias for fiscal document PDF generation.
+    """
+    return generate_document_pdf(html_string, base_url=base_url)

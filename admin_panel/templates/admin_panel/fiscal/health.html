@@ -1,0 +1,431 @@
+{% extends 'admin_panel/base.html' %}
+
+{% block page_title %}Salud fiscal{% endblock %}
+
+{% block content %}
+<div class="admin-table-container fiscal-health-shell">
+    <style>
+        .fiscal-health-shell {
+            display: grid;
+            gap: 14px;
+            padding: 14px;
+            border-radius: 16px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            background:
+                radial-gradient(circle at 10% 0%, rgba(255, 132, 64, 0.1), transparent 40%),
+                radial-gradient(circle at 90% 0%, rgba(64, 170, 255, 0.08), transparent 38%),
+                rgba(7, 14, 26, 0.9);
+        }
+
+        .fiscal-health-head {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 14px;
+            border-radius: 14px;
+            border: 1px solid rgba(255, 255, 255, 0.09);
+            background: linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.015));
+        }
+
+        .fiscal-health-title {
+            margin: 0;
+            font-size: 1.1rem;
+            color: #fff;
+        }
+
+        .fiscal-health-subtitle {
+            margin: 6px 0 0;
+            max-width: 74ch;
+            font-size: 0.84rem;
+            line-height: 1.45;
+            color: rgba(208, 216, 226, 0.78);
+        }
+
+        .fiscal-health-score {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            border-radius: 999px;
+            border: 1px solid rgba(255, 255, 255, 0.14);
+            background: rgba(255, 255, 255, 0.03);
+            font-size: 0.82rem;
+        }
+
+        .fiscal-health-toolbar {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 10px;
+            align-items: center;
+            padding: 12px;
+            border-radius: 14px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .fiscal-health-filter-form {
+            display: grid;
+            grid-template-columns: 170px 170px minmax(240px, 1fr) auto auto;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .fiscal-health-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            justify-content: flex-end;
+        }
+
+        .fiscal-health-kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+            gap: 10px;
+        }
+
+        .fiscal-health-kpi {
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.025);
+            padding: 10px 12px;
+            min-height: 76px;
+            display: grid;
+            align-content: center;
+            gap: 3px;
+        }
+
+        .fiscal-health-kpi-label {
+            margin: 0;
+            font-size: 0.74rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: rgba(198, 208, 222, 0.7);
+        }
+
+        .fiscal-health-kpi-value {
+            margin: 0;
+            font-size: 1.22rem;
+            font-weight: 700;
+            color: #f6f8fc;
+            line-height: 1.15;
+        }
+
+        .fiscal-health-panels {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+
+        .fiscal-health-card {
+            border: 1px solid rgba(255, 255, 255, 0.09);
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.02);
+            padding: 12px;
+            overflow: hidden;
+        }
+
+        .fiscal-health-card h3 {
+            margin: 0;
+            font-size: 0.98rem;
+            color: #fff;
+        }
+
+        .fiscal-health-card p {
+            margin: 5px 0 0;
+            color: rgba(206, 214, 224, 0.76);
+            font-size: 0.83rem;
+            line-height: 1.4;
+        }
+
+        .fiscal-health-list {
+            margin-top: 10px;
+            display: grid;
+            gap: 8px;
+        }
+
+        .fiscal-health-item {
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.02);
+            padding: 9px 10px;
+            display: grid;
+            gap: 4px;
+        }
+
+        .fiscal-health-item-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+        }
+
+        .fiscal-health-item-title {
+            font-size: 0.86rem;
+            font-weight: 700;
+            color: #fff;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .fiscal-health-meta {
+            font-size: 0.77rem;
+            color: rgba(197, 207, 222, 0.74);
+        }
+
+        .fiscal-health-table {
+            margin-top: 10px;
+        }
+
+        .fiscal-health-table .admin-table thead th {
+            white-space: nowrap;
+        }
+
+        .fiscal-health-badges {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        @media (max-width: 1280px) {
+            .fiscal-health-toolbar {
+                grid-template-columns: 1fr;
+            }
+            .fiscal-health-actions {
+                justify-content: flex-start;
+            }
+        }
+
+        @media (max-width: 1050px) {
+            .fiscal-health-filter-form {
+                grid-template-columns: 1fr 1fr;
+            }
+            .fiscal-health-filter-form .fiscal-health-search {
+                grid-column: 1 / -1;
+            }
+        }
+
+        @media (max-width: 980px) {
+            .fiscal-health-panels {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 640px) {
+            .fiscal-health-filter-form {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+
+    <section class="fiscal-health-head">
+        <div>
+            <h2 class="fiscal-health-title">Salud fiscal operativa · {{ active_company.name }}</h2>
+            <p class="fiscal-health-subtitle">
+                Vista rapida para detectar bloqueos de emision, retries vencidos y rechazos antes de que afecten la operacion.
+                Usa esta pantalla para priorizar acciones diarias y limpiar cola fiscal.
+            </p>
+        </div>
+        <div class="fiscal-health-score">
+            <span class="text-muted">Score</span>
+            {% if health_score >= 80 %}
+            <span class="badge badge-success">{{ health_score }}/100</span>
+            {% elif health_score >= 55 %}
+            <span class="badge badge-warning">{{ health_score }}/100</span>
+            {% else %}
+            <span class="badge badge-danger">{{ health_score }}/100</span>
+            {% endif %}
+        </div>
+    </section>
+
+    <section class="fiscal-health-toolbar">
+        <form method="get" class="fiscal-health-filter-form">
+            <input type="date" name="date_from" value="{{ date_from }}" class="form-input" title="Desde">
+            <input type="date" name="date_to" value="{{ date_to }}" class="form-input" title="Hasta">
+            <input
+                type="text"
+                name="q"
+                value="{{ search }}"
+                placeholder="Buscar por cliente, pedido o error..."
+                class="form-input fiscal-health-search"
+            >
+            <button type="submit" class="btn btn-primary">Actualizar</button>
+            <a href="{% url 'admin_fiscal_health' %}" class="btn btn-outline">Limpiar</a>
+        </form>
+        <div class="fiscal-health-actions">
+            <a href="{% url 'admin_fiscal_report' %}" class="btn btn-outline btn-sm">Reporte fiscal</a>
+            <a href="{% url 'admin_fiscal_document_list' %}" class="btn btn-outline btn-sm">Comprobantes</a>
+            <a href="{% url 'admin_fiscal_config' %}" class="btn btn-outline btn-sm">Config fiscal</a>
+        </div>
+    </section>
+
+    <section class="fiscal-health-kpi-grid">
+        <article class="fiscal-health-kpi"><p class="fiscal-health-kpi-label">Periodo docs</p><p class="fiscal-health-kpi-value">{{ summary.period_documents }}</p></article>
+        <article class="fiscal-health-kpi"><p class="fiscal-health-kpi-label">Periodo total</p><p class="fiscal-health-kpi-value">${{ summary.period_total|floatformat:2 }}</p></article>
+        <article class="fiscal-health-kpi"><p class="fiscal-health-kpi-label">Autorizados</p><p class="fiscal-health-kpi-value">{{ summary.authorized }}</p></article>
+        <article class="fiscal-health-kpi"><p class="fiscal-health-kpi-label">Listos para emitir</p><p class="fiscal-health-kpi-value">{{ summary.ready_to_issue }}</p></article>
+        <article class="fiscal-health-kpi"><p class="fiscal-health-kpi-label">Pendiente retry</p><p class="fiscal-health-kpi-value">{{ summary.pending_retry }}</p></article>
+        <article class="fiscal-health-kpi"><p class="fiscal-health-kpi-label">Retry vencido</p><p class="fiscal-health-kpi-value">{{ summary.retry_due }}</p></article>
+        <article class="fiscal-health-kpi"><p class="fiscal-health-kpi-label">Enviando</p><p class="fiscal-health-kpi-value">{{ summary.submitting }}</p></article>
+        <article class="fiscal-health-kpi"><p class="fiscal-health-kpi-label">Atascados</p><p class="fiscal-health-kpi-value">{{ summary.stale_submitting }}</p></article>
+        <article class="fiscal-health-kpi"><p class="fiscal-health-kpi-label">Rechazados</p><p class="fiscal-health-kpi-value">{{ summary.rejected }}</p></article>
+        <article class="fiscal-health-kpi"><p class="fiscal-health-kpi-label">Externos</p><p class="fiscal-health-kpi-value">{{ summary.external_recorded }}</p></article>
+    </section>
+
+    <section class="fiscal-health-panels">
+        <article class="fiscal-health-card">
+            <h3>Bloqueos de emision</h3>
+            <p>Documentos que quedaron en "Enviando" mas tiempo del esperado.</p>
+            <div class="fiscal-health-list">
+                {% for doc in stale_docs %}
+                <div class="fiscal-health-item">
+                    <div class="fiscal-health-item-head">
+                        <span class="fiscal-health-item-title">{{ doc.commercial_type_label }} · {{ doc.display_number }}</span>
+                        <a href="{% url 'admin_fiscal_document_detail' doc.pk %}" class="btn btn-outline btn-sm">Abrir</a>
+                    </div>
+                    <div class="fiscal-health-meta">
+                        {% if doc.client_company_ref and doc.client_company_ref.client_profile %}
+                        {{ doc.client_company_ref.client_profile.company_name }}
+                        {% else %}
+                        Cliente sin perfil
+                        {% endif %}
+                        | {% if doc.order_id %}Pedido #{{ doc.order_id }}{% else %}Sin pedido{% endif %}
+                    </div>
+                    <div class="fiscal-health-meta">
+                        Ultimo intento: {{ doc.last_attempt_at|date:"d/m/Y H:i"|default:"-" }} | Error: {{ doc.error_code|default:"-" }}
+                    </div>
+                </div>
+                {% empty %}
+                <div class="alert alert-success">No hay comprobantes atascados.</div>
+                {% endfor %}
+            </div>
+        </article>
+
+        <article class="fiscal-health-card">
+            <h3>Pendientes de reintento</h3>
+            <p>Documentos en retry que ya vencieron o quedaron sin fecha programada.</p>
+            <div class="fiscal-health-list">
+                {% for doc in retry_due_docs %}
+                <div class="fiscal-health-item">
+                    <div class="fiscal-health-item-head">
+                        <span class="fiscal-health-item-title">{{ doc.commercial_type_label }} · {{ doc.display_number }}</span>
+                        <a href="{% url 'admin_fiscal_document_detail' doc.pk %}" class="btn btn-outline btn-sm">Abrir</a>
+                    </div>
+                    <div class="fiscal-health-meta">
+                        {% if doc.client_company_ref and doc.client_company_ref.client_profile %}
+                        {{ doc.client_company_ref.client_profile.company_name }}
+                        {% else %}
+                        Cliente sin perfil
+                        {% endif %}
+                        | {% if doc.order_id %}Pedido #{{ doc.order_id }}{% else %}Sin pedido{% endif %}
+                    </div>
+                    <div class="fiscal-health-meta">
+                        Proximo retry: {{ doc.next_retry_at|date:"d/m/Y H:i"|default:"Sin fecha" }} | Error: {{ doc.error_code|default:"-" }}
+                    </div>
+                </div>
+                {% empty %}
+                <div class="alert alert-success">No hay retries vencidos.</div>
+                {% endfor %}
+            </div>
+        </article>
+    </section>
+
+    <section class="fiscal-health-panels">
+        <article class="fiscal-health-card">
+            <h3>Top errores</h3>
+            <p>Errores recurrentes para priorizar correcciones de configuracion o datos.</p>
+            <div class="fiscal-health-table">
+                <table class="admin-table">
+                    <thead>
+                        <tr><th>Error</th><th>Cantidad</th><th>Ultimo</th><th>Muestra</th></tr>
+                    </thead>
+                    <tbody>
+                        {% for row in top_errors %}
+                        <tr>
+                            <td><span class="badge badge-danger">{{ row.error_code }}</span></td>
+                            <td>{{ row.total }}</td>
+                            <td>{{ row.last_seen|date:"d/m/Y H:i" }}</td>
+                            <td>{{ row.sample_message|truncatechars:96 }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="4" class="text-center text-muted">Sin errores recurrentes.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </article>
+
+        <article class="fiscal-health-card">
+            <h3>Estado de configuracion ARCA</h3>
+            <p>Checklist rapido por empresa para evitar rechazos de setup.</p>
+            {% if is_ready %}
+            <div class="alert alert-success">Empresa lista para emitir.</div>
+            {% else %}
+            <div class="alert alert-warning">Faltan ajustes antes de emitir con estabilidad.</div>
+            {% endif %}
+
+            {% if readiness_errors %}
+            <ul class="fiscal-readiness-list">
+                {% for err in readiness_errors %}
+                <li>{{ err }}</li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+
+            <div class="fiscal-health-table">
+                <table class="admin-table">
+                    <thead>
+                        <tr><th>POS</th><th>Entorno</th><th>Activo</th><th>Default</th><th>Accion</th></tr>
+                    </thead>
+                    <tbody>
+                        {% for point in points %}
+                        <tr>
+                            <td>{{ point.number }}</td>
+                            <td>{{ point.get_environment_display }}</td>
+                            <td>{% if point.is_active %}<span class="badge badge-success">Si</span>{% else %}<span class="badge badge-secondary">No</span>{% endif %}</td>
+                            <td>{% if point.is_default %}<span class="badge badge-primary">Default</span>{% else %}<span class="badge badge-secondary">-</span>{% endif %}</td>
+                            <td><a href="{% url 'admin_fiscal_point_edit' point.pk %}" class="btn btn-outline btn-sm">Editar</a></td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="5" class="text-center text-muted">Sin puntos de venta fiscales configurados.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </article>
+    </section>
+
+    <section class="fiscal-health-card">
+        <h3>Rechazados recientes</h3>
+        <div class="fiscal-health-table">
+            <table class="admin-table">
+                <thead>
+                    <tr><th>Fecha</th><th>Tipo</th><th>Numero</th><th>Cliente</th><th>Error</th><th>Accion</th></tr>
+                </thead>
+                <tbody>
+                    {% for doc in rejected_recent %}
+                    <tr>
+                        <td>{{ doc.updated_at|date:"d/m/Y H:i" }}</td>
+                        <td>{{ doc.commercial_type_label }}</td>
+                        <td>{{ doc.display_number }}</td>
+                        <td>
+                            {% if doc.client_company_ref and doc.client_company_ref.client_profile %}
+                            {{ doc.client_company_ref.client_profile.company_name }}
+                            {% else %}
+                            -
+                            {% endif %}
+                        </td>
+                        <td>{{ doc.error_message|default:doc.error_code|truncatechars:96 }}</td>
+                        <td class="actions"><a href="{% url 'admin_fiscal_document_detail' doc.pk %}" class="btn btn-outline btn-sm">Abrir</a></td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="6" class="text-center text-muted">Sin rechazados recientes.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+</div>
+{% endblock %}

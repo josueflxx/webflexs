@@ -30,6 +30,7 @@
         <div class="toolbar-actions">
             <span class="text-muted">Empresa activa: <strong>{{ active_company.name }}</strong></span>
             <a href="{% url 'admin_fiscal_config' %}" class="btn btn-outline">Config fiscal</a>
+            <a href="{% url 'admin_fiscal_health' %}" class="btn btn-outline">Salud fiscal</a>
             <a href="{% url 'admin_fiscal_report' %}" class="btn btn-outline">Reporte fiscal</a>
         </div>
     </div>
@@ -119,6 +120,7 @@
                     <a href="{% url 'admin_fiscal_document_detail' doc.pk %}" class="btn btn-outline btn-sm">Ver</a>
                     {% if doc.can_print %}
                     <a href="{% url 'admin_fiscal_document_print' doc.pk %}?copy=original" class="btn btn-outline btn-sm" data-print-window="1" target="_blank" rel="noopener noreferrer">Imprimir</a>
+                    <a href="{% url 'admin_fiscal_document_print' doc.pk %}?copy=original&format=pdf" class="btn btn-outline btn-sm" data-print-window="1" target="_blank" rel="noopener noreferrer">PDF</a>
                     {% else %}
                     <span class="btn btn-outline btn-sm">Cerrar movimiento</span>
                     {% endif %}

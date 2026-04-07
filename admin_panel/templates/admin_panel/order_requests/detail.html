@@ -1,4 +1,4 @@
-{% extends 'admin_panel/base.html' %}
+﻿{% extends 'admin_panel/base.html' %}
 
 {% block page_title %}Solicitud Comercial #{{ order_request.pk }}{% endblock %}
 
@@ -36,6 +36,50 @@
         </div>
     </div>
 
+    {% if can_confirm_request or can_reject_request or can_convert_request %}
+    <div class="admin-card">
+        <div class="detail-header">
+            <div>
+                <h3>Acciones comerciales</h3>
+                <p class="text-muted">Confirma la solicitud para habilitar cotizacion/factura desde este mismo flujo.</p>
+            </div>
+        </div>
+        <div class="action-grid">
+            {% if can_confirm_request %}
+            <form method="post" action="{% url 'admin_order_request_confirm' order_request.pk %}" class="stack-form">
+                {% csrf_token %}
+                <label class="form-label" for="confirm-admin-note">Nota interna (opcional)</label>
+                <textarea id="confirm-admin-note" name="admin_note" class="form-textarea" rows="3" placeholder="Ejemplo: stock validado, condiciones comerciales aprobadas."></textarea>
+                <button type="submit" class="btn btn-primary">Confirmar solicitud</button>
+            </form>
+            {% else %}
+            <div class="stack-form">
+                <strong>Solicitud confirmada</strong>
+                <p class="text-muted">Ya podes generar cotizacion o factura con el snapshot comercial actual.</p>
+            </div>
+            {% endif %}
+
+            {% if can_reject_request %}
+            <form method="post" action="{% url 'admin_order_request_reject' order_request.pk %}" class="stack-form">
+                {% csrf_token %}
+                <label class="form-label" for="reject-request-reason">Motivo visible para el cliente</label>
+                <textarea id="reject-request-reason" name="rejection_reason" class="form-textarea" rows="3" placeholder="Ejemplo: sin stock o condiciones no disponibles."></textarea>
+                <button type="submit" class="btn btn-danger-outline">Rechazar solicitud</button>
+            </form>
+            {% endif %}
+
+            {% if can_convert_request %}
+            <form method="post" action="{% url 'admin_order_request_convert' order_request.pk %}" class="stack-form">
+                {% csrf_token %}
+                <label class="form-label">Pedido operativo</label>
+                <p class="text-muted">Convierte la solicitud confirmada en pedido borrador para gestion interna.</p>
+                <button type="submit" class="btn btn-outline">Convertir a pedido draft</button>
+            </form>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+
     {% if can_generate_documents %}
     <div class="admin-card">
         <div class="detail-header">
@@ -47,31 +91,13 @@
         <div class="action-grid">
             <form method="post" action="{% url 'admin_order_request_generate_quote' order_request.pk %}" class="stack-form">
                 {% csrf_token %}
-                <label class="form-label" for="quote-sales-document-type">Tipo comercial para cotizacion</label>
-                <select id="quote-sales-document-type" name="sales_document_type_id" class="form-select">
-                    <option value="">Default / auto</option>
-                    {% for configured_type in quote_document_types %}
-                    <option value="{{ configured_type.pk }}">
-                        {{ configured_type.name }}{% if configured_type.internal_doc_type %} · {{ configured_type.get_internal_doc_type_display|default:configured_type.internal_doc_type }}{% endif %} · {{ configured_type.default_origin_channel_label }}
-                    </option>
-                    {% endfor %}
-                </select>
-                <p class="text-muted">Convierte la solicitud en pedido draft si todavia no existe y reutiliza sus items para la cotizacion.</p>
+                <p class="text-muted">Genera cotizacion en modo automatico, reutilizando cliente, items y totales de la solicitud confirmada.</p>
                 <button type="submit" class="btn btn-outline">Generar cotizacion</button>
             </form>
 
             <form method="post" action="{% url 'admin_order_request_generate_invoice' order_request.pk %}" class="stack-form">
                 {% csrf_token %}
-                <label class="form-label" for="invoice-sales-document-type">Tipo comercial para factura</label>
-                <select id="invoice-sales-document-type" name="sales_document_type_id" class="form-select">
-                    <option value="">Default / auto</option>
-                    {% for configured_type in invoice_document_types %}
-                    <option value="{{ configured_type.pk }}">
-                        {{ configured_type.name }}{% if configured_type.fiscal_doc_type %} · {{ configured_type.get_fiscal_doc_type_display|default:configured_type.fiscal_doc_type }}{% endif %} · {{ configured_type.default_origin_channel_label }}
-                    </option>
-                    {% endfor %}
-                </select>
-                <p class="text-muted">Si el pedido operativo sigue en borrador, se confirma al abrir la factura para mantener coherencia contable.</p>
+                <p class="text-muted">Genera factura en modo automatico a partir del pedido/snapshot confirmado, sin recarga manual.</p>
                 <button type="submit" class="btn btn-primary">Generar factura</button>
             </form>
         </div>
@@ -133,7 +159,7 @@
         <div class="detail-header">
             <div>
                 <h3>Armar propuesta para el cliente</h3>
-                <p class="text-muted">Primer paso: ajuste de cantidades y precios sobre el snapshot ya solicitado.</p>
+                <p class="text-muted">Edita lineas, cantidades y precios, y envia una nueva version de propuesta al cliente.</p>
             </div>
             {% if current_proposal %}
             <span class="badge badge-warning">Editando sobre version {{ current_proposal.version_number }}</span>
@@ -317,7 +343,7 @@
                     {% for doc in request_order_documents %}
                     <li>
                         <div>
-                            <strong>{{ doc.commercial_type_label }} · {{ doc.display_number }}</strong>
+                            <strong>{{ doc.commercial_type_label }} - {{ doc.display_number }}</strong>
                             <small>{{ doc.issued_at|date:"d/m/Y H:i" }}</small>
                         </div>
                         <div class="order-inline-actions">
@@ -340,7 +366,7 @@
                     {% for doc in request_order_fiscal_documents %}
                     <li>
                         <div>
-                            <strong>{{ doc.commercial_type_label }} · {{ doc.display_number }}</strong>
+                            <strong>{{ doc.commercial_type_label }} - {{ doc.display_number }}</strong>
                             <small>{{ doc.get_status_display }} / {{ doc.get_issue_mode_display }}</small>
                         </div>
                         <div class="order-inline-actions">

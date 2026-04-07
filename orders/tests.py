@@ -801,6 +801,98 @@ class OrderRequestReviewActionsTests(TestCase):
         self.assertEqual(proposal_item.product_name, self.alt_product.name)
         self.assertEqual(proposal_item.price_at_snapshot, Decimal('121.50'))
 
+    def test_admin_can_send_new_proposal_version_while_waiting_client(self):
+        self.client.force_login(self.staff_user)
+
+        first_response = self.client.post(
+            reverse('admin_order_request_propose', args=[self.order_request.pk]),
+            data={
+                'message_to_client': 'Primera propuesta.',
+                'internal_note': 'v1',
+                'row_enabled_1': 'on',
+                'quantity_1': '2',
+                'unit_price_base_1': '100.00',
+                'price_at_snapshot_1': '90.00',
+            },
+        )
+        self.assertEqual(first_response.status_code, 302)
+        self.order_request.refresh_from_db()
+        self.assertEqual(self.order_request.status, OrderRequest.STATUS_WAITING_CLIENT)
+        first_proposal = self.order_request.current_proposal
+        self.assertIsNotNone(first_proposal)
+
+        second_response = self.client.post(
+            reverse('admin_order_request_propose', args=[self.order_request.pk]),
+            data={
+                'message_to_client': 'Ajuste final de stock.',
+                'internal_note': 'v2',
+                'row_enabled_1': 'on',
+                'quantity_1': '1',
+                'unit_price_base_1': '100.00',
+                'price_at_snapshot_1': '88.00',
+            },
+        )
+        self.assertEqual(second_response.status_code, 302)
+        self.order_request.refresh_from_db()
+        self.assertEqual(self.order_request.status, OrderRequest.STATUS_WAITING_CLIENT)
+
+        first_proposal.refresh_from_db()
+        self.assertEqual(first_proposal.status, OrderProposal.STATUS_EXPIRED)
+        self.assertFalse(first_proposal.is_current)
+
+        current_proposal = self.order_request.current_proposal
+        self.assertIsNotNone(current_proposal)
+        self.assertEqual(current_proposal.version_number, 2)
+        self.assertEqual(current_proposal.status, OrderProposal.STATUS_PENDING)
+        self.assertEqual(current_proposal.proposed_total, Decimal('88.00'))
+
+    def test_admin_detail_keeps_proposal_editor_after_confirm_until_converted(self):
+        self.client.force_login(self.staff_user)
+        confirm_response = self.client.post(
+            reverse('admin_order_request_confirm', args=[self.order_request.pk]),
+            data={'admin_note': 'Confirmada, pero editable para nueva propuesta.'},
+        )
+        self.assertEqual(confirm_response.status_code, 302)
+        self.order_request.refresh_from_db()
+        self.assertEqual(self.order_request.status, OrderRequest.STATUS_CONFIRMED)
+
+        detail_response = self.client.get(
+            reverse('admin_order_request_detail', args=[self.order_request.pk])
+        )
+        self.assertEqual(detail_response.status_code, 200)
+        self.assertContains(detail_response, 'Armar propuesta para el cliente')
+        self.assertContains(detail_response, 'Enviar propuesta')
+
+    def test_admin_can_send_proposal_after_manual_confirm(self):
+        self.client.force_login(self.staff_user)
+        confirm_response = self.client.post(
+            reverse('admin_order_request_confirm', args=[self.order_request.pk]),
+            data={'admin_note': 'Confirmada para abrir ventana de propuesta.'},
+        )
+        self.assertEqual(confirm_response.status_code, 302)
+        self.order_request.refresh_from_db()
+        self.assertEqual(self.order_request.status, OrderRequest.STATUS_CONFIRMED)
+
+        proposal_response = self.client.post(
+            reverse('admin_order_request_propose', args=[self.order_request.pk]),
+            data={
+                'message_to_client': 'Ajuste por disponibilidad.',
+                'internal_note': 'Propuesta post confirmacion.',
+                'row_enabled_1': 'on',
+                'quantity_1': '3',
+                'unit_price_base_1': '100.00',
+                'price_at_snapshot_1': '95.00',
+            },
+        )
+        self.assertEqual(proposal_response.status_code, 302)
+        self.order_request.refresh_from_db()
+        self.assertEqual(self.order_request.status, OrderRequest.STATUS_WAITING_CLIENT)
+        current_proposal = self.order_request.current_proposal
+        self.assertIsNotNone(current_proposal)
+        self.assertEqual(current_proposal.version_number, 1)
+        self.assertEqual(current_proposal.status, OrderProposal.STATUS_PENDING)
+        self.assertEqual(current_proposal.proposed_total, Decimal('285.00'))
+
     def test_admin_can_generate_quote_from_confirmed_request(self):
         self.client.force_login(self.staff_user)
         self.client.post(

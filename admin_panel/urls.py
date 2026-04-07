@@ -92,6 +92,7 @@ urlpatterns = [
     path('documentos/<int:doc_id>/eliminar/', views.internal_document_delete, name='admin_internal_document_delete'),
     path('fiscal/documentos/', views.fiscal_document_list, name='admin_fiscal_document_list'),
     path('fiscal/reportes/', views.fiscal_report, name='admin_fiscal_report'),
+    path('fiscal/salud/', views.fiscal_health, name='admin_fiscal_health'),
     path('fiscal/documentos/<int:pk>/', views.fiscal_document_detail, name='admin_fiscal_document_detail'),
     path('fiscal/documentos/<int:pk>/emitir/', views.fiscal_document_emit, name='admin_fiscal_document_emit'),
     path('fiscal/documentos/<int:pk>/cerrar/', views.fiscal_document_close, name='admin_fiscal_document_close'),

@@ -4,107 +4,354 @@
     <meta charset="utf-8">
     <title>{{ document.commercial_type_label }} {{ document.display_number }}</title>
     <style>
-        body { font-family: Arial, sans-serif; color: #222; margin: 24px; }
-        .header { display: flex; justify-content: space-between; align-items: center; }
-        .badge { border: 1px solid #222; padding: 4px 8px; font-size: 12px; letter-spacing: 1px; }
-        .section { margin-top: 16px; }
-        table { width: 100%; border-collapse: collapse; margin-top: 12px; }
-        th, td { border: 1px solid #ccc; padding: 6px; font-size: 12px; text-align: left; }
-        th { background: #f3f3f3; }
-        .right { text-align: right; }
+        :root {
+            --paper-width: 210mm;
+            --paper-min-height: 297mm;
+            --ink: #111111;
+            --muted: #5f6773;
+            --line: #2b2b2b;
+            --soft-line: #cfd6df;
+            --accent: #e2652e;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        html,
+        body {
+            margin: 0;
+            padding: 0;
+            background: #dde2e9;
+            color: var(--ink);
+            font-family: Arial, Helvetica, sans-serif;
+        }
+
+        body {
+            padding: 20px 0 32px;
+        }
+
+        .print-toolbar {
+            width: var(--paper-width);
+            margin: 0 auto 8px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            font-size: 11px;
+            color: #415164;
+        }
+
+        .print-copy-links {
+            display: flex;
+            gap: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+        }
+
+        .print-copy-links a,
+        .print-copy-links a:visited {
+            color: inherit;
+            text-decoration: none;
+            border-bottom: 1px solid transparent;
+            padding-bottom: 2px;
+        }
+
+        .print-copy-links a.is-active {
+            border-bottom-color: currentColor;
+            font-weight: 700;
+        }
+
+        .print-toolbar-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .print-toolbar-link,
+        .print-toolbar-link:visited,
+        .print-toolbar button {
+            border: 1px solid #9fa7b2;
+            background: #ffffff;
+            padding: 7px 12px;
+            border-radius: 999px;
+            font-size: 11px;
+            color: #1e293b;
+            text-decoration: none;
+            line-height: 1;
+            cursor: pointer;
+        }
+
+        .sheet {
+            width: var(--paper-width);
+            min-height: var(--paper-min-height);
+            margin: 0 auto;
+            background: #ffffff;
+            box-shadow: 0 12px 34px rgba(15, 23, 42, 0.15);
+            padding: 15mm 14mm 12mm;
+        }
+
+        .doc-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 12mm;
+            border-bottom: 1px solid var(--line);
+            padding-bottom: 6mm;
+            margin-bottom: 6mm;
+        }
+
+        .company-meta h2 {
+            margin: 0 0 2mm;
+            font-size: 20px;
+            letter-spacing: 0.02em;
+        }
+
+        .company-meta small {
+            display: block;
+            color: var(--muted);
+            font-size: 10px;
+            line-height: 1.35;
+        }
+
+        .copy-badge {
+            border: 1px solid var(--line);
+            padding: 7px 12px;
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            white-space: nowrap;
+        }
+
+        .doc-meta-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 6mm;
+            margin-bottom: 6mm;
+        }
+
+        .doc-card {
+            border: 1px solid var(--soft-line);
+            padding: 4mm;
+            border-radius: 4px;
+        }
+
+        .doc-card h3 {
+            margin: 0 0 2.5mm;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: #374151;
+        }
+
+        .doc-card p {
+            margin: 0;
+            line-height: 1.45;
+            font-size: 12px;
+        }
+
+        .doc-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 5mm;
+        }
+
+        .doc-table th,
+        .doc-table td {
+            border: 1px solid #d9dee6;
+            padding: 6px 7px;
+            font-size: 11px;
+            text-align: left;
+        }
+
+        .doc-table th {
+            background: #f5f7fa;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            font-size: 10px;
+            color: #334155;
+        }
+
+        .text-right {
+            text-align: right;
+        }
+
+        .totals-table {
+            width: 46%;
+            margin-left: auto;
+            margin-top: 4mm;
+            border-collapse: collapse;
+        }
+
+        .totals-table td {
+            border: 1px solid #d9dee6;
+            padding: 6px 8px;
+            font-size: 11px;
+        }
+
+        .totals-table tr:last-child td {
+            font-weight: 700;
+            background: #f5f7fa;
+        }
+
+        .section-title {
+            margin: 6mm 0 2mm;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: #374151;
+        }
+
+        .section-text {
+            margin: 0;
+            font-size: 11px;
+            line-height: 1.45;
+            color: #111827;
+            white-space: pre-wrap;
+        }
+
+        @page {
+            size: A4;
+            margin: 10mm;
+        }
+
         @media print {
-            .no-print { display: none; }
+            html,
+            body {
+                background: #ffffff;
+                padding: 0;
+            }
+
+            .print-toolbar {
+                display: none;
+            }
+
+            .sheet {
+                width: auto;
+                min-height: auto;
+                margin: 0;
+                box-shadow: none;
+                padding: 0;
+            }
         }
     </style>
 </head>
 <body>
-    <div class="header">
-        <div>
-            <h2 style="margin:0;">{{ document.company.name }}</h2>
-            <small>{{ document.company.legal_name|default:"-" }} | CUIT {{ document.company.cuit|default:"-" }}</small><br>
-            <small>{{ document.company.fiscal_address|default:"-" }} - {{ document.company.fiscal_city|default:"-" }}</small>
+    <div class="print-toolbar">
+        <div class="print-copy-links">
+            <a href="?copy=original" class="{% if copy_key == 'original' %}is-active{% endif %}" data-print-window="1" target="_blank" rel="noopener noreferrer">Original</a>
+            <a href="?copy=duplicado" class="{% if copy_key == 'duplicado' %}is-active{% endif %}" data-print-window="1" target="_blank" rel="noopener noreferrer">Duplicado</a>
+            <a href="?copy=triplicado" class="{% if copy_key == 'triplicado' %}is-active{% endif %}" data-print-window="1" target="_blank" rel="noopener noreferrer">Triplicado</a>
         </div>
-        <div class="badge">{{ copy_label }}</div>
+        <div class="print-toolbar-actions">
+            <a class="print-toolbar-link" href="?copy={{ copy_key|default:'original' }}&format=pdf" target="_blank" rel="noopener noreferrer">PDF</a>
+            <button type="button" onclick="window.print()">Imprimir</button>
+        </div>
     </div>
 
-    <div class="section">
-        <strong>{{ document.commercial_type_label }} {{ document.display_number }}</strong><br>
-        <small>Base interna: {{ document.get_doc_type_display }} · Fecha: {{ document.issued_at|date:"d/m/Y H:i" }}</small>
-    </div>
+    <main class="sheet">
+        <header class="doc-header">
+            <div class="company-meta">
+                <h2>{{ document.company.name|default:"-" }}</h2>
+                <small>{{ document.company.legal_name|default:"-" }} | CUIT {{ document.company.cuit|default:"-" }}</small>
+                <small>{{ document.company.fiscal_address|default:"-" }} - {{ document.company.fiscal_city|default:"-" }} - {{ document.company.fiscal_province|default:"-" }}</small>
+            </div>
+            <div class="copy-badge">{{ copy_label }}</div>
+        </header>
 
-    <div class="section">
-        <strong>Cliente</strong><br>
-        {% if document.client_company_ref %}
-            {{ document.client_company_ref.client_profile.company_name }}<br>
-            CUIT/DNI: {{ document.client_company_ref.client_profile.cuit_dni|default:"-" }}<br>
-        {% elif document.client_profile %}
-            {{ document.client_profile.company_name }}<br>
-            CUIT/DNI: {{ document.client_profile.cuit_dni|default:"-" }}<br>
-        {% else %}
-            -
+        <section class="doc-meta-grid">
+            <article class="doc-card">
+                <h3>Documento</h3>
+                <p>
+                    <strong>{{ document.commercial_type_label }}</strong><br>
+                    Numero: {{ document.display_number }}<br>
+                    Base interna: {{ document.get_doc_type_display }}<br>
+                    Fecha: {{ document.issued_at|date:"d/m/Y H:i" }}
+                </p>
+            </article>
+            <article class="doc-card">
+                <h3>Cliente</h3>
+                <p>
+                    {% if document.client_company_ref %}
+                    <strong>{{ document.client_company_ref.client_profile.company_name }}</strong><br>
+                    CUIT/DNI: {{ document.client_company_ref.client_profile.cuit_dni|default:"-" }}
+                    {% elif document.client_profile %}
+                    <strong>{{ document.client_profile.company_name }}</strong><br>
+                    CUIT/DNI: {{ document.client_profile.cuit_dni|default:"-" }}
+                    {% else %}
+                    -
+                    {% endif %}
+                </p>
+            </article>
+        </section>
+
+        {% if document.order %}
+        <section>
+            <h3 class="section-title">Productos del pedido #{{ document.order.pk }}</h3>
+            <table class="doc-table">
+                <thead>
+                    <tr>
+                        <th>SKU</th>
+                        <th>Producto</th>
+                        <th>Cant.</th>
+                        <th class="text-right">Precio</th>
+                        <th class="text-right">Importe</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in order_items %}
+                    <tr>
+                        <td>{{ item.product_sku|default:"-" }}</td>
+                        <td>{{ item.product_name|default:"-" }}</td>
+                        <td>{{ item.quantity }}</td>
+                        <td class="text-right">${{ item.price_at_purchase|floatformat:2 }}</td>
+                        <td class="text-right">${{ item.subtotal|floatformat:2 }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="5">Sin items registrados.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            <table class="totals-table">
+                <tr>
+                    <td>Subtotal</td>
+                    <td class="text-right">${{ document.order.subtotal|floatformat:2 }}</td>
+                </tr>
+                <tr>
+                    <td>Descuento</td>
+                    <td class="text-right">-${{ document.order.discount_amount|floatformat:2 }}</td>
+                </tr>
+                <tr>
+                    <td>Total</td>
+                    <td class="text-right">${{ document.order.total|floatformat:2 }}</td>
+                </tr>
+            </table>
+        </section>
         {% endif %}
-    </div>
 
-    {% if document.order %}
-    <div class="section">
-        <strong>Pedido #{{ document.order.pk }}</strong>
-        <table>
-            <thead>
-                <tr>
-                    <th>SKU</th>
-                    <th>Producto</th>
-                    <th>Cant.</th>
-                    <th class="right">Precio</th>
-                    <th class="right">Subtotal</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for item in order_items %}
-                <tr>
-                    <td>{{ item.product_sku }}</td>
-                    <td>{{ item.product_name }}</td>
-                    <td>{{ item.quantity }}</td>
-                    <td class="right">${{ item.price_at_purchase|floatformat:2 }}</td>
-                    <td class="right">${{ item.subtotal|floatformat:2 }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-        <table>
-            <tr>
-                <td>Subtotal</td>
-                <td class="right">${{ document.order.subtotal|floatformat:2 }}</td>
-            </tr>
-            <tr>
-                <td>Descuento</td>
-                <td class="right">-${{ document.order.discount_amount|floatformat:2 }}</td>
-            </tr>
-            <tr>
-                <td><strong>Total</strong></td>
-                <td class="right"><strong>${{ document.order.total|floatformat:2 }}</strong></td>
-            </tr>
-        </table>
-    </div>
-    {% endif %}
+        {% if document.payment %}
+        <section>
+            <h3 class="section-title">Pago asociado</h3>
+            <p class="section-text">Monto: ${{ document.payment.amount|floatformat:2 }} · Medio: {{ document.payment.get_method_display }} · Referencia: {{ document.payment.reference|default:"-" }}</p>
+        </section>
+        {% endif %}
 
-    {% if document.payment %}
-    <div class="section">
-        <strong>Pago asociado</strong><br>
-        Monto: ${{ document.payment.amount|floatformat:2 }}<br>
-        Medio: {{ document.payment.get_method_display }}<br>
-        Referencia: {{ document.payment.reference|default:"-" }}
-    </div>
-    {% endif %}
+        {% if document.transaction_id %}
+        <section>
+            <h3 class="section-title">Ajuste asociado</h3>
+            <p class="section-text">Referencia interna: ajuste #{{ document.transaction_id }}</p>
+        </section>
+        {% endif %}
 
-    {% if document.transaction_id %}
-    <div class="section">
-        <strong>Ajuste asociado</strong><br>
-        Referencia interna: ajuste #{{ document.transaction_id }}
-    </div>
-    {% endif %}
-
-    <div class="section no-print">
-        <button onclick="window.print()">Imprimir</button>
-    </div>
+        {% if document.sales_document_type and document.sales_document_type.print_signature %}
+        <section>
+            <h3 class="section-title">Observaciones</h3>
+            <p class="section-text">{{ document.sales_document_type.print_signature|linebreaksbr }}</p>
+        </section>
+        {% endif %}
+    </main>
 </body>
 </html>

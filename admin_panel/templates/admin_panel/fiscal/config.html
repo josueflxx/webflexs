@@ -3,116 +3,342 @@
 {% block page_title %}Factura electronica{% endblock %}
 
 {% block content %}
-<div class="admin-table-container">
-    <div class="admin-toolbar">
-        <div class="toolbar-search">
-            <strong>Configuracion fiscal de empresa activa</strong>
-            <div class="text-muted fiscal-config-subtitle">
-                Empresa activa: <strong>{{ active_company.name }}</strong>
-            </div>
-        </div>
-        <div class="toolbar-actions">
-            <a href="{% url 'admin_company_edit' active_company.pk %}" class="btn btn-outline">Editar empresa</a>
-            <a href="{% url 'admin_fiscal_document_list' %}" class="btn btn-outline">Comprobantes</a>
-            <a href="{% url 'admin_fiscal_point_create' %}" class="btn btn-primary">Nuevo punto de venta</a>
-        </div>
-    </div>
+<div class="admin-table-container fiscal-wizard-page">
+    <style>
+        .fiscal-wizard-page {
+            display: grid;
+            gap: 14px;
+        }
+        .fiscal-wizard-head {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 14px 16px;
+            border-radius: 14px;
+            border: 1px solid rgba(255,255,255,.09);
+            background: linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.015));
+        }
+        .fiscal-wizard-title {
+            margin: 0;
+            font-size: 1.08rem;
+        }
+        .fiscal-wizard-subtitle {
+            margin: 4px 0 0;
+            color: rgba(210,217,226,.76);
+            font-size: .86rem;
+            line-height: 1.45;
+            max-width: 74ch;
+        }
+        .fiscal-wizard-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .fiscal-global-status {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            width: fit-content;
+            padding: 7px 11px;
+            border-radius: 999px;
+            border: 1px solid rgba(255,255,255,.14);
+            background: rgba(255,255,255,.03);
+            color: rgba(230,236,242,.92);
+            font-size: .82rem;
+        }
+        .fiscal-step-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 12px;
+        }
+        .fiscal-step-card {
+            padding: 13px;
+            border-radius: 14px;
+            border: 1px solid rgba(255,255,255,.09);
+            background: rgba(255,255,255,.03);
+            display: grid;
+            gap: 10px;
+        }
+        .fiscal-step-card.is-ready {
+            border-color: rgba(25,209,127,.28);
+            background: linear-gradient(180deg, rgba(25,209,127,.11), rgba(255,255,255,.02));
+        }
+        .fiscal-step-card.is-pending {
+            border-color: rgba(255,193,7,.28);
+            background: linear-gradient(180deg, rgba(255,193,7,.10), rgba(255,255,255,.02));
+        }
+        .fiscal-step-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+        }
+        .fiscal-step-title-wrap {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            min-width: 0;
+        }
+        .fiscal-step-number {
+            width: 24px;
+            height: 24px;
+            border-radius: 999px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: .78rem;
+            font-weight: 700;
+            background: rgba(255,255,255,.08);
+            border: 1px solid rgba(255,255,255,.16);
+        }
+        .fiscal-step-title {
+            margin: 0;
+            font-size: .92rem;
+            color: #fff;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .fiscal-step-desc {
+            margin: 0;
+            font-size: .82rem;
+            color: rgba(210,217,226,.76);
+            line-height: 1.4;
+        }
+        .fiscal-step-snapshot {
+            margin: 0;
+            padding: 0;
+            list-style: none;
+            display: grid;
+            gap: 5px;
+            font-size: .82rem;
+        }
+        .fiscal-step-snapshot li {
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+            border-bottom: 1px dashed rgba(255,255,255,.1);
+            padding-bottom: 4px;
+        }
+        .fiscal-step-snapshot li:last-child {
+            border-bottom: 0;
+            padding-bottom: 0;
+        }
+        .fiscal-step-snapshot span {
+            color: rgba(208,216,226,.74);
+        }
+        .fiscal-step-snapshot strong {
+            color: #fff;
+            text-align: right;
+        }
+        .fiscal-step-errors {
+            margin: 0;
+            padding: 8px 10px 8px 22px;
+            border-radius: 10px;
+            background: rgba(220,53,69,.13);
+            border: 1px solid rgba(220,53,69,.28);
+            color: #ffd7dd;
+            font-size: .78rem;
+            line-height: 1.35;
+            display: grid;
+            gap: 3px;
+        }
+        .fiscal-step-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .fiscal-table-card {
+            border-radius: 14px;
+            border: 1px solid rgba(255,255,255,.09);
+            background: rgba(255,255,255,.02);
+            overflow: hidden;
+        }
+        .fiscal-table-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            padding: 12px 14px;
+            border-bottom: 1px solid rgba(255,255,255,.08);
+        }
+        .fiscal-table-head h3 {
+            margin: 0;
+            font-size: .95rem;
+        }
+        .fiscal-table-head p {
+            margin: 4px 0 0;
+            color: rgba(208,216,226,.74);
+            font-size: .8rem;
+        }
+        .fiscal-table-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        @media (max-width: 1100px) {
+            .fiscal-step-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
 
-    <div class="card fiscal-config-card">
-        <div class="fiscal-config-grid">
-            <div>
-                <div><strong>Razon social:</strong> {{ active_company.legal_name|default:"-" }}</div>
-                <div><strong>CUIT:</strong> {{ active_company.cuit|default:"-" }}</div>
-                <div><strong>Condicion fiscal:</strong> {{ active_company.get_tax_condition_display|default:"-" }}</div>
-                <div><strong>Domicilio fiscal:</strong> {{ active_company.fiscal_address|default:"-" }}</div>
-                <div><strong>Ciudad/Provincia:</strong> {{ active_company.fiscal_city|default:"-" }} / {{ active_company.fiscal_province|default:"-" }}</div>
-                <div><strong>Codigo postal:</strong> {{ active_company.postal_code|default:"-" }}</div>
-            </div>
-            <div>
-                <div><strong>POS default (Company):</strong> {{ active_company.point_of_sale_default|default:"-" }}</div>
-                <div><strong>POS activos:</strong> {{ active_points_count }}</div>
-                <div>
-                    <strong>POS default (modelo):</strong>
-                    {% if default_point %}{{ default_point.number }}{% else %}-{% endif %}
-                </div>
-                <div class="fiscal-status-block">
-                    {% if is_ready %}
-                    <span class="badge badge-success">Lista para emitir</span>
-                    {% else %}
-                    <span class="badge badge-warning">Configuracion incompleta</span>
-                    {% endif %}
-                </div>
-            </div>
+    <section class="fiscal-wizard-head">
+        <div>
+            <h2 class="fiscal-wizard-title">Factura electronica - Empresa {{ active_company.name }}</h2>
+            <p class="fiscal-wizard-subtitle">
+                Configura ARCA en 3 pasos: datos fiscales, punto de venta y validacion de conectividad.
+                Cuando los 3 pasos esten en verde, la empresa queda lista para emitir.
+            </p>
         </div>
-        {% if not is_ready %}
-        <div class="alert alert-warning fiscal-readiness-alert">
-            <strong>Faltantes detectados:</strong>
-            <ul class="fiscal-readiness-list">
-                {% for item in readiness_errors %}
-                <li>{{ item }}</li>
+        <div class="fiscal-wizard-actions">
+            <span class="fiscal-global-status">
+                {% if is_ready %}
+                <span class="badge badge-success">Lista para emitir</span>
+                {% else %}
+                <span class="badge badge-warning">Configuracion incompleta</span>
+                {% endif %}
+                <strong>{{ active_points_count }}</strong> POS activo(s)
+            </span>
+        </div>
+    </section>
+
+    <section class="fiscal-step-grid">
+        {% for step in fiscal_wizard_steps %}
+        <article class="fiscal-step-card {% if step.is_ready %}is-ready{% else %}is-pending{% endif %}">
+            <div class="fiscal-step-head">
+                <div class="fiscal-step-title-wrap">
+                    <span class="fiscal-step-number">{{ step.number }}</span>
+                    <h3 class="fiscal-step-title">{{ step.title }}</h3>
+                </div>
+                {% if step.is_ready %}
+                <span class="badge badge-success">Completo</span>
+                {% else %}
+                <span class="badge badge-warning">Pendiente</span>
+                {% endif %}
+            </div>
+            <p class="fiscal-step-desc">{{ step.description }}</p>
+
+            {% if step.snapshot %}
+            <ul class="fiscal-step-snapshot">
+                {% for item in step.snapshot %}
+                <li><span>{{ item.0 }}</span><strong>{{ item.1 }}</strong></li>
                 {% endfor %}
             </ul>
-        </div>
-        {% endif %}
-    </div>
+            {% endif %}
 
-    <table class="admin-table">
-        <thead>
-            <tr>
-                <th>Numero</th>
-                <th>Nombre</th>
-                <th>Entorno</th>
-                <th>Activo</th>
-                <th>Default</th>
-                <th>Acciones</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for point in points %}
-            <tr>
-                <td><strong>{{ point.number }}</strong></td>
-                <td>{{ point.name|default:"-" }}</td>
-                <td>{{ point.get_environment_display }}</td>
-                <td>
-                    {% if point.is_active %}
-                    <span class="badge badge-success">Si</span>
+            {% if step.errors %}
+            <ul class="fiscal-step-errors">
+                {% for err in step.errors %}
+                <li>{{ err }}</li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+
+            <div class="fiscal-step-actions">
+                {% if step.cta_url %}
+                    {% if step.cta_is_form %}
+                    <form method="post" action="{{ step.cta_url }}" class="inline-form">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-primary btn-sm">{{ step.cta_label }}</button>
+                    </form>
                     {% else %}
-                    <span class="badge badge-secondary">No</span>
+                    <a href="{{ step.cta_url }}" class="btn btn-primary btn-sm">{{ step.cta_label }}</a>
                     {% endif %}
-                </td>
-                <td>
-                    {% if point.is_default %}
-                    <span class="badge badge-primary">Default</span>
-                    {% else %}
-                    <span class="badge badge-secondary">-</span>
-                    {% endif %}
-                </td>
-                <td class="actions">
-                    <a href="{% url 'admin_fiscal_point_edit' point.pk %}" class="btn btn-outline btn-sm">Editar</a>
-                    <form method="post" action="{% url 'admin_fiscal_point_preflight' point.pk %}" class="inline-form">
-                        {% csrf_token %}
-                        <button type="submit" class="btn btn-outline btn-sm">Probar ARCA</button>
-                    </form>
-                    <form method="post" action="{% url 'admin_fiscal_point_toggle_active' point.pk %}" class="inline-form">
-                        {% csrf_token %}
-                        <button type="submit" class="btn btn-outline btn-sm">
-                            {% if point.is_active %}Desactivar{% else %}Activar{% endif %}
-                        </button>
-                    </form>
-                    {% if not point.is_default %}
-                    <form method="post" action="{% url 'admin_fiscal_point_set_default' point.pk %}" class="inline-form">
-                        {% csrf_token %}
-                        <button type="submit" class="btn btn-primary btn-sm">Marcar default</button>
-                    </form>
-                    {% endif %}
-                </td>
-            </tr>
-            {% empty %}
-            <tr>
-                <td colspan="6" class="text-center text-muted">No hay puntos de venta para esta empresa.</td>
-            </tr>
+                {% endif %}
+                {% if step.secondary_url %}
+                <a href="{{ step.secondary_url }}" class="btn btn-outline btn-sm">{{ step.secondary_label }}</a>
+                {% endif %}
+            </div>
+        </article>
+        {% endfor %}
+    </section>
+
+    {% if not is_ready and readiness_errors %}
+    <div class="alert alert-warning fiscal-readiness-alert">
+        <strong>Checklist pendiente general:</strong>
+        <ul class="fiscal-readiness-list">
+            {% for item in readiness_errors %}
+            <li>{{ item }}</li>
             {% endfor %}
-        </tbody>
-    </table>
+        </ul>
+    </div>
+    {% endif %}
+
+    <section class="fiscal-table-card">
+        <div class="fiscal-table-head">
+            <div>
+                <h3>Puntos de venta fiscales</h3>
+                <p>Detalle operativo de POS por entorno, estado y acciones de validacion.</p>
+            </div>
+            <div class="fiscal-table-actions">
+                <a href="{% url 'admin_company_edit' active_company.pk %}" class="btn btn-outline btn-sm">Editar empresa</a>
+                <a href="{% url 'admin_fiscal_document_list' %}" class="btn btn-outline btn-sm">Comprobantes</a>
+                <a href="{% url 'admin_fiscal_health' %}" class="btn btn-outline btn-sm">Salud fiscal</a>
+                <a href="{% url 'admin_fiscal_point_create' %}" class="btn btn-primary btn-sm">Nuevo punto de venta</a>
+            </div>
+        </div>
+
+        <table class="admin-table">
+            <thead>
+                <tr>
+                    <th>Numero</th>
+                    <th>Nombre</th>
+                    <th>Entorno</th>
+                    <th>Activo</th>
+                    <th>Default</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for point in points %}
+                <tr>
+                    <td><strong>{{ point.number }}</strong></td>
+                    <td>{{ point.name|default:"-" }}</td>
+                    <td>{{ point.get_environment_display }}</td>
+                    <td>
+                        {% if point.is_active %}
+                        <span class="badge badge-success">Si</span>
+                        {% else %}
+                        <span class="badge badge-secondary">No</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if point.is_default %}
+                        <span class="badge badge-primary">Default</span>
+                        {% else %}
+                        <span class="badge badge-secondary">-</span>
+                        {% endif %}
+                    </td>
+                    <td class="actions">
+                        <a href="{% url 'admin_fiscal_point_edit' point.pk %}" class="btn btn-outline btn-sm">Editar</a>
+                        <form method="post" action="{% url 'admin_fiscal_point_preflight' point.pk %}" class="inline-form">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-outline btn-sm">Probar ARCA</button>
+                        </form>
+                        <form method="post" action="{% url 'admin_fiscal_point_toggle_active' point.pk %}" class="inline-form">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-outline btn-sm">
+                                {% if point.is_active %}Desactivar{% else %}Activar{% endif %}
+                            </button>
+                        </form>
+                        {% if not point.is_default %}
+                        <form method="post" action="{% url 'admin_fiscal_point_set_default' point.pk %}" class="inline-form">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-primary btn-sm">Marcar default</button>
+                        </form>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="6" class="text-center text-muted">No hay puntos de venta para esta empresa.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </section>
 </div>
 {% endblock %}
