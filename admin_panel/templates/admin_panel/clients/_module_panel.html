@@ -13,7 +13,7 @@
                 {% if client_module_subtitle %}
                 {{ client_module_subtitle }}
                 {% else %}
-                Busqueda, alta, clasificacion y herramientas operativas para gestionar la cartera.
+                Busqueda, alta, ficha comercial y herramientas operativas para gestionar la cartera.
                 {% endif %}
             </p>
         </div>
@@ -29,18 +29,18 @@
         <a href="{% url 'admin_client_list' %}" class="client-module-card {% if client_panel == 'search' %}is-active{% endif %}">
             <div class="client-module-card-icon" aria-hidden="true">&#128269;</div>
             <div class="client-module-card-copy">
-                <span class="client-module-card-label">Buscar</span>
-                <strong>Clientes</strong>
-                <small>Listado, filtros, historial y acciones rapidas.</small>
+                <span class="client-module-card-label">Buscar clientes</span>
+                <strong>Ficha comercial</strong>
+                <small>Buscador, ficha del cliente, movimientos y cuenta corriente.</small>
             </div>
         </a>
 
         <a href="{% url 'admin_client_create' %}" class="client-module-card {% if client_panel == 'add' %}is-active{% endif %}">
             <div class="client-module-card-icon" aria-hidden="true">&#10010;</div>
             <div class="client-module-card-copy">
-                <span class="client-module-card-label">Agregar</span>
+                <span class="client-module-card-label">Agregar clientes</span>
                 <strong>Nuevo cliente</strong>
-                <small>Alta de usuario, perfil fiscal y relacion comercial.</small>
+                <small>Alta simple con datos de contacto, fiscales y comerciales.</small>
             </div>
         </a>
 
@@ -48,17 +48,8 @@
             <div class="client-module-card-icon" aria-hidden="true">&#128202;</div>
             <div class="client-module-card-copy">
                 <span class="client-module-card-label">Informes</span>
-                <strong>Reportes de clientes</strong>
-                <small>Lista, ranking comercial y clientes con saldo pendiente.</small>
-            </div>
-        </a>
-
-        <a href="{% url 'admin_client_category_list' %}" class="client-module-card {% if client_panel == 'settings' %}is-active{% endif %}">
-            <div class="client-module-card-icon" aria-hidden="true">&#128203;</div>
-            <div class="client-module-card-copy">
-                <span class="client-module-card-label">Configuracion</span>
-                <strong>Tipos de cliente</strong>
-                <small>Clasificacion, descuentos y reglas base del modulo.</small>
+                <strong>Lista y ranking</strong>
+                <small>Lista, ranking comercial y clientes con deuda o saldo pendiente.</small>
             </div>
         </a>
 
@@ -69,7 +60,16 @@
                     <span class="client-module-card-label">Herramientas</span>
                 </span>
                 <strong>Exportar e importar</strong>
-                <small>Intercambio de base, cargas masivas y accesos operativos del modulo.</small>
+                <small>Cargas masivas, actualizaciones y herramientas operativas del modulo.</small>
+            </div>
+        </a>
+
+        <a href="{% url 'admin_client_category_list' %}" class="client-module-card {% if client_panel == 'settings' %}is-active{% endif %}">
+            <div class="client-module-card-icon" aria-hidden="true">&#128203;</div>
+            <div class="client-module-card-copy">
+                <span class="client-module-card-label">Categorias</span>
+                <strong>Tipos de cliente</strong>
+                <small>Descuentos, topes y reglas comerciales por categoria.</small>
             </div>
         </a>
     </div>

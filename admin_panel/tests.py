@@ -1,7 +1,8 @@
 import json
 from decimal import Decimal
 from io import BytesIO
-from unittest.mock import patch
+from types import SimpleNamespace
+from unittest.mock import Mock, patch
 
 from django.contrib.auth.models import Group, User
 from django.core import mail
@@ -108,6 +109,9 @@ class ClientOrderHistoryViewTests(TestCase):
             reverse('admin_client_order_history', args=[self.client_profile.pk]),
             {'client_tab': 'documents'},
         )
+        default_response = self.client.get(
+            reverse('admin_client_order_history', args=[self.client_profile.pk]),
+        )
         account_response = self.client.get(
             reverse('admin_client_order_history', args=[self.client_profile.pk]),
             {'client_tab': 'account'},
@@ -115,17 +119,24 @@ class ClientOrderHistoryViewTests(TestCase):
 
         self.assertEqual(documents_response.status_code, 200)
         self.assertEqual(documents_response.context['client_tab'], 'account')
-        self.assertEqual(documents_response.context['ledger_tab'], 'invoices')
+        self.assertEqual(documents_response.context['movement_tab'], 'sales')
         self.assertEqual(len(documents_response.context['client_tabs']), 6)
         self.assertEqual(len(documents_response.context['ledger_tabs']), 6)
-        self.assertContains(documents_response, 'Facturas')
-        self.assertContains(documents_response, 'Cuenta Corriente')
+        self.assertContains(documents_response, 'Ventas del cliente')
+        self.assertContains(documents_response, 'Detalle tecnico de documentos')
+
+        self.assertEqual(default_response.status_code, 200)
+        self.assertEqual(default_response.context['movement_tab'], 'sales')
+        self.assertContains(default_response, 'Centro comercial del cliente')
+        self.assertContains(default_response, 'Ventas')
 
         self.assertEqual(account_response.status_code, 200)
-        self.assertEqual(account_response.context['ledger_tab'], 'account')
+        self.assertEqual(account_response.context['movement_tab'], 'account')
         self.assertContains(account_response, 'Nuevo movimiento')
         self.assertContains(account_response, 'Recibo')
-        self.assertContains(account_response, 'Cotizacion')
+        self.assertContains(account_response, 'Presupuesto / Cotizacion')
+        self.assertContains(account_response, 'Movimientos abiertos')
+        self.assertTrue(account_response.context['activity_timeline'])
 
     def test_client_order_history_account_tab_uses_commercial_receipt_labels(self):
         payment = ClientPayment.objects.create(
@@ -200,7 +211,7 @@ class ClientOrderHistoryViewTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.context['ledger_tab'], 'invoices')
+        self.assertEqual(response.context['movement_tab'], 'sales')
         self.assertContains(response, invoice_document.display_number)
         self.assertContains(response, 'Fiscal')
 
@@ -324,6 +335,20 @@ class ClientOrderHistoryViewTests(TestCase):
         response_after_void = self.client.get(account_url)
         self.assertEqual(response_after_void.status_code, 200)
         self.assertNotIn(tx.pk, [row['tx'].pk for row in response_after_void.context['open_movement_rows']])
+
+    def test_client_cuit_lookup_returns_fallback_payload(self):
+        self.client.force_login(self.staff)
+        response = self.client.get(
+            reverse('admin_client_cuit_lookup'),
+            {'cuit': '20-12345678-9'},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload['ok'])
+        self.assertEqual(payload['source'], 'fallback')
+        self.assertEqual(payload['document_type'], 'cuit')
+        self.assertEqual(payload['document_number'], '20123456789')
 
     def test_invoice_movement_cannot_be_reopened_after_closing(self):
         order = Order.objects.filter(
@@ -536,6 +561,72 @@ class ClientOrderHistoryViewTests(TestCase):
         tx.save(update_fields=['movement_state', 'closed_at', 'updated_at'])
         allowed = self.client.get(reverse('admin_fiscal_document_print', args=[fiscal_document.pk]))
         self.assertEqual(allowed.status_code, 200)
+
+    def test_fiscal_document_pdf_downloads_as_attachment(self):
+        order = Order.objects.filter(
+            user=self.client_user,
+            company=self.company,
+            status=Order.STATUS_CONFIRMED,
+        ).first()
+        self.assertIsNotNone(order)
+        point_of_sale = FiscalPointOfSale.objects.create(
+            company=self.company,
+            number='45',
+            is_active=True,
+            is_default=False,
+        )
+        sales_type = SalesDocumentType.objects.filter(
+            company=self.company,
+            document_behavior='Factura',
+        ).first()
+        fiscal_document = FiscalDocument.objects.create(
+            source_key='test-client-history-print-download-fiscal',
+            company=self.company,
+            client_company_ref=self.client_company,
+            client_profile=self.client_profile,
+            order=order,
+            point_of_sale=point_of_sale,
+            sales_document_type=sales_type,
+            doc_type='FA',
+            issue_mode='manual',
+            status='external_recorded',
+            subtotal_net=Decimal('100.00'),
+            total=Decimal('100.00'),
+        )
+        tx = ClientTransaction.objects.filter(
+            order=order,
+            transaction_type=ClientTransaction.TYPE_ORDER_CHARGE,
+        ).first()
+        if not tx:
+            tx = ClientTransaction.objects.create(
+                client_profile=self.client_profile,
+                company=self.company,
+                order=order,
+                transaction_type=ClientTransaction.TYPE_ORDER_CHARGE,
+                amount=Decimal('100.00'),
+                source_key='test:order:print-download-fiscal',
+            )
+        tx.movement_state = ClientTransaction.STATE_CLOSED
+        tx.closed_at = timezone.now()
+        tx.save(update_fields=['movement_state', 'closed_at', 'updated_at'])
+
+        self.client.force_login(self.staff)
+        self._activate_company()
+        generate_pdf = Mock(return_value=b"%PDF-test")
+        with patch.dict(
+            "sys.modules",
+            {"core.services.pdf_generator": SimpleNamespace(generate_document_pdf=generate_pdf)},
+        ):
+            response = self.client.get(
+                reverse('admin_fiscal_document_print', args=[fiscal_document.pk]),
+                {'copy': 'original', 'format': 'pdf'},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], 'application/pdf')
+        self.assertIn('attachment;', response['Content-Disposition'])
+        self.assertIn('.pdf', response['Content-Disposition'])
+        generate_pdf.assert_called_once()
 
     def test_quick_remito_redirects_to_latest_remito_document(self):
         shipped_order = Order.objects.create(
@@ -831,6 +922,13 @@ class DashboardHubRankingTests(TestCase):
         response = self.client.get(reverse('admin_dashboard'))
 
         self.assertEqual(response.status_code, 200)
+        self.assertIn('operational_snapshot_cards', response.context)
+        self.assertIn('recent_activity', response.context)
+        self.assertGreaterEqual(len(response.context['operational_snapshot_cards']), 6)
+        self.assertTrue(response.context['recent_activity'])
+        self.assertContains(response, 'Cola operativa')
+        self.assertContains(response, 'Actividad reciente')
+        self.assertContains(response, 'Pedidos por confirmar')
         self.assertContains(response, reverse('admin_client_order_history', args=[self.client_profile.pk]))
         self.assertContains(response, reverse('admin_product_edit', args=[self.product.pk]))
 
@@ -1413,6 +1511,134 @@ class ConfiguredSalesDocumentTypeFlowTests(TestCase):
         self.assertContains(response, 'Productos de la venta')
         self.assertContains(response, 'Totales')
         self.assertNotContains(response, 'Resumen comercial')
+
+    def test_order_detail_shows_commercial_flow_strip(self):
+        self.client.force_login(self.staff)
+        self._activate_company()
+
+        response = self.client.get(reverse('admin_order_detail', args=[self.order.pk]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Flujo comercial')
+        self.assertContains(response, 'Solicitud')
+        self.assertContains(response, 'Pedido')
+        self.assertContains(response, 'Remito')
+        self.assertContains(response, 'Factura')
+        self.assertContains(response, 'Cobro')
+        self.assertIn('order_flow_steps', response.context)
+        self.assertEqual(len(response.context['order_flow_steps']), 5)
+
+    def test_order_detail_renders_when_order_has_fiscal_document(self):
+        FiscalDocument.objects.create(
+            source_key='order-detail-fiscal-test',
+            company=self.company,
+            client_company_ref=self.client_company,
+            client_profile=self.client_profile,
+            order=self.order,
+            point_of_sale=self.point,
+            doc_type='FB',
+            issue_mode='manual',
+            status='external_recorded',
+            sales_document_type=self.sales_document_type,
+            number=1,
+            subtotal_net=Decimal('100.00'),
+            total=Decimal('100.00'),
+        )
+
+        self.client.force_login(self.staff)
+        self._activate_company()
+        response = self.client.get(reverse('admin_order_detail', args=[self.order.pk]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Flujo comercial')
+        self.assertContains(response, 'Factura')
+
+    def test_order_list_stage_filter_shows_sales_workspace(self):
+        Order.objects.create(
+            user=self.client_user,
+            company=self.company,
+            status=Order.STATUS_DRAFT,
+            subtotal=Decimal('80.00'),
+            total=Decimal('80.00'),
+            client_company='Cliente Draft',
+            client_company_ref=self.client_company,
+        )
+
+        self.client.force_login(self.staff)
+        self._activate_company()
+        response = self.client.get(reverse('admin_order_list'), {'stage': 'drafts'})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context['stage'], 'drafts')
+        self.assertContains(response, 'Workspace de ventas')
+        self.assertContains(response, 'Solicitud')
+        self.assertContains(response, 'Factura')
+        self.assertContains(response, 'Cobro')
+        self.assertContains(response, 'Borradores operativos')
+        self.assertEqual(response.context['page_obj'].paginator.count, 1)
+
+    def test_order_request_list_stage_filter_shows_sales_workspace(self):
+        OrderRequest.objects.create(
+            user=self.client_user,
+            company=self.company,
+            client_company_ref=self.client_company,
+            status=OrderRequest.STATUS_WAITING_CLIENT,
+            requested_total=Decimal('120.00'),
+        )
+
+        self.client.force_login(self.staff)
+        self._activate_company()
+        response = self.client.get(reverse('admin_order_request_list'), {'stage': 'waiting'})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context['stage'], 'waiting')
+        self.assertContains(response, 'Workspace de ventas')
+        self.assertContains(response, 'Esperando cliente')
+        self.assertEqual(response.context['page_obj'].paginator.count, 1)
+
+    def test_sales_workspace_hub_merges_requests_and_orders(self):
+        OrderRequest.objects.create(
+            user=self.client_user,
+            company=self.company,
+            client_company_ref=self.client_company,
+            status=OrderRequest.STATUS_SUBMITTED,
+            requested_total=Decimal('120.00'),
+        )
+
+        self.client.force_login(self.staff)
+        self._activate_company()
+        response = self.client.get(reverse('admin_sales_workspace'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Solicitud comercial')
+        self.assertContains(response, 'Pedido operativo')
+        self.assertContains(response, 'Esta vista cruza')
+        self.assertEqual(response.context['page_obj'].paginator.count, 2)
+        order_rows = [row for row in response.context['page_obj'].object_list if row['kind'] == 'order']
+        self.assertEqual(len(order_rows), 1)
+        self.assertTrue(order_rows[0]['quick_payment_url'])
+        self.assertTrue(order_rows[0]['quick_related_actions'])
+        self.assertContains(response, 'Cobros')
+        self.assertContains(response, 'Docs')
+
+    def test_sales_workspace_hub_stage_filter_waiting_returns_request_queue(self):
+        OrderRequest.objects.create(
+            user=self.client_user,
+            company=self.company,
+            client_company_ref=self.client_company,
+            status=OrderRequest.STATUS_WAITING_CLIENT,
+            requested_total=Decimal('130.00'),
+        )
+
+        self.client.force_login(self.staff)
+        self._activate_company()
+        response = self.client.get(reverse('admin_sales_workspace'), {'stage': 'waiting'})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context['stage'], 'waiting')
+        self.assertEqual(response.context['sales_workspace_active_keys'], ['requests_waiting'])
+        self.assertContains(response, 'Esperando cliente')
+        self.assertEqual(response.context['page_obj'].paginator.count, 1)
 
     def test_order_invoice_open_creates_invoice_from_order(self):
         self.client.force_login(self.staff)
@@ -2143,6 +2369,32 @@ class FiscalPrintTemplateTests(TestCase):
         self.assertContains(response, 'Condicion de venta')
         self.assertContains(response, 'Observaciones')
 
+    def test_fiscal_print_does_not_invent_number_for_unnumbered_document(self):
+        self.client.force_login(self.staff)
+        self._activate_company()
+        self.document.number = None
+        self.document.status = 'ready_to_issue'
+        self.document.issued_at = None
+        self.document.save(update_fields=['number', 'status', 'issued_at', 'updated_at'])
+        ClientTransaction.objects.create(
+            client_profile=self.client_profile,
+            company=self.company,
+            order=self.order,
+            transaction_type=ClientTransaction.TYPE_ORDER_CHARGE,
+            amount=Decimal('900.00'),
+            movement_state=ClientTransaction.STATE_CLOSED,
+            source_key='test:fiscal:unnumbered-print',
+        )
+
+        response = self.client.get(
+            reverse('admin_fiscal_document_print', args=[self.document.pk]),
+            {'copy': 'original'},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'N -')
+        self.assertNotContains(response, '00099-00000000')
+
 
 class ClampQuoterTests(TestCase):
     def setUp(self):
@@ -2851,6 +3103,71 @@ class ProductBulkCategoryFallbackTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.product.refresh_from_db()
         self.assertTrue(self.product.categories.filter(pk=self.category.pk).exists())
+
+
+class ProductBulkSearchSelectionTests(TestCase):
+    def setUp(self):
+        self.superadmin = User.objects.create_superuser(
+            username='josueflexs',
+            email='bulk@example.com',
+            password='secret123',
+        )
+
+    def test_product_list_shows_full_filtered_count_when_search_is_truncated(self):
+        for index in range(305):
+            Product.objects.create(
+                sku=f'LAM-{index:04d}',
+                name=f'Abrazadera laminada {index}',
+                price=Decimal('100.00'),
+                cost=Decimal('50.00'),
+                stock=1,
+                is_active=True,
+            )
+
+        self.client.force_login(self.superadmin)
+        response = self.client.get(reverse('admin_product_list'), {'q': 'laminada'})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Seleccionar todos los filtrados (305)')
+        self.assertContains(response, 'Se encontraron 305 resultados.')
+
+    def test_bulk_status_update_can_inactivate_all_filtered_results_beyond_visible_page(self):
+        matching_products = []
+        for index in range(305):
+            matching_products.append(
+                Product.objects.create(
+                    sku=f'LAM-FLT-{index:04d}',
+                    name=f'Abrazadera laminada filtro {index}',
+                    price=Decimal('100.00'),
+                    cost=Decimal('50.00'),
+                    stock=1,
+                    is_active=True,
+                )
+            )
+        other_product = Product.objects.create(
+            sku='OTRO-0001',
+            name='Producto sin coincidencia',
+            price=Decimal('100.00'),
+            cost=Decimal('50.00'),
+            stock=1,
+            is_active=True,
+        )
+
+        self.client.force_login(self.superadmin)
+        response = self.client.post(
+            reverse('admin_product_bulk_status'),
+            data={
+                'q': 'laminada filtro',
+                'select_all_pages': 'true',
+                'set_active': '0',
+            },
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(Product.objects.filter(pk__in=[product.pk for product in matching_products], is_active=False).count(), 305)
+        other_product.refresh_from_db()
+        self.assertTrue(other_product.is_active)
 
 
 class AdminInputValidationTests(TestCase):

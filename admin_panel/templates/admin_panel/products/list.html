@@ -108,7 +108,7 @@
                     <input type="hidden" name="product_ids_csv" id="bulkStatusProductIdsCsv" value="">
                     <input type="hidden" name="set_active" id="bulkStatusActionInput" value="">
                     <button type="button" class="btn btn-info" id="bulkActivateBtn" onclick="submitBulkStatus('1')" disabled>Activar</button>
-                    <button type="button" class="btn btn-warning-outline" id="bulkDeactivateBtn" onclick="submitBulkStatus('0')" disabled>Desactivar</button>
+                    <button type="button" class="btn btn-warning-outline" id="bulkDeactivateBtn" onclick="submitBulkStatus('0')" disabled>Inactivar</button>
                     <button type="button" class="btn btn-danger-outline" onclick="openDeleteModal()">Eliminar Todos</button>
                 </form>
 
@@ -561,7 +561,7 @@
                 }
                 if (deactivateBtn) {
                     deactivateBtn.removeAttribute('disabled');
-                    deactivateBtn.innerHTML = `Desactivar (${count})`;
+                    deactivateBtn.innerHTML = `Inactivar (${count})`;
                 }
                 if (imageBtn) {
                     const canRunImageAction = imageMode === 'clear' || hasImageFile;
@@ -587,7 +587,7 @@
                 }
                 if (deactivateBtn) {
                     deactivateBtn.setAttribute('disabled', 'true');
-                    deactivateBtn.innerHTML = 'Desactivar';
+                    deactivateBtn.innerHTML = 'Inactivar';
                 }
                 if (imageBtn) {
                     imageBtn.setAttribute('disabled', 'true');

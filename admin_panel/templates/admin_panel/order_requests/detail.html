@@ -1,13 +1,13 @@
 ﻿{% extends 'admin_panel/base.html' %}
 
-{% block page_title %}Solicitud Comercial #{{ order_request.pk }}{% endblock %}
+{% block page_title %}Solicitud de compra #{{ order_request.pk }}{% endblock %}
 
 {% block content %}
 <div class="admin-detail-page">
     <div class="admin-card">
         <div class="detail-header">
             <div>
-                <h2>Solicitud #{{ order_request.pk }}</h2>
+                <h2>Solicitud de compra #{{ order_request.pk }}</h2>
                 <p class="text-muted">
                     {{ order_request.company.name|default:"-" }}
                     {% if order_request.user %} | Usuario: {{ order_request.user.username }}{% endif %}
@@ -15,6 +15,10 @@
             </div>
             <span class="badge badge-info">{{ order_request.get_status_display }}</span>
         </div>
+
+        <p class="text-muted" style="margin-top:12px;">
+            Esta pantalla corresponde al flujo previo al pedido operativo: revisar, proponer cambios, confirmar y recien despues convertir o documentar.
+        </p>
 
         <div class="detail-grid">
             <div>
@@ -36,12 +40,84 @@
         </div>
     </div>
 
+    <div class="admin-card">
+        <div class="detail-header">
+            <div>
+                <h3>Circuito comercial</h3>
+                <p class="text-muted">La solicitud se revisa primero, luego se confirma y recien ahi se convierte en pedido operativo o documento.</p>
+            </div>
+        </div>
+        <div class="request-flow-grid">
+            <article class="request-flow-card is-origin">
+                <span class="request-flow-kicker">Solicitud del cliente</span>
+                <strong>{{ order_request.get_status_display }}</strong>
+                <small>Snapshot inicial enviado por el cliente desde {{ order_request.get_origin_channel_display|lower }} antes de la revision comercial.</small>
+                <div class="request-flow-meta">
+                    <span>Total: ${{ order_request.requested_total|floatformat:2 }}</span>
+                    <span>Items: {{ order_request.items.count }}</span>
+                </div>
+            </article>
+            <article class="request-flow-card {% if current_proposal %}is-live{% endif %}">
+                <span class="request-flow-kicker">Propuesta comercial</span>
+                {% if current_proposal %}
+                <strong>{{ current_proposal.get_status_display }}</strong>
+                <small>
+                    Version {{ current_proposal.version_number }}
+                    {% if current_proposal.message_to_client %}| {{ current_proposal.message_to_client|truncatechars:90 }}{% endif %}
+                </small>
+                <div class="request-flow-meta">
+                    <span>Total propuesto: ${{ current_proposal.proposed_total|floatformat:2 }}</span>
+                </div>
+                {% else %}
+                <strong>Sin propuesta activa</strong>
+                <small>La solicitud puede confirmarse tal cual o ajustarse antes de convertirla.</small>
+                {% endif %}
+            </article>
+            <article class="request-flow-card {% if request_order %}is-ready{% endif %}">
+                <span class="request-flow-kicker">Pedido operativo</span>
+                {% if request_order %}
+                <strong>Pedido #{{ request_order.pk }}</strong>
+                <small>
+                    {{ request_order.get_status_display }}
+                    {% if request_order.source_proposal_id %}
+                    | Snapshot tomado desde propuesta aceptada
+                    {% else %}
+                    | Snapshot tomado desde solicitud confirmada
+                    {% endif %}
+                </small>
+                <div class="request-flow-meta">
+                    <span>Total: ${{ request_order.total|floatformat:2 }}</span>
+                    <span>Origen: {{ request_order.get_origin_channel_display }}</span>
+                </div>
+                {% else %}
+                <strong>Pendiente de generar</strong>
+                <small>Se crea automaticamente al convertir la solicitud o al emitir documentos desde este flujo.</small>
+                {% endif %}
+            </article>
+            <article class="request-flow-card {% if request_order_documents or request_order_fiscal_documents %}is-docs{% endif %}">
+                <span class="request-flow-kicker">Documentos finales</span>
+                <strong>
+                    {% if request_order_documents or request_order_fiscal_documents %}
+                    Documentos generados
+                    {% else %}
+                    Sin documentos todavia
+                    {% endif %}
+                </strong>
+                <small>Cotizaciones internas y facturas fiscales generadas desde el snapshot aprobado.</small>
+                <div class="request-flow-meta">
+                    <span>Internos: {{ request_order_documents|length }}</span>
+                    <span>Fiscales: {{ request_order_fiscal_documents|length }}</span>
+                </div>
+            </article>
+        </div>
+    </div>
+
     {% if can_confirm_request or can_reject_request or can_convert_request %}
     <div class="admin-card">
         <div class="detail-header">
             <div>
                 <h3>Acciones comerciales</h3>
-                <p class="text-muted">Confirma la solicitud para habilitar cotizacion/factura desde este mismo flujo.</p>
+                <p class="text-muted">Confirma la solicitud para habilitar conversion a pedido, cotizacion o factura desde este mismo flujo.</p>
             </div>
         </div>
         <div class="action-grid">
@@ -83,7 +159,16 @@
     {% if can_generate_documents %}
     <div class="admin-card">
         <div class="detail-header">
-            <h3>Documentos comerciales</h3>
+            <div>
+                <h3>Documentos comerciales</h3>
+                <p class="text-muted">
+                    {% if request_order and request_order.source_proposal_id %}
+                    Los documentos saldran con el snapshot aprobado de la propuesta aceptada.
+                    {% else %}
+                    Los documentos saldran con el snapshot confirmado de la solicitud.
+                    {% endif %}
+                </p>
+            </div>
             {% if request_order %}
             <a href="{% url 'admin_order_detail' request_order.pk %}" class="btn btn-outline">Pedido #{{ request_order.pk }}</a>
             {% endif %}
@@ -91,13 +176,27 @@
         <div class="action-grid">
             <form method="post" action="{% url 'admin_order_request_generate_quote' order_request.pk %}" class="stack-form">
                 {% csrf_token %}
-                <p class="text-muted">Genera cotizacion en modo automatico, reutilizando cliente, items y totales de la solicitud confirmada.</p>
+                <label class="form-label" for="quote-sales-document-type">Tipo comercial para cotizacion</label>
+                <select id="quote-sales-document-type" name="sales_document_type_id" class="form-select">
+                    <option value="">Default / auto</option>
+                    {% for sales_type in quote_document_types %}
+                    <option value="{{ sales_type.pk }}">{{ sales_type.name }}</option>
+                    {% endfor %}
+                </select>
+                <p class="text-muted">Genera cotizacion en modo automatico, reutilizando cliente, items y totales del snapshot aprobado. La cotizacion no impacta cuenta corriente.</p>
                 <button type="submit" class="btn btn-outline">Generar cotizacion</button>
             </form>
 
             <form method="post" action="{% url 'admin_order_request_generate_invoice' order_request.pk %}" class="stack-form">
                 {% csrf_token %}
-                <p class="text-muted">Genera factura en modo automatico a partir del pedido/snapshot confirmado, sin recarga manual.</p>
+                <label class="form-label" for="invoice-sales-document-type">Tipo comercial para factura</label>
+                <select id="invoice-sales-document-type" name="sales_document_type_id" class="form-select">
+                    <option value="">Default / auto</option>
+                    {% for sales_type in invoice_document_types %}
+                    <option value="{{ sales_type.pk }}">{{ sales_type.name }}</option>
+                    {% endfor %}
+                </select>
+                <p class="text-muted">Genera factura en modo automatico a partir del pedido/snapshot confirmado, sin recarga manual y lista para continuar el circuito fiscal.</p>
                 <button type="submit" class="btn btn-primary">Generar factura</button>
             </form>
         </div>
@@ -461,6 +560,63 @@
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
         gap: 14px;
+    }
+    .request-flow-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 12px;
+    }
+    .request-flow-card {
+        display: grid;
+        gap: 8px;
+        padding: 14px;
+        border-radius: 14px;
+        border: 1px solid rgba(255,255,255,.08);
+        background: linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.02));
+    }
+    .request-flow-card strong {
+        color: #fff;
+        font-size: 1rem;
+    }
+    .request-flow-card small {
+        color: var(--color-gray-light);
+        line-height: 1.4;
+    }
+    .request-flow-kicker {
+        display: inline-flex;
+        width: fit-content;
+        padding: 4px 8px;
+        border-radius: 999px;
+        font-size: .72rem;
+        letter-spacing: .05em;
+        text-transform: uppercase;
+        color: #ffd1c2;
+        background: rgba(255,107,53,.12);
+        border: 1px solid rgba(255,107,53,.2);
+    }
+    .request-flow-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: auto;
+    }
+    .request-flow-meta span {
+        display: inline-flex;
+        padding: 5px 8px;
+        border-radius: 999px;
+        font-size: .75rem;
+        color: #edf2f7;
+        background: rgba(255,255,255,.05);
+        border: 1px solid rgba(255,255,255,.08);
+    }
+    .request-flow-card.is-live {
+        border-color: rgba(244, 180, 0, .24);
+    }
+    .request-flow-card.is-ready {
+        border-color: rgba(25, 209, 127, .22);
+    }
+    .request-flow-card.is-docs {
+        border-color: rgba(31, 143, 255, .22);
     }
     .detail-grid p,
     .detail-header h2,

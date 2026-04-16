@@ -1,806 +1,172 @@
-﻿{% extends 'admin_panel/base.html' %}
+{% extends 'admin_panel/base.html' %}
 
-{% block page_title %}Cliente {{ client.company_name }}{% endblock %}
+{% block page_title %}Ficha comercial {{ client.company_name }}{% endblock %}
 
 {% block content %}
-{% include 'admin_panel/clients/_module_panel.html' with client_panel='search' client_module_subtitle='Historial comercial, cuenta corriente y documentos del cliente seleccionado.' %}
-<div class="admin-table-container client-hub-page">
+{% include 'admin_panel/clients/_module_panel.html' with client_panel='search' client_module_subtitle='Ficha comercial del cliente: movimientos abiertos, ventas, cobros y cuenta corriente.' %}
+
+<div class="client-ledger-page">
     <style>
-        .client-hub-page {
-            display: grid;
-            gap: 18px;
-            overflow: visible !important;
-        }
-        .client-profile-shell {
-            display: grid;
-            gap: 14px;
-            padding: 18px 20px;
-            border-radius: 20px;
-            background:
-                radial-gradient(circle at 88% 8%, rgba(255,107,53,.16), transparent 28%),
-                linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.018)),
-                linear-gradient(180deg, rgba(15,21,34,.96), rgba(10,16,28,.985));
-            border: 1px solid rgba(255,255,255,.1);
-            box-shadow: 0 16px 34px rgba(0,0,0,.24);
-        }
-        .client-profile-head {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            padding-bottom: 14px;
-            border-bottom: 1px solid rgba(255,255,255,.08);
-        }
-        .client-profile-icon {
-            width: 44px;
-            height: 44px;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            border-radius: 12px;
-            background: rgba(255,255,255,.06);
-            border: 1px solid rgba(255,255,255,.1);
-            font-size: 1.2rem;
-        }
-        .client-profile-title {
-            margin: 0;
-            font-size: 1.12rem;
-            color: #f4f7fb;
-        }
-        .client-profile-subtitle {
-            margin: 4px 0 0;
-            color: rgba(208,216,226,.74);
-            font-size: .84rem;
-            line-height: 1.4;
-        }
-        .client-profile-grid {
-            display: grid;
-            grid-template-columns: repeat(2, minmax(280px, 1fr));
-            gap: 14px;
-        }
-        .client-profile-card {
-            position: relative;
-            border-radius: 14px;
-            border: 1px solid rgba(255,255,255,.1);
-            background: linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.02));
-            padding: 13px 14px;
-            box-shadow: inset 0 1px 0 rgba(255,255,255,.06);
-            transition: border-color .18s ease, background .18s ease, transform .18s ease;
-        }
-        .client-profile-card::before {
-            content: "";
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 2px;
-            border-radius: 14px 14px 0 0;
-            background: linear-gradient(90deg, rgba(255,107,53,.65), rgba(255,107,53,.08));
-        }
-        .client-profile-card:hover {
-            border-color: rgba(255,255,255,.16);
-            background: linear-gradient(180deg, rgba(255,255,255,.055), rgba(255,255,255,.025));
-            transform: translateY(-1px);
-        }
-        .client-profile-card h3 {
-            margin: 0 0 10px;
-            font-size: .8rem;
-            text-transform: uppercase;
-            letter-spacing: .1em;
-            color: #ff8c62;
-        }
-        .client-profile-list {
-            list-style: none;
-            margin: 0;
-            padding: 0;
-            display: grid;
-            gap: 0;
-            font-size: .89rem;
-            color: #e6edf5;
-            line-height: 1.32;
-        }
-        .client-profile-list li {
-            padding: 6px 0;
-            border-bottom: 1px dashed rgba(255,255,255,.09);
-        }
-        .client-profile-list li:last-child {
-            border-bottom: 0;
-            padding-bottom: 0;
-        }
-        .client-profile-list strong {
-            display: inline-block;
-            min-width: 132px;
-            color: #fff;
-            margin-right: 8px;
-        }
-        .client-profile-status {
-            display: inline-flex;
-            align-items: center;
-            padding: 2px 9px;
-            border-radius: 999px;
-            font-size: .74rem;
-            font-weight: 600;
-            border: 1px solid rgba(255,255,255,.16);
-            background: rgba(255,255,255,.05);
-            color: #ecf2f9;
-        }
-        .client-profile-status.is-ok {
-            border-color: rgba(25,209,127,.3);
-            background: rgba(25,209,127,.12);
-            color: #b9f2d4;
-        }
-        .client-profile-status.is-warn {
-            border-color: rgba(255,193,7,.34);
-            background: rgba(255,193,7,.14);
-            color: #ffe9a9;
-        }
-        .client-profile-status.is-off {
-            border-color: rgba(220,53,69,.34);
-            background: rgba(220,53,69,.14);
-            color: #ffb7bf;
-        }
-        .client-sales-shell {
-            display: grid;
-            gap: 14px;
-            padding: 16px 18px;
-            border-radius: 18px;
-            background:
-                linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.015)),
-                linear-gradient(180deg, rgba(15,21,34,.96), rgba(10,16,28,.98));
-            border: 1px solid rgba(255,255,255,.08);
-        }
-        .client-sales-head {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 16px;
-            padding-bottom: 14px;
-            border-bottom: 1px solid rgba(255,255,255,.08);
-        }
-        .client-sales-title-wrap {
-            display: flex;
-            align-items: center;
-            gap: 14px;
-            min-width: 0;
-        }
-        .client-sales-icon {
-            width: 54px;
-            height: 54px;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            border-radius: 16px;
-            background:
-                radial-gradient(circle at 30% 30%, rgba(255,107,53,.24), transparent 58%),
-                rgba(255,255,255,.05);
-            border: 1px solid rgba(255,255,255,.1);
-            box-shadow: inset 0 1px 0 rgba(255,255,255,.08);
-            font-size: 1.55rem;
-        }
-        .client-sales-heading {
-            margin: 0;
-            font-size: 1.22rem;
-            line-height: 1.2;
-        }
-        .client-sales-kicker {
-            margin: 4px 0 0;
-            color: rgba(210,217,226,.76);
-            font-size: .88rem;
-            line-height: 1.45;
-        }
-        .client-sales-head-right {
-            display: flex;
-            flex-wrap: wrap;
-            justify-content: flex-end;
-            gap: 10px;
-        }
-        .client-mini-stat {
-            min-width: 128px;
-            padding: 10px 12px;
-            border-radius: 14px;
-            border: 1px solid rgba(255,255,255,.08);
-            background: rgba(255,255,255,.03);
-        }
-        .client-mini-stat span {
-            display: block;
-            margin-bottom: 4px;
-            color: rgba(207,216,227,.66);
-            font-size: .72rem;
-            text-transform: uppercase;
-            letter-spacing: .08em;
-        }
-        .client-mini-stat strong {
-            display: block;
-            font-size: 1rem;
-            color: #f4f7fb;
-        }
-        .client-sales-toolbar {
-            display: flex;
-            flex-wrap: wrap;
-            align-items: center;
-            justify-content: space-between;
-            gap: 12px;
-        }
-        .client-doc-launcher-panel {
-            padding: 16px;
-            border-radius: 16px;
-            border: 1px solid rgba(255,255,255,.08);
-            background: rgba(255,255,255,.03);
-        }
-        .client-doc-launcher-list {
-            display: grid;
-            gap: 8px;
-            margin-top: 12px;
-        }
-        .client-doc-launcher-item,
-        .client-doc-launcher-panel button {
-            width: 100%;
-            display: inline-flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 10px;
-            padding: 10px 12px;
-            border-radius: 12px;
-            border: 1px solid rgba(255,255,255,.08);
-            background: rgba(255,255,255,.03);
-            color: #eef3f8;
-            text-decoration: none;
-            font-size: .86rem;
-            text-align: left;
-            transition: background .18s ease, border-color .18s ease, transform .18s ease;
-        }
-        .client-doc-launcher-item:hover,
-        .client-doc-launcher-panel button:hover {
-            background: rgba(255,255,255,.06);
-            border-color: rgba(255,255,255,.14);
-            transform: translateY(-1px);
-        }
-        .client-doc-launcher-panel button { cursor: pointer; }
-        .client-doc-launcher-item.is-fiscal,
-        .client-doc-launcher-panel button.is-fiscal { border-color: rgba(31,143,255,.2); }
-        .client-doc-launcher-item.is-payment,
-        .client-doc-launcher-panel button.is-payment { border-color: rgba(25,209,127,.2); }
-        .client-doc-launcher-item.is-adjustment,
-        .client-doc-launcher-panel button.is-adjustment { border-color: rgba(255,193,7,.2); }
-        .client-doc-launcher-item.is-remito,
-        .client-doc-launcher-panel button.is-remito { border-color: rgba(255,107,53,.2); }
-        .client-doc-launcher-item.is-credit-note,
-        .client-doc-launcher-panel button.is-credit-note { border-color: rgba(151,117,250,.2); }
-        .client-doc-launcher-item.is-order,
-        .client-doc-launcher-item.is-quote,
-        .client-doc-launcher-panel button.is-order,
-        .client-doc-launcher-panel button.is-quote { border-color: rgba(255,255,255,.12); }
-        .client-doc-launcher-item.is-disabled,
-        .client-doc-launcher-panel button:disabled {
-            opacity: .52;
-            pointer-events: none;
-        }
-        .client-doc-launcher-text {
-            display: grid;
-            gap: 4px;
-        }
-        .client-doc-launcher-text strong { color: #fff; }
-        .client-doc-launcher-text small { color: rgba(210,217,226,.68); line-height: 1.35; }
-        .client-doc-launcher-arrow {
-            font-size: 1rem;
-            color: rgba(230,236,242,.72);
-        }
-        .client-movement-menu {
-            position: relative;
-            display: inline-flex;
-        }
-        .client-movement-popover {
-            position: absolute;
-            top: calc(100% + 8px);
-            right: 0;
-            width: min(420px, 86vw);
-            z-index: 45;
-            padding: 14px;
-            border-radius: 14px;
-            border: 1px solid rgba(255,255,255,.12);
-            background:
-                linear-gradient(180deg, rgba(18,25,38,.98), rgba(11,18,30,.99));
-            box-shadow: 0 16px 40px rgba(0,0,0,.38);
-            max-height: min(70vh, 620px);
-            overflow-y: auto;
-        }
-        .client-movement-popover.is-upward {
-            top: auto;
-            bottom: calc(100% + 8px);
-        }
-        .client-movement-popover[hidden] { display: none !important; }
-        .client-movement-head {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 8px;
-            margin-bottom: 10px;
-        }
-        .client-movement-head strong {
-            color: #fff;
-            font-size: .95rem;
-        }
-        .client-movement-head small {
-            display: block;
-            color: rgba(210,217,226,.68);
-            font-size: .76rem;
-        }
-        .client-movement-close {
-            width: 28px;
-            height: 28px;
-            border-radius: 8px;
-            border: 1px solid rgba(255,255,255,.16);
-            background: rgba(255,255,255,.04);
-            color: #f4f7fb;
-            cursor: pointer;
-        }
-        .client-toolbar-actions,
-        .client-toolbar-meta,
-        .client-tab-nav,
-        .client-subtab-nav,
-        .client-action-row,
-        .client-foot-actions { display: flex; flex-wrap: wrap; gap: 10px; }
-        .client-toolbar-meta { gap: 8px; }
-        .client-toolbar-chip {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            padding: 8px 11px;
-            border-radius: 999px;
-            background: rgba(255,255,255,.04);
-            border: 1px solid rgba(255,255,255,.08);
-            color: rgba(228,234,241,.84);
-            font-size: .8rem;
-        }
-        .client-toolbar-chip strong { color: #fff; font-size: .82rem; }
-        .client-action-compact {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            padding: 10px 12px;
-            border-radius: 12px;
-            border: 1px solid rgba(255,255,255,.08);
-            background: rgba(255,255,255,.04);
-            color: #f4f7fb;
-            text-decoration: none;
-            font-size: .84rem;
-            transition: background .18s ease, border-color .18s ease, transform .18s ease;
-        }
-        .client-action-compact:hover {
-            background: rgba(255,107,53,.12);
-            border-color: rgba(255,107,53,.26);
-            transform: translateY(-1px);
-        }
-        .client-action-compact.is-primary {
-            background: linear-gradient(180deg, rgba(255,107,53,.2), rgba(255,107,53,.12));
-            border-color: rgba(255,107,53,.28);
-        }
-        .client-action-compact[aria-disabled="true"],
-        .client-action-compact.is-disabled {
-            opacity: .52;
-            pointer-events: none;
-        }
-        .client-hub-hero,
-        .client-hub-panel,
-        .client-hub-card {
-            padding: 18px;
-            border-radius: 18px;
-            background: linear-gradient(180deg, rgba(15,21,34,.96), rgba(10,16,28,.98));
-            border: 1px solid rgba(255,255,255,.08);
-        }
-        .client-hub-hero {
-            display: grid;
-            grid-template-columns: minmax(0, 1.3fr) minmax(300px, .7fr);
-            gap: 16px;
-            background:
-                radial-gradient(circle at top left, rgba(255,107,53,.16), transparent 36%),
-                linear-gradient(180deg, rgba(15,21,34,.96), rgba(10,16,28,.98));
-        }
-        .client-hub-eyebrow {
-            margin: 0 0 8px;
-            text-transform: uppercase;
-            letter-spacing: .08em;
-            font-size: .74rem;
-            color: rgba(207,216,227,.68);
-        }
-        .client-hub-title-row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
-        .client-hub-title-row h2 { margin: 0; font-size: 2rem; line-height: 1.08; }
-        .client-hub-subtitle { margin: 10px 0 0; color: rgba(214,223,233,.82); line-height: 1.55; }
-        .client-hub-chips { display: flex; flex-wrap: wrap; gap: 10px; }
-        .client-hub-chip,
-        .client-tab-link,
-        .client-subtab-link {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            padding: 11px 16px;
-            border-radius: 0;
-            border: 1px solid rgba(255,255,255,.12);
-            background: rgba(255,255,255,.04);
-            color: rgba(235,239,244,.88);
-            text-decoration: none;
-            font-size: .84rem;
-            box-shadow: inset 0 1px 0 rgba(255,255,255,.04);
-        }
-        .client-tab-link.is-active,
-        .client-subtab-link.is-active {
-            background: linear-gradient(180deg, rgba(255,107,53,.18), rgba(255,107,53,.1));
-            border-color: rgba(255,107,53,.32);
-            color: #fff4ec;
-        }
-        .client-hub-chip.is-warning { background: rgba(255,193,7,.08); border-color: rgba(255,193,7,.18); color: #ffe79c; }
-        .client-hub-chip.is-success { background: rgba(25,209,127,.08); border-color: rgba(25,209,127,.18); color: #a4f4c9; }
-        .client-section-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 14px; }
-        .client-section-head h3 { margin: 0; }
-        .client-section-head p { margin: 5px 0 0; color: rgba(210,217,226,.7); font-size: .84rem; line-height: 1.5; }
-        .client-data-grid,
-        .client-open-grid,
-        .client-doc-grid,
-        .client-history-metrics { display: grid; gap: 12px; }
-        .client-data-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-        .client-open-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-        .client-doc-grid,
-        .client-history-metrics { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-        .client-history-metrics.is-3col { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-        .client-mini-card {
-            border-radius: 16px;
-            padding: 16px;
-            background: rgba(255,255,255,.03);
-            border: 1px solid rgba(255,255,255,.08);
-        }
-        .client-mini-card strong { display: block; margin-bottom: 8px; }
-        .client-mini-list { display: grid; gap: 8px; color: rgba(223,230,237,.82); font-size: .9rem; line-height: 1.45; }
-        .client-open-item {
-            display: flex; justify-content: space-between; align-items: center; gap: 12px;
-            padding: 12px 14px; border-radius: 14px; background: rgba(0,0,0,.18); border: 1px solid rgba(255,255,255,.06);
-        }
-        .client-table-card { border-radius: 16px; overflow: hidden; border: 1px solid rgba(255,255,255,.08); background: rgba(255,255,255,.02); }
-        .client-table-card .admin-table { margin: 0; }
-        .client-table-card.is-history-spotlight {
-            margin-top: 12px;
-            border-radius: 14px;
-            background: rgba(0,0,0,.14);
-        }
-        .client-table-card.is-history-spotlight .admin-table thead th {
-            padding-top: 12px;
-            padding-bottom: 12px;
-            font-size: .75rem;
-            text-transform: uppercase;
-            letter-spacing: .06em;
-            color: rgba(208,216,225,.72);
-            background: rgba(255,255,255,.02);
-        }
-        .client-table-card.is-history-spotlight .admin-table tbody td {
-            padding-top: 10px;
-            padding-bottom: 10px;
-        }
-        .client-table-foot {
-            display: flex; justify-content: space-between; align-items: center; gap: 12px;
-            padding: 14px 16px; border-top: 1px solid rgba(255,255,255,.08); color: rgba(207,216,227,.76); font-size: .86rem;
-        }
-        .client-cell-stack { display: grid; gap: 4px; }
-        .client-cell-stack strong { color: #f7f9fc; }
-        .client-cell-stack small { color: rgba(205,214,224,.68); line-height: 1.35; }
-        .client-inline-badge {
-            display: inline-flex;
-            align-items: center;
-            padding: 4px 8px;
-            border-radius: 999px;
-            background: rgba(255,255,255,.06);
-            border: 1px solid rgba(255,255,255,.08);
-            color: rgba(235,240,245,.86);
-            font-size: .72rem;
-            text-transform: uppercase;
-            letter-spacing: .04em;
-            width: fit-content;
-        }
-        .client-inline-badge.is-fiscal { background: rgba(31,143,255,.12); border-color: rgba(31,143,255,.22); color: #b8dcff; }
-        .client-inline-badge.is-internal { background: rgba(255,107,53,.12); border-color: rgba(255,107,53,.24); color: #ffd7c6; }
-        .client-inline-badge.is-saas { background: rgba(151,117,250,.12); border-color: rgba(151,117,250,.22); color: #ddd1ff; }
-        .client-inline-badge.is-payment { background: rgba(25,209,127,.12); border-color: rgba(25,209,127,.22); color: #b2f3d0; }
-        .client-inline-badge.is-movement { background: rgba(255,193,7,.12); border-color: rgba(255,193,7,.22); color: #ffe8a3; }
-        .client-ledger-panel {
-            padding: 14px;
-            border-radius: 16px;
-            border: 1px solid rgba(255,255,255,.08);
-            background: rgba(255,255,255,.02);
-            overflow: visible;
-        }
-        .client-ledger-topline {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 12px;
-            margin-bottom: 12px;
-        }
-        .client-ledger-title {
-            margin: 0;
-            font-size: 1.08rem;
-        }
-        .client-ledger-summary {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 10px;
-            margin-bottom: 12px;
-        }
-        .client-ledger-chip {
-            min-width: 132px;
-            padding: 10px 12px;
-            border-radius: 12px;
-            border: 1px solid rgba(255,255,255,.08);
-            background: rgba(255,255,255,.03);
-        }
-        .client-ledger-chip span {
-            display: block;
-            margin-bottom: 4px;
-            color: rgba(207,216,227,.68);
-            font-size: .72rem;
-            text-transform: uppercase;
-            letter-spacing: .08em;
-        }
-        .client-ledger-chip strong {
-            font-size: .98rem;
-            color: #f7f9fc;
-        }
-        .client-table-card.is-ledger {
-            border-radius: 14px;
-            background: rgba(0,0,0,.14);
-            overflow: visible;
-        }
-        .client-table-card.is-ledger .admin-table thead th {
-            padding-top: 13px;
-            padding-bottom: 13px;
-            font-size: .76rem;
-            text-transform: uppercase;
-            letter-spacing: .06em;
-            color: rgba(208,216,225,.72);
-            background: rgba(255,255,255,.02);
-        }
-        .client-table-card.is-ledger .admin-table tbody td {
-            padding-top: 11px;
-            padding-bottom: 11px;
-            vertical-align: middle;
-        }
-        .client-row-actions {
-            display: flex;
-            justify-content: flex-end;
-            gap: 8px;
-        }
-        .client-icon-action {
-            width: 34px;
-            height: 34px;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            border-radius: 50%;
-            border: 1px solid rgba(255,255,255,.12);
-            background: rgba(255,255,255,.04);
-            color: #f4f7fb;
-            text-decoration: none;
-            font-size: .95rem;
-            transition: background .18s ease, border-color .18s ease, transform .18s ease;
-        }
-        .client-icon-action:hover {
-            background: rgba(255,107,53,.14);
-            border-color: rgba(255,107,53,.32);
-            transform: translateY(-1px);
-        }
-        .client-icon-action.is-danger:hover {
-            background: rgba(220,53,69,.14);
-            border-color: rgba(220,53,69,.3);
-        }
-        .client-row-relate {
-            position: relative;
-            display: inline-flex;
-        }
-        .client-row-relate-popover {
-            position: absolute;
-            top: auto;
-            bottom: calc(100% + 8px);
-            right: 0;
-            width: min(340px, 86vw);
-            z-index: 55;
-            padding: 12px;
-            border-radius: 12px;
-            border: 1px solid rgba(255,255,255,.12);
-            background:
-                linear-gradient(180deg, rgba(18,25,38,.98), rgba(11,18,30,.99));
-            box-shadow: 0 16px 38px rgba(0,0,0,.36);
-        }
-        .client-row-relate-popover[hidden] { display: none !important; }
-        .client-row-relate-head {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 8px;
-            margin-bottom: 10px;
-        }
-        .client-row-relate-head strong { font-size: .9rem; color: #fff; }
-        .client-row-relate-head small { display: block; font-size: .74rem; color: rgba(210,217,226,.68); }
-        .client-row-relate-close {
-            width: 26px;
-            height: 26px;
-            border-radius: 8px;
-            border: 1px solid rgba(255,255,255,.16);
-            background: rgba(255,255,255,.04);
-            color: #f4f7fb;
-            cursor: pointer;
-        }
-        .client-row-relate-list {
-            display: grid;
-            gap: 7px;
-        }
-        .client-row-relate-item {
-            width: 100%;
-            display: inline-flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 10px;
-            padding: 10px 12px;
-            border-radius: 10px;
-            border: 1px solid rgba(255,255,255,.1);
-            background: rgba(255,255,255,.03);
-            color: #eef3f8;
-            text-decoration: none;
-            text-align: left;
-            font-size: .8rem;
-            transition: background .18s ease, border-color .18s ease, transform .18s ease;
-            cursor: pointer;
-        }
-        .client-row-relate-item:hover {
-            background: rgba(255,255,255,.06);
-            border-color: rgba(255,255,255,.16);
-            transform: translateY(-1px);
-        }
-        .client-row-relate-item.is-disabled {
-            opacity: .55;
-            pointer-events: none;
-        }
-        .client-row-relate-empty {
-            padding: 9px 10px;
-            border-radius: 10px;
-            border: 1px solid rgba(255,255,255,.08);
-            background: rgba(255,255,255,.03);
-            color: rgba(205,214,224,.72);
-            font-size: .8rem;
-            line-height: 1.45;
-        }
-        .client-history-amount.is-credit {
-            color: #9ee6bb;
-            font-weight: 600;
-        }
-        .client-history-amount.is-debit {
-            color: #ffd4bf;
-            font-weight: 600;
-        }
-        @media (max-width: 1180px) {
-            .client-profile-grid,
-            .client-sales-head,
-            .client-hub-hero,
-            .client-data-grid,
-            .client-open-grid,
-            .client-doc-grid,
-            .client-history-metrics { grid-template-columns: 1fr; }
-            .client-sales-head {
-                flex-direction: column;
-                align-items: stretch;
-            }
-            .client-sales-head-right {
-                justify-content: flex-start;
-            }
-        }
-        @media (max-width: 640px) {
-            .client-profile-shell {
-                padding: 14px;
-            }
-            .client-profile-list strong {
-                display: block;
-                min-width: 0;
-                margin: 0 0 2px;
-            }
-        }
+        .client-ledger-page{display:grid;gap:18px}
+        .client-ledger-panel{border-radius:16px;border:1px solid rgba(255,255,255,.08);background:linear-gradient(180deg,rgba(16,22,33,.98),rgba(10,15,23,.99));overflow:hidden;box-shadow:0 24px 50px rgba(0,0,0,.2)}
+        .client-ledger-panel.is-sales{background:linear-gradient(180deg,rgba(15,21,31,.98),rgba(10,15,23,.99))}
+        .client-ledger-head,.client-ledger-sales-head,.client-ledger-open-row,.client-ledger-table-head,.client-ledger-table-foot,.client-ledger-inline,.client-ledger-actions,.client-ledger-tabs,.client-ledger-subtabs{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between}
+        .client-ledger-head{padding:16px 18px;background:linear-gradient(180deg,rgba(255,107,53,.14),rgba(255,107,53,.06));border-bottom:1px solid rgba(255,107,53,.16)}
+        .client-ledger-title-row{display:flex;align-items:flex-start;gap:14px;min-width:0}
+        .client-ledger-icon{width:54px;height:54px;border-radius:999px;display:inline-flex;align-items:center;justify-content:center;background:rgba(255,255,255,.96);color:#111722;border:1px solid rgba(255,255,255,.22);font-size:1.5rem;flex:0 0 auto}
+        .client-ledger-head h2,.client-ledger-sales-head h2,.client-ledger-sales-head h3{margin:0;color:var(--color-white)}
+        .client-ledger-head p,.client-ledger-sales-head p,.client-ledger-open-row p,.client-ledger-table-head p{margin:6px 0 0;color:#c7d0df;line-height:1.55}
+        .client-ledger-body,.client-ledger-table-wrap{padding:18px}
+        .client-ledger-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+        .client-ledger-grid.wide{grid-template-columns:1.25fr .95fr}
+        .client-ledger-box{padding:14px 16px;border-radius:14px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.03);min-width:0}
+        .client-ledger-label{display:inline-flex;align-items:center;padding:5px 10px;margin-bottom:12px;border-left:3px solid var(--color-primary);background:rgba(255,107,53,.1);color:var(--color-primary-light);font-size:.78rem;font-weight:700;letter-spacing:.04em;text-transform:uppercase}
+        .client-ledger-data{display:grid;grid-template-columns:minmax(120px,180px) minmax(0,1fr);gap:8px 10px;margin:0}
+        .client-ledger-data dt{color:#a6b0c0;font-weight:600;margin:0}
+        .client-ledger-data dd{margin:0;color:var(--color-white);overflow-wrap:anywhere}
+        .client-ledger-kpis{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+        .client-ledger-kpi{padding:12px 13px;border-radius:12px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.04)}
+        .client-ledger-kpi span{display:block;color:#9faac0;font-size:.75rem;text-transform:uppercase;letter-spacing:.08em}
+        .client-ledger-kpi strong{display:block;margin-top:6px;color:var(--color-white);font-size:1.15rem}
+        .client-ledger-open-links{display:flex;flex-wrap:wrap;gap:8px}
+        .client-ledger-open-links a,.client-ledger-open-links span{display:inline-flex;align-items:center;padding:7px 11px;border-radius:999px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.04);color:#eef3f8;text-decoration:none;font-size:.86rem}
+        .client-ledger-open-links a:hover{border-color:rgba(255,107,53,.3);background:rgba(255,107,53,.12)}
+        .client-ledger-sales-head{padding:14px 18px;border-top:2px solid rgba(255,107,53,.8);border-bottom:1px solid rgba(255,255,255,.08);background:linear-gradient(180deg,rgba(255,255,255,.06),rgba(255,255,255,.03))}
+        .client-ledger-plus{width:40px;height:40px;display:inline-flex;align-items:center;justify-content:center;border-radius:999px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.04);color:var(--color-white);font-size:1.2rem}
+        .client-ledger-tabs{padding:0 18px;gap:0;border-bottom:1px solid rgba(255,255,255,.08);overflow-x:auto;background:rgba(255,255,255,.025)}
+        .client-ledger-tab{display:inline-flex;align-items:center;justify-content:center;min-height:38px;padding:0 16px;border-right:1px solid rgba(255,255,255,.08);color:#d8dfeb;text-decoration:none;white-space:nowrap;background:rgba(255,255,255,.03);font-size:.9rem}
+        .client-ledger-tab:first-child{border-left:1px solid rgba(255,255,255,.08)}
+        .client-ledger-tab.active{background:linear-gradient(180deg,rgba(255,107,53,.18),rgba(255,107,53,.08));color:var(--color-white);box-shadow:inset 0 2px 0 rgba(255,107,53,.9)}
+        .client-ledger-open-row{padding:12px 18px 0}
+        .client-ledger-subtab{display:inline-flex;align-items:center;justify-content:center;padding:8px 12px;border-radius:999px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.03);color:#e7edf7;text-decoration:none}
+        .client-ledger-subtab.active{background:rgba(255,107,53,.12);border-color:rgba(255,107,53,.3)}
+        .client-ledger-open-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;padding:14px 18px 0}
+        .client-ledger-open-item,.client-ledger-activity-item{padding:14px;border-radius:14px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.03)}
+        .client-ledger-open-copy{display:grid;gap:6px;color:#c9d1de}
+        .client-ledger-table-card{border-radius:12px;overflow:hidden;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.02)}
+        .client-ledger-table-head{padding:12px 16px;border-bottom:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.02)}
+        .client-ledger-pills{display:flex;flex-wrap:wrap;gap:8px}
+        .client-ledger-pill{display:inline-flex;align-items:center;gap:6px;padding:8px 11px;border-radius:999px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.04);color:#eef3f8;font-size:.84rem}
+        .client-ledger-table-foot{padding:14px 16px;border-top:1px solid rgba(255,255,255,.08);color:#c4cddd}
+        .client-ledger-panel.is-sales .admin-table thead th{background:rgba(255,255,255,.04);color:#e7edf7;font-size:.82rem;text-transform:none;letter-spacing:.01em;padding-top:12px;padding-bottom:12px}
+        .client-ledger-panel.is-sales .admin-table tbody td{padding-top:12px;padding-bottom:12px;vertical-align:middle}
+        .client-ledger-panel.is-sales .admin-table tbody tr:hover{background:rgba(255,255,255,.025)}
+        .client-ledger-panel.is-sales .actions .client-ledger-inline{gap:8px}
+        .client-ledger-panel.is-sales .client-inline-badge{font-size:.68rem}
+        .client-inline-badge{display:inline-flex;padding:4px 8px;border-radius:999px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.06);font-size:.72rem;text-transform:uppercase}
+        .client-inline-badge.is-fiscal{background:rgba(31,143,255,.12);border-color:rgba(31,143,255,.24)}
+        .client-inline-badge.is-internal{background:rgba(255,107,53,.12);border-color:rgba(255,107,53,.24)}
+        .client-inline-badge.is-saas{background:rgba(151,117,250,.12);border-color:rgba(151,117,250,.22)}
+        .client-inline-badge.is-payment{background:rgba(25,209,127,.12);border-color:rgba(25,209,127,.22)}
+        .client-inline-badge.is-movement{background:rgba(255,193,7,.12);border-color:rgba(255,193,7,.22)}
+        .client-ledger-menu{position:relative}
+        .client-ledger-popover{position:absolute;top:calc(100% + 8px);right:0;width:min(420px,86vw);z-index:45;padding:14px;border-radius:14px;border:1px solid rgba(255,255,255,.12);background:linear-gradient(180deg,rgba(18,25,38,.98),rgba(11,18,30,.99));box-shadow:0 16px 40px rgba(0,0,0,.38)}
+        .client-ledger-popover[hidden]{display:none!important}
+        .client-ledger-popover-list{display:grid;gap:8px}
+        .client-ledger-popover-item,.client-ledger-popover-list button{width:100%;display:inline-flex;justify-content:space-between;align-items:center;padding:10px 12px;border-radius:12px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.03);color:#eef3f8;text-decoration:none;text-align:left}
+        .client-ledger-popover-item.is-disabled,.client-ledger-popover-list button:disabled{opacity:.5;pointer-events:none}
+        .client-ledger-activity-list{display:grid;gap:12px;padding:14px 18px 18px}
+        .client-ledger-activity-item p{margin:8px 0 0;color:#c9d1de;line-height:1.55}
+        .client-ledger-activity-top{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:8px;color:#c9d1de}
+        @media (max-width:1100px){.client-ledger-grid,.client-ledger-grid.wide,.client-ledger-open-grid{grid-template-columns:1fr}}
+        @media (max-width:760px){.client-ledger-head,.client-ledger-sales-head,.client-ledger-open-row,.client-ledger-table-head,.client-ledger-table-foot{flex-direction:column;align-items:stretch}.client-ledger-actions{justify-content:flex-start}.client-ledger-data{grid-template-columns:1fr}.client-ledger-kpis{grid-template-columns:1fr}}
     </style>
 
-    <section class="client-profile-shell">
-        <div class="client-profile-head">
-            <div class="client-profile-icon" aria-hidden="true">&#128101;</div>
-            <div>
-                <h2 class="client-profile-title">Ver cliente {{ client.company_name }}</h2>
-                <p class="client-profile-subtitle">Resumen operativo y fiscal del cliente en la empresa activa.</p>
-            </div>
-        </div>
-        <div class="client-profile-grid">
-            <article class="client-profile-card">
-                <h3>Datos de contacto</h3>
-                <ul class="client-profile-list">
-                                        <li>
-                        <strong>Estado:</strong>
-                        {% if client.user and client.user.is_active and client.is_approved %}
-                        <span class="client-profile-status is-ok">Habilitado</span>
-                        {% elif client.user and client.user.is_active %}
-                        <span class="client-profile-status is-warn">Pendiente</span>
-                        {% else %}
-                        <span class="client-profile-status is-off">Inactivo</span>
-                        {% endif %}
-                    </li>
-                    <li><strong>N&ordm; de cliente:</strong> {{ client.pk }}</li>
-                    <li><strong>Nombre:</strong> {{ client.company_name|default:"-" }}</li>
-                    <li><strong>Contacto:</strong> {% if client.user %}{{ client.user.get_full_name|default:client.user.username }}{% else %}-{% endif %}</li>
-                    <li><strong>Mail:</strong> {% if client.user %}{{ client.user.email|default:"-" }}{% else %}-{% endif %}</li>
-                    <li><strong>Telefonos:</strong> {{ client.phone|default:"-" }}</li>
-                    <li><strong>Domicilio:</strong> {{ client.fiscal_address|default:"-" }}</li>
-                    <li><strong>Localidad:</strong> {{ client.fiscal_city|default:"-" }}</li>
-                    <li><strong>Provincia:</strong> {{ client.fiscal_province|default:"-" }}</li>
-                    <li><strong>Codigo postal:</strong> {{ client.postal_code|default:"-" }}</li>
-                </ul>
-            </article>
-            <article class="client-profile-card">
-                <h3>Datos de facturacion</h3>
-                <ul class="client-profile-list">
-                    <li><strong>Condicion de IVA:</strong> {{ client.get_iva_condition_display|default:"-" }}</li>
-                    <li><strong>Razon social:</strong> {{ client.company_name|default:"-" }}</li>
-                    <li><strong>CUIT/DNI:</strong> {{ client.cuit_dni|default:"-" }}</li>
-                    <li><strong>Condicion de venta:</strong> {{ sale_condition_label }}</li>
-                    <li><strong>Empresa activa:</strong> {{ active_company_label }}</li>
-                </ul>
-            </article>
-            <article class="client-profile-card">
-                <h3>Categoria del cliente</h3>
-                <ul class="client-profile-list">
-                    <li><strong>Categoria:</strong> {{ effective_category.name|default:"-" }}</li>
-                    <li><strong>Lista de precio:</strong> {{ effective_price_list.name|default:"-" }}</li>
-                    <li><strong>Descuento:</strong> {{ effective_discount|floatformat:2 }}%</li>
-                    <li><strong>Operacion:</strong> {% if operations_locked %}Bloqueada{% else %}Autorizada{% endif %}</li>
-                </ul>
-            </article>
-            <article class="client-profile-card">
-                <h3>Situacion del cliente</h3>
-                <ul class="client-profile-list">
-                    <li><strong>Pedidos registrados:</strong> {{ summary.orders_count }}</li>
-                    <li><strong>Total operado:</strong> ${{ summary.total_amount|floatformat:2 }}</li>
-                    <li><strong>Total pagado:</strong> ${{ payments_summary.total_paid|floatformat:2 }}</li>
-                    <li><strong>Saldo actual:</strong> ${{ balance_summary.current_balance|floatformat:2 }}</li>
-                    <li><strong>Ultimo movimiento:</strong> {{ balance_summary.last_order_at|date:"d/m/Y H:i"|default:"-" }}</li>
-                </ul>
-            </article>
-        </div>
-    </section>
-
-    <section class="client-sales-shell">
-        <div class="client-sales-head">
-            <div class="client-sales-title-wrap">
-                <div class="client-sales-icon" aria-hidden="true">&#128179;</div>
+    <section class="client-ledger-panel">
+        <div class="client-ledger-head">
+            <div class="client-ledger-title-row">
+                <div class="client-ledger-icon" aria-hidden="true">&#128101;</div>
                 <div>
-                    <h2 class="client-sales-heading">Ventas del cliente {{ client.company_name }}</h2>
-                    <p class="client-sales-kicker">
-                        {% if client.user %}{{ client.user.username }}{% else %}Sin usuario{% endif %}
-                        {% if client.cuit_dni %} | CUIT/DNI {{ client.cuit_dni }}{% endif %}
-                        | {{ active_company_label }}
-                    </p>
+                    <h2>Ver el cliente {{ client.company_name }}</h2>
+                    <p>Legajo comercial del cliente con datos de contacto, condicion fiscal, situacion actual y acceso rapido a ventas, cobros y cuenta corriente.</p>
                 </div>
             </div>
-            <div class="client-sales-head-right">
-                <div class="client-mini-stat">
-                    <span>Saldo actual</span>
-                    <strong>${{ balance_summary.current_balance|floatformat:2 }}</strong>
-                </div>
-                <div class="client-mini-stat">
-                    <span>Estado</span>
-                    <strong>{% if operations_locked %}Bloqueado{% else %}Operable{% endif %}</strong>
-                </div>
+            <div class="client-ledger-actions">
+                {% if can_edit_client_profile %}<a href="{% url 'admin_client_edit' client.pk %}" class="btn btn-outline">Editar cliente</a>{% endif %}
+                <a href="{% url 'admin_client_list' %}" class="btn btn-outline">Volver a clientes</a>
             </div>
         </div>
 
-        <div class="client-sales-toolbar">
-            <div class="client-toolbar-actions">
-                {% if can_edit_client_profile %}
-                <a href="{% url 'admin_client_edit' client.pk %}" class="client-action-compact"><span aria-hidden="true">&#9998;</span> Editar</a>
-                {% endif %}
-                <a href="{% url 'admin_client_list' %}" class="client-action-compact"><span aria-hidden="true">&#8617;</span> Volver</a>
+        <div class="client-ledger-body">
+            <div class="client-ledger-grid">
+                <article class="client-ledger-box">
+                    <span class="client-ledger-label">Datos de contacto</span>
+                    <dl class="client-ledger-data">
+                        <dt>Estado</dt><dd>{% if not client_company_missing and client.user and client.user.is_active %}Habilitado{% elif client_company_missing %}Sin operacion en empresa activa{% else %}Pendiente{% endif %}</dd>
+                        <dt>No de cliente</dt><dd>{{ client.pk }}</dd>
+                        <dt>Nombre</dt><dd>{{ client.company_name|default:"-" }}</dd>
+                        <dt>Contacto</dt><dd>{% if client.user %}{{ client.user.get_full_name|default:client.user.username }}{% else %}-{% endif %}</dd>
+                        <dt>Mail</dt><dd>{% if client.user %}{{ client.user.email|default:"-" }}{% else %}-{% endif %}</dd>
+                        <dt>Telefonos</dt><dd>{{ client.phone|default:"-" }}</dd>
+                        <dt>Domicilio</dt><dd>{{ client.address|default:client.fiscal_address|default:"-" }}</dd>
+                        <dt>Localidad</dt><dd>{{ client.fiscal_city|default:"-" }}</dd>
+                        <dt>Provincia</dt><dd>{{ client.fiscal_province|default:"-" }}</dd>
+                        <dt>Codigo postal</dt><dd>{{ client.postal_code|default:"-" }}</dd>
+                    </dl>
+                </article>
+
+                <article class="client-ledger-box">
+                    <span class="client-ledger-label">Datos de facturacion</span>
+                    <dl class="client-ledger-data">
+                        <dt>Condicion IVA</dt><dd>{{ client.get_iva_condition_display|default:"-" }}</dd>
+                        <dt>Razon social</dt><dd>{{ client.company_name|default:"-" }}</dd>
+                        <dt>CUIT</dt><dd>{{ client.cuit_dni|default:"-" }}</dd>
+                        <dt>Documento</dt><dd>{{ client.document_type|default:"-" }} {{ client.document_number|default:"" }}</dd>
+                        <dt>Domicilio fiscal</dt><dd>{{ client.fiscal_address|default:"-" }}</dd>
+                        <dt>Localidad fiscal</dt><dd>{{ client.fiscal_city|default:"-" }}</dd>
+                        <dt>Provincia fiscal</dt><dd>{{ client.fiscal_province|default:"-" }}</dd>
+                    </dl>
+                </article>
+
+                <article class="client-ledger-box">
+                    <span class="client-ledger-label">Categoria del cliente</span>
+                    <dl class="client-ledger-data">
+                        <dt>Categoria</dt><dd>{{ effective_category.name|default:"-" }}</dd>
+                        <dt>Lista de precio</dt><dd>{{ effective_price_list.name|default:"-" }}</dd>
+                        <dt>Cuenta corriente</dt><dd>{{ sale_condition_label }}</dd>
+                        <dt>Descuento</dt><dd>{{ effective_discount|floatformat:2 }}%</dd>
+                        <dt>Empresa activa</dt><dd>{{ active_company_label }}</dd>
+                    </dl>
+                </article>
+
+                <article class="client-ledger-box">
+                    <span class="client-ledger-label">Moneda</span>
+                    <dl class="client-ledger-data">
+                        <dt>Moneda</dt><dd>Pesos (ARS)</dd>
+                        <dt>Usuario portal</dt><dd>{% if client.user %}{{ client.user.username|default:"Sin especificar" }}{% else %}Sin usuario{% endif %}</dd>
+                        <dt>Portal</dt><dd>{% if client.user and client.user.is_active %}Habilitado{% else %}No habilitado{% endif %}</dd>
+                    </dl>
+                </article>
             </div>
-            <div class="client-toolbar-meta">
-                <span class="client-toolbar-chip"><strong>Condicion</strong> {{ sale_condition_label }}</span>
-                <span class="client-toolbar-chip"><strong>Lista</strong> {{ effective_price_list.name|default:"-" }}</span>
-                <span class="client-toolbar-chip"><strong>Categoria</strong> {{ effective_category.name|default:"-" }}</span>
+
+            <div class="client-ledger-grid wide">
+                <article class="client-ledger-box">
+                    <span class="client-ledger-label">Situacion del cliente</span>
+                    <div class="client-ledger-kpis">
+                        <div class="client-ledger-kpi"><span>Ventas cerradas</span><strong>{{ movement_rows_by_tab.sales|length }}</strong></div>
+                        <div class="client-ledger-kpi"><span>Total facturado</span><strong>${{ balance_summary.orders_total|floatformat:2 }}</strong></div>
+                        <div class="client-ledger-kpi"><span>Total pagado</span><strong>${{ payments_summary.total_paid|floatformat:2 }}</strong></div>
+                        <div class="client-ledger-kpi"><span>Saldo actual</span><strong>${{ balance_summary.current_balance|floatformat:2 }}</strong></div>
+                        <div class="client-ledger-kpi"><span>Ultima venta</span><strong>{{ summary.last_order_at|date:"d/m/Y"|default:"-" }}</strong></div>
+                        <div class="client-ledger-kpi"><span>Ultimo cobro</span><strong>{{ payments_summary.last_payment_at|date:"d/m/Y"|default:"-" }}</strong></div>
+                    </div>
+                </article>
+
+                <article class="client-ledger-box">
+                    <span class="client-ledger-label">Atencion rapida</span>
+                    <dl class="client-ledger-data" style="margin-bottom:12px;">
+                        <dt>Movimientos abiertos</dt><dd>{{ open_movements_count }}</dd>
+                        <dt>Anulados</dt><dd>{{ voided_movements_count }}</dd>
+                        <dt>Ultimo movimiento</dt><dd>{{ activity_timeline.0.occurred_at|date:"d/m/Y H:i"|default:"-" }}</dd>
+                    </dl>
+                    <div class="client-ledger-open-links">
+                        {% for row in open_movement_rows %}
+                            {% if row.edit_url %}<a href="{{ row.edit_url }}">{{ row.number_label }}</a>{% else %}<span>{{ row.number_label }}</span>{% endif %}
+                        {% empty %}
+                            <span>Sin movimientos abiertos en la empresa activa.</span>
+                        {% endfor %}
+                    </div>
+                </article>
             </div>
         </div>
     </section>
@@ -811,458 +177,177 @@
     <div class="alert alert-warning">Este cliente no esta habilitado para operar en la empresa activa. Las acciones comerciales quedan bloqueadas.</div>
     {% endif %}
 
-    <nav class="client-tab-nav">
-        {% for tab in client_tabs %}
-        <a href="{{ tab.url }}" class="client-tab-link {% if tab.is_active %}is-active{% endif %}">{{ tab.label }}</a>
-        {% endfor %}
-    </nav>
-
-    {% if client_tab == 'overview' %}
-    <section class="client-history-metrics is-3col">
-        <article class="history-metric-card is-info"><span class="history-metric-label">Pedidos</span><strong class="history-metric-value">{{ summary.orders_count }}</strong></article>
-        <article class="history-metric-card is-success"><span class="history-metric-label">Total pagado</span><strong class="history-metric-value">${{ payments_summary.total_paid|floatformat:2 }}</strong></article>
-        <article class="history-metric-card is-secondary"><span class="history-metric-label">Saldo actual</span><strong class="history-metric-value">${{ balance_summary.current_balance|floatformat:2 }}</strong></article>
-    </section>
-
-    <section class="client-data-grid">
-        <article class="client-mini-card"><strong>Datos generales</strong><div class="client-mini-list"><span>Usuario: {{ client.user.username|default:"-" }}</span><span>Email: {{ client.user.email|default:"-" }}</span><span>Telefono: {{ client.phone|default:"-" }}</span><span>Provincia: {{ client.province|default:"-" }}</span></div></article>
-        <article class="client-mini-card"><strong>Datos comerciales</strong><div class="client-mini-list"><span>Categoria: {{ effective_category.name|default:"-" }}</span><span>Descuento: {{ effective_discount|floatformat:2 }}%</span><span>Lista: {{ effective_price_list.name|default:"-" }}</span><span>Condicion: {{ sale_condition_label }}</span></div></article>
-        <article class="client-mini-card"><strong>Datos fiscales</strong><div class="client-mini-list"><span>Documento: {{ client.document_type|default:"-" }} {{ client.document_number|default:"-" }}</span><span>IVA: {{ client.get_iva_condition_display|default:"-" }}</span><span>Domicilio: {{ client.fiscal_address|default:"-" }}</span><span>{{ client.fiscal_city|default:"-" }} - {{ client.fiscal_province|default:"-" }} ({{ client.postal_code|default:"-" }})</span></div></article>
-    </section>
-
-    <section class="client-hub-card">
-        <div class="client-section-head"><div><h3>Operaciones abiertas</h3><p>Pedidos que siguen en curso dentro del contexto activo.</p></div></div>
-        <div class="client-open-grid">
-            {% for order in open_orders %}
-            <div class="client-open-item">
-                <div><strong>Pedido #{{ order.pk }}</strong><div class="text-muted">{{ order.created_at|date:"d/m/Y H:i" }} | {{ order.company.name|default:"-" }}</div><div class="text-muted">Total ${{ order.total|floatformat:2 }}</div></div>
-                <div class="client-foot-actions"><span class="badge badge-secondary">{{ order.get_status_display }}</span><a href="{% url 'admin_order_detail' order.pk %}" class="btn btn-outline btn-sm">Abrir</a></div>
+    <section class="client-ledger-panel is-sales">
+        <div class="client-ledger-sales-head">
+            <div class="client-ledger-title-row">
+                <div class="client-ledger-icon" aria-hidden="true">&#128179;</div>
+                <div>
+                    <h2>Ventas del cliente {{ client.company_name }}</h2>
+                    <p>Centro comercial del cliente para cuenta corriente, pagos, facturas, remitos, pedidos y presupuestos.</p>
+                </div>
             </div>
+            {% if quick_sales_document_actions %}
+            <div class="client-ledger-menu" data-movement-menu>
+                <button type="button" class="client-ledger-plus" data-movement-toggle title="Nuevo movimiento">+</button>
+                <div class="client-ledger-popover" data-movement-popover hidden>
+                    <div class="client-ledger-head" style="padding:0 0 10px;background:none;border:0;">
+                        <div>
+                            <strong style="color:#fff">Nuevo movimiento</strong>
+                            <div style="color:rgba(210,217,226,.68);font-size:.8rem">Acciones rapidas para {{ active_company_label }}</div>
+                        </div>
+                        <button type="button" class="btn btn-outline btn-sm" data-movement-close>Cerrar</button>
+                    </div>
+                    <div class="client-ledger-popover-list">
+                        {% for item in quick_sales_document_actions %}
+                            {% if item.method == 'get' %}
+                            <a href="{{ item.url }}" class="client-ledger-popover-item {% if item.disabled %}is-disabled{% endif %}"><span><strong>{{ item.label }}</strong><br><small>{{ item.help_text }}</small></span><span aria-hidden="true">&#10132;</span></a>
+                            {% else %}
+                            <form method="post" action="{{ item.url }}" style="margin:0;">{% csrf_token %}
+                                <input type="hidden" name="company_id" value="{{ selected_company_id }}">
+                                <input type="hidden" name="action" value="{{ item.action_value }}">
+                                <input type="hidden" name="sales_document_type_id" value="{{ item.sales_document_type.pk }}">
+                                <input type="hidden" name="origin_channel" value="admin" data-origin-channel-field="1">
+                                <button type="submit" class="client-ledger-popover-item {% if item.disabled %}is-disabled{% endif %}" {% if item.disabled %}disabled{% endif %}><span><strong>{{ item.label }}</strong><br><small>{{ item.help_text }}</small></span><span aria-hidden="true">&#10132;</span></button>
+                            </form>
+                            {% endif %}
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <nav class="client-ledger-tabs">
+            {% for tab in client_tabs %}
+            <a href="{{ tab.url }}" class="client-ledger-tab {% if tab.is_active %}active{% endif %}">{{ tab.label }}</a>
+            {% endfor %}
+        </nav>
+
+        <div class="client-ledger-open-row">
+            <div>
+                <h3 style="margin:0;color:#fff">Movimientos abiertos</h3>
+                <p>Borradores y anulados quedan aca hasta que se cierren o revisen.</p>
+            </div>
+            <div class="client-ledger-subtabs">
+                {% for tab in open_state_tabs %}
+                <a href="{{ tab.url }}" class="client-ledger-subtab {% if tab.is_active %}active{% endif %}">{{ tab.label }}</a>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="client-ledger-open-grid">
+            {% for row in open_movement_rows %}
+            <article class="client-ledger-open-item">
+                <div class="client-ledger-open-copy">
+                    <strong style="color:#fff">{{ row.type_label }} {{ row.number_label }}</strong>
+                    <span>{{ row.tx.occurred_at|date:"d/m/Y H:i" }} | {{ row.reference_title }}</span>
+                    <span>Total ${{ row.movement_total|floatformat:2 }} | {{ row.source_origin_label }}</span>
+                </div>
+                <div class="client-ledger-inline" style="margin-top:12px;">
+                    <span class="badge {{ row.movement_state_badge }}">{{ row.movement_state_label }}</span>
+                    {% if row.edit_url %}<a href="{{ row.edit_url }}" class="btn btn-outline btn-sm">{% if open_state_tab == 'open' %}Modificar este movimiento{% else %}Ver movimiento{% endif %}</a>{% endif %}
+                    {% if open_state_tab == 'open' and row.can_close_movement %}<form method="post" action="{% url 'admin_client_transaction_set_state' client.pk row.tx.pk %}" style="margin:0;">{% csrf_token %}<input type="hidden" name="state" value="closed"><input type="hidden" name="next" value="{{ request.get_full_path }}"><button type="submit" class="btn btn-outline btn-sm">Cerrar</button></form>{% endif %}
+                    {% if open_state_tab == 'open' and row.can_void_movement %}<form method="post" action="{% url 'admin_client_transaction_set_state' client.pk row.tx.pk %}" style="margin:0;">{% csrf_token %}<input type="hidden" name="state" value="voided"><input type="hidden" name="next" value="{{ request.get_full_path }}"><button type="submit" class="btn btn-outline btn-sm">Anular</button></form>{% endif %}
+                </div>
+            </article>
             {% empty %}
-            <div class="client-mini-card">No hay operaciones abiertas para este cliente.</div>
+            <article class="client-ledger-open-item">{% if open_state_tab == 'voided' %}No hay movimientos anulados para este cliente en la empresa activa.{% else %}No hay movimientos abiertos para este cliente en la empresa activa.{% endif %}</article>
             {% endfor %}
         </div>
-    </section>
 
-    {% elif client_tab == 'account' %}
-    <section class="client-ledger-panel">
-        <div class="client-ledger-topline">
-            <div>
-                <h3 class="client-ledger-title">{{ active_ledger_title }}</h3>
-                <p class="client-sales-kicker">{{ active_ledger_subtitle }}</p>
-            </div>
-            <div class="client-foot-actions">
-                {% if quick_sales_document_actions %}
-                <div class="client-movement-menu" data-movement-menu>
-                    <button type="button" class="client-action-compact is-primary" data-movement-toggle><span aria-hidden="true">&#10133;</span> Nuevo movimiento</button>
-                    <div class="client-movement-popover" data-movement-popover hidden>
-                        <div class="client-movement-head">
-                            <div>
-                                <strong>Agregar movimiento</strong>
-                                <small>Atajos comerciales del cliente en {{ active_company_label }}.</small>
-                            </div>
-                            <button type="button" class="client-movement-close" data-movement-close aria-label="Cerrar">x</button>
+        {% if movement_tab == 'activity' %}
+        <div class="client-ledger-activity-list">
+            {% for event in activity_timeline %}
+            <article class="client-ledger-activity-item">
+                <div class="client-ledger-activity-top"><span class="client-inline-badge">{{ event.badge }}</span><span>{{ event.occurred_at|date:"d/m/Y H:i" }}</span></div>
+                <strong style="color:#fff">{{ event.title }}</strong>
+                {% if event.summary %}<p>{{ event.summary }}</p>{% endif %}
+                <div class="client-ledger-inline" style="margin-top:10px;">
+                    {% if event.scope_label %}<span>{{ event.scope_label }}</span>{% endif %}
+                    {% if event.actor_label %}<span>{{ event.actor_label }}</span>{% endif %}
+                    {% if event.amount is not None %}<span>${{ event.amount|floatformat:2 }}</span>{% endif %}
+                    {% if event.detail_url %}<a href="{{ event.detail_url }}" class="btn btn-outline btn-sm">{{ event.detail_label }}</a>{% endif %}
+                </div>
+            </article>
+            {% empty %}
+            <article class="client-ledger-open-item">Sin actividad reciente para este cliente.</article>
+            {% endfor %}
+        </div>
+        {% else %}
+            {% if ledger_warning %}<div class="alert alert-warning" style="margin:14px 18px 0;">{{ ledger_warning }}</div>{% endif %}
+            <div class="client-ledger-table-wrap">
+                <div class="client-ledger-table-card">
+                    <div class="client-ledger-table-head">
+                        <div>
+                            <h3>{{ active_ledger_title }}</h3>
+                            <p>{{ active_ledger_subtitle }}</p>
                         </div>
-                        <div class="client-doc-launcher-list">
-                            {% for item in quick_sales_document_actions %}
-                                {% if item.method == 'get' %}
-                                <a href="{{ item.url }}" class="client-doc-launcher-item {{ item.css_class }} {% if item.disabled %}is-disabled{% endif %}">
-                                    <span class="client-doc-launcher-text"><strong>{{ item.label }}</strong><small>{{ item.help_text }}</small></span>
-                                    <span class="client-doc-launcher-arrow" aria-hidden="true">&#10132;</span>
-                                </a>
+                        {% if movement_tab == 'account' %}
+                        <div class="client-ledger-pills">
+                            <span class="client-ledger-pill"><strong>Debe</strong> ${{ balance_summary.orders_total|floatformat:2 }}</span>
+                            <span class="client-ledger-pill"><strong>Pago</strong> ${{ balance_summary.total_paid|floatformat:2 }}</span>
+                        </div>
+                        {% endif %}
+                    </div>
+                    <table class="admin-table">
+                        <thead>
+                            {% if movement_tab == 'account' %}
+                            <tr><th>Fecha</th><th>Tipo comercial</th><th>Numero</th><th>Referencia</th><th>Debe</th><th>Haber</th><th>Saldo</th><th>Estado</th><th>Acciones</th></tr>
+                            {% else %}
+                            <tr><th>Fecha</th><th>Tipo</th><th>Numero</th><th>Referencia</th><th>Total</th><th>Estado</th><th>Acciones</th></tr>
+                            {% endif %}
+                        </thead>
+                        <tbody>
+                            {% for row in ledger_rows %}
+                            <tr>
+                                <td>{{ row.tx.occurred_at|date:"d/m/Y H:i" }}</td>
+                                <td><strong>{{ row.type_label }}</strong>{% if row.type_family_label and row.type_family_label != row.type_label %}<br><small>{{ row.type_family_label }}</small>{% endif %}</td>
+                                <td><strong>{{ row.number_label }}</strong><br><span class="client-inline-badge {% if row.source_origin_label == 'Fiscal' %}is-fiscal{% elif row.source_origin_label == 'Interno' %}is-internal{% elif row.source_origin_label == 'SaaS' %}is-saas{% elif row.source_origin_label == 'Pago' %}is-payment{% else %}is-movement{% endif %}">{{ row.source_origin_label }}</span></td>
+                                <td><strong>{{ row.reference_title }}</strong>{% if row.reference_meta %}<br><small>{{ row.reference_meta }}</small>{% endif %}</td>
+                                {% if movement_tab == 'account' %}
+                                <td>{% if row.debit > 0 %}${{ row.debit|floatformat:2 }}{% else %}-{% endif %}</td>
+                                <td>{% if row.credit > 0 %}${{ row.credit|floatformat:2 }}{% else %}-{% endif %}</td>
+                                <td><strong>${{ row.running_balance|floatformat:2 }}</strong></td>
                                 {% else %}
-                                <form method="post" action="{{ item.url }}" style="margin:0;">{% csrf_token %}
-                                    <input type="hidden" name="company_id" value="{{ selected_company_id }}">
-                                    <input type="hidden" name="action" value="{{ item.action_value }}">
-                                    <input type="hidden" name="sales_document_type_id" value="{{ item.sales_document_type.pk }}">
-                                    <input type="hidden" name="origin_channel" value="admin" data-origin-channel-field="1">
-                                    <button type="submit" class="client-doc-launcher-item {{ item.css_class }} {% if item.disabled %}is-disabled{% endif %}" {% if item.disabled %}disabled{% endif %}>
-                                        <span class="client-doc-launcher-text"><strong>{{ item.label }}</strong><small>{{ item.help_text }}</small></span>
-                                        <span class="client-doc-launcher-arrow" aria-hidden="true">&#10132;</span>
-                                    </button>
-                                </form>
+                                <td><strong>${{ row.movement_total|floatformat:2 }}</strong></td>
                                 {% endif %}
+                                <td><span class="badge {{ row.movement_state_badge }}">{{ row.movement_state_label }}</span></td>
+                                <td class="actions">
+                                    <div class="client-ledger-inline">
+                                        {% if row.edit_url %}<a href="{{ row.edit_url }}" class="btn btn-outline btn-sm">{{ row.edit_label|default:"Abrir" }}</a>{% endif %}
+                                        {% if row.can_reopen_movement and row.movement_state == 'closed' %}<form method="post" action="{% url 'admin_client_transaction_set_state' client.pk row.tx.pk %}" style="margin:0;">{% csrf_token %}<input type="hidden" name="state" value="open"><input type="hidden" name="next" value="{{ request.get_full_path }}"><button type="submit" class="btn btn-outline btn-sm">Dejar abierta</button></form>{% endif %}
+                                        {% if row.can_void_movement %}<form method="post" action="{% url 'admin_client_transaction_set_state' client.pk row.tx.pk %}" style="margin:0;">{% csrf_token %}<input type="hidden" name="state" value="voided"><input type="hidden" name="next" value="{{ request.get_full_path }}"><button type="submit" class="btn btn-outline btn-sm">Anular</button></form>{% endif %}
+                                        {% if row.document_url %}<a href="{{ row.document_url }}" class="btn btn-outline btn-sm" {% if row.document_target_blank %}data-print-window="1" target="_blank" rel="noopener noreferrer"{% endif %}>{{ row.document_action_label|default:"Documento" }}</a>{% elif row.document_locked %}<span class="btn btn-outline btn-sm">Cerrar para imprimir</span>{% endif %}
+                                        {% if row.payment_action_url and movement_tab != 'payments' %}<a href="{{ row.payment_action_url }}" class="btn btn-outline btn-sm">Cobro</a>{% endif %}
+                                    </div>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="{% if movement_tab == 'account' %}9{% else %}7{% endif %}" class="text-center text-muted">No hay movimientos para este filtro.</td></tr>
                             {% endfor %}
+                        </tbody>
+                    </table>
+                    <div class="client-ledger-table-foot">
+                        <span>{{ ledger_rows_total }} movimientos | mostrando {{ ledger_rows|length }}</span>
+                        <div class="client-ledger-inline">
+                            {% if ledger_hidden_count > 0 and ledger_more_url %}<a href="{{ ledger_more_url }}" class="btn btn-outline btn-sm">Mostrar mas</a>{% endif %}
+                            {% if ledger_hidden_count > 0 and ledger_show_all_url %}<a href="{{ ledger_show_all_url }}" class="btn btn-outline btn-sm">Mostrar todo</a>{% endif %}
                         </div>
                     </div>
                 </div>
-                {% endif %}
             </div>
-        </div>
-        {% if ledger_tab == 'account' %}
-        <div class="client-ledger-summary">
-            <div class="client-ledger-chip"><span>Deuda</span><strong>${{ balance_summary.orders_total|floatformat:2 }}</strong></div>
-            <div class="client-ledger-chip"><span>Pago</span><strong>${{ balance_summary.total_paid|floatformat:2 }}</strong></div>
-            <div class="client-ledger-chip"><span>Saldo</span><strong>${{ balance_summary.current_balance|floatformat:2 }}</strong></div>
-            <div class="client-ledger-chip"><span>Movimientos</span><strong>{{ ledger_rows_total }}</strong></div>
-            <div class="client-ledger-chip"><span>Abiertos</span><strong>{{ open_movements_count }}</strong></div>
-        </div>
-        <div class="client-section-head" style="margin-bottom:10px;">
-            <div>
-                <h3>Movimientos abiertos</h3>
-                <p>Seguimiento operativo de movimientos que aun no se cerraron ni anularon.</p>
-            </div>
-        </div>
-        <div class="client-open-grid" style="margin-bottom:16px;">
-            {% for row in open_movement_rows %}
-            <div class="client-open-item">
-                <div>
-                    <strong>{{ row.type_label }} {{ row.number_label }}</strong>
-                    <div class="text-muted">{{ row.tx.occurred_at|date:"d/m/Y H:i" }} | {{ row.reference_title }}</div>
-                    <div class="text-muted">Debe ${{ row.debit|floatformat:2 }} | Haber ${{ row.credit|floatformat:2 }}</div>
-                </div>
-                <div class="client-foot-actions">
-                    <span class="badge {{ row.movement_state_badge }}">{{ row.movement_state_label }}</span>
-                    <form method="post" action="{% url 'admin_client_transaction_set_state' client.pk row.tx.pk %}" style="margin:0;">
-                        {% csrf_token %}
-                        <input type="hidden" name="next" value="{{ history_current_url }}">
-                        <input type="hidden" name="state" value="closed">
-                        <button type="submit" class="btn btn-outline btn-sm">Cerrar</button>
-                    </form>
-                    <form method="post" action="{% url 'admin_client_transaction_set_state' client.pk row.tx.pk %}" style="margin:0;">
-                        {% csrf_token %}
-                        <input type="hidden" name="next" value="{{ history_current_url }}">
-                        <input type="hidden" name="state" value="voided">
-                        <button type="submit" class="btn btn-danger-outline btn-sm" onclick="return confirm('Anular este movimiento?');">Anular</button>
-                    </form>
-                </div>
-            </div>
-            {% empty %}
-            <div class="client-mini-card">No hay movimientos abiertos para este cliente en la empresa activa.</div>
-            {% endfor %}
-        </div>
         {% endif %}
-        {% if ledger_warning %}<div class="alert alert-warning" style="margin-bottom:14px;">{{ ledger_warning }}</div>{% endif %}
-        <div class="client-table-card is-ledger">
-            <table class="admin-table">
-                {% if ledger_tab == 'account' %}
-                <thead><tr><th>Fecha</th><th>Tipo comercial</th><th>Numero</th><th>Referencia</th><th>Debe</th><th>Haber</th><th>Saldo</th><th>Estado</th><th>Acciones</th></tr></thead>
-                {% else %}
-                <thead>
-                    <tr>
-                        <th>Fecha</th>
-                        <th>Tipo</th>
-                        <th>Numero</th>
-                        <th>Usuario</th>
-                        {% if ledger_tab != 'remitos' %}<th>Total</th>{% endif %}
-                        <th>Acciones</th>
-                    </tr>
-                </thead>
-                {% endif %}
-                <tbody>
-                    {% for row in ledger_rows %}
-                    {% if ledger_tab == 'account' %}
-                    <tr>
-                        <td>{{ row.tx.occurred_at|date:"d/m/Y H:i" }}</td>
-                        <td>
-                            <div class="client-cell-stack">
-                                <strong>{{ row.type_label }}</strong>
-                                {% if row.type_family_label and row.type_family_label != row.type_label %}
-                                <small>{{ row.type_family_label }}</small>
-                                {% endif %}
-                                {% if row.reference_title %}
-                                <small>{{ row.reference_title }}</small>
-                                {% endif %}
-                            </div>
-                        </td>
-                        <td>
-                            <div class="client-cell-stack">
-                                <strong>{{ row.number_label }}</strong>
-                                <span class="client-inline-badge {% if row.source_origin_label == 'Fiscal' %}is-fiscal{% elif row.source_origin_label == 'Interno' %}is-internal{% elif row.source_origin_label == 'SaaS' %}is-saas{% elif row.source_origin_label == 'Pago' %}is-payment{% else %}is-movement{% endif %}">{{ row.source_origin_label }}</span>
-                            </div>
-                        </td>
-                        <td>
-                            <div class="client-cell-stack">
-                                <strong>{{ row.reference_title }}</strong>
-                                {% if row.reference_meta %}<small>{{ row.reference_meta }}</small>{% endif %}
-                            </div>
-                        </td>
-                        <td>{% if row.debit > 0 %}${{ row.debit|floatformat:2 }}{% else %}-{% endif %}</td>
-                        <td>{% if row.credit > 0 %}${{ row.credit|floatformat:2 }}{% else %}-{% endif %}</td>
-                        <td><strong>${{ row.running_balance|floatformat:2 }}</strong></td>
-                        <td><span class="badge {{ row.movement_state_badge }}">{{ row.movement_state_label }}</span></td>
-                        <td class="actions">
-                            <div class="client-row-actions">
-                                {% if row.document_url %}
-                                <a href="{{ row.document_url }}" class="client-icon-action" title="{{ row.document_action_label }}" {% if row.document_target_blank %}data-print-window="1" target="_blank" rel="noopener noreferrer"{% endif %}><span aria-hidden="true">&#128196;</span></a>
-                                {% endif %}
-                                {% if related_sales_document_actions %}
-                                <div class="client-row-relate" data-relate-menu>
-                                    <button type="button" class="client-icon-action" data-relate-toggle title="Relacionar venta"><span aria-hidden="true">&#10133;</span></button>
-                                    <div class="client-row-relate-popover" data-relate-popover hidden>
-                                        <div class="client-row-relate-head">
-                                            <div>
-                                                <strong>Relacionar venta</strong>
-                                            </div>
-                                            <button type="button" class="client-row-relate-close" data-relate-close aria-label="Cerrar">x</button>
-                                        </div>
-                                        <div class="client-row-relate-list">
-                                            {% if row.can_relate %}
-                                                {% for item in related_sales_document_actions %}
-                                                <form method="post" action="{{ item.url }}" style="margin:0;">{% csrf_token %}
-                                                    <input type="hidden" name="company_id" value="{{ selected_company_id }}">
-                                                    <input type="hidden" name="action" value="{{ item.action_value }}">
-                                                    <input type="hidden" name="sales_document_type_id" value="{{ item.sales_document_type.pk }}">
-                                                    <input type="hidden" name="origin_channel" value="admin" data-origin-channel-field="1">
-                                                    <input type="hidden" name="source_tx_id" value="{{ row.tx.pk }}">
-                                                    <button type="submit" class="client-row-relate-item {{ item.css_class }} {% if item.disabled %}is-disabled{% endif %}" {% if item.disabled %}disabled{% endif %}>
-                                                        <span class="client-doc-launcher-text"><strong>{{ item.label }}</strong></span>
-                                                        <span class="client-doc-launcher-arrow" aria-hidden="true">&#10132;</span>
-                                                    </button>
-                                                </form>
-                                                {% endfor %}
-                                            {% else %}
-                                            <div class="client-row-relate-empty">Este movimiento no tiene pedido base para crear una venta relacionada.</div>
-                                            {% endif %}
-                                        </div>
-                                    </div>
-                                </div>
-                                {% endif %}
-                                {% if row.detail_url %}
-                                <a href="{{ row.detail_url }}" class="client-icon-action" title="{{ row.detail_label|default:'Abrir' }}"><span aria-hidden="true">&#128279;</span></a>
-                                {% endif %}
-                                {% if row.document_locked %}
-                                <span class="client-icon-action is-danger" title="{{ row.document_action_label|default:'Cerrar movimiento para imprimir' }}"><span aria-hidden="true">&#128274;</span></span>
-                                {% endif %}
-                                {% if not row.document_url and not row.detail_url and not row.document_locked %}
-                                <span class="client-icon-action is-danger" title="Sin accion disponible"><span aria-hidden="true">&#10005;</span></span>
-                                {% endif %}
-                            </div>
-                            <div class="client-row-actions" style="margin-top:6px;">
-                                {% if row.movement_state != 'closed' %}
-                                <form method="post" action="{% url 'admin_client_transaction_set_state' client.pk row.tx.pk %}" style="margin:0;">
-                                    {% csrf_token %}
-                                    <input type="hidden" name="next" value="{{ history_current_url }}">
-                                    <input type="hidden" name="state" value="closed">
-                                    <button type="submit" class="btn btn-outline btn-sm">Cerrar</button>
-                                </form>
-                                {% endif %}
-                                {% if row.movement_state != 'open' and row.can_reopen_movement %}
-                                <form method="post" action="{% url 'admin_client_transaction_set_state' client.pk row.tx.pk %}" style="margin:0;">
-                                    {% csrf_token %}
-                                    <input type="hidden" name="next" value="{{ history_current_url }}">
-                                    <input type="hidden" name="state" value="open">
-                                    <button type="submit" class="btn btn-outline btn-sm">Dejar abierto</button>
-                                </form>
-                                {% endif %}
-                                {% if row.movement_state != 'voided' %}
-                                <form method="post" action="{% url 'admin_client_transaction_set_state' client.pk row.tx.pk %}" style="margin:0;">
-                                    {% csrf_token %}
-                                    <input type="hidden" name="next" value="{{ history_current_url }}">
-                                    <input type="hidden" name="state" value="voided">
-                                    <button type="submit" class="btn btn-danger-outline btn-sm" onclick="return confirm('Anular este movimiento?');">Anular</button>
-                                </form>
-                                {% endif %}
-                            </div>
-                        </td>
-                    </tr>
-                    {% else %}
-                    <tr>
-                        <td>{{ row.tx.occurred_at|date:"d/m/Y H:i" }}</td>
-                        <td>
-                            <div class="client-cell-stack">
-                                <strong>{{ row.type_label }}</strong>
-                                {% if row.type_family_label and row.type_family_label != row.type_label %}
-                                <small>{{ row.type_family_label }}</small>
-                                {% endif %}
-                            </div>
-                        </td>
-                        <td>
-                            <div class="client-cell-stack">
-                                <strong>{{ row.number_label }}</strong>
-                                <span class="client-inline-badge {% if row.source_origin_label == 'Fiscal' %}is-fiscal{% elif row.source_origin_label == 'Interno' %}is-internal{% elif row.source_origin_label == 'SaaS' %}is-saas{% elif row.source_origin_label == 'Pago' %}is-payment{% else %}is-movement{% endif %}">{{ row.source_origin_label }}</span>
-                            </div>
-                        </td>
-                        <td>{{ row.actor_label }}</td>
-                        {% if ledger_tab != 'remitos' %}
-                        <td>{% if row.movement_total > 0 %}${{ row.movement_total|floatformat:2 }}{% else %}-{% endif %}</td>
-                        {% endif %}
-                        <td class="actions">
-                            <div class="client-row-actions">
-                                {% if row.document_url %}
-                                <a href="{{ row.document_url }}" class="client-icon-action" title="{{ row.document_action_label }}" {% if row.document_target_blank %}data-print-window="1" target="_blank" rel="noopener noreferrer"{% endif %}><span aria-hidden="true">&#128196;</span></a>
-                                {% endif %}
-                                {% if related_sales_document_actions %}
-                                <div class="client-row-relate" data-relate-menu>
-                                    <button type="button" class="client-icon-action" data-relate-toggle title="Relacionar venta"><span aria-hidden="true">&#10133;</span></button>
-                                    <div class="client-row-relate-popover" data-relate-popover hidden>
-                                        <div class="client-row-relate-head">
-                                            <div>
-                                                <strong>Relacionar venta</strong>
-                                            </div>
-                                            <button type="button" class="client-row-relate-close" data-relate-close aria-label="Cerrar">x</button>
-                                        </div>
-                                        <div class="client-row-relate-list">
-                                            {% if row.can_relate %}
-                                                {% for item in related_sales_document_actions %}
-                                                <form method="post" action="{{ item.url }}" style="margin:0;">{% csrf_token %}
-                                                    <input type="hidden" name="company_id" value="{{ selected_company_id }}">
-                                                    <input type="hidden" name="action" value="{{ item.action_value }}">
-                                                    <input type="hidden" name="sales_document_type_id" value="{{ item.sales_document_type.pk }}">
-                                                    <input type="hidden" name="origin_channel" value="admin" data-origin-channel-field="1">
-                                                    <input type="hidden" name="source_tx_id" value="{{ row.tx.pk }}">
-                                                    <button type="submit" class="client-row-relate-item {{ item.css_class }} {% if item.disabled %}is-disabled{% endif %}" {% if item.disabled %}disabled{% endif %}>
-                                                        <span class="client-doc-launcher-text"><strong>{{ item.label }}</strong></span>
-                                                        <span class="client-doc-launcher-arrow" aria-hidden="true">&#10132;</span>
-                                                    </button>
-                                                </form>
-                                                {% endfor %}
-                                            {% else %}
-                                            <div class="client-row-relate-empty">Este movimiento no tiene pedido base para crear una venta relacionada.</div>
-                                            {% endif %}
-                                        </div>
-                                    </div>
-                                </div>
-                                {% endif %}
-                                {% if row.detail_url %}
-                                <a href="{{ row.detail_url }}" class="client-icon-action" title="{{ row.detail_label|default:'Abrir' }}"><span aria-hidden="true">&#128279;</span></a>
-                                {% endif %}
-                                {% if row.document_locked %}
-                                <span class="client-icon-action is-danger" title="{{ row.document_action_label|default:'Cerrar movimiento para imprimir' }}"><span aria-hidden="true">&#128274;</span></span>
-                                {% endif %}
-                                {% if not row.document_url and not row.detail_url and not row.document_locked %}
-                                <span class="client-icon-action is-danger" title="Sin accion disponible"><span aria-hidden="true">&#10005;</span></span>
-                                {% endif %}
-                            </div>
-                        </td>
-                    </tr>
-                    {% endif %}
-                    {% empty %}
-                    <tr>
-                        <td colspan="{% if ledger_tab == 'account' %}9{% elif ledger_tab == 'remitos' %}5{% else %}6{% endif %}" class="text-center text-muted">No hay movimientos para este filtro.</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-            <div class="client-table-foot"><span>{{ ledger_rows_total }} movimientos | mostrando {{ ledger_rows|length }}</span><div class="client-foot-actions">{% if ledger_hidden_count > 0 and ledger_more_url %}<a href="{{ ledger_more_url }}" class="btn btn-outline btn-sm">Mostrar mas</a>{% endif %}{% if ledger_hidden_count > 0 and ledger_show_all_url %}<a href="{{ ledger_show_all_url }}" class="btn btn-outline btn-sm">Mostrar todo</a>{% endif %}</div></div>
-        </div>
-    </section>
 
-    {% elif client_tab == 'orders' %}
-    <section class="client-hub-panel">
-        <div class="client-section-head"><div><h3>Pedidos</h3><p>Pedidos, cotizaciones y estado operativo del cliente por empresa.</p></div></div>
-        <div class="client-history-metrics is-3col" style="margin-bottom:14px;">
-            <article class="history-metric-card is-info"><span class="history-metric-label">Pedidos</span><strong class="history-metric-value">{{ summary.orders_count }}</strong></article>
-            <article class="history-metric-card is-warning"><span class="history-metric-label">Ticket promedio</span><strong class="history-metric-value">${{ summary.avg_ticket|floatformat:2 }}</strong></article>
-            <article class="history-metric-card is-success"><span class="history-metric-label">Operaciones abiertas</span><strong class="history-metric-value">{{ open_orders_count }}</strong></article>
-        </div>
-        <form method="get" class="toolbar-search" style="margin-bottom:14px; display:flex; flex-wrap:wrap; gap:10px;">
-            <input type="hidden" name="client_tab" value="orders">
-            <select name="company_id" class="form-select">{% for company in companies %}<option value="{{ company.pk }}" {% if selected_company_id == company.pk|stringformat:'s' %}selected{% endif %}>{{ company.name }}</option>{% endfor %}</select>
-            <select name="status" class="form-select"><option value="">Todos los estados</option>{% for value, label in status_choices %}<option value="{{ value }}" {% if status == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select>
-            <button type="submit" class="btn btn-primary">Filtrar</button>
-            <a href="{{ orders_clear_url }}" class="btn btn-outline">Limpiar</a>
-        </form>
-        <div class="client-table-card">
-            <table class="admin-table">
-                <thead><tr><th>#</th><th>Fecha</th><th>Empresa</th><th>Items</th><th>Subtotal</th><th>Descuento</th><th>Total</th><th>Estado</th><th>Acciones</th></tr></thead>
-                <tbody>
-                    {% for order in page_obj %}
-                    <tr>
-                        <td><strong>{{ order.pk }}</strong></td>
-                        <td>{{ order.created_at|date:"d/m/Y H:i" }}</td>
-                        <td>{{ order.company.name|default:"-" }}</td>
-                        <td>{{ order.get_item_count }}</td>
-                        <td>${{ order.subtotal|floatformat:2 }}</td>
-                        <td>{% if order.discount_amount %}-${{ order.discount_amount|floatformat:2 }}{% else %}-{% endif %}</td>
-                        <td><strong>${{ order.total|floatformat:2 }}</strong></td>
-                        <td><span class="badge badge-secondary">{{ order.get_status_display }}</span></td>
-                        <td class="actions"><a href="{% url 'admin_order_detail' order.pk %}" class="btn btn-outline btn-sm">Abrir</a>{% if order.client_remito_document %}<a href="{% url 'admin_internal_document_print' order.client_remito_document.pk %}?copy=original" class="btn btn-outline btn-sm" data-print-window="1" target="_blank" rel="noopener noreferrer">Remito</a>{% elif order.client_can_remito %}<a href="{% url 'admin_order_detail' order.pk %}" class="btn btn-outline btn-sm">Preparar remito</a>{% endif %}{% if order.client_invoice_document %}<a href="{% url 'admin_fiscal_document_detail' order.client_invoice_document.pk %}" class="btn btn-outline btn-sm">Factura</a>{% elif order.client_can_invoice %}<a href="{% url 'admin_order_detail' order.pk %}" class="btn btn-outline btn-sm">Facturar</a>{% elif order.client_has_saas_invoice %}<a href="{% url 'admin_order_detail' order.pk %}" class="btn btn-outline btn-sm">SaaS</a>{% endif %}</td>
-                    </tr>
-                    {% empty %}
-                    <tr><td colspan="9" class="text-center text-muted">Este cliente no tiene pedidos cargados.</td></tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-            {% if page_obj.paginator.num_pages > 1 %}
-            <div class="client-table-foot"><span>Pagina {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span><div class="client-foot-actions">{% if page_obj.has_previous %}<a href="?client_tab=orders&page={{ page_obj.previous_page_number }}&status={{ status }}&company_id={{ selected_company_id }}" class="btn btn-outline btn-sm">Anterior</a>{% endif %}{% if page_obj.has_next %}<a href="?client_tab=orders&page={{ page_obj.next_page_number }}&status={{ status }}&company_id={{ selected_company_id }}" class="btn btn-outline btn-sm">Siguiente</a>{% endif %}</div></div>
-            {% endif %}
-        </div>
+        <details class="client-ledger-table-wrap" style="padding-top:0;">
+            <summary style="cursor:pointer;color:#fff;padding:0 0 10px;">Detalle tecnico de documentos</summary>
+            <div class="client-ledger-grid">
+                <article class="client-ledger-box"><span class="client-ledger-label">Internos</span><strong style="color:#fff">{{ documents_summary.internal_count }}</strong><div style="margin-top:6px;color:#aab4c5">{{ documents_summary.latest_internal_label }}</div></article>
+                <article class="client-ledger-box"><span class="client-ledger-label">Fiscales</span><strong style="color:#fff">{{ documents_summary.fiscal_count }}</strong><div style="margin-top:6px;color:#aab4c5">{{ documents_summary.latest_fiscal_label }}</div></article>
+                <article class="client-ledger-box"><span class="client-ledger-label">SaaS</span><strong style="color:#fff">{{ documents_summary.official_count }}</strong><div style="margin-top:6px;color:#aab4c5">{{ documents_summary.latest_document_hint }}</div></article>
+                <article class="client-ledger-box"><span class="client-ledger-label">Ultimo documento</span><strong style="color:#fff">{{ documents_summary.latest_document_label }}</strong><div style="margin-top:6px;color:#aab4c5">{{ documents_summary.latest_document_hint }}</div></article>
+            </div>
+        </details>
     </section>
-
-    {% elif client_tab == 'payments' %}
-    <section class="client-hub-panel">
-        <div class="client-section-head"><div><h3>Pagos</h3><p>Recibos, referencias y monto aplicado para el cliente.</p></div>{% if not operations_locked %}<a href="{% url 'admin_payment_list' %}?client_id={{ client.pk }}&company_id={{ selected_company_id }}" class="btn btn-primary">Registrar pago</a>{% endif %}</div>
-        <div class="client-history-metrics" style="margin-bottom:14px;">
-            <article class="history-metric-card is-success"><span class="history-metric-label">Pagos registrados</span><strong class="history-metric-value">{{ payments_summary.payments_count }}</strong></article>
-            <article class="history-metric-card is-primary"><span class="history-metric-label">Total pagado</span><strong class="history-metric-value">${{ payments_summary.total_paid|floatformat:2 }}</strong></article>
-            <article class="history-metric-card is-info"><span class="history-metric-label">Ultimo pago</span><strong class="history-metric-value">{{ payments_summary.last_payment_at|date:"d/m/Y H:i"|default:"-" }}</strong></article>
-            <article class="history-metric-card is-secondary"><span class="history-metric-label">Saldo actual</span><strong class="history-metric-value">${{ balance_summary.current_balance|floatformat:2 }}</strong></article>
-        </div>
-        <div class="client-table-card">
-            <table class="admin-table">
-                <thead><tr><th>Fecha</th><th>Recibo comercial</th><th>Aplicado a</th><th>Monto</th><th>Medio</th><th>Estado</th><th>Acciones</th></tr></thead>
-                <tbody>
-                    {% for row in payment_history_rows %}
-                    <tr>
-                        <td>{{ row.payment.paid_at|date:"d/m/Y H:i" }}</td>
-                        <td>
-                            <div class="client-cell-stack">
-                                <strong>{{ row.receipt_label }}</strong>
-                                <small>{{ row.receipt_number }}</small>
-                                <span class="client-inline-badge {% if row.receipt_origin_label == 'Interno' %}is-internal{% else %}is-payment{% endif %}">{{ row.receipt_origin_label }}</span>
-                            </div>
-                        </td>
-                        <td>
-                            <div class="client-cell-stack">
-                                <strong>{{ row.applied_title }}</strong>
-                                {% if row.applied_meta %}<small>{{ row.applied_meta }}</small>{% endif %}
-                            </div>
-                        </td>
-                        <td><strong>${{ row.payment.amount|floatformat:2 }}</strong></td>
-                        <td>{{ row.payment.get_method_display }}</td>
-                        <td>
-                            {% if row.payment.is_cancelled %}<span class="badge badge-danger">Anulado</span>{% else %}<span class="badge badge-success">Activo</span>{% endif %}
-                            <br><span class="badge {{ row.movement_state_badge }}">{{ row.movement_state_label }}</span>
-                        </td>
-                        <td class="actions">
-                            <div class="client-row-actions">
-                                {% if row.document_url %}
-                                <a href="{{ row.document_url }}" class="client-icon-action" title="Recibo" data-print-window="1" target="_blank" rel="noopener noreferrer"><span aria-hidden="true">&#128196;</span></a>
-                                {% endif %}
-                                {% if row.applied_url %}
-                                <a href="{{ row.applied_url }}" class="client-icon-action" title="{{ row.applied_label }}"><span aria-hidden="true">&#128279;</span></a>
-                                {% endif %}
-                                {% if row.document_locked %}
-                                <span class="client-icon-action is-danger" title="Cerrar movimiento para imprimir"><span aria-hidden="true">&#128274;</span></span>
-                                {% endif %}
-                                {% if not row.document_url and not row.applied_url and not row.document_locked %}
-                                <span class="client-icon-action is-danger" title="Sin accion disponible"><span aria-hidden="true">&#10005;</span></span>
-                                {% endif %}
-                            </div>
-                        </td>
-                    </tr>
-                    {% empty %}
-                    <tr><td colspan="7" class="text-center text-muted">No hay pagos para este cliente.</td></tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-    </section>
-
-    {% elif client_tab == 'documents' %}
-    <section class="client-doc-grid">
-        <article class="history-metric-card is-warning"><span class="history-metric-label">Internos</span><strong class="history-metric-value">{{ documents_summary.internal_count }}</strong></article>
-        <article class="history-metric-card is-info"><span class="history-metric-label">Fiscales</span><strong class="history-metric-value">{{ documents_summary.fiscal_count }}</strong></article>
-        <article class="history-metric-card is-primary"><span class="history-metric-label">SaaS</span><strong class="history-metric-value">{{ documents_summary.official_count }}</strong></article>
-        <article class="history-metric-card is-secondary"><span class="history-metric-label">Ultimo movimiento</span><strong class="history-metric-value" style="font-size:1.05rem;">{{ documents_summary.latest_document_label }}</strong><small class="text-muted">{{ documents_summary.latest_document_hint }}</small></article>
-    </section>
-
-    <section class="client-hub-card">
-        <div class="client-section-head"><div><h3>Documentos internos</h3><p>Ultimos documentos operativos del cliente con su nombre y numeracion comercial.</p></div></div>
-        <div class="client-table-card"><table class="admin-table"><thead><tr><th>Fecha</th><th>Tipo comercial</th><th>Numero comercial</th><th>Origen</th><th>Pedido</th><th>Acciones</th></tr></thead><tbody>{% for doc in recent_internal_documents %}<tr><td>{{ doc.issued_at|date:"d/m/Y H:i" }}</td><td><div class="client-cell-stack"><strong>{{ doc.commercial_type_label }}</strong><small>{{ doc.get_doc_type_display }}</small></div></td><td><div class="client-cell-stack"><strong>{{ doc.display_number }}</strong><span class="client-inline-badge is-internal">Interno</span></div></td><td><div class="client-cell-stack"><strong>{{ doc.company.name|default:"-" }}</strong>{% if doc.payment_id %}<small>Pago #{{ doc.payment_id }}</small>{% elif doc.transaction_id %}<small>Ajuste #{{ doc.transaction_id }}</small>{% else %}<small>Pedido #{{ doc.order_id|default:"-" }}</small>{% endif %}</div></td><td>{% if doc.order_id %}<a href="{% url 'admin_order_detail' doc.order_id %}" class="btn btn-outline btn-sm">#{{ doc.order_id }}</a>{% else %}-{% endif %}</td><td class="actions">{% if doc.can_print %}<a href="{% url 'admin_internal_document_print' doc.pk %}?copy=original" class="btn btn-outline btn-sm" data-print-window="1" target="_blank" rel="noopener noreferrer">Original</a><a href="{% url 'admin_internal_document_print' doc.pk %}?copy=duplicado" class="btn btn-outline btn-sm" data-print-window="1" target="_blank" rel="noopener noreferrer">Duplicado</a>{% else %}<span class="btn btn-outline btn-sm">Cerrar movimiento</span>{% endif %}</td></tr>{% empty %}<tr><td colspan="6" class="text-center text-muted">Sin documentos internos recientes.</td></tr>{% endfor %}</tbody></table></div>
-    </section>
-
-    <section class="client-hub-card">
-        <div class="client-section-head"><div><h3>Comprobantes fiscales</h3><p>Documentos fiscales locales y su capa comercial configurada.</p></div></div>
-        <div class="client-table-card"><table class="admin-table"><thead><tr><th>Fecha</th><th>Tipo comercial</th><th>Numero comercial</th><th>Origen fiscal</th><th>Estado</th><th>Pedido</th><th>Acciones</th></tr></thead><tbody>{% for doc in recent_fiscal_documents %}<tr><td>{{ doc.created_at|date:"d/m/Y H:i" }}</td><td><div class="client-cell-stack"><strong>{{ doc.commercial_type_label }}</strong><small>{{ doc.get_doc_type_display }}</small></div></td><td><div class="client-cell-stack"><strong>{{ doc.display_number }}</strong><span class="client-inline-badge is-fiscal">Fiscal</span></div></td><td><div class="client-cell-stack"><strong>PV {{ doc.point_of_sale.number|default:"-" }}</strong><small>{{ doc.company.name|default:"-" }}</small></div></td><td>{% if doc.status == 'pending_retry' or doc.status == 'rejected' %}<span class="badge badge-danger">{{ doc.get_status_display }}</span>{% elif doc.status == 'submitting' %}<span class="badge badge-warning">{{ doc.get_status_display }}</span>{% elif doc.status == 'authorized' %}<span class="badge badge-success">{{ doc.get_status_display }}</span>{% else %}<span class="badge badge-secondary">{{ doc.get_status_display }}</span>{% endif %}</td><td>{% if doc.order_id %}<a href="{% url 'admin_order_detail' doc.order_id %}" class="btn btn-outline btn-sm">#{{ doc.order_id }}</a>{% else %}-{% endif %}</td><td class="actions"><a href="{% url 'admin_fiscal_document_detail' doc.pk %}" class="btn btn-outline btn-sm">Ver</a>{% if doc.can_print %}<a href="{% url 'admin_fiscal_document_print' doc.pk %}?copy=original" class="btn btn-outline btn-sm" data-print-window="1" target="_blank" rel="noopener noreferrer">Original</a>{% else %}<span class="btn btn-outline btn-sm">Cerrar movimiento</span>{% endif %}</td></tr>{% empty %}<tr><td colspan="7" class="text-center text-muted">No hay comprobantes fiscales recientes para este cliente.</td></tr>{% endfor %}</tbody></table></div>
-    </section>
-
-    <section class="client-hub-card">
-        <div class="client-section-head"><div><h3>Comprobantes oficiales (SaaS)</h3><p>Historial de comprobantes externos registrados desde la transicion.</p></div></div>
-        <div class="client-table-card"><table class="admin-table"><thead><tr><th>Fecha</th><th>Tipo</th><th>Numero</th><th>Total</th><th>Pedido</th></tr></thead><tbody>{% for doc in official_docs %}<tr><td>{{ doc.saas_document_date|date:"d/m/Y"|default:"-" }}</td><td>{{ doc.saas_document_type|default:"Factura" }}</td><td>{{ doc.saas_document_number|default:"-" }}</td><td>${{ doc.total|floatformat:2 }}</td><td><a href="{% url 'admin_order_detail' doc.pk %}" class="btn btn-outline btn-sm">#{{ doc.pk }}</a></td></tr>{% empty %}<tr><td colspan="5" class="text-center text-muted">No hay comprobantes oficiales registrados.</td></tr>{% endfor %}</tbody></table></div>
-    </section>
-    {% endif %}
 </div>
 {% endblock %}
 
@@ -1270,132 +355,25 @@
 {{ block.super }}
 <script>
 document.addEventListener('DOMContentLoaded', () => {
-    const originSelect = document.querySelector('#clientOriginChannelInline, #clientOriginChannel');
-    const movementMenu = document.querySelector('[data-movement-menu]');
-    const movementToggle = movementMenu ? movementMenu.querySelector('[data-movement-toggle]') : null;
-    const movementPopover = movementMenu ? movementMenu.querySelector('[data-movement-popover]') : null;
-    const movementClose = movementMenu ? movementMenu.querySelector('[data-movement-close]') : null;
-    const relateMenus = Array.from(document.querySelectorAll('[data-relate-menu]'));
-
-    const syncOriginValue = () => {
-        document.querySelectorAll('[data-origin-channel-field="1"]').forEach((input) => {
-            input.value = (originSelect && originSelect.value) || 'admin';
-        });
-    };
-    if (originSelect) {
-        originSelect.addEventListener('change', syncOriginValue);
-    }
-    syncOriginValue();
-
-    if (movementToggle && movementPopover) {
-        const closeAllRelateMenus = () => {
-            relateMenus.forEach((menu) => {
-                const popover = menu.querySelector('[data-relate-popover]');
-                if (popover) {
-                    popover.hidden = true;
-                }
-            });
-        };
-        const closeMenu = () => {
-            movementPopover.hidden = true;
-            movementToggle.setAttribute('aria-expanded', 'false');
-        };
-        const openMenu = () => {
-            closeAllRelateMenus();
-            movementPopover.classList.remove('is-upward');
-            movementPopover.hidden = false;
-            movementToggle.setAttribute('aria-expanded', 'true');
-            const bounds = movementPopover.getBoundingClientRect();
-            if (bounds.bottom > (window.innerHeight - 12)) {
-                movementPopover.classList.add('is-upward');
-            }
-        };
-        movementToggle.addEventListener('click', (event) => {
+    const menu = document.querySelector('[data-movement-menu]');
+    const toggle = menu ? menu.querySelector('[data-movement-toggle]') : null;
+    const popover = menu ? menu.querySelector('[data-movement-popover]') : null;
+    const close = menu ? menu.querySelector('[data-movement-close]') : null;
+    const hide = () => { if (popover) { popover.hidden = true; } };
+    if (toggle && popover) {
+        toggle.addEventListener('click', (event) => {
             event.preventDefault();
-            if (movementPopover.hidden) {
-                openMenu();
-            } else {
-                closeMenu();
-            }
+            popover.hidden = !popover.hidden;
         });
-        if (movementClose) {
-            movementClose.addEventListener('click', (event) => {
-                event.preventDefault();
-                closeMenu();
-            });
+    }
+    if (close) {
+        close.addEventListener('click', () => hide());
+    }
+    document.addEventListener('click', (event) => {
+        if (menu && !menu.contains(event.target)) {
+            hide();
         }
-        document.addEventListener('click', (event) => {
-            if (!movementMenu.contains(event.target)) {
-                closeMenu();
-            }
-        });
-        document.addEventListener('keydown', (event) => {
-            if (event.key === 'Escape') {
-                closeMenu();
-            }
-        });
-    }
-
-    if (relateMenus.length) {
-        const closeAllRelateMenus = () => {
-            relateMenus.forEach((menu) => {
-                const popover = menu.querySelector('[data-relate-popover]');
-                if (popover) {
-                    popover.hidden = true;
-                }
-            });
-        };
-        relateMenus.forEach((menu) => {
-            const toggle = menu.querySelector('[data-relate-toggle]');
-            const popover = menu.querySelector('[data-relate-popover]');
-            const close = menu.querySelector('[data-relate-close]');
-            if (!toggle || !popover) {
-                return;
-            }
-            const openRowMenu = () => {
-                closeAllRelateMenus();
-                if (movementPopover) {
-                    movementPopover.hidden = true;
-                }
-                popover.hidden = false;
-                popover.style.right = '0';
-                popover.style.left = 'auto';
-                popover.style.top = 'auto';
-                popover.style.bottom = 'calc(100% + 8px)';
-            };
-            toggle.addEventListener('click', (event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                if (popover.hidden) {
-                    openRowMenu();
-                } else {
-                    popover.hidden = true;
-                }
-            });
-            if (close) {
-                close.addEventListener('click', (event) => {
-                    event.preventDefault();
-                    popover.hidden = true;
-                });
-            }
-        });
-        document.addEventListener('click', (event) => {
-            relateMenus.forEach((menu) => {
-                if (!menu.contains(event.target)) {
-                    const popover = menu.querySelector('[data-relate-popover]');
-                    if (popover) {
-                        popover.hidden = true;
-                    }
-                }
-            });
-        });
-        document.addEventListener('keydown', (event) => {
-            if (event.key === 'Escape') {
-                closeAllRelateMenus();
-            }
-        });
-    }
+    });
 });
 </script>
 {% endblock %}
-

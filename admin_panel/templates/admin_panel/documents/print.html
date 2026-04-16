@@ -240,12 +240,12 @@
 <body>
     <div class="print-toolbar">
         <div class="print-copy-links">
-            <a href="?copy=original" class="{% if copy_key == 'original' %}is-active{% endif %}" data-print-window="1" target="_blank" rel="noopener noreferrer">Original</a>
-            <a href="?copy=duplicado" class="{% if copy_key == 'duplicado' %}is-active{% endif %}" data-print-window="1" target="_blank" rel="noopener noreferrer">Duplicado</a>
-            <a href="?copy=triplicado" class="{% if copy_key == 'triplicado' %}is-active{% endif %}" data-print-window="1" target="_blank" rel="noopener noreferrer">Triplicado</a>
+            <a href="?copy=original" class="{% if copy_key == 'original' %}is-active{% endif %}">Original</a>
+            <a href="?copy=duplicado" class="{% if copy_key == 'duplicado' %}is-active{% endif %}">Duplicado</a>
+            <a href="?copy=triplicado" class="{% if copy_key == 'triplicado' %}is-active{% endif %}">Triplicado</a>
         </div>
         <div class="print-toolbar-actions">
-            <a class="print-toolbar-link" href="?copy={{ copy_key|default:'original' }}&format=pdf" target="_blank" rel="noopener noreferrer">PDF</a>
+            <a class="print-toolbar-link" href="?copy={{ copy_key|default:'original' }}&format=pdf">PDF</a>
             <button type="button" onclick="window.print()">Imprimir</button>
         </div>
     </div>

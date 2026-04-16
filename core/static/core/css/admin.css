@@ -651,6 +651,36 @@
     flex: 0 0 auto;
 }
 
+.header-user-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.header-user-link {
+    min-height: 38px;
+    padding: 0 14px;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.header-user-link:hover {
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.header-user-link.is-danger {
+    border-color: rgba(220, 53, 69, 0.24);
+    color: #ffcad2;
+}
+
+.header-user-link.is-danger:hover {
+    border-color: rgba(220, 53, 69, 0.34);
+    background: rgba(220, 53, 69, 0.14);
+    color: #ffe2e6;
+}
+
 .admin-messages {
     padding: 12px 24px;
 }
@@ -1977,53 +2007,9 @@
     border: 1px solid rgba(128, 128, 128, 0.2);
 }
 
-.admin-catalog-fab {
-    position: fixed;
-    left: 24px;
-    bottom: 24px;
-    width: 62px;
-    height: 62px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 50%;
-    border: 1px solid rgba(255, 255, 255, 0.14);
-    background:
-        radial-gradient(circle at 30% 30%, rgba(0, 197, 255, 0.3), transparent 52%),
-        linear-gradient(180deg, rgba(255, 107, 53, 0.92), rgba(255, 107, 53, 0.74));
-    color: #fff;
-    text-decoration: none;
-    font-size: 1.45rem;
-    box-shadow: 0 14px 30px rgba(0, 0, 0, 0.34);
-    z-index: 1280;
-    transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
-}
-
-.admin-catalog-fab:hover {
-    transform: translateY(-2px) scale(1.03);
-    box-shadow: 0 18px 34px rgba(0, 0, 0, 0.4);
-    border-color: rgba(255, 255, 255, 0.24);
-}
-
-.admin-catalog-fab:focus-visible {
-    outline: 2px solid rgba(255, 255, 255, 0.92);
-    outline-offset: 3px;
-}
-
-.admin-catalog-fab span {
-    line-height: 1;
-    filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.28));
-}
-
+.admin-catalog-fab,
 .admin-logout-fab {
-    bottom: 98px;
-    background:
-        radial-gradient(circle at 30% 30%, rgba(255, 210, 102, 0.26), transparent 52%),
-        linear-gradient(180deg, rgba(255, 89, 89, 0.94), rgba(200, 44, 44, 0.82));
-}
-
-.admin-logout-fab:hover {
-    border-color: rgba(255, 228, 228, 0.38);
+    display: none !important;
 }
 
 /* Admin Forms */
@@ -4388,6 +4374,11 @@
         margin-left: 0;
         justify-content: flex-start;
         gap: 10px;
+    }
+
+    .header-user-actions {
+        width: 100%;
+        order: 3;
     }
 
     .admin-top-nav-wrap {

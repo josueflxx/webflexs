@@ -2,6 +2,160 @@
 
 {% block page_title %}Dashboard{% endblock %}
 
+{% block extra_css %}
+{{ block.super }}
+<style>
+    .dashboard-ops-layout {
+        display: grid;
+        grid-template-columns: minmax(0, 1.45fr) minmax(320px, .95fr);
+        gap: 18px;
+        margin-bottom: 18px;
+    }
+    .dashboard-ops-card,
+    .dashboard-activity-card {
+        padding: 18px;
+        border-radius: 14px;
+        border: 1px solid rgba(255,255,255,.09);
+        background: linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.015));
+        box-shadow: 0 14px 30px rgba(0,0,0,.16);
+    }
+    .dashboard-ops-head,
+    .dashboard-activity-head {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        align-items: flex-start;
+        margin-bottom: 14px;
+    }
+    .dashboard-ops-head h3,
+    .dashboard-activity-head h3 {
+        margin: 2px 0 0;
+        font-size: 1rem;
+    }
+    .dashboard-ops-head p,
+    .dashboard-activity-head p {
+        margin: 6px 0 0;
+        color: rgba(208,216,226,.74);
+        font-size: .84rem;
+        line-height: 1.45;
+    }
+    .dashboard-ops-kicker {
+        display: inline-flex;
+        align-items: center;
+        padding: 4px 10px;
+        border-radius: 999px;
+        border: 1px solid rgba(255,255,255,.12);
+        background: rgba(255,255,255,.04);
+        color: #ffb08e;
+        font-size: .72rem;
+        text-transform: uppercase;
+        letter-spacing: .08em;
+    }
+    .dashboard-ops-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
+    }
+    .dashboard-ops-item {
+        display: grid;
+        gap: 8px;
+        padding: 14px;
+        border-radius: 12px;
+        border: 1px solid rgba(255,255,255,.09);
+        background: rgba(8, 14, 26, .5);
+        color: inherit;
+        text-decoration: none;
+        transition: transform .18s ease, border-color .18s ease, background .18s ease;
+    }
+    .dashboard-ops-item:hover {
+        transform: translateY(-1px);
+        border-color: rgba(255,255,255,.16);
+        background: rgba(10, 18, 31, .72);
+    }
+    .dashboard-ops-label {
+        font-size: .84rem;
+        color: rgba(208,216,226,.82);
+        line-height: 1.35;
+    }
+    .dashboard-ops-value {
+        font-size: 1.8rem;
+        color: #fff;
+        line-height: 1;
+    }
+    .dashboard-ops-item small {
+        color: rgba(208,216,226,.66);
+        line-height: 1.45;
+    }
+    .dashboard-activity-list {
+        display: grid;
+        gap: 12px;
+    }
+    .dashboard-activity-item {
+        display: grid;
+        gap: 8px;
+        padding: 13px 14px;
+        border-radius: 12px;
+        border: 1px solid rgba(255,255,255,.08);
+        background: rgba(8, 14, 26, .46);
+    }
+    .dashboard-activity-top {
+        display: flex;
+        justify-content: space-between;
+        gap: 10px;
+        align-items: center;
+    }
+    .dashboard-activity-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 4px 9px;
+        border-radius: 999px;
+        border: 1px solid rgba(255,255,255,.1);
+        background: rgba(255,255,255,.05);
+        color: #f4f7fb;
+        font-size: .72rem;
+    }
+    .dashboard-activity-time {
+        font-size: .78rem;
+        color: rgba(208,216,226,.7);
+    }
+    .dashboard-activity-item strong {
+        color: #fff;
+        font-size: .92rem;
+    }
+    .dashboard-activity-item p {
+        margin: 0;
+        color: rgba(208,216,226,.8);
+        font-size: .83rem;
+        line-height: 1.45;
+    }
+    .dashboard-activity-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
+        color: rgba(208,216,226,.68);
+        font-size: .76rem;
+    }
+    .dashboard-activity-amount {
+        font-weight: 700;
+        color: #fff;
+    }
+    @media (max-width: 1180px) {
+        .dashboard-ops-layout {
+            grid-template-columns: 1fr;
+        }
+        .dashboard-ops-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+    }
+    @media (max-width: 700px) {
+        .dashboard-ops-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="dashboard-compact">
     <section class="dashboard-showcase">
@@ -9,7 +163,7 @@
             <span class="dashboard-showcase-kicker">Hub operativo</span>
             <h2>Elegi el modulo y entra directo al trabajo</h2>
             <p>
-                El dashboard ahora funciona como una portada simple del panel, con accesos visuales y rankings clave.
+                La portada ahora combina accesos directos, colas operativas y actividad reciente para que al entrar se entienda que conviene mirar primero.
                 {% if active_company %}
                 Todo queda enfocado en <strong>{{ active_company.name }}</strong>.
                 {% else %}
@@ -40,6 +194,60 @@
                 </div>
             </div>
         </div>
+    </section>
+
+    <section class="dashboard-ops-layout">
+        <article class="dashboard-ops-card">
+            <div class="dashboard-ops-head">
+                <div>
+                    <span class="dashboard-ops-kicker">Cola operativa</span>
+                    <h3>Lo importante del dia</h3>
+                    <p>Un resumen corto de pendientes comerciales, cuenta corriente, fiscal y stock para entrar por prioridad.</p>
+                </div>
+            </div>
+            <div class="dashboard-ops-grid">
+                {% for item in operational_snapshot_cards %}
+                <a href="{{ item.url }}" class="dashboard-ops-item">
+                    <span class="dashboard-ops-label">{{ item.label }}</span>
+                    <strong class="dashboard-ops-value">{{ item.count }}</strong>
+                    <small>{{ item.help_text }}</small>
+                </a>
+                {% endfor %}
+            </div>
+        </article>
+
+        <article class="dashboard-activity-card">
+            <div class="dashboard-activity-head">
+                <div>
+                    <span class="dashboard-ops-kicker">Actividad reciente</span>
+                    <h3>Ultimos movimientos del negocio</h3>
+                    <p>Pedidos, comprobantes, cobros y solicitudes recientes dentro del contexto activo.</p>
+                </div>
+            </div>
+            <div class="dashboard-activity-list">
+                {% for event in recent_activity %}
+                <div class="dashboard-activity-item">
+                    <div class="dashboard-activity-top">
+                        <span class="dashboard-activity-badge">{{ event.badge }}</span>
+                        <span class="dashboard-activity-time">{{ event.occurred_at|date:"d/m H:i" }}</span>
+                    </div>
+                    <strong>{{ event.title }}</strong>
+                    {% if event.summary %}<p>{{ event.summary }}</p>{% endif %}
+                    <div class="dashboard-activity-meta">
+                        {% if event.scope_label %}<span>{{ event.scope_label }}</span>{% endif %}
+                        {% if event.actor_label %}<span>{{ event.actor_label }}</span>{% endif %}
+                        {% if event.amount is not None %}<span class="dashboard-activity-amount">${{ event.amount|floatformat:2 }}</span>{% endif %}
+                        {% if event.detail_url %}<a href="{{ event.detail_url }}" class="btn btn-ghost btn-sm">{{ event.detail_label }}</a>{% endif %}
+                    </div>
+                </div>
+                {% empty %}
+                <div class="dashboard-activity-item">
+                    <strong>Sin actividad reciente</strong>
+                    <p>Cuando entren pedidos, comprobantes o cobros, esta columna va a servir como mini timeline operativo.</p>
+                </div>
+                {% endfor %}
+            </div>
+        </article>
     </section>
 
     <section class="dashboard-hub-grid">

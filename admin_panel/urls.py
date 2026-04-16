@@ -67,6 +67,7 @@ urlpatterns = [
     path('pedidos-web/<int:pk>/eliminar/', views.order_request_delete_view, name='admin_order_request_delete'),
     
     # Orders
+    path('ventas/', views.sales_workspace, name='admin_sales_workspace'),
     path('pedidos/', views.order_list, name='admin_order_list'),
     path('pedidos/nuevo/', views.order_create_from_panel, name='admin_order_create_from_panel'),
     path('pedidos/exportar-saas/', views.order_export_saas, name='admin_order_export_saas'),

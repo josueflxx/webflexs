@@ -1,0 +1,220 @@
+{% extends 'admin_panel/base.html' %}
+
+{% block page_title %}Ventas{% endblock %}
+
+{% block content %}
+<div class="admin-table-container">
+    <div class="alert alert-info" style="margin-bottom:14px;">
+        Esta vista cruza <strong>solicitudes comerciales</strong> y <strong>pedidos operativos</strong> en una sola cola.
+        Sirve para seguir la venta de punta a punta sin saltar entre modulos.
+    </div>
+    {% include 'admin_panel/orders/_sales_workspace.html' %}
+
+    <div class="admin-toolbar">
+        <form method="get" class="toolbar-search order-filters-grid">
+            <input type="hidden" name="stage" value="{{ stage }}">
+            <input type="text" name="client" value="{{ client }}" placeholder="Buscar cliente..." class="form-input" data-suggest="1" data-suggest-scope="admin_clients" autocomplete="off">
+            <select name="company_id" class="form-select">
+                {% for company in companies %}
+                <option value="{{ company.pk }}" {% if selected_company_id == company.pk|stringformat:'s' %}selected{% endif %}>
+                    {{ company.name }}
+                </option>
+                {% endfor %}
+            </select>
+            <button type="submit" class="btn btn-primary">Filtrar</button>
+            <a href="{% url 'admin_sales_workspace' %}" class="btn btn-outline">Limpiar</a>
+            {% if stage %}
+            <a href="{% url 'admin_sales_workspace' %}" class="btn btn-outline">Quitar etapa</a>
+            {% endif %}
+        </form>
+    </div>
+
+    <table class="admin-table">
+        <thead>
+            <tr>
+                <th>Fecha</th>
+                <th>Tipo</th>
+                <th>Empresa</th>
+                <th>Cliente</th>
+                <th>Tramo actual</th>
+                <th>Total</th>
+                <th>Estado</th>
+                <th>Referencias</th>
+                <th>Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in page_obj %}
+            <tr class="sales-hub-row sales-hub-row-{{ row.kind }}">
+                <td>
+                    {{ row.created_at|date:"d/m/Y H:i" }}
+                </td>
+                <td>
+                    <span class="badge {{ row.kind_badge }}">{{ row.kind_label }}</span>
+                    <div class="text-muted admin-meta-text">{{ row.record_label }}</div>
+                </td>
+                <td>{{ row.company_name }}</td>
+                <td>
+                    {{ row.client_name }}
+                    {% if row.client_meta %}
+                    <div class="text-muted admin-meta-text">{{ row.client_meta }}</div>
+                    {% endif %}
+                </td>
+                <td>
+                    <strong>{{ row.stage_label }}</strong>
+                    <div class="text-muted admin-meta-text">{{ row.next_step_label }}</div>
+                </td>
+                <td>
+                    {% if row.amount is not None %}
+                    ${{ row.amount|floatformat:2 }}
+                    {% else %}
+                    <span class="text-muted">-</span>
+                    {% endif %}
+                </td>
+                <td><span class="badge {{ row.status_badge }}">{{ row.status_label }}</span></td>
+                <td>
+                    <span class="sales-hub-summary">{{ row.summary }}</span>
+                </td>
+                <td class="actions">
+                    <a href="{{ row.detail_url }}" class="btn btn-outline">{{ row.detail_label }}</a>
+                    {% if row.secondary_url %}
+                    <a href="{{ row.secondary_url }}" class="btn btn-outline">{{ row.secondary_label }}</a>
+                    {% endif %}
+                    {% if row.quick_payment_url %}
+                    <a href="{{ row.quick_payment_url }}" class="btn btn-outline">Cobros</a>
+                    {% endif %}
+                    {% if row.quick_related_actions %}
+                    <details class="sales-hub-docs-menu">
+                        <summary class="btn btn-outline sales-hub-docs-trigger" title="Generar o abrir documentos relacionados">Docs</summary>
+                        <div class="sales-hub-docs-popover">
+                            {% for item in row.quick_related_actions %}
+                            <form method="post" action="{{ item.url }}" style="margin:0;">
+                                {% csrf_token %}
+                                <input type="hidden" name="company_id" value="{{ row.company_id }}">
+                                <input type="hidden" name="action" value="{{ item.action_value }}">
+                                <input type="hidden" name="sales_document_type_id" value="{{ item.sales_document_type.pk }}">
+                                <input type="hidden" name="origin_channel" value="admin">
+                                <input type="hidden" name="source_order_id" value="{{ row.order_id }}">
+                                <button type="submit" class="sales-hub-docs-item" {% if item.disabled %}disabled{% endif %}>
+                                    {{ item.label }}
+                                </button>
+                            </form>
+                            {% endfor %}
+                        </div>
+                    </details>
+                    {% endif %}
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="9" class="text-center text-muted">No hay ventas activas para esta vista.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    {% if page_obj.paginator.num_pages > 1 %}
+    <div class="admin-toolbar">
+        <span>Pagina {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
+        <div class="toolbar-actions">
+            {% if page_obj.has_previous %}
+            <a href="?page={{ page_obj.previous_page_number }}&client={{ client }}&stage={{ stage }}&company_id={{ selected_company_id }}" class="btn btn-outline"><- Anterior</a>
+            {% endif %}
+            {% if page_obj.has_next %}
+            <a href="?page={{ page_obj.next_page_number }}&client={{ client }}&stage={{ stage }}&company_id={{ selected_company_id }}" class="btn btn-outline">Siguiente -></a>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<style>
+    .sales-hub-row-request td:first-child {
+        box-shadow: inset 3px 0 0 rgba(251, 146, 60, .45);
+    }
+
+    .sales-hub-row-order td:first-child {
+        box-shadow: inset 3px 0 0 rgba(96, 165, 250, .45);
+    }
+
+    .sales-hub-summary {
+        display: inline-block;
+        max-width: 420px;
+        color: rgba(226, 232, 240, .82);
+        line-height: 1.45;
+    }
+
+    .sales-hub-docs-menu {
+        display: inline-block;
+        position: relative;
+    }
+
+    .sales-hub-docs-popover {
+        position: absolute;
+        right: 0;
+        top: calc(100% + 6px);
+        z-index: 25;
+        min-width: 220px;
+        max-width: 280px;
+        padding: 8px;
+        display: grid;
+        gap: 6px;
+        border-radius: 10px;
+        border: 1px solid rgba(148, 163, 184, .32);
+        background: rgba(8, 14, 24, .98);
+        box-shadow: 0 20px 36px rgba(0, 0, 0, .35);
+    }
+
+    .sales-hub-docs-menu:not([open]) .sales-hub-docs-popover {
+        display: none;
+    }
+
+    .sales-hub-docs-trigger {
+        min-width: 46px;
+        text-align: center;
+    }
+
+    .sales-hub-docs-item {
+        width: 100%;
+        text-align: left;
+        border: 1px solid rgba(148, 163, 184, .35);
+        background: rgba(15, 23, 42, .9);
+        color: #e5e7eb;
+        border-radius: 8px;
+        padding: 7px 9px;
+        font-size: .8rem;
+        cursor: pointer;
+    }
+
+    .sales-hub-docs-item:hover {
+        border-color: rgba(251, 146, 60, .65);
+        background: rgba(30, 41, 59, .95);
+    }
+
+    .sales-hub-docs-item:disabled {
+        opacity: .5;
+        cursor: not-allowed;
+    }
+</style>
+
+<script>
+    (function () {
+        const menus = Array.from(document.querySelectorAll('.sales-hub-docs-menu'));
+        if (!menus.length) return;
+
+        document.addEventListener('click', (event) => {
+            menus.forEach((menu) => {
+                if (!menu.contains(event.target)) {
+                    menu.removeAttribute('open');
+                }
+            });
+        });
+
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') {
+                menus.forEach((menu) => menu.removeAttribute('open'));
+            }
+        });
+    })();
+</script>
+{% endblock %}

@@ -8,10 +8,40 @@
         <div class="order-header">
             <div>
                 <h1>Solicitud #{{ order_request.pk }}</h1>
-                <p class="text-muted">Pedido enviado desde el catalogo y pendiente de definicion comercial.</p>
+                <p class="text-muted">
+                    {% if order_request.status == 'submitted' %}
+                    Pedido enviado desde el catalogo y pendiente de revision comercial.
+                    {% elif order_request.status == 'in_review' %}
+                    Tu solicitud ya esta siendo revisada por el equipo comercial.
+                    {% elif order_request.status == 'waiting_client' %}
+                    Ya tenes una propuesta comercial disponible para aceptar o rechazar.
+                    {% elif order_request.status == 'confirmed' %}
+                    La operacion ya quedo confirmada y puede convertirse en documento sin recargar items.
+                    {% elif order_request.status == 'converted' %}
+                    La solicitud ya entro al circuito operativo y documental.
+                    {% elif order_request.status == 'rejected' %}
+                    La solicitud fue rechazada y conserva su trazabilidad comercial.
+                    {% elif order_request.status == 'cancelled' %}
+                    La solicitud fue cancelada antes de convertirse en documento.
+                    {% else %}
+                    Seguimiento comercial de tu solicitud enviada desde el catalogo.
+                    {% endif %}
+                </p>
             </div>
             <span class="badge badge-info request-status-badge">
+                {% if order_request.status == 'submitted' %}
+                Enviado
+                {% elif order_request.status == 'in_review' %}
+                En revision
+                {% elif order_request.status == 'waiting_client' %}
+                Esperando tu respuesta
+                {% elif order_request.status == 'confirmed' %}
+                Confirmado
+                {% elif order_request.status == 'converted' %}
+                Convertido
+                {% else %}
                 {{ order_request.get_status_display }}
+                {% endif %}
             </span>
         </div>
 
@@ -23,6 +53,72 @@
             {% if order_request.decided_at %}
             <p>Resolucion comercial: {{ order_request.decided_at|date:"d/m/Y H:i" }}</p>
             {% endif %}
+        </div>
+
+        <div class="request-flow-grid">
+            <article class="request-flow-card is-origin">
+                <span class="request-flow-kicker">Solicitud original</span>
+                <strong>{{ order_request.get_status_display }}</strong>
+                <small>Pedido cargado por vos desde el catalogo con snapshot propio de productos, cantidades y precios.</small>
+                <div class="request-flow-meta">
+                    <span>Total: ${{ order_request.requested_total|floatformat:2 }}</span>
+                    <span>Items: {{ order_request.items.count }}</span>
+                </div>
+            </article>
+
+            <article class="request-flow-card {% if current_proposal %}is-live{% endif %}">
+                <span class="request-flow-kicker">Propuesta comercial</span>
+                {% if current_proposal %}
+                <strong>{{ current_proposal.get_status_display }}</strong>
+                <small>
+                    Version {{ current_proposal.version_number }}
+                    {% if current_proposal.message_to_client %}| {{ current_proposal.message_to_client|truncatechars:90 }}{% endif %}
+                </small>
+                <div class="request-flow-meta">
+                    <span>Total propuesto: ${{ current_proposal.proposed_total|floatformat:2 }}</span>
+                </div>
+                {% else %}
+                <strong>Sin propuesta activa</strong>
+                <small>Si hace falta ajuste comercial, el admin puede enviarte una nueva propuesta para responder.</small>
+                {% endif %}
+            </article>
+
+            <article class="request-flow-card {% if request_order %}is-ready{% endif %}">
+                <span class="request-flow-kicker">Operacion confirmada</span>
+                {% if request_order %}
+                <strong>Pedido #{{ request_order.pk }}</strong>
+                <small>
+                    {% if request_order.source_proposal_id %}
+                    Se genero desde la propuesta aceptada.
+                    {% else %}
+                    Se genero desde la solicitud confirmada sin cambios.
+                    {% endif %}
+                </small>
+                <div class="request-flow-meta">
+                    <span>Estado: {{ request_order.get_status_display }}</span>
+                    <span>Total: ${{ request_order.total|floatformat:2 }}</span>
+                </div>
+                {% else %}
+                <strong>Pendiente de conversion</strong>
+                <small>La operacion todavia no se convirtio en pedido operativo.</small>
+                {% endif %}
+            </article>
+
+            <article class="request-flow-card {% if request_order_documents or request_order_fiscal_documents %}is-docs{% endif %}">
+                <span class="request-flow-kicker">Documentos asociados</span>
+                <strong>
+                    {% if request_order_documents or request_order_fiscal_documents %}
+                    Documentos disponibles
+                    {% else %}
+                    Sin documentos todavia
+                    {% endif %}
+                </strong>
+                <small>Cotizaciones internas y comprobantes fiscales generados a partir del snapshot aprobado.</small>
+                <div class="request-flow-meta">
+                    <span>Internos: {{ request_order_documents|length }}</span>
+                    <span>Fiscales: {{ request_order_fiscal_documents|length }}</span>
+                </div>
+            </article>
         </div>
 
         <div class="order-items">
@@ -243,9 +339,66 @@
     .order-header h1 {
         margin-bottom: 4px;
     }
-    .order-meta {
+        .order-meta {
         color: var(--color-gray-light);
         margin-bottom: var(--spacing-2xl);
+    }
+    .request-flow-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 14px;
+        margin-bottom: var(--spacing-2xl);
+    }
+    .request-flow-card {
+        display: grid;
+        gap: 8px;
+        padding: var(--spacing-lg);
+        border-radius: var(--radius-lg);
+        background: linear-gradient(180deg, rgba(255,255,255,.045), rgba(255,255,255,.02));
+        border: 1px solid rgba(255,255,255,.08);
+    }
+    .request-flow-card strong {
+        color: #fff;
+    }
+    .request-flow-card small {
+        color: var(--color-gray-light);
+        line-height: 1.45;
+    }
+    .request-flow-kicker {
+        display: inline-flex;
+        width: fit-content;
+        padding: 4px 10px;
+        border-radius: 999px;
+        font-size: .74rem;
+        text-transform: uppercase;
+        letter-spacing: .06em;
+        color: #ffd2c4;
+        background: rgba(255,107,53,.14);
+        border: 1px solid rgba(255,107,53,.2);
+    }
+    .request-flow-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: auto;
+    }
+    .request-flow-meta span {
+        display: inline-flex;
+        padding: 6px 10px;
+        border-radius: 999px;
+        font-size: .76rem;
+        color: #eef3f8;
+        background: rgba(255,255,255,.05);
+        border: 1px solid rgba(255,255,255,.08);
+    }
+    .request-flow-card.is-live {
+        border-color: rgba(244,180,0,.26);
+    }
+    .request-flow-card.is-ready {
+        border-color: rgba(25,209,127,.24);
+    }
+    .request-flow-card.is-docs {
+        border-color: rgba(31,143,255,.24);
     }
     .order-items {
         background: var(--color-dark-light);

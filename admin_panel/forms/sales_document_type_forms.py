@@ -223,6 +223,11 @@ class SalesDocumentTypeForm(forms.ModelForm):
                 "generate_stock_movement",
                 "Cotizacion y Presupuesto no deben generar stock.",
             )
+        if behavior in no_stock_behaviors and generate_account_movement:
+            self.add_error(
+                "generate_account_movement",
+                "Cotizacion y Presupuesto no deben impactar cuenta corriente.",
+            )
 
         if self.company and behavior and is_default:
             existing_default_qs = SalesDocumentType.objects.filter(

@@ -9,7 +9,10 @@ from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db.models import Case, F, IntegerField, Q, Value, When
 
-from accounts.services.ledger import ensure_adjustment_transaction
+from accounts.services.account_movement_service import (
+    sync_fiscal_document_account_movement,
+    sync_internal_document_account_movement,
+)
 from core.models import (
     DocumentSeries,
     SALES_BEHAVIOR_COTIZACION,
@@ -282,38 +285,12 @@ def ensure_stock_movements_for_order_document(
 
 
 def ensure_account_adjustment_for_fiscal_document(*, fiscal_document, sales_document_type, actor=None):
-    """Generate credit/debit ledger adjustment only for configurable credit/debit documents."""
-    if not fiscal_document or not sales_document_type or not sales_document_type.generate_account_movement:
+    """Backward-compatible wrapper for the unified account-movement service."""
+    if not fiscal_document or not sales_document_type:
         return None
-    if sales_document_type.document_behavior not in {
-        SALES_BEHAVIOR_NOTA_CREDITO,
-        SALES_BEHAVIOR_NOTA_DEBITO,
-    }:
-        return None
-
-    client_profile = fiscal_document.client_profile
-    if not client_profile and getattr(fiscal_document, "client_company_ref", None):
-        client_profile = fiscal_document.client_company_ref.client_profile
-    if not client_profile:
-        return None
-
-    total_amount = Decimal(fiscal_document.total or 0).quantize(Decimal("0.01"))
-    if total_amount == 0:
-        return None
-
-    signed_amount = total_amount
-    if sales_document_type.document_behavior == SALES_BEHAVIOR_NOTA_CREDITO:
-        signed_amount = total_amount * Decimal("-1")
-
-    return ensure_adjustment_transaction(
-        source_key=f"fiscal:{fiscal_document.pk}:account-adjustment",
-        client_profile=client_profile,
-        amount=signed_amount,
-        reason=f"{sales_document_type.name} {fiscal_document.doc_type}",
+    return sync_fiscal_document_account_movement(
+        fiscal_document=fiscal_document,
         actor=actor,
-        order=fiscal_document.order,
-        company=fiscal_document.company,
-        occurred_at=fiscal_document.issued_at or fiscal_document.created_at,
     )
 
 
@@ -347,9 +324,10 @@ def apply_sales_document_type_to_internal_document(*, document, sales_document_t
             internal_document=document,
         )
         try:
-            from accounts.services.ledger import sync_order_charge_transaction
-
-            sync_order_charge_transaction(order=document.order, actor=actor)
+            sync_internal_document_account_movement(
+                internal_document=document,
+                actor=actor,
+            )
         except Exception:
             pass
     return document
@@ -385,18 +363,13 @@ def apply_sales_document_type_to_fiscal_document(*, document, sales_document_typ
             actor=actor,
             fiscal_document=document,
         )
-    ensure_account_adjustment_for_fiscal_document(
-        fiscal_document=document,
-        sales_document_type=sales_document_type,
-        actor=actor,
-    )
-    if document.order_id:
-        try:
-            from accounts.services.ledger import sync_order_charge_transaction
-
-            sync_order_charge_transaction(order=document.order, actor=actor)
-        except Exception:
-            pass
+    try:
+        sync_fiscal_document_account_movement(
+            fiscal_document=document,
+            actor=actor,
+        )
+    except Exception:
+        pass
     return document
 
 

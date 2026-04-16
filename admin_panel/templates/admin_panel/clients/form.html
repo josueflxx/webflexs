@@ -2,6 +2,322 @@
 {% load l10n %}
 
 {% block page_title %}{% if is_create %}Nuevo Cliente{% else %}Editar Cliente{% endif %}{% endblock %}
+{% block extra_css %}
+<style>
+    .client-flat-page {
+        max-width: 1180px;
+        margin: 0 auto;
+        padding: 0 12px 28px;
+    }
+
+    .client-flat-card {
+        background: linear-gradient(180deg, rgba(20, 27, 38, 0.94), rgba(11, 16, 23, 0.98));
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 8px;
+        overflow: hidden;
+        box-shadow: 0 24px 42px rgba(0, 0, 0, 0.28);
+    }
+
+    .client-flat-heading {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 18px 20px;
+        background: linear-gradient(180deg, rgba(255, 107, 53, 0.16), rgba(255, 107, 53, 0.07));
+        border-bottom: 1px solid rgba(255, 107, 53, 0.16);
+        color: var(--color-white);
+    }
+
+    .client-flat-heading-icon {
+        width: 44px;
+        height: 44px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.95);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        font-size: 1.2rem;
+        flex: 0 0 auto;
+    }
+
+    .client-flat-heading h2 {
+        margin: 0 0 4px;
+        font-size: 1.16rem;
+        color: var(--color-white);
+    }
+
+    .client-flat-heading p {
+        margin: 0;
+        font-size: 0.92rem;
+        color: #d2d8e3;
+    }
+
+    .client-flat-form {
+        padding: 18px 20px 24px;
+        background:
+            radial-gradient(circle at top right, rgba(255, 107, 53, 0.06), transparent 30%),
+            linear-gradient(180deg, rgba(17, 22, 31, 0.98), rgba(11, 16, 23, 0.98));
+        color: var(--color-white);
+    }
+
+    .client-flat-section {
+        margin-bottom: 28px;
+    }
+
+    .client-flat-section-label {
+        display: inline-flex;
+        align-items: center;
+        padding: 6px 10px;
+        margin-bottom: 14px;
+        background: rgba(255, 107, 53, 0.1);
+        color: var(--color-primary-light);
+        border-left: 3px solid var(--color-primary);
+        font-size: 0.9rem;
+        font-weight: 600;
+        letter-spacing: 0.01em;
+    }
+
+    .client-flat-grid {
+        display: grid;
+        grid-template-columns: repeat(12, minmax(0, 1fr));
+        gap: 14px;
+    }
+
+    .client-flat-field {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        min-width: 0;
+        grid-column: span 4;
+    }
+
+    .client-flat-field.span-6 {
+        grid-column: span 6;
+    }
+
+    .client-flat-field.span-8 {
+        grid-column: span 8;
+    }
+
+    .client-flat-field.span-12 {
+        grid-column: 1 / -1;
+    }
+
+    .client-flat-field .form-label {
+        margin-bottom: 0;
+        color: var(--color-white);
+        font-size: 0.9rem;
+        font-weight: 600;
+    }
+
+    .client-flat-form .form-input,
+    .client-flat-form .form-select,
+    .client-flat-form .form-textarea {
+        width: 100%;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.04));
+        color: var(--color-white);
+        border-radius: 4px;
+        padding: 10px 11px;
+        box-shadow: none;
+    }
+
+    .client-flat-form .form-input:focus,
+    .client-flat-form .form-select:focus,
+    .client-flat-form .form-textarea:focus {
+        outline: none;
+        border-color: var(--color-primary);
+        background: rgba(255, 255, 255, 0.08);
+        box-shadow: 0 0 0 3px rgba(255, 107, 53, 0.14);
+    }
+
+    .client-flat-inline-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+    }
+
+    .client-flat-note,
+    .client-flat-form .text-muted {
+        color: #aab4c5;
+        font-size: 0.84rem;
+        line-height: 1.5;
+    }
+
+    .client-flat-hint {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        padding-top: 6px;
+        color: #c9d1de;
+        font-size: 0.84rem;
+    }
+
+    .client-flat-hint-icon {
+        width: 18px;
+        height: 18px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 999px;
+        background: var(--color-primary);
+        color: #fff;
+        font-size: 0.76rem;
+        flex: 0 0 auto;
+        margin-top: 1px;
+    }
+
+    .client-flat-fiscal-links {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        padding-top: 4px;
+    }
+
+    .client-flat-fiscal-links button,
+    .client-flat-fiscal-links a {
+        width: fit-content;
+    }
+
+    .client-flat-static {
+        padding: 10px 12px;
+        min-height: 44px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 4px;
+        background: rgba(255, 255, 255, 0.04);
+        color: #d8dfeb;
+        display: flex;
+        align-items: center;
+    }
+
+    .client-flat-static strong {
+        color: var(--color-white);
+    }
+
+    .client-flat-actions {
+        margin-top: 10px;
+        padding-top: 18px;
+        border-top: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .client-flat-actions .btn,
+    .client-flat-actions button,
+    .client-flat-actions a {
+        border-radius: 4px;
+    }
+
+    .client-flat-advanced {
+        margin-top: 8px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 6px;
+        background: rgba(255, 255, 255, 0.03);
+    }
+
+    .client-flat-advanced summary {
+        cursor: pointer;
+        list-style: none;
+        padding: 14px 16px;
+    }
+
+    .client-flat-advanced summary::-webkit-details-marker {
+        display: none;
+    }
+
+    .client-flat-advanced-body {
+        padding: 0 16px 16px;
+    }
+
+    .client-flat-page .client-company-links-panel,
+    .client-flat-page .client-company-summary {
+        margin-top: 16px;
+        padding: 16px;
+        border-radius: 6px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        background: rgba(255, 255, 255, 0.02);
+        color: var(--color-white);
+    }
+
+    .client-flat-page .client-company-links-header strong,
+    .client-flat-page .client-company-summary-head h3,
+    .client-flat-page .client-company-link-topline strong {
+        color: var(--color-white);
+    }
+
+    .client-flat-page .client-company-links-header p,
+    .client-flat-page .client-company-summary-head p,
+    .client-flat-page .client-company-link-copy small,
+    .client-flat-page .client-audit-item small {
+        color: #aab4c5;
+    }
+
+    .client-flat-page .client-company-link-card {
+        border-radius: 6px;
+        border-color: rgba(255, 255, 255, 0.08);
+        background: rgba(255, 255, 255, 0.03);
+    }
+
+    .client-flat-page .client-company-link-card.is-selected {
+        background: linear-gradient(180deg, rgba(255, 107, 53, 0.16), rgba(11, 16, 23, 0.88));
+        border-color: rgba(255, 107, 53, 0.45);
+    }
+
+    .client-flat-page .client-audit-item {
+        border-radius: 6px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        background: rgba(255, 255, 255, 0.03);
+        color: var(--color-white);
+    }
+
+    .client-flat-page .admin-table {
+        color: var(--color-white);
+    }
+
+    .client-flat-page .admin-table th {
+        background: rgba(255, 107, 53, 0.1);
+        color: var(--color-primary-light);
+    }
+
+    .client-flat-form .form-input::placeholder,
+    .client-flat-form .form-textarea::placeholder {
+        color: #8f99ac;
+    }
+
+    @media (max-width: 920px) {
+        .client-flat-field,
+        .client-flat-field.span-6,
+        .client-flat-field.span-8 {
+            grid-column: span 6;
+        }
+    }
+
+    @media (max-width: 680px) {
+        .client-flat-page {
+            padding-inline: 0;
+        }
+
+        .client-flat-card {
+            border-radius: 0;
+        }
+
+        .client-flat-heading,
+        .client-flat-form {
+            padding-inline: 14px;
+        }
+
+        .client-flat-field,
+        .client-flat-field.span-6,
+        .client-flat-field.span-8,
+        .client-flat-field.span-12 {
+            grid-column: 1 / -1;
+        }
+
+        .client-flat-inline-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+{% endblock %}
 
 {% block content %}
 {% if is_create %}
@@ -10,37 +326,36 @@
 {% include 'admin_panel/clients/_module_panel.html' with client_panel='search' client_module_subtitle='Edicion integral del cliente, sus datos de acceso y su configuracion comercial.' %}
 {% endif %}
 
-<div class="client-intake-shell">
-    <div class="client-intake-head">
-        <div class="client-intake-head-icon" aria-hidden="true">&#128100;</div>
+<div class="client-flat-page">
+    <div class="client-flat-card">
+        <div class="client-flat-heading">
+        <div class="client-flat-heading-icon" aria-hidden="true">&#128100;</div>
         <div>
-            <span class="client-intake-kicker">{% if is_create %}Agregar un cliente{% else %}Editar cliente{% endif %}</span>
-            <h2>{% if is_create %}Alta comercial y fiscal{% else %}{{ client.company_name }}{% endif %}</h2>
+            <h2>{% if is_create %}Agregar un cliente{% else %}Editar cliente{% endif %}</h2>
             <p>
-                Adaptado al flujo del sistema actual: contacto, fiscalidad, acceso al portal y configuracion comercial
-                por empresa.
+                Carga simple de contacto, datos fiscales, configuracion comercial y observaciones internas.
             </p>
         </div>
     </div>
 
-    <form method="post" class="client-intake-form">
+    <form method="post" class="client-flat-form">
         {% csrf_token %}
 
-        <section class="client-intake-section">
-            <div class="client-intake-section-title">Datos de contacto</div>
-            <div class="client-intake-grid client-intake-grid-contact">
-                <div class="form-group client-intake-span-2">
-                    <label for="company_name" class="form-label">Nombre / Empresa</label>
+        <section class="client-flat-section">
+            <div class="client-flat-section-label">Datos de contacto</div>
+            <div class="client-flat-grid">
+                <div class="client-flat-field span-6">
+                    <label for="company_name" class="form-label">Nombre</label>
                     <input type="text" name="company_name" id="company_name" class="form-input" value="{{ form_values.company_name }}" required>
                 </div>
-                <div class="form-group client-intake-contact-card">
+                <div class="client-flat-field span-6">
                     <label class="form-label">Contacto</label>
-                    <div class="client-intake-inline-grid">
+                    <div class="client-flat-inline-grid">
                         <input type="text" name="first_name" id="first_name" class="form-input" value="{{ form_values.first_name }}" placeholder="Nombre">
                         <input type="text" name="last_name" id="last_name" class="form-input" value="{{ form_values.last_name }}" placeholder="Apellido">
                     </div>
                 </div>
-                <div class="form-group">
+                <div class="client-flat-field">
                     <label for="client_category" class="form-label">Categoria del cliente</label>
                     <select name="client_category" id="client_category" class="form-select">
                         <option value="">Sin especificar</option>
@@ -55,35 +370,30 @@
                         {% endfor %}
                     </select>
                 </div>
-                <div class="form-group">
+                <div class="client-flat-field">
                     <label for="email" class="form-label">Mail</label>
                     <input type="email" name="email" id="email" class="form-input" value="{{ form_values.email }}">
                 </div>
-                <div class="form-group">
+                <div class="client-flat-field">
                     <label for="phone" class="form-label">Telefono/s</label>
                     <input type="text" name="phone" id="phone" class="form-input" value="{{ form_values.phone }}">
                 </div>
-                <div class="form-group client-intake-span-2">
+                <div class="client-flat-field span-6">
                     <label for="address" class="form-label">Domicilio</label>
                     <input type="text" name="address" id="address" class="form-input" value="{{ form_values.address }}">
                 </div>
-                <div class="form-group">
-                    <label for="province" class="form-label">Localidad / Provincia</label>
+                <div class="client-flat-field">
+                    <label for="province" class="form-label">Localidad</label>
                     <input type="text" name="province" id="province" class="form-input" value="{{ form_values.province }}">
                 </div>
             </div>
         </section>
 
-        <section class="client-intake-section">
-            <div class="client-intake-section-title">Datos de facturacion</div>
-            <div class="client-intake-grid client-intake-grid-billing">
-                <div class="form-group">
-                    <label for="cuit_dni" class="form-label">CUIT</label>
-                    <input type="text" name="cuit_dni" id="cuit_dni" class="form-input" value="{{ form_values.cuit_dni }}">
-                    <small class="text-muted">Ingresa el CUIT para preparar razon social y condicion de IVA.</small>
-                </div>
-                <div class="form-group">
-                    <label for="iva_condition" class="form-label">Condicion de IVA</label>
+        <section class="client-flat-section">
+            <div class="client-flat-section-label">Datos de facturacion</div>
+            <div class="client-flat-grid">
+                <div class="client-flat-field">
+                    <label for="iva_condition" class="form-label">Razon social / Condicion IVA</label>
                     <select name="iva_condition" id="iva_condition" class="form-select">
                         <option value="">-</option>
                         {% for value, label in iva_condition_choices %}
@@ -91,8 +401,12 @@
                         {% endfor %}
                     </select>
                 </div>
-                <div class="form-group">
-                    <label for="document_type" class="form-label">Tipo de documento</label>
+                <div class="client-flat-field">
+                    <label for="cuit_dni" class="form-label">CUIT</label>
+                    <input type="text" name="cuit_dni" id="cuit_dni" class="form-input" value="{{ form_values.cuit_dni }}">
+                </div>
+                <div class="client-flat-field">
+                    <label for="document_type" class="form-label">Otro tipo de documento</label>
                     <select name="document_type" id="document_type" class="form-select">
                         <option value="">Ninguno</option>
                         {% for value, label in document_type_choices %}
@@ -100,37 +414,49 @@
                         {% endfor %}
                     </select>
                 </div>
-                <div class="form-group">
+                <div class="client-flat-field">
                     <label for="document_number" class="form-label">Numero de documento</label>
                     <input type="text" name="document_number" id="document_number" class="form-input" value="{{ form_values.document_number }}">
                 </div>
-                <div class="form-group client-intake-span-2">
+                <div class="client-flat-field span-12">
+                    <div class="client-flat-hint">
+                        <span class="client-flat-hint-icon">i</span>
+                        <div>
+                            Ingresa el CUIT para que el sistema prepare razon social, condicion de IVA y datos fiscales. Si no hay respuesta automatica, puedes completar todo manualmente sin frenar el alta.
+                        </div>
+                    </div>
+                </div>
+                <div class="client-flat-field span-6">
                     <label for="fiscal_address" class="form-label">Domicilio fiscal</label>
                     <input type="text" name="fiscal_address" id="fiscal_address" class="form-input" value="{{ form_values.fiscal_address }}">
                 </div>
-                <div class="form-group">
+                <div class="client-flat-field">
                     <label for="fiscal_city" class="form-label">Localidad fiscal</label>
                     <input type="text" name="fiscal_city" id="fiscal_city" class="form-input" value="{{ form_values.fiscal_city }}">
                 </div>
-                <div class="form-group">
+                <div class="client-flat-field">
                     <label for="fiscal_province" class="form-label">Provincia fiscal</label>
                     <input type="text" name="fiscal_province" id="fiscal_province" class="form-input" value="{{ form_values.fiscal_province }}">
                 </div>
-                <div class="form-group">
+                <div class="client-flat-field">
                     <label for="postal_code" class="form-label">Codigo postal</label>
                     <input type="text" name="postal_code" id="postal_code" class="form-input" value="{{ form_values.postal_code }}">
                 </div>
-                <div class="form-group client-intake-actions-row">
+                <div class="client-flat-field span-6">
+                    <label class="form-label">Busqueda automatica</label>
+                    <div class="client-flat-fiscal-links">
                     <button type="button" id="cuit_autofill" class="btn btn-outline">Autocompletar fiscal (CUIT)</button>
+                        <span class="client-flat-note">Si ARCA/AFIP no responde, el formulario sigue funcionando en modo manual.</span>
+                    </div>
                 </div>
             </div>
         </section>
 
-        <section class="client-intake-section">
-            <div class="client-intake-section-title">Comercial y acceso</div>
-            <div class="client-intake-grid client-intake-grid-commercial">
-                <div class="form-group">
-                    <label for="company_id" class="form-label">Empresa en edicion</label>
+        <section class="client-flat-section">
+            <div class="client-flat-section-label">Comercial</div>
+            <div class="client-flat-grid">
+                <div class="client-flat-field">
+                    <label for="company_id" class="form-label">Empresa</label>
                     <select name="company_id" id="company_id" class="form-select">
                         {% for company in companies %}
                         <option value="{{ company.pk }}" {% if form_values.company_id == company.pk|stringformat:"s" %}selected{% endif %}>
@@ -140,12 +466,12 @@
                     </select>
                     <small class="text-muted">Los datos comerciales de abajo se guardan sobre esta empresa.</small>
                 </div>
-                <div class="form-group">
+                <div class="client-flat-field">
                     <label for="discount" class="form-label">Descuento (%)</label>
                     <input type="number" step="0.01" name="discount" id="discount" class="form-input" value="{{ form_values.discount }}">
                     <small class="text-muted">Si eliges categoria, se sincroniza automaticamente.</small>
                 </div>
-                <div class="form-group">
+                <div class="client-flat-field">
                     <label for="client_type" class="form-label">Rubro</label>
                     <select name="client_type" id="client_type" class="form-select">
                         <option value="">Sin especificar</option>
@@ -154,25 +480,59 @@
                         {% endfor %}
                     </select>
                 </div>
-                <div class="form-group">
+                <div class="client-flat-field span-6">
+                    <label class="form-label">Condicion activa</label>
+                    <div class="client-flat-static">
+                        <strong>{{ form_values.discount|default:"0" }}% de descuento</strong>&nbsp;·&nbsp;<span>La categoria puede autocompletar las condiciones de trabajo.</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="client-flat-section">
+            <div class="client-flat-section-label">Moneda</div>
+            <div class="client-flat-grid">
+                <div class="client-flat-field span-12">
+                    <label class="form-label">Moneda</label>
+                    <div class="client-flat-static">
+                        <strong>Pesos (ARS)</strong>&nbsp;·&nbsp;<span>En esta fase el flujo comercial sigue operando en ARS.</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="client-flat-section">
+            <div class="client-flat-section-label">Observaciones</div>
+            <div class="client-flat-field span-12">
+                <label for="notes" class="form-label">Notas internas</label>
+                <textarea name="notes" id="notes" class="form-textarea" rows="7" placeholder="Observaciones comerciales, fiscales u operativas del cliente.">{{ form_values.notes }}</textarea>
+                <small class="text-muted">Se guardan como texto interno para el equipo comercial y administrativo.</small>
+            </div>
+        </section>
+
+        <details class="client-flat-advanced" {% if not is_create %}open{% endif %}>
+            <summary><span class="client-flat-section-label" style="margin-bottom:0;">Opciones avanzadas y configuracion por empresa</span></summary>
+            <div class="client-flat-advanced-body">
+            <div class="client-flat-grid" style="margin-top:6px;">
+                <div class="client-flat-field">
                     <label for="username" class="form-label">Usuario del portal</label>
                     <input type="text" name="username" id="username" class="form-input" value="{{ form_values.username }}" required>
                 </div>
-                <div class="form-group">
+                <div class="client-flat-field">
                     <label class="form-label">Estado de acceso</label>
                     <label class="client-intake-checkbox">
                         <input type="checkbox" id="user_is_active" name="user_is_active" {% if form_values.user_is_active %}checked{% endif %}>
                         Usuario habilitado para iniciar sesion
                     </label>
                 </div>
-                <div class="form-group">
+                <div class="client-flat-field">
                     <label class="form-label">Estado del perfil</label>
                     <label class="client-intake-checkbox">
                         <input type="checkbox" id="client_is_approved" name="client_is_approved" {% if form_values.client_is_approved %}checked{% endif %}>
                         Perfil aprobado para operar
                     </label>
                 </div>
-                <div class="form-group">
+                <div class="client-flat-field">
                     <label class="form-label">Estado en empresa</label>
                     <label class="client-intake-checkbox">
                         <input type="checkbox" id="company_is_active" name="company_is_active" {% if form_values.company_is_active %}checked{% endif %}>
@@ -180,17 +540,17 @@
                     </label>
                 </div>
                 {% if is_create %}
-                <div class="form-group">
+                <div class="client-flat-field">
                     <label for="password" class="form-label">Contrasena inicial</label>
                     <input type="password" name="password" id="password" class="form-input" required>
                 </div>
-                <div class="form-group">
+                <div class="client-flat-field">
                     <label for="password_confirm" class="form-label">Confirmar contrasena</label>
                     <input type="password" name="password_confirm" id="password_confirm" class="form-input" required>
                 </div>
                 {% endif %}
             </div>
-            <div class="client-company-links-panel">
+            <div class="client-company-links-panel" style="margin-top:16px;">
                 <div class="client-company-links-header">
                     <div>
                         <strong>Empresas habilitadas</strong>
@@ -280,58 +640,40 @@
                 </div>
             </div>
             {% endif %}
-        </section>
-
-        <section class="client-intake-section">
-            <div class="client-intake-section-title">Datos extra</div>
-            <div class="client-intake-grid client-intake-grid-extra">
-                <div class="client-intake-info-card">
-                    <span class="client-intake-info-label">Moneda</span>
-                    <strong>Pesos (ARS)</strong>
-                    <small>El sistema opera comercialmente en ARS para este flujo.</small>
-                </div>
-                <div class="client-intake-info-card">
-                    <span class="client-intake-info-label">MercadoLibre</span>
-                    <strong>No integrado</strong>
-                    <small>Se deja fuera por ahora porque el proyecto no tiene esa capa modelada.</small>
-                </div>
-                <div class="client-intake-info-card">
-                    <span class="client-intake-info-label">Credenciales</span>
-                    <strong>{% if is_create %}Alta nueva{% else %}Usuario existente{% endif %}</strong>
-                    <small>La gestion de clave sigue separada cuando ya existe el cliente.</small>
-                </div>
-            </div>
-        </section>
-
-        <details class="client-intake-section client-intake-section-collapsible" {% if form_values.notes %}open{% endif %}>
-            <summary class="client-intake-section-title client-intake-section-title-summary">Observaciones</summary>
-            <div class="form-group" style="margin-top: 16px;">
-                <label for="notes" class="form-label">Notas internas</label>
-                <textarea name="notes" id="notes" class="form-textarea" rows="5">{{ form_values.notes }}</textarea>
             </div>
         </details>
 
-        <div class="form-actions">
+        <div class="form-actions client-flat-actions">
             <button type="submit" class="btn btn-primary">{% if is_create %}Agregar{% else %}Guardar cambios{% endif %}</button>
             {% if not is_create %}
             <a href="{% url 'admin_client_order_history' client.pk %}" class="btn btn-warning-outline">Ver historial</a>
             <a href="{% url 'admin_payment_list' %}?client_id={{ client.pk }}" class="btn btn-primary">Ver pagos</a>
             {% if can_manage_client_credentials and client.user %}
             <a href="{% url 'admin_client_password' client.pk %}" class="btn btn-outline">Cambiar clave</a>
+            {% if client.user.email %}
+            <form method="post" action="{% url 'admin_client_password_reset_email' client.pk %}" style="display:inline; margin:0;">
+                {% csrf_token %}
+                <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                <button type="submit" class="btn btn-outline">Enviar link de recuperacion</button>
+            </form>
+            {% else %}
+            <span class="btn btn-outline" style="opacity:.55; cursor:not-allowed;">Sin email para recuperar</span>
+            {% endif %}
             {% endif %}
             {% endif %}
             <a href="{% url 'admin_client_list' %}" class="btn btn-outline">Cancelar</a>
         </div>
     </form>
+    </div>
 
     {% if recent_client_audit_logs %}
-    <div class="client-company-summary" style="margin-top:24px;">
-        <div class="client-company-summary-head">
+    <details class="client-company-summary" style="margin-top:24px;">
+        <summary class="client-company-summary-head" style="cursor:pointer; list-style:none;">
             <div>
                 <h3>Auditoria reciente</h3>
                 <p>Ultimos cambios registrados sobre el cliente y su configuracion comercial.</p>
             </div>
-        </div>
+        </summary>
         <div class="client-audit-list">
             {% for log in recent_client_audit_logs %}
             <article class="client-audit-item">
@@ -343,7 +685,7 @@
             </article>
             {% endfor %}
         </div>
-    </div>
+    </details>
     {% endif %}
 </div>
 <script>
@@ -399,6 +741,7 @@
                 const fiscalAddress = document.getElementById('fiscal_address');
                 const fiscalProvince = document.getElementById('fiscal_province');
                 const fiscalCity = document.getElementById('fiscal_city');
+                const postalCode = document.getElementById('postal_code');
                 const cuit = (cuitInput ? cuitInput.value : '').trim();
                 if (!cuit) {
                     alert('Ingresa un CUIT antes de usar el autocompletado.');
@@ -412,14 +755,16 @@
                 fetch(`/admin-panel/clientes/cuit-lookup/?cuit=${encodeURIComponent(cuit)}`)
                     .then((response) => response.json())
                     .then((data) => {
-                        if (docNumber && !docNumber.value) docNumber.value = cuit;
-                        if (docType && !docType.value) docType.value = 'cuit';
+                        const fiscalData = data && data.ok ? data : {};
+                        if (docNumber && !docNumber.value) docNumber.value = fiscalData.document_number || cuit;
+                        if (docType && !docType.value) docType.value = fiscalData.document_type || 'cuit';
 
-                        if (data && data.ok && data.company_name && companyName && !companyName.value) companyName.value = data.company_name;
-                        if (data && data.ok && data.iva_condition && iva && !iva.value) iva.value = data.iva_condition;
-                        if (data && data.ok && data.fiscal_address && fiscalAddress && !fiscalAddress.value) fiscalAddress.value = data.fiscal_address;
-                        if (data && data.ok && data.fiscal_province && fiscalProvince && !fiscalProvince.value) fiscalProvince.value = data.fiscal_province;
-                        if (data && data.ok && data.fiscal_city && fiscalCity && !fiscalCity.value) fiscalCity.value = data.fiscal_city;
+                        if (fiscalData.company_name && companyName && !companyName.value) companyName.value = fiscalData.company_name;
+                        if (fiscalData.iva_condition && iva && !iva.value) iva.value = fiscalData.iva_condition;
+                        if (fiscalData.fiscal_address && fiscalAddress && !fiscalAddress.value) fiscalAddress.value = fiscalData.fiscal_address;
+                        if (fiscalData.fiscal_province && fiscalProvince && !fiscalProvince.value) fiscalProvince.value = fiscalData.fiscal_province;
+                        if (fiscalData.fiscal_city && fiscalCity && !fiscalCity.value) fiscalCity.value = fiscalData.fiscal_city;
+                        if (fiscalData.postal_code && postalCode && !postalCode.value) postalCode.value = fiscalData.postal_code;
 
                         const message = (data && data.message) ? data.message : 'Autocompletado fiscal aplicado con datos disponibles.';
                         alert(message);

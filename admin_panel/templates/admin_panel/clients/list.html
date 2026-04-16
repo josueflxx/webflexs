@@ -3,7 +3,7 @@
 {% block page_title %}Clientes{% endblock %}
 
 {% block content %}
-{% include 'admin_panel/clients/_module_panel.html' with client_panel='search' client_module_subtitle='Acceso central a la cartera: buscar, revisar historial y operar sobre cada cliente.' %}
+{% include 'admin_panel/clients/_module_panel.html' with client_panel='search' client_module_subtitle='Acceso central a la cartera: buscar clientes y abrir su ficha comercial completa.' %}
 <div class="admin-table-container clients-list-shell no-drag-scroll">
     <style>
         .client-history-link {
@@ -66,6 +66,11 @@
         </div>
     </div>
 
+    <div class="alert alert-info" style="margin-bottom:14px;">
+        Usa esta vista para encontrar clientes y abrir su <strong>ficha comercial</strong>.
+        La ficha reúne pedidos, cuenta corriente, cobros y documentos del cliente en un solo lugar.
+    </div>
+
     {% if missing_email_total > 0 %}
     <div class="alert alert-warning" style="margin-bottom:14px;">
         <strong>{{ missing_email_total }} cliente(s) sin email.</strong>
@@ -126,7 +131,7 @@
             <thead>
                 <tr>
                     <th>Usuario</th>
-                    <th>Empresa</th>
+                    <th>Empresa / ficha</th>
                     <th>CUIT/DNI</th>
                     <th>Provincia</th>
                     <th>Tipo</th>
@@ -154,9 +159,13 @@
                         {% endif %}
                     </td>
                     <td class="actions">
+                        <a href="{% url 'admin_client_order_history' client.pk %}" class="btn btn-outline btn-sm"
+                            title="Abrir ficha comercial">
+                            Ficha
+                        </a>
                         <a href="{% url 'admin_payment_list' %}?client_id={{ client.pk }}" class="btn btn-primary btn-sm"
-                            title="Pagos">
-                            Pagos
+                            title="Cobros y pagos del cliente">
+                            Cobros
                         </a>
                         {% if can_edit_client_profile %}
                         <a href="{% url 'admin_client_edit' client.pk %}" class="btn btn-outline"
@@ -165,10 +174,19 @@
                         </a>
                         {% if can_manage_client_credentials and client.user %}
                         <a href="{% url 'admin_client_password' client.pk %}" class="btn btn-warning-outline"
-                            title="Cambiar Contrasena">Clave</a>
+                            title="Cambiar clave de acceso al portal">Clave portal</a>
+                        {% if client.user.email %}
+                        <form method="post" action="{% url 'admin_client_password_reset_email' client.pk %}" style="display:inline; margin:0;">
+                            {% csrf_token %}
+                            <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                            <button type="submit" class="btn btn-outline" title="Enviar link para que el cliente cree o recupere su clave">Link portal</button>
+                        </form>
+                        {% else %}
+                        <span class="btn btn-outline" style="opacity:.55; cursor:not-allowed;" title="Carga un email para habilitar recuperacion">Portal sin email</span>
+                        {% endif %}
                         {% endif %}
                         {% if can_delete_client_record %}
-                        <a href="{% url 'admin_client_delete' client.pk %}" class="btn btn-danger-outline" title="Desactivar">Desactivar</a>
+                        <a href="{% url 'admin_client_delete' client.pk %}" class="btn btn-danger-outline" title="Desactivar cliente">Desactivar cliente</a>
                         {% endif %}
                         {% endif %}
                     </td>

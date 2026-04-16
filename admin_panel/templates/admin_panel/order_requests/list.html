@@ -1,11 +1,17 @@
 {% extends 'admin_panel/base.html' %}
 
-{% block page_title %}Solicitudes Comerciales{% endblock %}
+{% block page_title %}Solicitudes de compra{% endblock %}
 
 {% block content %}
 <div class="admin-table-container">
+    <div class="alert alert-info" style="margin-bottom:14px;">
+        Estas solicitudes vienen del catalogo o del portal del cliente. <strong>Todavia no son pedidos operativos</strong>:
+        primero se revisan, se pueden ajustar y luego se convierten en pedido.
+    </div>
+    {% include 'admin_panel/orders/_sales_workspace.html' %}
     <div class="admin-toolbar">
         <form method="get" class="toolbar-search order-filters-grid">
+            <input type="hidden" name="stage" value="{{ stage }}">
             <input type="text" name="client" value="{{ client }}" placeholder="Buscar cliente..." class="form-input">
             <select name="company_id" class="form-select">
                 {% for company in companies %}
@@ -22,6 +28,9 @@
             </select>
             <button type="submit" class="btn btn-primary">Filtrar</button>
             <a href="{% url 'admin_order_request_list' %}" class="btn btn-outline">Limpiar</a>
+            {% if stage %}
+            <a href="{% url 'admin_order_request_list' %}" class="btn btn-outline">Quitar etapa</a>
+            {% endif %}
         </form>
     </div>
 
@@ -34,7 +43,7 @@
                 <th>Cliente</th>
                 <th>Items</th>
                 <th>Total</th>
-                <th>Estado</th>
+                <th>Estado comercial</th>
                 <th>Propuesta</th>
                 <th>Acciones</th>
             </tr>
@@ -63,15 +72,15 @@
                     {% endif %}
                 </td>
                 <td class="actions">
-                    <a href="{% url 'admin_order_request_detail' order_request.pk %}" class="btn btn-outline">Ver</a>
+                    <a href="{% url 'admin_order_request_detail' order_request.pk %}" class="btn btn-outline">Abrir flujo</a>
                     {% if order_request.converted_order %}
-                    <a href="{% url 'admin_order_detail' order_request.converted_order.pk %}" class="btn btn-primary">Pedido</a>
+                    <a href="{% url 'admin_order_detail' order_request.converted_order.pk %}" class="btn btn-primary">Pedido operativo</a>
                     {% endif %}
                 </td>
             </tr>
             {% empty %}
             <tr>
-                <td colspan="9" class="text-center text-muted">No hay solicitudes comerciales</td>
+                <td colspan="9" class="text-center text-muted">No hay solicitudes de compra</td>
             </tr>
             {% endfor %}
         </tbody>

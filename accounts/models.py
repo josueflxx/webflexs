@@ -692,21 +692,6 @@ class ClientPayment(models.Model):
                     raise ValidationError("La empresa es obligatoria para pagos sin pedido.")
         super().save(*args, **kwargs)
 
-        # Keep client ledger in sync on create/update/cancel.
-        from accounts.services.ledger import sync_payment_transaction
-        sync_payment_transaction(
-            payment=self,
-            actor=self.created_by if self.created_by_id else None,
-        )
-
-        try:
-            from core.services.documents import ensure_document_for_payment
-
-            ensure_document_for_payment(self)
-        except Exception:
-            # Document creation should not block payment persistence.
-            pass
-
 
 class ClientTransaction(models.Model):
     """Auditable ledger row for client current-account balance."""

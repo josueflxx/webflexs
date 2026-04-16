@@ -49,7 +49,7 @@
             <span class="text-muted">-</span>
             {% endif %}
 
-            {% if order.status == 'draft' %}
+            {% if order.status == 'draft' and not order_items_edit_locked %}
             <a href="{% url 'admin_order_item_edit' order.pk item.pk %}" class="btn btn-outline btn-sm">
                 Editar
             </a>

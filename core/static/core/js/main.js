@@ -167,13 +167,6 @@ document.addEventListener('DOMContentLoaded', function () {
             return null;
         }
 
-        function getDocumentScrollContainer() {
-            const rootScroller = document.scrollingElement || document.documentElement;
-            if (!rootScroller) return null;
-            const canScrollX = rootScroller.scrollWidth > rootScroller.clientWidth;
-            return canScrollX ? rootScroller : null;
-        }
-
         function endRightDragScroll(event) {
             if (!dragState) return;
             const dragged = dragState.moved;
@@ -201,7 +194,7 @@ document.addEventListener('DOMContentLoaded', function () {
             );
             if (target.closest(interactiveBlockSelector) && !explicitScrollableContainer) return;
 
-            const container = getDragScrollContainer(target) || getDocumentScrollContainer();
+            const container = getDragScrollContainer(target);
             if (!container) return;
 
             dragState = {

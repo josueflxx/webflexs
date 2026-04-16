@@ -402,48 +402,7 @@ class Order(models.Model):
                     self.company = get_default_company()
                 except Exception:
                     pass
-        is_new = self._state.adding
-        update_fields = kwargs.get("update_fields")
-        tracked_fields = {"status", "total", "user", "status_updated_at"}
-        should_sync_ledger = (
-            is_new
-            or update_fields is None
-            or bool(tracked_fields.intersection(set(update_fields)))
-        )
-
         super().save(*args, **kwargs)
-
-        if kwargs.get("raw"):
-            return
-        if not should_sync_ledger:
-            return
-
-        try:
-            from accounts.services.ledger import sync_order_charge_transaction
-
-            sync_order_charge_transaction(order=self, actor=None)
-        except Exception:
-            # Ledger sync should never block persisting the order.
-            pass
-
-        try:
-            from core.models import DocumentSeries
-            from core.services.documents import ensure_document_for_order
-
-            if self.status == self.STATUS_DRAFT:
-                ensure_document_for_order(self, doc_type=DocumentSeries.DOC_COT)
-            if self.status in {
-                self.STATUS_CONFIRMED,
-                self.STATUS_PREPARING,
-                self.STATUS_SHIPPED,
-                self.STATUS_DELIVERED,
-            }:
-                ensure_document_for_order(self, doc_type=DocumentSeries.DOC_PED)
-            if self.status in {self.STATUS_SHIPPED, self.STATUS_DELIVERED}:
-                ensure_document_for_order(self, doc_type=DocumentSeries.DOC_REM)
-        except Exception:
-            # Document creation should not block order persistence.
-            pass
 
     def get_item_count(self):
         """Total number of items in order."""
@@ -485,32 +444,24 @@ class Order(models.Model):
         if not self.can_transition_to(normalized_target):
             raise ValueError("Transicion de estado no permitida.")
 
+        from django.db import transaction
         previous_status = self.normalized_status()
         if previous_status == normalized_target:
             return False
 
-        self.status = normalized_target
-        self.status_updated_at = timezone.now()
-        self.save(update_fields=["status", "status_updated_at", "updated_at"])
-        OrderStatusHistory.objects.create(
-            order=self,
-            from_status=previous_status,
-            to_status=normalized_target,
-            changed_by=changed_by if getattr(changed_by, "is_authenticated", False) else None,
-            note=(note or "").strip(),
-        )
-        try:
-            from accounts.services.ledger import sync_order_charge_transaction
-
-            sync_order_charge_transaction(
+        with transaction.atomic():
+            self.status = normalized_target
+            self.status_updated_at = timezone.now()
+            self.save(update_fields=["status", "status_updated_at", "updated_at"])
+            OrderStatusHistory.objects.create(
                 order=self,
-                actor=changed_by if getattr(changed_by, "is_authenticated", False) else None,
+                from_status=previous_status,
+                to_status=normalized_target,
+                changed_by=changed_by if getattr(changed_by, "is_authenticated", False) else None,
+                note=(note or "").strip(),
             )
-        except Exception:
-            # Ledger sync should never block the core status workflow.
-            pass
         return True
-
+ 
 
 class OrderStatusHistory(models.Model):
     """Traceability for each order status transition."""

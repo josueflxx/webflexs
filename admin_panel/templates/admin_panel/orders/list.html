@@ -1,11 +1,17 @@
 {% extends 'admin_panel/base.html' %}
 
-{% block page_title %}Pedidos{% endblock %}
+{% block page_title %}Pedidos operativos{% endblock %}
 
 {% block content %}
 <div class="admin-table-container">
+    <div class="alert alert-info" style="margin-bottom:14px;">
+        Aqui ves <strong>pedidos y cotizaciones operativas</strong> ya cargados por el equipo o convertidos desde una solicitud de compra.
+        Las solicitudes iniciadas por clientes se revisan aparte en <strong>Solicitudes de compra</strong>.
+    </div>
+    {% include 'admin_panel/orders/_sales_workspace.html' %}
     <div class="admin-toolbar">
         <form method="get" class="toolbar-search order-filters-grid" id="orderFiltersForm">
+            <input type="hidden" name="stage" value="{{ stage }}">
             <input type="text" name="client" value="{{ client }}" placeholder="Buscar cliente..." class="form-input" data-suggest="1" data-suggest-scope="admin_clients" autocomplete="off">
             <select name="company_id" class="form-select">
                 {% for company in companies %}
@@ -32,17 +38,20 @@
                 href="{% url 'admin_order_export_saas' %}?company_id={{ selected_company_id }}&status={{ status }}&sync_status={{ sync_status|default:'pending' }}"
                 class="btn btn-outline"
             >
-                Exportar SaaS
+                Exportar pedidos
             </a>
             {% else %}
             <span class="text-muted order-export-hint">Selecciona empresa para exportar</span>
+            {% endif %}
+            {% if stage %}
+            <a href="{% url 'admin_order_list' %}" class="btn btn-outline">Quitar etapa</a>
             {% endif %}
         </form>
     </div>
 
     <details class="order-create-panel" id="orderCreatePanel">
         <summary>
-            <span>+ Nuevo pedido</span>
+            <span>+ Cargar pedido manual</span>
         </summary>
         <form method="post" action="{% url 'admin_order_create_from_panel' %}" id="orderCreateForm" class="order-create-grid">
             {% csrf_token %}
@@ -81,7 +90,7 @@
                 </select>
             </div>
             <div class="order-create-actions">
-                <button type="submit" class="btn btn-primary">Crear pedido</button>
+                <button type="submit" class="btn btn-primary">Crear pedido operativo</button>
             </div>
         </form>
     </details>
@@ -96,7 +105,7 @@
                 <th>Items</th>
                 <th>Total</th>
                 <th>Estado</th>
-                <th>Sync</th>
+                <th>Integracion</th>
                 <th>Acciones</th>
             </tr>
         </thead>
@@ -139,7 +148,7 @@
                 <td class="actions">
                     {% if order.quick_client_profile_id and order.quick_related_actions %}
                     <details class="order-list-relate-menu">
-                        <summary class="btn btn-outline order-list-plus-btn" title="Relacionar venta">+</summary>
+                        <summary class="btn btn-outline order-list-plus-btn" title="Generar documento o comprobante">Docs</summary>
                         <div class="order-list-relate-popover">
                             {% for item in order.quick_related_actions %}
                             <form method="post" action="{{ item.url }}" style="margin:0;">
@@ -157,7 +166,7 @@
                         </div>
                     </details>
                     {% endif %}
-                    <a href="{% url 'admin_order_detail' order.pk %}" class="btn btn-outline">Ver</a>
+                    <a href="{% url 'admin_order_detail' order.pk %}" class="btn btn-outline">Abrir</a>
                 </td>
             </tr>
             {% empty %}
@@ -361,32 +370,49 @@
             const triggerRect = trigger.getBoundingClientRect();
             const viewportWidth = window.innerWidth;
             const viewportHeight = window.innerHeight;
+            const headerRect = document.querySelector('.admin-header')?.getBoundingClientRect();
+            const topNavRect = document.querySelector('.admin-top-nav-wrap')?.getBoundingClientRect();
+            let safeTop = 12;
+            if (headerRect && headerRect.bottom > 0) {
+                safeTop = Math.max(safeTop, headerRect.bottom + 8);
+            }
+            if (topNavRect && topNavRect.bottom > 0) {
+                safeTop = Math.max(safeTop, topNavRect.bottom + 8);
+            }
 
             const desiredWidth = Math.min(280, viewportWidth - 24);
             popover.style.width = desiredWidth + 'px';
 
             // first pass for natural height
-            popover.style.maxHeight = Math.max(150, viewportHeight - 24) + 'px';
+            popover.style.maxHeight = Math.max(150, viewportHeight - safeTop - 12) + 'px';
 
             const approxHeight = Math.min(popover.scrollHeight || 260, 340);
             let left = triggerRect.right - desiredWidth;
             left = Math.max(12, Math.min(left, viewportWidth - desiredWidth - 12));
 
-            const spaceBelow = viewportHeight - triggerRect.bottom - 12;
-            const spaceAbove = triggerRect.top - 12;
+            const minimumVisibleHeight = 140;
+            const topBelow = Math.max(safeTop, triggerRect.bottom + 8);
+            const spaceBelow = viewportHeight - topBelow - 12;
+            const spaceAbove = triggerRect.top - safeTop;
 
-            if (spaceBelow >= 170 || spaceBelow >= spaceAbove) {
-                const top = Math.max(12, triggerRect.bottom + 8);
+            if (spaceBelow >= minimumVisibleHeight) {
                 popover.style.left = left + 'px';
-                popover.style.top = top + 'px';
+                popover.style.top = topBelow + 'px';
                 popover.style.bottom = 'auto';
                 popover.style.maxHeight = Math.max(140, spaceBelow - 6) + 'px';
-            } else {
-                const top = Math.max(12, triggerRect.top - approxHeight - 8);
+            } else if (spaceAbove >= minimumVisibleHeight) {
+                const renderHeight = Math.min(approxHeight, spaceAbove);
+                const top = Math.max(safeTop, triggerRect.top - renderHeight - 8);
                 popover.style.left = left + 'px';
                 popover.style.top = top + 'px';
                 popover.style.bottom = 'auto';
                 popover.style.maxHeight = Math.max(140, spaceAbove - 6) + 'px';
+            } else {
+                const fallbackTop = Math.max(safeTop, viewportHeight - minimumVisibleHeight - 12);
+                popover.style.left = left + 'px';
+                popover.style.top = fallbackTop + 'px';
+                popover.style.bottom = 'auto';
+                popover.style.maxHeight = minimumVisibleHeight + 'px';
             }
         };
 

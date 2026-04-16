@@ -1,11 +1,59 @@
 {% extends 'admin_panel/base.html' %}
 
 {% block page_title %}Clientes{% endblock %}
+{% block extra_css %}
+<style>
+    .client-dashboard-stats {
+        gap: 12px;
+        margin-bottom: 18px;
+    }
+
+    .client-dashboard-stats .stat-card {
+        padding: 14px 16px;
+        border-radius: 12px;
+        min-height: 0;
+        box-shadow: 0 12px 24px rgba(0, 0, 0, 0.14);
+    }
+
+    .client-dashboard-stats .stat-card h3 {
+        margin-bottom: 6px;
+        font-size: 0.72rem;
+        letter-spacing: 0.08em;
+    }
+
+    .client-dashboard-stats .stat-card .number {
+        font-size: clamp(1.7rem, 2.3vw, 2.15rem);
+        line-height: 1;
+    }
+
+    .client-dashboard-stats .stat-card small {
+        margin-top: 8px;
+        font-size: 0.79rem;
+        line-height: 1.35;
+    }
+
+    @media (max-width: 1100px) {
+        .client-dashboard-stats {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+    }
+
+    @media (max-width: 640px) {
+        .client-dashboard-stats {
+            grid-template-columns: 1fr;
+        }
+
+        .client-dashboard-stats .stat-card {
+            padding: 12px 14px;
+        }
+    }
+</style>
+{% endblock %}
 
 {% block content %}
 {% include 'admin_panel/clients/_module_panel.html' with client_panel='dashboard' client_module_subtitle='Vista general del modulo: indicadores rapidos, actividad reciente y atajos de gestion.' %}
 
-<div class="dashboard-grid">
+<div class="dashboard-grid client-dashboard-stats">
     <div class="stat-card">
         <h3>Total clientes</h3>
         <span class="number">{{ total_clients }}</span>

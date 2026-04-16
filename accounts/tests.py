@@ -1,4 +1,5 @@
 import re
+from decimal import Decimal
 
 from django.contrib.auth.models import User
 from django.core.cache import cache
@@ -8,7 +9,25 @@ from django.urls import reverse
 
 from accounts.models import AccountRequest, ClientCategory, ClientCompany, ClientPayment, ClientProfile, ClientTransaction
 from accounts.services.client_importer import ClientImporter
-from core.models import Company, FiscalDocument, FiscalPointOfSale, SalesDocumentType
+from accounts.services.ledger import sync_order_charge_transaction
+from core.models import (
+    Company,
+    DocumentSeries,
+    FISCAL_DOC_TYPE_FB,
+    FISCAL_DOC_TYPE_NCB,
+    FISCAL_STATUS_EXTERNAL_RECORDED,
+    FISCAL_STATUS_READY_TO_ISSUE,
+    FiscalDocument,
+    FiscalPointOfSale,
+    InternalDocument,
+    SALES_BEHAVIOR_NOTA_CREDITO,
+    SALES_BEHAVIOR_PRESUPUESTO,
+    SALES_BILLING_MODE_INTERNAL_DOCUMENT,
+    SALES_BILLING_MODE_MANUAL_FISCAL,
+    SalesDocumentType,
+)
+from core.services.fiscal_documents import close_fiscal_document, reopen_fiscal_document
+from core.services.sales_documents import apply_sales_document_type_to_fiscal_document
 from orders.models import Order
 from core.services.company_context import get_default_company, get_default_client_origin_company
 
@@ -145,6 +164,7 @@ class LoginRedirectCompanySelectionTests(TestCase):
 @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
 class PasswordResetFlowTests(TestCase):
     def setUp(self):
+        cache.clear()
         mail.outbox = []
 
     def _extract_confirm_path(self, email_body):
@@ -184,7 +204,7 @@ class PasswordResetFlowTests(TestCase):
             },
             follow=True,
         )
-        self.assertContains(confirm_post, "Contrasena actualizada")
+        self.assertContains(confirm_post, "Clave actualizada")
 
         login_response = self.client.post(
             reverse("login"),
@@ -219,6 +239,21 @@ class PasswordResetFlowTests(TestCase):
         self.assertRedirects(response, reverse("password_reset_done"))
         self.assertEqual(len(mail.outbox), 1)
         self.assertEqual(mail.outbox[0].to, [staff.email])
+
+    @override_settings(PASSWORD_RESET_MAX_REQUESTS_PER_EMAIL=1, PASSWORD_RESET_MAX_REQUESTS_PER_IP=5)
+    def test_password_reset_rate_limit_keeps_response_generic(self):
+        user = User.objects.create_user(
+            username="cliente_rate_limit",
+            email="cliente_rate_limit@example.com",
+            password="oldpass123",
+        )
+
+        first_response = self.client.post(reverse("password_reset"), {"email": user.email})
+        second_response = self.client.post(reverse("password_reset"), {"email": user.email})
+
+        self.assertRedirects(first_response, reverse("password_reset_done"))
+        self.assertRedirects(second_response, reverse("password_reset_done"))
+        self.assertEqual(len(mail.outbox), 1)
 
 
 class ClientLedgerTests(TestCase):
@@ -378,6 +413,111 @@ class ClientLedgerTests(TestCase):
         )
 
         self.assertEqual(self.profile.get_total_orders_for_balance(), 100)
+
+    def test_order_charge_ignores_budget_type_even_if_misconfigured(self):
+        order = Order.objects.create(
+            user=self.user,
+            company=self.company,
+            status=Order.STATUS_CONFIRMED,
+            subtotal="125.00",
+            total="125.00",
+            client_company="Cliente Ledger",
+            client_company_ref=self.client_company,
+        )
+        budget_type = SalesDocumentType.objects.create(
+            company=self.company,
+            code="budget-ledger-misconfigured",
+            name="Presupuesto mal configurado",
+            document_behavior=SALES_BEHAVIOR_PRESUPUESTO,
+            billing_mode=SALES_BILLING_MODE_INTERNAL_DOCUMENT,
+            internal_doc_type=DocumentSeries.DOC_PED,
+            generate_account_movement=True,
+            enabled=True,
+        )
+        InternalDocument.objects.create(
+            source_key="test:budget:internal",
+            doc_type=DocumentSeries.DOC_PED,
+            number=999,
+            company=self.company,
+            client_company_ref=self.client_company,
+            client_profile=self.profile,
+            order=order,
+            sales_document_type=budget_type,
+        )
+
+        tx = sync_order_charge_transaction(order=order)
+
+        self.assertIsNotNone(tx)
+        self.assertEqual(tx.amount, Decimal("0.00"))
+
+    def test_credit_note_adjustment_updates_only_when_document_is_closed(self):
+        point = FiscalPointOfSale.objects.create(
+            company=self.company,
+            number="82",
+            is_active=True,
+            is_default=False,
+        )
+        invoice_type = SalesDocumentType.objects.filter(
+            company=self.company,
+            document_behavior="Factura",
+        ).first()
+        base_invoice = FiscalDocument.objects.create(
+            source_key="ledger-base-invoice",
+            company=self.company,
+            client_company_ref=self.client_company,
+            client_profile=self.profile,
+            point_of_sale=point,
+            sales_document_type=invoice_type,
+            doc_type=FISCAL_DOC_TYPE_FB,
+            issue_mode="manual",
+            status=FISCAL_STATUS_EXTERNAL_RECORDED,
+            number=1,
+            subtotal_net="100.00",
+            total="100.00",
+        )
+        credit_type = SalesDocumentType.objects.create(
+            company=self.company,
+            code="ncb-ledger-sync",
+            name="NC B ledger sync",
+            letter="B",
+            point_of_sale=point,
+            document_behavior=SALES_BEHAVIOR_NOTA_CREDITO,
+            billing_mode=SALES_BILLING_MODE_MANUAL_FISCAL,
+            fiscal_doc_type=FISCAL_DOC_TYPE_NCB,
+            generate_account_movement=True,
+            enabled=True,
+        )
+        credit_note = FiscalDocument.objects.create(
+            source_key="ledger-credit-note",
+            company=self.company,
+            client_company_ref=self.client_company,
+            client_profile=self.profile,
+            point_of_sale=point,
+            sales_document_type=credit_type,
+            related_document=base_invoice,
+            doc_type=FISCAL_DOC_TYPE_NCB,
+            issue_mode="manual",
+            status=FISCAL_STATUS_READY_TO_ISSUE,
+            subtotal_net="10.00",
+            total="10.00",
+        )
+
+        apply_sales_document_type_to_fiscal_document(
+            document=credit_note,
+            sales_document_type=credit_type,
+        )
+        tx = ClientTransaction.objects.get(
+            source_key=f"fiscal:{credit_note.pk}:account-adjustment"
+        )
+        self.assertEqual(tx.amount, Decimal("0.00"))
+
+        close_fiscal_document(fiscal_document=credit_note)
+        tx.refresh_from_db()
+        self.assertEqual(tx.amount, Decimal("-10.00"))
+
+        reopen_fiscal_document(fiscal_document=credit_note)
+        tx.refresh_from_db()
+        self.assertEqual(tx.amount, Decimal("0.00"))
 
     def test_discount_decimal_uses_client_category_when_assigned(self):
         category = ClientCategory.objects.create(

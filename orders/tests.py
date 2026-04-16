@@ -1,4 +1,6 @@
 from decimal import Decimal
+from types import SimpleNamespace
+from unittest.mock import Mock, patch
 
 from django.contrib.auth.models import Group, User
 from django.core.exceptions import ValidationError
@@ -6,6 +8,7 @@ from django.test import TestCase
 from django.urls import reverse
 
 from accounts.models import ClientCompany, ClientPayment, ClientProfile, ClientTransaction
+from accounts.services.movement_lifecycle import can_transition_transaction_state
 from catalog.models import ClampMeasureRequest, Product
 from orders.models import Cart, CartItem, Order, OrderItem, OrderProposal, OrderRequest, OrderRequestEvent
 from orders.services.request_workflow import (
@@ -97,6 +100,31 @@ class OrderPaymentWorkflowTests(TestCase):
         self.assertEqual(order.get_paid_amount(), Decimal('100.00'))
         self.assertEqual(order.get_pending_amount(), Decimal('0.00'))
         self.assertTrue(order.is_paid())
+
+    def test_same_movement_state_is_not_offered_as_transition(self):
+        order = Order.objects.create(
+            user=self.client_user,
+            company=self.company,
+            status=Order.STATUS_CONFIRMED,
+            subtotal=Decimal('100.00'),
+            total=Decimal('100.00'),
+            client_company='Cliente Pago Workflow',
+            client_company_ref=self.client_company,
+        )
+        tx = ClientTransaction.objects.create(
+            client_profile=self.client_profile,
+            company=self.company,
+            order=order,
+            transaction_type=ClientTransaction.TYPE_ORDER_CHARGE,
+            amount=Decimal('100.00'),
+            movement_state=ClientTransaction.STATE_CLOSED,
+            source_key='test:same-state-movement',
+        )
+
+        allowed, reason = can_transition_transaction_state(tx, ClientTransaction.STATE_CLOSED)
+
+        self.assertFalse(allowed)
+        self.assertIn('ya estaba en estado Cerrado', reason)
 
 
 class CheckoutClampRequestFlowTests(TestCase):
@@ -924,7 +952,7 @@ class OrderRequestReviewActionsTests(TestCase):
         self.assertIsNotNone(charge_tx)
         self.assertEqual(charge_tx.amount, Decimal('0.00'))
 
-    def test_admin_can_generate_quote_with_account_movement_type_impacts_current_account(self):
+    def test_admin_generate_quote_from_request_never_impacts_current_account(self):
         self.quote_type.generate_account_movement = True
         self.quote_type.save(update_fields=['generate_account_movement', 'updated_at'])
 
@@ -948,7 +976,54 @@ class OrderRequestReviewActionsTests(TestCase):
             transaction_type=ClientTransaction.TYPE_ORDER_CHARGE,
         ).first()
         self.assertIsNotNone(charge_tx)
-        self.assertEqual(charge_tx.amount, order.total)
+        self.assertEqual(charge_tx.amount, Decimal('0.00'))
+
+    def test_admin_generate_quote_from_accepted_proposal_uses_proposal_snapshot(self):
+        self.client.force_login(self.staff_user)
+        proposal_response = self.client.post(
+            reverse('admin_order_request_propose', args=[self.order_request.pk]),
+            data={
+                'message_to_client': 'Ajuste final aprobado para cotizar.',
+                'internal_note': 'Usar snapshot de propuesta',
+                'row_enabled_1': 'on',
+                'quantity_1': '1',
+                'unit_price_base_1': '100.00',
+                'price_at_snapshot_1': '91.00',
+            },
+        )
+        self.assertEqual(proposal_response.status_code, 302)
+        self.order_request.refresh_from_db()
+        proposal = self.order_request.current_proposal
+        self.assertIsNotNone(proposal)
+
+        self.client.force_login(self.client_user)
+        accept_response = self.client.post(
+            reverse('order_request_accept_proposal', args=[self.order_request.pk, proposal.pk]),
+        )
+        self.assertEqual(accept_response.status_code, 302)
+
+        self.client.force_login(self.staff_user)
+        quote_response = self.client.post(
+            reverse('admin_order_request_generate_quote', args=[self.order_request.pk]),
+            data={'sales_document_type_id': str(self.quote_type.pk)},
+        )
+
+        self.assertEqual(quote_response.status_code, 302)
+        self.order_request.refresh_from_db()
+        order = self.order_request.converted_order
+        self.assertIsNotNone(order)
+        self.assertEqual(order.source_proposal_id, proposal.pk)
+        self.assertEqual(order.total, Decimal('91.00'))
+
+        order_item = order.items.get(product_sku=self.product.sku)
+        self.assertEqual(order_item.quantity, 1)
+        self.assertEqual(order_item.price_at_purchase, Decimal('91.00'))
+        self.assertTrue(
+            InternalDocument.objects.filter(
+                order=order,
+                doc_type=DocumentSeries.DOC_COT,
+            ).exists()
+        )
 
     def test_admin_can_generate_invoice_from_confirmed_request(self):
         self.client.force_login(self.staff_user)
@@ -1112,3 +1187,35 @@ class OrderRequestReviewActionsTests(TestCase):
         self.assertContains(internal_response, self.product.name)
         self.assertEqual(fiscal_response.status_code, 200)
         self.assertContains(fiscal_response, fiscal_doc.get_doc_type_display())
+
+    def test_client_fiscal_document_pdf_downloads_as_attachment(self):
+        self.client.force_login(self.staff_user)
+        self.client.post(
+            reverse('admin_order_request_confirm', args=[self.order_request.pk]),
+            data={'admin_note': 'Lista para documentos'},
+        )
+        self.client.post(
+            reverse('admin_order_request_generate_invoice', args=[self.order_request.pk]),
+            data={'sales_document_type_id': str(self.invoice_type.pk)},
+        )
+
+        self.order_request.refresh_from_db()
+        order = self.order_request.converted_order
+        fiscal_doc = FiscalDocument.objects.filter(order=order, doc_type=FISCAL_DOC_TYPE_FB).first()
+
+        self.client.force_login(self.client_user)
+        generate_pdf = Mock(return_value=b"%PDF-test")
+        with patch.dict(
+            "sys.modules",
+            {"core.services.pdf_generator": SimpleNamespace(generate_document_pdf=generate_pdf)},
+        ):
+            response = self.client.get(
+                reverse('order_fiscal_document_print', args=[fiscal_doc.pk]),
+                {'copy': 'original', 'format': 'pdf'},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], 'application/pdf')
+        self.assertIn('attachment;', response['Content-Disposition'])
+        self.assertIn('.pdf', response['Content-Disposition'])
+        generate_pdf.assert_called_once()

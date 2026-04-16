@@ -12,6 +12,9 @@ from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.utils import timezone
 
+from accounts.services.account_movement_service import (
+    sync_fiscal_document_account_movement,
+)
 from core.models import (
     FISCAL_INVOICE_DOC_TYPES,
     FISCAL_ISSUE_MODE_ARCA_WSFE,
@@ -361,13 +364,13 @@ def emit_fiscal_document_now(*, fiscal_document: FiscalDocument, actor=None) -> 
 
         locked_doc.save(update_fields=update_fields)
 
-    if locked_doc.order_id:
-        try:
-            from accounts.services.ledger import sync_order_charge_transaction
-
-            sync_order_charge_transaction(order=locked_doc.order, actor=actor)
-        except Exception:
-            pass
+    try:
+        sync_fiscal_document_account_movement(
+            fiscal_document=locked_doc,
+            actor=actor,
+        )
+    except Exception:
+        pass
 
     message = {
         FISCAL_STATUS_AUTHORIZED: "Comprobante autorizado en ARCA.",

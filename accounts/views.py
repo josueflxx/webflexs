@@ -1,12 +1,14 @@
 ﻿"""
 Accounts app views - Login, logout, and account requests.
 """
+import hashlib
 import math
 
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
+from django.contrib.auth.views import PasswordResetView
 from django.core.cache import cache
 from django.shortcuts import redirect, render
 from django.urls import reverse
@@ -51,6 +53,43 @@ def _build_account_request_keys(request):
         f"account-request:{ip}:count",
         "account_request_last_submit_ts",
     )
+
+
+def _build_password_reset_keys(request, email):
+    ip = _get_client_ip(request)
+    normalized_email = (email or "").strip().lower()
+    email_hash = hashlib.sha256(normalized_email.encode("utf-8")).hexdigest()[:24] or "empty"
+    return (
+        f"password-reset:ip:{ip}:count",
+        f"password-reset:email:{email_hash}:count",
+    )
+
+
+class SafePasswordResetView(PasswordResetView):
+    """
+    Public password reset with generic UX and light abuse protection.
+    Django still owns token generation and email validation.
+    """
+
+    def form_valid(self, form):
+        email = (form.cleaned_data.get("email") or "").strip().lower()
+        ip_key, email_key = _build_password_reset_keys(self.request, email)
+        window_seconds = int(getattr(settings, "PASSWORD_RESET_WINDOW_SECONDS", 60 * 60))
+        max_per_ip = int(getattr(settings, "PASSWORD_RESET_MAX_REQUESTS_PER_IP", 8))
+        max_per_email = int(getattr(settings, "PASSWORD_RESET_MAX_REQUESTS_PER_EMAIL", 4))
+
+        ip_count = int(cache.get(ip_key, 0) or 0)
+        email_count = int(cache.get(email_key, 0) or 0)
+        if ip_count >= max_per_ip or email_count >= max_per_email:
+            messages.info(
+                self.request,
+                "Si ya solicitaste un enlace, espera unos minutos antes de volver a intentar.",
+            )
+            return redirect(self.get_success_url())
+
+        cache.set(ip_key, ip_count + 1, timeout=window_seconds)
+        cache.set(email_key, email_count + 1, timeout=window_seconds)
+        return super().form_valid(form)
 
 
 def login_view(request):

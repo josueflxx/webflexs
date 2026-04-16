@@ -215,10 +215,7 @@ def _build_client_fiscal_print_context(fiscal_document):
         "items": fiscal_document.items.all().order_by("line_number"),
         "document_letter": company_meta["letter"],
         "document_code": company_meta["code"],
-        "document_number_display": (
-            f"{str(fiscal_document.point_of_sale.number or '').zfill(5)}-"
-            f"{str(fiscal_document.number or 0).zfill(8)}"
-        ),
+        "document_number_display": fiscal_document.display_number,
         "company_address_line": " / ".join(bit for bit in company_address_bits if bit),
         "company_contact_line": " / ".join(
             bit
@@ -849,7 +846,7 @@ def order_fiscal_document_print(request, doc_id):
             pdf_bytes = generate_document_pdf(html_string, base_url=request.build_absolute_uri("/"))
             response = HttpResponse(pdf_bytes, content_type="application/pdf")
             response["Content-Disposition"] = (
-                f'inline; filename="{fiscal_document.commercial_type_label}_{fiscal_document.display_number}_{copy_type}.pdf"'
+                f'attachment; filename="{fiscal_document.commercial_type_label}_{fiscal_document.display_number}_{copy_type}.pdf"'
             )
             return response
         except ImportError:

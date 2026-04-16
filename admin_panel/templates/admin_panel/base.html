@@ -9,7 +9,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{% static 'core/css/base.css' %}">
-    <link rel="stylesheet" href="{% static 'core/css/admin.css' %}?v=43">
+    <link rel="stylesheet" href="{% static 'core/css/admin.css' %}?v=46">
     <link rel="stylesheet" href="{% static 'core/css/admin_right_sidebar.css' %}?v=4">
     <link rel="stylesheet" href="{% static 'core/css/search_suggestions.css' %}?v=5">
     <link rel="icon" type="image/x-icon" href="{% static 'core/img/favicon.ico' %}">
@@ -67,34 +67,49 @@
                 <a href="{% url 'admin_client_dashboard' %}"
                     class="nav-item {% if 'client' in request.resolver_match.url_name and 'client_category' not in request.resolver_match.url_name and 'client_report' not in request.resolver_match.url_name %}active{% endif %}">
                     <span class="nav-icon" aria-hidden="true">&#128101;</span>
-                    Clientes
+                    Buscar clientes
+                </a>
+                <a href="{% url 'admin_client_create' %}"
+                    class="nav-item {% if request.resolver_match.url_name == 'admin_client_create' %}active{% endif %}">
+                    <span class="nav-icon" aria-hidden="true">&#10010;</span>
+                    Agregar clientes
                 </a>
                 <a href="{% url 'admin_client_reports_hub' %}"
                     class="nav-item {% if request.resolver_match.url_name == 'admin_client_reports_hub' or request.resolver_match.url_name == 'admin_client_report_list' or request.resolver_match.url_name == 'admin_client_report_ranking' or request.resolver_match.url_name == 'admin_client_report_debtors' %}active{% endif %}">
                     <span class="nav-icon" aria-hidden="true">&#128202;</span>
-                    Informes clientes
+                    Informes
+                </a>
+                <a href="{% url 'admin_client_tools_hub' %}"
+                    class="nav-item {% if request.resolver_match.url_name == 'admin_client_tools_hub' or request.resolver_match.url_name == 'admin_client_export' or request.resolver_match.url_name == 'admin_import_process' %}active{% endif %}">
+                    <span class="nav-icon" aria-hidden="true">&#9881;</span>
+                    Herramientas
                 </a>
                 <a href="{% url 'admin_client_category_list' %}"
                     class="nav-item {% if 'client_category' in request.resolver_match.url_name %}active{% endif %}">
                     <span class="nav-icon" aria-hidden="true">&#128203;</span>
-                    Tipos clientes
+                    Categorias
                 </a>
                 <a href="{% url 'admin_request_list' %}"
                     class="nav-item {% if 'admin_request' in request.resolver_match.url_name %}active{% endif %}">
                     <span class="nav-icon" aria-hidden="true">&#128221;</span>
-                    Solicitudes
+                    Altas de clientes
                 </a>
 
-                <div class="nav-section">Ventas</div>
+                <div class="nav-section">Ventas secundarias</div>
+                <a href="{% url 'admin_sales_workspace' %}"
+                    class="nav-item {% if request.resolver_match.url_name == 'admin_sales_workspace' %}active{% endif %}">
+                    <span class="nav-icon" aria-hidden="true">&#128200;</span>
+                    Vista transversal
+                </a>
                 <a href="{% url 'admin_order_list' %}"
                     class="nav-item {% if 'order' in request.resolver_match.url_name and 'admin_order_request' not in request.resolver_match.url_name %}active{% endif %}">
                     <span class="nav-icon" aria-hidden="true">&#128722;</span>
-                    Pedidos
+                    Pedidos operativos
                 </a>
                 <a href="{% url 'admin_order_request_list' %}"
                     class="nav-item {% if 'admin_order_request' in request.resolver_match.url_name %}active{% endif %}">
                     <span class="nav-icon" aria-hidden="true">&#128221;</span>
-                    Pedidos web
+                    Solicitudes de compra
                 </a>
                 <a href="{% url 'admin_payment_list' %}"
                     class="nav-item {% if 'payment' in request.resolver_match.url_name %}active{% endif %}">
@@ -151,6 +166,22 @@
                     <h1>{% block page_title %}Dashboard{% endblock %}</h1>
                 </div>
                 <div class="header-user">
+                    <div class="header-user-actions">
+                        <a
+                            href="{% url 'catalog' %}"
+                            class="btn btn-ghost header-user-link"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                        >
+                            Ver catalogo
+                        </a>
+                        <a
+                            href="{% url 'logout' %}"
+                            class="btn btn-ghost header-user-link is-danger"
+                        >
+                            Cerrar sesion
+                        </a>
+                    </div>
                     <span class="header-user-name">{{ user.first_name|default:user.username }}</span>
                     {% if active_company %}
                     <span class="header-user-company">Empresa: {{ active_company.name }}</span>
@@ -207,24 +238,24 @@
                                 </a>
                                 <div class="top-nav-submenu" aria-label="Panel de clientes">
                                     <a href="{% url 'admin_client_list' %}" class="top-nav-submenu-item {% if request.resolver_match.url_name == 'admin_client_list' or request.resolver_match.url_name == 'admin_client_order_history' or request.resolver_match.url_name == 'admin_client_edit' or request.resolver_match.url_name == 'admin_client_password' %}is-active{% endif %}">
-                                        <strong>Buscar</strong>
-                                        <small>Listado, filtros e historial del cliente</small>
+                                        <strong>Buscar clientes</strong>
+                                        <small>Buscador, ficha comercial, movimientos y cuenta corriente</small>
                                     </a>
                                     <a href="{% url 'admin_client_create' %}" class="top-nav-submenu-item {% if request.resolver_match.url_name == 'admin_client_create' %}is-active{% endif %}">
-                                        <strong>Agregar</strong>
-                                        <small>Alta rapida de usuario, perfil y empresa</small>
+                                        <strong>Agregar clientes</strong>
+                                        <small>Alta simple con datos de contacto, fiscales y comerciales</small>
                                     </a>
                                     <a href="{% url 'admin_client_reports_hub' %}" class="top-nav-submenu-item {% if request.resolver_match.url_name == 'admin_client_reports_hub' or request.resolver_match.url_name == 'admin_client_report_list' or request.resolver_match.url_name == 'admin_client_report_ranking' or request.resolver_match.url_name == 'admin_client_report_debtors' %}is-active{% endif %}">
                                         <strong>Informes</strong>
-                                        <small>Lista, ranking y clientes deudores</small>
+                                        <small>Lista, ranking comercial y clientes con deuda</small>
                                     </a>
                                     <a href="{% url 'admin_client_category_list' %}" class="top-nav-submenu-item {% if 'client_category' in request.resolver_match.url_name %}is-active{% endif %}">
-                                        <strong>Tipos</strong>
-                                        <small>Configuracion comercial y categorias base</small>
+                                        <strong>Categorias</strong>
+                                        <small>Descuentos, topes y reglas comerciales por categoria</small>
                                     </a>
                                     <a href="{% url 'admin_client_tools_hub' %}" class="top-nav-submenu-item {% if request.resolver_match.url_name == 'admin_client_tools_hub' or request.resolver_match.url_name == 'admin_client_export' or request.resolver_match.url_name == 'admin_import_process' or 'admin_request' in request.resolver_match.url_name %}is-active{% endif %}">
                                         <strong>Herramientas</strong>
-                                        <small>Exportar, importar o gestionar solicitudes del modulo</small>
+                                        <small>Exportar, importar, actualizar y revisar altas de clientes</small>
                                     </a>
                                 </div>
                             </div>
@@ -232,13 +263,16 @@
                     </div>
 
                     <div class="top-nav-group">
-                        <span class="top-nav-group-label">Ventas</span>
+                        <span class="top-nav-group-label">Ventas secundarias</span>
                         <div class="top-nav-group-links">
+                            <a href="{% url 'admin_sales_workspace' %}" class="top-nav-item {% if request.resolver_match.url_name == 'admin_sales_workspace' %}active{% endif %}">
+                                <span aria-hidden="true">&#128200;</span> Vista transversal
+                            </a>
                             <a href="{% url 'admin_order_list' %}" class="top-nav-item {% if 'order' in request.resolver_match.url_name and 'admin_order_request' not in request.resolver_match.url_name %}active{% endif %}">
-                                <span aria-hidden="true">&#128722;</span> Pedidos
+                                <span aria-hidden="true">&#128722;</span> Pedidos operativos
                             </a>
                             <a href="{% url 'admin_order_request_list' %}" class="top-nav-item {% if 'admin_order_request' in request.resolver_match.url_name %}active{% endif %}">
-                                <span aria-hidden="true">&#128221;</span> Pedidos web
+                                <span aria-hidden="true">&#128221;</span> Solicitudes de compra
                             </a>
                             <a href="{% url 'admin_payment_list' %}" class="top-nav-item {% if 'payment' in request.resolver_match.url_name %}active{% endif %}">
                                 <span aria-hidden="true">&#128179;</span> Pagos
@@ -278,26 +312,6 @@
                 {% block content %}{% endblock %}
             </div>
         </main>
-
-        <a
-            href="{% url 'logout' %}"
-            class="admin-catalog-fab admin-logout-fab"
-            title="Cerrar sesion"
-            aria-label="Cerrar sesion"
-        >
-            <span aria-hidden="true">&#128682;</span>
-        </a>
-
-        <a
-            href="{% url 'catalog' %}"
-            class="admin-catalog-fab"
-            target="_blank"
-            rel="noopener noreferrer"
-            title="Ver catalogo"
-            aria-label="Ver catalogo"
-        >
-            <span aria-hidden="true">&#127760;</span>
-        </a>
 
         <button class="sidebar-show-btn" id="showRightSidebar" title="Mostrar actividad" onclick="toggleSidebar(false)">
             <span>&#128101;</span>
@@ -342,10 +356,11 @@
         <div class="sidebar-overlay" id="leftSidebarOverlay"></div>
     </div>
 
-    <script src="{% static 'core/js/main.js' %}?v=7"></script>
+    <script src="{% static 'core/js/main.js' %}?v=8"></script>
     <script src="{% static 'core/js/search_suggestions.js' %}?v=8"></script>
     <script>
         const RIGHT_SIDEBAR_AUTO_BREAKPOINT = 1360;
+        const ADMIN_TOP_NAV_SCROLL_KEY = 'adminTopNavScrollLeft';
         let rightSidebarAutoMode = false;
         let adminPresenceDigest = '';
         let adminPresenceTouchLastSentAt = 0;
@@ -426,6 +441,42 @@
                 navScroller.addEventListener('scroll', positionSubmenu);
             }
             positionSubmenu();
+        }
+
+        function setupTopNavScrollPersistence() {
+            const navScroller = document.querySelector('.admin-top-nav');
+            if (!navScroller) return;
+
+            const persistScrollLeft = () => {
+                try {
+                    sessionStorage.setItem(ADMIN_TOP_NAV_SCROLL_KEY, String(navScroller.scrollLeft || 0));
+                } catch (error) {
+                    // Ignore storage issues and keep navigation usable.
+                }
+            };
+
+            try {
+                const rawValue = sessionStorage.getItem(ADMIN_TOP_NAV_SCROLL_KEY);
+                if (rawValue !== null) {
+                    const savedScrollLeft = Number(rawValue);
+                    if (Number.isFinite(savedScrollLeft) && savedScrollLeft > 0) {
+                        requestAnimationFrame(() => {
+                            navScroller.scrollLeft = savedScrollLeft;
+                        });
+                    }
+                }
+            } catch (error) {
+                // Ignore restore failures.
+            }
+
+            navScroller.addEventListener('scroll', persistScrollLeft, { passive: true });
+
+            navScroller.querySelectorAll('a').forEach((link) => {
+                link.addEventListener('click', persistScrollLeft);
+            });
+
+            window.addEventListener('beforeunload', persistScrollLeft);
+            persistScrollLeft();
         }
 
         window.toggleLeftSidebar = function(opened) {
@@ -774,6 +825,7 @@
                 Number('{{ admin_presence_refresh_seconds|default:30 }}') || 30,
                 10
             );
+            setupTopNavScrollPersistence();
             setupClientsTopNavFloatingSubmenu();
             const interactionEvents = ['pointerdown', 'keydown', 'mousemove', 'scroll', 'touchstart'];
             interactionEvents.forEach((eventName) => {
