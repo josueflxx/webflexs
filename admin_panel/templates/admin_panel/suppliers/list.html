@@ -4,72 +4,221 @@
 
 {% block extra_css %}
 <style>
+    .suppliers-admin-panel {
+        width: min(1180px, calc(100vw - 48px));
+        max-width: 100%;
+        margin-inline: auto;
+    }
+
+    .suppliers-control-board {
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0));
+    }
+
+    .suppliers-toolbar {
+        align-items: flex-start;
+        gap: 12px;
+        padding: 16px 18px 14px;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+    }
+
+    .supplier-search-form {
+        width: 100%;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    .suppliers-section-heading {
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+        color: var(--color-white);
+    }
+
+    .suppliers-section-heading strong {
+        font-size: 14px;
+        line-height: 1;
+    }
+
+    .suppliers-section-kicker {
+        color: var(--color-primary);
+        font-size: 10px;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+    }
+
+    .supplier-search-row {
+        display: grid;
+        grid-template-columns: minmax(300px, 1fr) minmax(190px, auto) auto auto;
+        gap: 8px;
+        align-items: center;
+    }
+
+    .supplier-search-row .form-input {
+        width: 100%;
+        min-width: 0;
+        min-height: 44px;
+        font-weight: 600;
+    }
+
+    .supplier-active-toggle {
+        min-height: 44px;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 0 12px;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.03);
+        color: var(--color-white);
+        font-size: 13px;
+        font-weight: 700;
+        white-space: nowrap;
+    }
+
+    .suppliers-quick-actions {
+        flex: 0 0 auto;
+        padding-top: 20px;
+        justify-content: flex-end;
+        overflow: visible;
+    }
+
     .supplier-kpi-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+        grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 12px;
-        margin-bottom: 14px;
+        padding: 14px 18px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
     }
 
     .supplier-kpi-card {
         background: rgba(255, 255, 255, 0.03);
         border: 1px solid rgba(255, 255, 255, 0.08);
-        border-radius: 10px;
-        padding: 12px;
+        border-radius: 8px;
+        padding: 12px 14px;
     }
 
     .supplier-kpi-card .label {
         color: var(--color-gray-light);
-        font-size: 0.82rem;
+        font-size: 10px;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
         margin-bottom: 6px;
         display: block;
     }
 
     .supplier-kpi-card .value {
-        font-size: 1.45rem;
+        font-size: 1.25rem;
         font-weight: 700;
         color: var(--color-white);
+    }
+
+    .supplier-table-wrap {
+        overflow-x: auto;
+        scrollbar-width: thin;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .supplier-table {
+        width: 100%;
+        min-width: 940px;
     }
 
     .supplier-table .badge {
         min-width: 36px;
         text-align: center;
     }
+
+    .supplier-name-cell {
+        min-width: 280px;
+        font-weight: 800;
+        color: var(--color-white);
+    }
+
+    .supplier-number-cell {
+        font-weight: 800;
+        color: var(--color-white);
+    }
+
+    .supplier-action-cell {
+        width: 170px;
+    }
+
+    .supplier-action-cell .btn {
+        width: 100%;
+        justify-content: center;
+    }
+
+    @media (max-width: 820px) {
+        .suppliers-admin-panel {
+            width: calc(100vw - 24px);
+        }
+
+        .suppliers-toolbar {
+            grid-template-columns: 1fr;
+        }
+
+        .supplier-search-row,
+        .supplier-kpi-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .suppliers-quick-actions {
+            width: 100%;
+            padding-top: 0;
+        }
+
+        .suppliers-quick-actions .btn {
+            width: 100%;
+        }
+    }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="admin-table-container">
-    <div class="admin-toolbar">
-        <form method="get" class="toolbar-search">
-            <input type="text" name="q" value="{{ search }}" placeholder="Buscar proveedor..." class="form-input">
-            <label class="form-checkbox-label" style="display:flex;align-items:center;gap:6px;">
-                <input type="checkbox" name="only_active" value="1" {% if only_active %}checked{% endif %}>
-                Solo activos
-            </label>
-            <button type="submit" class="btn btn-primary">Filtrar</button>
-            {% if search or only_active %}
-            <a href="{% url 'admin_supplier_list' %}" class="btn btn-outline">Limpiar</a>
-            {% endif %}
+<div class="admin-table-container suppliers-admin-panel">
+    <div class="suppliers-control-board">
+        <div class="admin-toolbar suppliers-toolbar">
+        <form method="get" class="toolbar-search supplier-search-form">
+            <div class="suppliers-section-heading">
+                <span class="suppliers-section-kicker">Catalogo</span>
+                <strong>Buscar y revisar proveedores</strong>
+            </div>
+            <div class="supplier-search-row">
+                <input type="text" name="q" value="{{ search }}" placeholder="Buscar proveedor..." class="form-input">
+                <label class="supplier-active-toggle">
+                    <input type="checkbox" name="only_active" value="1" {% if only_active %}checked{% endif %}>
+                    Solo activos
+                </label>
+                <button type="submit" class="btn btn-primary">Filtrar</button>
+                {% if search or only_active %}
+                <a href="{% url 'admin_supplier_list' %}" class="btn btn-outline">Limpiar</a>
+                {% endif %}
+            </div>
         </form>
-        <div class="toolbar-actions">
+        <div class="toolbar-actions suppliers-quick-actions">
             <a href="{% url 'admin_supplier_unassigned' %}" class="btn btn-warning-outline">Sin proveedor</a>
         </div>
-    </div>
-
-    <div class="admin-toolbar" style="border-top: 1px solid rgba(255,255,255,0.08);">
-        <div class="supplier-kpi-grid" style="width:100%;">
-            <div class="supplier-kpi-card">
-                <span class="label">Proveedores visibles</span>
-                <span class="value">{{ total_suppliers }}</span>
-            </div>
-            <div class="supplier-kpi-card">
-                <span class="label">Productos sin proveedor</span>
-                <span class="value">{{ uncategorized_products_count }}</span>
-            </div>
         </div>
     </div>
 
+    <div class="supplier-kpi-grid">
+        <div class="supplier-kpi-card">
+            <span class="label">Proveedores visibles</span>
+            <span class="value">{{ total_suppliers }}</span>
+        </div>
+        <div class="supplier-kpi-card">
+            <span class="label">Productos sin proveedor</span>
+            <span class="value">{{ uncategorized_products_count }}</span>
+        </div>
+    </div>
+
+    <div class="supplier-table-wrap" data-drag-scroll>
     <table class="admin-table supplier-table">
         <thead>
             <tr>
@@ -84,7 +233,7 @@
         <tbody>
             {% for supplier in page_obj %}
             <tr>
-                <td><strong>{{ supplier.name }}</strong></td>
+                <td class="supplier-name-cell">{{ supplier.name }}</td>
                 <td>
                     {% if supplier.is_active %}
                     <span class="badge badge-success">Activo</span>
@@ -94,8 +243,8 @@
                 </td>
                 <td><span class="badge badge-info">{{ supplier.products_count|default:0 }}</span></td>
                 <td><span class="badge badge-success">{{ supplier.active_products_count|default:0 }}</span></td>
-                <td>{{ supplier.stock_total|default:0 }}</td>
-                <td>
+                <td class="supplier-number-cell">{{ supplier.stock_total|default:0 }}</td>
+                <td class="supplier-action-cell">
                     <a href="{% url 'admin_supplier_detail' supplier.pk %}" class="btn btn-outline">Ver productos</a>
                 </td>
             </tr>
@@ -106,6 +255,7 @@
             {% endfor %}
         </tbody>
     </table>
+    </div>
 
     {% if page_obj.paginator.num_pages > 1 %}
     <div class="admin-toolbar">

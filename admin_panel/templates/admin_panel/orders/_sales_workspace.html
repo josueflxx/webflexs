@@ -1,13 +1,13 @@
 <style>
     .sales-workspace-shell {
         display: grid;
-        gap: 12px;
-        margin: 0 0 14px;
-        padding: 16px;
-        border-radius: 14px;
+        gap: 9px;
+        margin: 0;
+        padding: 12px;
+        border-radius: 10px;
         border: 1px solid rgba(255,255,255,.1);
         background: linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.015));
-        box-shadow: 0 14px 28px rgba(0,0,0,.14);
+        box-shadow: 0 10px 22px rgba(0,0,0,.12);
     }
     .sales-workspace-head {
         display: flex;
@@ -18,36 +18,41 @@
     .sales-workspace-head h3 {
         margin: 2px 0 0;
         color: #fff;
-        font-size: 1rem;
+        font-size: .92rem;
     }
     .sales-workspace-head p {
-        margin: 6px 0 0;
+        margin: 4px 0 0;
         color: rgba(208,216,226,.76);
-        font-size: .84rem;
+        font-size: .78rem;
         line-height: 1.45;
     }
     .sales-workspace-kicker {
         display: inline-flex;
         align-items: center;
-        padding: 4px 10px;
+        padding: 3px 8px;
         border-radius: 999px;
         border: 1px solid rgba(255,255,255,.12);
         background: rgba(255,255,255,.04);
         color: #ffb08e;
-        font-size: .72rem;
+        font-size: .68rem;
         text-transform: uppercase;
         letter-spacing: .08em;
     }
     .sales-workspace-cards {
         display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 12px;
+        grid-template-columns: repeat(6, minmax(128px, 1fr));
+        gap: 8px;
     }
     .sales-workspace-card {
         display: grid;
-        gap: 8px;
-        padding: 14px;
-        border-radius: 12px;
+        grid-template-columns: minmax(0, 1fr) auto;
+        grid-template-areas:
+            "label value"
+            "help help";
+        gap: 5px 8px;
+        align-items: center;
+        padding: 9px 10px;
+        border-radius: 8px;
         border: 1px solid rgba(255,255,255,.08);
         background: rgba(8, 14, 26, .48);
         color: inherit;
@@ -65,18 +70,27 @@
         background: rgba(37, 22, 12, .55);
     }
     .sales-workspace-label {
+        grid-area: label;
         color: rgba(208,216,226,.82);
-        font-size: .84rem;
+        font-size: .76rem;
         line-height: 1.35;
     }
     .sales-workspace-value {
+        grid-area: value;
         color: #fff;
-        font-size: 1.8rem;
+        font-size: 1.25rem;
         line-height: 1;
     }
     .sales-workspace-card small {
+        grid-area: help;
         color: rgba(208,216,226,.68);
+        font-size: .7rem;
         line-height: 1.45;
+    }
+    @media (max-width: 1320px) {
+        .sales-workspace-cards {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
     }
     @media (max-width: 960px) {
         .sales-workspace-cards {

@@ -9,7 +9,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{% static 'core/css/base.css' %}">
-    <link rel="stylesheet" href="{% static 'core/css/admin.css' %}?v=46">
+    <link rel="stylesheet" href="{% static 'core/css/admin.css' %}?v=54">
     <link rel="stylesheet" href="{% static 'core/css/admin_right_sidebar.css' %}?v=4">
     <link rel="stylesheet" href="{% static 'core/css/search_suggestions.css' %}?v=5">
     <link rel="icon" type="image/x-icon" href="{% static 'core/img/favicon.ico' %}">
@@ -99,7 +99,7 @@
                 <a href="{% url 'admin_sales_workspace' %}"
                     class="nav-item {% if request.resolver_match.url_name == 'admin_sales_workspace' %}active{% endif %}">
                     <span class="nav-icon" aria-hidden="true">&#128200;</span>
-                    Vista transversal
+                    Seguimiento de ventas
                 </a>
                 <a href="{% url 'admin_order_list' %}"
                     class="nav-item {% if 'order' in request.resolver_match.url_name and 'admin_order_request' not in request.resolver_match.url_name %}active{% endif %}">
@@ -266,7 +266,7 @@
                         <span class="top-nav-group-label">Ventas secundarias</span>
                         <div class="top-nav-group-links">
                             <a href="{% url 'admin_sales_workspace' %}" class="top-nav-item {% if request.resolver_match.url_name == 'admin_sales_workspace' %}active{% endif %}">
-                                <span aria-hidden="true">&#128200;</span> Vista transversal
+                                <span aria-hidden="true">&#128200;</span> Seguimiento de ventas
                             </a>
                             <a href="{% url 'admin_order_list' %}" class="top-nav-item {% if 'order' in request.resolver_match.url_name and 'admin_order_request' not in request.resolver_match.url_name %}active{% endif %}">
                                 <span aria-hidden="true">&#128722;</span> Pedidos operativos
@@ -356,7 +356,7 @@
         <div class="sidebar-overlay" id="leftSidebarOverlay"></div>
     </div>
 
-    <script src="{% static 'core/js/main.js' %}?v=8"></script>
+    <script src="{% static 'core/js/main.js' %}?v=12"></script>
     <script src="{% static 'core/js/search_suggestions.js' %}?v=8"></script>
     <script>
         const RIGHT_SIDEBAR_AUTO_BREAKPOINT = 1360;

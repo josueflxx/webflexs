@@ -13,11 +13,10 @@
                 para que la barra superior quede enfocada en catalogo, clientes y ventas.
             </p>
         </div>
-        <div class="settings-hero-badges">
-            <span class="settings-hero-badge">Sitio</span>
-            <span class="settings-hero-badge">Empresas</span>
-            <span class="settings-hero-badge">Fiscal</span>
-            <span class="settings-hero-badge">Herramientas</span>
+        <div class="settings-hero-actions">
+            <a href="{% url 'admin_company_list' %}" class="btn btn-outline btn-sm">Empresas</a>
+            <a href="{% url 'admin_fiscal_config' %}" class="btn btn-outline btn-sm">Fiscal</a>
+            <a href="{% url 'admin_import_dashboard' %}" class="btn btn-outline btn-sm">Importar</a>
         </div>
     </section>
 
@@ -31,6 +30,7 @@
 
         <div class="settings-card-grid">
             <article class="settings-link-card">
+                <span class="settings-link-icon">AF</span>
                 <span class="settings-link-kicker">Sistema</span>
                 <h4>Factura electronica</h4>
                 <p>Readiness fiscal, puntos de venta y configuracion de emision por empresa.</p>
@@ -38,6 +38,7 @@
             </article>
 
             <article class="settings-link-card">
+                <span class="settings-link-icon">RF</span>
                 <span class="settings-link-kicker">Fiscal</span>
                 <h4>Reportes fiscales</h4>
                 <p>Seguimiento de totales, rechazos, reintentos y comprobantes vencidos.</p>
@@ -45,6 +46,7 @@
             </article>
 
             <article class="settings-link-card">
+                <span class="settings-link-icon">EM</span>
                 <span class="settings-link-kicker">Sistema</span>
                 <h4>Empresas</h4>
                 <p>Razones sociales, datos maestros y configuracion base por compania.</p>
@@ -52,6 +54,7 @@
             </article>
 
             <article class="settings-link-card">
+                <span class="settings-link-icon">TV</span>
                 <span class="settings-link-kicker">Ventas</span>
                 <h4>Tipos de venta</h4>
                 <p>Motor configurable de comprobantes y movimientos comerciales: numeracion, stock, cuenta y fiscal.</p>
@@ -59,6 +62,7 @@
             </article>
 
             <article class="settings-link-card">
+                <span class="settings-link-icon">DP</span>
                 <span class="settings-link-kicker">Logistica</span>
                 <h4>Depositos</h4>
                 <p>Depositos disponibles para documentos con impacto de stock y operacion comercial.</p>
@@ -66,6 +70,7 @@
             </article>
 
             <article class="settings-link-card">
+                <span class="settings-link-icon">AD</span>
                 <span class="settings-link-kicker">Acceso</span>
                 <h4>Admins</h4>
                 <p>Permisos de acceso al panel y administracion de cuentas internas.</p>
@@ -73,6 +78,7 @@
             </article>
 
             <article class="settings-link-card">
+                <span class="settings-link-icon">IM</span>
                 <span class="settings-link-kicker">Herramientas</span>
                 <h4>Importaciones</h4>
                 <p>Dashboard de importacion, seguimiento de tareas y rollback cuando aplique.</p>
@@ -80,6 +86,7 @@
             </article>
 
             <article class="settings-link-card">
+                <span class="settings-link-icon">XL</span>
                 <span class="settings-link-kicker">Herramientas</span>
                 <h4>Exportar Excel</h4>
                 <p>Plantillas y estructuras para exportes comerciales del catalogo.</p>

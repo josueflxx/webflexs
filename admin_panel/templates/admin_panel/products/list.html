@@ -4,10 +4,14 @@
 {% block page_title %}Productos{% endblock %}
 
 {% block content %}
-<div class="admin-table-container">
+<div class="admin-table-container products-admin-panel">
     <div class="products-control-board">
         <div class="admin-toolbar products-toolbar products-toolbar-main">
             <form method="get" class="toolbar-search product-filters-layout" id="productFiltersForm">
+                <div class="products-section-heading">
+                    <span class="products-section-kicker">Catalogo</span>
+                    <strong>Buscar y filtrar productos</strong>
+                </div>
                 <div class="product-filters-top-row">
                     <select name="category" id="filterCategory" class="form-select">
                         <option value="">Todas las categorias</option>
@@ -56,7 +60,7 @@
                 <button type="button" class="btn btn-outline btn-sm" onclick="saveProductFilters()">Guardar vista</button>
                 <button type="button" class="btn btn-outline btn-sm" onclick="loadProductFilters()">Cargar vista</button>
                 {% if user.is_superuser %}
-                <a href="{% url 'admin_product_create' %}" class="btn btn-primary">+ Nuevo Producto</a>
+                <a href="{% url 'admin_product_create' %}" class="btn btn-primary">+ Nuevo producto</a>
                 {% endif %}
             </div>
         </div>
@@ -67,10 +71,15 @@
         {% if user.is_superuser %}
         <details class="products-bulk-panel">
             <summary>
-                <span>Acciones masivas</span>
+                <span>
+                    <strong>Acciones masivas</strong>
+                    <small>Aplicar cambios a productos seleccionados</small>
+                </span>
                 <span class="badge badge-info" id="bulkSelectedCount">0 seleccionados</span>
             </summary>
             <div class="products-bulk-content">
+                <div class="products-bulk-section">
+                    <div class="products-bulk-label">Categorias</div>
                 <form id="bulkCategoryForm" method="post" action="{% url 'admin_product_bulk_category' %}"
                     class="products-bulk-form" onsubmit="return validateBulkAction()">
                     {% csrf_token %}
@@ -95,7 +104,10 @@
                     </select>
                     <button type="submit" class="btn btn-primary" id="bulkSubmitBtn" disabled>Categorizar</button>
                 </form>
+                </div>
 
+                <div class="products-bulk-section">
+                    <div class="products-bulk-label">Estado de catalogo</div>
                 <form id="bulkStatusForm" method="post" action="{% url 'admin_product_bulk_status' %}" class="products-bulk-form"
                     onsubmit="return validateBulkStatusAction()">
                     {% csrf_token %}
@@ -109,9 +121,11 @@
                     <input type="hidden" name="set_active" id="bulkStatusActionInput" value="">
                     <button type="button" class="btn btn-info" id="bulkActivateBtn" onclick="submitBulkStatus('1')" disabled>Activar</button>
                     <button type="button" class="btn btn-warning-outline" id="bulkDeactivateBtn" onclick="submitBulkStatus('0')" disabled>Inactivar</button>
-                    <button type="button" class="btn btn-danger-outline" onclick="openDeleteModal()">Eliminar Todos</button>
                 </form>
+                </div>
 
+                <div class="products-bulk-section products-bulk-section-wide">
+                    <div class="products-bulk-label">Imagenes</div>
                 <form id="bulkImageForm" method="post" enctype="multipart/form-data"
                     action="{% url 'admin_product_bulk_image' %}" class="products-bulk-form"
                     onsubmit="return validateBulkImageAction()">
@@ -136,8 +150,9 @@
                     </label>
                     <button type="submit" class="btn btn-primary" id="bulkImageSubmitBtn" disabled>Aplicar imagen</button>
                 </form>
+                </div>
 
-                <div class="products-bulk-form" style="align-items: center;">
+                <div class="products-bulk-selection-bar">
                     <button type="button" class="btn btn-outline btn-sm" onclick="selectCurrentPage()">
                         Seleccionar pagina ({{ pagination_count }})
                     </button>
@@ -150,6 +165,7 @@
                         Limpiar seleccion
                     </button>
                     <span class="badge badge-info" id="bulkSelectedCountInline">0 seleccionados</span>
+                    <button type="button" class="btn btn-danger-outline btn-sm products-danger-action" onclick="openDeleteModal()">Eliminar todos</button>
                 </div>
             </div>
         </details>
@@ -219,20 +235,41 @@
             width: 100%;
             display: flex;
             flex-direction: column;
+            gap: 12px;
+            min-width: 0;
+        }
+
+        .products-section-heading {
+            display: flex;
+            align-items: baseline;
             gap: 10px;
+            color: var(--color-white);
+        }
+
+        .products-section-heading strong {
+            font-size: 14px;
+            line-height: 1;
+        }
+
+        .products-section-kicker {
+            color: var(--color-primary);
+            font-size: 10px;
+            font-weight: 800;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
         }
 
         .product-filters-top-row {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 10px;
+            display: grid;
+            grid-template-columns: minmax(220px, 1.3fr) minmax(130px, 0.65fr) minmax(160px, 0.75fr) auto auto;
+            gap: 8px;
             align-items: center;
         }
 
         .product-filters-top-row .form-select {
-            min-width: 180px;
-            max-width: 230px;
-            flex: 1 1 190px;
+            min-width: 0;
+            max-width: none;
+            width: 100%;
         }
 
         .product-filters-top-row .btn {
@@ -241,17 +278,99 @@
 
         .product-filters-search-row {
             width: 100%;
+            padding: 0 14px 12px;
         }
 
         .product-search-input {
             width: 100%;
             min-width: 0;
+            min-height: 34px;
+            font-weight: 600;
         }
 
-        @media (max-width: 820px) {
-            .product-filters-top-row .form-select {
-                max-width: none;
-                flex: 1 1 100%;
+        .products-bulk-panel summary > span:first-child {
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+        }
+
+        .products-bulk-panel summary small {
+            color: var(--color-gray-light);
+            font-size: 11px;
+            font-weight: 500;
+        }
+
+        .products-bulk-section {
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 8px;
+            padding: 12px;
+            background: rgba(255, 255, 255, 0.025);
+        }
+
+        .products-bulk-label {
+            margin-bottom: 9px;
+            color: var(--color-gray-light);
+            font-size: 10px;
+            font-weight: 800;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+
+        .products-bulk-selection-bar {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+            border-top: 1px solid rgba(255, 255, 255, 0.08);
+            padding-top: 12px;
+        }
+
+        .products-danger-action {
+            margin-left: auto;
+        }
+
+        .products-table-wrapper {
+            border-top: 1px solid rgba(255, 255, 255, 0.08);
+            overflow-x: auto;
+        }
+
+        .products-table-wrapper .admin-table td:first-child,
+        .products-table-wrapper .admin-table th:first-child {
+            text-align: center;
+            width: 44px;
+            min-width: 44px;
+        }
+
+        .products-table-wrapper .admin-table tbody tr {
+            background: rgba(255, 255, 255, 0.01);
+        }
+
+        .products-table-wrapper .admin-table tbody tr:hover {
+            background: rgba(255, 107, 53, 0.055);
+        }
+
+        .products-table-wrapper .admin-table .actions {
+            justify-content: flex-start;
+            gap: 5px;
+        }
+
+        @media (max-width: 1100px) {
+            .product-filters-top-row {
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+            }
+
+            .product-filters-top-row .btn {
+                width: 100%;
+            }
+        }
+
+        @media (max-width: 720px) {
+            .product-filters-top-row {
+                grid-template-columns: 1fr;
+            }
+
+            .products-danger-action {
+                margin-left: 0;
             }
         }
 
@@ -670,12 +789,15 @@
         document.addEventListener('DOMContentLoaded', function () {
             document.getElementById('bulkImageMode')?.addEventListener('change', updateBulkButton);
             document.getElementById('bulkImageInput')?.addEventListener('change', updateBulkButton);
+            document.querySelectorAll('.products-table-wrapper').forEach((el) => {
+                el.scrollLeft = 0;
+            });
             syncSelectionFlags();
             updateBulkButton();
             refreshSelectionInfo();
         });
     </script>
-    <div class="products-table-wrapper">
+    <div class="products-table-wrapper" data-drag-scroll>
         <table class="admin-table">
             <thead>
                 <tr>

@@ -3,48 +3,58 @@
 {% block page_title %}Pagos{% endblock %}
 
 {% block content %}
-<div class="admin-table-container">
-    <div class="admin-toolbar">
-        <form method="get" class="toolbar-search payments-filter-form">
-            <input type="text" name="q" value="{{ search }}" placeholder="Buscar cliente, CUIT, referencia o pedido..." class="form-input">
-            <select name="client_id" class="form-select">
-                <option value="">Todos los clientes</option>
-                {% for client in clients %}
-                <option value="{{ client.pk }}" {% if selected_client_id == client.pk|stringformat:'s' %}selected{% endif %}>
-                    {{ client.company_name }} ({{ client.user.username }})
-                </option>
-                {% endfor %}
-            </select>
-            <select name="company_id" class="form-select">
-                {% for company in companies %}
-                <option value="{{ company.pk }}" {% if selected_company_id == company.pk|stringformat:'s' %}selected{% endif %}>
-                    {{ company.name }}
-                </option>
-                {% endfor %}
-            </select>
-            <select name="sync_status" class="form-select">
-                <option value="">Sync: todos</option>
-                {% for value, label in sync_status_choices %}
-                <option value="{{ value }}" {% if sync_status == value %}selected{% endif %}>{{ label }}</option>
-                {% endfor %}
-            </select>
-            <input type="text" name="order_id" value="{{ order_id }}" placeholder="Pedido # (opcional)" class="form-input payments-order-id-input">
-            <button type="submit" class="btn btn-primary">Filtrar</button>
-            <a href="{% url 'admin_payment_list' %}" class="btn btn-outline">Limpiar</a>
-            {% if selected_company_id != 'all' %}
-            <a
-                href="{% url 'admin_payment_export_saas' %}?company_id={{ selected_company_id }}&sync_status={{ sync_status|default:'pending' }}"
-                class="btn btn-outline"
-            >
-                Exportar pendientes SaaS
-            </a>
-            {% else %}
-            <span class="text-muted">Selecciona empresa para exportar</span>
-            {% endif %}
-        </form>
+<div class="admin-table-container payments-admin-panel">
+    <div class="payments-control-board">
+        <div class="admin-toolbar payments-toolbar">
+            <form method="get" class="toolbar-search payments-filter-form">
+                <div class="payments-section-heading">
+                    <span class="payments-section-kicker">Tesoreria</span>
+                    <strong>Buscar y revisar pagos</strong>
+                </div>
+                <div class="payments-filter-grid">
+                    <input type="text" name="q" value="{{ search }}" placeholder="Buscar cliente, CUIT, referencia o pedido..." class="form-input payments-search-input">
+                    <select name="client_id" class="form-select">
+                        <option value="">Todos los clientes</option>
+                        {% for client in clients %}
+                        <option value="{{ client.pk }}" {% if selected_client_id == client.pk|stringformat:'s' %}selected{% endif %}>
+                            {{ client.company_name }} ({{ client.user.username }})
+                        </option>
+                        {% endfor %}
+                    </select>
+                    <select name="company_id" class="form-select">
+                        {% for company in companies %}
+                        <option value="{{ company.pk }}" {% if selected_company_id == company.pk|stringformat:'s' %}selected{% endif %}>
+                            {{ company.name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                    <select name="sync_status" class="form-select">
+                        <option value="">Sync: todos</option>
+                        {% for value, label in sync_status_choices %}
+                        <option value="{{ value }}" {% if sync_status == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                    <input type="text" name="order_id" value="{{ order_id }}" placeholder="Pedido # (opcional)" class="form-input payments-order-id-input">
+                    <button type="submit" class="btn btn-primary">Filtrar</button>
+                    <a href="{% url 'admin_payment_list' %}" class="btn btn-outline">Limpiar</a>
+                </div>
+            </form>
+            <div class="toolbar-actions payments-quick-actions">
+                {% if selected_company_id != 'all' %}
+                <a
+                    href="{% url 'admin_payment_export_saas' %}?company_id={{ selected_company_id }}&sync_status={{ sync_status|default:'pending' }}"
+                    class="btn btn-outline"
+                >
+                    Exportar pendientes SaaS
+                </a>
+                {% else %}
+                <span class="text-muted payments-export-note">Selecciona empresa para exportar</span>
+                {% endif %}
+            </div>
+        </div>
     </div>
 
-    <div class="admin-toolbar payments-summary-toolbar admin-toolbar-separator">
+    <div class="payments-summary-toolbar">
         <div class="payments-summary-grid">
             <article class="doc-type-metric">
                 <span class="doc-type-metric-label">Pagos visibles</span>
@@ -82,7 +92,11 @@
         </div>
     </div>
 
-    <div class="admin-toolbar admin-toolbar-separator">
+    <div class="payments-create-panel">
+        <div class="payments-section-heading payments-section-heading-spaced">
+            <span class="payments-section-kicker">Carga rapida</span>
+            <strong>Registrar pago o ajuste</strong>
+        </div>
         <form method="post" class="payment-create-form">
             {% csrf_token %}
             <input type="hidden" id="paymentActionInput" name="action" value="{% if suggested_action == 'adjust' %}adjust{% else %}create{% endif %}">
@@ -166,6 +180,7 @@
         </form>
     </div>
 
+    <div class="payments-table-wrap" data-drag-scroll>
     <table class="admin-table">
         <thead>
             <tr>
@@ -252,6 +267,7 @@
             {% endfor %}
         </tbody>
     </table>
+    </div>
 
     {% if page_obj.paginator.num_pages > 1 %}
     <div class="admin-toolbar">
@@ -267,6 +283,207 @@
     </div>
     {% endif %}
 </div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .payments-admin-panel {
+        width: min(1180px, calc(100vw - 48px));
+        max-width: 100%;
+        margin-inline: auto;
+    }
+
+    .payments-control-board {
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0));
+    }
+
+    .payments-toolbar {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: flex-start;
+        gap: 12px;
+        padding: 13px 15px 12px;
+    }
+
+    .payments-filter-form {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        min-width: 0;
+        width: 100%;
+    }
+
+    .payments-section-heading {
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+        color: var(--color-white);
+    }
+
+    .payments-section-heading strong {
+        font-size: 12px;
+        line-height: 1;
+    }
+
+    .payments-section-heading-spaced {
+        margin-bottom: 12px;
+    }
+
+    .payments-section-kicker {
+        color: var(--color-primary);
+        font-size: 9px;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+    }
+
+    .payments-filter-grid {
+        display: grid;
+        grid-template-columns: minmax(260px, 1.35fr) minmax(210px, 1fr) minmax(160px, 0.8fr) minmax(150px, 0.8fr);
+        gap: 8px;
+        align-items: center;
+    }
+
+    .payments-search-input {
+        grid-column: span 2;
+    }
+
+    .payments-filter-grid .form-input,
+    .payments-filter-grid .form-select {
+        min-width: 0;
+        width: 100%;
+        min-height: 34px;
+        font-weight: 600;
+        font-size: 0.86rem;
+    }
+
+    .payments-filter-grid .btn {
+        min-height: 34px;
+        padding-block: 8px;
+    }
+
+    .payments-quick-actions {
+        flex: 0 0 auto;
+        padding-top: 20px;
+        overflow: visible;
+    }
+
+    .payments-export-note {
+        display: inline-flex;
+        align-items: center;
+        min-height: 34px;
+        white-space: nowrap;
+    }
+
+    .payments-summary-toolbar {
+        padding: 12px 15px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .payments-summary-grid {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 12px;
+    }
+
+    .payments-summary-grid .doc-type-metric {
+        min-height: 72px;
+        border-radius: 8px;
+        padding: 10px 12px;
+    }
+
+    .payments-summary-grid .doc-type-metric-value {
+        font-size: 1.08rem;
+    }
+
+    .payments-create-panel {
+        padding: 13px 15px 12px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        background: rgba(255, 255, 255, 0.018);
+    }
+
+    .payment-create-form {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 8px;
+    }
+
+    .payment-create-form .form-input,
+    .payment-create-form .form-select {
+        min-height: 34px;
+        font-weight: 600;
+        font-size: 0.86rem;
+    }
+
+    .payment-create-actions {
+        padding-top: 4px;
+    }
+
+    .payments-table-wrap {
+        overflow-x: auto;
+        scrollbar-width: thin;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .payments-table-wrap .admin-table {
+        min-width: 1180px;
+    }
+
+    .payments-table-wrap .admin-table td,
+    .payments-table-wrap .admin-table th {
+        white-space: nowrap;
+    }
+
+    .payments-table-wrap .admin-table td:nth-child(4) {
+        white-space: normal;
+        min-width: 190px;
+    }
+
+    @media (max-width: 1100px) {
+        .payments-toolbar,
+        .payments-filter-grid,
+        .payment-create-form {
+            grid-template-columns: 1fr 1fr;
+        }
+
+        .payments-search-input,
+        .payment-field-span-2,
+        .payment-field-full {
+            grid-column: 1 / -1;
+        }
+
+        .payments-quick-actions {
+            grid-column: 1 / -1;
+            width: 100%;
+            padding-top: 0;
+            justify-content: flex-start;
+        }
+
+        .payments-summary-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+    }
+
+    @media (max-width: 720px) {
+        .payments-admin-panel {
+            width: calc(100vw - 24px);
+        }
+
+        .payments-toolbar,
+        .payments-filter-grid,
+        .payments-summary-grid,
+        .payment-create-form {
+            grid-template-columns: 1fr;
+        }
+
+        .payments-search-input {
+            grid-column: auto;
+        }
+
+        .payments-quick-actions .btn {
+            width: 100%;
+        }
+    }
+</style>
 {% endblock %}
 
 {% block extra_js %}

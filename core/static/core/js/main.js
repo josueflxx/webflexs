@@ -117,7 +117,26 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Admin UX: allow horizontal scrolling overflow panels/tables using right-click drag.
     if (document.body.classList.contains('admin-body')) {
+        function resetAdminPageHorizontalScroll() {
+            if (window.scrollX) {
+                window.scrollTo(0, window.scrollY || 0);
+            }
+            if (document.documentElement) {
+                document.documentElement.scrollLeft = 0;
+                document.documentElement.style.overflowX = 'hidden';
+            }
+            if (document.body) {
+                document.body.scrollLeft = 0;
+                document.body.style.overflowX = 'hidden';
+            }
+        }
+
+        resetAdminPageHorizontalScroll();
+        window.addEventListener('load', resetAdminPageHorizontalScroll);
+        window.addEventListener('resize', resetAdminPageHorizontalScroll);
+
         const adminDragScrollSelector = [
+            '.admin-top-nav',
             '.toolbar-actions',
             '.form-actions',
             '.cc-quick-actions',
@@ -127,6 +146,22 @@ document.addEventListener('DOMContentLoaded', function () {
             '.category-table-wrap',
             '.execution-table-wrap',
             '.admin-table-container',
+            '.admin-detail-table-wrap',
+            '.report-standalone-table-wrap',
+            '.sales-record-actions',
+            '[data-drag-scroll]'
+        ].join(',');
+
+        const adminWheelScrollSelector = [
+            '.products-table-wrapper',
+            '.category-table-wrap',
+            '.execution-table-wrap',
+            '.admin-detail-table-wrap',
+            '.report-standalone-table-wrap',
+            '.sales-record-table-wrap',
+            '.doc-type-table-wrap',
+            '.order-table-wrap',
+            '[data-wheel-scroll]',
             '[data-drag-scroll]'
         ].join(',');
 
@@ -165,6 +200,26 @@ document.addEventListener('DOMContentLoaded', function () {
                 current = current.parentElement;
             }
             return null;
+        }
+
+        function getWheelScrollContainer(startElement) {
+            if (!(startElement instanceof Element)) return null;
+            let current = startElement;
+            while (current && current !== document.body) {
+                if (current.matches(adminWheelScrollSelector) && isElementScrollable(current)) {
+                    return current;
+                }
+                current = current.parentElement;
+            }
+            return null;
+        }
+
+        function canScrollHorizontallyInDirection(container, delta) {
+            if (!container || !delta) return false;
+            const maxScrollLeft = container.scrollWidth - container.clientWidth;
+            if (maxScrollLeft <= 0) return false;
+            if (delta > 0) return container.scrollLeft < maxScrollLeft - 1;
+            return container.scrollLeft > 1;
         }
 
         function endRightDragScroll(event) {
@@ -207,6 +262,39 @@ document.addEventListener('DOMContentLoaded', function () {
             document.body.classList.add('admin-drag-scroll-lock');
             event.preventDefault();
         }, true);
+
+        document.addEventListener('wheel', function wheelHorizontalOverflow(event) {
+            if (event.ctrlKey || event.shiftKey) return;
+
+            const target = event.target;
+            if (!(target instanceof Element)) return;
+            if (target.closest('textarea, select, [contenteditable="true"], .no-wheel-scroll')) return;
+
+            const hasHorizontalWheel = Math.abs(event.deltaX) > 0;
+            const dominantDelta = Math.abs(event.deltaX) > Math.abs(event.deltaY)
+                ? event.deltaX
+                : event.deltaY;
+            const container = getWheelScrollContainer(target);
+
+            if (container) {
+                if (dominantDelta && canScrollHorizontallyInDirection(container, dominantDelta)) {
+                    container.scrollLeft += dominantDelta;
+                }
+                if (dominantDelta || hasHorizontalWheel) {
+                    event.preventDefault();
+                    resetAdminPageHorizontalScroll();
+                }
+                return;
+            }
+
+            if (hasHorizontalWheel) {
+                event.preventDefault();
+            }
+
+            window.requestAnimationFrame(() => {
+                resetAdminPageHorizontalScroll();
+            });
+        }, { passive: false, capture: true });
 
         document.addEventListener('mousemove', function moveRightDragScroll(event) {
             if (!dragState) return;

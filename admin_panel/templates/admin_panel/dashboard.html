@@ -7,17 +7,17 @@
 <style>
     .dashboard-ops-layout {
         display: grid;
-        grid-template-columns: minmax(0, 1.45fr) minmax(320px, .95fr);
-        gap: 18px;
-        margin-bottom: 18px;
+        grid-template-columns: minmax(0, 1.35fr) minmax(300px, .82fr);
+        gap: 10px;
+        margin-bottom: 10px;
     }
     .dashboard-ops-card,
     .dashboard-activity-card {
-        padding: 18px;
-        border-radius: 14px;
+        padding: 12px;
+        border-radius: 8px;
         border: 1px solid rgba(255,255,255,.09);
         background: linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.015));
-        box-shadow: 0 14px 30px rgba(0,0,0,.16);
+        box-shadow: 0 10px 22px rgba(0,0,0,.14);
     }
     .dashboard-ops-head,
     .dashboard-activity-head {
@@ -25,42 +25,42 @@
         justify-content: space-between;
         gap: 12px;
         align-items: flex-start;
-        margin-bottom: 14px;
+        margin-bottom: 10px;
     }
     .dashboard-ops-head h3,
     .dashboard-activity-head h3 {
         margin: 2px 0 0;
-        font-size: 1rem;
+        font-size: .9rem;
     }
     .dashboard-ops-head p,
     .dashboard-activity-head p {
-        margin: 6px 0 0;
+        margin: 4px 0 0;
         color: rgba(208,216,226,.74);
-        font-size: .84rem;
-        line-height: 1.45;
+        font-size: .76rem;
+        line-height: 1.35;
     }
     .dashboard-ops-kicker {
         display: inline-flex;
         align-items: center;
-        padding: 4px 10px;
-        border-radius: 999px;
+        padding: 3px 8px;
+        border-radius: 8px;
         border: 1px solid rgba(255,255,255,.12);
         background: rgba(255,255,255,.04);
         color: #ffb08e;
-        font-size: .72rem;
+        font-size: .62rem;
         text-transform: uppercase;
         letter-spacing: .08em;
     }
     .dashboard-ops-grid {
         display: grid;
         grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 12px;
+        gap: 8px;
     }
     .dashboard-ops-item {
         display: grid;
-        gap: 8px;
-        padding: 14px;
-        border-radius: 12px;
+        gap: 5px;
+        padding: 10px;
+        border-radius: 8px;
         border: 1px solid rgba(255,255,255,.09);
         background: rgba(8, 14, 26, .5);
         color: inherit;
@@ -73,28 +73,29 @@
         background: rgba(10, 18, 31, .72);
     }
     .dashboard-ops-label {
-        font-size: .84rem;
+        font-size: .74rem;
         color: rgba(208,216,226,.82);
         line-height: 1.35;
     }
     .dashboard-ops-value {
-        font-size: 1.8rem;
+        font-size: 1.25rem;
         color: #fff;
         line-height: 1;
     }
     .dashboard-ops-item small {
         color: rgba(208,216,226,.66);
-        line-height: 1.45;
+        line-height: 1.35;
+        font-size: .72rem;
     }
     .dashboard-activity-list {
         display: grid;
-        gap: 12px;
+        gap: 8px;
     }
     .dashboard-activity-item {
         display: grid;
-        gap: 8px;
-        padding: 13px 14px;
-        border-radius: 12px;
+        gap: 5px;
+        padding: 9px 10px;
+        border-radius: 8px;
         border: 1px solid rgba(255,255,255,.08);
         background: rgba(8, 14, 26, .46);
     }
@@ -107,26 +108,26 @@
     .dashboard-activity-badge {
         display: inline-flex;
         align-items: center;
-        padding: 4px 9px;
-        border-radius: 999px;
+        padding: 3px 8px;
+        border-radius: 8px;
         border: 1px solid rgba(255,255,255,.1);
         background: rgba(255,255,255,.05);
         color: #f4f7fb;
-        font-size: .72rem;
+        font-size: .64rem;
     }
     .dashboard-activity-time {
-        font-size: .78rem;
+        font-size: .68rem;
         color: rgba(208,216,226,.7);
     }
     .dashboard-activity-item strong {
         color: #fff;
-        font-size: .92rem;
+        font-size: .82rem;
     }
     .dashboard-activity-item p {
         margin: 0;
         color: rgba(208,216,226,.8);
-        font-size: .83rem;
-        line-height: 1.45;
+        font-size: .74rem;
+        line-height: 1.35;
     }
     .dashboard-activity-meta {
         display: flex;
@@ -134,7 +135,7 @@
         gap: 8px;
         align-items: center;
         color: rgba(208,216,226,.68);
-        font-size: .76rem;
+        font-size: .68rem;
     }
     .dashboard-activity-amount {
         font-weight: 700;
@@ -153,78 +154,392 @@
             grid-template-columns: 1fr;
         }
     }
+
+    .dashboard-command-header {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 12px;
+        align-items: end;
+        padding: 10px 12px;
+        border: 1px solid rgba(255,255,255,.09);
+        border-radius: 8px;
+        background: linear-gradient(160deg, rgba(18, 24, 33, .96), rgba(10, 14, 20, .98));
+    }
+    .dashboard-command-kicker,
+    .dashboard-section-kicker {
+        display: inline-flex;
+        width: fit-content;
+        padding: 3px 8px;
+        border-radius: 8px;
+        border: 1px solid rgba(255,107,53,.28);
+        background: rgba(255,107,53,.12);
+        color: #ffc7ae;
+        font-size: .58rem;
+        font-weight: 800;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+    }
+    .dashboard-command-header h2 {
+        margin: 5px 0 3px;
+        font-size: 1.14rem;
+        line-height: 1.08;
+    }
+    .dashboard-command-header p {
+        margin: 0;
+        max-width: 96ch;
+        color: rgba(210,217,226,.76);
+        font-size: .78rem;
+        line-height: 1.38;
+    }
+    .dashboard-command-actions {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+    }
+    .dashboard-command-meta {
+        display: grid;
+        gap: 4px;
+        min-width: 160px;
+        padding: 8px 9px;
+        border-radius: 8px;
+        border: 1px solid rgba(255,255,255,.09);
+        background: rgba(255,255,255,.035);
+        color: rgba(210,217,226,.78);
+        font-size: .7rem;
+    }
+    .dashboard-command-meta strong {
+        color: #fff;
+        font-size: .82rem;
+    }
+    .dashboard-control-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1.1fr) minmax(340px, .74fr);
+        gap: 10px;
+    }
+    .dashboard-panel {
+        border: 1px solid rgba(255,255,255,.09);
+        border-radius: 8px;
+        background: linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.015));
+        box-shadow: 0 10px 22px rgba(0,0,0,.14);
+    }
+    .dashboard-panel-head {
+        display: flex;
+        justify-content: space-between;
+        gap: 10px;
+        align-items: flex-start;
+        padding: 10px 12px 8px;
+        border-bottom: 1px solid rgba(255,255,255,.08);
+    }
+    .dashboard-panel-head h3 {
+        margin: 6px 0 0;
+        font-size: .92rem;
+    }
+    .dashboard-panel-head p {
+        margin: 4px 0 0;
+        color: rgba(210,217,226,.72);
+        font-size: .74rem;
+        line-height: 1.35;
+    }
+    .dashboard-priority-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 7px;
+        padding: 9px 10px 10px;
+    }
+    .dashboard-priority-item {
+        position: relative;
+        overflow: hidden;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 6px;
+        align-items: start;
+        padding: 9px 10px 10px;
+        border-radius: 8px;
+        border: 1px solid rgba(255,255,255,.075);
+        background:
+            linear-gradient(90deg, rgba(255,107,53,.11), transparent 3px),
+            rgba(8,14,26,.48);
+        color: inherit;
+        text-decoration: none;
+    }
+    .dashboard-priority-item:hover {
+        background: rgba(255,107,53,.06);
+        border-color: rgba(255,107,53,.22);
+    }
+    .dashboard-priority-item span {
+        color: rgba(210,217,226,.82);
+        font-size: .72rem;
+        line-height: 1.25;
+    }
+    .dashboard-priority-item strong {
+        color: #fff;
+        font-size: 1.28rem;
+        line-height: 1;
+        letter-spacing: -.02em;
+    }
+    .dashboard-priority-item small {
+        grid-column: 1 / -1;
+        color: rgba(210,217,226,.62);
+        font-size: .66rem;
+        line-height: 1.3;
+    }
+    .dashboard-activity-compact {
+        display: grid;
+        gap: 6px;
+        padding: 9px 10px 10px;
+        max-height: 360px;
+        overflow: auto;
+    }
+    .dashboard-activity-compact::-webkit-scrollbar {
+        width: 8px;
+    }
+    .dashboard-activity-compact::-webkit-scrollbar-track {
+        background: rgba(255,255,255,.06);
+        border-radius: 999px;
+    }
+    .dashboard-activity-compact::-webkit-scrollbar-thumb {
+        background: rgba(255,255,255,.28);
+        border-radius: 999px;
+    }
+    .dashboard-activity-compact .dashboard-activity-item {
+        position: relative;
+        padding-left: 12px;
+        background:
+            linear-gradient(90deg, rgba(0,197,255,.12), transparent 3px),
+            rgba(8,14,26,.46);
+    }
+    .dashboard-activity-compact .dashboard-activity-badge {
+        border-color: rgba(255,107,53,.22);
+        background: rgba(255,107,53,.10);
+        color: #ffd6c5;
+        font-weight: 700;
+    }
+    .dashboard-activity-compact .dashboard-activity-meta .btn {
+        min-height: 25px;
+        padding: 4px 8px;
+        font-size: .62rem;
+    }
+    .dashboard-function-section,
+    .dashboard-rankings-section {
+        display: grid;
+        gap: 10px;
+        padding: 10px;
+        border-radius: 8px;
+        border: 1px solid rgba(255,255,255,.09);
+        background:
+            radial-gradient(circle at top right, rgba(255,107,53,.06), transparent 24%),
+            linear-gradient(180deg, rgba(255,255,255,.028), rgba(255,255,255,.012));
+        box-shadow: 0 10px 22px rgba(0,0,0,.12);
+    }
+    .dashboard-function-section.is-foundation {
+        background:
+            radial-gradient(circle at top right, rgba(46,204,113,.07), transparent 24%),
+            linear-gradient(180deg, rgba(255,255,255,.028), rgba(255,255,255,.012));
+    }
+    .dashboard-function-section.is-control,
+    .dashboard-rankings-section {
+        background:
+            radial-gradient(circle at top right, rgba(122,162,255,.07), transparent 24%),
+            linear-gradient(180deg, rgba(255,255,255,.028), rgba(255,255,255,.012));
+    }
+    .dashboard-function-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 2px 2px 8px;
+        border-bottom: 1px solid rgba(255,255,255,.07);
+    }
+    .dashboard-function-head h3 {
+        margin: 0;
+        font-size: .92rem;
+    }
+    .dashboard-function-head p {
+        margin: 2px 0 0;
+        color: rgba(210,217,226,.68);
+        font-size: .72rem;
+    }
+    .dashboard-function-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 8px;
+    }
+    .dashboard-mini-card {
+        position: relative;
+        overflow: hidden;
+        display: grid;
+        grid-template-columns: 32px minmax(0, 1fr);
+        grid-template-areas:
+            "icon tag"
+            "icon title"
+            "copy copy"
+            "actions actions";
+        gap: 6px 9px;
+        padding: 10px;
+        border-radius: 8px;
+        border: 1px solid color-mix(in srgb, var(--mini-accent, #ff6b35) 20%, rgba(255,255,255,.09));
+        background:
+            radial-gradient(circle at top left, color-mix(in srgb, var(--mini-accent, #ff6b35) 14%, transparent), transparent 36%),
+            linear-gradient(160deg, rgba(16,22,31,.96), rgba(10,14,20,.98));
+        box-shadow: 0 8px 18px rgba(0,0,0,.11);
+        min-height: 138px;
+        transition: transform .16s ease, border-color .16s ease, background .16s ease;
+    }
+    .dashboard-mini-card:hover {
+        transform: translateY(-1px);
+        border-color: color-mix(in srgb, var(--mini-accent, #ff6b35) 36%, rgba(255,255,255,.14));
+    }
+    .dashboard-mini-card::after {
+        content: "";
+        position: absolute;
+        inset: auto 10px 0 10px;
+        height: 2px;
+        border-radius: 999px 999px 0 0;
+        background: linear-gradient(90deg, var(--mini-accent, #ff6b35), transparent);
+        opacity: .82;
+    }
+    .dashboard-mini-icon {
+        grid-area: icon;
+        width: 30px;
+        height: 30px;
+        border-radius: 8px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid color-mix(in srgb, var(--mini-accent, #ff6b35) 40%, transparent);
+        background: color-mix(in srgb, var(--mini-accent, #ff6b35) 16%, rgba(255,255,255,.04));
+        color: color-mix(in srgb, var(--mini-accent, #ff6b35) 80%, white);
+        font-weight: 800;
+        font-size: .68rem;
+    }
+    .dashboard-mini-tag {
+        grid-area: tag;
+        align-self: end;
+        color: color-mix(in srgb, var(--mini-accent, #ff6b35) 75%, white);
+        font-size: .58rem;
+        font-weight: 800;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+    }
+    .dashboard-mini-card h4 {
+        grid-area: title;
+        margin: 0;
+        font-size: .88rem;
+        line-height: 1.12;
+    }
+    .dashboard-mini-card p {
+        grid-area: copy;
+        margin: 0;
+        color: rgba(210,217,226,.72);
+        font-size: .72rem;
+        line-height: 1.33;
+    }
+    .dashboard-mini-actions {
+        grid-area: actions;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: auto;
+        position: relative;
+        z-index: 1;
+    }
+    .dashboard-mini-actions .btn {
+        min-height: 28px;
+        padding: 5px 8px;
+        font-size: .64rem;
+    }
+    .dashboard-mini-card.is-sales,
+    .dashboard-mini-card.is-web { --mini-accent: #ff6b35; }
+    .dashboard-mini-card.is-clients,
+    .dashboard-mini-card.is-money { --mini-accent: #ffc947; }
+    .dashboard-mini-card.is-catalog,
+    .dashboard-mini-card.is-supplier { --mini-accent: #2ecc71; }
+    .dashboard-mini-card.is-clamp,
+    .dashboard-mini-card.is-tools { --mini-accent: #00c5ff; }
+    .dashboard-mini-card.is-fiscal { --mini-accent: #7aa2ff; }
+    .dashboard-mini-card.is-company { --mini-accent: #d3dae6; }
+    .dashboard-rankings-section .dashboard-rankings-grid {
+        gap: 8px;
+    }
+    .dashboard-rankings-section .dashboard-ranking-card {
+        border-color: rgba(255,255,255,.09);
+        background: linear-gradient(160deg, rgba(16,22,31,.92), rgba(10,14,20,.96));
+        box-shadow: 0 8px 18px rgba(0,0,0,.11);
+    }
+    @media (max-width: 1250px) {
+        .dashboard-control-grid,
+        .dashboard-command-header {
+            grid-template-columns: 1fr;
+        }
+        .dashboard-command-actions {
+            justify-content: flex-start;
+        }
+        .dashboard-function-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+    }
+    @media (max-width: 780px) {
+        .dashboard-priority-grid,
+        .dashboard-function-grid {
+            grid-template-columns: 1fr;
+        }
+    }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="dashboard-compact">
-    <section class="dashboard-showcase">
-        <div class="dashboard-showcase-main">
-            <span class="dashboard-showcase-kicker">Hub operativo</span>
-            <h2>Elegi el modulo y entra directo al trabajo</h2>
+    <section class="dashboard-command-header">
+        <div>
+            <span class="dashboard-command-kicker">Centro operativo</span>
+            <h2>Prioridades, movimientos y accesos diarios</h2>
             <p>
-                La portada ahora combina accesos directos, colas operativas y actividad reciente para que al entrar se entienda que conviene mirar primero.
-                {% if active_company %}
-                Todo queda enfocado en <strong>{{ active_company.name }}</strong>.
-                {% else %}
-                Usa la empresa activa para ordenar mejor la operacion.
-                {% endif %}
+                La pantalla queda ordenada por uso real: primero pendientes y actividad, despues las areas de trabajo, y al final los indicadores comerciales.
+                {% if active_company %}Contexto activo: <strong>{{ active_company.name }}</strong>.{% endif %}
             </p>
-            <div class="dashboard-actions-wrap">
-                <a href="{% url 'admin_order_list' %}" class="btn btn-primary">Abrir pedidos</a>
-                <a href="{% url 'admin_order_request_list' %}" class="btn btn-outline">Pedidos web</a>
-                <a href="{% url 'admin_client_dashboard' %}" class="btn btn-outline">Clientes</a>
-                <a href="{% url 'admin_fiscal_document_list' %}" class="btn btn-outline">Comprobantes</a>
-            </div>
         </div>
-        <div class="dashboard-showcase-side">
-            <div class="dashboard-spotlight-card">
-                <span class="dashboard-spotlight-label">Modo actual</span>
-                <strong>Hub con foco comercial</strong>
-                <p>Sin ruido visual, pero con rankings utiles para decidir rapido que mirar primero.</p>
+        <div class="dashboard-command-actions">
+            <div class="dashboard-command-meta">
+                <span>Empresa activa</span>
+                <strong>{{ active_company.name|default:"Sin seleccionar" }}</strong>
             </div>
-            <div class="dashboard-spotlight-grid">
-                <div class="dashboard-spotlight-mini">
-                    <span>Empresa activa</span>
-                    <strong>{{ active_company.name|default:"Sin seleccionar" }}</strong>
-                </div>
-                <div class="dashboard-spotlight-mini">
-                    <span>Objetivo</span>
-                    <strong>Entrar y operar</strong>
-                </div>
-            </div>
+            <a href="{% url 'admin_order_list' %}" class="btn btn-primary">Pedidos</a>
+            <a href="{% url 'admin_client_dashboard' %}" class="btn btn-outline">Clientes</a>
+            <a href="{% url 'admin_payment_list' %}" class="btn btn-outline">Cobros</a>
+            <a href="{% url 'select_company' %}?next={{ request.get_full_path|urlencode }}" class="btn btn-outline">Cambiar empresa</a>
         </div>
     </section>
 
-    <section class="dashboard-ops-layout">
-        <article class="dashboard-ops-card">
-            <div class="dashboard-ops-head">
+    <section class="dashboard-control-grid">
+        <article class="dashboard-panel">
+            <div class="dashboard-panel-head">
                 <div>
-                    <span class="dashboard-ops-kicker">Cola operativa</span>
-                    <h3>Lo importante del dia</h3>
-                    <p>Un resumen corto de pendientes comerciales, cuenta corriente, fiscal y stock para entrar por prioridad.</p>
+                    <span class="dashboard-section-kicker">Prioridad</span>
+                    <h3>Lo que conviene resolver primero</h3>
+                    <p>Pedidos, cobros, facturacion, stock y solicitudes que pueden frenar la operatoria.</p>
                 </div>
             </div>
-            <div class="dashboard-ops-grid">
+            <div class="dashboard-priority-grid">
                 {% for item in operational_snapshot_cards %}
-                <a href="{{ item.url }}" class="dashboard-ops-item">
-                    <span class="dashboard-ops-label">{{ item.label }}</span>
-                    <strong class="dashboard-ops-value">{{ item.count }}</strong>
+                <a href="{{ item.url }}" class="dashboard-priority-item">
+                    <span>{{ item.label }}</span>
+                    <strong>{{ item.count }}</strong>
                     <small>{{ item.help_text }}</small>
                 </a>
                 {% endfor %}
             </div>
         </article>
 
-        <article class="dashboard-activity-card">
-            <div class="dashboard-activity-head">
+        <article class="dashboard-panel">
+            <div class="dashboard-panel-head">
                 <div>
-                    <span class="dashboard-ops-kicker">Actividad reciente</span>
-                    <h3>Ultimos movimientos del negocio</h3>
-                    <p>Pedidos, comprobantes, cobros y solicitudes recientes dentro del contexto activo.</p>
+                    <span class="dashboard-section-kicker">Actividad</span>
+                    <h3>Ultimos movimientos</h3>
+                    <p>Mini historial de pedidos, comprobantes, pagos y cambios recientes.</p>
                 </div>
             </div>
-            <div class="dashboard-activity-list">
+            <div class="dashboard-activity-compact">
                 {% for event in recent_activity %}
                 <div class="dashboard-activity-item">
                     <div class="dashboard-activity-top">
@@ -250,104 +565,169 @@
         </article>
     </section>
 
-    <section class="dashboard-hub-grid">
-        <article class="dashboard-hub-card is-sales">
-            <div class="dashboard-hub-head">
-                <span class="dashboard-hub-icon" aria-hidden="true">&#128722;</span>
-                <span class="dashboard-hub-kicker">Ventas</span>
+    <section class="dashboard-function-section is-daily">
+        <div class="dashboard-function-head">
+            <div>
+                <span class="dashboard-section-kicker">Trabajo diario</span>
+                <h3>Ventas, clientes y cobranza</h3>
+                <p>Entradas principales para operar el circuito comercial.</p>
             </div>
-            <h3>Pedidos operativos</h3>
-            <p>Gestiona pedidos manuales, pedidos convertidos, estados comerciales y documentos asociados.</p>
-            <div class="dashboard-hub-actions">
-                <a href="{% url 'admin_order_list' %}" class="btn btn-primary">Ir a pedidos</a>
-                <a href="{% url 'admin_payment_list' %}" class="btn btn-ghost">Ver pagos</a>
-            </div>
-        </article>
-
-        <article class="dashboard-hub-card is-web">
-            <div class="dashboard-hub-head">
-                <span class="dashboard-hub-icon" aria-hidden="true">&#128221;</span>
-                <span class="dashboard-hub-kicker">B2B</span>
-            </div>
-            <h3>Pedidos web</h3>
-            <p>Revisa solicitudes del catalogo, propuestas comerciales y conversiones a pedido final.</p>
-            <div class="dashboard-hub-actions">
-                <a href="{% url 'admin_order_request_list' %}" class="btn btn-primary">Abrir pedidos web</a>
-                <a href="{% url 'catalog' %}" class="btn btn-ghost">Ver catalogo publico</a>
-            </div>
-        </article>
-
-        <article class="dashboard-hub-card is-clients">
-            <div class="dashboard-hub-head">
-                <span class="dashboard-hub-icon" aria-hidden="true">&#128101;</span>
-                <span class="dashboard-hub-kicker">Clientes</span>
-            </div>
-            <h3>Gestion comercial</h3>
-            <p>Accede al modulo de clientes, historial, reportes, cuenta corriente y herramientas del area.</p>
-            <div class="dashboard-hub-actions">
-                <a href="{% url 'admin_client_dashboard' %}" class="btn btn-primary">Abrir clientes</a>
-                <a href="{% url 'admin_client_reports_hub' %}" class="btn btn-ghost">Ver reportes</a>
-            </div>
-        </article>
-
-        <article class="dashboard-hub-card is-catalog">
-            <div class="dashboard-hub-head">
-                <span class="dashboard-hub-icon" aria-hidden="true">&#128230;</span>
-                <span class="dashboard-hub-kicker">Catalogo</span>
-            </div>
-            <h3>Productos y estructura</h3>
-            <p>Administra productos, categorias, proveedores y el contenido comercial del catalogo.</p>
-            <div class="dashboard-hub-actions">
-                <a href="{% url 'admin_product_list' %}" class="btn btn-primary">Abrir productos</a>
-                <a href="{% url 'admin_category_list' %}" class="btn btn-ghost">Categorias</a>
-                <a href="{% url 'admin_supplier_list' %}" class="btn btn-ghost">Proveedores</a>
-            </div>
-        </article>
-
-        <article class="dashboard-hub-card is-fiscal">
-            <div class="dashboard-hub-head">
-                <span class="dashboard-hub-icon" aria-hidden="true">&#128196;</span>
-                <span class="dashboard-hub-kicker">Facturacion</span>
-            </div>
-            <h3>Comprobantes fiscales</h3>
-            <p>Consulta el estado fiscal, comprobantes emitidos, borradores manuales y acciones sobre ARCA.</p>
-            <div class="dashboard-hub-actions">
-                <a href="{% url 'admin_fiscal_document_list' %}" class="btn btn-primary">Abrir comprobantes</a>
-                <a href="{% url 'admin_payment_list' %}" class="btn btn-ghost">Cobranza</a>
-            </div>
-        </article>
-
-        <article class="dashboard-hub-card is-tools">
-            <div class="dashboard-hub-head">
-                <span class="dashboard-hub-icon" aria-hidden="true">&#128208;</span>
-                <span class="dashboard-hub-kicker">Herramientas</span>
-            </div>
-            <h3>Utilidades del panel</h3>
-            <p>Entra al cotizador, importaciones, solicitudes a medida y cambios de empresa cuando haga falta.</p>
-            <div class="dashboard-hub-actions">
-                <a href="{% url 'admin_clamp_quoter' %}" class="btn btn-primary">Cotizador</a>
-                <a href="{% url 'admin_import_dashboard' %}" class="btn btn-ghost">Importaciones</a>
-                <a href="{% url 'admin_clamp_request_list' %}" class="btn btn-ghost">Solicitudes medida</a>
-            </div>
-        </article>
-
-        <article class="dashboard-hub-card is-company">
-            <div class="dashboard-hub-head">
-                <span class="dashboard-hub-icon" aria-hidden="true">&#127970;</span>
-                <span class="dashboard-hub-kicker">Empresa</span>
-            </div>
-            <h3>Contexto activo</h3>
-            <p>Cambia la empresa activa o entra a configuracion general para ajustar el alcance del trabajo.</p>
-            <div class="dashboard-hub-actions">
-                <a href="{% url 'select_company' %}?next={{ request.get_full_path|urlencode }}" class="btn btn-primary">Cambiar empresa</a>
-                {% if user.is_superuser %}
-                <a href="{% url 'admin_settings' %}" class="btn btn-ghost">Configuracion</a>
-                {% endif %}
-            </div>
-        </article>
+        </div>
+        <div class="dashboard-function-grid">
+            <article class="dashboard-mini-card is-sales">
+                <span class="dashboard-mini-icon">PV</span>
+                <span class="dashboard-mini-tag">Ventas</span>
+                <h4>Pedidos operativos</h4>
+                <p>Pedidos manuales, convertidos, estados comerciales y documentos asociados.</p>
+                <div class="dashboard-mini-actions">
+                    <a href="{% url 'admin_order_list' %}" class="btn btn-primary">Abrir pedidos</a>
+                    <a href="{% url 'admin_sales_workspace' %}" class="btn btn-ghost">Seguimiento</a>
+                </div>
+            </article>
+            <article class="dashboard-mini-card is-web">
+                <span class="dashboard-mini-icon">PW</span>
+                <span class="dashboard-mini-tag">B2B</span>
+                <h4>Pedidos web</h4>
+                <p>Solicitudes del catalogo, propuestas comerciales y conversiones a pedido final.</p>
+                <div class="dashboard-mini-actions">
+                    <a href="{% url 'admin_order_request_list' %}" class="btn btn-primary">Abrir web</a>
+                    <a href="{% url 'catalog' %}" class="btn btn-ghost">Catalogo</a>
+                </div>
+            </article>
+            <article class="dashboard-mini-card is-clients">
+                <span class="dashboard-mini-icon">CL</span>
+                <span class="dashboard-mini-tag">Clientes</span>
+                <h4>Ficha comercial</h4>
+                <p>Clientes, historial, cuenta corriente, reportes y herramientas del area.</p>
+                <div class="dashboard-mini-actions">
+                    <a href="{% url 'admin_client_dashboard' %}" class="btn btn-primary">Abrir clientes</a>
+                    <a href="{% url 'admin_client_reports_hub' %}" class="btn btn-ghost">Reportes</a>
+                </div>
+            </article>
+            <article class="dashboard-mini-card is-money">
+                <span class="dashboard-mini-icon">CB</span>
+                <span class="dashboard-mini-tag">Cobros</span>
+                <h4>Pagos y saldos</h4>
+                <p>Registro de pagos, ajustes, recibos y movimientos que impactan cuenta corriente.</p>
+                <div class="dashboard-mini-actions">
+                    <a href="{% url 'admin_payment_list' %}" class="btn btn-primary">Abrir cobros</a>
+                </div>
+            </article>
+        </div>
     </section>
 
-    <section class="dashboard-rankings-grid">
+    <section class="dashboard-function-section is-foundation">
+        <div class="dashboard-function-head">
+            <div>
+                <span class="dashboard-section-kicker">Base operativa</span>
+                <h3>Catalogo, tecnica y datos</h3>
+                <p>Productos, proveedores, abrazaderas y cargas masivas.</p>
+            </div>
+        </div>
+        <div class="dashboard-function-grid">
+            <article class="dashboard-mini-card is-catalog">
+                <span class="dashboard-mini-icon">PR</span>
+                <span class="dashboard-mini-tag">Catalogo</span>
+                <h4>Productos</h4>
+                <p>Alta, precios, stock, categorias y visibilidad del catalogo comercial.</p>
+                <div class="dashboard-mini-actions">
+                    <a href="{% url 'admin_product_list' %}" class="btn btn-primary">Productos</a>
+                    <a href="{% url 'admin_category_list' %}" class="btn btn-ghost">Categorias</a>
+                </div>
+            </article>
+            <article class="dashboard-mini-card is-supplier">
+                <span class="dashboard-mini-icon">PV</span>
+                <span class="dashboard-mini-tag">Proveedores</span>
+                <h4>Proveedores</h4>
+                <p>Control de proveedores, productos vinculados y articulos sin proveedor.</p>
+                <div class="dashboard-mini-actions">
+                    <a href="{% url 'admin_supplier_list' %}" class="btn btn-primary">Proveedores</a>
+                </div>
+            </article>
+            <article class="dashboard-mini-card is-clamp">
+                <span class="dashboard-mini-icon">AB</span>
+                <span class="dashboard-mini-tag">Abrazaderas</span>
+                <h4>Solicitudes a medida</h4>
+                <p>Pedidos tecnicos, cotizaciones, codigos y publicacion eventual al catalogo.</p>
+                <div class="dashboard-mini-actions">
+                    <a href="{% url 'admin_clamp_request_list' %}" class="btn btn-primary">Solicitudes</a>
+                    <a href="{% url 'admin_clamp_quoter' %}" class="btn btn-ghost">Cotizador</a>
+                </div>
+            </article>
+            <article class="dashboard-mini-card is-tools">
+                <span class="dashboard-mini-icon">IM</span>
+                <span class="dashboard-mini-tag">Datos</span>
+                <h4>Importaciones</h4>
+                <p>Cargas masivas, seguimiento de tareas, rollback y mantenimiento de datos.</p>
+                <div class="dashboard-mini-actions">
+                    <a href="{% url 'admin_import_dashboard' %}" class="btn btn-primary">Importar</a>
+                </div>
+            </article>
+        </div>
+    </section>
+
+    <section class="dashboard-function-section is-control">
+        <div class="dashboard-function-head">
+            <div>
+                <span class="dashboard-section-kicker">Control</span>
+                <h3>Fiscal, empresa y configuracion</h3>
+                <p>Todo lo que ordena el marco operativo del sistema.</p>
+            </div>
+        </div>
+        <div class="dashboard-function-grid">
+            <article class="dashboard-mini-card is-fiscal">
+                <span class="dashboard-mini-icon">CF</span>
+                <span class="dashboard-mini-tag">Fiscal</span>
+                <h4>Comprobantes</h4>
+                <p>Estado fiscal, comprobantes emitidos, borradores manuales y acciones ARCA.</p>
+                <div class="dashboard-mini-actions">
+                    <a href="{% url 'admin_fiscal_document_list' %}" class="btn btn-primary">Comprobantes</a>
+                    <a href="{% url 'admin_fiscal_report' %}" class="btn btn-ghost">Reportes</a>
+                </div>
+            </article>
+            <article class="dashboard-mini-card is-company">
+                <span class="dashboard-mini-icon">EM</span>
+                <span class="dashboard-mini-tag">Empresa</span>
+                <h4>Contexto activo</h4>
+                <p>Cambio de empresa activa, razones sociales y datos maestros del entorno.</p>
+                <div class="dashboard-mini-actions">
+                    <a href="{% url 'select_company' %}?next={{ request.get_full_path|urlencode }}" class="btn btn-primary">Cambiar</a>
+                    <a href="{% url 'admin_company_list' %}" class="btn btn-ghost">Empresas</a>
+                </div>
+            </article>
+            <article class="dashboard-mini-card is-company">
+                <span class="dashboard-mini-icon">CG</span>
+                <span class="dashboard-mini-tag">Sistema</span>
+                <h4>Configuracion</h4>
+                <p>Preferencias del portal, ventas, depositos, admins y herramientas internas.</p>
+                <div class="dashboard-mini-actions">
+                    {% if user.is_superuser %}
+                    <a href="{% url 'admin_settings' %}" class="btn btn-primary">Configurar</a>
+                    {% endif %}
+                    <a href="{% url 'admin_sales_document_type_list' %}" class="btn btn-ghost">Tipos</a>
+                </div>
+            </article>
+            <article class="dashboard-mini-card is-tools">
+                <span class="dashboard-mini-icon">EX</span>
+                <span class="dashboard-mini-tag">Exportes</span>
+                <h4>Excel y plantillas</h4>
+                <p>Plantillas y estructuras para exportes comerciales del catalogo.</p>
+                <div class="dashboard-mini-actions">
+                    <a href="{% url 'admin_catalog_excel_template_list' %}" class="btn btn-primary">Exportes</a>
+                </div>
+            </article>
+        </div>
+    </section>
+
+    <section class="dashboard-rankings-section">
+        <div class="dashboard-function-head">
+            <div>
+                <span class="dashboard-section-kicker">Indicadores</span>
+                <h3>Lectura comercial rapida</h3>
+                <p>Ranking de facturacion, productos y deuda para detectar donde mirar.</p>
+            </div>
+        </div>
+        <div class="dashboard-rankings-grid">
         <article class="dashboard-ranking-card is-sales">
             <div class="dashboard-ranking-head">
                 <div>
@@ -461,6 +841,7 @@
             <p class="dashboard-ranking-empty">No hay deuda activa para mostrar en este momento.</p>
             {% endif %}
         </article>
+        </div>
     </section>
 </div>
 {% endblock %}

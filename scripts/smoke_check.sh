@@ -18,6 +18,6 @@ check_url() {
 check_url "/"
 check_url "/catalogo/"
 check_url "/accounts/login/"
-check_url "/admin-panel/login/"
+check_url "/admin-panel/"
 
 echo "Smoke check OK para $BASE_URL"

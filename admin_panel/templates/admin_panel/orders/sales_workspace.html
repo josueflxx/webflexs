@@ -1,10 +1,10 @@
 {% extends 'admin_panel/base.html' %}
 
-{% block page_title %}Ventas{% endblock %}
+{% block page_title %}Seguimiento de ventas{% endblock %}
 
 {% block content %}
-<div class="admin-table-container">
-    <div class="alert alert-info" style="margin-bottom:14px;">
+<div class="sales-workspace-page">
+    <div class="alert alert-info sales-hub-intro">
         Esta vista cruza <strong>solicitudes comerciales</strong> y <strong>pedidos operativos</strong> en una sola cola.
         Sirve para seguir la venta de punta a punta sin saltar entre modulos.
     </div>
@@ -29,89 +29,92 @@
         </form>
     </div>
 
-    <table class="admin-table">
-        <thead>
-            <tr>
-                <th>Fecha</th>
-                <th>Tipo</th>
-                <th>Empresa</th>
-                <th>Cliente</th>
-                <th>Tramo actual</th>
-                <th>Total</th>
-                <th>Estado</th>
-                <th>Referencias</th>
-                <th>Acciones</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for row in page_obj %}
-            <tr class="sales-hub-row sales-hub-row-{{ row.kind }}">
-                <td>
-                    {{ row.created_at|date:"d/m/Y H:i" }}
-                </td>
-                <td>
-                    <span class="badge {{ row.kind_badge }}">{{ row.kind_label }}</span>
-                    <div class="text-muted admin-meta-text">{{ row.record_label }}</div>
-                </td>
-                <td>{{ row.company_name }}</td>
-                <td>
-                    {{ row.client_name }}
-                    {% if row.client_meta %}
-                    <div class="text-muted admin-meta-text">{{ row.client_meta }}</div>
-                    {% endif %}
-                </td>
-                <td>
-                    <strong>{{ row.stage_label }}</strong>
-                    <div class="text-muted admin-meta-text">{{ row.next_step_label }}</div>
-                </td>
-                <td>
-                    {% if row.amount is not None %}
-                    ${{ row.amount|floatformat:2 }}
-                    {% else %}
-                    <span class="text-muted">-</span>
-                    {% endif %}
-                </td>
-                <td><span class="badge {{ row.status_badge }}">{{ row.status_label }}</span></td>
-                <td>
-                    <span class="sales-hub-summary">{{ row.summary }}</span>
-                </td>
-                <td class="actions">
-                    <a href="{{ row.detail_url }}" class="btn btn-outline">{{ row.detail_label }}</a>
-                    {% if row.secondary_url %}
-                    <a href="{{ row.secondary_url }}" class="btn btn-outline">{{ row.secondary_label }}</a>
-                    {% endif %}
-                    {% if row.quick_payment_url %}
-                    <a href="{{ row.quick_payment_url }}" class="btn btn-outline">Cobros</a>
-                    {% endif %}
-                    {% if row.quick_related_actions %}
-                    <details class="sales-hub-docs-menu">
-                        <summary class="btn btn-outline sales-hub-docs-trigger" title="Generar o abrir documentos relacionados">Docs</summary>
-                        <div class="sales-hub-docs-popover">
-                            {% for item in row.quick_related_actions %}
-                            <form method="post" action="{{ item.url }}" style="margin:0;">
-                                {% csrf_token %}
-                                <input type="hidden" name="company_id" value="{{ row.company_id }}">
-                                <input type="hidden" name="action" value="{{ item.action_value }}">
-                                <input type="hidden" name="sales_document_type_id" value="{{ item.sales_document_type.pk }}">
-                                <input type="hidden" name="origin_channel" value="admin">
-                                <input type="hidden" name="source_order_id" value="{{ row.order_id }}">
-                                <button type="submit" class="sales-hub-docs-item" {% if item.disabled %}disabled{% endif %}>
-                                    {{ item.label }}
-                                </button>
-                            </form>
-                            {% endfor %}
+    <div class="admin-detail-table-wrap sales-hub-table-wrap" data-drag-scroll>
+        <table class="admin-table">
+            <thead>
+                <tr>
+                    <th>Fecha</th>
+                    <th>Operacion</th>
+                    <th>Cliente</th>
+                    <th>Siguiente paso</th>
+                    <th>Total</th>
+                    <th>Estado</th>
+                    <th>Referencias</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in page_obj %}
+                <tr class="sales-hub-row sales-hub-row-{{ row.kind }}">
+                    <td>
+                        {{ row.created_at|date:"d/m/Y H:i" }}
+                    </td>
+                    <td class="sales-hub-operation-cell">
+                        <span class="badge {{ row.kind_badge }}">{{ row.kind_label }}</span>
+                        <div class="sales-hub-record">{{ row.record_label }}</div>
+                    </td>
+                    <td class="sales-hub-client-cell">
+                        {{ row.client_name }}
+                        <div class="text-muted admin-meta-text">{{ row.company_name }}</div>
+                        {% if row.client_meta %}
+                        <div class="text-muted admin-meta-text">{{ row.client_meta }}</div>
+                        {% endif %}
+                    </td>
+                    <td class="sales-hub-next-cell">
+                        <strong class="sales-hub-next-badge">{{ row.stage_label }}</strong>
+                        <div class="text-muted admin-meta-text">{{ row.next_step_label }}</div>
+                    </td>
+                    <td class="sales-hub-amount-cell">
+                        {% if row.amount is not None %}
+                        ${{ row.amount|floatformat:2 }}
+                        {% else %}
+                        <span class="text-muted">-</span>
+                        {% endif %}
+                    </td>
+                    <td><span class="badge {{ row.status_badge }}">{{ row.status_label }}</span></td>
+                    <td class="sales-hub-reference-cell">
+                        <span class="sales-hub-summary">{{ row.summary }}</span>
+                    </td>
+                    <td class="sales-hub-actions-cell">
+                        <div class="sales-hub-actions">
+                            <a href="{{ row.detail_url }}" class="btn btn-primary sales-hub-open-btn" title="{{ row.detail_label }}">Abrir</a>
+                            {% if row.secondary_url %}
+                            <a href="{{ row.secondary_url }}" class="btn btn-outline sales-hub-action-btn">{{ row.secondary_label }}</a>
+                            {% endif %}
+                            {% if row.quick_payment_url %}
+                            <a href="{{ row.quick_payment_url }}" class="btn btn-outline sales-hub-action-btn">Cobros</a>
+                            {% endif %}
+                            {% if row.quick_related_actions %}
+                            <details class="sales-hub-docs-menu">
+                                <summary class="btn btn-outline sales-hub-docs-trigger sales-hub-action-btn" title="Generar o abrir documentos relacionados">Docs</summary>
+                                <div class="sales-hub-docs-popover">
+                                    {% for item in row.quick_related_actions %}
+                                    <form method="post" action="{{ item.url }}" style="margin:0;">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="company_id" value="{{ row.company_id }}">
+                                        <input type="hidden" name="action" value="{{ item.action_value }}">
+                                        <input type="hidden" name="sales_document_type_id" value="{{ item.sales_document_type.pk }}">
+                                        <input type="hidden" name="origin_channel" value="admin">
+                                        <input type="hidden" name="source_order_id" value="{{ row.order_id }}">
+                                        <button type="submit" class="sales-hub-docs-item" {% if item.disabled %}disabled{% endif %}>
+                                            {{ item.label }}
+                                        </button>
+                                    </form>
+                                    {% endfor %}
+                                </div>
+                            </details>
+                            {% endif %}
                         </div>
-                    </details>
-                    {% endif %}
-                </td>
-            </tr>
-            {% empty %}
-            <tr>
-                <td colspan="9" class="text-center text-muted">No hay ventas activas para esta vista.</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                <td colspan="8" class="text-center text-muted">No hay ventas activas para esta vista.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
 
     {% if page_obj.paginator.num_pages > 1 %}
     <div class="admin-toolbar">
@@ -129,6 +132,101 @@
 </div>
 
 <style>
+    .sales-workspace-page {
+        background: linear-gradient(160deg, rgba(18, 24, 33, 0.96), rgba(10, 14, 20, 0.98));
+        border-radius: 20px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        overflow: hidden;
+        box-shadow: 0 22px 44px rgba(0, 0, 0, 0.16);
+        max-width: 100%;
+        min-width: 0;
+    }
+
+    .sales-hub-intro {
+        margin: 0;
+        border-radius: 0;
+        border-left: 0;
+        border-right: 0;
+        border-top: 0;
+        padding: 10px 14px;
+        font-size: .82rem;
+    }
+
+    .sales-workspace-page > .admin-toolbar {
+        padding: 10px 14px;
+    }
+
+    .sales-workspace-page .order-filters-grid {
+        gap: 8px;
+    }
+
+    .sales-hub-table-wrap {
+        border-top: 1px solid rgba(255, 255, 255, 0.08);
+        scrollbar-gutter: stable;
+        max-width: 100%;
+        min-width: 0;
+        overflow-x: auto;
+        overflow-y: hidden;
+    }
+
+    .sales-hub-table-wrap .admin-table {
+        min-width: 1160px;
+    }
+
+    .sales-hub-table-wrap .admin-table th,
+    .sales-hub-table-wrap .admin-table td {
+        padding: 8px 12px;
+    }
+
+    .sales-hub-table-wrap .admin-table th:last-child,
+    .sales-hub-table-wrap .admin-table td:last-child {
+        position: sticky;
+        right: 0;
+        z-index: 8;
+        background: rgba(12, 18, 28, .98);
+        box-shadow: -12px 0 18px rgba(0, 0, 0, .22);
+    }
+
+    .sales-hub-table-wrap .admin-table th:last-child {
+        z-index: 12;
+        background: rgba(18, 24, 35, .98);
+    }
+
+    .sales-hub-operation-cell,
+    .sales-hub-client-cell,
+    .sales-hub-next-cell {
+        min-width: 160px;
+    }
+
+    .sales-hub-reference-cell {
+        min-width: 300px;
+    }
+
+    .sales-hub-amount-cell {
+        min-width: 105px;
+        font-weight: 700;
+        color: #f7fafc;
+    }
+
+    .sales-hub-record {
+        margin-top: 4px;
+        color: rgba(208, 216, 226, .72);
+        font-size: .78rem;
+        line-height: 1.25;
+    }
+
+    .sales-hub-next-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 4px 8px;
+        border-radius: 999px;
+        border: 1px solid rgba(251, 146, 60, .28);
+        background: rgba(251, 146, 60, .1);
+        color: #ffd0ba;
+        font-size: .76rem;
+        line-height: 1;
+    }
+
     .sales-hub-row-request td:first-child {
         box-shadow: inset 3px 0 0 rgba(251, 146, 60, .45);
     }
@@ -142,6 +240,29 @@
         max-width: 420px;
         color: rgba(226, 232, 240, .82);
         line-height: 1.45;
+    }
+
+    .sales-hub-actions {
+        display: flex;
+        gap: 6px;
+        align-items: center;
+        min-width: 330px;
+        justify-content: flex-end;
+        flex-wrap: nowrap;
+    }
+
+    .sales-hub-open-btn,
+    .sales-hub-action-btn,
+    .sales-hub-docs-trigger {
+        min-height: 30px;
+        padding: 0 11px;
+        border-radius: 7px;
+        font-size: .76rem;
+        white-space: nowrap;
+    }
+
+    .sales-hub-open-btn {
+        min-width: 72px;
     }
 
     .sales-hub-docs-menu {
@@ -199,8 +320,20 @@
 
 <script>
     (function () {
+        function resetSalesHorizontalPosition() {
+            window.scrollTo(0, window.scrollY || 0);
+            document.documentElement.scrollLeft = 0;
+            document.body.scrollLeft = 0;
+
+            const page = document.querySelector('.sales-workspace-page');
+            if (page) page.scrollLeft = 0;
+        }
+
+        resetSalesHorizontalPosition();
+        window.addEventListener('load', resetSalesHorizontalPosition);
+        window.addEventListener('resize', resetSalesHorizontalPosition);
+
         const menus = Array.from(document.querySelectorAll('.sales-hub-docs-menu'));
-        if (!menus.length) return;
 
         document.addEventListener('click', (event) => {
             menus.forEach((menu) => {

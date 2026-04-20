@@ -3,38 +3,185 @@
 
 {% block page_title %}Solicitudes a Medida{% endblock %}
 
+{% block extra_css %}
+<style>
+    .clamp-requests-admin-panel {
+        width: min(1180px, calc(100vw - 48px));
+        max-width: 100%;
+        margin-inline: auto;
+    }
+
+    .clamp-requests-control {
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0));
+    }
+
+    .clamp-requests-toolbar {
+        padding: 12px 14px;
+        align-items: flex-start;
+    }
+
+    .clamp-requests-filter-form {
+        width: 100%;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .clamp-requests-heading {
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+        color: var(--color-white);
+    }
+
+    .clamp-requests-heading span {
+        color: var(--color-primary);
+        font-size: 9px;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+    }
+
+    .clamp-requests-heading strong {
+        font-size: 12px;
+        line-height: 1;
+    }
+
+    .clamp-requests-filter-grid {
+        display: grid;
+        grid-template-columns: minmax(320px, 1fr) minmax(180px, 0.45fr) auto auto;
+        gap: 8px;
+        align-items: center;
+    }
+
+    .clamp-requests-filter-grid .form-input,
+    .clamp-requests-filter-grid .form-select {
+        min-width: 0;
+        width: 100%;
+    }
+
+    .clamp-status-summary {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 8px;
+        padding: 12px 14px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .clamp-status-chip {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 10px;
+        border-radius: 8px;
+        border: 1px solid rgba(23, 162, 184, 0.28);
+        background: rgba(23, 162, 184, 0.08);
+        color: #dff9ff;
+        font-size: 11px;
+        font-weight: 700;
+        text-decoration: none;
+    }
+
+    .clamp-status-chip strong {
+        color: var(--color-white);
+        font-size: 13px;
+    }
+
+    .clamp-requests-table-wrap {
+        overflow-x: auto;
+        scrollbar-width: thin;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .clamp-requests-table {
+        width: 100%;
+        min-width: 1040px;
+    }
+
+    .clamp-request-id {
+        width: 54px;
+        color: var(--color-white);
+    }
+
+    .clamp-request-client {
+        min-width: 190px;
+        font-weight: 700;
+    }
+
+    .clamp-request-measure {
+        min-width: 260px;
+        font-weight: 800;
+    }
+
+    .clamp-request-price {
+        min-width: 130px;
+    }
+
+    .clamp-request-action {
+        width: 130px;
+    }
+
+    .clamp-request-action .btn {
+        width: 100%;
+    }
+
+    @media (max-width: 900px) {
+        .clamp-requests-admin-panel {
+            width: calc(100vw - 24px);
+        }
+
+        .clamp-requests-filter-grid,
+        .clamp-status-summary {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="admin-table-container">
-    <div class="admin-toolbar">
-        <form method="get" class="toolbar-search">
-            <input
-                type="text"
-                name="q"
-                value="{{ search }}"
-                class="form-input"
-                placeholder="Buscar por cliente, codigo o descripcion..."
-            >
-            <select name="status" class="form-select">
-                <option value="all" {% if status_filter == 'all' %}selected{% endif %}>Todos los estados</option>
-                {% for value, label in status_choices %}
-                <option value="{{ value }}" {% if status_filter == value %}selected{% endif %}>{{ label }}</option>
-                {% endfor %}
-            </select>
-            <button type="submit" class="btn btn-primary">Filtrar</button>
-            <a href="{% url 'admin_clamp_request_list' %}" class="btn btn-outline">Limpiar</a>
-        </form>
+<div class="admin-table-container clamp-requests-admin-panel">
+    <div class="clamp-requests-control">
+        <div class="admin-toolbar clamp-requests-toolbar">
+            <form method="get" class="toolbar-search clamp-requests-filter-form">
+                <div class="clamp-requests-heading">
+                    <span>Abrazaderas</span>
+                    <strong>Solicitudes a medida</strong>
+                </div>
+                <div class="clamp-requests-filter-grid">
+                    <input
+                        type="text"
+                        name="q"
+                        value="{{ search }}"
+                        class="form-input"
+                        placeholder="Buscar por cliente, codigo o descripcion..."
+                    >
+                    <select name="status" class="form-select">
+                        <option value="all" {% if status_filter == 'all' %}selected{% endif %}>Todos los estados</option>
+                        {% for value, label in status_choices %}
+                        <option value="{{ value }}" {% if status_filter == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                    <button type="submit" class="btn btn-primary">Filtrar</button>
+                    <a href="{% url 'admin_clamp_request_list' %}" class="btn btn-outline">Limpiar</a>
+                </div>
+            </form>
+        </div>
     </div>
 
-    <div class="active-filter-chips" style="margin-bottom:12px;">
+    <div class="clamp-status-summary">
         {% for value, label in status_choices %}
-        <span class="badge badge-info">
-            {{ label }}: {{ summary_map|get_item:value|default:0 }}
+        <span class="clamp-status-chip">
+            <span>{{ label }}</span>
+            <strong>{{ summary_map|get_item:value|default:0 }}</strong>
         </span>
         {% endfor %}
     </div>
 
-    <div class="products-table-wrapper">
-        <table class="admin-table">
+    <div class="clamp-requests-table-wrap" data-drag-scroll>
+        <table class="admin-table clamp-requests-table">
             <thead>
                 <tr>
                     <th>#</th>
@@ -50,19 +197,19 @@
             <tbody>
                 {% for req in page_obj %}
                 <tr>
-                    <td><strong>#{{ req.pk }}</strong></td>
+                    <td class="clamp-request-id"><strong>#{{ req.pk }}</strong></td>
                     <td>{{ req.created_at|date:"d/m/Y H:i" }}</td>
-                    <td>
+                    <td class="clamp-request-client">
                         <div>{{ req.client_name|default:"-" }}</div>
                         {% if req.client_email %}
                         <small class="text-muted">{{ req.client_email }}</small>
                         {% endif %}
                     </td>
-                    <td>
+                    <td class="clamp-request-measure">
                         <div>{{ req.get_clamp_type_display|upper }} {{ req.diameter }} x {{ req.width_mm }} x {{ req.length_mm }} {{ req.profile_type }}</div>
                         <small class="text-muted">{{ req.generated_code|default:req.description }}</small>
                     </td>
-                    <td>
+                    <td class="clamp-request-price">
                         {% if req.confirmed_price %}
                         <strong>${{ req.confirmed_price|floatformat:2 }}</strong>
                         <div><small class="text-muted">Confirmado {% if req.confirmed_price_list %}- {{ req.get_confirmed_price_list_display }}{% endif %}</small></div>
@@ -89,7 +236,7 @@
                         <span class="badge badge-secondary">No existe</span>
                         {% endif %}
                     </td>
-                    <td class="actions">
+                    <td class="actions clamp-request-action">
                         <a href="{% url 'admin_clamp_request_detail' req.pk %}" class="btn btn-outline btn-sm">Gestionar</a>
                     </td>
                 </tr>
