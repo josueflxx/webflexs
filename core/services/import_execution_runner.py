@@ -10,6 +10,7 @@ from django.utils.text import slugify
 
 from catalog.models import Category, Product
 from core.models import ImportExecution
+from core.services.importer import sanitize_import_data
 from core.services.import_manager import ImportTaskManager
 
 
@@ -42,6 +43,39 @@ def _resolve_importer_class(importer_class_path):
     return getattr(module, class_name)
 
 
+def _result_row_errors(result, limit=50):
+    return [
+        {
+            "row": row.row_number,
+            "message": "; ".join(str(error) for error in (row.errors or [])),
+            "data": sanitize_import_data(getattr(row, "data", {}) or {}),
+        }
+        for row in result.row_results
+        if not getattr(row, "success", False)
+    ][:limit]
+
+
+def _duplicate_warnings(result, limit=50):
+    return [
+        {
+            "row": row.row_number,
+            "message": "; ".join(str(error) for error in (row.errors or []))
+            or "SKU duplicado dentro del archivo.",
+            "data": sanitize_import_data(getattr(row, "data", {}) or {}),
+        }
+        for row in result.row_results
+        if (getattr(row, "data", {}) or {}).get("_duplicate_sku")
+    ][:limit]
+
+
+def _duplicate_count(result):
+    return sum(
+        1
+        for row in result.row_results
+        if (getattr(row, "data", {}) or {}).get("_duplicate_sku")
+    )
+
+
 def _run_preflight(import_type, importer_class, file_path):
     """
     Lightweight validation checks before long import processing.
@@ -56,9 +90,10 @@ def _run_preflight(import_type, importer_class, file_path):
         cols = {str(c).strip().lower() for c in df.columns}
         missing = sorted(required_cols - cols)
         if missing:
-            preflight_errors.append(
-                "El archivo no contiene las columnas requeridas para categorias: " + ", ".join(missing)
-            )
+            preflight_errors.append({
+                "row": 0,
+                "message": "El archivo no contiene las columnas requeridas para categorias: " + ", ".join(missing),
+            })
 
     elif import_type == "clients":
         import pandas as pd
@@ -73,9 +108,7 @@ def _run_preflight(import_type, importer_class, file_path):
         importer = importer_class(file_path)
         preview = importer.run(dry_run=True)
         if getattr(preview, "has_errors", False):
-            preflight_errors.append(
-                "La validacion previa detecto errores. Corrige el archivo antes de importar."
-            )
+            preflight_errors.extend(_result_row_errors(preview))
 
     return preflight_errors
 
@@ -106,10 +139,7 @@ def run_import_execution(task_id, execution_id, import_type, importer_class_path
                 "updated": 0,
                 "errors": len(preflight_errors),
                 "has_errors": True,
-                "row_errors": [
-                    {"row": 0, "message": msg}
-                    for msg in preflight_errors
-                ],
+                "row_errors": preflight_errors[:50],
                 "preflight_errors": preflight_errors,
                 "execution_id": execution_id,
                 "import_type": import_type,
@@ -136,10 +166,9 @@ def run_import_execution(task_id, execution_id, import_type, importer_class_path
             "updated": result.updated,
             "errors": result.errors,
             "has_errors": result.has_errors,
-            "row_errors": [
-                {"row": r.row_number, "message": str(r.errors)}
-                for r in result.row_results if not r.success
-            ][:50],
+            "row_errors": _result_row_errors(result),
+            "duplicate_count": _duplicate_count(result),
+            "duplicate_warnings": _duplicate_warnings(result),
             "preflight_errors": preflight_errors,
             "execution_id": execution_id,
             "import_type": import_type,

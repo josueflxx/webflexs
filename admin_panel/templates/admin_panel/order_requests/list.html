@@ -3,10 +3,11 @@
 {% block page_title %}Solicitudes de compra{% endblock %}
 
 {% block content %}
-<div class="admin-table-container">
-    <div class="alert alert-info" style="margin-bottom:14px;">
-        Estas solicitudes vienen del catalogo o del portal del cliente. <strong>Todavia no son pedidos operativos</strong>:
-        primero se revisan, se pueden ajustar y luego se convierten en pedido.
+<div class="admin-table-container order-request-list-shell">
+    <div class="alert alert-info order-request-note">
+        <span>Estas solicitudes vienen del catalogo o del portal del cliente.</span>
+        <strong>Todavia no son pedidos operativos.</strong>
+        <span>Primero se revisan, se pueden ajustar y luego se convierten en pedido.</span>
     </div>
     {% include 'admin_panel/orders/_sales_workspace.html' %}
     <div class="admin-toolbar">
@@ -34,57 +35,59 @@
         </form>
     </div>
 
-    <table class="admin-table">
-        <thead>
-            <tr>
-                <th>#</th>
-                <th>Fecha</th>
-                <th>Empresa</th>
-                <th>Cliente</th>
-                <th>Items</th>
-                <th>Total</th>
-                <th>Estado comercial</th>
-                <th>Propuesta</th>
-                <th>Acciones</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for order_request in page_obj %}
-            <tr>
-                <td><strong>{{ order_request.pk }}</strong></td>
-                <td>{{ order_request.created_at|date:"d/m/Y H:i" }}</td>
-                <td>{{ order_request.company.name|default:"-" }}</td>
-                <td>
-                    {{ order_request.client_company_ref.client_profile.company_name|default:order_request.user.username|default:"-" }}
-                    {% if order_request.user %}
-                    <div class="text-muted admin-meta-text">{{ order_request.user.username }}</div>
-                    {% endif %}
-                </td>
-                <td>{{ order_request.get_item_count }}</td>
-                <td>${{ order_request.requested_total|floatformat:2 }}</td>
-                <td><span class="badge badge-info">{{ order_request.get_status_display }}</span></td>
-                <td>
-                    {% if order_request.current_proposal %}
-                    <span class="badge badge-warning">V{{ order_request.current_proposal.version_number }}</span>
-                    <div class="text-muted admin-meta-text">{{ order_request.current_proposal.get_status_display }}</div>
-                    {% else %}
-                    <span class="text-muted">Sin propuesta</span>
-                    {% endif %}
-                </td>
-                <td class="actions">
-                    <a href="{% url 'admin_order_request_detail' order_request.pk %}" class="btn btn-outline">Abrir flujo</a>
-                    {% if order_request.converted_order %}
-                    <a href="{% url 'admin_order_detail' order_request.converted_order.pk %}" class="btn btn-primary">Pedido operativo</a>
-                    {% endif %}
-                </td>
-            </tr>
-            {% empty %}
-            <tr>
-                <td colspan="9" class="text-center text-muted">No hay solicitudes de compra</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+    <div class="admin-detail-table-wrap order-request-table-scroll">
+        <table class="admin-table order-request-table">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Fecha</th>
+                    <th>Empresa</th>
+                    <th>Cliente</th>
+                    <th>Items</th>
+                    <th>Total</th>
+                    <th>Estado comercial</th>
+                    <th>Propuesta</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for order_request in page_obj %}
+                <tr>
+                    <td><strong>{{ order_request.pk }}</strong></td>
+                    <td>{{ order_request.created_at|date:"d/m/Y H:i" }}</td>
+                    <td>{{ order_request.company.name|default:"-" }}</td>
+                    <td>
+                        {{ order_request.client_company_ref.client_profile.company_name|default:order_request.user.username|default:"-" }}
+                        {% if order_request.user %}
+                        <div class="text-muted admin-meta-text">{{ order_request.user.username }}</div>
+                        {% endif %}
+                    </td>
+                    <td>{{ order_request.get_item_count }}</td>
+                    <td>${{ order_request.requested_total|floatformat:2 }}</td>
+                    <td><span class="badge badge-info">{{ order_request.get_status_display }}</span></td>
+                    <td>
+                        {% if order_request.current_proposal %}
+                        <span class="badge badge-warning">V{{ order_request.current_proposal.version_number }}</span>
+                        <div class="text-muted admin-meta-text">{{ order_request.current_proposal.get_status_display }}</div>
+                        {% else %}
+                        <span class="text-muted">Sin propuesta</span>
+                        {% endif %}
+                    </td>
+                    <td class="actions">
+                        <a href="{% url 'admin_order_request_detail' order_request.pk %}" class="btn btn-outline">Solicitud Web</a>
+                        {% if order_request.converted_order %}
+                        <a href="{% url 'admin_order_detail' order_request.converted_order.pk %}" class="btn btn-primary">Pedido operativo</a>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="9" class="text-center text-muted">No hay solicitudes de compra</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
 
     {% if page_obj.paginator.num_pages > 1 %}
     <div class="admin-toolbar">
@@ -100,4 +103,131 @@
     </div>
     {% endif %}
 </div>
+
+<style>
+    .admin-content:has(.order-request-list-shell) {
+        width: 100%;
+        max-width: 100%;
+        margin-left: 0;
+        margin-right: 0;
+    }
+
+    .order-request-list-shell {
+        overflow-x: hidden;
+        overflow-y: visible;
+        max-width: min(100%, 1480px);
+        margin: 0 auto;
+    }
+
+    .order-request-list-shell > .alert,
+    .order-request-list-shell > .sales-workspace-shell,
+    .order-request-list-shell > .admin-toolbar {
+        max-width: 100%;
+        min-width: 0;
+    }
+
+    .order-request-note {
+        display: flex;
+        align-items: center;
+        justify-content: flex-start;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-bottom: 12px;
+        text-align: left;
+    }
+
+    .order-request-table-scroll {
+        border-top: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .order-request-table {
+        width: 100%;
+        min-width: 0;
+        table-layout: fixed;
+    }
+
+    .order-request-table th:nth-child(1),
+    .order-request-table td:nth-child(1) {
+        width: 42px;
+    }
+
+    .order-request-table th:nth-child(2),
+    .order-request-table td:nth-child(2) {
+        width: 126px;
+    }
+
+    .order-request-table th:nth-child(3),
+    .order-request-table td:nth-child(3) {
+        width: 86px;
+    }
+
+    .order-request-table th:nth-child(5),
+    .order-request-table td:nth-child(5) {
+        width: 58px;
+    }
+
+    .order-request-table th:nth-child(6),
+    .order-request-table td:nth-child(6) {
+        width: 112px;
+    }
+
+    .order-request-table th:nth-child(7),
+    .order-request-table td:nth-child(7) {
+        width: 150px;
+    }
+
+    .order-request-table th:nth-child(8),
+    .order-request-table td:nth-child(8) {
+        width: 118px;
+    }
+
+    .order-request-table th:nth-child(9),
+    .order-request-table td:nth-child(9) {
+        width: 300px;
+    }
+
+    .order-request-table th,
+    .order-request-table td {
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .order-request-table td:nth-child(4) {
+        white-space: normal;
+    }
+
+    .order-request-table .actions {
+        min-width: 0;
+        justify-content: flex-end;
+        flex-wrap: nowrap;
+        padding-right: 16px;
+    }
+
+    .order-request-table .actions .btn {
+        min-width: 126px;
+        white-space: nowrap;
+    }
+
+    @media (max-width: 980px) {
+        .order-request-list-shell {
+            border-radius: 10px;
+        }
+
+        .order-request-list-shell .alert,
+        .order-request-list-shell .admin-toolbar {
+            margin-left: 0;
+            margin-right: 0;
+        }
+
+        .order-request-list-shell .sales-workspace-head h3 {
+            font-size: .86rem;
+            white-space: normal;
+        }
+
+        .order-request-table {
+            min-width: 860px;
+            table-layout: auto;
+        }
+    }
+</style>
 {% endblock %}

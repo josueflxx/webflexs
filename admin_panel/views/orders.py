@@ -2556,8 +2556,8 @@ def order_list(request):
     user_ids = {order.user_id for order in page_orders if order.user_id}
     profile_by_user_id = {}
     if user_ids:
-        for profile in ClientProfile.objects.only("pk", "user_id").filter(user_id__in=user_ids):
-            profile_by_user_id[profile.user_id] = profile.pk
+        for profile in ClientProfile.objects.only("pk", "user_id", "company_name").filter(user_id__in=user_ids):
+            profile_by_user_id[profile.user_id] = profile
 
     actions_by_company_id = {}
     if active_company:
@@ -2568,7 +2568,13 @@ def order_list(request):
         )
 
     for order in page_orders:
-        order.quick_client_profile_id = profile_by_user_id.get(order.user_id) or ""
+        client_profile = profile_by_user_id.get(order.user_id)
+        order.quick_client_profile_id = client_profile.pk if client_profile else ""
+        order.quick_client_display_name = (
+            client_profile.company_name
+            if client_profile and client_profile.company_name
+            else (order.user.username if order.user_id else "N/A")
+        )
         if order.company_id not in actions_by_company_id:
             company_obj = order.company if getattr(order, "company_id", None) else None
             actions_by_company_id[order.company_id] = _build_related_sales_document_actions(
@@ -2806,7 +2812,7 @@ def order_detail(request, pk):
     order_items = _build_order_detail_items(order)
 
     order_client_profile = (
-        ClientProfile.objects.only('id').filter(user_id=order.user_id).first()
+        ClientProfile.objects.select_related("client_category", "user").filter(user_id=order.user_id).first()
         if order.user_id
         else None
     )
@@ -2950,6 +2956,7 @@ def order_detail(request, pk):
     order_documents = list(
         InternalDocument.objects.select_related('sales_document_type').filter(order=order).order_by('issued_at')
     )
+    primary_sales_document = order_invoice_document or (order_documents[0] if order_documents else None)
     for doc in order_documents:
         doc.can_safe_delete = not _get_internal_document_delete_blockers(doc)
         doc.can_print = order_movement_closed
@@ -2985,7 +2992,9 @@ def order_detail(request, pk):
         'order_pending_amount': order.get_pending_amount(),
         'order_is_paid': order.is_paid(),
         'order_client_profile_id': order_client_profile.pk if order_client_profile else '',
+        'order_client_profile': order_client_profile,
         'order_documents': order_documents,
+        'primary_sales_document': primary_sales_document,
         'document_company': order.company,
         'pricing_snapshot': pricing_snapshot,
         'sales_internal_document_types': sales_internal_document_types,

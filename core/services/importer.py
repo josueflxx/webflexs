@@ -3,6 +3,8 @@ import pandas as pd
 import openpyxl
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
+from decimal import Decimal
+import math
 from typing import List, Dict, Any, Optional
 
 @dataclass
@@ -26,6 +28,47 @@ class ImportResult:
     @property
     def has_errors(self):
         return self.errors > 0
+
+
+def sanitize_import_value(value):
+    """Return a JSON-safe representation for values read from spreadsheets."""
+    if value is None:
+        return ""
+
+    if isinstance(value, dict):
+        return {str(k): sanitize_import_value(v) for k, v in value.items()}
+
+    if isinstance(value, (list, tuple, set)):
+        return [sanitize_import_value(v) for v in value]
+
+    if isinstance(value, Decimal):
+        return str(value)
+
+    if isinstance(value, float):
+        if not math.isfinite(value):
+            return ""
+        return value
+
+    try:
+        if pd.isna(value):
+            return ""
+    except (TypeError, ValueError):
+        pass
+
+    if isinstance(value, (str, int, bool)):
+        return value
+
+    if hasattr(value, "isoformat"):
+        try:
+            return value.isoformat()
+        except (TypeError, ValueError):
+            pass
+
+    return str(value)
+
+
+def sanitize_import_data(data):
+    return sanitize_import_value(data or {})
 
 class BaseImporter(ABC):
     """
@@ -79,9 +122,10 @@ class BaseImporter(ABC):
             if progress_callback:
                 progress_callback(index + 1, self.results.total_rows)
 
-            row_dict = row.to_dict()
             # row_number 2 because Excel header is 1, and 0-index
             row_num = index + 2 
+            row_dict = row.to_dict()
+            row_dict["__row_number"] = row_num
             
             try:
                 row_result = self.process_row(row_dict, dry_run=dry_run)

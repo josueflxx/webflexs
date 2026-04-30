@@ -905,7 +905,31 @@ def _resolve_internal_document_transaction(document):
 def _resolve_fiscal_document_transaction(document):
     if not document or not getattr(document, "order_id", None):
         return None
-    return _resolve_order_charge_transaction(getattr(document, "order", None))
+    transaction_obj = _resolve_order_charge_transaction(getattr(document, "order", None))
+    if getattr(document, "status", "") in {
+        FISCAL_STATUS_AUTHORIZED,
+        FISCAL_STATUS_EXTERNAL_RECORDED,
+    }:
+        document_changed_at = getattr(document, "updated_at", None) or getattr(document, "created_at", None)
+        tx_changed_at = getattr(transaction_obj, "updated_at", None) if transaction_obj else None
+        should_sync_placeholder = (
+            transaction_obj is None
+            or (
+                (transaction_obj.movement_state or ClientTransaction.STATE_OPEN) == ClientTransaction.STATE_OPEN
+                and document_changed_at
+                and tx_changed_at
+                and tx_changed_at <= document_changed_at
+            )
+        )
+        if should_sync_placeholder:
+            try:
+                transaction_obj = sync_order_charge_transaction(order=document.order)
+            except Exception:
+                logger.exception(
+                    "No se pudo sincronizar el movimiento de cuenta corriente para el comprobante fiscal %s",
+                    getattr(document, "pk", None),
+                )
+    return transaction_obj
 
 
 def _movement_allows_print(transaction_obj):
@@ -2664,3 +2688,4 @@ def _get_report_client_contact_name(client):
 
 
 __all__ = ['ADMIN_ROLE_CHOICES', 'ADMIN_ROLE_LABELS', 'BILLABLE_FISCAL_DOC_TYPES', 'CLIENT_EXPORT_ENCODING_CHOICES', 'CLIENT_EXPORT_PRESET_CHOICES', 'CLIENT_FACTURABLE_STATUSES', 'CLIENT_REMITO_READY_STATUSES', 'CLIENT_REPORT_CURRENCY_CHOICES', 'CLIENT_REPORT_DATE_RANGE_CHOICES', 'CLIENT_REPORT_DEBTOR_CHOICES', 'CLIENT_REPORT_OPTIONAL_COLUMNS', 'CLIENT_REPORT_ORDER_STATUSES', 'CLIENT_REPORT_RANKING_CHOICES', 'CLIENT_REPORT_RESULTS_SORT_FIELDS', 'CLIENT_REPORT_STATE_CHOICES', 'CLIENT_REPORT_TEXT_FIELD_CHOICES', 'EMITTABLE_FISCAL_DOC_TYPES', 'FISCAL_PRINT_COPY_LABELS', 'FISCAL_PRINT_DOC_META', 'INVOICE_FISCAL_DOC_TYPES', 'ORDER_INTERNAL_DOC_STATUS_RULES', 'ORDER_PRODUCT_SEARCH_FIELDS', 'PRIMARY_SUPERADMIN_USERNAME', '_annotate_client_orders_with_documents', '_build_client_company_summary_rows', '_build_client_form_values', '_build_client_report_queryset', '_build_client_report_row', '_build_fiscal_collection_snapshot', '_build_related_sales_document_actions', '_client_export_csv_response', '_client_report_csv_response', '_client_report_date_label', '_client_report_matches_text', '_client_reports_nav', '_client_tools_nav', '_create_draft_order_for_client', '_create_related_order_from_source', '_delete_orphan_product_image', '_deny_fiscal_operation_if_needed', '_extract_linked_company_ids', '_find_products_for_order_query', '_format_currency_ars', '_get_client_export_rows', '_get_client_orders_queryset', '_get_client_report_locality_choices', '_get_fiscal_workflow_state', '_get_order_client_profile', '_get_report_client_address', '_get_report_client_balance', '_get_report_client_category', '_get_report_client_contact_name', '_get_report_client_document_detail', '_get_report_client_locality', '_get_report_client_price_list_name', '_get_report_client_province', '_get_report_client_state', '_get_report_company_link', '_is_ajax_request', '_is_checked', '_is_order_items_edit_locked', '_is_standalone_report_request', '_is_transaction_reopen_locked', '_movement_allows_print', '_recalculate_order_totals_from_items', '_redirect_admin_product_list_with_filters', '_redirect_client_history', '_render_client_form', '_resolve_client_editor_company', '_resolve_default_point_of_sale', '_resolve_fiscal_document_transaction', '_resolve_internal_document_transaction', '_resolve_invoice_sales_document_type_for_order', '_resolve_linked_companies', '_resolve_order_charge_transaction', '_resolve_order_item_pricing', '_resolve_preferred_invoice_doc_type', '_resolve_related_order_for_quick_action', '_resolve_related_order_from_order_id_for_quick_action', '_resolve_report_date_range', '_resolve_safe_next_url', '_send_password_reset_email_for_user', '_store_bulk_product_image', '_sum_decimal_values', '_validate_admin_image_upload', 'apply_admin_text_search', 'build_admin_user_snapshot', 'build_category_options', 'build_category_tree_rows', 'build_product_filter_chips', 'build_supplier_products_queryset', 'calculate_category_deactivation_impact', 'can_delete_client_record', 'can_edit_client_profile', 'can_manage_client_credentials', 'can_manage_fiscal_operations', 'collect_created_refs', 'detect_category_integrity_issues', 'enrich_products_with_category_state', 'ensure_admin_role_groups', 'extract_target_product_ids_from_post', 'generate_clamp_code_api', 'get_active_client_categories', 'get_admin_company_filter', 'get_admin_company_required', 'get_admin_company_scope_mode', 'get_admin_role_label', 'get_admin_role_labels', 'get_admin_role_value', 'get_admin_role_values', 'get_admin_selected_company', 'get_admin_user_scope_ids', 'get_cached_category_options', 'get_client_categories_for_client', 'get_managed_admin_users_queryset', 'get_product_queryset', 'get_recent_admin_user_audit_logs', 'is_primary_superadmin', 'normalize_admin_search_query', 'parse_admin_decimal_input', 'set_admin_role_for_user', 'set_admin_roles_for_user', 'settings_view', 'validate_attributes_for_category']
+__all__.append('admin_company_access_table_available')

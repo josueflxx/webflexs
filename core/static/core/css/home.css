@@ -35,8 +35,8 @@
     justify-items: center;
     position: relative;
     z-index: 1;
-    max-width: 860px;
-    min-height: calc(100vh - var(--header-offset) - 80px);
+    max-width: 760px;
+    min-height: calc(100vh - var(--header-offset) - 4.5rem);
 }
 
 .hero-text {

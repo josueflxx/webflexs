@@ -1,6 +1,6 @@
 {% extends 'admin_panel/base.html' %}
 
-{% block page_title %}{% if order.status == 'draft' %}Cotizacion operativa{% else %}Pedido operativo{% endif %} #{{ order.pk }}{% endblock %}
+{% block page_title %}Ficha de venta {% if primary_sales_document %}{{ primary_sales_document.commercial_type_label }} {{ primary_sales_document.display_number }}{% elif order.status == 'draft' %}Cotizacion operativa #{{ order.pk }}{% else %}Pedido operativo #{{ order.pk }}{% endif %}{% endblock %}
 
 {% block extra_css %}
 <style>
@@ -196,7 +196,204 @@
 .sales-flow-step .btn {
     justify-self: flex-start;
 }
+.order-record-page {
+    justify-content: center;
+}
+.order-record-page .order-record-shell {
+    width: min(1120px, calc(100vw - 48px));
+    margin: 8px auto 26px;
+    padding: 0;
+    overflow: hidden;
+    border-radius: 8px;
+    border-color: rgba(255, 255, 255, .12);
+    background: rgba(12, 17, 25, .96);
+    box-shadow: 0 20px 44px rgba(0, 0, 0, .28);
+}
+.order-record-page .order-record-header {
+    padding: 14px 18px;
+    align-items: center;
+    border-top: 2px solid #ff6b3d;
+    border-bottom: 1px solid rgba(255, 255, 255, .08);
+    background: rgba(255, 255, 255, .045);
+}
+.order-record-page .sales-record-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, .08);
+    border: 1px solid rgba(255, 255, 255, .14);
+    color: #f8fafc;
+}
+.order-record-page .sales-record-kicker {
+    display: none;
+}
+.order-record-page .sales-record-heading {
+    font-size: 1rem;
+    letter-spacing: 0;
+    text-transform: none;
+}
+.order-record-page .sales-record-subcopy {
+    margin-top: 4px;
+    font-size: .78rem;
+}
+.order-record-page .sales-record-actions {
+    gap: 6px;
+}
+.order-record-page .sales-record-action {
+    min-height: 30px;
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-size: .72rem;
+}
+.order-record-page .sales-record-top-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 20px;
+    padding: 16px 18px 8px;
+}
+.order-record-page .sales-record-panel {
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+}
+.order-record-page .sales-record-panel-header {
+    min-height: 28px;
+    margin-bottom: 8px;
+    align-items: center;
+}
+.order-record-page .sales-record-panel-eyebrow,
+.order-record-page .sales-record-card-head h3,
+.order-record-page .order-classic-toggle > summary {
+    width: max-content;
+    max-width: 100%;
+    padding: 5px 10px;
+    border-radius: 0;
+    background: rgba(255, 255, 255, .07);
+    color: #ff7654;
+    font-size: .76rem;
+    letter-spacing: .02em;
+    text-transform: none;
+}
+.order-record-page .sales-record-panel-title {
+    display: none;
+}
+.order-record-page .sales-record-grid {
+    gap: 7px 20px;
+}
+.order-record-page .sales-record-field {
+    grid-template-columns: minmax(116px, auto) minmax(0, 1fr);
+    align-items: baseline;
+    gap: 8px;
+}
+.order-record-page .sales-record-field-label {
+    color: rgba(226, 232, 240, .8);
+    font-size: .76rem;
+    text-transform: none;
+    letter-spacing: 0;
+}
+.order-record-page .sales-record-field-value {
+    font-size: .82rem;
+    color: #f8fafc;
+}
+.order-record-page .sales-flow-strip {
+    display: none;
+}
+.order-record-page .sales-record-card {
+    margin: 0 18px 12px;
+    padding: 12px 10px;
+    border-radius: 0;
+    border-width: 0;
+    border-top: 1px solid rgba(255, 255, 255, .08);
+    background: transparent;
+    box-shadow: none;
+}
+.order-record-page .sales-record-card-head {
+    margin-bottom: 10px;
+}
+.order-record-page .sales-record-card-head p {
+    display: none;
+}
+.order-record-page .order-classic-collapsible-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px 24px;
+}
+.order-record-page .order-classic-toggle {
+    border: 0;
+    background: transparent;
+}
+.order-record-page .order-classic-toggle > summary {
+    cursor: pointer;
+}
+.order-record-page .order-classic-toggle-body {
+    padding: 8px 10px 10px;
+}
+.order-record-page .sales-record-table-wrap {
+    border-radius: 0;
+    border-top: 0;
+}
+.order-record-page .order-record-products-table {
+    font-size: .8rem;
+}
+.order-record-page .order-record-products-table th {
+    color: #f8fafc;
+    background: transparent;
+    text-transform: none;
+    letter-spacing: 0;
+}
+.order-record-page .order-record-add-item-grid {
+    grid-template-columns: minmax(0, 1fr) 74px 120px auto;
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px dashed rgba(255, 255, 255, .12);
+}
+.order-record-page .order-record-foot-grid {
+    margin: 0 18px 18px;
+    grid-template-columns: minmax(0, 1.6fr) minmax(260px, .8fr);
+    gap: 16px;
+}
+.order-record-page .order-record-foot-grid > .sales-record-card {
+    margin: 0;
+    border-top: 0;
+}
+.order-record-page .sales-record-note-box {
+    min-height: 118px;
+    border-radius: 0;
+    border-color: rgba(255, 255, 255, .1);
+    background: rgba(255, 255, 255, .035);
+    font-size: .84rem;
+}
+.order-record-page .sales-record-summary {
+    gap: 6px;
+}
+.order-record-page .sales-record-summary-row {
+    font-size: .82rem;
+}
+.order-record-page .sales-record-summary-row.is-total strong {
+    font-size: 1.35rem;
+    color: #f8fafc;
+}
+.order-record-page .order-movement-inline {
+    align-items: center;
+    border-top-style: dashed;
+}
+.order-record-page .order-movement-inline-head {
+    justify-content: center;
+}
+.order-record-page .order-movement-inline-actions {
+    justify-content: center;
+}
+.order-record-page .order-movement-inline-actions .btn {
+    min-width: 88px;
+    border-radius: 4px;
+}
 @media (max-width: 960px) {
+    .order-record-page .order-record-shell {
+        width: calc(100vw - 28px);
+    }
+    .order-record-page .sales-record-top-grid,
+    .order-record-page .order-record-foot-grid,
     .order-classic-collapsible-grid {
         grid-template-columns: 1fr;
     }
@@ -212,13 +409,18 @@
     <section class="sales-record-shell order-record-shell">
         <div class="sales-record-header order-record-header">
             <div class="sales-record-title-wrap">
-                <div class="sales-record-icon" aria-hidden="true">&#128722;</div>
+                <div class="sales-record-icon" aria-hidden="true">&#128441;</div>
                 <div>
-                    <p class="sales-record-kicker">Ficha de venta</p>
+                    <p class="sales-record-kicker">Movimiento operativo</p>
                     <h2 class="sales-record-heading">
-                        Abrir
-                        {% if order.status == 'draft' %}cotizacion operativa{% else %}pedido operativo{% endif %}
-                        {{ order.pk }}
+                        Ficha de venta
+                        {% if primary_sales_document %}
+                            {{ primary_sales_document.commercial_type_label }} {{ primary_sales_document.display_number }}
+                        {% elif order.status == 'draft' %}
+                            Cotizacion #{{ order.pk }}
+                        {% else %}
+                            Pedido #{{ order.pk }}
+                        {% endif %}
                     </h2>
                     <p class="sales-record-subcopy">
                         {{ order.company.name|default:"-" }} &middot; {{ order.client_company|default:order.user.username|default:"-" }} &middot;
@@ -297,17 +499,27 @@
                 <div class="sales-record-grid">
                     <div class="sales-record-field">
                         <span class="sales-record-field-label">Estado</span>
-                        <span class="sales-record-field-value">{{ order.get_status_display }}</span>
+                        <span class="sales-record-field-value">{{ order_movement_state_label|default:order.get_status_display }}</span>
                     </div>
                     <div class="sales-record-field">
-                        <span class="sales-record-field-label">Tipo interno</span>
+                        <span class="sales-record-field-label">Tipo de comprobante</span>
                         <span class="sales-record-field-value">
-                            {% if order.status == 'draft' %}Cotizacion operativa (COT){% else %}Pedido operativo (PED){% endif %}
+                            {% if primary_sales_document %}{{ primary_sales_document.commercial_type_label }}{% elif order.status == 'draft' %}Cotizacion operativa{% else %}Pedido operativo{% endif %}
                         </span>
                     </div>
                     <div class="sales-record-field">
-                        <span class="sales-record-field-label">Numero interno</span>
-                        <span class="sales-record-field-value">Pedido #{{ order.pk }}</span>
+                        <span class="sales-record-field-label">Letra</span>
+                        <span class="sales-record-field-value">{{ primary_sales_document.sales_document_type.letter|default:"X" }}</span>
+                    </div>
+                    <div class="sales-record-field">
+                        <span class="sales-record-field-label">Punto de venta</span>
+                        <span class="sales-record-field-value">
+                            {% if primary_sales_document.sales_document_type.point_of_sale_number %}{{ primary_sales_document.sales_document_type.point_of_sale_number }}{% elif order_invoice_document.point_of_sale.number %}{{ order_invoice_document.point_of_sale.number }}{% else %}00001{% endif %}
+                        </span>
+                    </div>
+                    <div class="sales-record-field">
+                        <span class="sales-record-field-label">Numero</span>
+                        <span class="sales-record-field-value">{% if primary_sales_document %}{{ primary_sales_document.display_number }}{% else %}{{ order.pk }}{% endif %}</span>
                     </div>
                     <div class="sales-record-field">
                         <span class="sales-record-field-label">Fecha</span>
@@ -346,19 +558,31 @@
                 <div class="sales-record-grid">
                     <div class="sales-record-field">
                         <span class="sales-record-field-label">Nombre</span>
-                        <span class="sales-record-field-value">{{ order.client_company|default:order.user.username|default:"-" }}</span>
+                        <span class="sales-record-field-value">{{ order_client_profile.company_name|default:order.client_company|default:order.user.username|default:"-" }}</span>
+                    </div>
+                    <div class="sales-record-field">
+                        <span class="sales-record-field-label">N de cliente</span>
+                        <span class="sales-record-field-value">{{ order_client_profile.pk|default:"-" }}</span>
                     </div>
                     <div class="sales-record-field">
                         <span class="sales-record-field-label">CUIT</span>
-                        <span class="sales-record-field-value">{{ order.client_cuit|default:"-" }}</span>
+                        <span class="sales-record-field-value">{{ order_client_profile.cuit_dni|default:order.client_cuit|default:"-" }}</span>
                     </div>
                     <div class="sales-record-field">
                         <span class="sales-record-field-label">Domicilio</span>
-                        <span class="sales-record-field-value">{{ order.client_address|default:"-" }}</span>
+                        <span class="sales-record-field-value">{{ order_client_profile.fiscal_address|default:order_client_profile.address|default:order.client_address|default:"-" }}</span>
+                    </div>
+                    <div class="sales-record-field">
+                        <span class="sales-record-field-label">Localidad</span>
+                        <span class="sales-record-field-value">{{ order_client_profile.fiscal_city|default:"-" }}</span>
+                    </div>
+                    <div class="sales-record-field">
+                        <span class="sales-record-field-label">Condicion de IVA</span>
+                        <span class="sales-record-field-value">{{ order_client_profile.get_iva_condition_display|default:"-" }}</span>
                     </div>
                     <div class="sales-record-field">
                         <span class="sales-record-field-label">Telefono</span>
-                        <span class="sales-record-field-value">{{ order.client_phone|default:"-" }}</span>
+                        <span class="sales-record-field-value">{{ order_client_profile.phone|default:order.client_phone|default:"-" }}</span>
                     </div>
                     <div class="sales-record-field">
                         <span class="sales-record-field-label">Categoria</span>
@@ -655,6 +879,7 @@
                             {% else %}
                             <button type="button" class="btn btn-outline" disabled title="{{ order_movement_close_block_reason|default:'No disponible' }}">Cerrar</button>
                             {% endif %}
+                            <button type="button" class="btn btn-outline" disabled title="El movimiento ya esta abierto.">Dejar abierta</button>
                             {% if order_movement_can_void %}
                             <form method="post" action="{% url 'admin_client_transaction_set_state' order_client_profile_id order_movement_transaction.pk %}" style="margin:0;">
                                 {% csrf_token %}
@@ -662,8 +887,11 @@
                                 <input type="hidden" name="state" value="voided">
                                 <button type="submit" class="btn btn-danger-outline" onclick="return confirm('Anular este movimiento?');">Anular</button>
                             </form>
+                            {% else %}
+                            <button type="button" class="btn btn-danger-outline" disabled title="{{ order_movement_void_block_reason|default:'No disponible' }}">Anular</button>
                             {% endif %}
                         {% elif order_movement_state == 'closed' %}
+                            <button type="button" class="btn btn-outline" disabled title="El movimiento ya esta cerrado.">Cerrar</button>
                             {% if order_movement_can_open %}
                             <form method="post" action="{% url 'admin_client_transaction_set_state' order_client_profile_id order_movement_transaction.pk %}" style="margin:0;">
                                 {% csrf_token %}
@@ -674,8 +902,20 @@
                             {% else %}
                             <button type="button" class="btn btn-outline" disabled title="{{ order_movement_open_block_reason|default:'No disponible' }}">Dejar abierta</button>
                             {% endif %}
+                            {% if order_movement_can_void %}
+                            <form method="post" action="{% url 'admin_client_transaction_set_state' order_client_profile_id order_movement_transaction.pk %}" style="margin:0;">
+                                {% csrf_token %}
+                                <input type="hidden" name="next" value="{{ order_detail_next_url }}">
+                                <input type="hidden" name="state" value="voided">
+                                <button type="submit" class="btn btn-danger-outline" onclick="return confirm('Anular este movimiento?');">Anular</button>
+                            </form>
+                            {% else %}
+                            <button type="button" class="btn btn-danger-outline" disabled title="{{ order_movement_void_block_reason|default:'No disponible' }}">Anular</button>
+                            {% endif %}
                         {% else %}
-                        <span class="badge badge-danger">Anulado</span>
+                        <button type="button" class="btn btn-outline" disabled>Cerrar</button>
+                        <button type="button" class="btn btn-outline" disabled>Dejar abierta</button>
+                        <button type="button" class="btn btn-danger-outline" disabled>Anulado</button>
                         {% endif %}
                     </div>
                     {% if status_history %}
@@ -688,6 +928,18 @@
                         </div>
                     </details>
                     {% endif %}
+                </div>
+                {% else %}
+                <div class="order-movement-inline">
+                    <div class="order-movement-inline-head">
+                        <span class="order-movement-inline-label">Estado del movimiento</span>
+                        <span class="order-movement-inline-state">Sin movimiento vinculado</span>
+                    </div>
+                    <div class="order-movement-inline-actions">
+                        <button type="button" class="btn btn-outline" disabled>Cerrar</button>
+                        <button type="button" class="btn btn-outline" disabled>Dejar abierta</button>
+                        <button type="button" class="btn btn-danger-outline" disabled>Anular</button>
+                    </div>
                 </div>
                 {% endif %}
 

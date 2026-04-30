@@ -292,6 +292,24 @@ from .helpers import *
 
 # ===================== PRODUCTS =====================
 
+def _attach_import_duplicate_alert(product):
+    attrs = product.attributes or {}
+    duplicate_keys = {
+        ProductImporter.DUPLICATE_FLAG_KEY,
+        ProductImporter.DUPLICATE_COUNT_KEY,
+        ProductImporter.DUPLICATE_DETAIL_KEY,
+        ProductImporter.DUPLICATE_ORIGINAL_ROW_KEY,
+    }
+    product.import_duplicate_alert = attrs.get(ProductImporter.DUPLICATE_FLAG_KEY) == "Si"
+    product.import_duplicate_count = attrs.get(ProductImporter.DUPLICATE_COUNT_KEY) or ""
+    product.import_duplicate_detail = attrs.get(ProductImporter.DUPLICATE_DETAIL_KEY) or ""
+    product.import_duplicate_original_row = attrs.get(ProductImporter.DUPLICATE_ORIGINAL_ROW_KEY) or ""
+    product.visible_import_attributes = {
+        key: value for key, value in attrs.items() if key not in duplicate_keys
+    }
+    return product
+
+
 @staff_member_required
 def product_list(request):
     """Product list with search, filters, and pagination."""
@@ -315,6 +333,8 @@ def product_list(request):
     page_obj = paginator.get_page(page_number)
 
     enrich_products_with_category_state(page_obj.object_list)
+    for product in page_obj.object_list:
+        _attach_import_duplicate_alert(product)
     
     category_options = get_cached_category_options(only_active=True, include_inactive_suffix=False)
     filter_chips = build_product_filter_chips(request.GET, category_options)
@@ -350,8 +370,10 @@ def product_create(request):
             supplier_name = clean_supplier_name(request.POST.get('supplier', ''))
             supplier_obj = ensure_supplier(supplier_name) if supplier_name else None
             price = request.POST.get('price', '0')
+            cost = request.POST.get('cost', '0')
             stock = request.POST.get('stock', '0')
             price_value = parse_admin_decimal_input(price, 'Precio', min_value='0')
+            cost_value = parse_admin_decimal_input(cost, 'Costo', min_value='0')
             stock_value = parse_int_value(stock, 'Stock', min_value=0)
             primary_category_id = request.POST.get('category', '')
             selected_category_ids = normalize_category_ids(request.POST.getlist('categories'))
@@ -413,6 +435,7 @@ def product_create(request):
                     name=name,
                     supplier=supplier_name,
                     supplier_ref=supplier_obj,
+                    cost=cost_value,
                     price=price_value,
                     stock=stock_value,
                     category_id=int(primary_category_id) if str(primary_category_id).isdigit() else None,
@@ -450,6 +473,7 @@ def product_create(request):
 def product_edit(request, pk):
     """Edit existing product."""
     product = get_object_or_404(Product, pk=pk)
+    _attach_import_duplicate_alert(product)
     category_options = get_cached_category_options(only_active=True, include_inactive_suffix=False)
     supplier_suggestions = list(Supplier.objects.order_by('name').values_list('name', flat=True)[:400])
     
@@ -459,6 +483,7 @@ def product_edit(request, pk):
             product.name = request.POST.get('name', '').strip()
             product.supplier = clean_supplier_name(request.POST.get('supplier', ''))
             product.supplier_ref = ensure_supplier(product.supplier) if product.supplier else None
+            product.cost = parse_admin_decimal_input(request.POST.get('cost', '0'), 'Costo', min_value='0')
             product.price = parse_admin_decimal_input(request.POST.get('price', '0'), 'Precio', min_value='0')
             product.stock = parse_int_value(request.POST.get('stock', '0'), 'Stock', min_value=0)
             product.description = request.POST.get('description', '').strip()

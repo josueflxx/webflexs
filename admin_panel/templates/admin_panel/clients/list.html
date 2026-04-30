@@ -159,10 +159,6 @@
                         {% endif %}
                     </td>
                     <td class="actions">
-                        <a href="{% url 'admin_client_order_history' client.pk %}" class="btn btn-outline btn-sm"
-                            title="Abrir ficha comercial">
-                            Ficha
-                        </a>
                         <a href="{% url 'admin_payment_list' %}?client_id={{ client.pk }}" class="btn btn-primary btn-sm"
                             title="Cobros y pagos del cliente">
                             Cobros

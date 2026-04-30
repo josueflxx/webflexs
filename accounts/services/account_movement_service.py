@@ -129,6 +129,7 @@ def resolve_order_charge_snapshot(order):
                 f"Venta facturada {billable_document.commercial_type_label} "
                 f"{billable_document.display_number}"
             ).strip(),
+            "movement_state": ClientTransaction.STATE_CLOSED,
         }
 
     if order and (
@@ -143,6 +144,7 @@ def resolve_order_charge_snapshot(order):
                 f"{getattr(order, 'saas_document_type', '')} "
                 f"{getattr(order, 'saas_document_number', '')}"
             ).strip(),
+            "movement_state": ClientTransaction.STATE_CLOSED,
         }
 
     internal_document = get_order_accountable_internal_document(order)
@@ -157,12 +159,14 @@ def resolve_order_charge_snapshot(order):
                 f"Movimiento comercial {internal_document.commercial_type_label} "
                 f"{internal_document.display_number}"
             ).strip(),
+            "movement_state": ClientTransaction.STATE_CLOSED,
         }
 
     return {
         "amount": Decimal("0.00"),
         "occurred_at": getattr(order, "status_updated_at", None) or timezone.now(),
         "description": f"Pedido #{order.pk} sin comprobante imputable a cuenta corriente",
+        "movement_state": ClientTransaction.STATE_OPEN,
     }
 
 
@@ -183,6 +187,11 @@ def sync_order_charge_transaction(order, actor=None):
         "amount": charge_snapshot["amount"],
         "description": charge_snapshot["description"],
         "occurred_at": charge_snapshot["occurred_at"],
+        "movement_state": charge_snapshot.get("movement_state", ClientTransaction.STATE_OPEN),
+        "closed_at": timezone.now()
+        if charge_snapshot.get("movement_state") == ClientTransaction.STATE_CLOSED
+        else None,
+        "voided_at": None,
         "created_by": actor if getattr(actor, "is_authenticated", False) else None,
     }
     tx, _ = ClientTransaction.objects.update_or_create(
@@ -203,6 +212,7 @@ def sync_payment_transaction(payment, actor=None):
     company = _resolve_company_for_record(company=company, order=getattr(payment, "order", None))
 
     amount = Decimal("0.00")
+    movement_state = ClientTransaction.STATE_VOIDED if payment.is_cancelled else ClientTransaction.STATE_CLOSED
     if not payment.is_cancelled:
         amount = (_to_decimal(payment.amount) * Decimal("-1")).quantize(Decimal("0.01"))
 
@@ -216,6 +226,11 @@ def sync_payment_transaction(payment, actor=None):
         "amount": amount,
         "description": f"Pago #{payment.pk} - {payment.get_method_display()}",
         "occurred_at": getattr(payment, "paid_at", None) or timezone.now(),
+        "movement_state": movement_state,
+        "closed_at": getattr(payment, "paid_at", None) or timezone.now()
+        if movement_state == ClientTransaction.STATE_CLOSED
+        else None,
+        "voided_at": timezone.now() if movement_state == ClientTransaction.STATE_VOIDED else None,
         "created_by": (
             actor
             if getattr(actor, "is_authenticated", False)

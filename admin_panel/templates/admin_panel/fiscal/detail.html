@@ -1,34 +1,38 @@
 {% extends 'admin_panel/base.html' %}
 
-{% block page_title %}Comprobante fiscal #{{ fiscal_document.pk }}{% endblock %}
+{% block page_title %}Modificar venta {{ fiscal_document.commercial_type_label }} {{ document_number_display }}{% endblock %}
 
 {% block extra_css %}
 <style>
 .fiscal-classic-wrap {
-    max-width: min(1480px, calc(100vw - 40px));
+    max-width: min(1120px, calc(100vw - 48px));
     width: 100%;
-    padding: 10px;
+    padding: 8px 0 26px;
     background: transparent;
     border: 0;
     box-shadow: none;
+    margin: 0 auto;
 }
 .fiscal-classic-sheet {
-    background: linear-gradient(160deg, rgba(15, 23, 36, 0.98), rgba(10, 14, 22, 0.99));
+    background: rgba(12, 17, 25, .96);
     color: #e5e7eb;
     border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 16px;
-    padding: 16px 18px 20px;
+    border-radius: 8px;
+    padding: 0 0 18px;
     display: grid;
-    gap: 14px;
-    box-shadow: 0 18px 34px rgba(0, 0, 0, 0.28);
+    gap: 12px;
+    box-shadow: 0 20px 44px rgba(0, 0, 0, 0.28);
+    overflow: hidden;
 }
 .fiscal-classic-header {
     display: flex;
     justify-content: space-between;
     gap: 12px;
-    align-items: flex-start;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.12);
-    padding-bottom: 10px;
+    align-items: center;
+    border-top: 2px solid #ff6b3d;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    padding: 14px 18px;
+    background: rgba(255, 255, 255, .045);
 }
 .fiscal-classic-title {
     display: flex;
@@ -37,8 +41,8 @@
     min-width: 0;
 }
 .fiscal-classic-icon {
-    width: 42px;
-    height: 42px;
+    width: 44px;
+    height: 44px;
     border-radius: 999px;
     display: inline-flex;
     align-items: center;
@@ -49,14 +53,14 @@
 }
 .fiscal-classic-heading {
     margin: 0;
-    font-size: 1.45rem;
+    font-size: 1rem;
     font-weight: 700;
     line-height: 1.1;
     color: #f8fafc;
 }
 .fiscal-classic-subcopy {
     margin: 4px 0 0;
-    font-size: 0.85rem;
+    font-size: 0.78rem;
     color: rgba(226, 232, 240, 0.78);
 }
 .fiscal-classic-actions {
@@ -70,9 +74,10 @@
     border: 1px solid rgba(255, 255, 255, 0.2);
     background: rgba(255, 255, 255, 0.05);
     color: #e5e7eb;
-    border-radius: 8px;
+    border-radius: 6px;
     padding: 7px 10px;
-    font-size: 0.79rem;
+    min-height: 30px;
+    font-size: 0.72rem;
     text-decoration: none;
     cursor: pointer;
     line-height: 1;
@@ -99,19 +104,25 @@
 .fiscal-classic-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 12px;
+    gap: 20px;
+    padding: 16px 18px 0;
 }
 .fiscal-classic-card {
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.13);
-    border-radius: 12px;
-    padding: 10px 12px;
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    padding: 0;
 }
 .fiscal-classic-card h3 {
+    width: max-content;
+    max-width: 100%;
     margin: 0 0 8px;
-    font-size: 0.95rem;
+    padding: 5px 10px;
+    background: rgba(255, 255, 255, .07);
+    font-size: 0.76rem;
     color: #ff875b;
     font-weight: 700;
+    letter-spacing: .02em;
 }
 .fiscal-state-line {
     display: inline-flex;
@@ -143,10 +154,10 @@
 }
 .fiscal-kv li {
     display: grid;
-    grid-template-columns: minmax(150px, 1fr) minmax(0, 1.45fr);
+    grid-template-columns: minmax(116px, auto) minmax(0, 1fr);
     gap: 8px;
     align-items: baseline;
-    border-bottom: 1px dashed rgba(255, 255, 255, 0.14);
+    border-bottom: 1px dashed rgba(255, 255, 255, 0.10);
     padding-bottom: 3px;
 }
 .fiscal-kv li:last-child {
@@ -154,28 +165,36 @@
     padding-bottom: 0;
 }
 .fiscal-kv-label {
-    color: rgba(226, 232, 240, 0.76);
+    color: rgba(226, 232, 240, 0.8);
+    font-size: .76rem;
 }
 .fiscal-kv-value {
     color: #f8fafc;
     font-weight: 600;
+    font-size: .82rem;
     word-break: break-word;
 }
 .fiscal-classic-collapsible-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 10px;
+    gap: 8px 24px;
+    padding: 0 18px;
 }
 .fiscal-detail-box {
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.13);
-    border-radius: 12px;
-    padding: 8px 10px;
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    padding: 0;
 }
 .fiscal-detail-box summary {
     cursor: pointer;
+    width: max-content;
+    max-width: 100%;
+    padding: 5px 10px;
+    background: rgba(255, 255, 255, .07);
     color: #ff875b;
     font-weight: 700;
+    font-size: .76rem;
     list-style: none;
 }
 .fiscal-detail-box summary::-webkit-details-marker {
@@ -192,6 +211,7 @@
 }
 .fiscal-detail-box-body {
     margin-top: 8px;
+    padding: 0 10px 6px;
 }
 .fiscal-products-head {
     display: flex;
@@ -201,9 +221,13 @@
     margin-bottom: 8px;
 }
 .fiscal-products-head h3 {
+    width: max-content;
+    max-width: 100%;
     margin: 0;
+    padding: 5px 10px;
+    background: rgba(255, 255, 255, .07);
     color: #ff875b;
-    font-size: 1rem;
+    font-size: .76rem;
 }
 .fiscal-products-head small {
     color: rgba(226, 232, 240, 0.75);
@@ -225,20 +249,24 @@
     color: #e5e7eb;
 }
 .fiscal-classic-table th {
-    color: #9ca3af;
+    color: #f8fafc;
     font-size: 0.79rem;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    background: rgba(255, 255, 255, 0.04);
+    text-transform: none;
+    letter-spacing: 0;
+    background: rgba(255, 255, 255, 0.045);
 }
 .fiscal-classic-bottom {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(280px, 0.42fr);
-    gap: 12px;
+    grid-template-columns: minmax(0, 1.6fr) minmax(280px, 0.72fr);
+    gap: 16px;
     align-items: start;
+    padding: 0 18px;
 }
 .fiscal-observations {
-    min-height: 130px;
+    min-height: 118px;
+    border: 1px solid rgba(255, 255, 255, .1);
+    background: rgba(255, 255, 255, .035);
+    padding: 12px 14px;
     white-space: pre-wrap;
     line-height: 1.45;
     color: #e5e7eb;
@@ -246,17 +274,17 @@
 .fiscal-total-box {
     margin-left: auto;
     width: 100%;
-    max-width: 360px;
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.13);
-    border-radius: 12px;
-    padding: 10px 12px;
+    max-width: none;
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    padding: 0 10px;
 }
 .fiscal-total-line {
     display: flex;
     justify-content: space-between;
     gap: 10px;
-    font-size: 0.96rem;
+    font-size: 0.82rem;
     color: #e5e7eb;
     margin-bottom: 5px;
 }
@@ -267,7 +295,7 @@
     margin-top: 8px;
     padding-top: 8px;
     border-top: 1px solid rgba(255, 255, 255, 0.16);
-    font-size: 1.5rem;
+    font-size: 1.35rem;
     font-weight: 800;
     color: #fff3ea;
 }
@@ -293,9 +321,29 @@
 }
 .fiscal-classic-footer {
     display: flex;
-    justify-content: space-between;
+    justify-content: center;
     gap: 10px;
     flex-wrap: wrap;
+    padding: 0 18px;
+}
+.fiscal-classic-sheet > .fiscal-classic-card {
+    margin: 0 18px;
+    padding: 12px 10px;
+    border-top: 1px solid rgba(255, 255, 255, .08);
+}
+.fiscal-movement-actions {
+    display: flex;
+    justify-content: center;
+    gap: 7px;
+    flex-wrap: wrap;
+    padding: 4px 18px 0;
+}
+.fiscal-movement-actions form {
+    margin: 0;
+}
+.fiscal-movement-actions .fiscal-classic-action {
+    min-width: 92px;
+    text-align: center;
 }
 .fiscal-related-details {
     position: relative;
@@ -341,6 +389,9 @@
     cursor: not-allowed;
 }
 @media (max-width: 1100px) {
+    .fiscal-classic-wrap {
+        max-width: calc(100vw - 28px);
+    }
     .fiscal-classic-grid,
     .fiscal-classic-collapsible-grid,
     .fiscal-classic-bottom {
@@ -367,7 +418,7 @@
             <div class="fiscal-classic-title">
                 <span class="fiscal-classic-icon" aria-hidden="true">&#128179;</span>
                 <div>
-                    <h2 class="fiscal-classic-heading">Ver la venta {{ fiscal_document.commercial_type_label }} {{ document_number_display }}</h2>
+                    <h2 class="fiscal-classic-heading">Modificar venta {{ fiscal_document.commercial_type_label }} {{ document_number_display }}</h2>
                     <p class="fiscal-classic-subcopy">
                         {{ fiscal_document.company.name }} | {{ fiscal_document.get_doc_type_display }} | {{ fiscal_document.get_issue_mode_display }}
                     </p>
@@ -681,6 +732,56 @@ Sin observaciones registradas para este comprobante.
                 {% endif %}
             </div>
         </details>
+
+        <div class="fiscal-movement-actions" aria-label="Acciones principales del comprobante">
+            {% if can_close_document %}
+            <form method="post" action="{% url 'admin_fiscal_document_close' fiscal_document.pk %}">
+                {% csrf_token %}
+                <button type="submit" class="fiscal-classic-action is-primary">Cerrar</button>
+            </form>
+            {% elif can_close_movement_from_fiscal and related_client_profile_id and movement_transaction %}
+            <form method="post" action="{% url 'admin_client_transaction_set_state' related_client_profile_id movement_transaction.pk %}">
+                {% csrf_token %}
+                <input type="hidden" name="state" value="closed">
+                <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                <button type="submit" class="fiscal-classic-action is-primary">Cerrar</button>
+            </form>
+            {% else %}
+            <span class="fiscal-classic-action is-disabled" title="{{ movement_close_reason|default:'No disponible' }}">Cerrar</span>
+            {% endif %}
+
+            {% if can_reopen_document %}
+            <form method="post" action="{% url 'admin_fiscal_document_reopen' fiscal_document.pk %}">
+                {% csrf_token %}
+                <button type="submit" class="fiscal-classic-action">Dejar abierta</button>
+            </form>
+            {% elif can_open_movement_from_fiscal and related_client_profile_id and movement_transaction %}
+            <form method="post" action="{% url 'admin_client_transaction_set_state' related_client_profile_id movement_transaction.pk %}">
+                {% csrf_token %}
+                <input type="hidden" name="state" value="open">
+                <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                <button type="submit" class="fiscal-classic-action">Dejar abierta</button>
+            </form>
+            {% else %}
+            <span class="fiscal-classic-action is-disabled" title="{{ movement_open_reason|default:'No disponible' }}">Dejar abierta</span>
+            {% endif %}
+
+            {% if can_void_document %}
+            <form method="post" action="{% url 'admin_fiscal_document_void' fiscal_document.pk %}">
+                {% csrf_token %}
+                <button type="submit" class="fiscal-classic-action is-danger" onclick="return confirm('Anular este comprobante?');">Anular</button>
+            </form>
+            {% elif can_void_movement_from_fiscal and related_client_profile_id and movement_transaction %}
+            <form method="post" action="{% url 'admin_client_transaction_set_state' related_client_profile_id movement_transaction.pk %}">
+                {% csrf_token %}
+                <input type="hidden" name="state" value="voided">
+                <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                <button type="submit" class="fiscal-classic-action is-danger" onclick="return confirm('Anular este movimiento?');">Anular</button>
+            </form>
+            {% else %}
+            <span class="fiscal-classic-action is-disabled">Anular</span>
+            {% endif %}
+        </div>
 
         <div class="fiscal-classic-footer">
             <a href="{% url 'admin_fiscal_document_list' %}" class="fiscal-classic-action"><- Volver a comprobantes</a>

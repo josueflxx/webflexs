@@ -159,6 +159,10 @@ from admin_panel.forms.export_forms import (
 )
 from admin_panel.forms.sales_document_type_forms import SalesDocumentTypeForm, WarehouseForm
 from catalog.services.product_importer import ProductImporter
+from catalog.services.import_templates import (
+    build_import_template_filename,
+    build_product_import_template_workbook,
+)
 from accounts.services.client_importer import ClientImporter
 from catalog.services.category_importer import CategoryImporter
 from catalog.services.abrazadera_importer import AbrazaderaImporter
@@ -188,6 +192,7 @@ from catalog.services.category_assignment import (
     remove_category_from_products,
 )
 from core.services.import_manager import ImportTaskManager
+from core.services.importer import sanitize_import_data
 from core.services.background_jobs import dispatch_import_job
 from core.services.fiscal import (
     is_company_fiscal_ready,
@@ -292,6 +297,218 @@ from .helpers import *
 
 # ===================== IMPORTERS =====================
 
+def _import_row_errors(result, limit=50):
+    return [
+        {
+            'row': row.row_number,
+            'message': '; '.join(str(error) for error in (row.errors or [])),
+            'data': sanitize_import_data(getattr(row, 'data', {}) or {}),
+        }
+        for row in result.row_results
+        if not row.success
+    ][:limit]
+
+
+def _resolve_import_classes(import_type):
+    if import_type == 'products':
+        return ProductImportForm, ProductImporter
+    if import_type == 'clients':
+        return ClientImportForm, ClientImporter
+    if import_type == 'categories':
+        return CategoryImportForm, CategoryImporter
+    if import_type == 'abrazaderas':
+        return ProductImportForm, AbrazaderaImporter
+    return None, None
+
+
+def _cell_value(value):
+    value = sanitize_import_data(value)
+    if isinstance(value, (dict, list)):
+        return json.dumps(value, ensure_ascii=False)
+    return value
+
+
+def _extract_duplicate_rows(result):
+    rows = []
+    for row in result.row_results:
+        message = '; '.join(str(error) for error in (row.errors or []))
+        data = sanitize_import_data(getattr(row, 'data', {}) or {})
+        if not data.get('_duplicate_sku') and 'duplicado dentro del archivo' not in message.lower():
+            continue
+
+        first_data = sanitize_import_data(data.get('_duplicate_first_data') or {})
+        rows.append({
+            'sku': data.get('_duplicate_sku') or data.get('sku') or data.get('codigo') or '',
+            'first_row': data.get('_duplicate_first_row') or '',
+            'duplicate_row': row.row_number,
+            'first_name': first_data.get('nombre') or first_data.get('descripcion') or '',
+            'duplicate_name': data.get('nombre') or data.get('descripcion') or '',
+            'first_supplier': first_data.get('proveedor') or '',
+            'duplicate_supplier': data.get('proveedor') or '',
+            'first_category': first_data.get('rubro') or first_data.get('categoria') or '',
+            'duplicate_category': data.get('rubro') or data.get('categoria') or '',
+            'first_price': first_data.get('precio_final') or first_data.get('precio') or '',
+            'duplicate_price': data.get('precio_final') or data.get('precio') or '',
+            'first_cost': first_data.get('costo') or '',
+            'duplicate_cost': data.get('costo') or '',
+            'message': message,
+            'suggestion': 'Si son el mismo producto, deja una sola fila. Si son productos distintos, asigna un Codigo unico al duplicado.',
+        })
+    return rows
+
+
+def _import_duplicate_warnings(result, limit=50):
+    return [
+        {
+            'row': row.row_number,
+            'message': '; '.join(str(error) for error in (row.errors or []))
+            or 'SKU duplicado dentro del archivo.',
+            'data': sanitize_import_data(getattr(row, 'data', {}) or {}),
+        }
+        for row in result.row_results
+        if (getattr(row, 'data', {}) or {}).get('_duplicate_sku')
+    ][:limit]
+
+
+def _build_import_diagnostic_workbook(result, import_type):
+    workbook = Workbook()
+    duplicate_sheet = workbook.active
+    duplicate_sheet.title = 'Duplicados'
+
+    duplicate_headers = [
+        'Codigo',
+        'Fila original',
+        'Nombre original',
+        'Proveedor original',
+        'Rubro original',
+        'Precio final original',
+        'Costo original',
+        'Fila duplicada',
+        'Nombre duplicado',
+        'Proveedor duplicado',
+        'Rubro duplicado',
+        'Precio final duplicado',
+        'Costo duplicado',
+        'Mensaje',
+        'Sugerencia',
+    ]
+    duplicate_sheet.append(duplicate_headers)
+
+    duplicate_rows = _extract_duplicate_rows(result)
+    for item in duplicate_rows:
+        duplicate_sheet.append([
+            _cell_value(item['sku']),
+            _cell_value(item['first_row']),
+            _cell_value(item['first_name']),
+            _cell_value(item['first_supplier']),
+            _cell_value(item['first_category']),
+            _cell_value(item['first_price']),
+            _cell_value(item['first_cost']),
+            _cell_value(item['duplicate_row']),
+            _cell_value(item['duplicate_name']),
+            _cell_value(item['duplicate_supplier']),
+            _cell_value(item['duplicate_category']),
+            _cell_value(item['duplicate_price']),
+            _cell_value(item['duplicate_cost']),
+            _cell_value(item['message']),
+            _cell_value(item['suggestion']),
+        ])
+
+    if not duplicate_rows:
+        duplicate_sheet.append(['Sin SKUs duplicados detectados.'])
+
+    error_sheet = workbook.create_sheet('Todos los errores')
+    error_sheet.append(['Fila', 'Codigo', 'Nombre', 'Proveedor', 'Rubro', 'Precio final', 'Costo', 'Mensaje'])
+    for row in result.row_results:
+        if getattr(row, 'success', False):
+            continue
+        data = sanitize_import_data(getattr(row, 'data', {}) or {})
+        error_sheet.append([
+            _cell_value(row.row_number),
+            _cell_value(data.get('_duplicate_sku') or data.get('sku') or data.get('codigo') or ''),
+            _cell_value(data.get('nombre') or data.get('descripcion') or ''),
+            _cell_value(data.get('proveedor') or ''),
+            _cell_value(data.get('rubro') or data.get('categoria') or ''),
+            _cell_value(data.get('precio_final') or data.get('precio') or ''),
+            _cell_value(data.get('costo') or ''),
+            _cell_value('; '.join(str(error) for error in (row.errors or []))),
+        ])
+
+    summary = workbook.create_sheet('Resumen', 0)
+    summary.append(['Tipo de importacion', import_type])
+    summary.append(['Filas', result.total_rows])
+    summary.append(['Creados simulados', result.created])
+    summary.append(['Actualizados simulados', result.updated])
+    summary.append(['Errores', result.errors])
+    summary.append(['Duplicados', len(duplicate_rows)])
+    summary.append([])
+    summary.append(['Lectura recomendada'])
+    summary.append(['1', 'Revisar la hoja Duplicados.'])
+    summary.append(['2', 'Si dos filas son el mismo producto, dejar una sola.'])
+    summary.append(['3', 'Si son productos distintos, cambiar el Codigo del duplicado por uno unico.'])
+    summary.append(['4', 'Volver a correr Vista previa antes de importar en real.'])
+
+    for sheet in workbook.worksheets:
+        for column_cells in sheet.columns:
+            max_length = 0
+            column_letter = column_cells[0].column_letter
+            for cell in column_cells:
+                max_length = max(max_length, len(str(cell.value or '')))
+            sheet.column_dimensions[column_letter].width = min(max(max_length + 2, 12), 48)
+        sheet.freeze_panes = 'A2'
+
+    return workbook
+
+
+@user_passes_test(is_primary_superadmin)
+@require_POST
+def import_diagnostic_download(request, import_type):
+    """Build an XLSX diagnostic report for dry-run validation errors."""
+    FormClass, ImporterClass = _resolve_import_classes(import_type)
+    if not ImporterClass:
+        return JsonResponse({'success': False, 'error': 'Tipo de importacion no valido.'}, status=400)
+    if 'file' not in request.FILES:
+        return JsonResponse({'success': False, 'error': 'Selecciona un archivo para diagnosticar.'}, status=400)
+
+    uploaded_file = request.FILES['file']
+    temp_dir = os.path.join(settings.BASE_DIR, 'media', 'temp_imports')
+    os.makedirs(temp_dir, exist_ok=True)
+    file_basename = os.path.basename(uploaded_file.name)
+    stamp = timezone.now().strftime('%Y%m%d%H%M%S%f')
+    file_path = os.path.join(temp_dir, f'diagnostic_{stamp}_{file_basename}')
+
+    try:
+        with open(file_path, 'wb+') as destination:
+            for chunk in uploaded_file.chunks():
+                destination.write(chunk)
+
+        importer = ImporterClass(file_path)
+        preview = importer.run(dry_run=True)
+        workbook = _build_import_diagnostic_workbook(preview, import_type)
+        output = BytesIO()
+        workbook.save(output)
+        output.seek(0)
+
+        response = HttpResponse(
+            output.getvalue(),
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        )
+        filename_stamp = timezone.now().strftime('%Y%m%d_%H%M%S')
+        response['Content-Disposition'] = (
+            f'attachment; filename="diagnostico_importacion_{import_type}_{filename_stamp}.xlsx"'
+        )
+        return response
+    except Exception:
+        logger.exception('Error building import diagnostic report')
+        return JsonResponse({'success': False, 'error': 'No se pudo generar el diagnostico.'}, status=500)
+    finally:
+        try:
+            if os.path.exists(file_path):
+                os.remove(file_path)
+        except OSError:
+            pass
+
+
 def run_background_import(task_id, execution_id, import_type, ImporterClass, file_path, dry_run):
     """Function to run in a separate thread."""
     execution = ImportExecution.objects.filter(pk=execution_id).first()
@@ -300,10 +517,7 @@ def run_background_import(task_id, execution_id, import_type, ImporterClass, fil
         if not dry_run:
             preflight_importer = ImporterClass(file_path)
             preflight_result = preflight_importer.run(dry_run=True)
-            preflight_errors = [
-                {'row': r.row_number, 'message': str(r.errors)}
-                for r in preflight_result.row_results if not r.success
-            ][:50]
+            preflight_errors = _import_row_errors(preflight_result)
             if preflight_result.has_errors:
                 result_data = {
                     'created': 0,
@@ -336,10 +550,9 @@ def run_background_import(task_id, execution_id, import_type, ImporterClass, fil
             'updated': result.updated,
             'errors': result.errors,
             'has_errors': result.has_errors,
-            'row_errors': [
-                {'row': r.row_number, 'message': str(r.errors)}
-                for r in result.row_results if not r.success
-            ][:50],
+            'row_errors': _import_row_errors(result),
+            'duplicate_count': len(_extract_duplicate_rows(result)),
+            'duplicate_warnings': _import_duplicate_warnings(result),
             'preflight_errors': preflight_errors,
             'execution_id': execution_id,
             'import_type': import_type,
@@ -462,6 +675,26 @@ def import_dashboard(request):
 
 
 @user_passes_test(is_primary_superadmin)
+def import_template_download(request, import_type):
+    if import_type not in ("products", "abrazaderas"):
+        messages.error(request, "Este tipo de importacion no tiene plantilla descargable.")
+        return redirect("admin_import_dashboard")
+
+    workbook = build_product_import_template_workbook(import_type=import_type)
+    output = BytesIO()
+    workbook.save(output)
+    output.seek(0)
+
+    response = HttpResponse(
+        output.getvalue(),
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+    filename = build_import_template_filename(import_type)
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    return response
+
+
+@user_passes_test(is_primary_superadmin)
 def import_process(request, import_type):
     """Handle file upload and processing for imports."""
     active_company = get_active_company(request)
@@ -521,10 +754,9 @@ def import_process(request, import_type):
                             'updated': preview.updated,
                             'errors': preview.errors,
                             'has_errors': preview.has_errors,
-                            'row_errors': [
-                                {'row': r.row_number, 'message': str(r.errors)}
-                                for r in preview.row_results if not r.success
-                            ][:50],
+                            'row_errors': _import_row_errors(preview),
+                            'duplicate_count': len(_extract_duplicate_rows(preview)),
+                            'duplicate_warnings': _import_duplicate_warnings(preview),
                         },
                     })
 
@@ -740,4 +972,4 @@ def category_delete_all(request):
     messages.success(request, f'Se eliminaron {count} categorías correctamente.')
     return redirect('admin_category_list')
 
-__all__ = ['run_background_import', 'import_status', 'import_dashboard', 'import_process', 'import_rollback', 'product_delete_all', 'client_delete_all', 'category_delete_all']
+__all__ = ['run_background_import', 'import_status', 'import_dashboard', 'import_template_download', 'import_diagnostic_download', 'import_process', 'import_rollback', 'product_delete_all', 'client_delete_all', 'category_delete_all']

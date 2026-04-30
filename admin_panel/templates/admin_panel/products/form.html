@@ -7,6 +7,23 @@
 <div class="admin-form-container">
     <h2>{{ action }} Producto</h2>
 
+    {% if product.import_duplicate_alert %}
+    <div class="alert alert-warning product-duplicate-alert">
+        <strong>Producto con duplicados en la ultima importacion</strong>
+        <p>
+            Este codigo aparecio mas de una vez en el Excel. Se importo la primera aparicion
+            y las demas quedaron registradas como aviso para revisar.
+        </p>
+        <div class="product-duplicate-meta">
+            <span>Fila original: {{ product.import_duplicate_original_row|default:"-" }}</span>
+            <span>Duplicados detectados: {{ product.import_duplicate_count|default:"-" }}</span>
+        </div>
+        {% if product.import_duplicate_detail %}
+        <pre>{{ product.import_duplicate_detail }}</pre>
+        {% endif %}
+    </div>
+    {% endif %}
+
     <form method="post" enctype="multipart/form-data">
         {% csrf_token %}
 
@@ -80,6 +97,18 @@
                    class="form-input" 
                    required 
                    value="{% if product %}{{ product.price|unlocalize }}{% else %}0{% endif %}" 
+                   {% if not user.is_superuser %}disabled{% endif %}>
+            <small class="text-muted">En importaciones SaaS se usa Precio Final ($) como precio de catalogo.</small>
+        </div>
+
+        <div class="form-group">
+            <label for="cost" class="form-label">Costo</label>
+            <input type="number"
+                   step="0.01"
+                   name="cost"
+                   id="cost"
+                   class="form-input"
+                   value="{% if product %}{{ product.cost|unlocalize }}{% else %}0{% endif %}"
                    {% if not user.is_superuser %}disabled{% endif %}>
         </div>
 
@@ -162,6 +191,22 @@
         </div>
 
         {% if product %}
+        {% if product.visible_import_attributes %}
+        <div class="form-group product-source-card">
+            <div class="product-source-head">
+                <span>Datos importados y tecnicos</span>
+                <small>Se conservan al editar el producto.</small>
+            </div>
+            <div class="product-source-grid">
+                {% for key, value in product.visible_import_attributes.items %}
+                <div class="product-source-item">
+                    <strong>{{ key }}</strong>
+                    <span>{{ value }}</span>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
         <div class="form-group">
             <label class="form-label">
                 <input type="checkbox" 
@@ -236,6 +281,77 @@
         border-radius: 8px;
         border: 1px solid rgba(255, 255, 255, 0.16);
         background: rgba(255, 255, 255, 0.04);
+    }
+    .product-source-card {
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.035);
+        padding: 14px;
+    }
+    .product-source-head {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        align-items: baseline;
+        margin-bottom: 10px;
+        color: var(--color-white);
+        font-weight: 700;
+    }
+    .product-source-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 8px;
+    }
+    .product-source-item {
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 8px;
+        padding: 8px 10px;
+        background: rgba(0, 0, 0, 0.18);
+        min-width: 0;
+    }
+    .product-source-item strong {
+        display: block;
+        color: var(--color-primary);
+        font-size: 0.74rem;
+        text-transform: uppercase;
+        letter-spacing: 0;
+        margin-bottom: 4px;
+    }
+    .product-source-item span {
+        display: block;
+        color: var(--color-white);
+        overflow-wrap: anywhere;
+    }
+    .product-duplicate-alert {
+        border-color: rgba(255, 193, 7, 0.55);
+        background: rgba(255, 193, 7, 0.08);
+    }
+    .product-duplicate-alert p {
+        margin: 6px 0 10px;
+    }
+    .product-duplicate-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 10px;
+    }
+    .product-duplicate-meta span {
+        border: 1px solid rgba(255, 193, 7, 0.3);
+        border-radius: 8px;
+        padding: 5px 8px;
+        background: rgba(0, 0, 0, 0.16);
+        font-weight: 700;
+    }
+    .product-duplicate-alert pre {
+        max-height: 180px;
+        overflow: auto;
+        white-space: pre-wrap;
+        margin: 0;
+        padding: 10px;
+        border-radius: 8px;
+        background: rgba(0, 0, 0, 0.24);
+        color: var(--color-white);
+        font-size: 0.86rem;
     }
 </style>
 
@@ -399,7 +515,7 @@
 
     function collectAttributes() {
         const fields = document.querySelectorAll('.attr-field');
-        const attributes = {};
+        const attributes = { ...currentAttributes };
         const missingRequired = [];
         const missingRecommended = [];
 
@@ -407,6 +523,7 @@
             if (field.value) {
                 attributes[field.dataset.slug] = field.value;
             } else {
+                delete attributes[field.dataset.slug];
                 if (field.dataset.required === '1') {
                     missingRequired.push(field.dataset.slug);
                 } else if (field.dataset.recommended === '1') {

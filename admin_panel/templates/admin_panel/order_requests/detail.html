@@ -541,53 +541,71 @@
     .admin-detail-page {
         display: flex;
         flex-direction: column;
-        gap: 16px;
+        gap: 12px;
+        max-width: 1320px;
+        margin: 0 auto;
     }
     .admin-card {
         background: var(--admin-card-bg, #121824);
         border: 1px solid var(--admin-border, rgba(255, 255, 255, 0.08));
-        border-radius: 14px;
-        padding: 16px;
+        border-radius: 10px;
+        padding: 12px 14px;
     }
     .detail-header {
         display: flex;
         justify-content: space-between;
         align-items: start;
-        gap: 12px;
-        margin-bottom: 12px;
+        gap: 10px;
+        margin-bottom: 9px;
+    }
+    .detail-header h2 {
+        font-size: 1.08rem;
+        line-height: 1.18;
+    }
+    .detail-header h3,
+    .admin-card > h3 {
+        font-size: .98rem;
+        line-height: 1.2;
     }
     .detail-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-        gap: 14px;
+        grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+        gap: 9px 12px;
+    }
+    .detail-grid strong {
+        font-size: .78rem;
+    }
+    .detail-grid p {
+        font-size: .84rem;
     }
     .request-flow-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-        gap: 12px;
+        grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+        gap: 10px;
     }
     .request-flow-card {
         display: grid;
-        gap: 8px;
-        padding: 14px;
-        border-radius: 14px;
+        gap: 6px;
+        padding: 11px 12px;
+        border-radius: 10px;
         border: 1px solid rgba(255,255,255,.08);
         background: linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.02));
     }
     .request-flow-card strong {
         color: #fff;
-        font-size: 1rem;
+        font-size: .9rem;
     }
     .request-flow-card small {
         color: var(--color-gray-light);
-        line-height: 1.4;
+        font-size: .76rem;
+        line-height: 1.35;
     }
     .request-flow-kicker {
         display: inline-flex;
         width: fit-content;
-        padding: 4px 8px;
+        padding: 3px 8px;
         border-radius: 999px;
-        font-size: .72rem;
+        font-size: .65rem;
         letter-spacing: .05em;
         text-transform: uppercase;
         color: #ffd1c2;
@@ -597,14 +615,14 @@
     .request-flow-meta {
         display: flex;
         flex-wrap: wrap;
-        gap: 8px;
+        gap: 6px;
         margin-top: auto;
     }
     .request-flow-meta span {
         display: inline-flex;
-        padding: 5px 8px;
+        padding: 3px 7px;
         border-radius: 999px;
-        font-size: .75rem;
+        font-size: .69rem;
         color: #edf2f7;
         background: rgba(255,255,255,.05);
         border: 1px solid rgba(255,255,255,.08);
@@ -623,18 +641,22 @@
     .detail-header h3 {
         margin: 0;
     }
+    .admin-card p {
+        font-size: .82rem;
+        line-height: 1.38;
+    }
     .action-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-        gap: 14px;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 11px;
     }
     .stack-form {
         display: flex;
         flex-direction: column;
-        gap: 10px;
+        gap: 8px;
     }
     .form-textarea {
-        min-height: 92px;
+        min-height: 78px;
     }
     .proposal-lines {
         overflow-x: auto;

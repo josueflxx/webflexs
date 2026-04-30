@@ -153,6 +153,8 @@ document.addEventListener('DOMContentLoaded', function () {
         ].join(',');
 
         const adminWheelScrollSelector = [
+            '.admin-top-nav',
+            '.header-user',
             '.products-table-wrapper',
             '.category-table-wrap',
             '.execution-table-wrap',

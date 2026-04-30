@@ -4,13 +4,28 @@ from io import BytesIO
 from django.contrib.auth.models import User
 from django.test import SimpleTestCase, TestCase
 from django.urls import reverse
-from openpyxl import load_workbook
+from openpyxl import Workbook, load_workbook
 
 from accounts.models import ClientProfile
+from catalog.services.abrazadera_importer import AbrazaderaImporter
 from catalog.services.clamp_code import generarCodigo, parsearCodigo
+from catalog.services.product_importer import ProductImporter
 from catalog.models import Category, ClampMeasureRequest, ClampSpecs, Product
 from core.models import CatalogExcelTemplate, CatalogExcelTemplateColumn, CatalogExcelTemplateSheet
 from orders.models import CartItem
+
+
+def build_import_workbook(headers, rows):
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "Importacion"
+    sheet.append(headers)
+    for row in rows:
+        sheet.append(row)
+    output = BytesIO()
+    workbook.save(output)
+    output.seek(0)
+    return output
 
 
 class ClampCodeTests(SimpleTestCase):
@@ -99,6 +114,272 @@ class ClampCodeTests(SimpleTestCase):
                 forma="P",
                 strict_diameter_mapping=True,
             )
+
+
+class ProductImportTests(TestCase):
+    def test_product_import_accepts_header_file_without_supplier(self):
+        file_obj = build_import_workbook(
+            ["SKU", "Nombre", "Precio", "Stock", "Categoria", "Atributos"],
+            [["IMP-001", "Producto importado", 100.5, 4, "Prueba", "Color:Rojo;Material:Acero"]],
+        )
+
+        result = ProductImporter(file_obj).run(dry_run=False)
+
+        self.assertEqual(result.errors, 0)
+        product = Product.objects.get(sku="IMP-001")
+        self.assertEqual(product.name, "Producto importado")
+        self.assertEqual(product.price, Decimal("100.50"))
+        self.assertEqual(product.stock, 4)
+        self.assertTrue(product.categories.filter(name="Prueba").exists())
+        self.assertEqual(product.attributes, {"Color": "Rojo", "Material": "Acero"})
+
+    def test_product_import_parses_argentine_money_and_preserves_existing_blanks(self):
+        supplier_category = Category.objects.create(name="Existentes")
+        product = Product.objects.create(
+            sku="IMP-002",
+            name="Producto viejo",
+            supplier="Proveedor Actual",
+            price=Decimal("10.00"),
+            stock=7,
+            category=supplier_category,
+        )
+        product.categories.add(supplier_category)
+        file_obj = build_import_workbook(
+            ["Codigo", "Articulo", "Venta", "Costo", "Stock", "Proveedor"],
+            [["IMP-002", "Producto nuevo", "$ 12.500,50", "ARS 1.250", "", ""]],
+        )
+
+        result = ProductImporter(file_obj).run(dry_run=False)
+
+        self.assertEqual(result.errors, 0)
+        product.refresh_from_db()
+        self.assertEqual(product.name, "Producto nuevo")
+        self.assertEqual(product.price, Decimal("12500.50"))
+        self.assertEqual(product.cost, Decimal("1250.00"))
+        self.assertEqual(product.stock, 7)
+        self.assertEqual(product.supplier, "Proveedor Actual")
+
+    def test_product_import_updates_filters_for_existing_products(self):
+        product = Product.objects.create(
+            sku="IMP-FILTERS",
+            name="Producto con filtros",
+            price=Decimal("10.00"),
+            stock=1,
+            filter_1="Viejo",
+        )
+        file_obj = build_import_workbook(
+            ["SKU", "Nombre", "Precio", "Filtro 1", "Filtro 2", "Filtro 5"],
+            [["IMP-FILTERS", "Producto con filtros", "", "Camion", "Suspension", "Pesado"]],
+        )
+
+        result = ProductImporter(file_obj).run(dry_run=False)
+
+        self.assertEqual(result.errors, 0)
+        product.refresh_from_db()
+        self.assertEqual(product.filter_1, "Camion")
+        self.assertEqual(product.filter_2, "Suspension")
+        self.assertEqual(product.filter_5, "Pesado")
+
+    def test_product_import_builds_attributes_from_technical_columns(self):
+        file_obj = build_import_workbook(
+            [
+                "Codigo Flexs",
+                "Nombre producto",
+                "Precio lista",
+                "Stock",
+                "Familia",
+                "Subfamilia",
+                "Estado",
+                "Diametro",
+                "Ancho",
+                "Largo",
+                "Forma",
+                "Atributos",
+            ],
+            [
+                [
+                    "IMP-TECH",
+                    "ABRAZADERA TREFILADA DE 1/2 X 80 X 220 CURVA",
+                    "1.250,75",
+                    12,
+                    "Abrazaderas",
+                    "Trefiladas",
+                    "X",
+                    "1/2",
+                    80,
+                    220,
+                    "Curva",
+                    "Color:Negro",
+                ]
+            ],
+        )
+
+        result = ProductImporter(file_obj).run(dry_run=False)
+
+        self.assertEqual(result.errors, 0)
+        product = Product.objects.get(sku="IMP-TECH")
+        self.assertTrue(product.is_active)
+        self.assertEqual(product.price, Decimal("1250.75"))
+        self.assertTrue(product.categories.filter(name="Trefiladas").exists())
+        self.assertEqual(product.attributes["Color"], "Negro")
+        self.assertEqual(product.attributes["Diametro"], "1/2")
+        self.assertEqual(product.attributes["Ancho"], "80")
+        self.assertEqual(product.attributes["Largo"], "220")
+        self.assertEqual(product.attributes["Forma"], "Curva")
+
+    def test_product_import_adapts_saas_export_columns(self):
+        file_obj = build_import_workbook(
+            [
+                "Nº de producto",
+                "Estado",
+                "Rubro",
+                "Nombre",
+                "Código",
+                "Código universal de producto (UPC)",
+                "Código de proveedor",
+                "Unidad",
+                "Alicuota de IVA",
+                "Proveedor",
+                "Costo ($)",
+                "Utilidad (%)",
+                "Precio ($)",
+                "Precio Final ($)",
+                "Mostrar en tienda",
+            ],
+            [
+                [
+                    918,
+                    "Habilitado",
+                    "BUJE ARMADO",
+                    "BUJE DEMO SAAS",
+                    "SAAS-001",
+                    "7791234567890",
+                    "PROV-55",
+                    "unidad",
+                    "21%",
+                    "MOVIGOM S.R.L.",
+                    "1.000,00",
+                    "1",
+                    "10.000,00",
+                    "12.100,00",
+                    "no",
+                ]
+            ],
+        )
+
+        result = ProductImporter(file_obj).run(dry_run=False)
+
+        self.assertEqual(result.errors, 0)
+        product = Product.objects.get(sku="SAAS-001")
+        self.assertEqual(product.price, Decimal("12100.00"))
+        self.assertEqual(product.cost, Decimal("1000.00"))
+        self.assertTrue(product.is_active)
+        self.assertEqual(product.attributes["Numero SaaS"], "918")
+        self.assertEqual(product.attributes["Codigo proveedor"], "PROV-55")
+        self.assertEqual(product.attributes["UPC"], "7791234567890")
+        self.assertEqual(product.attributes["IVA"], "21%")
+        self.assertEqual(product.attributes["Precio neto SaaS"], "10.000,00")
+        self.assertEqual(product.attributes["Precio final SaaS"], "12.100,00")
+        self.assertEqual(product.attributes["Origen importacion"], "SaaS Argentina")
+
+    def test_product_import_places_saas_clamps_under_parent_category(self):
+        file_obj = build_import_workbook(
+            ["Rubro", "Nombre", "Código", "Precio Final ($)", "Proveedor"],
+            [
+                [
+                    "ABRAZADERA DE 5/8",
+                    "ABRAZADERA TREFILADA DE 5/8 X 80 X 220 CURVA",
+                    "SAAS-ABR-001",
+                    2500,
+                    "ROCES",
+                ]
+            ],
+        )
+
+        result = ProductImporter(file_obj).run(dry_run=False)
+
+        self.assertEqual(result.errors, 0)
+        product = Product.objects.get(sku="SAAS-ABR-001")
+        self.assertTrue(product.categories.filter(name__iexact="ABRAZADERAS").exists())
+        subcategory = product.categories.get(name="ABRAZADERA DE 5/8")
+        self.assertEqual(subcategory.parent.name, "ABRAZADERAS")
+
+    def test_product_import_rejects_invalid_active_value(self):
+        file_obj = build_import_workbook(
+            ["SKU", "Nombre", "Precio", "Activo"],
+            [["IMP-ACTIVE", "Producto", 10, "tal vez"]],
+        )
+
+        result = ProductImporter(file_obj).run(dry_run=True)
+
+        self.assertEqual(result.errors, 1)
+        self.assertIn("Activo invalido", result.row_results[0].errors[0])
+
+    def test_product_import_reports_duplicate_sku_inside_file(self):
+        file_obj = build_import_workbook(
+            ["SKU", "Nombre", "Precio"],
+            [
+                ["IMP-DUP", "Uno", 100],
+                ["IMP-DUP", "Dos", 200],
+            ],
+        )
+
+        result = ProductImporter(file_obj).run(dry_run=True)
+
+        self.assertEqual(result.errors, 0)
+        self.assertTrue(result.row_results[1].success)
+        self.assertEqual(result.row_results[1].action, "skipped")
+        self.assertIn("SKU duplicado", result.row_results[1].errors[0])
+        self.assertEqual(result.row_results[1].data["_duplicate_sku"], "IMP-DUP")
+        self.assertEqual(result.row_results[1].data["_duplicate_first_row"], 2)
+        self.assertEqual(result.row_results[1].data["_duplicate_first_data"]["nombre"], "Uno")
+
+    def test_product_import_records_duplicate_warning_on_product(self):
+        file_obj = build_import_workbook(
+            ["SKU", "Nombre", "Precio", "Proveedor", "Rubro"],
+            [
+                ["IMP-DUP-REAL", "Producto principal", 100, "Proveedor A", "Rubro A"],
+                ["IMP-DUP-REAL", "Producto alternativo", 200, "Proveedor B", "Rubro B"],
+            ],
+        )
+
+        result = ProductImporter(file_obj).run(dry_run=False)
+
+        self.assertEqual(result.errors, 0)
+        self.assertEqual(result.created, 1)
+        product = Product.objects.get(sku="IMP-DUP-REAL")
+        self.assertEqual(product.name, "Producto principal")
+        self.assertEqual(product.attributes["Duplicado en importacion"], "Si")
+        self.assertEqual(product.attributes["Duplicados importacion"], "1")
+        self.assertIn("Fila 3 contra fila 2", product.attributes["Detalle duplicados importacion"])
+        self.assertIn("Producto alternativo", product.attributes["Detalle duplicados importacion"])
+
+    def test_abrazadera_import_accepts_product_style_headers(self):
+        file_obj = build_import_workbook(
+            ["sku", "nombre", "precio", "stock", "categoria"],
+            [["ABR-IMP", "ABRAZADERA TREFILADA DE 1/2 X 85 X 260 CURVA", "1.250,75", 12, "Abrazaderas"]],
+        )
+
+        result = AbrazaderaImporter(file_obj).run(dry_run=False)
+
+        self.assertEqual(result.errors, 0)
+        product = Product.objects.get(sku="ABR-IMP")
+        self.assertEqual(product.price, Decimal("1250.75"))
+        self.assertEqual(product.stock, 12)
+        self.assertTrue(product.categories.filter(name="Abrazaderas").exists())
+        self.assertTrue(hasattr(product, "clamp_specs"))
+
+    def test_abrazadera_import_skips_non_clamp_rows(self):
+        file_obj = build_import_workbook(
+            ["Codigo", "Nombre", "Rubro", "Precio Final ($)"],
+            [["BUJE-IMP", "BUJE DE GOMA DEMO", "BUJE DE GOMA", "1000"]],
+        )
+
+        result = AbrazaderaImporter(file_obj).run(dry_run=False)
+
+        self.assertEqual(result.errors, 0)
+        self.assertEqual(result.created, 0)
+        self.assertFalse(Product.objects.filter(sku="BUJE-IMP").exists())
 
 
 class ClampMeasureRequestFlowTests(TestCase):

@@ -54,7 +54,11 @@
                         <div class="sales-hub-record">{{ row.record_label }}</div>
                     </td>
                     <td class="sales-hub-client-cell">
-                        {{ row.client_name }}
+                        {% if row.secondary_url %}
+                        <a href="{{ row.secondary_url }}" class="sales-hub-client-link">{{ row.client_name }}</a>
+                        {% else %}
+                        <span class="sales-hub-client-name">{{ row.client_name }}</span>
+                        {% endif %}
                         <div class="text-muted admin-meta-text">{{ row.company_name }}</div>
                         {% if row.client_meta %}
                         <div class="text-muted admin-meta-text">{{ row.client_meta }}</div>
@@ -78,9 +82,6 @@
                     <td class="sales-hub-actions-cell">
                         <div class="sales-hub-actions">
                             <a href="{{ row.detail_url }}" class="btn btn-primary sales-hub-open-btn" title="{{ row.detail_label }}">Abrir</a>
-                            {% if row.secondary_url %}
-                            <a href="{{ row.secondary_url }}" class="btn btn-outline sales-hub-action-btn">{{ row.secondary_label }}</a>
-                            {% endif %}
                             {% if row.quick_payment_url %}
                             <a href="{{ row.quick_payment_url }}" class="btn btn-outline sales-hub-action-btn">Cobros</a>
                             {% endif %}
@@ -198,6 +199,25 @@
         min-width: 160px;
     }
 
+    .sales-hub-client-link,
+    .sales-hub-client-name {
+        display: inline-block;
+        color: #f8fafc;
+        font-weight: 700;
+        line-height: 1.25;
+        text-decoration: none;
+    }
+
+    .sales-hub-client-link {
+        border-bottom: 1px solid rgba(0, 197, 255, .42);
+        transition: color .16s ease, border-color .16s ease;
+    }
+
+    .sales-hub-client-link:hover {
+        color: #67e8f9;
+        border-color: rgba(103, 232, 249, .85);
+    }
+
     .sales-hub-reference-cell {
         min-width: 300px;
     }
@@ -246,7 +266,7 @@
         display: flex;
         gap: 6px;
         align-items: center;
-        min-width: 330px;
+        min-width: 260px;
         justify-content: flex-end;
         flex-wrap: nowrap;
     }

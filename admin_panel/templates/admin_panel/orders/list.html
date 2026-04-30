@@ -115,7 +115,19 @@
                 <td><strong>{{ order.pk }}</strong></td>
                 <td>{{ order.created_at|date:"d/m/Y H:i" }}</td>
                 <td>{{ order.company.name|default:"-" }}</td>
-                <td>{{ order.user.username|default:"N/A" }}</td>
+                <td>
+                    {% if order.quick_client_profile_id %}
+                    <a
+                        href="{% url 'admin_client_order_history' order.quick_client_profile_id %}"
+                        class="order-client-link"
+                        title="Abrir ficha del cliente"
+                    >
+                        {{ order.quick_client_display_name }}
+                    </a>
+                    {% else %}
+                    {{ order.quick_client_display_name|default:"N/A" }}
+                    {% endif %}
+                </td>
                 <td>{{ order.get_item_count }}</td>
                 <td>${{ order.total|floatformat:2 }}</td>
                 <td>
@@ -247,6 +259,19 @@
         display: inline-block;
         margin-right: 6px;
         z-index: 10;
+    }
+
+    .order-client-link {
+        color: #f8fafc;
+        font-weight: 800;
+        text-decoration: none;
+        border-bottom: 1px solid rgba(34, 211, 238, .45);
+        transition: color .16s ease, border-color .16s ease;
+    }
+
+    .order-client-link:hover {
+        color: #22d3ee;
+        border-bottom-color: rgba(34, 211, 238, .9);
     }
 
     .order-list-relate-menu[open] {

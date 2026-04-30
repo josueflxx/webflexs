@@ -42,6 +42,17 @@ class Command(BaseCommand):
             f"Cobro: #{result.payment.pk if result.payment else '-'} ref={result.payment.reference if result.payment else '-'}"
         )
         self.stdout.write(
+            f"Cuenta corriente demo: ${result.client_profile.get_current_balance(company=result.company):.2f}"
+        )
+        self.stdout.write("Confirmacion manual sugerida:")
+        self.stdout.write(f"  1. Abrir la solicitud web: /admin-panel/solicitudes/{result.order_request.pk}/")
+        self.stdout.write(f"  2. Abrir la ficha de venta: /admin-panel/pedidos/{result.order.pk}/")
+        self.stdout.write(f"  3. Abrir la ficha del cliente: /admin-panel/clientes/{result.client_profile.pk}/historial/")
+        if result.invoice:
+            self.stdout.write(f"  4. Abrir la factura: /admin-panel/fiscal/documentos/{result.invoice.pk}/")
+        if result.payment:
+            self.stdout.write("  5. Revisar el cobro en /admin-panel/pagos/")
+        self.stdout.write(
             "URLs sugeridas:"
             f" /admin-panel/pedidos/{result.order.pk}/"
             f" /admin-panel/solicitudes/{result.order_request.pk}/"

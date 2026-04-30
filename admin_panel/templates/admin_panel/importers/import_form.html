@@ -44,6 +44,32 @@
         color: var(--color-danger);
         font-size: 0.9rem;
     }
+
+    .error-zone.has-only-warnings {
+        color: #ffd166;
+    }
+
+    .error-zone small {
+        color: var(--color-text-muted);
+        display: block;
+        margin-top: 6px;
+    }
+
+    .import-template-action {
+        margin-top: 12px;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .preview-actions {
+        display: none;
+        margin-top: 12px;
+        gap: 10px;
+        flex-wrap: wrap;
+        align-items: center;
+    }
 </style>
 {% endblock %}
 
@@ -58,9 +84,23 @@
             <li>La primera fila debe contener encabezados validos.</li>
             <li>Activa "Dry run" para simular sin modificar datos.</li>
             {% if import_type == 'products' %}
-            <li>Formato productos: A=SKU, B=Nombre, C=Proveedor, D=Precio, E=Stock, F..J=Filtro_1..Filtro_5.</li>
+            <li>Productos acepta encabezados flexibles: SKU/Codigo, Nombre/Articulo, Proveedor, Precio/Venta, Costo, Stock, Categoria/Rubro/Subrubro y Activo.</li>
+            <li>Formato SaaS Argentina: Codigo es SKU, Precio Final ($) es el precio de catalogo y Precio ($) queda guardado como precio neto de origen.</li>
+            <li>Campos utiles de origen como Nro producto, Codigo proveedor, UPC, IVA, Unidad y Utilidad quedan guardados en atributos del producto.</li>
+            <li>Compatibilidad vieja: A=SKU, B=Nombre, C=Proveedor, D=Precio, E=Stock, F..J=Filtro_1..Filtro_5.</li>
+            <li>Las celdas vacias no borran datos existentes: solo actualizan campos con valores validos.</li>
+            {% elif import_type == 'abrazaderas' %}
+            <li>Abrazaderas acepta DESCRIPCION/CODIGO/PRECIO o SKU/NOMBRE/PRECIO/STOCK/CATEGORIA.</li>
+            <li>Se vinculan automaticamente a la categoria Abrazaderas y se intenta completar la ficha tecnica.</li>
+            <li>Las celdas vacias no borran datos existentes.</li>
             {% endif %}
         </ul>
+        {% if import_type == 'products' or import_type == 'abrazaderas' %}
+        <div class="import-template-action">
+            <a href="{% url 'admin_import_template_download' import_type %}" class="btn btn-outline btn-sm">Descargar plantilla Excel</a>
+            <small class="text-muted">Incluye ejemplos, columnas tecnicas y valores recomendados.</small>
+        </div>
+        {% endif %}
     </div>
 
     <form id="importForm" method="post" enctype="multipart/form-data">
@@ -106,6 +146,12 @@
         <h4>Vista previa de validacion</h4>
         <p id="previewSummary"></p>
         <div id="previewErrors" class="error-zone"></div>
+        <div id="previewReportActions" class="preview-actions">
+            <button type="button" id="btnDownloadDiagnostic" class="btn btn-outline btn-sm">
+                Descargar diagnostico Excel
+            </button>
+            <small class="text-muted">Incluye duplicados, filas originales y sugerencias de correccion.</small>
+        </div>
     </div>
 
     <div id="progressContainer" style="display: none; margin-top: 24px;">
@@ -128,6 +174,7 @@
 
 <script>
     const statusUrlTemplate = "{% url 'admin_import_status' '__TASK_ID__' %}";
+    const diagnosticUrl = "{% url 'admin_import_diagnostic_download' import_type %}";
     const dryRunCheckbox = document.getElementById('{{ form.dry_run.id_for_label }}');
     const confirmApplyCheckbox = document.getElementById('{{ form.confirm_apply.id_for_label }}');
 
@@ -155,6 +202,7 @@
         const previewContainer = document.getElementById('previewContainer');
         const previewSummary = document.getElementById('previewSummary');
         const previewErrors = document.getElementById('previewErrors');
+        const previewReportActions = document.getElementById('previewReportActions');
 
         try {
             const response = await fetch(window.location.href, {
@@ -175,17 +223,81 @@
                 <strong>Filas:</strong> ${preview.total_rows || 0}<br>
                 <strong>Creados (simulado):</strong> ${preview.created || 0}<br>
                 <strong>Actualizados (simulado):</strong> ${preview.updated || 0}<br>
-                <strong>Errores:</strong> ${preview.errors || 0}
+                <strong>Errores:</strong> ${preview.errors || 0}<br>
+                <strong>Duplicados con aviso:</strong> ${preview.duplicate_count || 0}
             `;
-            if (preview.row_errors && preview.row_errors.length > 0) {
-                previewErrors.innerHTML = '<h5>Errores detectados:</h5><ul>' +
-                    preview.row_errors.map((err) => `<li>Fila ${err.row}: ${err.message}</li>`).join('') +
-                    '</ul>';
+            const hasErrors = preview.row_errors && preview.row_errors.length > 0;
+            const hasDuplicateWarnings = preview.duplicate_warnings && preview.duplicate_warnings.length > 0;
+            if (hasErrors || hasDuplicateWarnings) {
+                let html = '';
+                previewErrors.classList.toggle('has-only-warnings', !hasErrors && hasDuplicateWarnings);
+                if (hasErrors) {
+                    html += '<h5>Errores detectados:</h5><ul>' +
+                        preview.row_errors.map((err) => `<li>Fila ${err.row}: ${err.message}</li>`).join('') +
+                        '</ul>';
+                }
+                if (hasDuplicateWarnings) {
+                    html += '<h5>Avisos de duplicados:</h5><ul>' +
+                        preview.duplicate_warnings.map((err) => `<li>Fila ${err.row}: ${err.message}</li>`).join('') +
+                        '</ul><small>La importacion real continua: se usa la primera aparicion del codigo y se guarda una alerta en el producto.</small>';
+                }
+                previewErrors.innerHTML = html;
+                previewReportActions.style.display = 'flex';
             } else {
+                previewErrors.classList.remove('has-only-warnings');
                 previewErrors.innerHTML = '<span style=\"color:var(--color-success)\">Sin errores de validacion.</span>';
+                previewReportActions.style.display = 'none';
             }
         } catch (error) {
             alert(error.message || 'No se pudo ejecutar vista previa.');
+        }
+    });
+
+    document.getElementById('btnDownloadDiagnostic').addEventListener('click', async function (e) {
+        e.preventDefault();
+        const form = document.getElementById('importForm');
+        const formData = new FormData(form);
+        const button = e.currentTarget;
+        const previousText = button.innerText;
+        button.disabled = true;
+        button.innerText = 'Generando...';
+
+        try {
+            const response = await fetch(diagnosticUrl, {
+                method: 'POST',
+                body: formData,
+                credentials: 'same-origin',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            });
+
+            const contentType = response.headers.get('content-type') || '';
+            if (!response.ok) {
+                if (contentType.includes('application/json')) {
+                    const data = await response.json();
+                    throw new Error((data && data.error) || 'No se pudo generar el diagnostico.');
+                }
+                throw new Error('No se pudo generar el diagnostico.');
+            }
+
+            const blob = await response.blob();
+            const disposition = response.headers.get('content-disposition') || '';
+            const match = disposition.match(/filename=\"?([^\";]+)\"?/i);
+            const filename = match ? match[1] : 'diagnostico_importacion.xlsx';
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            URL.revokeObjectURL(url);
+        } catch (error) {
+            alert(error.message || 'No se pudo descargar el diagnostico.');
+        } finally {
+            button.disabled = false;
+            button.innerText = previousText;
         }
     });
 
@@ -295,24 +407,36 @@
             const created = result.created || 0;
             const updated = result.updated || 0;
             const errors = result.errors || 0;
+            const duplicates = result.duplicate_count || 0;
             const executionId = result.execution_id || '-';
 
             document.getElementById('resultSummary').innerHTML = `
                 <strong>Ejecucion:</strong> ${executionId}<br>
                 <strong>Creados:</strong> ${created}<br>
                 <strong>Actualizados:</strong> ${updated}<br>
-                <strong>Errores:</strong> ${errors}
+                <strong>Errores:</strong> ${errors}<br>
+                <strong>Duplicados registrados:</strong> ${duplicates}
             `;
 
             const errorZone = document.getElementById('errorZone');
             if (result.row_errors && result.row_errors.length > 0) {
+                errorZone.classList.remove('has-only-warnings');
                 let errorHtml = '<h5>Detalle de errores:</h5><ul>';
                 result.row_errors.forEach((err) => {
                     errorHtml += `<li>Fila ${err.row}: ${err.message}</li>`;
                 });
                 errorHtml += '</ul>';
                 errorZone.innerHTML = errorHtml;
+            } else if (result.duplicate_warnings && result.duplicate_warnings.length > 0) {
+                errorZone.classList.add('has-only-warnings');
+                let warningHtml = '<h5>Avisos de duplicados registrados:</h5><ul>';
+                result.duplicate_warnings.forEach((err) => {
+                    warningHtml += `<li>Fila ${err.row}: ${err.message}</li>`;
+                });
+                warningHtml += '</ul>';
+                errorZone.innerHTML = warningHtml;
             } else {
+                errorZone.classList.remove('has-only-warnings');
                 errorZone.innerHTML = '';
             }
         }

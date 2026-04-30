@@ -173,6 +173,8 @@ urlpatterns = [
     # Importers
     path('importar/', views.import_dashboard, name='admin_import_dashboard'),
     path('importar/status/<str:task_id>/', views.import_status, name='admin_import_status'),
+    path('importar/<str:import_type>/plantilla/', views.import_template_download, name='admin_import_template_download'),
+    path('importar/<str:import_type>/diagnostico/', views.import_diagnostic_download, name='admin_import_diagnostic_download'),
     path('importar/<str:import_type>/', views.import_process, name='admin_import_process'),
     path('importar/rollback/<int:execution_id>/', views.import_rollback, name='admin_import_rollback'),
     # Commit view removed as we handle it in process view for MVP simplicity
