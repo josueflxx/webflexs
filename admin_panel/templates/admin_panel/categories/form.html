@@ -56,6 +56,37 @@
         align-items: start;
     }
 
+    .category-section-title {
+        margin: 22px 0 12px;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        color: var(--color-primary);
+        font-size: 0.82rem;
+        font-weight: 800;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        background: rgba(255, 107, 53, 0.08);
+        border-left: 2px solid var(--color-primary);
+        padding: 8px 10px;
+        border-radius: 0 8px 8px 0;
+    }
+
+    .category-public-card {
+        border: 1px solid rgba(23, 162, 184, 0.28);
+        border-radius: 10px;
+        padding: 14px;
+        background: rgba(23, 162, 184, 0.06);
+        margin-bottom: 16px;
+    }
+
+    .category-public-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1.4fr) minmax(0, 0.8fr);
+        gap: 14px;
+        align-items: start;
+    }
+
     .category-active-card {
         border: 1px solid rgba(255, 255, 255, 0.12);
         border-radius: 10px;
@@ -74,6 +105,10 @@
         color: var(--color-gray-light);
         display: block;
         line-height: 1.4;
+    }
+
+    .category-active-card + .category-active-card {
+        margin-top: 10px;
     }
 
     .deactivation-impact {
@@ -141,6 +176,10 @@
             grid-template-columns: 1fr;
         }
 
+        .category-public-grid {
+            grid-template-columns: 1fr;
+        }
+
         .category-context {
             flex-direction: column;
             align-items: flex-start;
@@ -188,6 +227,16 @@
         </div>
         {% endif %}
 
+        <div class="category-section-title">Uso interno</div>
+        <div class="form-group">
+            <label for="name" class="form-label">Nombre interno</label>
+            <input type="text" name="name" id="name" class="form-input" value="{{ form.name.value|default:'' }}" {% if not user.is_superuser %}disabled{% endif %}>
+            <div class="category-field-help">Nombre operativo para administracion, importadores y orden interno.</div>
+            {% if form.name.errors %}
+            <div class="error-feedback">{{ form.name.errors.0 }}</div>
+            {% endif %}
+        </div>
+
         <div class="category-grid">
             <div class="form-group">
                 <label for="parent" class="form-label">Categoria padre (opcional)</label>
@@ -205,34 +254,75 @@
                 {% endif %}
             </div>
 
-            <div class="category-active-card">
-                <label class="form-checkbox-label">
-                    <input type="checkbox" name="is_active" {% if form.is_active.value %}checked{% endif %} {% if not user.is_superuser %}disabled{% endif %}>
-                    Categoria activa
-                </label>
-                <small>Las categorias inactivas no se muestran en catalogo y pueden ocultar productos sin otras categorias activas.</small>
-                {% if action == 'Editar' and deactivation_impact %}
-                <div class="deactivation-impact">
-                    <h4>Impacto estimado al desactivar</h4>
-                    <ul>
-                        <li>Subcategorias que tambien se desactivaran: {{ deactivation_impact.descendants_count }}</li>
-                        <li>Productos vinculados: {{ deactivation_impact.linked_products }}</li>
-                        <li>Quedarian ocultos: {{ deactivation_impact.would_hide }}</li>
-                        <li>Seguirian visibles por otras categorias activas: {{ deactivation_impact.would_remain_visible }}</li>
-                    </ul>
+            <div>
+                <div class="category-active-card">
+                    <label class="form-checkbox-label">
+                        <input type="checkbox" name="is_active" {% if form.is_active.value %}checked{% endif %} {% if not user.is_superuser %}disabled{% endif %}>
+                        Categoria activa
+                    </label>
+                    <small>Control operativo. Si esta inactiva, se oculta del panel comercial y del catalogo.</small>
                 </div>
-                {% endif %}
+
+                <div class="category-active-card">
+                    <label class="form-checkbox-label">
+                        <input type="checkbox" name="visible_in_catalog" {% if form.visible_in_catalog.value %}checked{% endif %} {% if not user.is_superuser %}disabled{% endif %}>
+                        Visible para clientes
+                    </label>
+                    <small>Control publico. Si se desmarca, no aparece en el catalogo cliente ni habilita productos por esa categoria.</small>
+                </div>
             </div>
         </div>
 
-        <div class="form-group">
-            <label for="name" class="form-label">Nombre</label>
-            <input type="text" name="name" id="name" class="form-input" value="{{ form.name.value|default:'' }}" {% if not user.is_superuser %}disabled{% endif %}>
-            {% if form.name.errors %}
-            <div class="error-feedback">{{ form.name.errors.0 }}</div>
-            {% endif %}
+        {% if action == 'Editar' and deactivation_impact %}
+        <div class="deactivation-impact">
+            <h4>Impacto estimado al desactivar</h4>
+            <ul>
+                <li>Subcategorias que tambien se desactivaran: {{ deactivation_impact.descendants_count }}</li>
+                <li>Productos vinculados: {{ deactivation_impact.linked_products }}</li>
+                <li>Quedarian ocultos: {{ deactivation_impact.would_hide }}</li>
+                <li>Seguirian visibles por otras categorias activas: {{ deactivation_impact.would_remain_visible }}</li>
+            </ul>
+        </div>
+        {% endif %}
+
+        <div class="category-section-title">Catalogo cliente</div>
+        <div class="category-public-card">
+            <div class="category-public-grid">
+                <div class="form-group">
+                    <label for="public_name" class="form-label">Nombre publico</label>
+                    <input type="text" name="public_name" id="public_name" class="form-input" value="{{ form.public_name.value|default:'' }}" {% if not user.is_superuser %}disabled{% endif %}>
+                    <div class="category-field-help">Si queda vacio, el catalogo usa el nombre interno.</div>
+                    {% if form.public_name.errors %}
+                    <div class="error-feedback">{{ form.public_name.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <div class="form-group">
+                    <label for="public_order" class="form-label">Orden publico</label>
+                    <input type="number" name="public_order" id="public_order" class="form-input" min="0" value="{{ form.public_order.value|default:0 }}" {% if not user.is_superuser %}disabled{% endif %}>
+                    <div class="category-field-help">Orden comercial del arbol visible para clientes.</div>
+                    {% if form.public_order.errors %}
+                    <div class="error-feedback">{{ form.public_order.errors.0 }}</div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="public_description" class="form-label">Descripcion publica</label>
+                <textarea name="public_description" id="public_description" class="form-textarea" rows="3" {% if not user.is_superuser %}disabled{% endif %}>{{ form.public_description.value|default:'' }}</textarea>
+                <div class="category-field-help">Texto corto para orientar al cliente al entrar a esta categoria.</div>
+                {% if form.public_description.errors %}
+                <div class="error-feedback">{{ form.public_description.errors.0 }}</div>
+                {% endif %}
+            </div>
+
+            <label class="form-checkbox-label">
+                <input type="checkbox" name="is_featured" {% if form.is_featured.value %}checked{% endif %} {% if not user.is_superuser %}disabled{% endif %}>
+                Categoria destacada
+            </label>
         </div>
 
+        <div class="category-section-title">SEO</div>
         <div class="form-group">
             <label for="seo_title" class="form-label">SEO title (opcional)</label>
             <input type="text" name="seo_title" id="seo_title" class="form-input" maxlength="160"

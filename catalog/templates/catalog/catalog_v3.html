@@ -10,7 +10,7 @@
 {% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="{% static 'core/css/catalog.css' %}">
+<link rel="stylesheet" href="{% static 'core/css/catalog.css' %}?v=20260504-list-responsive">
 {% endblock %}
 
 {% block content %}
@@ -23,7 +23,7 @@
                 <p class="catalog-subtitle">
                     {% if current_category and current_category_has_descendants %}
                     <span class="price-notice">
-                        Incluye productos de subcategorias de "{{ current_category.name }}"
+                        Incluye productos de subcategorias de "{{ current_category.display_name }}"
                     </span><br>
                     {% endif %}
                     {% if not show_prices %}
@@ -42,7 +42,7 @@
                 </span>
                 {% if current_category %}
                 <span class="header-stat">
-                    categoria: <strong>{{ current_category.name }}</strong>
+                    categoria: <strong>{{ current_category.display_name }}</strong>
                 </span>
                 {% endif %}
                 {% if search_query %}
@@ -77,6 +77,7 @@
                     <form method="get" class="search-form">
                         <input type="hidden" name="category" value="{{ category_slug }}">
                         <input type="hidden" name="order" value="{{ order_by }}">
+                        <input type="hidden" name="view" value="{{ view_mode }}">
                         <input
                             type="text"
                             name="q"
@@ -148,7 +149,7 @@
                     </div>
                     <div id="categoriesWrapper" style="display: none;">
                         <div class="category-tree">
-                            <a href="{% url 'catalog' %}" class="category-tree-link category-tree-link-root {% if not category_slug %}active{% endif %}">
+                            <a href="{% url 'catalog' %}?{% querystring request category='' page='' %}" class="category-tree-link category-tree-link-root {% if not category_slug %}active{% endif %}">
                                 <span class="category-tree-label">Todas</span>
                             </a>
 
@@ -166,7 +167,7 @@
                                         type="button"
                                         class="category-tree-toggle"
                                         onclick="toggleCategoryTree(event, '{{ row.category.id }}')"
-                                        aria-label="Mostrar subcategorias de {{ row.category.name }}"
+                                        aria-label="Mostrar subcategorias de {{ row.category.display_name }}"
                                     >
                                         <span class="category-toggle-icon">&#9654;</span>
                                     </button>
@@ -175,11 +176,11 @@
                                     {% endif %}
 
                                     <a
-                                        href="?category={{ row.category.slug }}"
+                                        href="?{% querystring request category=row.category.slug page='' %}"
                                         class="category-tree-link {% if category_slug == row.category.slug %}active{% endif %}"
                                         title="{{ row.full_path }}"
                                     >
-                                        <span class="category-tree-label">{{ row.category.name }}</span>
+                                        <span class="category-tree-label">{{ row.category.display_name }}</span>
                                         {% if row.has_children %}
                                         <span class="category-tree-count">{{ row.children_count }}</span>
                                         {% endif %}
@@ -192,6 +193,7 @@
                                         <input type="hidden" name="q" value="{{ search_query }}">
                                         <input type="hidden" name="category" value="{{ category_slug }}">
                                         <input type="hidden" name="order" value="{{ order_by }}">
+                                        <input type="hidden" name="view" value="{{ view_mode }}">
 
                                         {% if clamp_options %}
                                         <div class="category-inline-title">Filtros tecnicos</div>
@@ -242,7 +244,7 @@
                                         <div class="category-inline-actions">
                                             <button type="submit" class="btn btn-primary btn-sm">Aplicar</button>
                                             {% if active_filters %}
-                                            <a href="?category={{ category_slug }}&q={{ search_query }}&order={{ order_by }}" class="btn btn-outline btn-sm">
+                                            <a href="?category={{ category_slug }}&q={{ search_query }}&order={{ order_by }}&view={{ view_mode }}" class="btn btn-outline btn-sm">
                                                 Limpiar
                                             </a>
                                             {% endif %}
@@ -267,6 +269,20 @@
                         </span>
                     </div>
                     <div class="toolbar-actions">
+                        <div class="view-toggle" aria-label="Modo de vista">
+                            <a
+                                href="?{% querystring request view='grid' page='' %}"
+                                class="view-toggle-btn {% if view_mode == 'grid' %}active{% endif %}"
+                            >
+                                Tarjetas
+                            </a>
+                            <a
+                                href="?{% querystring request view='list' page='' %}"
+                                class="view-toggle-btn {% if view_mode == 'list' %}active{% endif %}"
+                            >
+                                Lista
+                            </a>
+                        </div>
                         <select name="order" class="form-select order-select" onchange="updateOrder(this.value)">
                             {% if search_query %}
                             <option value="relevance" {% if order_by == 'relevance' %}selected{% endif %}>Mejor coincidencia</option>
@@ -294,6 +310,12 @@
                 </nav>
                 {% endif %}
 
+                {% if current_category and current_category.public_description %}
+                <div class="search-summary-chips">
+                    <span class="search-summary-chip">{{ current_category.public_description }}</span>
+                </div>
+                {% endif %}
+
                 {% if active_filter_chips %}
                 <div class="active-filter-chips">
                     {% for chip in active_filter_chips %}
@@ -314,9 +336,80 @@
                 {% endif %}
 
                 {% if page_obj.object_list %}
-                <div class="products-grid">
+                <div class="{% if view_mode == 'list' %}products-list{% else %}products-grid{% endif %}">
                     {% for product in page_obj %}
-                    <article class="product-card" data-product-id="{{ product.id|unlocalize }}">
+                    {% if view_mode == 'list' %}
+                    <article class="catalog-list-item" data-product-id="{{ product.id|unlocalize }}">
+                        <a class="catalog-list-thumb" href="{% url 'product_detail' product.sku %}">
+                            {% if product.image %}
+                            <img src="{{ product.image.url }}" alt="{{ product.name }}">
+                            {% else %}
+                            <span>+</span>
+                            {% endif %}
+                        </a>
+
+                        <div class="catalog-list-main">
+                            <div class="catalog-list-topline">
+                                <span class="catalog-list-sku">{{ product.sku }}</span>
+                                {% if product.stock > 0 %}
+                                <span class="product-stock in-stock">Stock {{ product.stock }}</span>
+                                {% else %}
+                                <span class="product-stock out-stock">Sin stock</span>
+                                {% endif %}
+                            </div>
+                            <h3 class="catalog-list-title">
+                                <a href="{% url 'product_detail' product.sku %}">{{ product.name }}</a>
+                            </h3>
+                            <div class="catalog-list-meta">
+                                {% if can_view_catalog_supplier and product.supplier %}
+                                <span>Prov. {{ product.supplier }}</span>
+                                {% endif %}
+                                {% if product.display_categories %}
+                                {% for cat in product.display_categories %}
+                                <span class="catalog-list-category">{{ cat.display_name }}</span>
+                                {% endfor %}
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <div class="catalog-list-pricebox">
+                            {% if show_prices %}
+                                {% if discount %}
+                                <span class="catalog-list-muted">Lista ${{ product.base_price|default:product.price|floatformat:2 }}</span>
+                                <span class="catalog-list-discount">{{ discount|multiply:100|floatformat:0 }}% OFF</span>
+                                <strong>${{ product.final_price|floatformat:2 }}</strong>
+                                {% else %}
+                                <strong>${{ product.base_price|default:product.price|floatformat:2 }}</strong>
+                                {% endif %}
+                            {% else %}
+                            <a href="{% url 'login' %}">Ver precio</a>
+                            {% endif %}
+                        </div>
+
+                        <div class="catalog-list-actions">
+                            <a href="{% url 'product_detail' product.sku %}" class="btn btn-outline product-detail-btn">
+                                Detalle
+                            </a>
+                            {% if user.is_authenticated %}
+                            <button
+                                class="btn btn-outline"
+                                onclick="toggleFavorite({{ product.id|unlocalize }}, this)"
+                                data-favorite="{% if product.is_favorite %}1{% else %}0{% endif %}"
+                            >
+                                {% if product.is_favorite %}Favorito{% else %}Guardar{% endif %}
+                            </button>
+                            <button
+                                class="btn btn-primary btn-add-cart"
+                                onclick="addToCart({{ product.id|unlocalize }})"
+                                {% if product.stock <= 0 %}disabled{% endif %}
+                            >
+                                Agregar
+                            </button>
+                            {% endif %}
+                        </div>
+                    </article>
+                    {% else %}
+                    <article class="{% if view_mode == 'list' %}product-list-row{% else %}product-card{% endif %}" data-product-id="{{ product.id|unlocalize }}">
                         <a class="product-image" href="{% url 'product_detail' product.sku %}">
                             {% if product.image %}
                             <img src="{{ product.image.url }}" alt="{{ product.name }}">
@@ -343,7 +436,7 @@
                             {% if product.display_categories %}
                             <div class="product-category-list">
                                 {% for cat in product.display_categories %}
-                                <span class="product-category">{{ cat.name }}</span>
+                                <span class="product-category">{{ cat.display_name }}</span>
                                 {% endfor %}
                             </div>
                             {% endif %}
@@ -400,6 +493,7 @@
                             </div>
                         </div>
                     </article>
+                    {% endif %}
                     {% endfor %}
                 </div>
 

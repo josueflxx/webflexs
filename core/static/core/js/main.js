@@ -155,8 +155,6 @@ document.addEventListener('DOMContentLoaded', function () {
         const adminWheelScrollSelector = [
             '.admin-top-nav',
             '.header-user',
-            '.products-table-wrapper',
-            '.category-table-wrap',
             '.execution-table-wrap',
             '.admin-detail-table-wrap',
             '.report-standalone-table-wrap',
@@ -271,6 +269,10 @@ document.addEventListener('DOMContentLoaded', function () {
             const target = event.target;
             if (!(target instanceof Element)) return;
             if (target.closest('textarea, select, [contenteditable="true"], .no-wheel-scroll')) return;
+            if (target.closest('.products-table-wrapper, .category-table-wrap')) {
+                resetAdminPageHorizontalScroll();
+                return;
+            }
 
             const hasHorizontalWheel = Math.abs(event.deltaX) > 0;
             const dominantDelta = Math.abs(event.deltaX) > Math.abs(event.deltaY)

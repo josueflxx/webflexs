@@ -1,6 +1,7 @@
 """
 Catalog app views - Product listing and detail.
 """
+import hashlib
 import json
 import re
 from decimal import Decimal
@@ -470,20 +471,28 @@ def build_search_summary(parsed_search):
 
 def get_catalog_product_queryset():
     """
-    Build a lean queryset for catalog listing with active categories prefetched.
+    Build a lean queryset for catalog listing with public categories prefetched.
     """
-    active_category_prefetch = Prefetch(
+    public_category_prefetch = Prefetch(
         "categories",
-        queryset=Category.objects.filter(is_active=True).only("id", "name", "is_active", "slug"),
-        to_attr="prefetched_active_categories",
+        queryset=Category.objects.filter(is_active=True, visible_in_catalog=True).only(
+            "id",
+            "name",
+            "public_name",
+            "is_active",
+            "visible_in_catalog",
+            "slug",
+        ),
+        to_attr="prefetched_public_categories",
     )
     return Product.catalog_visible(
         Product.objects.select_related("category")
-        .prefetch_related(active_category_prefetch)
+        .prefetch_related(public_category_prefetch)
         .only(
             "id",
             "sku",
             "name",
+            "supplier",
             "description",
             "price",
             "stock",
@@ -491,10 +500,62 @@ def get_catalog_product_queryset():
             "category_id",
             "category__id",
             "category__name",
+            "category__public_name",
             "category__is_active",
+            "category__visible_in_catalog",
             "updated_at",
         )
     )
+
+
+def get_public_category_ids_with_products():
+    """
+    Return public category IDs that should appear in the client catalog.
+
+    A category appears if it has at least one catalog-visible product assigned to
+    itself or to a visible descendant. Empty public categories remain hidden from
+    the customer-facing tree but still exist in admin.
+    """
+    all_categories = {
+        category.id: category
+        for category in Category.objects.select_related("parent")
+    }
+    visible_categories = {
+        category.id: category
+        for category in all_categories.values()
+        if category.is_active and category.visible_in_catalog
+    }
+    if not visible_categories:
+        return set()
+
+    products = Product.catalog_visible(
+        Product.objects.all(),
+        include_uncategorized=False,
+    )
+    linked_ids = set(
+        products.exclude(category_id__isnull=True).values_list("category_id", flat=True)
+    )
+    linked_ids.update(
+        products.exclude(categories__id__isnull=True).values_list("categories__id", flat=True)
+    )
+
+    public_ids = set()
+    for category_id in linked_ids:
+        node = visible_categories.get(category_id)
+        if not node:
+            continue
+        chain = []
+        cursor = node
+        is_public_path = True
+        while cursor:
+            if not cursor.is_active or not cursor.visible_in_catalog:
+                is_public_path = False
+                break
+            chain.append(cursor)
+            cursor = all_categories.get(cursor.parent_id)
+        if is_public_path:
+            public_ids.update(category.id for category in chain)
+    return public_ids
 
 
 def build_category_tree_rows(categories):
@@ -506,11 +567,14 @@ def build_category_tree_rows(categories):
     for category in category_list:
         children_map.setdefault(category.parent_id, []).append(category)
 
+    def category_sort_key(cat):
+        return (cat.public_order, cat.order, cat.display_name.lower(), cat.id)
+
     for siblings in children_map.values():
-        siblings.sort(key=lambda cat: (cat.order, cat.name.lower(), cat.id))
+        siblings.sort(key=category_sort_key)
 
     roots = [cat for cat in category_list if cat.parent_id not in category_map]
-    roots.sort(key=lambda cat: (cat.order, cat.name.lower(), cat.id))
+    roots.sort(key=category_sort_key)
 
     rows = []
     visited = set()
@@ -520,7 +584,7 @@ def build_category_tree_rows(categories):
             return
         visited.add(node.id)
 
-        next_path = [*path_names, node.name]
+        next_path = [*path_names, node.display_name]
         children = children_map.get(node.id, [])
         rows.append(
             {
@@ -540,7 +604,7 @@ def build_category_tree_rows(categories):
 
     remaining = sorted(
         (cat for cat in category_list if cat.id not in visited),
-        key=lambda cat: (cat.order, cat.name.lower(), cat.id),
+        key=category_sort_key,
     )
     for category in remaining:
         walk(category, 0, [])
@@ -552,20 +616,32 @@ def get_cached_category_tree_rows():
     """
     Cache category tree generation to avoid rebuilding on each request.
     """
-    aggregate = Category.objects.filter(is_active=True).aggregate(
+    aggregate = Category.objects.filter(is_active=True, visible_in_catalog=True).aggregate(
         total=Count("id"),
         max_updated=Max("updated_at"),
     )
     total = aggregate.get("total") or 0
     max_updated = aggregate.get("max_updated")
     stamp = int(max_updated.timestamp()) if max_updated else 0
-    cache_key = f"catalog_tree_rows_v3:{total}:{stamp}"
+    public_ids = get_public_category_ids_with_products()
+    ids_stamp = hashlib.sha1(
+        ",".join(str(category_id) for category_id in sorted(public_ids)).encode("utf-8")
+    ).hexdigest()[:16]
+    cache_key = f"catalog_tree_rows_v4:{total}:{stamp}:{ids_stamp}"
 
     rows = cache.get(cache_key)
     if rows is not None:
         return rows
 
-    categories = Category.objects.filter(is_active=True).select_related("parent").order_by("order", "name")
+    categories = (
+        Category.objects.filter(
+            id__in=public_ids,
+            is_active=True,
+            visible_in_catalog=True,
+        )
+        .select_related("parent")
+        .order_by("public_order", "order", "name")
+    )
     rows = build_category_tree_rows(categories)
     cache.set(cache_key, rows, 300)
     return rows
@@ -613,7 +689,7 @@ def build_category_breadcrumb(current_category):
         chain.append(node)
         node = node.parent
     chain.reverse()
-    return [{"name": cat.name, "url": f"{reverse('catalog')}?category={cat.slug}"} for cat in chain]
+    return [{"name": cat.display_name, "url": f"{reverse('catalog')}?category={cat.slug}"} for cat in chain]
 
 
 def log_catalog_analytics(request, search_query, current_category, active_filters, results_count):
@@ -672,9 +748,19 @@ def catalog(request):
     clamp_options = {}
 
     if category_slug:
-        current_category = Category.objects.filter(slug=category_slug, is_active=True).first()
+        current_category = Category.objects.filter(
+            slug=category_slug,
+            is_active=True,
+            visible_in_catalog=True,
+        ).first()
         if current_category:
-            category_ids = current_category.get_descendant_ids(include_self=True, only_active=True)
+            raw_category_ids = current_category.get_descendant_ids(include_self=True, only_active=True)
+            category_ids = list(
+                Category.objects.filter(
+                    id__in=raw_category_ids,
+                    visible_in_catalog=True,
+                ).values_list("id", flat=True)
+            )
             products = products.filter(
                 Q(category_id__in=category_ids) | Q(categories__id__in=category_ids)
             ).distinct()
@@ -746,6 +832,10 @@ def catalog(request):
     if order_by not in valid_orders:
         order_by = order_by_default
 
+    view_mode = request.GET.get("view", "grid").strip().lower()
+    if view_mode not in {"grid", "list"}:
+        view_mode = "grid"
+
     if search_query:
         products = annotate_catalog_search_rank(products, parsed_search)
         if order_by == "relevance":
@@ -794,11 +884,12 @@ def catalog(request):
     product_ids = [product.id for product in page_obj.object_list]
     price_item_map = build_price_list_item_map(price_list, product_ids)
     for product in page_obj.object_list:
-        linked_categories = list(getattr(product, "prefetched_active_categories", []))
+        linked_categories = list(getattr(product, "prefetched_public_categories", []))
         if (
             product.category_id
             and product.category
             and product.category.is_active
+            and product.category.visible_in_catalog
             and all(cat.id != product.category_id for cat in linked_categories)
         ):
             linked_categories.append(product.category)
@@ -819,7 +910,10 @@ def catalog(request):
     if current_category:
         expanded_category_ids.append(current_category.id)
         current_category_has_descendants = bool(
-            current_category.get_descendant_ids(include_self=False, only_active=True)
+            Category.objects.filter(
+                id__in=current_category.get_descendant_ids(include_self=False, only_active=True),
+                visible_in_catalog=True,
+            ).exists()
         )
         parent = current_category.parent
         while parent:
@@ -847,10 +941,11 @@ def catalog(request):
         canonical_url = request.build_absolute_uri(f"{reverse('catalog')}?category={current_category.slug}")
 
     if current_category:
-        seo_title = current_category.seo_title or f"{current_category.name} | Catalogo FLEXS"
+        seo_title = current_category.seo_title or f"{current_category.display_name} | Catalogo FLEXS"
         seo_description = (
             current_category.seo_description
-            or f"Explora productos de {current_category.name} en FLEXS."
+            or current_category.public_description
+            or f"Explora productos de {current_category.display_name} en FLEXS."
         )
     else:
         seo_title = "Catalogo FLEXS - Repuestos y Autopartes"
@@ -878,6 +973,8 @@ def catalog(request):
         "active_filter_chips": active_filter_chips,
         "breadcrumb_categories": breadcrumb_categories,
         "order_by": order_by,
+        "view_mode": view_mode,
+        "can_view_catalog_supplier": bool(request.user.is_authenticated and request.user.is_staff),
         "show_prices": show_prices,
         "discount": discount,
         "price_message": settings.public_prices_message,
@@ -897,14 +994,21 @@ def catalog(request):
 
 def product_detail(request, sku):
     """Product detail view."""
-    active_category_prefetch = Prefetch(
+    public_category_prefetch = Prefetch(
         "categories",
-        queryset=Category.objects.filter(is_active=True).only("id", "name", "is_active", "slug"),
-        to_attr="prefetched_active_categories",
+        queryset=Category.objects.filter(is_active=True, visible_in_catalog=True).only(
+            "id",
+            "name",
+            "public_name",
+            "is_active",
+            "visible_in_catalog",
+            "slug",
+        ),
+        to_attr="prefetched_public_categories",
     )
     product = get_object_or_404(
         Product.catalog_visible(
-            Product.objects.select_related("category").prefetch_related(active_category_prefetch).only(
+            Product.objects.select_related("category").prefetch_related(public_category_prefetch).only(
                 "id",
                 "sku",
                 "name",
@@ -917,8 +1021,10 @@ def product_detail(request, sku):
                 "category_id",
                 "category__id",
                 "category__name",
+                "category__public_name",
                 "category__slug",
                 "category__is_active",
+                "category__visible_in_catalog",
             )
         ),
         sku=sku,
@@ -963,15 +1069,21 @@ def product_detail(request, sku):
     )
     final_price = pricing.final_price
     base_price = pricing.base_price
-    linked_categories = list(getattr(product, "prefetched_active_categories", []))
+    linked_categories = list(getattr(product, "prefetched_public_categories", []))
     if (
         product.category_id
         and product.category
         and product.category.is_active
+        and product.category.visible_in_catalog
         and all(cat.id != product.category_id for cat in linked_categories)
     ):
         linked_categories.append(product.category)
-    if product.category_id and product.category and product.category.is_active:
+    if (
+        product.category_id
+        and product.category
+        and product.category.is_active
+        and product.category.visible_in_catalog
+    ):
         primary_category = product.category
     else:
         primary_category = linked_categories[0] if linked_categories else None

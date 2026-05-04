@@ -8,11 +8,35 @@ class CategoryForm(forms.ModelForm):
 
     class Meta:
         model = Category
-        fields = ["name", "parent", "is_active", "seo_title", "seo_description"]
+        fields = [
+            "name",
+            "public_name",
+            "public_description",
+            "parent",
+            "is_active",
+            "visible_in_catalog",
+            "is_featured",
+            "public_order",
+            "seo_title",
+            "seo_description",
+        ]
         widgets = {
             "name": forms.TextInput(attrs={"class": "form-input", "placeholder": "Nombre de la categoria"}),
+            "public_name": forms.TextInput(
+                attrs={"class": "form-input", "placeholder": "Nombre visible para clientes"}
+            ),
+            "public_description": forms.Textarea(
+                attrs={
+                    "class": "form-textarea",
+                    "rows": 3,
+                    "placeholder": "Descripcion breve para catalogo cliente",
+                }
+            ),
             "parent": forms.Select(attrs={"class": "form-select"}),
             "is_active": forms.CheckboxInput(attrs={"class": "form-checkbox"}),
+            "visible_in_catalog": forms.CheckboxInput(attrs={"class": "form-checkbox"}),
+            "is_featured": forms.CheckboxInput(attrs={"class": "form-checkbox"}),
+            "public_order": forms.NumberInput(attrs={"class": "form-input", "min": 0}),
             "seo_title": forms.TextInput(
                 attrs={"class": "form-input", "placeholder": "Titulo SEO (opcional)"}
             ),
@@ -22,8 +46,13 @@ class CategoryForm(forms.ModelForm):
         }
         labels = {
             "name": "Nombre",
+            "public_name": "Nombre publico",
+            "public_description": "Descripcion publica",
             "parent": "Categoria padre",
             "is_active": "Activa",
+            "visible_in_catalog": "Visible en catalogo cliente",
+            "is_featured": "Destacada",
+            "public_order": "Orden publico",
             "seo_title": "SEO title",
             "seo_description": "SEO description",
         }

@@ -98,6 +98,57 @@
         font-size: 0.84rem;
     }
 
+    .catalog-diagnostics {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 10px;
+        margin: 12px 0 16px;
+    }
+
+    .catalog-diagnostic-card {
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 10px;
+        padding: 12px;
+        background: rgba(255, 255, 255, 0.03);
+        min-height: 108px;
+    }
+
+    .catalog-diagnostic-card strong {
+        display: block;
+        color: #ffffff;
+        font-size: 1.35rem;
+        line-height: 1;
+        margin: 4px 0 6px;
+    }
+
+    .catalog-diagnostic-card span {
+        display: block;
+        color: var(--color-primary);
+        font-size: 0.72rem;
+        font-weight: 800;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+    }
+
+    .catalog-diagnostic-card small {
+        display: block;
+        color: var(--color-gray-light);
+        font-size: 0.78rem;
+        line-height: 1.35;
+    }
+
+    .category-public-meta {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
+
+    .category-public-badges {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+    }
+
     .reorder-status {
         color: var(--color-gray-light);
         font-size: 0.82rem;
@@ -333,6 +384,10 @@
             flex-direction: column;
             align-items: stretch;
         }
+
+        .catalog-diagnostics {
+            grid-template-columns: 1fr;
+        }
     }
 </style>
 {% endblock %}
@@ -367,6 +422,8 @@
                 <option value="all" {% if status == 'all' %}selected{% endif %}>Todos los estados</option>
                 <option value="active" {% if status == 'active' %}selected{% endif %}>Solo activas</option>
                 <option value="inactive" {% if status == 'inactive' %}selected{% endif %}>Solo inactivas</option>
+                <option value="public" {% if status == 'public' %}selected{% endif %}>Visibles cliente</option>
+                <option value="hidden" {% if status == 'hidden' %}selected{% endif %}>Ocultas cliente</option>
             </select>
             <button type="submit" class="btn btn-primary btn-inline">Filtrar</button>
             {% if search or status != 'all' %}
@@ -410,6 +467,31 @@
     </div>
     {% endif %}
 
+    {% if catalog_diagnostics %}
+    <div class="catalog-diagnostics">
+        <div class="catalog-diagnostic-card">
+            <span>Cliente</span>
+            <strong>{{ catalog_diagnostics.visible_empty_count }}</strong>
+            <small>Categorias publicas vacias. Se ocultan del arbol cliente hasta tener productos visibles.</small>
+        </div>
+        <div class="catalog-diagnostic-card">
+            <span>Ocultas</span>
+            <strong>{{ catalog_diagnostics.hidden_with_products_count }}</strong>
+            <small>Categorias ocultas con productos vinculados. Sirven para orden interno o revision.</small>
+        </div>
+        <div class="catalog-diagnostic-card">
+            <span>Sin categoria</span>
+            <strong>{{ catalog_diagnostics.uncategorized_active_products }}</strong>
+            <small>Productos activos sin categoria. Pueden aparecer sin filtro especifico.</small>
+        </div>
+        <div class="catalog-diagnostic-card">
+            <span>Solo ocultas</span>
+            <strong>{{ catalog_diagnostics.active_products_only_hidden }}</strong>
+            <small>Productos activos que no tienen ninguna categoria visible para clientes.</small>
+        </div>
+    </div>
+    {% endif %}
+
     <div id="deleteModal" class="category-modal">
         <div class="category-modal-content">
             <h3 style="color: #dc3545; margin-top: 0;">Peligro: borrado masivo</h3>
@@ -443,6 +525,7 @@
                     <th>Nombre</th>
                     <th>Subcategorias</th>
                     <th>Productos</th>
+                    <th>Catalogo cliente</th>
                     <th>Estado</th>
                     <th>Acciones</th>
                 </tr>
@@ -485,6 +568,9 @@
                             <span class="category-dot"></span>
                             <div class="category-name-meta">
                                 <strong>{{ row.category.name }}</strong>
+                                {% if row.category.public_name %}
+                                <small>Publico: {{ row.category.public_name }}</small>
+                                {% endif %}
                                 {% if row.depth == 0 %}
                                 <small>Categoria raiz{% if row.has_children %} - {{ row.children_count }} subcategorias{% endif %}</small>
                                 {% else %}
@@ -509,6 +595,23 @@
                         </div>
                     </td>
                     <td>
+                        <div class="category-public-meta">
+                            <div class="category-public-badges">
+                                {% if row.category.visible_in_catalog and row.category.is_active %}
+                                <span class="badge badge-info">Visible cliente</span>
+                                {% elif row.category.visible_in_catalog %}
+                                <span class="badge badge-secondary">Publica inactiva</span>
+                                {% else %}
+                                <span class="badge badge-warning">Oculta cliente</span>
+                                {% endif %}
+                                {% if row.category.is_featured %}
+                                <span class="badge badge-success">Destacada</span>
+                                {% endif %}
+                            </div>
+                            <small class="text-muted">Publicos: {{ row.category.public_products_count|default:0 }} - Orden: {{ row.category.public_order|default:0 }}</small>
+                        </div>
+                    </td>
+                    <td>
                         {% if row.category.is_active %}
                         <span class="badge badge-success">Activa</span>
                         {% else %}
@@ -529,7 +632,7 @@
                 </tr>
                 {% empty %}
                 <tr>
-                    <td colspan="{% if user.is_superuser %}7{% else %}6{% endif %}" class="text-center text-muted">No hay categorias</td>
+                    <td colspan="{% if user.is_superuser %}8{% else %}7{% endif %}" class="text-center text-muted">No hay categorias</td>
                 </tr>
                 {% endfor %}
             </tbody>

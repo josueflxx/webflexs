@@ -1153,6 +1153,12 @@ def category_list(request):
         filtered_categories = [c for c in all_categories if c.is_active]
     elif status == 'inactive':
         filtered_categories = [c for c in all_categories if not c.is_active]
+    elif status == 'public':
+        filtered_categories = [
+            c for c in all_categories if c.is_active and getattr(c, 'visible_in_catalog', True)
+        ]
+    elif status == 'hidden':
+        filtered_categories = [c for c in all_categories if not getattr(c, 'visible_in_catalog', True)]
     else:
         filtered_categories = all_categories
 
@@ -1231,6 +1237,12 @@ def category_list(request):
         category.direct_products_count = category.products_m2m.count()
 
     integrity_issues = detect_category_integrity_issues(all_categories)
+    catalog_diagnostics = build_category_catalog_diagnostics(all_categories)
+    public_product_counts = catalog_diagnostics.get('public_category_product_counts', {})
+    for row in tree_rows:
+        category = row['category']
+        category.public_products_count = public_product_counts.get(category.id, 0)
+
     focus_category_id = None
     auto_expand_ids = []
     if focus_raw.isdigit():
@@ -1248,6 +1260,7 @@ def category_list(request):
         'search': search,
         'status': status,
         'integrity_issues': integrity_issues,
+        'catalog_diagnostics': catalog_diagnostics,
         'move_parent_options': build_category_options(
             all_categories,
             include_inactive_suffix=True,

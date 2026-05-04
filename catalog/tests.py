@@ -2,6 +2,7 @@ from decimal import Decimal
 from io import BytesIO
 
 from django.contrib.auth.models import User
+from django.core.cache import cache
 from django.test import SimpleTestCase, TestCase
 from django.urls import reverse
 from openpyxl import Workbook, load_workbook
@@ -692,6 +693,106 @@ class CatalogAdvancedSearchTests(TestCase):
         self.assertEqual(response.status_code, 200)
         skus = [product.sku for product in response.context["page_obj"].object_list]
         self.assertIn("ABT3480220S", skus)
+
+
+class CatalogCategoryVisibilityTests(TestCase):
+    def setUp(self):
+        cache.clear()
+
+    def tearDown(self):
+        cache.clear()
+
+    def test_hidden_category_hides_product_from_public_catalog(self):
+        hidden_category = Category.objects.create(
+            name="Uso interno",
+            slug="uso-interno",
+            is_active=True,
+            visible_in_catalog=False,
+        )
+        product = Product.objects.create(
+            sku="INT-001",
+            name="Producto interno",
+            price=Decimal("100.00"),
+            stock=5,
+            is_active=True,
+            category=hidden_category,
+        )
+        product.categories.add(hidden_category)
+
+        response = self.client.get(reverse("catalog"))
+
+        self.assertEqual(response.status_code, 200)
+        skus = [item.sku for item in response.context["page_obj"].object_list]
+        self.assertNotIn("INT-001", skus)
+
+    def test_public_tree_hides_empty_categories_and_uses_public_name(self):
+        public_category = Category.objects.create(
+            name="ELASTICOS Y SUSPENSION",
+            public_name="Suspension",
+            public_description="Linea comercial visible.",
+            slug="elasticos-suspension",
+            is_active=True,
+            visible_in_catalog=True,
+        )
+        empty_category = Category.objects.create(
+            name="VACIA INTERNA",
+            public_name="Vacia cliente",
+            slug="vacia-interna",
+            is_active=True,
+            visible_in_catalog=True,
+        )
+        product = Product.objects.create(
+            sku="PUB-001",
+            name="Producto visible",
+            price=Decimal("100.00"),
+            stock=5,
+            is_active=True,
+            category=public_category,
+        )
+        product.categories.add(public_category)
+
+        response = self.client.get(reverse("catalog"))
+
+        self.assertEqual(response.status_code, 200)
+        row_categories = [row["category"] for row in response.context["category_tree_rows"]]
+        row_ids = {category.id for category in row_categories}
+        self.assertIn(public_category.id, row_ids)
+        self.assertNotIn(empty_category.id, row_ids)
+        self.assertIn("Suspension", [category.display_name for category in row_categories])
+
+    def test_hiding_parent_category_hides_public_descendants(self):
+        parent = Category.objects.create(
+            name="Padre publico",
+            slug="padre-publico",
+            is_active=True,
+            visible_in_catalog=True,
+        )
+        child = Category.objects.create(
+            name="Hijo publico",
+            slug="hijo-publico",
+            parent=parent,
+            is_active=True,
+            visible_in_catalog=True,
+        )
+        product = Product.objects.create(
+            sku="CHILD-001",
+            name="Producto hijo",
+            price=Decimal("100.00"),
+            stock=5,
+            is_active=True,
+            category=child,
+        )
+        product.categories.add(child)
+
+        parent.visible_in_catalog = False
+        parent.save()
+        child.refresh_from_db()
+
+        response = self.client.get(reverse("catalog"))
+
+        self.assertFalse(child.visible_in_catalog)
+        skus = [item.sku for item in response.context["page_obj"].object_list]
+        self.assertNotIn("CHILD-001", skus)
 
 
 class ProductDetailTemplateTests(TestCase):

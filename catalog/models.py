@@ -15,6 +15,17 @@ class Category(models.Model):
 
     name = models.CharField(max_length=100, verbose_name="Nombre")
     slug = models.SlugField(max_length=100, unique=True, blank=True)
+    public_name = models.CharField(
+        max_length=120,
+        blank=True,
+        verbose_name="Nombre publico",
+        help_text="Nombre visible para clientes. Si queda vacio se usa el nombre interno.",
+    )
+    public_description = models.TextField(
+        blank=True,
+        verbose_name="Descripcion publica",
+        help_text="Texto corto opcional para el catalogo de clientes.",
+    )
     parent = models.ForeignKey(
         "self",
         on_delete=models.SET_NULL,
@@ -25,6 +36,17 @@ class Category(models.Model):
     )
     order = models.IntegerField(default=0, verbose_name="Orden")
     is_active = models.BooleanField(default=True, verbose_name="Activa")
+    visible_in_catalog = models.BooleanField(
+        default=True,
+        verbose_name="Visible en catalogo",
+        help_text="Controla si esta categoria aparece y habilita visibilidad publica de productos.",
+    )
+    is_featured = models.BooleanField(default=False, verbose_name="Destacada")
+    public_order = models.IntegerField(
+        default=0,
+        verbose_name="Orden publico",
+        help_text="Orden comercial para el catalogo de clientes.",
+    )
     seo_title = models.CharField(
         max_length=160,
         blank=True,
@@ -49,27 +71,36 @@ class Category(models.Model):
             models.Index(fields=["slug"]),
             models.Index(fields=["parent"]),
             models.Index(fields=["is_active"]),
+            models.Index(fields=["visible_in_catalog"]),
             models.Index(fields=["order"]),
+            models.Index(fields=["public_order"]),
             models.Index(fields=["parent", "is_active"]),
+            models.Index(fields=["parent", "visible_in_catalog"]),
         ]
 
     def save(self, *args, **kwargs):
         previous_is_active = None
+        previous_visible_in_catalog = None
         if self.pk:
-            previous_is_active = (
+            previous_state = (
                 Category.objects.filter(pk=self.pk)
-                .values_list("is_active", flat=True)
+                .values("is_active", "visible_in_catalog")
                 .first()
             )
+            if previous_state:
+                previous_is_active = previous_state.get("is_active")
+                previous_visible_in_catalog = previous_state.get("visible_in_catalog")
 
         if self.parent_id and self.is_active:
-            parent_is_active = (
+            parent_state = (
                 Category.objects.filter(pk=self.parent_id)
-                .values_list("is_active", flat=True)
+                .values("is_active", "visible_in_catalog")
                 .first()
             )
-            if parent_is_active is False:
+            if parent_state and parent_state.get("is_active") is False:
                 self.is_active = False
+            if parent_state and parent_state.get("visible_in_catalog") is False:
+                self.visible_in_catalog = False
 
         if not self.slug:
             from django.utils.text import slugify
@@ -94,16 +125,44 @@ class Category(models.Model):
                     updated_at=timezone.now(),
                 )
 
+        # Keep the public catalog tree coherent: hiding a parent hides the branch.
+        if previous_visible_in_catalog is True and self.visible_in_catalog is False:
+            descendant_ids = self.get_descendant_ids(include_self=False)
+            if descendant_ids:
+                Category.objects.filter(
+                    id__in=descendant_ids,
+                    visible_in_catalog=True,
+                ).update(
+                    visible_in_catalog=False,
+                    updated_at=timezone.now(),
+                )
+
     def __str__(self):
         if self.parent:
             return f"{self.parent.name} > {self.name}"
         return self.name
+
+    @property
+    def display_name(self):
+        return self.public_name.strip() or self.name
+
+    @property
+    def catalog_label(self):
+        return self.display_name
 
     def get_full_path(self):
         path = [self.name]
         parent = self.parent
         while parent:
             path.insert(0, parent.name)
+            parent = parent.parent
+        return " > ".join(path)
+
+    def get_public_full_path(self):
+        path = [self.display_name]
+        parent = self.parent
+        while parent:
+            path.insert(0, parent.display_name)
             parent = parent.parent
         return " > ".join(path)
 
@@ -165,6 +224,8 @@ class Category(models.Model):
         # Keep hierarchy state coherent: active child under inactive parent is not allowed.
         if new_parent and not new_parent.is_active and self.is_active:
             self.is_active = False
+        if new_parent and not new_parent.visible_in_catalog and self.visible_in_catalog:
+            self.visible_in_catalog = False
 
         self.save()
 
@@ -449,7 +510,10 @@ class Product(models.Model):
 
     @classmethod
     def catalog_visibility_q(cls, include_uncategorized=True):
-        visibility_q = Q(category__is_active=True) | Q(categories__is_active=True)
+        visibility_q = (
+            Q(category__is_active=True, category__visible_in_catalog=True)
+            | Q(categories__is_active=True, categories__visible_in_catalog=True)
+        )
         if include_uncategorized:
             visibility_q |= Q(category__isnull=True, categories__isnull=True)
         return visibility_q
@@ -459,7 +523,7 @@ class Product(models.Model):
         """
         Products visible in public catalog:
         - Product must be active
-        - At least one assigned category must be active
+        - At least one assigned category must be active and visible in catalog
           (or uncategorized if include_uncategorized=True).
         """
         qs = queryset if queryset is not None else cls.objects.all()
@@ -473,7 +537,7 @@ class Product(models.Model):
         linked_categories = self.get_linked_categories()
         if not linked_categories:
             return include_uncategorized
-        return any(cat.is_active for cat in linked_categories)
+        return any(cat.is_active and cat.visible_in_catalog for cat in linked_categories)
 
     def extract_attributes_from_description(self):
         """

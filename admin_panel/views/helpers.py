@@ -2071,6 +2071,15 @@ def detect_category_integrity_issues(categories):
                 f'Categoria activa "{category.name}" tiene padre inactivo "{category.parent.name}".'
             )
 
+        if (
+            getattr(category, "visible_in_catalog", True)
+            and category.parent
+            and not getattr(category.parent, "visible_in_catalog", True)
+        ):
+            issues.append(
+                f'Categoria visible "{category.name}" depende de padre oculto en catalogo "{category.parent.name}".'
+            )
+
         seen = set()
         parent = category.parent
         while parent:
@@ -2081,6 +2090,84 @@ def detect_category_integrity_issues(categories):
             parent = parent.parent
 
     return list(dict.fromkeys(issues))
+
+
+def build_category_catalog_diagnostics(categories):
+    """
+    Return compact catalog-facing diagnostics for the category admin.
+    """
+    category_list = list(categories)
+    category_map = {category.id: category for category in category_list}
+    active_visible_ids = {
+        category.id
+        for category in category_list
+        if category.is_active and getattr(category, "visible_in_catalog", True)
+    }
+
+    active_products = Product.objects.filter(is_active=True).prefetch_related("categories").select_related("category")
+    uncategorized_count = active_products.filter(category__isnull=True, categories__isnull=True).count()
+
+    category_product_counts = {category.id: 0 for category in category_list}
+    public_category_product_counts = {category.id: 0 for category in category_list}
+    active_products_only_hidden = 0
+
+    for product in active_products:
+        linked_categories = product.get_linked_categories()
+        linked_ids = {cat.id for cat in linked_categories if cat and cat.id in category_map}
+        public_linked_ids = {
+            cat.id
+            for cat in linked_categories
+            if cat and cat.id in active_visible_ids
+        }
+
+        if linked_ids and not public_linked_ids:
+            active_products_only_hidden += 1
+
+        for category_id in linked_ids:
+            category_product_counts[category_id] = category_product_counts.get(category_id, 0) + 1
+        public_counted_ids = set()
+        for category_id in public_linked_ids:
+            node = category_map.get(category_id)
+            while node and node.id in active_visible_ids:
+                public_counted_ids.add(node.id)
+                node = category_map.get(node.parent_id)
+        for category_id in public_counted_ids:
+            public_category_product_counts[category_id] = public_category_product_counts.get(category_id, 0) + 1
+
+    visible_empty = [
+        category for category in category_list
+        if category.id in active_visible_ids and public_category_product_counts.get(category.id, 0) == 0
+    ]
+    hidden_with_products = [
+        category for category in category_list
+        if (not getattr(category, "visible_in_catalog", True))
+        and category_product_counts.get(category.id, 0) > 0
+    ]
+
+    normalized_names = {}
+    for category in category_list:
+        key = (category.name or "").strip().lower()
+        if not key:
+            continue
+        normalized_names.setdefault(key, []).append(category)
+    duplicate_groups = [
+        group for group in normalized_names.values() if len(group) > 1
+    ]
+
+    return {
+        "visible_empty_count": len(visible_empty),
+        "visible_empty_samples": visible_empty[:5],
+        "hidden_with_products_count": len(hidden_with_products),
+        "hidden_with_products_samples": hidden_with_products[:5],
+        "uncategorized_active_products": uncategorized_count,
+        "active_products_only_hidden": active_products_only_hidden,
+        "duplicate_name_groups_count": len(duplicate_groups),
+        "duplicate_name_groups_samples": [
+            ", ".join(cat.get_full_path() for cat in group[:4])
+            for group in duplicate_groups[:5]
+        ],
+        "public_category_product_counts": public_category_product_counts,
+    }
 
 
 def calculate_category_deactivation_impact(category):
@@ -2337,14 +2424,17 @@ def enrich_products_with_category_state(products):
 
         for cat in linked_categories:
             is_category_active = bool(cat.is_active)
-            is_effective_active = bool(product.is_active and is_category_active)
+            is_category_public = bool(getattr(cat, "visible_in_catalog", True))
+            is_effective_active = bool(product.is_active and is_category_active and is_category_public)
             if is_effective_active:
                 active_category_count += 1
 
             category_status_rows.append({
                 'id': cat.id,
                 'name': cat.name,
+                'display_name': cat.display_name,
                 'is_category_active': is_category_active,
+                'is_category_public': is_category_public,
                 'is_effective_active': is_effective_active,
             })
 
@@ -2687,5 +2777,5 @@ def _get_report_client_contact_name(client):
 
 
 
-__all__ = ['ADMIN_ROLE_CHOICES', 'ADMIN_ROLE_LABELS', 'BILLABLE_FISCAL_DOC_TYPES', 'CLIENT_EXPORT_ENCODING_CHOICES', 'CLIENT_EXPORT_PRESET_CHOICES', 'CLIENT_FACTURABLE_STATUSES', 'CLIENT_REMITO_READY_STATUSES', 'CLIENT_REPORT_CURRENCY_CHOICES', 'CLIENT_REPORT_DATE_RANGE_CHOICES', 'CLIENT_REPORT_DEBTOR_CHOICES', 'CLIENT_REPORT_OPTIONAL_COLUMNS', 'CLIENT_REPORT_ORDER_STATUSES', 'CLIENT_REPORT_RANKING_CHOICES', 'CLIENT_REPORT_RESULTS_SORT_FIELDS', 'CLIENT_REPORT_STATE_CHOICES', 'CLIENT_REPORT_TEXT_FIELD_CHOICES', 'EMITTABLE_FISCAL_DOC_TYPES', 'FISCAL_PRINT_COPY_LABELS', 'FISCAL_PRINT_DOC_META', 'INVOICE_FISCAL_DOC_TYPES', 'ORDER_INTERNAL_DOC_STATUS_RULES', 'ORDER_PRODUCT_SEARCH_FIELDS', 'PRIMARY_SUPERADMIN_USERNAME', '_annotate_client_orders_with_documents', '_build_client_company_summary_rows', '_build_client_form_values', '_build_client_report_queryset', '_build_client_report_row', '_build_fiscal_collection_snapshot', '_build_related_sales_document_actions', '_client_export_csv_response', '_client_report_csv_response', '_client_report_date_label', '_client_report_matches_text', '_client_reports_nav', '_client_tools_nav', '_create_draft_order_for_client', '_create_related_order_from_source', '_delete_orphan_product_image', '_deny_fiscal_operation_if_needed', '_extract_linked_company_ids', '_find_products_for_order_query', '_format_currency_ars', '_get_client_export_rows', '_get_client_orders_queryset', '_get_client_report_locality_choices', '_get_fiscal_workflow_state', '_get_order_client_profile', '_get_report_client_address', '_get_report_client_balance', '_get_report_client_category', '_get_report_client_contact_name', '_get_report_client_document_detail', '_get_report_client_locality', '_get_report_client_price_list_name', '_get_report_client_province', '_get_report_client_state', '_get_report_company_link', '_is_ajax_request', '_is_checked', '_is_order_items_edit_locked', '_is_standalone_report_request', '_is_transaction_reopen_locked', '_movement_allows_print', '_recalculate_order_totals_from_items', '_redirect_admin_product_list_with_filters', '_redirect_client_history', '_render_client_form', '_resolve_client_editor_company', '_resolve_default_point_of_sale', '_resolve_fiscal_document_transaction', '_resolve_internal_document_transaction', '_resolve_invoice_sales_document_type_for_order', '_resolve_linked_companies', '_resolve_order_charge_transaction', '_resolve_order_item_pricing', '_resolve_preferred_invoice_doc_type', '_resolve_related_order_for_quick_action', '_resolve_related_order_from_order_id_for_quick_action', '_resolve_report_date_range', '_resolve_safe_next_url', '_send_password_reset_email_for_user', '_store_bulk_product_image', '_sum_decimal_values', '_validate_admin_image_upload', 'apply_admin_text_search', 'build_admin_user_snapshot', 'build_category_options', 'build_category_tree_rows', 'build_product_filter_chips', 'build_supplier_products_queryset', 'calculate_category_deactivation_impact', 'can_delete_client_record', 'can_edit_client_profile', 'can_manage_client_credentials', 'can_manage_fiscal_operations', 'collect_created_refs', 'detect_category_integrity_issues', 'enrich_products_with_category_state', 'ensure_admin_role_groups', 'extract_target_product_ids_from_post', 'generate_clamp_code_api', 'get_active_client_categories', 'get_admin_company_filter', 'get_admin_company_required', 'get_admin_company_scope_mode', 'get_admin_role_label', 'get_admin_role_labels', 'get_admin_role_value', 'get_admin_role_values', 'get_admin_selected_company', 'get_admin_user_scope_ids', 'get_cached_category_options', 'get_client_categories_for_client', 'get_managed_admin_users_queryset', 'get_product_queryset', 'get_recent_admin_user_audit_logs', 'is_primary_superadmin', 'normalize_admin_search_query', 'parse_admin_decimal_input', 'set_admin_role_for_user', 'set_admin_roles_for_user', 'settings_view', 'validate_attributes_for_category']
+__all__ = ['ADMIN_ROLE_CHOICES', 'ADMIN_ROLE_LABELS', 'BILLABLE_FISCAL_DOC_TYPES', 'CLIENT_EXPORT_ENCODING_CHOICES', 'CLIENT_EXPORT_PRESET_CHOICES', 'CLIENT_FACTURABLE_STATUSES', 'CLIENT_REMITO_READY_STATUSES', 'CLIENT_REPORT_CURRENCY_CHOICES', 'CLIENT_REPORT_DATE_RANGE_CHOICES', 'CLIENT_REPORT_DEBTOR_CHOICES', 'CLIENT_REPORT_OPTIONAL_COLUMNS', 'CLIENT_REPORT_ORDER_STATUSES', 'CLIENT_REPORT_RANKING_CHOICES', 'CLIENT_REPORT_RESULTS_SORT_FIELDS', 'CLIENT_REPORT_STATE_CHOICES', 'CLIENT_REPORT_TEXT_FIELD_CHOICES', 'EMITTABLE_FISCAL_DOC_TYPES', 'FISCAL_PRINT_COPY_LABELS', 'FISCAL_PRINT_DOC_META', 'INVOICE_FISCAL_DOC_TYPES', 'ORDER_INTERNAL_DOC_STATUS_RULES', 'ORDER_PRODUCT_SEARCH_FIELDS', 'PRIMARY_SUPERADMIN_USERNAME', '_annotate_client_orders_with_documents', '_build_client_company_summary_rows', '_build_client_form_values', '_build_client_report_queryset', '_build_client_report_row', '_build_fiscal_collection_snapshot', '_build_related_sales_document_actions', '_client_export_csv_response', '_client_report_csv_response', '_client_report_date_label', '_client_report_matches_text', '_client_reports_nav', '_client_tools_nav', '_create_draft_order_for_client', '_create_related_order_from_source', '_delete_orphan_product_image', '_deny_fiscal_operation_if_needed', '_extract_linked_company_ids', '_find_products_for_order_query', '_format_currency_ars', '_get_client_export_rows', '_get_client_orders_queryset', '_get_client_report_locality_choices', '_get_fiscal_workflow_state', '_get_order_client_profile', '_get_report_client_address', '_get_report_client_balance', '_get_report_client_category', '_get_report_client_contact_name', '_get_report_client_document_detail', '_get_report_client_locality', '_get_report_client_price_list_name', '_get_report_client_province', '_get_report_client_state', '_get_report_company_link', '_is_ajax_request', '_is_checked', '_is_order_items_edit_locked', '_is_standalone_report_request', '_is_transaction_reopen_locked', '_movement_allows_print', '_recalculate_order_totals_from_items', '_redirect_admin_product_list_with_filters', '_redirect_client_history', '_render_client_form', '_resolve_client_editor_company', '_resolve_default_point_of_sale', '_resolve_fiscal_document_transaction', '_resolve_internal_document_transaction', '_resolve_invoice_sales_document_type_for_order', '_resolve_linked_companies', '_resolve_order_charge_transaction', '_resolve_order_item_pricing', '_resolve_preferred_invoice_doc_type', '_resolve_related_order_for_quick_action', '_resolve_related_order_from_order_id_for_quick_action', '_resolve_report_date_range', '_resolve_safe_next_url', '_send_password_reset_email_for_user', '_store_bulk_product_image', '_sum_decimal_values', '_validate_admin_image_upload', 'apply_admin_text_search', 'build_admin_user_snapshot', 'build_category_catalog_diagnostics', 'build_category_options', 'build_category_tree_rows', 'build_product_filter_chips', 'build_supplier_products_queryset', 'calculate_category_deactivation_impact', 'can_delete_client_record', 'can_edit_client_profile', 'can_manage_client_credentials', 'can_manage_fiscal_operations', 'collect_created_refs', 'detect_category_integrity_issues', 'enrich_products_with_category_state', 'ensure_admin_role_groups', 'extract_target_product_ids_from_post', 'generate_clamp_code_api', 'get_active_client_categories', 'get_admin_company_filter', 'get_admin_company_required', 'get_admin_company_scope_mode', 'get_admin_role_label', 'get_admin_role_labels', 'get_admin_role_value', 'get_admin_role_values', 'get_admin_selected_company', 'get_admin_user_scope_ids', 'get_cached_category_options', 'get_client_categories_for_client', 'get_managed_admin_users_queryset', 'get_product_queryset', 'get_recent_admin_user_audit_logs', 'is_primary_superadmin', 'normalize_admin_search_query', 'parse_admin_decimal_input', 'set_admin_role_for_user', 'set_admin_roles_for_user', 'settings_view', 'validate_attributes_for_category']
 __all__.append('admin_company_access_table_available')
