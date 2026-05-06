@@ -58,11 +58,41 @@ class ImportForm(forms.Form):
 
 
 class ProductImportForm(ImportForm):
+    CATEGORY_MODE_CHOICES = [
+        (
+            "existing",
+            "Vincular solo categorias existentes (recomendado)",
+        ),
+        (
+            "ignore",
+            "No tocar categorias de productos",
+        ),
+        (
+            "hidden",
+            "Crear categorias nuevas ocultas para revisar",
+        ),
+        (
+            "create",
+            "Crear categorias nuevas visibles",
+        ),
+    ]
+
     update_existing = forms.BooleanField(
         required=False,
         initial=True,
         label="Actualizar existentes",
         help_text="Si se encuentra un producto con el mismo SKU, actualiza sus datos.",
+    )
+
+    category_mode = forms.ChoiceField(
+        choices=CATEGORY_MODE_CHOICES,
+        required=True,
+        initial="existing",
+        label="Categorias del Excel",
+        help_text=(
+            "Controla que hace el importador con Rubro/Categoria/Subrubro. "
+            "Por defecto no crea categorias nuevas."
+        ),
     )
 
 

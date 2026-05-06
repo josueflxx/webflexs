@@ -3055,6 +3055,86 @@ class CategoryManageProductsTests(TestCase):
         self.assertTrue(self.product.categories.filter(pk=self.category.pk).exists())
 
 
+class CategoryBulkActionTests(TestCase):
+    def setUp(self):
+        self.superadmin = User.objects.create_superuser(
+            username='josueflexs',
+            email='josue@example.com',
+            password='secret123',
+        )
+
+    def test_delete_empty_selected_categories_protects_linked_products(self):
+        empty_category = Category.objects.create(name='Categoria Vacia', slug='categoria-vacia')
+        linked_category = Category.objects.create(name='Categoria Con Productos', slug='categoria-con-productos')
+        Product.objects.create(
+            sku='CAT-LINK-001',
+            name='Producto vinculado a categoria',
+            price=Decimal('100.00'),
+            cost=Decimal('50.00'),
+            category=linked_category,
+        )
+
+        self.client.force_login(self.superadmin)
+        response = self.client.post(
+            reverse('admin_category_bulk_status'),
+            data={
+                'bulk_action': 'delete_empty',
+                'category_ids': [str(empty_category.pk), str(linked_category.pk)],
+            },
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(Category.objects.filter(pk=empty_category.pk).exists())
+        self.assertTrue(Category.objects.filter(pk=linked_category.pk).exists())
+
+    def test_merge_delete_moves_product_links_to_target(self):
+        source_category = Category.objects.create(name='Rubro Importado', slug='rubro-importado')
+        target_category = Category.objects.create(name='Rubro Correcto', slug='rubro-correcto')
+        product = Product.objects.create(
+            sku='CAT-MERGE-001',
+            name='Producto para fusion',
+            price=Decimal('100.00'),
+            cost=Decimal('50.00'),
+            category=source_category,
+        )
+        product.categories.add(source_category)
+
+        self.client.force_login(self.superadmin)
+        response = self.client.post(
+            reverse('admin_category_bulk_status'),
+            data={
+                'bulk_action': 'merge_delete',
+                'target_category_id': str(target_category.pk),
+                'category_ids': [str(source_category.pk)],
+            },
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(Category.objects.filter(pk=source_category.pk).exists())
+        product.refresh_from_db()
+        self.assertEqual(product.category_id, target_category.pk)
+        self.assertTrue(product.categories.filter(pk=target_category.pk).exists())
+
+    def test_hide_catalog_selected_categories(self):
+        category = Category.objects.create(name='Visible Cliente', slug='visible-cliente')
+
+        self.client.force_login(self.superadmin)
+        response = self.client.post(
+            reverse('admin_category_bulk_status'),
+            data={
+                'bulk_action': 'hide_catalog',
+                'category_ids': [str(category.pk)],
+            },
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        category.refresh_from_db()
+        self.assertFalse(category.visible_in_catalog)
+
+
 class ProductBulkCategoryFallbackTests(TestCase):
     def setUp(self):
         self.superadmin = User.objects.create_superuser(

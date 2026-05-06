@@ -204,13 +204,26 @@ class ProductImporter(BaseImporter):
     DUPLICATE_COUNT_KEY = "Duplicados importacion"
     DUPLICATE_DETAIL_KEY = "Detalle duplicados importacion"
     DUPLICATE_ORIGINAL_ROW_KEY = "Fila original importacion"
+    CATEGORY_MODE_IGNORE = "ignore"
+    CATEGORY_MODE_EXISTING = "existing"
+    CATEGORY_MODE_HIDDEN = "hidden"
+    CATEGORY_MODE_CREATE = "create"
+    CATEGORY_MODES = {
+        CATEGORY_MODE_IGNORE,
+        CATEGORY_MODE_EXISTING,
+        CATEGORY_MODE_HIDDEN,
+        CATEGORY_MODE_CREATE,
+    }
 
-    def __init__(self, file):
+    def __init__(self, file, category_mode=None):
         super().__init__(file)
         self.required_columns = ["sku"]
         self._seen_skus = {}
         self._seen_row_data = {}
         self.column_mapping_mode = "headers"
+        self.category_mode = category_mode or self.CATEGORY_MODE_EXISTING
+        if self.category_mode not in self.CATEGORY_MODES:
+            self.category_mode = self.CATEGORY_MODE_EXISTING
 
     def load_data(self):
         super().load_data()
@@ -271,24 +284,42 @@ class ProductImporter(BaseImporter):
         if parent:
             qs = qs.filter(parent=parent)
         category = qs.first()
-        if category or dry_run:
+        if category or dry_run or self.category_mode in {
+            self.CATEGORY_MODE_IGNORE,
+            self.CATEGORY_MODE_EXISTING,
+        }:
             return category
+
+        category_defaults = {
+            "name": name,
+            "parent": parent,
+            "slug": unique_slug_for_model(Category, name),
+            "is_active": True,
+        }
+        if self.category_mode == self.CATEGORY_MODE_HIDDEN:
+            category_defaults.update({
+                "is_active": False,
+                "visible_in_catalog": False,
+            })
         return Category.objects.create(
-            name=name,
-            parent=parent,
-            slug=unique_slug_for_model(Category, name),
-            is_active=True,
+            **category_defaults,
         )
 
     def _assign_categories(self, product, row, dry_run=True):
+        if self.category_mode == self.CATEGORY_MODE_IGNORE:
+            return []
+
         category_names = self._get_category_names(row)
         if not category_names:
-            return
+            return []
 
         parent = None
         parent_name = self._get_parent_category_name(row)
+        missing = []
         if parent_name:
             parent = self._resolve_category(parent_name, dry_run=dry_run)
+            if not parent:
+                missing.append(parent_name)
 
         resolved = []
         for name in category_names:
@@ -298,14 +329,17 @@ class ProductImporter(BaseImporter):
                 category = self._resolve_category(name, parent=parent, dry_run=dry_run)
             if category:
                 resolved.append(category)
+            else:
+                missing.append(name)
 
         if dry_run or not resolved:
-            return
+            return list(dict.fromkeys(missing))
 
         product.categories.add(*resolved)
         if product.category_id is None:
             product.category = resolved[-1]
             product.save(update_fields=["category", "updated_at"])
+        return list(dict.fromkeys(missing))
 
     def _parse_price(self, row, existing, errors):
         raw = row.get("precio_final")
@@ -487,10 +521,14 @@ class ProductImporter(BaseImporter):
             "costo": str(cost) if cost is not None else "",
             "stock": stock if stock is not None else "",
             "categorias": self._get_category_names(row),
+            "modo_categorias": self.category_mode,
             "atributos": attributes or {},
         }
 
         if dry_run:
+            missing_categories = self._assign_categories(None, row, dry_run=True)
+            if missing_categories:
+                result.data["categorias_no_encontradas"] = missing_categories
             result.success = True
             result.action = "updated" if existing else "created"
             return result
@@ -581,7 +619,9 @@ class ProductImporter(BaseImporter):
                 )
                 created = True
 
-            self._assign_categories(product, row, dry_run=False)
+            missing_categories = self._assign_categories(product, row, dry_run=False)
+            if missing_categories:
+                result.data["categorias_no_encontradas"] = missing_categories
             self.check_and_run_parser(product, dry_run=dry_run)
 
             result.success = True

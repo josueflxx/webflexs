@@ -87,11 +87,12 @@
             <li>Productos acepta encabezados flexibles: SKU/Codigo, Nombre/Articulo, Proveedor, Precio/Venta, Costo, Stock, Categoria/Rubro/Subrubro y Activo.</li>
             <li>Formato SaaS Argentina: Codigo es SKU, Precio Final ($) es el precio de catalogo y Precio ($) queda guardado como precio neto de origen.</li>
             <li>Campos utiles de origen como Nro producto, Codigo proveedor, UPC, IVA, Unidad y Utilidad quedan guardados en atributos del producto.</li>
+            <li>Por seguridad, las categorias del Excel no se crean automaticamente salvo que lo elijas abajo.</li>
             <li>Compatibilidad vieja: A=SKU, B=Nombre, C=Proveedor, D=Precio, E=Stock, F..J=Filtro_1..Filtro_5.</li>
             <li>Las celdas vacias no borran datos existentes: solo actualizan campos con valores validos.</li>
             {% elif import_type == 'abrazaderas' %}
             <li>Abrazaderas acepta DESCRIPCION/CODIGO/PRECIO o SKU/NOMBRE/PRECIO/STOCK/CATEGORIA.</li>
-            <li>Se vinculan automaticamente a la categoria Abrazaderas y se intenta completar la ficha tecnica.</li>
+            <li>Se vinculan a categorias existentes y se intenta completar la ficha tecnica. Solo crea categorias si lo autorizas abajo.</li>
             <li>Las celdas vacias no borran datos existentes.</li>
             {% endif %}
         </ul>
@@ -132,6 +133,16 @@
         {% if form.update_existing %}
         <div class="form-group">
             {{ form.update_existing }} {{ form.update_existing.label }}
+        </div>
+        {% endif %}
+
+        {% if form.category_mode %}
+        <div class="form-group">
+            <label for="{{ form.category_mode.id_for_label }}" class="form-label">{{ form.category_mode.label }}</label>
+            {{ form.category_mode }}
+            <small class="text-muted" style="display: block; margin-top: 5px;">
+                {{ form.category_mode.help_text }}
+            </small>
         </div>
         {% endif %}
 
@@ -224,17 +235,24 @@
                 <strong>Creados (simulado):</strong> ${preview.created || 0}<br>
                 <strong>Actualizados (simulado):</strong> ${preview.updated || 0}<br>
                 <strong>Errores:</strong> ${preview.errors || 0}<br>
-                <strong>Duplicados con aviso:</strong> ${preview.duplicate_count || 0}
+                <strong>Duplicados con aviso:</strong> ${preview.duplicate_count || 0}<br>
+                <strong>Categorias no encontradas:</strong> ${(preview.category_warnings || []).length}
             `;
             const hasErrors = preview.row_errors && preview.row_errors.length > 0;
             const hasDuplicateWarnings = preview.duplicate_warnings && preview.duplicate_warnings.length > 0;
-            if (hasErrors || hasDuplicateWarnings) {
+            const hasCategoryWarnings = preview.category_warnings && preview.category_warnings.length > 0;
+            if (hasErrors || hasDuplicateWarnings || hasCategoryWarnings) {
                 let html = '';
-                previewErrors.classList.toggle('has-only-warnings', !hasErrors && hasDuplicateWarnings);
+                previewErrors.classList.toggle('has-only-warnings', !hasErrors && (hasDuplicateWarnings || hasCategoryWarnings));
                 if (hasErrors) {
                     html += '<h5>Errores detectados:</h5><ul>' +
                         preview.row_errors.map((err) => `<li>Fila ${err.row}: ${err.message}</li>`).join('') +
                         '</ul>';
+                }
+                if (hasCategoryWarnings) {
+                    html += '<h5>Avisos de categorias:</h5><ul>' +
+                        preview.category_warnings.map((err) => `<li>Fila ${err.row}: ${err.message}</li>`).join('') +
+                        '</ul><small>Con el modo recomendado no se crean categorias nuevas: solo se vinculan las que ya existen.</small>';
                 }
                 if (hasDuplicateWarnings) {
                     html += '<h5>Avisos de duplicados:</h5><ul>' +
@@ -408,6 +426,7 @@
             const updated = result.updated || 0;
             const errors = result.errors || 0;
             const duplicates = result.duplicate_count || 0;
+            const categoryWarnings = result.category_warnings || [];
             const executionId = result.execution_id || '-';
 
             document.getElementById('resultSummary').innerHTML = `
@@ -415,7 +434,8 @@
                 <strong>Creados:</strong> ${created}<br>
                 <strong>Actualizados:</strong> ${updated}<br>
                 <strong>Errores:</strong> ${errors}<br>
-                <strong>Duplicados registrados:</strong> ${duplicates}
+                <strong>Duplicados registrados:</strong> ${duplicates}<br>
+                <strong>Categorias no encontradas:</strong> ${categoryWarnings.length}
             `;
 
             const errorZone = document.getElementById('errorZone');
@@ -431,6 +451,14 @@
                 errorZone.classList.add('has-only-warnings');
                 let warningHtml = '<h5>Avisos de duplicados registrados:</h5><ul>';
                 result.duplicate_warnings.forEach((err) => {
+                    warningHtml += `<li>Fila ${err.row}: ${err.message}</li>`;
+                });
+                warningHtml += '</ul>';
+                errorZone.innerHTML = warningHtml;
+            } else if (result.category_warnings && result.category_warnings.length > 0) {
+                errorZone.classList.add('has-only-warnings');
+                let warningHtml = '<h5>Avisos de categorias:</h5><ul>';
+                result.category_warnings.forEach((err) => {
                     warningHtml += `<li>Fila ${err.row}: ${err.message}</li>`;
                 });
                 warningHtml += '</ul>';

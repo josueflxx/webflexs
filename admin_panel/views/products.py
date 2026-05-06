@@ -1314,10 +1314,11 @@ def category_reorder(request):
 @superuser_required_for_modifications
 def category_bulk_status(request):
     """
-    Bulk activate/deactivate selected categories.
+    Bulk maintenance actions for selected categories.
     """
     action = request.POST.get("bulk_action", "").strip().lower()
     selected_ids = normalize_category_ids(request.POST.getlist("category_ids"))
+    target_raw = request.POST.get("target_category_id", "").strip()
     q = request.POST.get("q", "").strip()
     status = request.POST.get("status", "all").strip().lower()
 
@@ -1334,7 +1335,19 @@ def category_bulk_status(request):
         messages.warning(request, "No se seleccionaron categorias.")
         return redirect(redirect_url)
 
-    if action not in {"activate", "deactivate"}:
+    valid_actions = {
+        "activate",
+        "deactivate",
+        "show_catalog",
+        "hide_catalog",
+        "feature",
+        "unfeature",
+        "move",
+        "clear_parent",
+        "delete_empty",
+        "merge_delete",
+    }
+    if action not in valid_actions:
         messages.error(request, "Accion masiva invalida.")
         return redirect(redirect_url)
 
@@ -1346,10 +1359,43 @@ def category_bulk_status(request):
         messages.warning(request, "No se encontraron categorias validas para actualizar.")
         return redirect(redirect_url)
 
+    selected_set = set(categories_map.keys())
     ordered_categories = sorted(
         categories_map.values(),
         key=lambda cat: len(cat.get_ancestor_ids(include_self=True)),
     )
+
+    def _root_selected_categories():
+        roots = []
+        for category in ordered_categories:
+            ancestor_ids = category.get_ancestor_ids(include_self=False)
+            if not any(ancestor_id in selected_set for ancestor_id in ancestor_ids):
+                roots.append(category)
+        return roots
+
+    def _deep_selected_categories():
+        return sorted(
+            ordered_categories,
+            key=lambda cat: len(cat.get_ancestor_ids(include_self=True)),
+            reverse=True,
+        )
+
+    def _linked_product_count(category):
+        return Product.objects.filter(
+            Q(category_id=category.pk) | Q(categories__id=category.pk)
+        ).distinct().count()
+
+    def _resolve_target_category():
+        if not target_raw:
+            return None, "Selecciona una categoria destino."
+        if not target_raw.isdigit():
+            return None, "Categoria destino invalida."
+        target = Category.objects.filter(pk=int(target_raw)).first()
+        if not target:
+            return None, "No se encontro la categoria destino."
+        if target.pk in selected_set:
+            return None, "La categoria destino no puede estar dentro de la seleccion."
+        return target, ""
 
     if action == "deactivate":
         impacted_ids = set()
@@ -1388,6 +1434,249 @@ def category_bulk_status(request):
                 "selected_ids": list(categories_map.keys())[:200],
                 "deactivated_total": deactivated_total,
                 "cascaded": cascaded,
+            },
+        )
+        return redirect(redirect_url)
+
+    if action == "hide_catalog":
+        impacted_ids = set()
+        for category in ordered_categories:
+            impacted_ids.update(category.get_descendant_ids(include_self=True))
+
+        visible_before_ids = set(
+            Category.objects.filter(
+                id__in=impacted_ids,
+                visible_in_catalog=True,
+            ).values_list("id", flat=True)
+        )
+
+        for category in ordered_categories:
+            if category.visible_in_catalog:
+                category.visible_in_catalog = False
+                category.save()
+
+        visible_after_ids = set(
+            Category.objects.filter(
+                id__in=impacted_ids,
+                visible_in_catalog=True,
+            ).values_list("id", flat=True)
+        )
+        hidden_total = len(visible_before_ids - visible_after_ids)
+        messages.success(request, f"Categorias ocultadas del catalogo cliente: {hidden_total}.")
+        log_admin_action(
+            request,
+            action="category_bulk_hide_catalog",
+            target_type="category_bulk",
+            details={
+                "selected_count": len(categories_map),
+                "selected_ids": list(categories_map.keys())[:200],
+                "hidden_total": hidden_total,
+            },
+        )
+        return redirect(redirect_url)
+
+    if action == "show_catalog":
+        visible_before = {
+            category.id: category.visible_in_catalog for category in ordered_categories
+        }
+        blocked = 0
+        with transaction.atomic():
+            for category in ordered_categories:
+                category.visible_in_catalog = True
+                category.save()
+
+        refreshed = Category.objects.filter(id__in=categories_map.keys())
+        shown = 0
+        for category in refreshed:
+            if not visible_before.get(category.id, False) and category.visible_in_catalog:
+                shown += 1
+            if not category.visible_in_catalog:
+                blocked += 1
+
+        if blocked:
+            messages.warning(
+                request,
+                f"Se hicieron visibles {shown} categorias. "
+                f"{blocked} siguen ocultas porque dependen de un padre oculto.",
+            )
+        else:
+            messages.success(request, f"Categorias visibles para cliente: {shown}.")
+        log_admin_action(
+            request,
+            action="category_bulk_show_catalog",
+            target_type="category_bulk",
+            details={
+                "selected_count": len(categories_map),
+                "selected_ids": list(categories_map.keys())[:200],
+                "shown": shown,
+                "blocked": blocked,
+            },
+        )
+        return redirect(redirect_url)
+
+    if action in {"feature", "unfeature"}:
+        featured_value = action == "feature"
+        updated = Category.objects.filter(id__in=selected_ids).update(
+            is_featured=featured_value,
+            updated_at=timezone.now(),
+        )
+        label = "destacadas" if featured_value else "quitadas de destacados"
+        messages.success(request, f"Categorias {label}: {updated}.")
+        log_admin_action(
+            request,
+            action=f"category_bulk_{action}",
+            target_type="category_bulk",
+            details={
+                "selected_count": len(categories_map),
+                "selected_ids": list(categories_map.keys())[:200],
+                "updated": updated,
+            },
+        )
+        return redirect(redirect_url)
+
+    if action in {"move", "clear_parent"}:
+        new_parent = None
+        if action == "move":
+            new_parent, error = _resolve_target_category()
+            if error:
+                messages.error(request, error)
+                return redirect(redirect_url)
+
+        moved = 0
+        skipped = []
+        with transaction.atomic():
+            for category in _root_selected_categories():
+                if not category.can_move_to(new_parent):
+                    skipped.append(category.name)
+                    continue
+                category.move_to(new_parent)
+                moved += 1
+
+        destination = new_parent.name if new_parent else "raiz"
+        if skipped:
+            messages.warning(
+                request,
+                f"Se movieron {moved} categorias a {destination}. "
+                f"Se omitieron {len(skipped)} por riesgo de ciclo.",
+            )
+        else:
+            messages.success(request, f"Se movieron {moved} categorias a {destination}.")
+        log_admin_action(
+            request,
+            action="category_bulk_move",
+            target_type="category_bulk",
+            details={
+                "selected_count": len(categories_map),
+                "selected_ids": list(categories_map.keys())[:200],
+                "moved": moved,
+                "target_id": new_parent.pk if new_parent else None,
+                "skipped": skipped[:50],
+            },
+        )
+        return redirect(redirect_url)
+
+    if action == "delete_empty":
+        deleted = 0
+        skipped_with_products = 0
+        skipped_with_children = 0
+        deleted_names = []
+        with transaction.atomic():
+            for category in _deep_selected_categories():
+                if _linked_product_count(category):
+                    skipped_with_products += 1
+                    continue
+                if Category.objects.filter(parent_id=category.pk).exists():
+                    skipped_with_children += 1
+                    continue
+                deleted_names.append(category.name)
+                category.delete()
+                deleted += 1
+
+        if deleted:
+            messages.success(request, f"Categorias vacias eliminadas: {deleted}.")
+        if skipped_with_products or skipped_with_children:
+            messages.warning(
+                request,
+                "Se protegieron categorias con productos o subcategorias: "
+                f"{skipped_with_products} con productos, {skipped_with_children} con subcategorias.",
+            )
+        log_admin_action(
+            request,
+            action="category_bulk_delete_empty",
+            target_type="category_bulk",
+            details={
+                "selected_count": len(categories_map),
+                "selected_ids": list(categories_map.keys())[:200],
+                "deleted": deleted,
+                "deleted_names": deleted_names[:100],
+                "skipped_with_products": skipped_with_products,
+                "skipped_with_children": skipped_with_children,
+            },
+        )
+        return redirect(redirect_url)
+
+    if action == "merge_delete":
+        target, error = _resolve_target_category()
+        if error:
+            messages.error(request, error)
+            return redirect(redirect_url)
+
+        merged = 0
+        moved_primary_links = 0
+        moved_m2m_links = 0
+        moved_children = 0
+        skipped = []
+        with transaction.atomic():
+            for category in _deep_selected_categories():
+                if not target or target.pk in category.get_descendant_ids(include_self=True):
+                    skipped.append(category.name)
+                    continue
+
+                primary_count = Product.objects.filter(category_id=category.pk).update(category_id=target.pk)
+                moved_primary_links += primary_count
+
+                linked_products = Product.objects.filter(categories=category).distinct()
+                linked_count = linked_products.count()
+                for product in linked_products.iterator():
+                    product.categories.add(target)
+                    product.categories.remove(category)
+                moved_m2m_links += linked_count
+
+                children = list(Category.objects.filter(parent_id=category.pk))
+                for child in children:
+                    if child.pk == target.pk:
+                        continue
+                    child.move_to(target)
+                    moved_children += 1
+
+                category.delete()
+                merged += 1
+
+        if skipped:
+            messages.warning(
+                request,
+                f"Se fusionaron {merged} categorias en {target.name}. "
+                f"Se omitieron {len(skipped)} por relacion jerarquica invalida.",
+            )
+        else:
+            messages.success(
+                request,
+                f"Se fusionaron {merged} categorias en {target.name}. "
+                f"Productos movidos: {moved_primary_links + moved_m2m_links}.",
+            )
+        log_admin_action(
+            request,
+            action="category_bulk_merge_delete",
+            target_type="category_bulk",
+            details={
+                "selected_count": len(categories_map),
+                "selected_ids": list(categories_map.keys())[:200],
+                "target_id": target.pk,
+                "merged": merged,
+                "moved_primary_links": moved_primary_links,
+                "moved_m2m_links": moved_m2m_links,
+                "moved_children": moved_children,
+                "skipped": skipped[:50],
             },
         )
         return redirect(redirect_url)

@@ -19,7 +19,15 @@ def _should_run_import_sync():
     return bool(getattr(settings, "IMPORTS_FORCE_SYNC", False))
 
 
-def dispatch_import_job(task_id, execution_id, import_type, importer_class_path, file_path, dry_run):
+def dispatch_import_job(
+    task_id,
+    execution_id,
+    import_type,
+    importer_class_path,
+    file_path,
+    dry_run,
+    import_options=None,
+):
     """
     Dispatch import execution to:
     - Celery queue if FEATURE_BACKGROUND_JOBS_ENABLED is active and backend available
@@ -33,6 +41,7 @@ def dispatch_import_job(task_id, execution_id, import_type, importer_class_path,
             importer_class_path,
             file_path,
             bool(dry_run),
+            import_options or {},
         )
         ImportTaskManager.set_backend(task_id, backend="sync", job_id="")
         return {"backend": "sync", "job_id": ""}
@@ -48,6 +57,7 @@ def dispatch_import_job(task_id, execution_id, import_type, importer_class_path,
                 importer_class_path,
                 file_path,
                 bool(dry_run),
+                import_options or {},
             )
             ImportTaskManager.set_backend(task_id, backend="celery", job_id=getattr(async_result, "id", ""))
             return {"backend": "celery", "job_id": getattr(async_result, "id", "")}
@@ -56,7 +66,15 @@ def dispatch_import_job(task_id, execution_id, import_type, importer_class_path,
 
     thread = threading.Thread(
         target=run_import_execution,
-        args=(task_id, execution_id, import_type, importer_class_path, file_path, bool(dry_run)),
+        args=(
+            task_id,
+            execution_id,
+            import_type,
+            importer_class_path,
+            file_path,
+            bool(dry_run),
+            import_options or {},
+        ),
         daemon=True,
     )
     thread.start()

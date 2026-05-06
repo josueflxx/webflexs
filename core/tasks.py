@@ -33,7 +33,15 @@ else:
 
 
 @shared_task(name="core.run_import_execution_task")
-def run_import_execution_task(task_id, execution_id, import_type, importer_class_path, file_path, dry_run):
+def run_import_execution_task(
+    task_id,
+    execution_id,
+    import_type,
+    importer_class_path,
+    file_path,
+    dry_run,
+    import_options=None,
+):
     """
     Run one import execution in background.
     """
@@ -44,6 +52,7 @@ def run_import_execution_task(task_id, execution_id, import_type, importer_class
         importer_class_path=importer_class_path,
         file_path=file_path,
         dry_run=bool(dry_run),
+        import_options=import_options or {},
     )
     return {"task_id": task_id, "execution_id": execution_id}
 

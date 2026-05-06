@@ -321,6 +321,22 @@ def _resolve_import_classes(import_type):
     return None, None
 
 
+def _import_options_from_data(data, import_type):
+    if import_type not in {"products", "abrazaderas"}:
+        return {}
+    category_mode = str(data.get("category_mode") or "existing").strip()
+    if category_mode not in {"ignore", "existing", "hidden", "create"}:
+        category_mode = "existing"
+    return {"category_mode": category_mode}
+
+
+def _build_importer(importer_class, file_path, import_type, options=None):
+    options = options or {}
+    if import_type in {"products", "abrazaderas"}:
+        return importer_class(file_path, **options)
+    return importer_class(file_path)
+
+
 def _cell_value(value):
     value = sanitize_import_data(value)
     if isinstance(value, (dict, list)):
@@ -368,6 +384,23 @@ def _import_duplicate_warnings(result, limit=50):
         for row in result.row_results
         if (getattr(row, 'data', {}) or {}).get('_duplicate_sku')
     ][:limit]
+
+
+def _import_category_warnings(result, limit=50):
+    warnings = []
+    for row in result.row_results:
+        data = sanitize_import_data(getattr(row, 'data', {}) or {})
+        missing = data.get('categorias_no_encontradas') or []
+        if not missing:
+            continue
+        if isinstance(missing, str):
+            missing = [missing]
+        warnings.append({
+            'row': row.row_number,
+            'message': 'Categorias no encontradas: ' + ', '.join(str(item) for item in missing),
+            'data': data,
+        })
+    return warnings[:limit]
 
 
 def _build_import_diagnostic_workbook(result, import_type):
@@ -434,6 +467,25 @@ def _build_import_diagnostic_workbook(result, import_type):
             _cell_value('; '.join(str(error) for error in (row.errors or []))),
         ])
 
+    category_sheet = workbook.create_sheet('Categorias no encontradas')
+    category_sheet.append(['Fila', 'Codigo', 'Nombre', 'Categorias no encontradas', 'Modo usado', 'Sugerencia'])
+    category_rows = _import_category_warnings(result, limit=1000)
+    for item in category_rows:
+        data = sanitize_import_data(item.get('data') or {})
+        missing = data.get('categorias_no_encontradas') or []
+        if isinstance(missing, str):
+            missing = [missing]
+        category_sheet.append([
+            _cell_value(item.get('row')),
+            _cell_value(data.get('sku') or data.get('codigo') or ''),
+            _cell_value(data.get('nombre') or data.get('descripcion') or ''),
+            _cell_value(', '.join(str(value) for value in missing)),
+            _cell_value(data.get('modo_categorias') or ''),
+            _cell_value('Crear o corregir la categoria antes de importar, o cambiar el modo de categorias.'),
+        ])
+    if not category_rows:
+        category_sheet.append(['Sin categorias faltantes detectadas.'])
+
     summary = workbook.create_sheet('Resumen', 0)
     summary.append(['Tipo de importacion', import_type])
     summary.append(['Filas', result.total_rows])
@@ -441,6 +493,7 @@ def _build_import_diagnostic_workbook(result, import_type):
     summary.append(['Actualizados simulados', result.updated])
     summary.append(['Errores', result.errors])
     summary.append(['Duplicados', len(duplicate_rows)])
+    summary.append(['Categorias no encontradas', len(category_rows)])
     summary.append([])
     summary.append(['Lectura recomendada'])
     summary.append(['1', 'Revisar la hoja Duplicados.'])
@@ -482,7 +535,8 @@ def import_diagnostic_download(request, import_type):
             for chunk in uploaded_file.chunks():
                 destination.write(chunk)
 
-        importer = ImporterClass(file_path)
+        import_options = _import_options_from_data(request.POST, import_type)
+        importer = _build_importer(ImporterClass, file_path, import_type, import_options)
         preview = importer.run(dry_run=True)
         workbook = _build_import_diagnostic_workbook(preview, import_type)
         output = BytesIO()
@@ -509,13 +563,14 @@ def import_diagnostic_download(request, import_type):
             pass
 
 
-def run_background_import(task_id, execution_id, import_type, ImporterClass, file_path, dry_run):
+def run_background_import(task_id, execution_id, import_type, ImporterClass, file_path, dry_run, import_options=None):
     """Function to run in a separate thread."""
     execution = ImportExecution.objects.filter(pk=execution_id).first()
     try:
         preflight_errors = []
+        import_options = import_options or {}
         if not dry_run:
-            preflight_importer = ImporterClass(file_path)
+            preflight_importer = _build_importer(ImporterClass, file_path, import_type, import_options)
             preflight_result = preflight_importer.run(dry_run=True)
             preflight_errors = _import_row_errors(preflight_result)
             if preflight_result.has_errors:
@@ -541,7 +596,7 @@ def run_background_import(task_id, execution_id, import_type, ImporterClass, fil
         def progress_callback(current, total):
             ImportTaskManager.update_progress(task_id, current, total, f"Procesando fila {current} de {total}")
 
-        importer = ImporterClass(file_path)
+        importer = _build_importer(ImporterClass, file_path, import_type, import_options)
         result = importer.run(dry_run=dry_run, progress_callback=progress_callback)
 
         created_refs = collect_created_refs(import_type, result.row_results) if not dry_run else []
@@ -553,6 +608,7 @@ def run_background_import(task_id, execution_id, import_type, ImporterClass, fil
             'row_errors': _import_row_errors(result),
             'duplicate_count': len(_extract_duplicate_rows(result)),
             'duplicate_warnings': _import_duplicate_warnings(result),
+            'category_warnings': _import_category_warnings(result),
             'preflight_errors': preflight_errors,
             'execution_id': execution_id,
             'import_type': import_type,
@@ -727,6 +783,7 @@ def import_process(request, import_type):
             try:
                 uploaded_file = request.FILES['file']
                 preview_only = request.POST.get('preview_only') == '1'
+                import_options = _import_options_from_data(form.cleaned_data, import_type)
                 temp_dir = os.path.join(settings.BASE_DIR, 'media', 'temp_imports')
                 os.makedirs(temp_dir, exist_ok=True)
 
@@ -738,7 +795,7 @@ def import_process(request, import_type):
                         destination.write(chunk)
 
                 if preview_only:
-                    importer = ImporterClass(file_path)
+                    importer = _build_importer(ImporterClass, file_path, import_type, import_options)
                     preview = importer.run(dry_run=True)
                     try:
                         if os.path.exists(file_path):
@@ -757,6 +814,7 @@ def import_process(request, import_type):
                             'row_errors': _import_row_errors(preview),
                             'duplicate_count': len(_extract_duplicate_rows(preview)),
                             'duplicate_warnings': _import_duplicate_warnings(preview),
+                            'category_warnings': _import_category_warnings(preview),
                         },
                     })
 
@@ -779,6 +837,7 @@ def import_process(request, import_type):
                     dry_run=dry_run,
                     status=ImportExecution.STATUS_PROCESSING,
                     metrics={},
+                    result_summary={'import_options': import_options},
                     supplier_name="",
                 )
 
@@ -790,6 +849,7 @@ def import_process(request, import_type):
                     importer_class_path=importer_class_path,
                     file_path=file_path,
                     dry_run=dry_run,
+                    import_options=import_options,
                 )
 
                 log_admin_action(
@@ -803,6 +863,7 @@ def import_process(request, import_type):
                         'confirm_apply': bool(confirm_apply),
                         'file_name': file_basename,
                         'backend': dispatch_result.get('backend', 'thread'),
+                        'import_options': import_options,
                     },
                 )
 

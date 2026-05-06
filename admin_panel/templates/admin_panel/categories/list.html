@@ -63,6 +63,27 @@
         flex-wrap: wrap;
     }
 
+    .bulk-action-controls {
+        display: grid;
+        grid-template-columns: minmax(210px, 1fr) minmax(230px, 1fr) auto;
+        gap: 10px;
+        align-items: center;
+        flex: 1;
+        min-width: min(760px, 100%);
+    }
+
+    .bulk-action-controls .form-select {
+        min-height: 38px;
+    }
+
+    .bulk-target-wrapper {
+        display: none;
+    }
+
+    .bulk-target-wrapper.show {
+        display: block;
+    }
+
     .bulk-actions-count {
         color: var(--color-gray-light);
         font-size: 0.85rem;
@@ -385,6 +406,10 @@
             align-items: stretch;
         }
 
+        .bulk-action-controls {
+            grid-template-columns: 1fr;
+        }
+
         .catalog-diagnostics {
             grid-template-columns: 1fr;
         }
@@ -437,18 +462,39 @@
     <div class="admin-toolbar">
         <div class="bulk-actions-bar">
             <strong>Acciones masivas</strong>
-            <button type="button" class="btn btn-outline btn-inline" id="bulkActivateBtn" onclick="submitBulkCategoryStatus('activate')" disabled>
-                Activar seleccionadas
-            </button>
-            <button type="button" class="btn btn-outline btn-inline btn-danger-outline" id="bulkDeactivateBtn" onclick="submitBulkCategoryStatus('deactivate')" disabled>
-                Desactivar seleccionadas
-            </button>
+            <div class="bulk-action-controls">
+                <select id="bulkActionSelect" class="form-select">
+                    <option value="">Elegir accion...</option>
+                    <option value="activate">Activar seleccionadas</option>
+                    <option value="deactivate">Desactivar seleccionadas</option>
+                    <option value="show_catalog">Mostrar en catalogo cliente</option>
+                    <option value="hide_catalog">Ocultar del catalogo cliente</option>
+                    <option value="feature">Marcar como destacadas</option>
+                    <option value="unfeature">Quitar destacado</option>
+                    <option value="move">Mover bajo otra categoria</option>
+                    <option value="clear_parent">Enviar a raiz</option>
+                    <option value="delete_empty">Eliminar seleccionadas vacias</option>
+                    <option value="merge_delete">Fusionar en destino y eliminar</option>
+                </select>
+                <div class="bulk-target-wrapper" id="bulkTargetWrapper">
+                    <select id="bulkTargetSelect" class="form-select">
+                        <option value="">Categoria destino...</option>
+                        {% for opt in move_parent_options %}
+                        <option value="{{ opt.id }}">{{ opt.label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <button type="button" class="btn btn-primary btn-inline" id="bulkApplyBtn" onclick="submitBulkCategoryAction()" disabled>
+                    Aplicar
+                </button>
+            </div>
             <span class="bulk-actions-count" id="bulkSelectedCount">0 seleccionadas</span>
-            <span class="bulk-actions-hint">Tip: puedes seleccionar categorias padre o subcategorias.</span>
+            <span class="bulk-actions-hint">Eliminar vacias protege categorias con productos o subcategorias. Fusionar mueve productos al destino.</span>
         </div>
         <form method="post" id="bulkStatusForm" action="{% url 'admin_category_bulk_status' %}" style="display:none;">
             {% csrf_token %}
             <input type="hidden" name="bulk_action" id="bulkActionInput" value="">
+            <input type="hidden" name="target_category_id" id="bulkTargetInput" value="">
             <input type="hidden" name="q" value="{{ search }}">
             <input type="hidden" name="status" value="{{ status }}">
             <div id="bulkIdsContainer"></div>
@@ -842,15 +888,18 @@
         const inputs = getCategorySelectionInputs();
         const selectedCount = inputs.filter((input) => input.checked).length;
         const countLabel = document.getElementById('bulkSelectedCount');
-        const activateBtn = document.getElementById('bulkActivateBtn');
-        const deactivateBtn = document.getElementById('bulkDeactivateBtn');
+        const applyBtn = document.getElementById('bulkApplyBtn');
         const master = document.getElementById('selectAllCategories');
 
         if (countLabel) {
             countLabel.textContent = `${selectedCount} seleccionadas`;
         }
-        if (activateBtn) activateBtn.disabled = selectedCount === 0;
-        if (deactivateBtn) deactivateBtn.disabled = selectedCount === 0;
+        if (applyBtn) {
+            const action = getSelectedBulkAction();
+            const targetSelect = document.getElementById('bulkTargetSelect');
+            const targetMissing = bulkActionNeedsTarget(action) && (!targetSelect || !targetSelect.value);
+            applyBtn.disabled = selectedCount === 0 || !action || targetMissing;
+        }
 
         if (master) {
             const visibleInputs = inputs.filter((input) => isRowVisible(input.closest('.category-row')));
@@ -860,17 +909,79 @@
         }
     }
 
+    function getSelectedBulkAction() {
+        const select = document.getElementById('bulkActionSelect');
+        return select ? select.value : '';
+    }
+
+    function bulkActionNeedsTarget(action) {
+        return ['move', 'merge_delete'].includes(action);
+    }
+
+    function updateBulkTargetVisibility() {
+        const action = getSelectedBulkAction();
+        const wrapper = document.getElementById('bulkTargetWrapper');
+        if (!wrapper) return;
+        wrapper.classList.toggle('show', bulkActionNeedsTarget(action));
+        updateBulkSelectionUI();
+    }
+
+    function buildBulkConfirmMessage(action, selectedCount, targetLabel) {
+        if (action === 'delete_empty') {
+            return `Eliminar ${selectedCount} categoria(s) seleccionada(s) solo si estan vacias? Las que tengan productos o subcategorias se van a proteger.`;
+        }
+        if (action === 'merge_delete') {
+            return `Fusionar ${selectedCount} categoria(s) en "${targetLabel}" y luego eliminarlas? Los productos y subcategorias se moveran al destino.`;
+        }
+        if (action === 'deactivate') {
+            return `Desactivar ${selectedCount} categoria(s)? Si hay subcategorias, tambien pueden quedar desactivadas por cascada.`;
+        }
+        if (action === 'hide_catalog') {
+            return `Ocultar ${selectedCount} categoria(s) del catalogo cliente? Las subcategorias tambien pueden quedar ocultas por cascada.`;
+        }
+        return '';
+    }
+
+    function submitBulkCategoryAction() {
+        const action = getSelectedBulkAction();
+        if (!action) {
+            alert('Elige una accion masiva.');
+            return;
+        }
+        submitBulkCategoryStatus(action);
+    }
+
     function submitBulkCategoryStatus(action) {
         const form = document.getElementById('bulkStatusForm');
         const actionInput = document.getElementById('bulkActionInput');
+        const targetInput = document.getElementById('bulkTargetInput');
+        const targetSelect = document.getElementById('bulkTargetSelect');
         const idsContainer = document.getElementById('bulkIdsContainer');
-        if (!form || !actionInput || !idsContainer) return;
+        if (!form || !actionInput || !targetInput || !idsContainer) return;
 
         const selectedIds = getCategorySelectionInputs()
             .filter((input) => input.checked)
             .map((input) => input.value);
         if (!selectedIds.length) {
             alert('Selecciona al menos una categoria.');
+            return;
+        }
+
+        let targetValue = '';
+        let targetLabel = '';
+        if (bulkActionNeedsTarget(action)) {
+            targetValue = targetSelect ? targetSelect.value : '';
+            targetLabel = targetSelect && targetSelect.selectedOptions.length
+                ? targetSelect.selectedOptions[0].textContent.trim()
+                : '';
+            if (!targetValue) {
+                alert('Selecciona una categoria destino.');
+                return;
+            }
+        }
+
+        const confirmMessage = buildBulkConfirmMessage(action, selectedIds.length, targetLabel);
+        if (confirmMessage && !window.confirm(confirmMessage)) {
             return;
         }
 
@@ -884,6 +995,7 @@
         });
 
         actionInput.value = action;
+        targetInput.value = targetValue;
         form.submit();
     }
 
@@ -1037,6 +1149,14 @@
         getCategorySelectionInputs().forEach((input) => {
             input.addEventListener('change', updateBulkSelectionUI);
         });
+        const bulkActionSelect = document.getElementById('bulkActionSelect');
+        if (bulkActionSelect) {
+            bulkActionSelect.addEventListener('change', updateBulkTargetVisibility);
+        }
+        const bulkTargetSelect = document.getElementById('bulkTargetSelect');
+        if (bulkTargetSelect) {
+            bulkTargetSelect.addEventListener('change', updateBulkSelectionUI);
+        }
 
         const autoExpandIds = {{ auto_expand_ids_json|safe }};
         if (Array.isArray(autoExpandIds) && autoExpandIds.length) {

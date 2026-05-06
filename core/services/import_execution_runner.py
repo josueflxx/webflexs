@@ -43,6 +43,13 @@ def _resolve_importer_class(importer_class_path):
     return getattr(module, class_name)
 
 
+def _build_importer(importer_class, file_path, import_type, import_options=None):
+    options = import_options or {}
+    if import_type in {"products", "abrazaderas"}:
+        return importer_class(file_path, **options)
+    return importer_class(file_path)
+
+
 def _result_row_errors(result, limit=50):
     return [
         {
@@ -76,7 +83,24 @@ def _duplicate_count(result):
     )
 
 
-def _run_preflight(import_type, importer_class, file_path):
+def _category_warnings(result, limit=50):
+    warnings = []
+    for row in result.row_results:
+        data = sanitize_import_data(getattr(row, "data", {}) or {})
+        missing = data.get("categorias_no_encontradas") or []
+        if not missing:
+            continue
+        if isinstance(missing, str):
+            missing = [missing]
+        warnings.append({
+            "row": row.row_number,
+            "message": "Categorias no encontradas: " + ", ".join(str(item) for item in missing),
+            "data": data,
+        })
+    return warnings[:limit]
+
+
+def _run_preflight(import_type, importer_class, file_path, import_options=None):
     """
     Lightweight validation checks before long import processing.
     """
@@ -105,7 +129,7 @@ def _run_preflight(import_type, importer_class, file_path):
         _ = df  # keep explicit read/parse validation
 
     elif import_type in {"products", "abrazaderas"}:
-        importer = importer_class(file_path)
+        importer = _build_importer(importer_class, file_path, import_type, import_options)
         preview = importer.run(dry_run=True)
         if getattr(preview, "has_errors", False):
             preflight_errors.extend(_result_row_errors(preview))
@@ -123,7 +147,15 @@ def _build_batch_meta(total_rows, batch_size=500):
     }
 
 
-def run_import_execution(task_id, execution_id, import_type, importer_class_path, file_path, dry_run):
+def run_import_execution(
+    task_id,
+    execution_id,
+    import_type,
+    importer_class_path,
+    file_path,
+    dry_run,
+    import_options=None,
+):
     """
     Execute one import job and persist progress/status.
     This function is backend-agnostic (thread or celery).
@@ -131,7 +163,8 @@ def run_import_execution(task_id, execution_id, import_type, importer_class_path
     execution = ImportExecution.objects.filter(pk=execution_id).first()
     try:
         importer_class = _resolve_importer_class(importer_class_path)
-        preflight_errors = _run_preflight(import_type, importer_class, file_path)
+        import_options = import_options or {}
+        preflight_errors = _run_preflight(import_type, importer_class, file_path, import_options)
 
         if preflight_errors:
             result_data = {
@@ -155,7 +188,7 @@ def run_import_execution(task_id, execution_id, import_type, importer_class_path
         def progress_callback(current, total):
             ImportTaskManager.update_progress(task_id, current, total, f"Procesando fila {current} de {total}")
 
-        importer = importer_class(file_path)
+        importer = _build_importer(importer_class, file_path, import_type, import_options)
         if execution and getattr(execution, "company_id", None):
             importer.company = execution.company
         result = importer.run(dry_run=dry_run, progress_callback=progress_callback)
@@ -169,11 +202,13 @@ def run_import_execution(task_id, execution_id, import_type, importer_class_path
             "row_errors": _result_row_errors(result),
             "duplicate_count": _duplicate_count(result),
             "duplicate_warnings": _duplicate_warnings(result),
+            "category_warnings": _category_warnings(result),
             "preflight_errors": preflight_errors,
             "execution_id": execution_id,
             "import_type": import_type,
             "total_rows": result.total_rows,
             "batch_meta": _build_batch_meta(result.total_rows),
+            "import_options": import_options,
         }
 
         ImportTaskManager.complete_task(task_id, result_data)
