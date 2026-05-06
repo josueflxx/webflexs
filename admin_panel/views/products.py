@@ -1345,6 +1345,7 @@ def category_bulk_status(request):
         "move",
         "clear_parent",
         "delete_empty",
+        "delete_keep_products",
         "merge_delete",
     }
     if action not in valid_actions:
@@ -1611,6 +1612,45 @@ def category_bulk_status(request):
                 "deleted_names": deleted_names[:100],
                 "skipped_with_products": skipped_with_products,
                 "skipped_with_children": skipped_with_children,
+            },
+        )
+        return redirect(redirect_url)
+
+    if action == "delete_keep_products":
+        linked_products_count = Product.objects.filter(
+            Q(category_id__in=selected_ids) | Q(categories__id__in=selected_ids)
+        ).distinct().count()
+        unselected_children_count = Category.objects.filter(
+            parent_id__in=selected_ids,
+        ).exclude(id__in=selected_ids).count()
+        deleted = 0
+        deleted_names = []
+        with transaction.atomic():
+            for category in _deep_selected_categories():
+                deleted_names.append(category.name)
+                category.delete()
+                deleted += 1
+
+        messages.success(
+            request,
+            f"Categorias eliminadas: {deleted}. Productos conservados: {linked_products_count}.",
+        )
+        if unselected_children_count:
+            messages.warning(
+                request,
+                f"{unselected_children_count} subcategorias quedaron en la raiz para no borrarlas.",
+            )
+        log_admin_action(
+            request,
+            action="category_bulk_delete_keep_products",
+            target_type="category_bulk",
+            details={
+                "selected_count": len(categories_map),
+                "selected_ids": list(categories_map.keys())[:200],
+                "deleted": deleted,
+                "deleted_names": deleted_names[:100],
+                "linked_products_count": linked_products_count,
+                "unselected_children_count": unselected_children_count,
             },
         )
         return redirect(redirect_url)
@@ -1902,15 +1942,28 @@ def category_delete(request, pk):
     if request.method == 'POST':
         name = category.name
         category_id = category.pk
+        linked_products_count = Product.objects.filter(
+            Q(category_id=category.pk) | Q(categories__id=category.pk)
+        ).distinct().count()
+        child_count = Category.objects.filter(parent_id=category.pk).count()
         category.delete()
         log_admin_action(
             request,
             action="category_delete",
             target_type="category",
             target_id=category_id,
-            details={"name": name},
+            details={
+                "name": name,
+                "linked_products_count": linked_products_count,
+                "child_count": child_count,
+            },
         )
-        messages.success(request, f'Categoría "{name}" eliminada.')
+        messages.success(
+            request,
+            f'Categoria "{name}" eliminada. Productos conservados: {linked_products_count}.',
+        )
+        if child_count:
+            messages.warning(request, f"{child_count} subcategorias quedaron en la raiz.")
         return redirect('admin_category_list')
         
     return render(request, 'admin_panel/delete_confirm.html', {

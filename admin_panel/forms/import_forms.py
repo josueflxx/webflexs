@@ -61,7 +61,7 @@ class ProductImportForm(ImportForm):
     CATEGORY_MODE_CHOICES = [
         (
             "existing",
-            "Vincular solo categorias existentes (recomendado)",
+            "Usar solo categorias existentes para productos nuevos (recomendado)",
         ),
         (
             "ignore",
@@ -91,7 +91,27 @@ class ProductImportForm(ImportForm):
         label="Categorias del Excel",
         help_text=(
             "Controla que hace el importador con Rubro/Categoria/Subrubro. "
-            "Por defecto no crea categorias nuevas."
+            "Por defecto no crea categorias nuevas ni recategoriza productos existentes."
+        ),
+    )
+
+    preserve_existing_categories = forms.BooleanField(
+        required=False,
+        initial=True,
+        label="Conservar categorias actuales al actualizar productos existentes",
+        help_text=(
+            "Recomendado: si el SKU ya existe, actualiza precio, costo, stock y datos, "
+            "pero deja el articulo en las categorias que ya tenia en el sistema."
+        ),
+    )
+
+    allow_category_creation = forms.BooleanField(
+        required=False,
+        initial=False,
+        label="Autorizar creacion de categorias nuevas desde el Excel",
+        help_text=(
+            "Usalo solo cuando quieras construir categorias desde cero. "
+            "Si no esta marcado, los modos de creacion se tratan como 'solo existentes'."
         ),
     )
 

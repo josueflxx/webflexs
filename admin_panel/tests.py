@@ -3088,6 +3088,41 @@ class CategoryBulkActionTests(TestCase):
         self.assertFalse(Category.objects.filter(pk=empty_category.pk).exists())
         self.assertTrue(Category.objects.filter(pk=linked_category.pk).exists())
 
+    def test_delete_keep_products_removes_categories_without_deleting_products(self):
+        parent_category = Category.objects.create(name='Categoria A Borrar', slug='categoria-a-borrar')
+        child_category = Category.objects.create(
+            name='Subcategoria Conservada',
+            slug='subcategoria-conservada',
+            parent=parent_category,
+        )
+        product = Product.objects.create(
+            sku='CAT-KEEP-001',
+            name='Producto que debe sobrevivir',
+            price=Decimal('100.00'),
+            cost=Decimal('50.00'),
+            category=parent_category,
+        )
+        product.categories.add(parent_category)
+
+        self.client.force_login(self.superadmin)
+        response = self.client.post(
+            reverse('admin_category_bulk_status'),
+            data={
+                'bulk_action': 'delete_keep_products',
+                'category_ids': [str(parent_category.pk)],
+            },
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(Category.objects.filter(pk=parent_category.pk).exists())
+        product.refresh_from_db()
+        child_category.refresh_from_db()
+        self.assertIsNone(product.category_id)
+        self.assertTrue(Product.objects.filter(pk=product.pk).exists())
+        self.assertFalse(product.categories.filter(pk=parent_category.pk).exists())
+        self.assertIsNone(child_category.parent_id)
+
     def test_merge_delete_moves_product_links_to_target(self):
         source_category = Category.objects.create(name='Rubro Importado', slug='rubro-importado')
         target_category = Category.objects.create(name='Rubro Correcto', slug='rubro-correcto')

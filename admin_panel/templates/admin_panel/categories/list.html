@@ -474,6 +474,7 @@
                     <option value="move">Mover bajo otra categoria</option>
                     <option value="clear_parent">Enviar a raiz</option>
                     <option value="delete_empty">Eliminar seleccionadas vacias</option>
+                    <option value="delete_keep_products">Eliminar categorias y conservar articulos</option>
                     <option value="merge_delete">Fusionar en destino y eliminar</option>
                 </select>
                 <div class="bulk-target-wrapper" id="bulkTargetWrapper">
@@ -489,7 +490,7 @@
                 </button>
             </div>
             <span class="bulk-actions-count" id="bulkSelectedCount">0 seleccionadas</span>
-            <span class="bulk-actions-hint">Eliminar vacias protege categorias con productos o subcategorias. Fusionar mueve productos al destino.</span>
+            <span class="bulk-actions-hint">Actualizar importaciones no debe recategorizar articulos existentes. Eliminar categorias conserva los articulos; quedan sin esa categoria.</span>
         </div>
         <form method="post" id="bulkStatusForm" action="{% url 'admin_category_bulk_status' %}" style="display:none;">
             {% csrf_token %}
@@ -929,6 +930,9 @@
     function buildBulkConfirmMessage(action, selectedCount, targetLabel) {
         if (action === 'delete_empty') {
             return `Eliminar ${selectedCount} categoria(s) seleccionada(s) solo si estan vacias? Las que tengan productos o subcategorias se van a proteger.`;
+        }
+        if (action === 'delete_keep_products') {
+            return `Eliminar ${selectedCount} categoria(s)? Los articulos NO se borran: se les quita esa categoria. Las subcategorias no seleccionadas quedaran en la raiz.`;
         }
         if (action === 'merge_delete') {
             return `Fusionar ${selectedCount} categoria(s) en "${targetLabel}" y luego eliminarlas? Los productos y subcategorias se moveran al destino.`;

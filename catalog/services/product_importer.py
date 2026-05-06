@@ -19,6 +19,17 @@ from catalog.services.import_utils import (
 from catalog.services.supplier_sync import ensure_supplier, clean_supplier_name
 
 
+def _truthy_option(value, default=False):
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    text = str(value).strip().lower()
+    if not text:
+        return default
+    return text in {"1", "true", "on", "yes", "si", "s"}
+
+
 class ProductImporter(BaseImporter):
     """
     Importador tolerante para productos.
@@ -215,7 +226,13 @@ class ProductImporter(BaseImporter):
         CATEGORY_MODE_CREATE,
     }
 
-    def __init__(self, file, category_mode=None):
+    def __init__(
+        self,
+        file,
+        category_mode=None,
+        preserve_existing_categories=True,
+        allow_category_creation=False,
+    ):
         super().__init__(file)
         self.required_columns = ["sku"]
         self._seen_skus = {}
@@ -223,6 +240,19 @@ class ProductImporter(BaseImporter):
         self.column_mapping_mode = "headers"
         self.category_mode = category_mode or self.CATEGORY_MODE_EXISTING
         if self.category_mode not in self.CATEGORY_MODES:
+            self.category_mode = self.CATEGORY_MODE_EXISTING
+        self.preserve_existing_categories = _truthy_option(
+            preserve_existing_categories,
+            default=True,
+        )
+        self.allow_category_creation = _truthy_option(
+            allow_category_creation,
+            default=False,
+        )
+        if (
+            self.category_mode in {self.CATEGORY_MODE_HIDDEN, self.CATEGORY_MODE_CREATE}
+            and not self.allow_category_creation
+        ):
             self.category_mode = self.CATEGORY_MODE_EXISTING
 
     def load_data(self):
@@ -522,13 +552,18 @@ class ProductImporter(BaseImporter):
             "stock": stock if stock is not None else "",
             "categorias": self._get_category_names(row),
             "modo_categorias": self.category_mode,
+            "preservar_categorias_existentes": self.preserve_existing_categories,
             "atributos": attributes or {},
         }
+        preserve_categories = bool(existing and self.preserve_existing_categories)
 
         if dry_run:
-            missing_categories = self._assign_categories(None, row, dry_run=True)
-            if missing_categories:
-                result.data["categorias_no_encontradas"] = missing_categories
+            if preserve_categories:
+                result.data["categorias_preservadas"] = True
+            else:
+                missing_categories = self._assign_categories(None, row, dry_run=True)
+                if missing_categories:
+                    result.data["categorias_no_encontradas"] = missing_categories
             result.success = True
             result.action = "updated" if existing else "created"
             return result
@@ -619,9 +654,12 @@ class ProductImporter(BaseImporter):
                 )
                 created = True
 
-            missing_categories = self._assign_categories(product, row, dry_run=False)
-            if missing_categories:
-                result.data["categorias_no_encontradas"] = missing_categories
+            if not (existing and self.preserve_existing_categories):
+                missing_categories = self._assign_categories(product, row, dry_run=False)
+                if missing_categories:
+                    result.data["categorias_no_encontradas"] = missing_categories
+            else:
+                result.data["categorias_preservadas"] = True
             self.check_and_run_parser(product, dry_run=dry_run)
 
             result.success = True

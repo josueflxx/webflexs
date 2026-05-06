@@ -87,12 +87,14 @@
             <li>Productos acepta encabezados flexibles: SKU/Codigo, Nombre/Articulo, Proveedor, Precio/Venta, Costo, Stock, Categoria/Rubro/Subrubro y Activo.</li>
             <li>Formato SaaS Argentina: Codigo es SKU, Precio Final ($) es el precio de catalogo y Precio ($) queda guardado como precio neto de origen.</li>
             <li>Campos utiles de origen como Nro producto, Codigo proveedor, UPC, IVA, Unidad y Utilidad quedan guardados en atributos del producto.</li>
-            <li>Por seguridad, las categorias del Excel no se crean automaticamente salvo que lo elijas abajo.</li>
+            <li>Por seguridad, actualizar productos existentes conserva las categorias que ya tienen en el sistema.</li>
+            <li>Las categorias del Excel no se crean automaticamente salvo que lo autorices explicitamente abajo.</li>
             <li>Compatibilidad vieja: A=SKU, B=Nombre, C=Proveedor, D=Precio, E=Stock, F..J=Filtro_1..Filtro_5.</li>
             <li>Las celdas vacias no borran datos existentes: solo actualizan campos con valores validos.</li>
             {% elif import_type == 'abrazaderas' %}
             <li>Abrazaderas acepta DESCRIPCION/CODIGO/PRECIO o SKU/NOMBRE/PRECIO/STOCK/CATEGORIA.</li>
-            <li>Se vinculan a categorias existentes y se intenta completar la ficha tecnica. Solo crea categorias si lo autorizas abajo.</li>
+            <li>Al actualizar codigos existentes conserva sus categorias actuales y se intenta completar la ficha tecnica.</li>
+            <li>Solo crea categorias si lo autorizas abajo.</li>
             <li>Las celdas vacias no borran datos existentes.</li>
             {% endif %}
         </ul>
@@ -142,6 +144,30 @@
             {{ form.category_mode }}
             <small class="text-muted" style="display: block; margin-top: 5px;">
                 {{ form.category_mode.help_text }}
+            </small>
+        </div>
+        {% endif %}
+
+        {% if form.preserve_existing_categories %}
+        <div class="form-group">
+            <div class="flex items-center gap-2">
+                {{ form.preserve_existing_categories }}
+                <label for="{{ form.preserve_existing_categories.id_for_label }}" style="margin-bottom: 0; cursor: pointer;">{{ form.preserve_existing_categories.label }}</label>
+            </div>
+            <small class="text-muted" style="display: block; margin-top: 5px; margin-left: 1.5rem;">
+                {{ form.preserve_existing_categories.help_text }}
+            </small>
+        </div>
+        {% endif %}
+
+        {% if form.allow_category_creation %}
+        <div class="form-group">
+            <div class="flex items-center gap-2">
+                {{ form.allow_category_creation }}
+                <label for="{{ form.allow_category_creation.id_for_label }}" style="margin-bottom: 0; cursor: pointer;">{{ form.allow_category_creation.label }}</label>
+            </div>
+            <small class="text-muted" style="display: block; margin-top: 5px; margin-left: 1.5rem;">
+                {{ form.allow_category_creation.help_text }}
             </small>
         </div>
         {% endif %}

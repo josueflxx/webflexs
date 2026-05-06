@@ -324,10 +324,35 @@ def _resolve_import_classes(import_type):
 def _import_options_from_data(data, import_type):
     if import_type not in {"products", "abrazaderas"}:
         return {}
+
+    def _truthy(value, default=False):
+        if value is None:
+            return default
+        if isinstance(value, bool):
+            return value
+        text = str(value).strip().lower()
+        if not text:
+            return default
+        return text in {"1", "true", "on", "yes", "si", "s"}
+
     category_mode = str(data.get("category_mode") or "existing").strip()
     if category_mode not in {"ignore", "existing", "hidden", "create"}:
         category_mode = "existing"
-    return {"category_mode": category_mode}
+    preserve_existing_categories = _truthy(
+        data.get("preserve_existing_categories"),
+        default=True,
+    )
+    allow_category_creation = _truthy(
+        data.get("allow_category_creation"),
+        default=False,
+    )
+    if category_mode in {"hidden", "create"} and not allow_category_creation:
+        category_mode = "existing"
+    return {
+        "category_mode": category_mode,
+        "preserve_existing_categories": preserve_existing_categories,
+        "allow_category_creation": allow_category_creation,
+    }
 
 
 def _build_importer(importer_class, file_path, import_type, options=None):

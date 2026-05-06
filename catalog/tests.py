@@ -124,7 +124,11 @@ class ProductImportTests(TestCase):
             [["IMP-001", "Producto importado", 100.5, 4, "Prueba", "Color:Rojo;Material:Acero"]],
         )
 
-        result = ProductImporter(file_obj, category_mode="create").run(dry_run=False)
+        result = ProductImporter(
+            file_obj,
+            category_mode="create",
+            allow_category_creation=True,
+        ).run(dry_run=False)
 
         self.assertEqual(result.errors, 0)
         product = Product.objects.get(sku="IMP-001")
@@ -151,6 +155,61 @@ class ProductImportTests(TestCase):
             ["Categoria accidental"],
         )
 
+    def test_product_import_preserves_existing_categories_by_default(self):
+        manual_category = Category.objects.create(name="Categoria Manual", slug="categoria-manual")
+        excel_category = Category.objects.create(name="Categoria Excel", slug="categoria-excel")
+        product = Product.objects.create(
+            sku="IMP-PRESERVE-CAT",
+            name="Producto ordenado manualmente",
+            price=Decimal("100.00"),
+            stock=3,
+            category=manual_category,
+        )
+        product.categories.add(manual_category)
+        file_obj = build_import_workbook(
+            ["SKU", "Nombre", "Precio", "Categoria"],
+            [["IMP-PRESERVE-CAT", "Producto actualizado", 150, "Categoria Excel"]],
+        )
+
+        result = ProductImporter(file_obj).run(dry_run=False)
+
+        self.assertEqual(result.errors, 0)
+        product.refresh_from_db()
+        self.assertEqual(product.name, "Producto actualizado")
+        self.assertEqual(product.price, Decimal("150.00"))
+        self.assertEqual(product.category_id, manual_category.pk)
+        self.assertTrue(product.categories.filter(pk=manual_category.pk).exists())
+        self.assertFalse(product.categories.filter(pk=excel_category.pk).exists())
+        self.assertTrue(result.row_results[0].data["categorias_preservadas"])
+
+    def test_product_import_links_existing_category_to_new_products_by_default(self):
+        category = Category.objects.create(name="Categoria Existente", slug="categoria-existente")
+        file_obj = build_import_workbook(
+            ["SKU", "Nombre", "Precio", "Categoria"],
+            [["IMP-NEW-CAT", "Producto nuevo con categoria", 100, "Categoria Existente"]],
+        )
+
+        result = ProductImporter(file_obj).run(dry_run=False)
+
+        self.assertEqual(result.errors, 0)
+        product = Product.objects.get(sku="IMP-NEW-CAT")
+        self.assertEqual(product.category_id, category.pk)
+        self.assertTrue(product.categories.filter(pk=category.pk).exists())
+
+    def test_product_import_requires_explicit_permission_to_create_categories(self):
+        file_obj = build_import_workbook(
+            ["SKU", "Nombre", "Precio", "Categoria"],
+            [["IMP-CREATE-BLOCKED", "Producto sin alta de categoria", 100, "Categoria Nueva"]],
+        )
+
+        result = ProductImporter(file_obj, category_mode="create").run(dry_run=False)
+
+        self.assertEqual(result.errors, 0)
+        product = Product.objects.get(sku="IMP-CREATE-BLOCKED")
+        self.assertFalse(Category.objects.filter(name="Categoria Nueva").exists())
+        self.assertFalse(product.categories.exists())
+        self.assertEqual(result.row_results[0].data["modo_categorias"], "existing")
+
     def test_product_import_parses_argentine_money_and_preserves_existing_blanks(self):
         supplier_category = Category.objects.create(name="Existentes")
         product = Product.objects.create(
@@ -167,7 +226,11 @@ class ProductImportTests(TestCase):
             [["IMP-002", "Producto nuevo", "$ 12.500,50", "ARS 1.250", "", ""]],
         )
 
-        result = ProductImporter(file_obj, category_mode="create").run(dry_run=False)
+        result = ProductImporter(
+            file_obj,
+            category_mode="create",
+            allow_category_creation=True,
+        ).run(dry_run=False)
 
         self.assertEqual(result.errors, 0)
         product.refresh_from_db()
@@ -190,7 +253,11 @@ class ProductImportTests(TestCase):
             [["IMP-FILTERS", "Producto con filtros", "", "Camion", "Suspension", "Pesado"]],
         )
 
-        result = ProductImporter(file_obj, category_mode="create").run(dry_run=False)
+        result = ProductImporter(
+            file_obj,
+            category_mode="create",
+            allow_category_creation=True,
+        ).run(dry_run=False)
 
         self.assertEqual(result.errors, 0)
         product.refresh_from_db()
@@ -232,7 +299,11 @@ class ProductImportTests(TestCase):
             ],
         )
 
-        result = ProductImporter(file_obj, category_mode="create").run(dry_run=False)
+        result = ProductImporter(
+            file_obj,
+            category_mode="create",
+            allow_category_creation=True,
+        ).run(dry_run=False)
 
         self.assertEqual(result.errors, 0)
         product = Product.objects.get(sku="IMP-TECH")
@@ -285,7 +356,11 @@ class ProductImportTests(TestCase):
             ],
         )
 
-        result = ProductImporter(file_obj, category_mode="create").run(dry_run=False)
+        result = ProductImporter(
+            file_obj,
+            category_mode="create",
+            allow_category_creation=True,
+        ).run(dry_run=False)
 
         self.assertEqual(result.errors, 0)
         product = Product.objects.get(sku="SAAS-001")
@@ -314,7 +389,11 @@ class ProductImportTests(TestCase):
             ],
         )
 
-        result = ProductImporter(file_obj, category_mode="create").run(dry_run=False)
+        result = ProductImporter(
+            file_obj,
+            category_mode="create",
+            allow_category_creation=True,
+        ).run(dry_run=False)
 
         self.assertEqual(result.errors, 0)
         product = Product.objects.get(sku="SAAS-ABR-001")
@@ -378,7 +457,11 @@ class ProductImportTests(TestCase):
             [["ABR-IMP", "ABRAZADERA TREFILADA DE 1/2 X 85 X 260 CURVA", "1.250,75", 12, "Abrazaderas"]],
         )
 
-        result = AbrazaderaImporter(file_obj, category_mode="create").run(dry_run=False)
+        result = AbrazaderaImporter(
+            file_obj,
+            category_mode="create",
+            allow_category_creation=True,
+        ).run(dry_run=False)
 
         self.assertEqual(result.errors, 0)
         product = Product.objects.get(sku="ABR-IMP")
