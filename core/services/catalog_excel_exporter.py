@@ -32,6 +32,8 @@ TEXT_WRAP_KEYS = {"description", "attributes_json", "categories"}
 HEADER_FILL = PatternFill(fill_type="solid", fgColor="1F2937")
 HEADER_FONT = Font(color="FFFFFF", bold=True)
 HEADER_ALIGNMENT = Alignment(horizontal="left", vertical="center")
+GROUP_TITLE_FILL = PatternFill(fill_type="solid", fgColor="E5E7EB")
+GROUP_TITLE_FONT = Font(color="111827", bold=True, size=12)
 ALT_ROW_FILL = PatternFill(fill_type="solid", fgColor="F8FAFC")
 STATUS_OK_FILL = PatternFill(fill_type="solid", fgColor="D1FAE5")
 STATUS_BAD_FILL = PatternFill(fill_type="solid", fgColor="FEE2E2")
@@ -113,18 +115,64 @@ def _serialize_product_value(product, key, price_map=None, discount_percentage=N
     return ""
 
 
-def _resolve_category_ids(sheet):
-    category_ids = set(sheet.categories.values_list("id", flat=True))
+def _is_public_category(category, category_lookup=None):
+    current = category
+    seen = set()
+    while current and current.pk not in seen:
+        if not current.is_active or not current.visible_in_catalog:
+            return False
+        seen.add(current.pk)
+        if category_lookup is None:
+            current = current.parent
+        else:
+            current = category_lookup.get(current.parent_id)
+    return bool(category)
+
+
+def _selected_category_ids(sheet):
+    return set(sheet.categories.values_list("id", flat=True))
+
+
+def _sheet_requires_public_catalog(sheet):
+    template = getattr(sheet, "template", None)
+    return bool(sheet.only_catalog_visible or (template and template.is_client_download_enabled))
+
+
+def _sheet_should_export(sheet):
+    selected_category_ids = _selected_category_ids(sheet)
+    if _sheet_requires_public_catalog(sheet) and selected_category_ids:
+        return bool(_resolve_category_ids(sheet, selected_ids=selected_category_ids))
+    return True
+
+
+def _filter_public_category_ids(category_ids):
     if not category_ids:
         return set()
-    if not sheet.include_descendant_categories:
-        return category_ids
+    category_lookup = Category.objects.all().in_bulk()
+    return {
+        category_id
+        for category_id in category_ids
+        if _is_public_category(category_lookup.get(category_id), category_lookup=category_lookup)
+    }
 
-    categories = Category.objects.filter(id__in=category_ids)
-    resolved = set()
-    for category in categories:
-        resolved.update(category.get_descendant_ids(include_self=True))
-    return resolved
+
+def _resolve_category_ids(sheet, selected_ids=None):
+    """Resolve sheet categories, honoring public visibility for client catalog exports."""
+    category_ids = selected_ids if selected_ids is not None else _selected_category_ids(sheet)
+    if not category_ids:
+        return set()
+
+    if not sheet.include_descendant_categories:
+        resolved_ids = category_ids
+    else:
+        categories = Category.objects.filter(id__in=category_ids)
+        resolved_ids = set()
+        for category in categories:
+            resolved_ids.update(category.get_descendant_ids(include_self=True))
+
+    if _sheet_requires_public_catalog(sheet):
+        return _filter_public_category_ids(resolved_ids)
+    return resolved_ids
 
 
 def _apply_sheet_filters(sheet):
@@ -133,10 +181,13 @@ def _apply_sheet_filters(sheet):
     if sheet.only_active_products:
         queryset = queryset.filter(is_active=True)
 
-    if sheet.only_catalog_visible:
+    if _sheet_requires_public_catalog(sheet):
         queryset = Product.catalog_visible(queryset=queryset, include_uncategorized=True)
 
-    category_ids = _resolve_category_ids(sheet)
+    selected_category_ids = _selected_category_ids(sheet)
+    category_ids = _resolve_category_ids(sheet, selected_ids=selected_category_ids)
+    if selected_category_ids and not category_ids:
+        return queryset.none()
     if category_ids:
         queryset = queryset.filter(
             Q(category_id__in=category_ids) | Q(categories__id__in=category_ids)
@@ -181,9 +232,9 @@ def _string_len_for_width(value):
     return len(str(value))
 
 
-def _apply_header_styles(worksheet, total_columns):
+def _apply_header_styles(worksheet, total_columns, row=1):
     for col_idx in range(1, total_columns + 1):
-        cell = worksheet.cell(row=1, column=col_idx)
+        cell = worksheet.cell(row=row, column=col_idx)
         cell.font = HEADER_FONT
         cell.fill = HEADER_FILL
         cell.alignment = HEADER_ALIGNMENT
@@ -226,6 +277,271 @@ def _set_auto_column_widths(worksheet, column_widths):
         worksheet.column_dimensions[get_column_letter(idx)].width = adjusted
 
 
+def _worksheet_next_row(worksheet):
+    if worksheet.max_row == 1 and worksheet.max_column == 1 and worksheet["A1"].value is None:
+        return 1
+    return worksheet.max_row + 1
+
+
+def _category_depth(category, category_lookup):
+    depth = 0
+    parent_id = getattr(category, "parent_id", None)
+    seen = set()
+    while parent_id and parent_id not in seen:
+        seen.add(parent_id)
+        parent = category_lookup.get(parent_id)
+        if parent is None:
+            break
+        depth += 1
+        parent_id = parent.parent_id
+    return depth
+
+
+def _category_path(category, category_lookup, public=False):
+    if category is None:
+        return []
+    path = []
+    current = category
+    seen = set()
+    while current and current.pk not in seen:
+        seen.add(current.pk)
+        label = current.display_name if public else current.name
+        path.insert(0, label)
+        current = category_lookup.get(current.parent_id)
+    return path
+
+
+def _is_descendant_of(category, root_id, category_lookup):
+    current = category
+    seen = set()
+    while current and current.pk not in seen:
+        if current.pk == root_id:
+            return True
+        seen.add(current.pk)
+        current = category_lookup.get(current.parent_id)
+    return False
+
+
+def _category_sort_key(category, category_lookup):
+    path = []
+    current = category
+    seen = set()
+    while current and current.pk not in seen:
+        seen.add(current.pk)
+        path.insert(
+            0,
+            (
+                current.public_order,
+                current.order,
+                (current.display_name or current.name or "").lower(),
+                current.pk,
+            ),
+        )
+        current = category_lookup.get(current.parent_id)
+    return tuple(path)
+
+
+def _build_grouping_context(sheet):
+    selected_ids = _selected_category_ids(sheet)
+    resolved_ids = _resolve_category_ids(sheet, selected_ids=selected_ids)
+    category_lookup = Category.objects.all().in_bulk()
+
+    selected_categories = [
+        category_lookup[category_id]
+        for category_id in selected_ids
+        if category_id in category_lookup
+    ]
+    selected_categories.sort(key=lambda category: _category_sort_key(category, category_lookup))
+
+    return {
+        "selected_ids": selected_ids,
+        "resolved_ids": resolved_ids,
+        "only_catalog_visible": _sheet_requires_public_catalog(sheet),
+        "category_lookup": category_lookup,
+        "selected_categories": selected_categories,
+    }
+
+
+def _select_product_group_category(product, grouping_context):
+    resolved_ids = grouping_context["resolved_ids"]
+    selected_ids = grouping_context["selected_ids"]
+    only_catalog_visible = grouping_context["only_catalog_visible"]
+    if selected_ids and not resolved_ids:
+        return None
+
+    linked_categories = [
+        category
+        for category in product.get_linked_categories()
+        if category
+        and (not resolved_ids or category.pk in resolved_ids)
+        and (not only_catalog_visible or _is_public_category(category, grouping_context["category_lookup"]))
+    ]
+    if not linked_categories and not resolved_ids:
+        linked_categories = [
+            category
+            for category in product.get_linked_categories()
+            if category and (not only_catalog_visible or _is_public_category(category, grouping_context["category_lookup"]))
+        ]
+    if not linked_categories:
+        return None
+
+    category_lookup = grouping_context["category_lookup"]
+    linked_categories.sort(
+        key=lambda category: (
+            -_category_depth(category, category_lookup),
+            _category_sort_key(category, category_lookup),
+        )
+    )
+    return linked_categories[0]
+
+
+def _category_group_label(category, grouping_context):
+    if category is None:
+        return "Sin categoria"
+
+    category_lookup = grouping_context["category_lookup"]
+    selected_categories = grouping_context["selected_categories"]
+    matching_roots = [
+        root
+        for root in selected_categories
+        if _is_descendant_of(category, root.pk, category_lookup)
+    ]
+
+    if len(selected_categories) == 1 and matching_roots:
+        root = matching_roots[0]
+        if category.pk == root.pk:
+            return "Sin subcategoria"
+        root_path = _category_path(root, category_lookup, public=True)
+        category_path = _category_path(category, category_lookup, public=True)
+        relative_path = category_path[len(root_path):]
+        return " > ".join(relative_path) if relative_path else category.display_name
+
+    return " > ".join(_category_path(category, category_lookup, public=True)) or category.display_name
+
+
+def _append_group_title(worksheet, row_index, label, product_count, total_columns):
+    title_cell = worksheet.cell(row=row_index, column=1)
+    title_cell.value = f"{label} ({product_count} productos)"
+    title_cell.font = GROUP_TITLE_FONT
+    title_cell.fill = GROUP_TITLE_FILL
+    title_cell.alignment = Alignment(horizontal="left", vertical="center")
+    title_cell.border = THIN_BORDER
+
+    if total_columns > 1:
+        for col_idx in range(2, total_columns + 1):
+            cell = worksheet.cell(row=row_index, column=col_idx)
+            cell.fill = GROUP_TITLE_FILL
+            cell.border = THIN_BORDER
+        worksheet.merge_cells(
+            start_row=row_index,
+            start_column=1,
+            end_row=row_index,
+            end_column=total_columns,
+        )
+
+    worksheet.row_dimensions[row_index].height = 22
+
+
+def _append_product_row(
+    worksheet,
+    excel_row,
+    product,
+    columns,
+    column_keys,
+    column_widths,
+    price_map,
+    discount_percentage,
+):
+    row_values = [
+        _serialize_product_value(
+            product,
+            col.key,
+            price_map=price_map,
+            discount_percentage=discount_percentage,
+        )
+        for col in columns
+    ]
+    worksheet.append(row_values)
+    for idx, value in enumerate(row_values):
+        column_widths[idx] = max(column_widths[idx], _string_len_for_width(value))
+    _apply_row_styles(worksheet, excel_row, row_values, column_keys)
+
+
+def _append_grouped_products(
+    worksheet,
+    sheet_config,
+    columns,
+    headers,
+    column_keys,
+    column_widths,
+    price_map,
+    discount_percentage,
+):
+    grouping_context = _build_grouping_context(sheet_config)
+    grouped_products = {}
+
+    products = list(_apply_sheet_filters(sheet_config))
+    for product in products:
+        group_category = _select_product_group_category(product, grouping_context)
+        group_key = group_category.pk if group_category else 0
+        if group_key not in grouped_products:
+            grouped_products[group_key] = {
+                "category": group_category,
+                "products": [],
+            }
+        grouped_products[group_key]["products"].append(product)
+
+    sorted_groups = sorted(
+        grouped_products.values(),
+        key=lambda group: (
+            group["category"] is None,
+            _category_sort_key(group["category"], grouping_context["category_lookup"])
+            if group["category"] is not None
+            else ((999999, 999999, "sin categoria", 0),),
+        ),
+    )
+
+    if not sorted_groups:
+        if sheet_config.include_header:
+            worksheet.append(headers)
+            _apply_header_styles(worksheet, len(headers))
+        return 0
+
+    row_count = 0
+    for group in sorted_groups:
+        products_in_group = group["products"]
+        if not products_in_group:
+            continue
+
+        title = _category_group_label(group["category"], grouping_context)
+        next_row = _worksheet_next_row(worksheet)
+        _append_group_title(worksheet, next_row, title, len(products_in_group), len(headers))
+        column_widths[0] = max(column_widths[0], _string_len_for_width(title) + 12)
+
+        if sheet_config.include_header:
+            worksheet.append(headers)
+            header_row = worksheet.max_row
+            _apply_header_styles(worksheet, len(headers), row=header_row)
+
+        for product in products_in_group:
+            excel_row = worksheet.max_row + 1
+            _append_product_row(
+                worksheet,
+                excel_row,
+                product,
+                columns,
+                column_keys,
+                column_widths,
+                price_map,
+                discount_percentage,
+            )
+            row_count += 1
+
+        worksheet.append([])
+
+    return row_count
+
+
 def build_catalog_workbook(template, price_list=None, discount_percentage=None):
     """
     Build an XLSX workbook from one CatalogExcelTemplate instance.
@@ -256,7 +572,15 @@ def build_catalog_workbook(template, price_list=None, discount_percentage=None):
             )
         }
 
+    exported_any_sheet = False
+    skipped_sheets = []
+
     for sheet_config in sheets:
+        if not _sheet_should_export(sheet_config):
+            skipped_sheets.append(sheet_config.name)
+            continue
+
+        exported_any_sheet = True
         worksheet = workbook.create_sheet(sheet_config.name[:31] or "Hoja")
         columns = list(
             sheet_config.columns.filter(is_active=True).order_by("order", "id")
@@ -279,6 +603,21 @@ def build_catalog_workbook(template, price_list=None, discount_percentage=None):
         column_keys = [col.key for col in columns]
         column_widths = [_string_len_for_width(header) for header in headers]
 
+        if sheet_config.group_by_subcategories:
+            row_count = _append_grouped_products(
+                worksheet,
+                sheet_config,
+                columns,
+                headers,
+                column_keys,
+                column_widths,
+                price_map,
+                discount_percentage,
+            )
+            _set_auto_column_widths(worksheet, column_widths)
+            rows_by_sheet[sheet_config.name] = row_count
+            continue
+
         if sheet_config.include_header:
             worksheet.append(headers)
             worksheet.freeze_panes = "A2"
@@ -286,22 +625,18 @@ def build_catalog_workbook(template, price_list=None, discount_percentage=None):
 
         row_count = 0
         for product in _apply_sheet_filters(sheet_config).iterator(chunk_size=500):
-            row_values = [
-                _serialize_product_value(
-                    product,
-                    col.key,
-                    price_map=price_map,
-                    discount_percentage=discount_percentage,
-                )
-                for col in columns
-            ]
-            worksheet.append(row_values)
+            excel_row = row_count + (1 if sheet_config.include_header else 0) + 1
+            _append_product_row(
+                worksheet,
+                excel_row,
+                product,
+                columns,
+                column_keys,
+                column_widths,
+                price_map,
+                discount_percentage,
+            )
             row_count += 1
-            for idx, value in enumerate(row_values):
-                column_widths[idx] = max(column_widths[idx], _string_len_for_width(value))
-
-            excel_row = row_count + (1 if sheet_config.include_header else 0)
-            _apply_row_styles(worksheet, excel_row, row_values, column_keys)
 
         if sheet_config.include_header and row_count > 0:
             worksheet.auto_filter.ref = worksheet.dimensions
@@ -310,8 +645,18 @@ def build_catalog_workbook(template, price_list=None, discount_percentage=None):
 
         rows_by_sheet[sheet_config.name] = row_count
 
+    if not exported_any_sheet:
+        default_sheet = workbook.create_sheet("Catalogo")
+        default_sheet.append(["Mensaje"])
+        default_sheet.append(["No hay categorias visibles para exportar."])
+        rows_by_sheet["Catalogo"] = 0
+
     total_rows = sum(rows_by_sheet.values())
-    return workbook, {"rows_by_sheet": rows_by_sheet, "total_rows": total_rows}
+    return workbook, {
+        "rows_by_sheet": rows_by_sheet,
+        "total_rows": total_rows,
+        "skipped_sheets": skipped_sheets,
+    }
 
 
 def build_export_filename(template):

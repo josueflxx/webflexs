@@ -13,6 +13,7 @@ from catalog.services.clamp_code import generarCodigo, parsearCodigo
 from catalog.services.product_importer import ProductImporter
 from catalog.models import Category, ClampMeasureRequest, ClampSpecs, Product
 from core.models import CatalogExcelTemplate, CatalogExcelTemplateColumn, CatalogExcelTemplateSheet
+from core.services.catalog_excel_exporter import build_catalog_workbook
 from orders.models import CartItem
 
 
@@ -992,3 +993,218 @@ class CatalogClientExcelDownloadTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "No hay una plantilla de Excel publicada para clientes")
+
+
+class CatalogExcelGroupedExportTests(TestCase):
+    def test_sheet_can_group_products_by_subcategory_blocks(self):
+        root = Category.objects.create(name="Elasticos", order=1, is_active=True)
+        child = Category.objects.create(name="Bujes", parent=root, order=2, is_active=True)
+        direct_product = Product.objects.create(
+            sku="ROOT-001",
+            name="Producto categoria raiz",
+            price=Decimal("100.00"),
+            stock=1,
+            is_active=True,
+            category=root,
+        )
+        direct_product.categories.add(root)
+        child_product = Product.objects.create(
+            sku="CHILD-001",
+            name="Producto subcategoria",
+            price=Decimal("200.00"),
+            stock=2,
+            is_active=True,
+            category=child,
+        )
+        child_product.categories.add(child)
+
+        template = CatalogExcelTemplate.objects.create(name="Catalogo agrupado")
+        sheet = CatalogExcelTemplateSheet.objects.create(
+            template=template,
+            name="Elasticos",
+            include_header=True,
+            include_descendant_categories=True,
+            group_by_subcategories=True,
+            sort_by="sku_asc",
+        )
+        sheet.categories.add(root)
+        CatalogExcelTemplateColumn.objects.create(sheet=sheet, key="sku", order=1, is_active=True)
+        CatalogExcelTemplateColumn.objects.create(sheet=sheet, key="name", order=2, is_active=True)
+        CatalogExcelTemplateColumn.objects.create(sheet=sheet, key="price", order=3, is_active=True)
+
+        workbook, stats = build_catalog_workbook(template)
+        worksheet = workbook["Elasticos"]
+
+        self.assertEqual(stats["rows_by_sheet"]["Elasticos"], 2)
+        self.assertEqual(worksheet["A1"].value, "Sin subcategoria (1 productos)")
+        self.assertEqual(worksheet["A2"].value, "SKU")
+        self.assertEqual(worksheet["A3"].value, "ROOT-001")
+        self.assertEqual(worksheet["A4"].value, "Bujes (1 productos)")
+        self.assertEqual(worksheet["A5"].value, "SKU")
+        self.assertEqual(worksheet["A6"].value, "CHILD-001")
+        self.assertIsNone(worksheet.freeze_panes)
+
+    def test_client_catalog_export_skips_inactive_category_blocks(self):
+        root = Category.objects.create(name="Catalogo", order=1, is_active=True, visible_in_catalog=True)
+        active_child = Category.objects.create(
+            name="Visible",
+            parent=root,
+            order=1,
+            is_active=True,
+            visible_in_catalog=True,
+        )
+        inactive_child = Category.objects.create(
+            name="Inactiva",
+            parent=root,
+            order=2,
+            is_active=False,
+            visible_in_catalog=False,
+        )
+        visible_product = Product.objects.create(
+            sku="VISIBLE-001",
+            name="Producto visible",
+            price=Decimal("100.00"),
+            stock=1,
+            is_active=True,
+            category=active_child,
+        )
+        visible_product.categories.add(active_child)
+        hidden_product = Product.objects.create(
+            sku="HIDDEN-001",
+            name="Producto oculto por categoria",
+            price=Decimal("200.00"),
+            stock=1,
+            is_active=True,
+            category=inactive_child,
+        )
+        hidden_product.categories.add(inactive_child)
+
+        template = CatalogExcelTemplate.objects.create(
+            name="Catalogo publico agrupado",
+            is_client_download_enabled=True,
+        )
+        sheet = CatalogExcelTemplateSheet.objects.create(
+            template=template,
+            name="Catalogo",
+            include_header=True,
+            only_active_products=True,
+            only_catalog_visible=False,
+            include_descendant_categories=True,
+            group_by_subcategories=True,
+            sort_by="sku_asc",
+        )
+        sheet.categories.add(root)
+        CatalogExcelTemplateColumn.objects.create(sheet=sheet, key="sku", order=1, is_active=True)
+        CatalogExcelTemplateColumn.objects.create(sheet=sheet, key="name", order=2, is_active=True)
+
+        workbook, stats = build_catalog_workbook(template)
+        worksheet = workbook["Catalogo"]
+        values = [cell.value for row in worksheet.iter_rows() for cell in row if cell.value]
+
+        self.assertEqual(stats["rows_by_sheet"]["Catalogo"], 1)
+        self.assertIn("Visible (1 productos)", values)
+        self.assertIn("VISIBLE-001", values)
+        self.assertNotIn("Inactiva (1 productos)", values)
+        self.assertNotIn("HIDDEN-001", values)
+
+    def test_client_catalog_export_with_inactive_selected_root_does_not_export_all_products(self):
+        inactive_root = Category.objects.create(
+            name="Raiz inactiva",
+            is_active=False,
+            visible_in_catalog=False,
+        )
+        unrelated_root = Category.objects.create(
+            name="Raiz visible",
+            is_active=True,
+            visible_in_catalog=True,
+        )
+        unrelated_product = Product.objects.create(
+            sku="UNRELATED-001",
+            name="Producto de otra categoria",
+            price=Decimal("100.00"),
+            stock=1,
+            is_active=True,
+            category=unrelated_root,
+        )
+        unrelated_product.categories.add(unrelated_root)
+
+        template = CatalogExcelTemplate.objects.create(name="Catalogo raiz inactiva")
+        sheet = CatalogExcelTemplateSheet.objects.create(
+            template=template,
+            name="Raiz inactiva",
+            include_header=True,
+            only_active_products=True,
+            only_catalog_visible=True,
+            include_descendant_categories=True,
+            group_by_subcategories=True,
+            sort_by="sku_asc",
+        )
+        sheet.categories.add(inactive_root)
+        CatalogExcelTemplateColumn.objects.create(sheet=sheet, key="sku", order=1, is_active=True)
+        CatalogExcelTemplateColumn.objects.create(sheet=sheet, key="name", order=2, is_active=True)
+
+        workbook, stats = build_catalog_workbook(template)
+        worksheet = workbook["Catalogo"]
+        values = [cell.value for row in worksheet.iter_rows() for cell in row if cell.value]
+
+        self.assertEqual(stats["rows_by_sheet"]["Catalogo"], 0)
+        self.assertEqual(stats["skipped_sheets"], ["Raiz inactiva"])
+        self.assertNotIn("Raiz inactiva", workbook.sheetnames)
+        self.assertIn("No hay categorias visibles para exportar.", values)
+        self.assertNotIn("UNRELATED-001", values)
+
+    def test_public_export_skips_inactive_category_sheet_but_keeps_visible_sheets(self):
+        visible_root = Category.objects.create(
+            name="Visible",
+            is_active=True,
+            visible_in_catalog=True,
+        )
+        hidden_root = Category.objects.create(
+            name="Oculta",
+            is_active=False,
+            visible_in_catalog=False,
+        )
+        product = Product.objects.create(
+            sku="VISIBLE-SHEET-001",
+            name="Producto visible",
+            price=Decimal("100.00"),
+            stock=1,
+            is_active=True,
+            category=visible_root,
+        )
+        product.categories.add(visible_root)
+
+        template = CatalogExcelTemplate.objects.create(
+            name="Catalogo con hojas heredadas",
+            is_client_download_enabled=True,
+        )
+        visible_sheet = CatalogExcelTemplateSheet.objects.create(
+            template=template,
+            name="Visible",
+            include_header=True,
+            only_active_products=True,
+            include_descendant_categories=True,
+            group_by_subcategories=True,
+            sort_by="sku_asc",
+        )
+        visible_sheet.categories.add(visible_root)
+        hidden_sheet = CatalogExcelTemplateSheet.objects.create(
+            template=template,
+            name="Oculta",
+            include_header=True,
+            only_active_products=True,
+            include_descendant_categories=True,
+            group_by_subcategories=True,
+            sort_by="sku_asc",
+        )
+        hidden_sheet.categories.add(hidden_root)
+        for sheet in (visible_sheet, hidden_sheet):
+            CatalogExcelTemplateColumn.objects.create(sheet=sheet, key="sku", order=1, is_active=True)
+            CatalogExcelTemplateColumn.objects.create(sheet=sheet, key="name", order=2, is_active=True)
+
+        workbook, stats = build_catalog_workbook(template)
+
+        self.assertIn("Visible", workbook.sheetnames)
+        self.assertNotIn("Oculta", workbook.sheetnames)
+        self.assertEqual(stats["skipped_sheets"], ["Oculta"])
+        self.assertEqual(stats["rows_by_sheet"]["Visible"], 1)

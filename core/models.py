@@ -1584,6 +1584,11 @@ class CatalogExcelTemplateSheet(models.Model):
         default=True,
         verbose_name="Incluir subcategorias",
     )
+    group_by_subcategories = models.BooleanField(
+        default=False,
+        verbose_name="Separar por subcategorias",
+        help_text="Cuando la hoja filtra una categoria principal, agrupa los productos en tablas internas por subcategoria.",
+    )
     categories = models.ManyToManyField(
         "catalog.Category",
         blank=True,

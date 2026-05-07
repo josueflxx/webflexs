@@ -312,6 +312,7 @@ CATALOG_EXCEL_SHEET_SNAPSHOT_FIELDS = [
     "only_active_products",
     "only_catalog_visible",
     "include_descendant_categories",
+    "group_by_subcategories",
     "search_query",
     "max_rows",
     "sort_by",
@@ -584,14 +585,17 @@ def catalog_excel_template_autogenerate_main_category_sheets(request, template_i
 
     root_categories_qs = Category.objects.filter(parent__isnull=True)
     if not include_inactive_categories:
-        root_categories_qs = root_categories_qs.filter(is_active=True)
+        root_categories_qs = root_categories_qs.filter(
+            is_active=True,
+            visible_in_catalog=True,
+        )
 
     root_categories = list(root_categories_qs.order_by("order", "name", "id"))
     if not root_categories:
         if include_inactive_categories:
             messages.warning(request, "No hay categorias principales para generar hojas.")
         else:
-            messages.warning(request, "No hay categorias principales activas para generar hojas.")
+            messages.warning(request, "No hay categorias principales activas y visibles para generar hojas.")
         return redirect(_export_template_detail_url(template.pk))
 
     base_columns = _resolve_auto_columns_from_template(template)
@@ -618,6 +622,7 @@ def catalog_excel_template_autogenerate_main_category_sheets(request, template_i
                     only_active_products=True,
                     only_catalog_visible=not include_inactive_categories,
                     include_descendant_categories=True,
+                    group_by_subcategories=True,
                     search_query="",
                     max_rows=None,
                     sort_by="name_asc",
@@ -631,6 +636,7 @@ def catalog_excel_template_autogenerate_main_category_sheets(request, template_i
                 target_sheet.only_active_products = True
                 target_sheet.only_catalog_visible = not include_inactive_categories
                 target_sheet.include_descendant_categories = True
+                target_sheet.group_by_subcategories = True
                 target_sheet.search_query = ""
                 target_sheet.max_rows = None
                 target_sheet.sort_by = "name_asc"
@@ -641,6 +647,7 @@ def catalog_excel_template_autogenerate_main_category_sheets(request, template_i
                         "only_active_products",
                         "only_catalog_visible",
                         "include_descendant_categories",
+                        "group_by_subcategories",
                         "search_query",
                         "max_rows",
                         "sort_by",
@@ -669,7 +676,7 @@ def catalog_excel_template_autogenerate_main_category_sheets(request, template_i
     messages.success(
         request,
         (
-            f"Hojas generadas por categorias principales ({'activas e inactivas' if include_inactive_categories else 'solo activas'}): "
+            f"Hojas generadas por categorias principales ({'activas e inactivas' if include_inactive_categories else 'solo activas y visibles'}): "
             f"{created_count} nuevas, {updated_count} actualizadas."
         ),
     )

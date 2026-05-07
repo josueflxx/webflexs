@@ -46,6 +46,7 @@ class CatalogExcelTemplateSheetForm(forms.ModelForm):
             "only_active_products",
             "only_catalog_visible",
             "include_descendant_categories",
+            "group_by_subcategories",
             "sort_by",
             "search_query",
             "max_rows",
@@ -59,6 +60,7 @@ class CatalogExcelTemplateSheetForm(forms.ModelForm):
             "only_active_products": forms.CheckboxInput(attrs={"class": "form-checkbox"}),
             "only_catalog_visible": forms.CheckboxInput(attrs={"class": "form-checkbox"}),
             "include_descendant_categories": forms.CheckboxInput(attrs={"class": "form-checkbox"}),
+            "group_by_subcategories": forms.CheckboxInput(attrs={"class": "form-checkbox"}),
             "sort_by": forms.Select(attrs={"class": "form-select"}),
             "search_query": forms.TextInput(
                 attrs={"class": "form-input", "placeholder": "Filtro texto opcional (SKU, nombre, descripcion...)"},
@@ -74,6 +76,7 @@ class CatalogExcelTemplateSheetForm(forms.ModelForm):
             "only_active_products": "Solo productos activos",
             "only_catalog_visible": "Solo visibles en catalogo",
             "include_descendant_categories": "Incluir subcategorias",
+            "group_by_subcategories": "Separar por subcategorias",
             "sort_by": "Orden resultados",
             "search_query": "Busqueda interna",
             "max_rows": "Limite de filas",
@@ -82,6 +85,7 @@ class CatalogExcelTemplateSheetForm(forms.ModelForm):
         }
         help_texts = {
             "categories": "Si seleccionas categorias, solo exporta productos que pertenezcan a esas categorias.",
+            "group_by_subcategories": "Crea bloques dentro de la misma hoja: titulo de subcategoria, encabezados y productos.",
             "suppliers": "Opcional. Filtra solo productos de los proveedores elegidos.",
         }
 

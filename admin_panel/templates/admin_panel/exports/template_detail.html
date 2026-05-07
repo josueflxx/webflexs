@@ -117,6 +117,7 @@
             <span class="badge badge-info">Solo activos: {% if sheet.only_active_products %}Si{% else %}No{% endif %}</span>
             <span class="badge badge-info">Solo visible catalogo: {% if sheet.only_catalog_visible %}Si{% else %}No{% endif %}</span>
             <span class="badge badge-info">Incluye subcategorias: {% if sheet.include_descendant_categories %}Si{% else %}No{% endif %}</span>
+            <span class="badge badge-info">Bloques por subcategoria: {% if sheet.group_by_subcategories %}Si{% else %}No{% endif %}</span>
             {% if sheet.max_rows %}
             <span class="badge badge-warning">Limite: {{ sheet.max_rows }}</span>
             {% else %}
