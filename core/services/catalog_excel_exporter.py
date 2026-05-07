@@ -1,6 +1,7 @@
 """Catalog Excel export builder using configurable templates."""
 
 import json
+from types import SimpleNamespace
 from decimal import Decimal
 
 from django.db.models import Q
@@ -133,16 +134,213 @@ def _selected_category_ids(sheet):
     return set(sheet.categories.values_list("id", flat=True))
 
 
+def _selected_supplier_ids(sheet):
+    return set(sheet.suppliers.values_list("id", flat=True))
+
+
+def _sheet_search_query(sheet):
+    return (getattr(sheet, "search_query", "") or "").strip()
+
+
 def _sheet_requires_public_catalog(sheet):
     template = getattr(sheet, "template", None)
     return bool(sheet.only_catalog_visible or (template and template.is_client_download_enabled))
 
 
+def _sheet_has_explicit_scope(sheet):
+    return bool(
+        _selected_category_ids(sheet)
+        or _selected_supplier_ids(sheet)
+        or _sheet_search_query(sheet)
+    )
+
+
 def _sheet_should_export(sheet):
     selected_category_ids = _selected_category_ids(sheet)
-    if _sheet_requires_public_catalog(sheet) and selected_category_ids:
-        return bool(_resolve_category_ids(sheet, selected_ids=selected_category_ids))
+    if _sheet_requires_public_catalog(sheet):
+        template = getattr(sheet, "template", None)
+        if template and template.is_client_download_enabled and not _sheet_has_explicit_scope(sheet):
+            return False
+        if selected_category_ids:
+            return bool(_resolve_category_ids(sheet, selected_ids=selected_category_ids))
     return True
+
+
+def _public_category_ids_with_products():
+    all_categories = {
+        category.id: category
+        for category in Category.objects.select_related("parent")
+    }
+    visible_categories = {
+        category.id: category
+        for category in all_categories.values()
+        if category.is_active and category.visible_in_catalog
+    }
+    if not visible_categories:
+        return set()
+
+    products = Product.catalog_visible(Product.objects.all(), include_uncategorized=False)
+    linked_ids = set(
+        products.exclude(category_id__isnull=True).values_list("category_id", flat=True)
+    )
+    linked_ids.update(
+        products.exclude(categories__id__isnull=True).values_list("categories__id", flat=True)
+    )
+
+    public_ids = set()
+    for category_id in linked_ids:
+        node = visible_categories.get(category_id)
+        if not node:
+            continue
+        chain = []
+        cursor = node
+        is_public_path = True
+        while cursor:
+            if not cursor.is_active or not cursor.visible_in_catalog:
+                is_public_path = False
+                break
+            chain.append(cursor)
+            cursor = all_categories.get(cursor.parent_id)
+        if is_public_path:
+            public_ids.update(category.id for category in chain)
+    return public_ids
+
+
+def _category_public_sort_key(category):
+    return (
+        category.public_order,
+        category.order,
+        (category.display_name or category.name or "").lower(),
+        category.id,
+    )
+
+
+class _ListRelationAdapter:
+    def __init__(self, items):
+        self._items = list(items)
+
+    def values_list(self, field_name, flat=False):
+        values = [getattr(item, field_name) for item in self._items]
+        if flat:
+            return values
+        return [(value,) for value in values]
+
+    def all(self):
+        return list(self._items)
+
+
+class _ColumnRelationAdapter:
+    def __init__(self, items):
+        self._items = list(items)
+
+    def filter(self, **kwargs):
+        items = self._items
+        for field_name, expected in kwargs.items():
+            items = [
+                item
+                for item in items
+                if getattr(item, field_name, None) == expected
+            ]
+        return _ColumnRelationAdapter(items)
+
+    def order_by(self, *fields):
+        items = list(self._items)
+        for field in reversed(fields):
+            reverse = field.startswith("-")
+            field_name = field[1:] if reverse else field
+            items.sort(
+                key=lambda item: getattr(item, field_name, None),
+                reverse=reverse,
+            )
+        return _ColumnRelationAdapter(items)
+
+    def __iter__(self):
+        return iter(self._items)
+
+
+def _build_synthetic_category_sheet(template, category, columns, order, name=None):
+    return SimpleNamespace(
+        template=template,
+        name=name or category.name[:31] or "Categoria",
+        order=order,
+        include_header=True,
+        only_active_products=True,
+        only_catalog_visible=True,
+        include_descendant_categories=True,
+        group_by_subcategories=True,
+        search_query="",
+        max_rows=None,
+        sort_by="name_asc",
+        categories=_ListRelationAdapter([category]),
+        suppliers=_ListRelationAdapter([]),
+        columns=_ColumnRelationAdapter(columns),
+        _synthetic=True,
+    )
+
+
+def _complete_public_catalog_sheets(template, sheets):
+    if not template.is_client_download_enabled:
+        return sheets
+
+    selected_root_ids = set()
+    for sheet in sheets:
+        selected_category_ids = _selected_category_ids(sheet)
+        selected_root_ids.update(selected_category_ids)
+
+    public_ids = _public_category_ids_with_products()
+    if not public_ids:
+        return sheets
+
+    public_categories = {
+        category.id: category
+        for category in Category.objects.filter(
+            id__in=public_ids,
+            is_active=True,
+            visible_in_catalog=True,
+        ).select_related("parent")
+    }
+    public_roots = [
+        category
+        for category in public_categories.values()
+        if category.parent_id not in public_categories
+    ]
+    public_roots.sort(key=_category_public_sort_key)
+
+    base_columns = []
+    for sheet in sheets:
+        base_columns = list(sheet.columns.filter(is_active=True).order_by("order", "id"))
+        if base_columns:
+            break
+
+    completed_sheets = list(sheets)
+    used_names = {sheet.name[:31] for sheet in completed_sheets}
+    next_order = len(completed_sheets) + 1
+
+    def unique_sheet_name(base_name):
+        base_name = (base_name[:31] or "Categoria").strip()
+        candidate = base_name
+        counter = 2
+        while candidate in used_names:
+            suffix = f" {counter}"
+            candidate = f"{base_name[:31 - len(suffix)]}{suffix}"
+            counter += 1
+        used_names.add(candidate)
+        return candidate
+
+    for category in public_roots:
+        if category.id in selected_root_ids:
+            continue
+        completed_sheets.append(
+            _build_synthetic_category_sheet(
+                template,
+                category,
+                base_columns,
+                next_order,
+                name=unique_sheet_name(category.name),
+            )
+        )
+        next_order += 1
+    return completed_sheets
 
 
 def _filter_public_category_ids(category_ids):
@@ -341,6 +539,60 @@ def _category_sort_key(category, category_lookup):
     return tuple(path)
 
 
+def _client_export_uses_canonical_categories(sheet):
+    template = getattr(sheet, "template", None)
+    return bool(template and template.is_client_download_enabled and _selected_category_ids(sheet))
+
+
+def _select_canonical_public_category(product, category_lookup):
+    linked_categories = [
+        category
+        for category in product.get_linked_categories()
+        if category and _is_public_category(category, category_lookup=category_lookup)
+    ]
+    if not linked_categories:
+        return None
+
+    primary_category = category_lookup.get(product.category_id) if product.category_id else None
+    if primary_category and _is_public_category(primary_category, category_lookup=category_lookup):
+        same_branch = [
+            category
+            for category in linked_categories
+            if _is_descendant_of(category, primary_category.pk, category_lookup)
+        ]
+        if same_branch:
+            same_branch.sort(
+                key=lambda category: (
+                    -_category_depth(category, category_lookup),
+                    _category_sort_key(category, category_lookup),
+                )
+            )
+            return same_branch[0]
+        return primary_category
+
+    linked_categories.sort(
+        key=lambda category: (
+            -_category_depth(category, category_lookup),
+            _category_sort_key(category, category_lookup),
+        )
+    )
+    return linked_categories[0]
+
+
+def _iter_sheet_products(sheet):
+    queryset = _apply_sheet_filters(sheet)
+    if not _client_export_uses_canonical_categories(sheet):
+        yield from queryset.iterator(chunk_size=500)
+        return
+
+    resolved_ids = _resolve_category_ids(sheet, selected_ids=_selected_category_ids(sheet))
+    category_lookup = Category.objects.select_related("parent").in_bulk()
+    for product in queryset.iterator(chunk_size=500):
+        canonical_category = _select_canonical_public_category(product, category_lookup)
+        if canonical_category and canonical_category.pk in resolved_ids:
+            yield product
+
+
 def _build_grouping_context(sheet):
     selected_ids = _selected_category_ids(sheet)
     resolved_ids = _resolve_category_ids(sheet, selected_ids=selected_ids)
@@ -480,7 +732,7 @@ def _append_grouped_products(
     grouping_context = _build_grouping_context(sheet_config)
     grouped_products = {}
 
-    products = list(_apply_sheet_filters(sheet_config))
+    products = list(_iter_sheet_products(sheet_config))
     for product in products:
         group_category = _select_product_group_category(product, grouping_context)
         group_key = group_category.pk if group_category else 0
@@ -556,6 +808,7 @@ def build_catalog_workbook(template, price_list=None, discount_percentage=None):
     sheets = list(
         template.sheets.prefetch_related("columns", "categories", "suppliers").order_by("order", "id")
     )
+    sheets = _complete_public_catalog_sheets(template, sheets)
     if not sheets:
         default_sheet = workbook.create_sheet("Catalogo")
         default_sheet.append(["Mensaje"])
@@ -580,7 +833,6 @@ def build_catalog_workbook(template, price_list=None, discount_percentage=None):
             skipped_sheets.append(sheet_config.name)
             continue
 
-        exported_any_sheet = True
         worksheet = workbook.create_sheet(sheet_config.name[:31] or "Hoja")
         columns = list(
             sheet_config.columns.filter(is_active=True).order_by("order", "id")
@@ -615,6 +867,11 @@ def build_catalog_workbook(template, price_list=None, discount_percentage=None):
                 discount_percentage,
             )
             _set_auto_column_widths(worksheet, column_widths)
+            if _sheet_requires_public_catalog(sheet_config) and row_count == 0:
+                workbook.remove(worksheet)
+                skipped_sheets.append(sheet_config.name)
+                continue
+            exported_any_sheet = True
             rows_by_sheet[sheet_config.name] = row_count
             continue
 
@@ -624,7 +881,7 @@ def build_catalog_workbook(template, price_list=None, discount_percentage=None):
             _apply_header_styles(worksheet, len(headers))
 
         row_count = 0
-        for product in _apply_sheet_filters(sheet_config).iterator(chunk_size=500):
+        for product in _iter_sheet_products(sheet_config):
             excel_row = row_count + (1 if sheet_config.include_header else 0) + 1
             _append_product_row(
                 worksheet,
@@ -643,6 +900,12 @@ def build_catalog_workbook(template, price_list=None, discount_percentage=None):
 
         _set_auto_column_widths(worksheet, column_widths)
 
+        if _sheet_requires_public_catalog(sheet_config) and row_count == 0:
+            workbook.remove(worksheet)
+            skipped_sheets.append(sheet_config.name)
+            continue
+
+        exported_any_sheet = True
         rows_by_sheet[sheet_config.name] = row_count
 
     if not exported_any_sheet:

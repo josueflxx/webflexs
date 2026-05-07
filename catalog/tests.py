@@ -1208,3 +1208,206 @@ class CatalogExcelGroupedExportTests(TestCase):
         self.assertNotIn("Oculta", workbook.sheetnames)
         self.assertEqual(stats["skipped_sheets"], ["Oculta"])
         self.assertEqual(stats["rows_by_sheet"]["Visible"], 1)
+
+    def test_client_export_adds_missing_public_root_sheets(self):
+        configured_root = Category.objects.create(
+            name="Configurada",
+            is_active=True,
+            visible_in_catalog=True,
+        )
+        missing_root = Category.objects.create(
+            name="Nueva visible",
+            is_active=True,
+            visible_in_catalog=True,
+        )
+        configured_product = Product.objects.create(
+            sku="CONFIG-001",
+            name="Producto configurado",
+            price=Decimal("100.00"),
+            stock=1,
+            is_active=True,
+            category=configured_root,
+        )
+        configured_product.categories.add(configured_root)
+        missing_product = Product.objects.create(
+            sku="MISSING-001",
+            name="Producto raiz nueva",
+            price=Decimal("200.00"),
+            stock=1,
+            is_active=True,
+            category=missing_root,
+        )
+        missing_product.categories.add(missing_root)
+
+        template = CatalogExcelTemplate.objects.create(
+            name="Catalogo incompleto",
+            is_client_download_enabled=True,
+        )
+        sheet = CatalogExcelTemplateSheet.objects.create(
+            template=template,
+            name="Configurada",
+            include_header=True,
+            only_active_products=True,
+            only_catalog_visible=True,
+            include_descendant_categories=True,
+            group_by_subcategories=True,
+            sort_by="sku_asc",
+        )
+        sheet.categories.add(configured_root)
+        CatalogExcelTemplateColumn.objects.create(sheet=sheet, key="sku", order=1, is_active=True)
+        CatalogExcelTemplateColumn.objects.create(sheet=sheet, key="name", order=2, is_active=True)
+
+        workbook, stats = build_catalog_workbook(template)
+
+        self.assertIn("Configurada", workbook.sheetnames)
+        self.assertIn("Nueva visible", workbook.sheetnames)
+        self.assertEqual(stats["rows_by_sheet"]["Configurada"], 1)
+        self.assertEqual(stats["rows_by_sheet"]["Nueva visible"], 1)
+
+    def test_client_export_skips_public_sheet_without_scope(self):
+        public_root = Category.objects.create(
+            name="ABRAZADERAS",
+            is_active=True,
+            visible_in_catalog=True,
+        )
+        product = Product.objects.create(
+            sku="AB-001",
+            name="Abrazadera visible",
+            price=Decimal("100.00"),
+            stock=1,
+            is_active=True,
+            category=public_root,
+        )
+        product.categories.add(public_root)
+
+        template = CatalogExcelTemplate.objects.create(
+            name="Catalogo con hoja huerfana",
+            is_client_download_enabled=True,
+        )
+        orphan_sheet = CatalogExcelTemplateSheet.objects.create(
+            template=template,
+            name="CAÑO TENSOR",
+            include_header=True,
+            only_active_products=True,
+            only_catalog_visible=True,
+            include_descendant_categories=True,
+            group_by_subcategories=False,
+            sort_by="sku_asc",
+        )
+        CatalogExcelTemplateColumn.objects.create(
+            sheet=orphan_sheet,
+            key="sku",
+            order=1,
+            is_active=True,
+        )
+        CatalogExcelTemplateColumn.objects.create(
+            sheet=orphan_sheet,
+            key="name",
+            order=2,
+            is_active=True,
+        )
+
+        workbook, stats = build_catalog_workbook(template)
+
+        self.assertNotIn("CAÑO TENSOR", workbook.sheetnames)
+        self.assertIn("ABRAZADERAS", workbook.sheetnames)
+        self.assertIn("CAÑO TENSOR", stats["skipped_sheets"])
+        self.assertEqual(stats["rows_by_sheet"]["ABRAZADERAS"], 1)
+
+    def test_client_export_uses_one_canonical_category_for_multi_category_products(self):
+        primary_root = Category.objects.create(
+            name="ABRAZADERAS",
+            is_active=True,
+            visible_in_catalog=True,
+        )
+        secondary_root = Category.objects.create(
+            name="CAÑO TENSOR",
+            is_active=True,
+            visible_in_catalog=True,
+        )
+        shared_product = Product.objects.create(
+            sku="SHARED-001",
+            name="Producto con dos categorias",
+            price=Decimal("100.00"),
+            stock=1,
+            is_active=True,
+            category=primary_root,
+        )
+        shared_product.categories.add(primary_root, secondary_root)
+        secondary_product = Product.objects.create(
+            sku="TENSOR-001",
+            name="Producto tensor",
+            price=Decimal("200.00"),
+            stock=1,
+            is_active=True,
+            category=secondary_root,
+        )
+        secondary_product.categories.add(secondary_root)
+
+        template = CatalogExcelTemplate.objects.create(
+            name="Catalogo sin duplicar",
+            is_client_download_enabled=True,
+        )
+        primary_sheet = CatalogExcelTemplateSheet.objects.create(
+            template=template,
+            name="ABRAZADERAS",
+            include_header=True,
+            only_active_products=True,
+            only_catalog_visible=True,
+            include_descendant_categories=True,
+            group_by_subcategories=False,
+            sort_by="sku_asc",
+        )
+        primary_sheet.categories.add(primary_root)
+        secondary_sheet = CatalogExcelTemplateSheet.objects.create(
+            template=template,
+            name="CAÑO TENSOR",
+            include_header=True,
+            only_active_products=True,
+            only_catalog_visible=True,
+            include_descendant_categories=True,
+            group_by_subcategories=False,
+            sort_by="sku_asc",
+        )
+        secondary_sheet.categories.add(secondary_root)
+        for sheet in (primary_sheet, secondary_sheet):
+            CatalogExcelTemplateColumn.objects.create(sheet=sheet, key="sku", order=1, is_active=True)
+            CatalogExcelTemplateColumn.objects.create(sheet=sheet, key="name", order=2, is_active=True)
+
+        workbook, stats = build_catalog_workbook(template)
+
+        self.assertIn("ABRAZADERAS", workbook.sheetnames)
+        self.assertIn("CAÑO TENSOR", workbook.sheetnames)
+        self.assertEqual(stats["rows_by_sheet"]["ABRAZADERAS"], 1)
+        self.assertEqual(stats["rows_by_sheet"]["CAÑO TENSOR"], 1)
+
+    def test_public_export_skips_active_empty_category_sheet(self):
+        empty_root = Category.objects.create(
+            name="Vacia visible",
+            is_active=True,
+            visible_in_catalog=True,
+        )
+        template = CatalogExcelTemplate.objects.create(
+            name="Catalogo vacio",
+            is_client_download_enabled=True,
+        )
+        sheet = CatalogExcelTemplateSheet.objects.create(
+            template=template,
+            name="Vacia visible",
+            include_header=True,
+            only_active_products=True,
+            only_catalog_visible=True,
+            include_descendant_categories=True,
+            group_by_subcategories=True,
+            sort_by="sku_asc",
+        )
+        sheet.categories.add(empty_root)
+        CatalogExcelTemplateColumn.objects.create(sheet=sheet, key="sku", order=1, is_active=True)
+        CatalogExcelTemplateColumn.objects.create(sheet=sheet, key="name", order=2, is_active=True)
+
+        workbook, stats = build_catalog_workbook(template)
+
+        self.assertNotIn("Vacia visible", workbook.sheetnames)
+        self.assertEqual(stats["skipped_sheets"], ["Vacia visible"])
+        self.assertIn("Catalogo", workbook.sheetnames)
+        self.assertEqual(stats["rows_by_sheet"]["Catalogo"], 0)
