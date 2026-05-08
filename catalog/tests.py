@@ -11,7 +11,7 @@ from accounts.models import ClientProfile
 from catalog.services.abrazadera_importer import AbrazaderaImporter
 from catalog.services.clamp_code import generarCodigo, parsearCodigo
 from catalog.services.product_importer import ProductImporter
-from catalog.models import Category, ClampMeasureRequest, ClampSpecs, Product
+from catalog.models import Category, CategoryProductOrder, ClampMeasureRequest, ClampSpecs, Product
 from core.models import CatalogExcelTemplate, CatalogExcelTemplateColumn, CatalogExcelTemplateSheet
 from core.services.catalog_excel_exporter import build_catalog_workbook
 from orders.models import CartItem
@@ -895,6 +895,41 @@ class CatalogCategoryVisibilityTests(TestCase):
         skus = [item.sku for item in response.context["page_obj"].object_list]
         self.assertNotIn("CHILD-001", skus)
 
+    def test_category_page_uses_manual_product_order_by_default(self):
+        category = Category.objects.create(
+            name="Orden publico",
+            slug="orden-publico",
+            is_active=True,
+            visible_in_catalog=True,
+        )
+        first_product = Product.objects.create(
+            sku="ORD-001",
+            name="Producto primero alfabetico",
+            price=Decimal("100.00"),
+            stock=5,
+            is_active=True,
+            category=category,
+        )
+        second_product = Product.objects.create(
+            sku="ORD-002",
+            name="ZZ Producto manual primero",
+            price=Decimal("100.00"),
+            stock=5,
+            is_active=True,
+            category=category,
+        )
+        first_product.categories.add(category)
+        second_product.categories.add(category)
+        CategoryProductOrder.objects.create(category=category, product=first_product, sort_order=20)
+        CategoryProductOrder.objects.create(category=category, product=second_product, sort_order=10)
+
+        response = self.client.get(reverse("catalog"), {"category": category.slug})
+
+        self.assertEqual(response.status_code, 200)
+        skus = [item.sku for item in response.context["page_obj"].object_list]
+        self.assertEqual(skus[:2], ["ORD-002", "ORD-001"])
+        self.assertEqual(response.context["order_by"], "manual")
+
 
 class ProductDetailTemplateTests(TestCase):
     def setUp(self):
@@ -1380,6 +1415,58 @@ class CatalogExcelGroupedExportTests(TestCase):
         self.assertIn("CAÑO TENSOR", workbook.sheetnames)
         self.assertEqual(stats["rows_by_sheet"]["ABRAZADERAS"], 1)
         self.assertEqual(stats["rows_by_sheet"]["CAÑO TENSOR"], 1)
+
+    def test_client_export_respects_manual_product_order_per_category(self):
+        root = Category.objects.create(
+            name="Orden publico",
+            is_active=True,
+            visible_in_catalog=True,
+        )
+        first_product = Product.objects.create(
+            sku="ORD-001",
+            name="A producto alfabetico",
+            price=Decimal("100.00"),
+            stock=1,
+            is_active=True,
+            category=root,
+        )
+        second_product = Product.objects.create(
+            sku="ORD-002",
+            name="Z producto manual primero",
+            price=Decimal("200.00"),
+            stock=1,
+            is_active=True,
+            category=root,
+        )
+        first_product.categories.add(root)
+        second_product.categories.add(root)
+        CategoryProductOrder.objects.create(category=root, product=first_product, sort_order=20)
+        CategoryProductOrder.objects.create(category=root, product=second_product, sort_order=10)
+
+        template = CatalogExcelTemplate.objects.create(
+            name="Catalogo ordenado",
+            is_client_download_enabled=True,
+        )
+        sheet = CatalogExcelTemplateSheet.objects.create(
+            template=template,
+            name="Orden publico",
+            include_header=True,
+            only_active_products=True,
+            only_catalog_visible=True,
+            include_descendant_categories=True,
+            group_by_subcategories=False,
+            sort_by="name_asc",
+        )
+        sheet.categories.add(root)
+        CatalogExcelTemplateColumn.objects.create(sheet=sheet, key="sku", order=1, is_active=True)
+        CatalogExcelTemplateColumn.objects.create(sheet=sheet, key="name", order=2, is_active=True)
+
+        workbook, stats = build_catalog_workbook(template)
+        worksheet = workbook["Orden publico"]
+
+        self.assertEqual(stats["rows_by_sheet"]["Orden publico"], 2)
+        self.assertEqual(worksheet["A2"].value, "ORD-002")
+        self.assertEqual(worksheet["A3"].value, "ORD-001")
 
     def test_public_export_skips_active_empty_category_sheet(self):
         empty_root = Category.objects.create(

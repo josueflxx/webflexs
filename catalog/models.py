@@ -567,6 +567,44 @@ class Product(models.Model):
         return extracted
 
 
+class CategoryProductOrder(models.Model):
+    """Manual product ordering scoped to one category."""
+
+    category = models.ForeignKey(
+        Category,
+        on_delete=models.CASCADE,
+        related_name="product_order_rows",
+        verbose_name="Categoria",
+    )
+    product = models.ForeignKey(
+        Product,
+        on_delete=models.CASCADE,
+        related_name="category_order_rows",
+        verbose_name="Producto",
+    )
+    sort_order = models.PositiveIntegerField(default=0, db_index=True, verbose_name="Orden")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Orden de producto por categoria"
+        verbose_name_plural = "Ordenes de productos por categoria"
+        ordering = ["category_id", "sort_order", "product__name", "product_id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["category", "product"],
+                name="uniq_category_product_order",
+            )
+        ]
+        indexes = [
+            models.Index(fields=["category", "sort_order", "product"]),
+            models.Index(fields=["product", "category"]),
+        ]
+
+    def __str__(self):
+        return f"{self.category_id}:{self.product_id} #{self.sort_order}"
+
+
 class ClampSpecs(models.Model):
     """
     Structured technical specs for clamp products.

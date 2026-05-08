@@ -3,9 +3,9 @@ Category assignment helpers for flexible product categorization.
 """
 import re
 
-from django.db.models import Min
+from django.db.models import Max, Min
 
-from catalog.models import Category, Product
+from catalog.models import Category, CategoryProductOrder, Product
 
 
 def normalize_category_ids(raw_ids):
@@ -83,6 +83,8 @@ def assign_categories_to_product(product, category_ids, primary_category_id=None
         valid_ids.append(primary_category_id)
 
     product.categories.set(valid_ids)
+    _ensure_order_rows_for_products(valid_ids, [product.id])
+    CategoryProductOrder.objects.filter(product=product).exclude(category_id__in=valid_ids).delete()
     _sync_primary_category_for_products([product.id], preferred_primary_id=primary_category_id)
 
 
@@ -100,6 +102,7 @@ def add_category_to_products(product_ids, category_id):
     through = Product.categories.through
     rows = [through(product_id=pid, category_id=category_id) for pid in product_ids]
     through.objects.bulk_create(rows, ignore_conflicts=True, batch_size=2000)
+    _ensure_order_rows_for_products([category_id], product_ids)
 
     # Fill legacy primary category where missing.
     Product.objects.filter(id__in=product_ids, category__isnull=True).update(category_id=category_id)
@@ -121,6 +124,8 @@ def replace_categories_for_products(product_ids, category_id):
     through.objects.filter(product_id__in=product_ids).delete()
     rows = [through(product_id=pid, category_id=category_id) for pid in product_ids]
     through.objects.bulk_create(rows, ignore_conflicts=True, batch_size=2000)
+    CategoryProductOrder.objects.filter(product_id__in=product_ids).exclude(category_id=category_id).delete()
+    _ensure_order_rows_for_products([category_id], product_ids)
 
     Product.objects.filter(id__in=product_ids).update(category_id=category_id)
     return len(product_ids)
@@ -139,8 +144,50 @@ def remove_category_from_products(product_ids, category_id):
 
     through = Product.categories.through
     deleted, _ = through.objects.filter(product_id__in=product_ids, category_id=category_id).delete()
+    CategoryProductOrder.objects.filter(product_id__in=product_ids, category_id=category_id).delete()
     _sync_primary_category_for_products(product_ids)
     return deleted
+
+
+def _ensure_order_rows_for_products(category_ids, product_ids):
+    category_ids = normalize_category_ids(category_ids)
+    product_ids = normalize_category_ids(product_ids)
+    if not category_ids or not product_ids:
+        return
+
+    existing_pairs = set(
+        CategoryProductOrder.objects.filter(
+            category_id__in=category_ids,
+            product_id__in=product_ids,
+        ).values_list("category_id", "product_id")
+    )
+    max_order_by_category = dict(
+        CategoryProductOrder.objects.filter(category_id__in=category_ids)
+        .values("category_id")
+        .annotate(max_order=Max("sort_order"))
+        .values_list("category_id", "max_order")
+    )
+
+    rows = []
+    next_order_by_category = {
+        category_id: (max_order_by_category.get(category_id) or 0)
+        for category_id in category_ids
+    }
+    for category_id in category_ids:
+        for product_id in product_ids:
+            if (category_id, product_id) in existing_pairs:
+                continue
+            next_order_by_category[category_id] += 10
+            rows.append(
+                CategoryProductOrder(
+                    category_id=category_id,
+                    product_id=product_id,
+                    sort_order=next_order_by_category[category_id],
+                )
+            )
+
+    if rows:
+        CategoryProductOrder.objects.bulk_create(rows, ignore_conflicts=True, batch_size=2000)
 
 
 def _sync_primary_category_for_products(product_ids, preferred_primary_id=None):

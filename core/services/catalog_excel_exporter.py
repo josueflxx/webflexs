@@ -10,7 +10,7 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 
-from catalog.models import Category, Product, PriceListItem
+from catalog.models import Category, CategoryProductOrder, Product, PriceListItem
 from core.models import CATALOG_EXPORT_COLUMN_CHOICES
 
 
@@ -587,10 +587,37 @@ def _iter_sheet_products(sheet):
 
     resolved_ids = _resolve_category_ids(sheet, selected_ids=_selected_category_ids(sheet))
     category_lookup = Category.objects.select_related("parent").in_bulk()
+    matched_products = []
+    matched_product_ids = []
+    matched_category_ids = []
     for product in queryset.iterator(chunk_size=500):
         canonical_category = _select_canonical_public_category(product, category_lookup)
         if canonical_category and canonical_category.pk in resolved_ids:
-            yield product
+            product._catalog_export_category_id = canonical_category.pk
+            matched_products.append(product)
+            matched_product_ids.append(product.pk)
+            matched_category_ids.append(canonical_category.pk)
+
+    order_map = {
+        (category_id, product_id): sort_order
+        for category_id, product_id, sort_order in CategoryProductOrder.objects.filter(
+            category_id__in=set(matched_category_ids),
+            product_id__in=matched_product_ids,
+        ).values_list("category_id", "product_id", "sort_order")
+    }
+    for product in matched_products:
+        category_id = getattr(product, "_catalog_export_category_id", None)
+        product._catalog_export_sort_order = order_map.get((category_id, product.pk), 999999999)
+
+    matched_products.sort(
+        key=lambda product: (
+            getattr(product, "_catalog_export_sort_order", 999999999),
+            (product.name or "").lower(),
+            product.sku or "",
+            product.pk,
+        )
+    )
+    yield from matched_products
 
 
 def _build_grouping_context(sheet):
@@ -620,6 +647,12 @@ def _select_product_group_category(product, grouping_context):
     only_catalog_visible = grouping_context["only_catalog_visible"]
     if selected_ids and not resolved_ids:
         return None
+
+    export_category_id = getattr(product, "_catalog_export_category_id", None)
+    if export_category_id and (not resolved_ids or export_category_id in resolved_ids):
+        export_category = grouping_context["category_lookup"].get(export_category_id)
+        if export_category:
+            return export_category
 
     linked_categories = [
         category

@@ -128,6 +128,7 @@ urlpatterns = [
     path('categorias/reordenar/', views.category_reorder, name='admin_category_reorder'),
     path('categorias/estado-masivo/', views.category_bulk_status, name='admin_category_bulk_status'),
     path('categorias/<int:pk>/productos/', views.category_manage_products, name='admin_category_products'),
+    path('categorias/<int:pk>/productos/reordenar/', views.category_products_reorder, name='admin_category_products_reorder'),
     
     # Category Attributes
     path('categorias/<int:category_id>/atributos/nuevo/', views.category_attribute_create, name='admin_category_attribute_create'),

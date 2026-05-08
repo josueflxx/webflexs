@@ -30,6 +30,8 @@ from django.db.models import (
     ExpressionWrapper,
     Value,
     Prefetch,
+    OuterRef,
+    Subquery,
 )
 from django.db.models.functions import Coalesce
 from django.http import JsonResponse, HttpResponse
@@ -49,7 +51,15 @@ from urllib.parse import urlencode, parse_qs
 import csv
 from openpyxl import Workbook
 
-from catalog.models import Product, Category, CategoryAttribute, ClampMeasureRequest, Supplier, PriceList
+from catalog.models import (
+    Product,
+    Category,
+    CategoryAttribute,
+    CategoryProductOrder,
+    ClampMeasureRequest,
+    Supplier,
+    PriceList,
+)
 from accounts.models import (
     AccountRequest,
     ClientCategory,
@@ -2133,7 +2143,23 @@ def category_manage_products(request, pk):
 
     products, search, status, cat_filter = get_filtered_queryset(request.GET)
 
-    paginator = Paginator(products.order_by('name'), 50)
+    can_reorder_products = cat_filter == 'current' and not search and not status
+
+    if cat_filter == 'current':
+        order_subquery = (
+            CategoryProductOrder.objects.filter(category=category, product_id=OuterRef("pk"))
+            .values("sort_order")[:1]
+        )
+        products = products.annotate(
+            category_sort_order=Coalesce(
+                Subquery(order_subquery, output_field=IntegerField()),
+                Value(999999999),
+            )
+        ).order_by("category_sort_order", "name", "sku", "id")
+    else:
+        products = products.order_by('name', 'sku', 'id')
+
+    paginator = Paginator(products, 300 if can_reorder_products else 50)
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
 
@@ -2153,7 +2179,82 @@ def category_manage_products(request, pk):
         'all_category_options': all_category_options,
         'total_count': products.count(),
         'pagination_count': len(page_obj.object_list),
+        'can_reorder_products': can_reorder_products,
     })
+
+
+@staff_member_required
+@require_POST
+@superuser_required_for_modifications
+def category_products_reorder(request, pk):
+    """
+    Reorder products inside one category without changing category assignment.
+    """
+    category = get_object_or_404(Category, pk=pk)
+    try:
+        payload = json.loads(request.body.decode("utf-8"))
+    except json.JSONDecodeError:
+        return JsonResponse({"success": False, "error": "JSON invalido."}, status=400)
+
+    ordered_ids = normalize_category_ids(payload.get("ordered_ids", []))
+    if not ordered_ids:
+        return JsonResponse({"success": False, "error": "No hay productos para ordenar."}, status=400)
+
+    try:
+        base_order = int(payload.get("base_order", 10))
+    except (TypeError, ValueError):
+        base_order = 10
+    base_order = max(base_order, 10)
+
+    linked_ids = set(
+        Product.categories.through.objects.filter(
+            category_id=category.id,
+            product_id__in=ordered_ids,
+        ).values_list("product_id", flat=True)
+    )
+    normalized_ids = [product_id for product_id in ordered_ids if product_id in linked_ids]
+    if not normalized_ids:
+        return JsonResponse({"success": False, "error": "Los productos no pertenecen a esta categoria."}, status=400)
+
+    existing_rows = {
+        row.product_id: row
+        for row in CategoryProductOrder.objects.filter(
+            category=category,
+            product_id__in=normalized_ids,
+        )
+    }
+    now = timezone.now()
+    updates = []
+    creates = []
+    for index, product_id in enumerate(normalized_ids):
+        sort_order = base_order + (index * 10)
+        row = existing_rows.get(product_id)
+        if row:
+            row.sort_order = sort_order
+            row.updated_at = now
+            updates.append(row)
+        else:
+            creates.append(
+                CategoryProductOrder(
+                    category=category,
+                    product_id=product_id,
+                    sort_order=sort_order,
+                )
+            )
+
+    if creates:
+        CategoryProductOrder.objects.bulk_create(creates, ignore_conflicts=True, batch_size=500)
+    if updates:
+        CategoryProductOrder.objects.bulk_update(updates, ["sort_order", "updated_at"], batch_size=500)
+
+    log_admin_action(
+        request,
+        action="category_products_reorder",
+        target_type="category",
+        target_id=category.id,
+        details={"ordered_ids": normalized_ids[:100], "count": len(normalized_ids), "base_order": base_order},
+    )
+    return JsonResponse({"success": True, "updated": len(normalized_ids)})
 
 # ===================== API =====================
 
@@ -2214,4 +2315,4 @@ def parse_clamp_code_api(request):
         logger.exception("Error parsing clamp code")
         return JsonResponse({"success": False, "error": "No se pudo parsear el codigo."}, status=500)
 
-__all__ = ['product_list', 'product_create', 'product_edit', 'product_delete', 'product_toggle_active', 'product_bulk_category_update', 'product_bulk_status_update', 'product_bulk_image_update', 'supplier_list', 'supplier_detail', 'supplier_bulk_action', 'supplier_export', 'supplier_print', 'supplier_unassigned', 'supplier_toggle_active', 'category_list', 'category_reorder', 'category_bulk_status', 'category_create', 'category_edit', 'category_move', 'category_delete', 'category_attribute_create', 'category_attribute_edit', 'category_attribute_delete', 'category_manage_products', 'get_category_attributes', 'parse_product_description', 'parse_clamp_code_api']
+__all__ = ['product_list', 'product_create', 'product_edit', 'product_delete', 'product_toggle_active', 'product_bulk_category_update', 'product_bulk_status_update', 'product_bulk_image_update', 'supplier_list', 'supplier_detail', 'supplier_bulk_action', 'supplier_export', 'supplier_print', 'supplier_unassigned', 'supplier_toggle_active', 'category_list', 'category_reorder', 'category_bulk_status', 'category_create', 'category_edit', 'category_move', 'category_delete', 'category_attribute_create', 'category_attribute_edit', 'category_attribute_delete', 'category_manage_products', 'category_products_reorder', 'get_category_attributes', 'parse_product_description', 'parse_clamp_code_api']

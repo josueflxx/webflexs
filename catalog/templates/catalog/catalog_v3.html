@@ -287,6 +287,9 @@
                             {% if search_query %}
                             <option value="relevance" {% if order_by == 'relevance' %}selected{% endif %}>Mejor coincidencia</option>
                             {% endif %}
+                            {% if current_category %}
+                            <option value="manual" {% if order_by == 'manual' %}selected{% endif %}>Orden de categoria</option>
+                            {% endif %}
                             <option value="name" {% if order_by == 'name' %}selected{% endif %}>Nombre A-Z</option>
                             <option value="-name" {% if order_by == '-name' %}selected{% endif %}>Nombre Z-A</option>
                             <option value="price" {% if order_by == 'price' %}selected{% endif %}>Menor precio</option>

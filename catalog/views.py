@@ -11,7 +11,8 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.cache import cache
 from django.core.paginator import Paginator
-from django.db.models import Case, Count, IntegerField, Max, Prefetch, Q, Value, When
+from django.db.models import Case, Count, IntegerField, Max, OuterRef, Prefetch, Q, Subquery, Value, When
+from django.db.models.functions import Coalesce
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -37,7 +38,7 @@ from catalog.services.clamp_quoter import (
     calculate_clamp_quote,
     get_allowed_diameter_options,
 )
-from .models import Category, CategoryAttribute, ClampMeasureRequest, Product
+from .models import Category, CategoryAttribute, CategoryProductOrder, ClampMeasureRequest, Product
 
 
 CLAMP_REQUEST_DEFAULT_DOLLAR_RATE = Decimal("1450")
@@ -743,6 +744,7 @@ def catalog(request):
 
     category_slug = request.GET.get("category", "")
     current_category = None
+    category_ids = []
     category_attributes = []
     active_filters = {}
     clamp_options = {}
@@ -825,9 +827,11 @@ def catalog(request):
                     )
                     clamp_options[field] = [option for option in options if option]
 
-    order_by_default = "relevance" if search_query else "name"
+    order_by_default = "relevance" if search_query else ("manual" if current_category else "name")
     order_by = request.GET.get("order", order_by_default)
     valid_orders = {"name", "-name", "price", "-price", "sku", "relevance"}
+    if current_category:
+        valid_orders.add("manual")
 
     if order_by not in valid_orders:
         order_by = order_by_default
@@ -840,12 +844,43 @@ def catalog(request):
         products = annotate_catalog_search_rank(products, parsed_search)
         if order_by == "relevance":
             products = products.order_by("-search_rank", "name")
+        elif order_by == "manual" and current_category:
+            order_subquery = (
+                CategoryProductOrder.objects.filter(
+                    category_id__in=category_ids,
+                    product_id=OuterRef("pk"),
+                )
+                .order_by("sort_order", "category_id")
+                .values("sort_order")[:1]
+            )
+            products = products.annotate(
+                category_product_sort_order=Coalesce(
+                    Subquery(order_subquery, output_field=IntegerField()),
+                    Value(999999999),
+                )
+            ).order_by("category_product_sort_order", "-search_rank", "name", "sku", "id")
         else:
             products = products.order_by(order_by)
     else:
         if order_by == "relevance":
             order_by = "name"
-        products = products.order_by(order_by)
+        if order_by == "manual" and current_category:
+            order_subquery = (
+                CategoryProductOrder.objects.filter(
+                    category_id__in=category_ids,
+                    product_id=OuterRef("pk"),
+                )
+                .order_by("sort_order", "category_id")
+                .values("sort_order")[:1]
+            )
+            products = products.annotate(
+                category_product_sort_order=Coalesce(
+                    Subquery(order_subquery, output_field=IntegerField()),
+                    Value(999999999),
+                )
+            ).order_by("category_product_sort_order", "name", "sku", "id")
+        else:
+            products = products.order_by(order_by)
 
     paginator = Paginator(products, 20)
     page_obj = paginator.get_page(request.GET.get("page", 1))

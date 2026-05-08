@@ -15,7 +15,7 @@ from openpyxl import Workbook, load_workbook
 
 from admin_panel.forms.import_forms import ClientImportForm
 from accounts.models import AccountRequest, ClientCategory, ClientCompany, ClientPayment, ClientProfile, ClientTransaction
-from catalog.models import Category, ClampMeasureRequest, Product, Supplier
+from catalog.models import Category, CategoryProductOrder, ClampMeasureRequest, Product, Supplier
 from catalog.services.clamp_quoter import calculate_clamp_quote
 from core.models import (
     AdminAuditLog,
@@ -3053,6 +3053,46 @@ class CategoryManageProductsTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.product.refresh_from_db()
         self.assertTrue(self.product.categories.filter(pk=self.category.pk).exists())
+        self.assertTrue(
+            CategoryProductOrder.objects.filter(
+                category=self.category,
+                product=self.product,
+            ).exists()
+        )
+
+    def test_reorder_category_products_updates_manual_order(self):
+        second_product = Product.objects.create(
+            sku='CAT-TEST-002',
+            name='Producto Categoria Test 2',
+            price=Decimal('120.00'),
+            cost=Decimal('60.00'),
+            stock=5,
+            is_active=True,
+        )
+        self.product.categories.add(self.category)
+        second_product.categories.add(self.category)
+        CategoryProductOrder.objects.create(category=self.category, product=self.product, sort_order=10)
+        CategoryProductOrder.objects.create(category=self.category, product=second_product, sort_order=20)
+
+        self.client.force_login(self.superadmin)
+        response = self.client.post(
+            reverse('admin_category_products_reorder', args=[self.category.pk]),
+            data=json.dumps({
+                'ordered_ids': [second_product.pk, self.product.pk],
+                'base_order': 10,
+            }),
+            content_type='application/json',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            CategoryProductOrder.objects.get(category=self.category, product=second_product).sort_order,
+            10,
+        )
+        self.assertEqual(
+            CategoryProductOrder.objects.get(category=self.category, product=self.product).sort_order,
+            20,
+        )
 
 
 class CategoryBulkActionTests(TestCase):
