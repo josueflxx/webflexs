@@ -2162,6 +2162,7 @@ def category_manage_products(request, pk):
     paginator = Paginator(products, 300 if can_reorder_products else 50)
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
+    page_start_index = page_obj.start_index()
 
     enrich_products_with_category_state(page_obj.object_list)
     for product in page_obj.object_list:
@@ -2179,6 +2180,7 @@ def category_manage_products(request, pk):
         'all_category_options': all_category_options,
         'total_count': products.count(),
         'pagination_count': len(page_obj.object_list),
+        'page_start_index': page_start_index,
         'can_reorder_products': can_reorder_products,
     })
 

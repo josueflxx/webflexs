@@ -3094,6 +3094,29 @@ class CategoryManageProductsTests(TestCase):
             20,
         )
 
+    def test_manage_products_shows_human_order_numbers(self):
+        second_product = Product.objects.create(
+            sku='CAT-TEST-002',
+            name='Producto Categoria Test 2',
+            price=Decimal('120.00'),
+            cost=Decimal('60.00'),
+            stock=5,
+            is_active=True,
+        )
+        self.product.categories.add(self.category)
+        second_product.categories.add(self.category)
+        CategoryProductOrder.objects.create(category=self.category, product=self.product, sort_order=10)
+        CategoryProductOrder.objects.create(category=self.category, product=second_product, sort_order=20)
+
+        self.client.force_login(self.superadmin)
+        response = self.client.get(reverse('admin_category_products', args=[self.category.pk]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, '<span class="product-order-number">1</span>', html=True)
+        self.assertContains(response, '<span class="product-order-number">2</span>', html=True)
+        self.assertNotContains(response, '<span class="product-order-number">10</span>', html=True)
+        self.assertNotContains(response, '<span class="product-order-number">20</span>', html=True)
+
 
 class CategoryBulkActionTests(TestCase):
     def setUp(self):

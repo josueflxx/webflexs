@@ -141,7 +141,7 @@
                         </td>
                         <td class="product-order-cell">
                             <div class="product-order-control">
-                                <span class="product-order-number">{{ product.category_sort_order|default:forloop.counter }}</span>
+                                <span class="product-order-number">{{ page_start_index|add:forloop.counter0 }}</span>
                                 {% if can_reorder_products %}
                                 <span class="product-drag-handle" title="Arrastrar para ordenar">
                                     <span class="drag-dots" aria-hidden="true"></span>
@@ -216,6 +216,7 @@
 
     <script>
         const TOTAL_COUNT = Number('{{ total_count|unlocalize }}') || 0;
+        const ORDER_PAGE_START = Number('{{ page_start_index|unlocalize }}') || 1;
 
         function toggleSelectAll() {
             const checkboxes = document.querySelectorAll('.product-checkbox');
@@ -352,7 +353,7 @@
             function refreshVisibleOrder() {
                 rows().forEach((row, index) => {
                     const label = row.querySelector('.product-order-number');
-                    if (label) label.textContent = String(index + 1);
+                    if (label) label.textContent = String(ORDER_PAGE_START + index);
                 });
             }
 
