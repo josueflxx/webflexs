@@ -1322,6 +1322,61 @@ def category_reorder(request):
 @staff_member_required
 @require_POST
 @superuser_required_for_modifications
+def category_sort_roots_alpha(request):
+    """
+    Sort only root categories alphabetically, keeping ABRAZADERAS as the first root.
+    Subcategories keep their parent and current order.
+    """
+    root_categories = list(Category.objects.filter(parent__isnull=True))
+
+    def root_sort_key(category):
+        public_or_internal_name = (category.public_name or category.name or "").strip()
+        normalized_names = {
+            slugify(category.name or ""),
+            slugify(category.public_name or ""),
+        }
+        return (
+            0 if "abrazaderas" in normalized_names else 1,
+            public_or_internal_name.casefold(),
+            category.id,
+        )
+
+    ordered_roots = sorted(root_categories, key=root_sort_key)
+    now = timezone.now()
+    updates = []
+    for index, category in enumerate(ordered_roots):
+        order_value = (index + 1) * 10
+        if category.order == order_value and category.public_order == order_value:
+            continue
+        category.order = order_value
+        category.public_order = order_value
+        category.updated_at = now
+        updates.append(category)
+
+    if updates:
+        Category.objects.bulk_update(updates, ["order", "public_order", "updated_at"], batch_size=500)
+
+    log_admin_action(
+        request,
+        action="category_sort_roots_alpha",
+        target_type="category_bulk",
+        details={
+            "scope": "root_categories",
+            "updated": len(updates),
+            "total_roots": len(root_categories),
+            "first": ordered_roots[0].name if ordered_roots else None,
+        },
+    )
+    messages.success(
+        request,
+        f"Se ordenaron {len(root_categories)} categorias principales. ABRAZADERAS queda primera y las subcategorias no se tocaron.",
+    )
+    return redirect("admin_category_list")
+
+
+@staff_member_required
+@require_POST
+@superuser_required_for_modifications
 def category_bulk_status(request):
     """
     Bulk maintenance actions for selected categories.
@@ -2317,4 +2372,4 @@ def parse_clamp_code_api(request):
         logger.exception("Error parsing clamp code")
         return JsonResponse({"success": False, "error": "No se pudo parsear el codigo."}, status=500)
 
-__all__ = ['product_list', 'product_create', 'product_edit', 'product_delete', 'product_toggle_active', 'product_bulk_category_update', 'product_bulk_status_update', 'product_bulk_image_update', 'supplier_list', 'supplier_detail', 'supplier_bulk_action', 'supplier_export', 'supplier_print', 'supplier_unassigned', 'supplier_toggle_active', 'category_list', 'category_reorder', 'category_bulk_status', 'category_create', 'category_edit', 'category_move', 'category_delete', 'category_attribute_create', 'category_attribute_edit', 'category_attribute_delete', 'category_manage_products', 'category_products_reorder', 'get_category_attributes', 'parse_product_description', 'parse_clamp_code_api']
+__all__ = ['product_list', 'product_create', 'product_edit', 'product_delete', 'product_toggle_active', 'product_bulk_category_update', 'product_bulk_status_update', 'product_bulk_image_update', 'supplier_list', 'supplier_detail', 'supplier_bulk_action', 'supplier_export', 'supplier_print', 'supplier_unassigned', 'supplier_toggle_active', 'category_list', 'category_reorder', 'category_sort_roots_alpha', 'category_bulk_status', 'category_create', 'category_edit', 'category_move', 'category_delete', 'category_attribute_create', 'category_attribute_edit', 'category_attribute_delete', 'category_manage_products', 'category_products_reorder', 'get_category_attributes', 'parse_product_description', 'parse_clamp_code_api']

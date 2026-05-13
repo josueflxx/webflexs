@@ -23,6 +23,11 @@
         font-size: 0.9rem;
     }
 
+    .category-alpha-sort-form {
+        display: inline-flex;
+        margin: 0;
+    }
+
     .category-table-wrap {
         overflow-x: auto;
     }
@@ -431,6 +436,13 @@
             {% if not search and status == 'all' %}
             <button type="button" class="btn btn-info" id="saveOrderBtn" onclick="saveCategoryOrder()" style="display: none;">Guardar orden</button>
             {% endif %}
+            <form method="post"
+                action="{% url 'admin_category_sort_roots_alpha' %}"
+                class="category-alpha-sort-form"
+                onsubmit="return confirm('Ordenar alfabeticamente solo las categorias principales? ABRAZADERAS quedara primera y las subcategorias no se tocaran.');">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-outline">Ordenar principales A-Z</button>
+            </form>
             <button type="button" class="btn btn-danger" onclick="openDeleteModal()">Eliminar todas</button>
             <a href="{% url 'admin_category_create' %}" class="btn btn-primary">Nueva categoria</a>
             {% endif %}

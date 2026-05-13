@@ -215,6 +215,23 @@ def _category_public_sort_key(category):
     )
 
 
+def _public_root_for_category(category, category_lookup):
+    if category is None:
+        return None
+
+    current = category
+    root = category
+    seen = set()
+    while current and current.pk not in seen:
+        seen.add(current.pk)
+        root = current
+        parent = category_lookup.get(current.parent_id)
+        if parent is None:
+            break
+        current = parent
+    return root
+
+
 class _ListRelationAdapter:
     def __init__(self, items):
         self._items = list(items)
@@ -282,11 +299,6 @@ def _complete_public_catalog_sheets(template, sheets):
     if not template.is_client_download_enabled:
         return sheets
 
-    selected_root_ids = set()
-    for sheet in sheets:
-        selected_category_ids = _selected_category_ids(sheet)
-        selected_root_ids.update(selected_category_ids)
-
     public_ids = _public_category_ids_with_products()
     if not public_ids:
         return sheets
@@ -306,6 +318,30 @@ def _complete_public_catalog_sheets(template, sheets):
     ]
     public_roots.sort(key=_category_public_sort_key)
 
+    sheet_root_map = {}
+
+    def sheet_primary_public_root(sheet):
+        sheet_key = id(sheet)
+        if sheet_key in sheet_root_map:
+            return sheet_root_map[sheet_key]
+
+        roots = []
+        for category_id in _selected_category_ids(sheet):
+            root = _public_root_for_category(public_categories.get(category_id), public_categories)
+            if root:
+                roots.append(root)
+
+        roots.sort(key=_category_public_sort_key)
+        sheet_root_map[sheet_key] = roots[0] if roots else None
+        return sheet_root_map[sheet_key]
+
+    selected_root_ids = {
+        root.id
+        for sheet in sheets
+        for root in [sheet_primary_public_root(sheet)]
+        if root is not None
+    }
+
     base_columns = []
     for sheet in sheets:
         base_columns = list(sheet.columns.filter(is_active=True).order_by("order", "id"))
@@ -313,11 +349,47 @@ def _complete_public_catalog_sheets(template, sheets):
             break
 
     completed_sheets = list(sheets)
-    used_names = {sheet.name[:31] for sheet in completed_sheets}
     next_order = len(completed_sheets) + 1
 
+    for category in public_roots:
+        if category.id in selected_root_ids:
+            continue
+        synthetic_sheet = _build_synthetic_category_sheet(
+            template,
+            category,
+            base_columns,
+            next_order,
+            name=category.display_name or category.name,
+        )
+        sheet_root_map[id(synthetic_sheet)] = category
+        completed_sheets.append(synthetic_sheet)
+        next_order += 1
+
+    completed_sheets.sort(
+        key=lambda sheet: (
+            sheet_primary_public_root(sheet) is None,
+            _category_public_sort_key(sheet_primary_public_root(sheet))
+            if sheet_primary_public_root(sheet) is not None
+            else (999999, 999999, (sheet.name or "").lower(), getattr(sheet, "id", 0) or 0),
+            getattr(sheet, "order", 0) or 0,
+            getattr(sheet, "id", 0) or 0,
+        )
+    )
+
+    deduped_sheets = []
+    seen_root_ids = set()
+    for sheet in completed_sheets:
+        root = sheet_primary_public_root(sheet)
+        if root is not None:
+            if root.id in seen_root_ids:
+                continue
+            seen_root_ids.add(root.id)
+        deduped_sheets.append(sheet)
+
+    used_names = set()
+
     def unique_sheet_name(base_name):
-        base_name = (base_name[:31] or "Categoria").strip()
+        base_name = (str(base_name or "Categoria").strip()[:31] or "Categoria")
         candidate = base_name
         counter = 2
         while candidate in used_names:
@@ -327,20 +399,12 @@ def _complete_public_catalog_sheets(template, sheets):
         used_names.add(candidate)
         return candidate
 
-    for category in public_roots:
-        if category.id in selected_root_ids:
-            continue
-        completed_sheets.append(
-            _build_synthetic_category_sheet(
-                template,
-                category,
-                base_columns,
-                next_order,
-                name=unique_sheet_name(category.name),
-            )
-        )
-        next_order += 1
-    return completed_sheets
+    for sheet in deduped_sheets:
+        root = sheet_primary_public_root(sheet)
+        base_name = (root.display_name if root is not None else sheet.name) or "Categoria"
+        sheet._export_name = unique_sheet_name(base_name)
+
+    return deduped_sheets
 
 
 def _filter_public_category_ids(category_ids):
@@ -863,10 +927,11 @@ def build_catalog_workbook(template, price_list=None, discount_percentage=None):
 
     for sheet_config in sheets:
         if not _sheet_should_export(sheet_config):
-            skipped_sheets.append(sheet_config.name)
+            skipped_sheets.append(getattr(sheet_config, "_export_name", None) or sheet_config.name)
             continue
 
-        worksheet = workbook.create_sheet(sheet_config.name[:31] or "Hoja")
+        sheet_name = getattr(sheet_config, "_export_name", None) or sheet_config.name
+        worksheet = workbook.create_sheet(sheet_name[:31] or "Hoja")
         columns = list(
             sheet_config.columns.filter(is_active=True).order_by("order", "id")
         )
@@ -902,10 +967,10 @@ def build_catalog_workbook(template, price_list=None, discount_percentage=None):
             _set_auto_column_widths(worksheet, column_widths)
             if _sheet_requires_public_catalog(sheet_config) and row_count == 0:
                 workbook.remove(worksheet)
-                skipped_sheets.append(sheet_config.name)
+                skipped_sheets.append(sheet_name)
                 continue
             exported_any_sheet = True
-            rows_by_sheet[sheet_config.name] = row_count
+            rows_by_sheet[sheet_name] = row_count
             continue
 
         if sheet_config.include_header:
@@ -935,11 +1000,11 @@ def build_catalog_workbook(template, price_list=None, discount_percentage=None):
 
         if _sheet_requires_public_catalog(sheet_config) and row_count == 0:
             workbook.remove(worksheet)
-            skipped_sheets.append(sheet_config.name)
+            skipped_sheets.append(sheet_name)
             continue
 
         exported_any_sheet = True
-        rows_by_sheet[sheet_config.name] = row_count
+        rows_by_sheet[sheet_name] = row_count
 
     if not exported_any_sheet:
         default_sheet = workbook.create_sheet("Catalogo")
@@ -956,5 +1021,5 @@ def build_catalog_workbook(template, price_list=None, discount_percentage=None):
 
 
 def build_export_filename(template):
-    stamp = timezone.now().strftime("%Y%m%d_%H%M")
+    stamp = timezone.now().strftime("%Y%m%d_%H%M%S")
     return f"catalogo_{template.slug}_{stamp}.xlsx"

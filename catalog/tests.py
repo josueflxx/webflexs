@@ -1007,8 +1007,13 @@ class CatalogClientExcelDownloadTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertIn("spreadsheetml.sheet", response["Content-Type"])
+        self.assertIn("no-store", response["Cache-Control"])
+        self.assertIn("no-cache", response["Cache-Control"])
+        self.assertIn("max-age=0", response["Cache-Control"])
+        self.assertEqual(response["Pragma"], "no-cache")
+        self.assertEqual(response["Expires"], "0")
         workbook = load_workbook(BytesIO(response.content))
-        worksheet = workbook["Catalogo"]
+        worksheet = workbook["Categoria XLSX"]
         self.assertEqual(worksheet["A1"].value, "SKU")
         self.assertEqual(worksheet["B2"].value, "Producto XLSX")
 
@@ -1298,6 +1303,93 @@ class CatalogExcelGroupedExportTests(TestCase):
         self.assertIn("Nueva visible", workbook.sheetnames)
         self.assertEqual(stats["rows_by_sheet"]["Configurada"], 1)
         self.assertEqual(stats["rows_by_sheet"]["Nueva visible"], 1)
+
+    def test_client_export_orders_sheets_by_public_catalog_order(self):
+        abrazaderas = Category.objects.create(
+            name="ABRAZADERAS",
+            order=10,
+            public_order=10,
+            is_active=True,
+            visible_in_catalog=True,
+        )
+        bujes = Category.objects.create(
+            name="BUJES",
+            order=30,
+            public_order=30,
+            is_active=True,
+            visible_in_catalog=True,
+        )
+        acero = Category.objects.create(
+            name="ACERO",
+            order=20,
+            public_order=20,
+            is_active=True,
+            visible_in_catalog=True,
+        )
+
+        for category, sku in (
+            (bujes, "BUJE-001"),
+            (acero, "ACERO-001"),
+            (abrazaderas, "ABR-001"),
+        ):
+            product = Product.objects.create(
+                sku=sku,
+                name=f"Producto {sku}",
+                price=Decimal("100.00"),
+                stock=1,
+                is_active=True,
+                category=category,
+            )
+            product.categories.add(category)
+
+        template = CatalogExcelTemplate.objects.create(
+            name="Catalogo orden hojas",
+            is_client_download_enabled=True,
+        )
+        sheet_bujes = CatalogExcelTemplateSheet.objects.create(
+            template=template,
+            name="BUJES viejo",
+            order=1,
+            include_header=True,
+            only_active_products=True,
+            only_catalog_visible=True,
+            include_descendant_categories=True,
+            group_by_subcategories=True,
+            sort_by="sku_asc",
+        )
+        sheet_bujes.categories.add(bujes)
+        sheet_abrazaderas = CatalogExcelTemplateSheet.objects.create(
+            template=template,
+            name="ABRAZADERAS viejo",
+            order=2,
+            include_header=True,
+            only_active_products=True,
+            only_catalog_visible=True,
+            include_descendant_categories=True,
+            group_by_subcategories=True,
+            sort_by="sku_asc",
+        )
+        sheet_abrazaderas.categories.add(abrazaderas)
+        sheet_acero = CatalogExcelTemplateSheet.objects.create(
+            template=template,
+            name="ACERO viejo",
+            order=3,
+            include_header=True,
+            only_active_products=True,
+            only_catalog_visible=True,
+            include_descendant_categories=True,
+            group_by_subcategories=True,
+            sort_by="sku_asc",
+        )
+        sheet_acero.categories.add(acero)
+        for sheet in (sheet_bujes, sheet_abrazaderas, sheet_acero):
+            CatalogExcelTemplateColumn.objects.create(sheet=sheet, key="sku", order=1, is_active=True)
+            CatalogExcelTemplateColumn.objects.create(sheet=sheet, key="name", order=2, is_active=True)
+
+        workbook, stats = build_catalog_workbook(template)
+
+        self.assertEqual(workbook.sheetnames[:3], ["ABRAZADERAS", "ACERO", "BUJES"])
+        self.assertEqual(list(stats["rows_by_sheet"].keys())[:3], ["ABRAZADERAS", "ACERO", "BUJES"])
 
     def test_client_export_skips_public_sheet_without_scope(self):
         public_root = Category.objects.create(

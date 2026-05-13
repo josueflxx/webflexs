@@ -126,6 +126,7 @@ urlpatterns = [
     path('categorias/<int:pk>/eliminar/', views.category_delete, name='admin_category_delete'),
     path('categorias/eliminar-todas/', views.category_delete_all, name='admin_category_delete_all'),
     path('categorias/reordenar/', views.category_reorder, name='admin_category_reorder'),
+    path('categorias/ordenar-principales-az/', views.category_sort_roots_alpha, name='admin_category_sort_roots_alpha'),
     path('categorias/estado-masivo/', views.category_bulk_status, name='admin_category_bulk_status'),
     path('categorias/<int:pk>/productos/', views.category_manage_products, name='admin_category_products'),
     path('categorias/<int:pk>/productos/reordenar/', views.category_products_reorder, name='admin_category_products_reorder'),

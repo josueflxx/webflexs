@@ -3232,6 +3232,40 @@ class CategoryBulkActionTests(TestCase):
         category.refresh_from_db()
         self.assertFalse(category.visible_in_catalog)
 
+    def test_sort_root_categories_alpha_keeps_abrazaderas_first(self):
+        zeta = Category.objects.create(name='Zeta', slug='zeta', order=10, public_order=10)
+        bulones = Category.objects.create(name='Bulones', slug='bulones', order=20, public_order=20)
+        acero = Category.objects.create(name='Acero', slug='acero', order=30, public_order=30)
+        abrazaderas = Category.objects.create(name='ABRAZADERAS', slug='abrazaderas', order=40, public_order=40)
+        child = Category.objects.create(
+            name='Sub de Zeta',
+            slug='sub-de-zeta',
+            parent=zeta,
+            order=5,
+            public_order=5,
+        )
+
+        self.client.force_login(self.superadmin)
+        response = self.client.post(reverse('admin_category_sort_roots_alpha'), follow=True)
+
+        self.assertEqual(response.status_code, 200)
+        ordered_roots = list(
+            Category.objects.filter(parent__isnull=True).order_by('order').values_list('name', flat=True)
+        )
+        self.assertEqual(ordered_roots, ['ABRAZADERAS', 'Acero', 'Bulones', 'Zeta'])
+
+        for expected_order, category in enumerate(
+            Category.objects.filter(parent__isnull=True).order_by('order'),
+            start=1,
+        ):
+            self.assertEqual(category.order, expected_order * 10)
+            self.assertEqual(category.public_order, expected_order * 10)
+
+        child.refresh_from_db()
+        self.assertEqual(child.parent_id, zeta.pk)
+        self.assertEqual(child.order, 5)
+        self.assertEqual(child.public_order, 5)
+
 
 class ProductBulkCategoryFallbackTests(TestCase):
     def setUp(self):
@@ -3928,6 +3962,11 @@ class CatalogExcelTemplateExportTests(TestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertIn('spreadsheetml.sheet', response['Content-Type'])
+        self.assertIn('no-store', response['Cache-Control'])
+        self.assertIn('no-cache', response['Cache-Control'])
+        self.assertIn('max-age=0', response['Cache-Control'])
+        self.assertEqual(response['Pragma'], 'no-cache')
+        self.assertEqual(response['Expires'], '0')
 
         wb = load_workbook(BytesIO(response.content))
         ws = wb['Productos']
