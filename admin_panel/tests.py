@@ -3967,6 +3967,10 @@ class CatalogExcelTemplateExportTests(TestCase):
         self.assertIn('max-age=0', response['Cache-Control'])
         self.assertEqual(response['Pragma'], 'no-cache')
         self.assertEqual(response['Expires'], '0')
+        self.template.refresh_from_db()
+        self.assertIsNotNone(self.template.last_generated_at)
+        self.assertEqual(self.template.last_generated_rows, 1)
+        self.assertEqual(self.template.last_generated_by, self.staff)
 
         wb = load_workbook(BytesIO(response.content))
         ws = wb['Productos']
@@ -3974,6 +3978,21 @@ class CatalogExcelTemplateExportTests(TestCase):
         self.assertEqual(ws['B1'].value, 'Nombre')
         self.assertEqual(ws['A2'].value, 'EXP-001')
         self.assertEqual(ws['B2'].value, 'Producto Exportable')
+
+    def test_primary_superadmin_can_regenerate_catalog_excel_status(self):
+        self.client.force_login(self.primary_superadmin)
+        response = self.client.post(
+            reverse('admin_catalog_excel_template_regenerate', args=[self.template.pk]),
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.template.refresh_from_db()
+        self.assertIsNotNone(self.template.last_generated_at)
+        self.assertEqual(self.template.last_generated_rows, 1)
+        self.assertEqual(self.template.last_generated_by, self.primary_superadmin)
+        self.assertContains(response, 'Catalogo Excel regenerado')
+        self.assertContains(response, 'Calidad del catalogo')
 
     def test_non_primary_superadmin_cannot_create_template(self):
         other_superadmin = User.objects.create_superuser(

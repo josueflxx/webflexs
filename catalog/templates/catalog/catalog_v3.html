@@ -118,6 +118,13 @@
                     <p class="text-muted" style="margin:0 0 8px;">
                         Descarga la version publicada del catalogo en formato XLSX.
                     </p>
+                    <p class="text-muted catalog-excel-updated">
+                        {% if client_catalog_excel_last_generated_at %}
+                        Actualizado {{ client_catalog_excel_last_generated_at|date:"d/m/Y H:i" }}
+                        {% else %}
+                        Se genera actualizado al descargar.
+                        {% endif %}
+                    </p>
                     <a href="{% url 'catalog_client_excel_download' %}" class="btn btn-outline excel-download-btn" style="width:100%;">
                         <img
                             src="{% static 'core/img/excel-icon.svg' %}"

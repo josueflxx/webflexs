@@ -33,8 +33,17 @@ TEXT_WRAP_KEYS = {"description", "attributes_json", "categories"}
 HEADER_FILL = PatternFill(fill_type="solid", fgColor="1F2937")
 HEADER_FONT = Font(color="FFFFFF", bold=True)
 HEADER_ALIGNMENT = Alignment(horizontal="left", vertical="center")
-GROUP_TITLE_FILL = PatternFill(fill_type="solid", fgColor="E5E7EB")
-GROUP_TITLE_FONT = Font(color="111827", bold=True, size=12)
+GROUP_TITLE_FILL = PatternFill(fill_type="solid", fgColor="FFE4D6")
+GROUP_TITLE_FONT = Font(color="C2410C", bold=True, size=12)
+INDEX_TITLE_FILL = PatternFill(fill_type="solid", fgColor="FF6B3A")
+INDEX_TITLE_FONT = Font(color="FFFFFF", bold=True, size=16)
+INDEX_SUBTITLE_FILL = PatternFill(fill_type="solid", fgColor="111827")
+INDEX_SUBTITLE_FONT = Font(color="E5E7EB", italic=True)
+INDEX_CARD_FILL = PatternFill(fill_type="solid", fgColor="F8FAFC")
+INDEX_CARD_VALUE_FONT = Font(color="111827", bold=True, size=14)
+INDEX_CARD_ACCENT_FONT = Font(color="C2410C", bold=True, size=14)
+INDEX_MUTED_FILL = PatternFill(fill_type="solid", fgColor="F3F4F6")
+INDEX_MUTED_FONT = Font(color="374151", bold=True)
 ALT_ROW_FILL = PatternFill(fill_type="solid", fgColor="F8FAFC")
 STATUS_OK_FILL = PatternFill(fill_type="solid", fgColor="D1FAE5")
 STATUS_BAD_FILL = PatternFill(fill_type="solid", fgColor="FEE2E2")
@@ -44,6 +53,13 @@ THIN_BORDER = Border(
     top=Side(style="thin", color="D1D5DB"),
     bottom=Side(style="thin", color="D1D5DB"),
 )
+
+
+def _prepare_worksheet(worksheet, tab_color=None):
+    worksheet.sheet_view.showGridLines = False
+    worksheet.sheet_view.zoomScale = 90
+    if tab_color:
+        worksheet.sheet_properties.tabColor = tab_color
 
 
 def _decimal_to_excel(value):
@@ -58,6 +74,28 @@ def _yes_no(value):
     return "Si" if value else "No"
 
 
+def _resolve_product_export_price(product, price_map=None, discount_percentage=None):
+    base_price = product.price
+    if price_map is not None:
+        base_price = price_map.get(product.id, product.price)
+    if base_price is None:
+        return Decimal("0")
+    if not isinstance(base_price, Decimal):
+        base_price = Decimal(str(base_price or 0))
+    if discount_percentage is not None and discount_percentage != 0:
+        discount_decimal = Decimal(str(discount_percentage)) / Decimal("100")
+        base_price = base_price * (Decimal("1") - discount_decimal)
+    return base_price
+
+
+def _product_has_public_export_price(product, price_map=None, discount_percentage=None):
+    return _resolve_product_export_price(
+        product,
+        price_map=price_map,
+        discount_percentage=discount_percentage,
+    ) > 0
+
+
 def _serialize_product_value(product, key, price_map=None, discount_percentage=None):
     if key == "sku":
         return product.sku
@@ -70,13 +108,13 @@ def _serialize_product_value(product, key, price_map=None, discount_percentage=N
     if key == "supplier_normalized":
         return product.supplier_ref.name if product.supplier_ref_id else ""
     if key == "price":
-        base_price = product.price
-        if price_map is not None:
-            base_price = price_map.get(product.id, product.price)
-        if discount_percentage is not None and discount_percentage != 0:
-            discount_decimal = Decimal(str(discount_percentage)) / Decimal("100")
-            base_price = base_price * (Decimal("1") - discount_decimal)
-        return _decimal_to_excel(base_price)
+        return _decimal_to_excel(
+            _resolve_product_export_price(
+                product,
+                price_map=price_map,
+                discount_percentage=discount_percentage,
+            )
+        )
     if key == "cost":
         return _decimal_to_excel(product.cost)
     if key == "stock":
@@ -145,6 +183,11 @@ def _sheet_search_query(sheet):
 def _sheet_requires_public_catalog(sheet):
     template = getattr(sheet, "template", None)
     return bool(sheet.only_catalog_visible or (template and template.is_client_download_enabled))
+
+
+def _sheet_requires_public_price(sheet):
+    template = getattr(sheet, "template", None)
+    return bool(template and template.is_client_download_enabled)
 
 
 def _sheet_has_explicit_scope(sheet):
@@ -444,7 +487,7 @@ def _apply_sheet_filters(sheet):
         queryset = queryset.filter(is_active=True)
 
     if _sheet_requires_public_catalog(sheet):
-        queryset = Product.catalog_visible(queryset=queryset, include_uncategorized=True)
+        queryset = Product.catalog_visible(queryset=queryset, include_uncategorized=False)
 
     selected_category_ids = _selected_category_ids(sheet)
     category_ids = _resolve_category_ids(sheet, selected_ids=selected_category_ids)
@@ -495,6 +538,7 @@ def _string_len_for_width(value):
 
 
 def _apply_header_styles(worksheet, total_columns, row=1):
+    worksheet.row_dimensions[row].height = 20
     for col_idx in range(1, total_columns + 1):
         cell = worksheet.cell(row=row, column=col_idx)
         cell.font = HEADER_FONT
@@ -537,6 +581,90 @@ def _set_auto_column_widths(worksheet, column_widths):
     for idx, width in enumerate(column_widths, start=1):
         adjusted = max(10, min(width + 2, 72))
         worksheet.column_dimensions[get_column_letter(idx)].width = adjusted
+
+
+def _safe_sheet_link(sheet_name):
+    escaped = str(sheet_name).replace("'", "''")
+    return f"#'{escaped}'!A1"
+
+
+def _append_index_sheet(workbook, template, stats, generated_at):
+    title = "INDICE"
+    if title in workbook.sheetnames:
+        counter = 2
+        while f"{title} {counter}" in workbook.sheetnames:
+            counter += 1
+        title = f"{title} {counter}"
+
+    worksheet = workbook.create_sheet(title, 0)
+    _prepare_worksheet(worksheet, "FF6B3A")
+    local_generated_at = timezone.localtime(generated_at).replace(tzinfo=None)
+    version = local_generated_at.strftime("catalogo-%Y%m%d-%H%M%S")
+    rows_by_sheet = stats.get("rows_by_sheet", {})
+
+    template_label = (template.name or "").strip() or "General"
+    title_text = template_label if template_label.lower().startswith("catalogo") else f"Catalogo {template_label}"
+    worksheet.merge_cells(start_row=1, start_column=1, end_row=1, end_column=4)
+    worksheet["A1"] = title_text
+    worksheet["A1"].font = INDEX_TITLE_FONT
+    worksheet["A1"].fill = INDEX_TITLE_FILL
+    worksheet["A1"].alignment = Alignment(horizontal="left", vertical="center")
+    worksheet.row_dimensions[1].height = 28
+
+    worksheet.merge_cells(start_row=2, start_column=1, end_row=2, end_column=4)
+    worksheet["A2"] = (
+        "Lista digital vigente: productos activos, visibles para clientes y con precio publicable."
+        if template.is_client_download_enabled
+        else "Exportacion generada segun la configuracion de la plantilla."
+    )
+    worksheet["A2"].font = INDEX_SUBTITLE_FONT
+    worksheet["A2"].fill = INDEX_SUBTITLE_FILL
+    worksheet["A2"].alignment = Alignment(horizontal="left", vertical="center")
+    worksheet.row_dimensions[2].height = 22
+
+    stat_cards = [
+        ("Productos", stats.get("total_rows", 0), INDEX_CARD_ACCENT_FONT),
+        ("Hojas", len(rows_by_sheet), INDEX_CARD_VALUE_FONT),
+        ("Version", version, INDEX_CARD_VALUE_FONT),
+        ("Generado", local_generated_at.strftime("%d/%m/%Y %H:%M"), INDEX_CARD_VALUE_FONT),
+    ]
+    for col_idx, (label, value, value_font) in enumerate(stat_cards, start=1):
+        label_cell = worksheet.cell(row=4, column=col_idx, value=label)
+        value_cell = worksheet.cell(row=5, column=col_idx, value=value)
+        for cell in (label_cell, value_cell):
+            cell.fill = INDEX_CARD_FILL
+            cell.border = THIN_BORDER
+            cell.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
+        label_cell.font = INDEX_MUTED_FONT
+        value_cell.font = value_font
+    worksheet.row_dimensions[4].height = 20
+    worksheet.row_dimensions[5].height = 26
+
+    header_row = 7
+    headers = ["Hoja", "Productos", "Estado", "Acceso"]
+    for col_idx, header in enumerate(headers, start=1):
+        worksheet.cell(row=header_row, column=col_idx, value=header)
+    _apply_header_styles(worksheet, len(headers), row=header_row)
+
+    row_idx = header_row + 1
+    for sheet_name, row_count in rows_by_sheet.items():
+        worksheet.cell(row=row_idx, column=1, value=sheet_name)
+        worksheet.cell(row=row_idx, column=2, value=row_count)
+        worksheet.cell(row=row_idx, column=3, value="Exportada")
+        link_cell = worksheet.cell(row=row_idx, column=4, value="Abrir hoja")
+        link_cell.hyperlink = _safe_sheet_link(sheet_name)
+        link_cell.style = "Hyperlink"
+        for col_idx in range(1, 5):
+            cell = worksheet.cell(row=row_idx, column=col_idx)
+            cell.border = THIN_BORDER
+            cell.alignment = Alignment(horizontal="left", vertical="center")
+        row_idx += 1
+
+    worksheet.freeze_panes = "A8"
+    worksheet.column_dimensions["A"].width = 34
+    worksheet.column_dimensions["B"].width = 18
+    worksheet.column_dimensions["C"].width = 20
+    worksheet.column_dimensions["D"].width = 18
 
 
 def _worksheet_next_row(worksheet):
@@ -643,10 +771,29 @@ def _select_canonical_public_category(product, category_lookup):
     return linked_categories[0]
 
 
-def _iter_sheet_products(sheet):
+def _product_has_public_category(product, category_lookup):
+    return any(
+        category and _is_public_category(category, category_lookup=category_lookup)
+        for category in product.get_linked_categories()
+    )
+
+
+def _iter_sheet_products(sheet, price_map=None, discount_percentage=None):
     queryset = _apply_sheet_filters(sheet)
+    requires_public_catalog = _sheet_requires_public_catalog(sheet)
+    requires_public_price = _sheet_requires_public_price(sheet)
     if not _client_export_uses_canonical_categories(sheet):
-        yield from queryset.iterator(chunk_size=500)
+        category_lookup = Category.objects.select_related("parent").in_bulk() if requires_public_catalog else None
+        for product in queryset.iterator(chunk_size=500):
+            if requires_public_catalog and not _product_has_public_category(product, category_lookup):
+                continue
+            if requires_public_price and not _product_has_public_export_price(
+                product,
+                price_map=price_map,
+                discount_percentage=discount_percentage,
+            ):
+                continue
+            yield product
         return
 
     resolved_ids = _resolve_category_ids(sheet, selected_ids=_selected_category_ids(sheet))
@@ -655,6 +802,12 @@ def _iter_sheet_products(sheet):
     matched_product_ids = []
     matched_category_ids = []
     for product in queryset.iterator(chunk_size=500):
+        if requires_public_price and not _product_has_public_export_price(
+            product,
+            price_map=price_map,
+            discount_percentage=discount_percentage,
+        ):
+            continue
         canonical_category = _select_canonical_public_category(product, category_lookup)
         if canonical_category and canonical_category.pk in resolved_ids:
             product._catalog_export_category_id = canonical_category.pk
@@ -759,7 +912,7 @@ def _category_group_label(category, grouping_context):
     if len(selected_categories) == 1 and matching_roots:
         root = matching_roots[0]
         if category.pk == root.pk:
-            return "Sin subcategoria"
+            return "Categoria principal"
         root_path = _category_path(root, category_lookup, public=True)
         category_path = _category_path(category, category_lookup, public=True)
         relative_path = category_path[len(root_path):]
@@ -770,7 +923,12 @@ def _category_group_label(category, grouping_context):
 
 def _append_group_title(worksheet, row_index, label, product_count, total_columns):
     title_cell = worksheet.cell(row=row_index, column=1)
-    title_cell.value = f"{label} ({product_count} productos)"
+    if label == "Categoria principal":
+        title_cell.value = f"Categoria principal ({product_count} productos)"
+    elif label == "Sin categoria":
+        title_cell.value = f"Sin categoria ({product_count} productos)"
+    else:
+        title_cell.value = f"Subcategoria: {label} ({product_count} productos)"
     title_cell.font = GROUP_TITLE_FONT
     title_cell.fill = GROUP_TITLE_FILL
     title_cell.alignment = Alignment(horizontal="left", vertical="center")
@@ -829,7 +987,13 @@ def _append_grouped_products(
     grouping_context = _build_grouping_context(sheet_config)
     grouped_products = {}
 
-    products = list(_iter_sheet_products(sheet_config))
+    products = list(
+        _iter_sheet_products(
+            sheet_config,
+            price_map=price_map,
+            discount_percentage=discount_percentage,
+        )
+    )
     for product in products:
         group_category = _select_product_group_category(product, grouping_context)
         group_key = group_category.pk if group_category else 0
@@ -896,8 +1060,12 @@ def build_catalog_workbook(template, price_list=None, discount_percentage=None):
     Build an XLSX workbook from one CatalogExcelTemplate instance.
     Returns (workbook, stats_dict).
     """
+    generated_at = timezone.now()
     workbook = Workbook()
     workbook.remove(workbook.active)
+    workbook.properties.title = template.name
+    workbook.properties.creator = "WebFlexs"
+    workbook.properties.created = timezone.localtime(generated_at).replace(tzinfo=None)
 
     rows_by_sheet = {}
     export_columns_map = dict(CATALOG_EXPORT_COLUMN_CHOICES)
@@ -908,10 +1076,13 @@ def build_catalog_workbook(template, price_list=None, discount_percentage=None):
     sheets = _complete_public_catalog_sheets(template, sheets)
     if not sheets:
         default_sheet = workbook.create_sheet("Catalogo")
+        _prepare_worksheet(default_sheet, "94A3B8")
         default_sheet.append(["Mensaje"])
         default_sheet.append(["La plantilla no tiene hojas configuradas."])
         rows_by_sheet["Catalogo"] = 1
-        return workbook, {"rows_by_sheet": rows_by_sheet, "total_rows": 1}
+        stats = {"rows_by_sheet": rows_by_sheet, "total_rows": 1, "skipped_sheets": []}
+        _append_index_sheet(workbook, template, stats, generated_at)
+        return workbook, stats
 
     price_map = None
     if price_list:
@@ -932,6 +1103,7 @@ def build_catalog_workbook(template, price_list=None, discount_percentage=None):
 
         sheet_name = getattr(sheet_config, "_export_name", None) or sheet_config.name
         worksheet = workbook.create_sheet(sheet_name[:31] or "Hoja")
+        _prepare_worksheet(worksheet, "1F2937")
         columns = list(
             sheet_config.columns.filter(is_active=True).order_by("order", "id")
         )
@@ -979,7 +1151,11 @@ def build_catalog_workbook(template, price_list=None, discount_percentage=None):
             _apply_header_styles(worksheet, len(headers))
 
         row_count = 0
-        for product in _iter_sheet_products(sheet_config):
+        for product in _iter_sheet_products(
+            sheet_config,
+            price_map=price_map,
+            discount_percentage=discount_percentage,
+        ):
             excel_row = row_count + (1 if sheet_config.include_header else 0) + 1
             _append_product_row(
                 worksheet,
@@ -1008,16 +1184,19 @@ def build_catalog_workbook(template, price_list=None, discount_percentage=None):
 
     if not exported_any_sheet:
         default_sheet = workbook.create_sheet("Catalogo")
+        _prepare_worksheet(default_sheet, "94A3B8")
         default_sheet.append(["Mensaje"])
         default_sheet.append(["No hay categorias visibles para exportar."])
         rows_by_sheet["Catalogo"] = 0
 
     total_rows = sum(rows_by_sheet.values())
-    return workbook, {
+    stats = {
         "rows_by_sheet": rows_by_sheet,
         "total_rows": total_rows,
         "skipped_sheets": skipped_sheets,
     }
+    _append_index_sheet(workbook, template, stats, generated_at)
+    return workbook, stats
 
 
 def build_export_filename(template):

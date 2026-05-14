@@ -225,6 +225,14 @@ class ProductImporter(BaseImporter):
         CATEGORY_MODE_HIDDEN,
         CATEGORY_MODE_CREATE,
     }
+    UPDATE_MODE_COMMERCIAL = "commercial"
+    UPDATE_MODE_PRICES = "prices"
+    UPDATE_MODE_CREATE_ONLY = "create_only"
+    UPDATE_MODES = {
+        UPDATE_MODE_COMMERCIAL,
+        UPDATE_MODE_PRICES,
+        UPDATE_MODE_CREATE_ONLY,
+    }
 
     def __init__(
         self,
@@ -232,12 +240,16 @@ class ProductImporter(BaseImporter):
         category_mode=None,
         preserve_existing_categories=True,
         allow_category_creation=False,
+        update_mode=None,
     ):
         super().__init__(file)
         self.required_columns = ["sku"]
         self._seen_skus = {}
         self._seen_row_data = {}
         self.column_mapping_mode = "headers"
+        self.update_mode = update_mode or self.UPDATE_MODE_COMMERCIAL
+        if self.update_mode not in self.UPDATE_MODES:
+            self.update_mode = self.UPDATE_MODE_COMMERCIAL
         self.category_mode = category_mode or self.CATEGORY_MODE_EXISTING
         if self.category_mode not in self.CATEGORY_MODES:
             self.category_mode = self.CATEGORY_MODE_EXISTING
@@ -524,6 +536,17 @@ class ProductImporter(BaseImporter):
             self._seen_row_data[sku] = public_row_data
 
         existing = Product.objects.filter(sku=sku).first() if sku else None
+        if existing and self.update_mode == self.UPDATE_MODE_CREATE_ONLY:
+            result.data = {
+                "sku": sku,
+                "nombre": existing.name,
+                "modo_actualizacion": self.update_mode,
+                "omitido": "Producto existente; modo crear nuevos solamente.",
+            }
+            result.success = True
+            result.action = "skipped"
+            return result
+
         name = self._get_name(row, existing=existing)
         if not name:
             errors.append("Nombre es requerido")
@@ -552,6 +575,7 @@ class ProductImporter(BaseImporter):
             "stock": stock if stock is not None else "",
             "categorias": self._get_category_names(row),
             "modo_categorias": self.category_mode,
+            "modo_actualizacion": self.update_mode,
             "preservar_categorias_existentes": self.preserve_existing_categories,
             "atributos": attributes or {},
         }
@@ -573,24 +597,6 @@ class ProductImporter(BaseImporter):
                 product = existing
                 update_fields = []
 
-                if name and product.name != name:
-                    product.name = name
-                    update_fields.append("name")
-
-                description = self._text(row.get("descripcion"))
-                if description and product.description != description:
-                    product.description = description
-                    update_fields.append("description")
-
-                if supplier:
-                    supplier_ref = ensure_supplier(supplier)
-                    if product.supplier != supplier:
-                        product.supplier = supplier
-                        update_fields.append("supplier")
-                    if product.supplier_ref_id != getattr(supplier_ref, "id", None):
-                        product.supplier_ref = supplier_ref
-                        update_fields.append("supplier_ref")
-
                 if price is not None and product.price != price:
                     product.price = price
                     update_fields.append("price")
@@ -599,35 +605,54 @@ class ProductImporter(BaseImporter):
                     product.cost = cost
                     update_fields.append("cost")
 
-                if stock is not None and product.stock != stock:
-                    product.stock = stock
-                    update_fields.append("stock")
+                if self.update_mode != self.UPDATE_MODE_PRICES:
+                    if name and product.name != name:
+                        product.name = name
+                        update_fields.append("name")
 
-                if active is not None and product.is_active != active:
-                    product.is_active = active
-                    update_fields.append("is_active")
+                    description = self._text(row.get("descripcion"))
+                    if description and product.description != description:
+                        product.description = description
+                        update_fields.append("description")
 
-                if attributes is not None:
-                    merged_attributes = {
-                        **(product.attributes or {}),
-                        **attributes,
+                    if supplier:
+                        supplier_ref = ensure_supplier(supplier)
+                        if product.supplier != supplier:
+                            product.supplier = supplier
+                            update_fields.append("supplier")
+                        if product.supplier_ref_id != getattr(supplier_ref, "id", None):
+                            product.supplier_ref = supplier_ref
+                            update_fields.append("supplier_ref")
+
+                    if stock is not None and product.stock != stock:
+                        product.stock = stock
+                        update_fields.append("stock")
+
+                    if active is not None and product.is_active != active:
+                        product.is_active = active
+                        update_fields.append("is_active")
+
+                    if attributes is not None:
+                        merged_attributes = {
+                            **(product.attributes or {}),
+                            **attributes,
+                        }
+                        if product.attributes != merged_attributes:
+                            product.attributes = merged_attributes
+                            update_fields.append("attributes")
+
+                    filter_map = {
+                        "filter_1": "filtro_1",
+                        "filter_2": "filtro_2",
+                        "filter_3": "filtro_3",
+                        "filter_4": "filtro_4",
+                        "filter_5": "filtro_5",
                     }
-                    if product.attributes != merged_attributes:
-                        product.attributes = merged_attributes
-                        update_fields.append("attributes")
-
-                filter_map = {
-                    "filter_1": "filtro_1",
-                    "filter_2": "filtro_2",
-                    "filter_3": "filtro_3",
-                    "filter_4": "filtro_4",
-                    "filter_5": "filtro_5",
-                }
-                for model_field, row_key in filter_map.items():
-                    value = self._text(row.get(row_key))
-                    if value and getattr(product, model_field) != value:
-                        setattr(product, model_field, value)
-                        update_fields.append(model_field)
+                    for model_field, row_key in filter_map.items():
+                        value = self._text(row.get(row_key))
+                        if value and getattr(product, model_field) != value:
+                            setattr(product, model_field, value)
+                            update_fields.append(model_field)
 
                 if update_fields:
                     update_fields.append("updated_at")
@@ -654,13 +679,17 @@ class ProductImporter(BaseImporter):
                 )
                 created = True
 
-            if not (existing and self.preserve_existing_categories):
+            if existing and self.update_mode == self.UPDATE_MODE_PRICES:
+                result.data["categorias_preservadas"] = True
+                result.data["orden_manual_preservado"] = True
+            elif not (existing and self.preserve_existing_categories):
                 missing_categories = self._assign_categories(product, row, dry_run=False)
                 if missing_categories:
                     result.data["categorias_no_encontradas"] = missing_categories
             else:
                 result.data["categorias_preservadas"] = True
-            self.check_and_run_parser(product, dry_run=dry_run)
+            if self.update_mode != self.UPDATE_MODE_PRICES:
+                self.check_and_run_parser(product, dry_run=dry_run)
 
             result.success = True
             result.action = "created" if created else "updated"

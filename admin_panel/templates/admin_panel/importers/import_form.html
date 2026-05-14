@@ -89,6 +89,7 @@
             <li>Campos utiles de origen como Nro producto, Codigo proveedor, UPC, IVA, Unidad y Utilidad quedan guardados en atributos del producto.</li>
             <li>Por seguridad, actualizar productos existentes conserva las categorias que ya tienen en el sistema.</li>
             <li>Las categorias del Excel no se crean automaticamente salvo que lo autorices explicitamente abajo.</li>
+            <li>El orden manual del catalogo y del Excel publicado no se modifica por importar o actualizar productos.</li>
             <li>Compatibilidad vieja: A=SKU, B=Nombre, C=Proveedor, D=Precio, E=Stock, F..J=Filtro_1..Filtro_5.</li>
             <li>Las celdas vacias no borran datos existentes: solo actualizan campos con valores validos.</li>
             {% elif import_type == 'abrazaderas' %}
@@ -135,6 +136,16 @@
         {% if form.update_existing %}
         <div class="form-group">
             {{ form.update_existing }} {{ form.update_existing.label }}
+        </div>
+        {% endif %}
+
+        {% if form.update_mode %}
+        <div class="form-group">
+            <label for="{{ form.update_mode.id_for_label }}" class="form-label">{{ form.update_mode.label }}</label>
+            {{ form.update_mode }}
+            <small class="text-muted" style="display: block; margin-top: 5px;">
+                {{ form.update_mode.help_text }}
+            </small>
         </div>
         {% endif %}
 

@@ -1523,6 +1523,28 @@ class CatalogExcelTemplate(models.Model):
         blank=True,
         related_name="catalog_excel_templates_updated",
     )
+    last_generated_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="Ultima generacion",
+    )
+    last_generated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="catalog_excel_templates_generated",
+        verbose_name="Ultimo generador",
+    )
+    last_generated_rows = models.PositiveIntegerField(
+        default=0,
+        verbose_name="Filas ultima generacion",
+    )
+    last_generated_stats = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name="Estadisticas ultima generacion",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -1556,6 +1578,22 @@ class CatalogExcelTemplate(models.Model):
 
     def __str__(self):
         return self.name
+
+    def mark_generated(self, stats=None, user=None):
+        stats = stats or {}
+        generated_at = timezone.now()
+        row_count = int(stats.get("total_rows") or 0)
+        user_id = getattr(user, "pk", None) if user and getattr(user, "is_authenticated", False) else None
+        CatalogExcelTemplate.objects.filter(pk=self.pk).update(
+            last_generated_at=generated_at,
+            last_generated_by_id=user_id,
+            last_generated_rows=row_count,
+            last_generated_stats=stats,
+        )
+        self.last_generated_at = generated_at
+        self.last_generated_by_id = user_id
+        self.last_generated_rows = row_count
+        self.last_generated_stats = stats
 
     @classmethod
     def get_client_download_template(cls):

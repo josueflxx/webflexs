@@ -183,6 +183,102 @@ class ProductImportTests(TestCase):
         self.assertFalse(product.categories.filter(pk=excel_category.pk).exists())
         self.assertTrue(result.row_results[0].data["categorias_preservadas"])
 
+    def test_product_import_price_mode_only_updates_prices_and_costs(self):
+        category = Category.objects.create(name="Categoria Manual", slug="categoria-manual")
+        product = Product.objects.create(
+            sku="IMP-PRICE-ONLY",
+            name="Nombre estable",
+            supplier="Proveedor estable",
+            price=Decimal("100.00"),
+            cost=Decimal("70.00"),
+            stock=5,
+            filter_1="Filtro estable",
+            category=category,
+        )
+        product.categories.add(category)
+        file_obj = build_import_workbook(
+            ["SKU", "Nombre", "Precio", "Costo", "Stock", "Proveedor", "Filtro 1"],
+            [["IMP-PRICE-ONLY", "Nombre Excel", 150, 90, 99, "Proveedor Excel", "Filtro Excel"]],
+        )
+
+        result = ProductImporter(file_obj, update_mode="prices").run(dry_run=False)
+
+        self.assertEqual(result.errors, 0)
+        product.refresh_from_db()
+        self.assertEqual(product.name, "Nombre estable")
+        self.assertEqual(product.supplier, "Proveedor estable")
+        self.assertEqual(product.stock, 5)
+        self.assertEqual(product.filter_1, "Filtro estable")
+        self.assertEqual(product.price, Decimal("150.00"))
+        self.assertEqual(product.cost, Decimal("90.00"))
+        self.assertEqual(product.category_id, category.pk)
+        self.assertTrue(result.row_results[0].data["orden_manual_preservado"])
+
+    def test_product_import_create_only_skips_existing_skus(self):
+        Product.objects.create(
+            sku="IMP-CREATE-ONLY",
+            name="Producto existente",
+            price=Decimal("100.00"),
+            stock=1,
+        )
+        file_obj = build_import_workbook(
+            ["SKU", "Nombre", "Precio"],
+            [
+                ["IMP-CREATE-ONLY", "No debe pisar", 999],
+                ["IMP-CREATE-ONLY-NEW", "Producto nuevo", 250],
+            ],
+        )
+
+        result = ProductImporter(file_obj, update_mode="create_only").run(dry_run=False)
+
+        self.assertEqual(result.errors, 0)
+        product = Product.objects.get(sku="IMP-CREATE-ONLY")
+        self.assertEqual(product.name, "Producto existente")
+        self.assertEqual(product.price, Decimal("100.00"))
+        self.assertEqual(result.row_results[0].action, "skipped")
+        self.assertTrue(Product.objects.filter(sku="IMP-CREATE-ONLY-NEW").exists())
+
+    def test_product_import_preserves_manual_category_order(self):
+        category = Category.objects.create(name="Orden Manual", slug="orden-manual")
+        product_a = Product.objects.create(
+            sku="IMP-ORDER-A",
+            name="Producto A",
+            price=Decimal("100.00"),
+            stock=1,
+            category=category,
+        )
+        product_b = Product.objects.create(
+            sku="IMP-ORDER-B",
+            name="Producto B",
+            price=Decimal("200.00"),
+            stock=1,
+            category=category,
+        )
+        product_a.categories.add(category)
+        product_b.categories.add(category)
+        CategoryProductOrder.objects.create(category=category, product=product_a, sort_order=20)
+        CategoryProductOrder.objects.create(category=category, product=product_b, sort_order=10)
+        file_obj = build_import_workbook(
+            ["SKU", "Nombre", "Precio", "Categoria"],
+            [
+                ["IMP-ORDER-A", "Producto A actualizado", 110, "Categoria Excel"],
+                ["IMP-ORDER-B", "Producto B actualizado", 220, "Categoria Excel"],
+            ],
+        )
+
+        result = ProductImporter(file_obj).run(dry_run=False)
+
+        self.assertEqual(result.errors, 0)
+        self.assertEqual(
+            list(
+                CategoryProductOrder.objects.filter(category=category)
+                .order_by("sort_order")
+                .values_list("product__sku", "sort_order")
+            ),
+            [("IMP-ORDER-B", 10), ("IMP-ORDER-A", 20)],
+        )
+        self.assertFalse(Category.objects.filter(name="Categoria Excel").exists())
+
     def test_product_import_links_existing_category_to_new_products_by_default(self):
         category = Category.objects.create(name="Categoria Existente", slug="categoria-existente")
         file_obj = build_import_workbook(
@@ -1013,9 +1109,37 @@ class CatalogClientExcelDownloadTests(TestCase):
         self.assertEqual(response["Pragma"], "no-cache")
         self.assertEqual(response["Expires"], "0")
         workbook = load_workbook(BytesIO(response.content))
+        self.assertEqual(workbook.sheetnames[0], "INDICE")
+        self.assertEqual(workbook["INDICE"]["A1"].value, "Catalogo Plantilla Cliente XLSX")
+        self.assertEqual(workbook["INDICE"]["A8"].value, "Categoria XLSX")
+        self.assertEqual(workbook["INDICE"]["D8"].hyperlink.target, "#'Categoria XLSX'!A1")
         worksheet = workbook["Categoria XLSX"]
         self.assertEqual(worksheet["A1"].value, "SKU")
         self.assertEqual(worksheet["B2"].value, "Producto XLSX")
+
+    def test_client_catalog_excel_skips_visible_products_without_price(self):
+        zero_price = Product.objects.create(
+            sku="ZERO-XLSX",
+            name="Producto sin precio publico",
+            price=Decimal("0.00"),
+            stock=1,
+            is_active=True,
+            category=self.category,
+        )
+        zero_price.categories.add(self.category)
+
+        self.client.force_login(self.approved_user)
+        response = self.client.get(reverse("catalog_client_excel_download"))
+
+        self.assertEqual(response.status_code, 200)
+        workbook = load_workbook(BytesIO(response.content))
+        worksheet = workbook["Categoria XLSX"]
+        values = [cell.value for row in worksheet.iter_rows() for cell in row if cell.value]
+
+        self.assertIn("Producto XLSX", values)
+        self.assertNotIn("Producto sin precio publico", values)
+        self.template.refresh_from_db()
+        self.assertEqual(self.template.last_generated_rows, 1)
 
     def test_unapproved_client_cannot_download_catalog_excel(self):
         self.client.force_login(self.unapproved_user)
@@ -1076,10 +1200,10 @@ class CatalogExcelGroupedExportTests(TestCase):
         worksheet = workbook["Elasticos"]
 
         self.assertEqual(stats["rows_by_sheet"]["Elasticos"], 2)
-        self.assertEqual(worksheet["A1"].value, "Sin subcategoria (1 productos)")
+        self.assertEqual(worksheet["A1"].value, "Categoria principal (1 productos)")
         self.assertEqual(worksheet["A2"].value, "SKU")
         self.assertEqual(worksheet["A3"].value, "ROOT-001")
-        self.assertEqual(worksheet["A4"].value, "Bujes (1 productos)")
+        self.assertEqual(worksheet["A4"].value, "Subcategoria: Bujes (1 productos)")
         self.assertEqual(worksheet["A5"].value, "SKU")
         self.assertEqual(worksheet["A6"].value, "CHILD-001")
         self.assertIsNone(worksheet.freeze_panes)
@@ -1142,7 +1266,7 @@ class CatalogExcelGroupedExportTests(TestCase):
         values = [cell.value for row in worksheet.iter_rows() for cell in row if cell.value]
 
         self.assertEqual(stats["rows_by_sheet"]["Catalogo"], 1)
-        self.assertIn("Visible (1 productos)", values)
+        self.assertIn("Subcategoria: Visible (1 productos)", values)
         self.assertIn("VISIBLE-001", values)
         self.assertNotIn("Inactiva (1 productos)", values)
         self.assertNotIn("HIDDEN-001", values)
@@ -1388,7 +1512,7 @@ class CatalogExcelGroupedExportTests(TestCase):
 
         workbook, stats = build_catalog_workbook(template)
 
-        self.assertEqual(workbook.sheetnames[:3], ["ABRAZADERAS", "ACERO", "BUJES"])
+        self.assertEqual(workbook.sheetnames[:4], ["INDICE", "ABRAZADERAS", "ACERO", "BUJES"])
         self.assertEqual(list(stats["rows_by_sheet"].keys())[:3], ["ABRAZADERAS", "ACERO", "BUJES"])
 
     def test_client_export_skips_public_sheet_without_scope(self):

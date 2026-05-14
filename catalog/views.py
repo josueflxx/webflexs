@@ -1199,11 +1199,12 @@ def client_catalog_excel_download(request):
         client_company=pricing_context[1] if pricing_context else None,
         client_category=pricing_context[2] if pricing_context else None,
     )
-    workbook, _stats = build_catalog_workbook(
+    workbook, stats = build_catalog_workbook(
         template,
         price_list=price_list,
         discount_percentage=discount_percentage,
     )
+    template.mark_generated(stats, user=request.user)
     file_name = build_export_filename(template)
     response = HttpResponse(
         content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"

@@ -49,7 +49,7 @@ from urllib.parse import urlencode, parse_qs
 import csv
 from openpyxl import Workbook
 
-from catalog.models import Product, Category, CategoryAttribute, ClampMeasureRequest, Supplier, PriceList
+from catalog.models import Product, Category, CategoryAttribute, ClampMeasureRequest, Supplier, PriceList, CategoryProductOrder
 from accounts.models import (
     AccountRequest,
     ClientCategory,
@@ -415,6 +415,153 @@ def catalog_excel_template_list(request):
     )
 
 
+def _latest_catalog_excel_source_change(template):
+    timestamps = [
+        getattr(template, "updated_at", None),
+        Product.objects.aggregate(value=Max("updated_at")).get("value"),
+        Category.objects.aggregate(value=Max("updated_at")).get("value"),
+        CategoryProductOrder.objects.aggregate(value=Max("updated_at")).get("value"),
+        template.sheets.aggregate(value=Max("updated_at")).get("value"),
+    ]
+    return max((value for value in timestamps if value), default=None)
+
+
+def _build_catalog_quality_summary(template):
+    active_products = Product.objects.filter(is_active=True)
+    public_products = Product.catalog_visible(
+        Product.objects.all(),
+        include_uncategorized=False,
+    )
+    public_product_ids = public_products.values("pk")
+    last_source_change = _latest_catalog_excel_source_change(template)
+    last_generated_at = template.last_generated_at
+
+    duplicate_alerts = 0
+    for attrs in active_products.values_list("attributes", flat=True).iterator():
+        if isinstance(attrs, dict) and attrs.get(ProductImporter.DUPLICATE_FLAG_KEY):
+            duplicate_alerts += 1
+
+    linked_to_multiple_categories = 0
+    multiple_without_primary = 0
+    for product in active_products.prefetch_related("categories").iterator(chunk_size=500):
+        linked_ids = {category.id for category in product.categories.all()}
+        if product.category_id:
+            linked_ids.add(product.category_id)
+        if len(linked_ids) > 1:
+            linked_to_multiple_categories += 1
+            if not product.category_id:
+                multiple_without_primary += 1
+
+    weak_name_count = 0
+    weak_name_values = {"", "-", ".", "s/n", "sin nombre", "sin descripcion"}
+    for name in public_products.values_list("name", flat=True).iterator(chunk_size=500):
+        normalized_name = (name or "").strip().lower()
+        if len(normalized_name) < 4 or normalized_name in weak_name_values:
+            weak_name_count += 1
+
+    visible_empty_categories = 0
+    for category in Category.objects.filter(is_active=True, visible_in_catalog=True).iterator():
+        category_ids = category.get_descendant_ids(include_self=True)
+        has_products = Product.catalog_visible(
+            Product.objects.filter(
+                Q(category_id__in=category_ids) | Q(categories__id__in=category_ids)
+            ),
+            include_uncategorized=False,
+        ).exists()
+        if not has_products:
+            visible_empty_categories += 1
+
+    hidden_categories_with_products = (
+        Category.objects.filter(Q(is_active=False) | Q(visible_in_catalog=False))
+        .filter(Q(products__is_active=True) | Q(products_m2m__is_active=True))
+        .distinct()
+        .count()
+    )
+
+    cards = [
+        {
+            "label": "Productos activos",
+            "count": active_products.count(),
+            "help": "Base activa que puede alimentar catalogo, Excel y busquedas.",
+            "severity": "info",
+        },
+        {
+            "label": "Visibles para clientes",
+            "count": public_products.count(),
+            "help": "Productos activos con al menos una categoria publica activa.",
+            "severity": "good",
+        },
+        {
+            "label": "Exportables Excel cliente",
+            "count": public_products.filter(price__gt=0).count(),
+            "help": "Visibles, activos y con precio mayor a cero para el Excel publicado.",
+            "severity": "good",
+        },
+        {
+            "label": "Sin categoria visible",
+            "count": active_products.exclude(pk__in=public_product_ids).count(),
+            "help": "No aparecen en catalogo cliente ni Excel publicado.",
+            "severity": "warn",
+        },
+        {
+            "label": "Sin categoria principal",
+            "count": active_products.filter(category__isnull=True).count(),
+            "help": "Conviene definir una principal para decidir su ubicacion canonica.",
+            "severity": "warn",
+        },
+        {
+            "label": "En varias categorias",
+            "count": linked_to_multiple_categories,
+            "help": "Se exportan una sola vez usando categoria principal/canonica.",
+            "severity": "info",
+        },
+        {
+            "label": "Multiples sin principal",
+            "count": multiple_without_primary,
+            "help": "Tienen varias categorias pero ninguna principal para decidir ubicacion.",
+            "severity": "warn",
+        },
+        {
+            "label": "Duplicados avisados",
+            "count": duplicate_alerts,
+            "help": "Productos con alerta generada por importaciones con SKU repetido.",
+            "severity": "warn",
+        },
+        {
+            "label": "Sin precio",
+            "count": public_products.filter(Q(price__isnull=True) | Q(price__lte=0)).count(),
+            "help": "Visibles al cliente pero fuera del Excel cliente por precio cero o pendiente.",
+            "severity": "warn",
+        },
+        {
+            "label": "Nombres para revisar",
+            "count": weak_name_count,
+            "help": "Nombres publicos demasiado cortos o genericos para una lista comercial.",
+            "severity": "warn",
+        },
+        {
+            "label": "Categorias publicas vacias",
+            "count": visible_empty_categories,
+            "help": "Categorias visibles sin productos publicos debajo.",
+            "severity": "warn",
+        },
+        {
+            "label": "Ocultas con productos",
+            "count": hidden_categories_with_products,
+            "help": "Orden interno o revision: no salen al catalogo cliente.",
+            "severity": "info",
+        },
+    ]
+    return {
+        "last_source_change": last_source_change,
+        "has_pending_changes": bool(
+            not last_generated_at
+            or (last_source_change and last_source_change > last_generated_at)
+        ),
+        "cards": cards,
+    }
+
+
 @staff_member_required
 def catalog_excel_template_detail(request, template_id):
     template = get_object_or_404(
@@ -428,6 +575,7 @@ def catalog_excel_template_detail(request, template_id):
     sheets = list(template.sheets.all().order_by("order", "id"))
     for sheet in sheets:
         sheet.active_columns = list(sheet.columns.filter(is_active=True).order_by("order", "id"))
+    catalog_quality = _build_catalog_quality_summary(template)
 
     return render(
         request,
@@ -435,6 +583,7 @@ def catalog_excel_template_detail(request, template_id):
         {
             "template": template,
             "sheets": sheets,
+            "catalog_quality": catalog_quality,
         },
     )
 
@@ -548,6 +697,7 @@ def catalog_excel_template_download(request, template_id):
         pk=template_id,
     )
     workbook, stats = build_catalog_workbook(template)
+    template.mark_generated(stats, user=request.user)
     file_name = build_export_filename(template)
     response = HttpResponse(
         content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -571,6 +721,34 @@ def catalog_excel_template_download(request, template_id):
         },
     )
     return response
+
+
+@staff_member_required
+@superuser_required_for_modifications
+@require_POST
+def catalog_excel_template_regenerate(request, template_id):
+    template = get_object_or_404(
+        CatalogExcelTemplate.objects.prefetch_related("sheets__columns", "sheets__categories", "sheets__suppliers"),
+        pk=template_id,
+    )
+    _workbook, stats = build_catalog_workbook(template)
+    template.mark_generated(stats, user=request.user)
+    log_admin_action(
+        request,
+        action="catalog_excel_template_regenerate",
+        target_type="catalog_excel_template",
+        target_id=template.pk,
+        details={
+            "name": template.name,
+            "total_rows": stats.get("total_rows", 0),
+            "rows_by_sheet": stats.get("rows_by_sheet", {}),
+        },
+    )
+    messages.success(
+        request,
+        f"Catalogo Excel regenerado: {stats.get('total_rows', 0)} filas listas para descargar.",
+    )
+    return redirect(_export_template_detail_url(template.pk))
 
 
 @staff_member_required
@@ -923,4 +1101,4 @@ def catalog_excel_column_delete(request, column_id):
         },
     )
 
-__all__ = ['_export_template_detail_url', '_build_excel_sheet_base_name', '_build_unique_excel_sheet_name', '_resolve_auto_columns_from_template', '_replace_sheet_columns', 'catalog_excel_template_list', 'catalog_excel_template_detail', 'catalog_excel_template_create', 'catalog_excel_template_edit', 'catalog_excel_template_delete', 'catalog_excel_template_download', 'catalog_excel_template_autogenerate_main_category_sheets', 'catalog_excel_sheet_create', 'catalog_excel_sheet_edit', 'catalog_excel_sheet_delete', 'catalog_excel_column_create', 'catalog_excel_column_edit', 'catalog_excel_column_delete']
+__all__ = ['_export_template_detail_url', '_build_excel_sheet_base_name', '_build_unique_excel_sheet_name', '_resolve_auto_columns_from_template', '_replace_sheet_columns', 'catalog_excel_template_list', 'catalog_excel_template_detail', 'catalog_excel_template_create', 'catalog_excel_template_edit', 'catalog_excel_template_delete', 'catalog_excel_template_download', 'catalog_excel_template_regenerate', 'catalog_excel_template_autogenerate_main_category_sheets', 'catalog_excel_sheet_create', 'catalog_excel_sheet_edit', 'catalog_excel_sheet_delete', 'catalog_excel_column_create', 'catalog_excel_column_edit', 'catalog_excel_column_delete']

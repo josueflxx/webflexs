@@ -110,6 +110,7 @@ urlpatterns = [
     path('exportar-catalogo/<int:template_id>/editar/', views.catalog_excel_template_edit, name='admin_catalog_excel_template_edit'),
     path('exportar-catalogo/<int:template_id>/eliminar/', views.catalog_excel_template_delete, name='admin_catalog_excel_template_delete'),
     path('exportar-catalogo/<int:template_id>/descargar/', views.catalog_excel_template_download, name='admin_catalog_excel_template_download'),
+    path('exportar-catalogo/<int:template_id>/regenerar/', views.catalog_excel_template_regenerate, name='admin_catalog_excel_template_regenerate'),
     path('exportar-catalogo/<int:template_id>/auto-hojas-principales/', views.catalog_excel_template_autogenerate_main_category_sheets, name='admin_catalog_excel_template_autogenerate_main_category_sheets'),
     path('exportar-catalogo/<int:template_id>/hojas/nueva/', views.catalog_excel_sheet_create, name='admin_catalog_excel_sheet_create'),
     path('exportar-catalogo/hojas/<int:sheet_id>/editar/', views.catalog_excel_sheet_edit, name='admin_catalog_excel_sheet_edit'),

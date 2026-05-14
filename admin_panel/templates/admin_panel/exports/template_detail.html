@@ -38,6 +38,59 @@
         text-transform: uppercase;
         letter-spacing: 0.04em;
     }
+
+    .excel-status-grid,
+    .catalog-quality-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 10px;
+        margin: 14px 0;
+    }
+
+    .excel-status-card,
+    .catalog-quality-card {
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.03);
+        padding: 12px;
+    }
+
+    .excel-status-card small,
+    .catalog-quality-card small {
+        display: block;
+        color: var(--color-gray-light);
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        margin-bottom: 6px;
+    }
+
+    .excel-status-card strong,
+    .catalog-quality-card strong {
+        display: block;
+        font-size: 1.35rem;
+        color: var(--color-white);
+    }
+
+    .catalog-quality-card p {
+        margin: 6px 0 0;
+        color: var(--color-gray-light);
+        font-size: 0.86rem;
+        line-height: 1.35;
+    }
+
+    .catalog-quality-card.good {
+        border-color: rgba(31, 197, 91, 0.28);
+    }
+
+    .catalog-quality-card.warn {
+        border-color: rgba(255, 209, 102, 0.28);
+    }
+
+    .excel-status-card.pending {
+        border-color: rgba(255, 105, 55, 0.38);
+        background: rgba(255, 105, 55, 0.08);
+    }
 </style>
 {% endblock %}
 
@@ -66,10 +119,63 @@
         <div class="toolbar-actions">
             <a href="{% url 'admin_catalog_excel_template_download' template.pk %}" class="btn btn-primary">Descargar XLSX</a>
             {% if user.is_superuser %}
+            <form method="post" action="{% url 'admin_catalog_excel_template_regenerate' template.pk %}" style="display:inline;">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-outline">Regenerar catalogo Excel</button>
+            </form>
             <a href="{% url 'admin_catalog_excel_template_edit' template.pk %}" class="btn btn-outline">Editar plantilla</a>
             <a href="{% url 'admin_catalog_excel_template_delete' template.pk %}" class="btn btn-danger">Eliminar</a>
             {% endif %}
             <a href="{% url 'admin_catalog_excel_template_list' %}" class="btn btn-outline">Volver</a>
+        </div>
+    </div>
+
+    <div class="excel-status-grid">
+        <div class="excel-status-card {% if catalog_quality.has_pending_changes %}pending{% endif %}">
+            <small>Estado Excel</small>
+            <strong>{% if catalog_quality.has_pending_changes %}Cambios pendientes{% else %}Actualizado{% endif %}</strong>
+            <p class="text-muted" style="margin:6px 0 0;">
+                {% if catalog_quality.has_pending_changes %}
+                Hay cambios de catalogo posteriores a la ultima generacion registrada.
+                {% else %}
+                La ultima generacion registrada esta alineada con el catalogo.
+                {% endif %}
+            </p>
+        </div>
+        <div class="excel-status-card">
+            <small>Ultima generacion</small>
+            <strong>{% if template.last_generated_at %}{{ template.last_generated_at|date:"d/m/Y H:i" }}{% else %}Sin registro{% endif %}</strong>
+            <p class="text-muted" style="margin:6px 0 0;">
+                {% if template.last_generated_by %}Por {{ template.last_generated_by.username }}{% else %}Se completa al descargar o regenerar.{% endif %}
+            </p>
+        </div>
+        <div class="excel-status-card">
+            <small>Ultimo cambio fuente</small>
+            <strong>{% if catalog_quality.last_source_change %}{{ catalog_quality.last_source_change|date:"d/m/Y H:i" }}{% else %}-{% endif %}</strong>
+            <p class="text-muted" style="margin:6px 0 0;">Productos, categorias, orden manual u hojas.</p>
+        </div>
+        <div class="excel-status-card">
+            <small>Filas ultima generacion</small>
+            <strong>{{ template.last_generated_rows|default:0 }}</strong>
+            <p class="text-muted" style="margin:6px 0 0;">El archivo se vuelve a armar en cada descarga.</p>
+        </div>
+    </div>
+
+    <div class="sheet-card">
+        <div class="admin-toolbar" style="padding:0; border:0; margin-bottom: 8px;">
+            <div>
+                <h3 style="margin:0;">Calidad del catalogo</h3>
+                <small class="text-muted">Lectura rapida para detectar productos sin categoria visible, precios pendientes y categorias a revisar.</small>
+            </div>
+        </div>
+        <div class="catalog-quality-grid">
+            {% for item in catalog_quality.cards %}
+            <div class="catalog-quality-card {{ item.severity }}">
+                <small>{{ item.label }}</small>
+                <strong>{{ item.count }}</strong>
+                <p>{{ item.help }}</p>
+            </div>
+            {% endfor %}
         </div>
     </div>
 

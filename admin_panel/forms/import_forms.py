@@ -58,6 +58,21 @@ class ImportForm(forms.Form):
 
 
 class ProductImportForm(ImportForm):
+    UPDATE_MODE_CHOICES = [
+        (
+            "commercial",
+            "Actualizar datos comerciales sin tocar categorias ni orden manual",
+        ),
+        (
+            "prices",
+            "Actualizar solo precios y costos",
+        ),
+        (
+            "create_only",
+            "Crear productos nuevos y omitir SKUs existentes",
+        ),
+    ]
+
     CATEGORY_MODE_CHOICES = [
         (
             "existing",
@@ -82,6 +97,17 @@ class ProductImportForm(ImportForm):
         initial=True,
         label="Actualizar existentes",
         help_text="Si se encuentra un producto con el mismo SKU, actualiza sus datos.",
+    )
+
+    update_mode = forms.ChoiceField(
+        choices=UPDATE_MODE_CHOICES,
+        required=True,
+        initial="commercial",
+        label="Modo de actualizacion",
+        help_text=(
+            "El modo recomendado actualiza el catalogo comercial, conserva las categorias "
+            "actuales de los articulos existentes y no toca el orden manual del catalogo/Excel."
+        ),
     )
 
     category_mode = forms.ChoiceField(

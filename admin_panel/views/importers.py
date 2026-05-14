@@ -338,6 +338,12 @@ def _import_options_from_data(data, import_type):
     category_mode = str(data.get("category_mode") or "existing").strip()
     if category_mode not in {"ignore", "existing", "hidden", "create"}:
         category_mode = "existing"
+    update_mode = str(data.get("update_mode") or "commercial").strip()
+    if update_mode not in {"commercial", "prices", "create_only"}:
+        update_mode = "commercial"
+    update_existing = _truthy(data.get("update_existing"), default=True)
+    if not update_existing:
+        update_mode = "create_only"
     preserve_existing_categories = _truthy(
         data.get("preserve_existing_categories"),
         default=True,
@@ -349,6 +355,7 @@ def _import_options_from_data(data, import_type):
     if category_mode in {"hidden", "create"} and not allow_category_creation:
         category_mode = "existing"
     return {
+        "update_mode": update_mode,
         "category_mode": category_mode,
         "preserve_existing_categories": preserve_existing_categories,
         "allow_category_creation": allow_category_creation,

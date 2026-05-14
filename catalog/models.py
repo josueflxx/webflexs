@@ -444,6 +444,7 @@ class Product(models.Model):
         blank=True,
         related_name="products",
         verbose_name="Categoria principal",
+        help_text="Ubicacion canonica del producto para catalogo cliente y Excel cuando esta en varias categorias.",
     )
     # Flexible assignment: one product can belong to many categories
     categories = models.ManyToManyField(

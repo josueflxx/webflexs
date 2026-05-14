@@ -28,6 +28,7 @@ def site_settings(request):
     user = getattr(request, "user", None)
     client_catalog_excel_download_enabled = False
     client_catalog_excel_download_label = "Descargar catalogo Excel"
+    client_catalog_excel_last_generated_at = None
 
     if user and user.is_authenticated:
         can_access_client_export = False
@@ -52,6 +53,7 @@ def site_settings(request):
                     (published_template.client_download_label or "").strip()
                     or "Descargar catalogo Excel"
                 )
+                client_catalog_excel_last_generated_at = published_template.last_generated_at
 
     return {
         'site_settings': SiteSettings.get_settings(),
@@ -59,6 +61,7 @@ def site_settings(request):
         'feature_read_only_mode': bool(getattr(settings, 'FEATURE_READ_ONLY_MODE', False)),
         'client_catalog_excel_download_enabled': client_catalog_excel_download_enabled,
         'client_catalog_excel_download_label': client_catalog_excel_download_label,
+        'client_catalog_excel_last_generated_at': client_catalog_excel_last_generated_at,
     }
 
 

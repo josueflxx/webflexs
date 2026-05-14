@@ -119,6 +119,11 @@
     filter: drop-shadow(0 0 4px rgba(20, 181, 86, 0.35));
 }
 
+.catalog-excel-updated {
+    margin: 0 0 8px;
+    font-size: 0.78rem;
+}
+
 .category-filter-header {
     display: flex;
     justify-content: space-between;
