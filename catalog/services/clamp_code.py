@@ -2,7 +2,7 @@
 Clamp code parser/generator for ABRAZADERAS.
 
 Rules:
-- Prefix: ABL (laminada) / ABT (trefilada)
+- Prefix: ABL (laminada) / ABT (trefilada) / ABF (forjada)
 - Numeric core: [medida_compactada][ancho][largo]
 - Suffix: C/P/S (CURVA/PLANA/SEMICURVA)
 
@@ -18,13 +18,16 @@ import re
 PREFIX_TO_TYPE = {
     "ABL": "LAMINADA",
     "ABT": "TREFILADA",
+    "ABF": "FORJADA",
 }
 
 TYPE_TO_PREFIX = {
     "ABL": "ABL",
     "ABT": "ABT",
+    "ABF": "ABF",
     "LAMINADA": "ABL",
     "TREFILADA": "ABT",
+    "FORJADA": "ABF",
 }
 
 SHAPE_CODE_TO_NAME = {
@@ -40,6 +43,8 @@ SHAPE_NAME_TO_CODE = {
     "CURVA": "C",
     "PLANA": "P",
     "SEMICURVA": "S",
+    "S/CURVA": "S",
+    "S CURVA": "S",
 }
 
 # Conservador: solo mapeos de medida validados por uso frecuente/ejemplos.
@@ -226,9 +231,9 @@ def parsearCodigo(
     Parse a clamp code and return normalized attributes.
     """
     code = _normalize_key(codigo)
-    match = re.fullmatch(r"(ABL|ABT)(\d+)([CPS])", code)
+    match = re.fullmatch(r"(ABL|ABT|ABF)(\d+)([CPS])", code)
     if not match:
-        raise ValueError("Codigo invalido. Debe cumplir formato ABL/ABT + numeros + C/P/S.")
+        raise ValueError("Codigo invalido. Debe cumplir formato ABL/ABT/ABF + numeros + C/P/S.")
 
     prefix, numeric_core, shape_code = match.groups()
     clamp_type = PREFIX_TO_TYPE[prefix]
@@ -301,9 +306,9 @@ def generarCodigo(
     raw_shape = _normalize_key(forma)
 
     if raw_type not in TYPE_TO_PREFIX:
-        raise ValueError("Tipo invalido. Usa ABL/ABT o LAMINADA/TREFILADA.")
+        raise ValueError("Tipo invalido. Usa ABL/ABT/ABF o LAMINADA/TREFILADA/FORJADA.")
     if raw_shape not in SHAPE_NAME_TO_CODE:
-        raise ValueError("Forma invalida. Usa C/P/S o CURVA/PLANA/SEMICURVA.")
+        raise ValueError("Forma invalida. Usa C/P/S o CURVA/PLANA/SEMICURVA/S/CURVA.")
 
     try:
         width_int = int(ancho)

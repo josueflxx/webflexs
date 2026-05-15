@@ -6,6 +6,7 @@ from django.conf import settings
 from .models import CatalogExcelTemplate, SiteSettings
 from core.services.presence import build_admin_presence_payload, get_presence_config
 from core.services.company_context import get_active_company, get_user_companies
+from core.services.catalog_excel_status import latest_catalog_excel_source_change
 
 
 def _can_use_clamp_measure_feature(request):
@@ -29,6 +30,8 @@ def site_settings(request):
     client_catalog_excel_download_enabled = False
     client_catalog_excel_download_label = "Descargar catalogo Excel"
     client_catalog_excel_last_generated_at = None
+    client_catalog_excel_last_source_change = None
+    client_catalog_excel_has_pending_changes = False
 
     if user and user.is_authenticated:
         can_access_client_export = False
@@ -54,6 +57,16 @@ def site_settings(request):
                     or "Descargar catalogo Excel"
                 )
                 client_catalog_excel_last_generated_at = published_template.last_generated_at
+                client_catalog_excel_last_source_change = latest_catalog_excel_source_change(
+                    published_template
+                )
+                client_catalog_excel_has_pending_changes = bool(
+                    not client_catalog_excel_last_generated_at
+                    or (
+                        client_catalog_excel_last_source_change
+                        and client_catalog_excel_last_source_change > client_catalog_excel_last_generated_at
+                    )
+                )
 
     return {
         'site_settings': SiteSettings.get_settings(),
@@ -62,6 +75,8 @@ def site_settings(request):
         'client_catalog_excel_download_enabled': client_catalog_excel_download_enabled,
         'client_catalog_excel_download_label': client_catalog_excel_download_label,
         'client_catalog_excel_last_generated_at': client_catalog_excel_last_generated_at,
+        'client_catalog_excel_last_source_change': client_catalog_excel_last_source_change,
+        'client_catalog_excel_has_pending_changes': client_catalog_excel_has_pending_changes,
     }
 
 

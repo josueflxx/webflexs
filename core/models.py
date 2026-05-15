@@ -1489,6 +1489,13 @@ CATALOG_EXPORT_SORT_CHOICES = [
     ("price_asc", "Precio menor a mayor"),
 ]
 
+CATALOG_EXPORT_SPECIAL_GROUPING_NONE = ""
+CATALOG_EXPORT_SPECIAL_GROUPING_CLAMP_MEASURE = "clamp_measure"
+CATALOG_EXPORT_SPECIAL_GROUPING_CHOICES = [
+    (CATALOG_EXPORT_SPECIAL_GROUPING_NONE, "Sin agrupacion tecnica"),
+    (CATALOG_EXPORT_SPECIAL_GROUPING_CLAMP_MEASURE, "Abrazaderas por medida"),
+]
+
 
 class CatalogExcelTemplate(models.Model):
     """Workbook template to export the product catalog."""
@@ -1627,6 +1634,14 @@ class CatalogExcelTemplateSheet(models.Model):
         verbose_name="Separar por subcategorias",
         help_text="Cuando la hoja filtra una categoria principal, agrupa los productos en tablas internas por subcategoria.",
     )
+    special_grouping = models.CharField(
+        max_length=30,
+        choices=CATALOG_EXPORT_SPECIAL_GROUPING_CHOICES,
+        blank=True,
+        default=CATALOG_EXPORT_SPECIAL_GROUPING_NONE,
+        verbose_name="Agrupacion tecnica",
+        help_text="Opcional. Usa una salida especial para rubros tecnicos, sin modificar categorias reales.",
+    )
     categories = models.ManyToManyField(
         "catalog.Category",
         blank=True,
@@ -1711,3 +1726,28 @@ class CatalogExcelTemplateColumn(models.Model):
         if self.header:
             return self.header
         return dict(CATALOG_EXPORT_COLUMN_CHOICES).get(self.key, self.key)
+
+    def _touch_parent_sheet(self):
+        if not self.sheet_id:
+            return
+        sheet = (
+            CatalogExcelTemplateSheet.objects.filter(pk=self.sheet_id)
+            .only("id", "template_id")
+            .first()
+        )
+        if not sheet:
+            return
+        now = timezone.now()
+        CatalogExcelTemplateSheet.objects.filter(pk=sheet.pk).update(updated_at=now)
+        CatalogExcelTemplate.objects.filter(pk=sheet.template_id).update(updated_at=now)
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        self._touch_parent_sheet()
+
+    def delete(self, *args, **kwargs):
+        sheet_id = self.sheet_id
+        result = super().delete(*args, **kwargs)
+        self.sheet_id = sheet_id
+        self._touch_parent_sheet()
+        return result

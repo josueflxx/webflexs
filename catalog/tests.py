@@ -10,6 +10,7 @@ from openpyxl import Workbook, load_workbook
 from accounts.models import ClientProfile
 from catalog.services.abrazadera_importer import AbrazaderaImporter
 from catalog.services.clamp_code import generarCodigo, parsearCodigo
+from catalog.services.clamp_measure_parser import parse_clamp_measure
 from catalog.services.product_importer import ProductImporter
 from catalog.models import Category, CategoryProductOrder, ClampMeasureRequest, ClampSpecs, Product
 from core.models import CatalogExcelTemplate, CatalogExcelTemplateColumn, CatalogExcelTemplateSheet
@@ -64,6 +65,15 @@ class ClampCodeTests(SimpleTestCase):
         self.assertEqual(parsed["ancho"], 80)
         self.assertEqual(parsed["largo"], 220)
         self.assertFalse(parsed["diametro_requiere_mapeo"])
+
+    def test_parse_forjada_prefix(self):
+        parsed = parsearCodigo("ABF1882220C")
+        self.assertEqual(parsed["prefijo"], "ABF")
+        self.assertEqual(parsed["tipo"], "FORJADA")
+        self.assertEqual(parsed["diametro"], "18")
+        self.assertEqual(parsed["ancho"], 82)
+        self.assertEqual(parsed["largo"], 220)
+        self.assertEqual(parsed["forma"], "CURVA")
 
     def test_generate_known_codes(self):
         code_1 = generarCodigo(
@@ -1160,6 +1170,109 @@ class CatalogClientExcelDownloadTests(TestCase):
 
 
 class CatalogExcelGroupedExportTests(TestCase):
+    def test_clamp_measure_parser_normalizes_name_variants(self):
+        result = parse_clamp_measure(
+            "ABT7880320S",
+            "ABRAZADERA TREFILADA 7/8 X 80 X 320 SEMI CURVA",
+        )
+
+        self.assertEqual(result.tipo, "TREFILADA")
+        self.assertEqual(result.diametro, "7/8")
+        self.assertEqual(result.ancho, 80)
+        self.assertEqual(result.largo, 320)
+        self.assertEqual(result.forma, "S/CURVA")
+        self.assertEqual(
+            result.nombre_normalizado,
+            "ABRAZADERA TREFILADA 7/8 X 80 X 320 S/CURVA",
+        )
+
+    def test_clamp_measure_export_groups_products_by_diameter(self):
+        root = Category.objects.create(
+            name="ABRAZADERAS",
+            is_active=True,
+            visible_in_catalog=True,
+        )
+        first_product = Product.objects.create(
+            sku="ABT7880320S",
+            name="ABRAZADERA TREFILADA 7/8 X 80 X 320 S/CURVA",
+            price=Decimal("100.00"),
+            stock=1,
+            is_active=True,
+            category=root,
+        )
+        second_product = Product.objects.create(
+            sku="ABL1135400C",
+            name="ABRAZADERA LAMINADA DE 1 X 135 X 400 CURVO",
+            price=Decimal("200.00"),
+            stock=1,
+            is_active=True,
+            category=root,
+        )
+        first_product.categories.add(root)
+        second_product.categories.add(root)
+
+        template = CatalogExcelTemplate.objects.create(name="Catalogo abrazaderas")
+        sheet = CatalogExcelTemplateSheet.objects.create(
+            template=template,
+            name="ABRAZADERAS",
+            include_header=True,
+            only_active_products=True,
+            only_catalog_visible=True,
+            include_descendant_categories=True,
+            special_grouping="clamp_measure",
+            sort_by="sku_asc",
+        )
+        sheet.categories.add(root)
+
+        workbook, stats = build_catalog_workbook(template)
+        worksheet = workbook["ABRAZADERAS"]
+        values = [cell.value for row in worksheet.iter_rows() for cell in row if cell.value]
+
+        self.assertEqual(stats["rows_by_sheet"]["ABRAZADERAS"], 2)
+        self.assertIn("Diametro 7/8 (1 productos)", values)
+        self.assertIn("Diametro 1 (1 productos)", values)
+        self.assertIn("Codigo original", values)
+        self.assertIn("Nombre normalizado", values)
+        self.assertIn("ABRAZADERA TREFILADA 7/8 X 80 X 320 S/CURVA", values)
+        self.assertIn("ABRAZADERA LAMINADA 1 X 135 X 400 CURVA", values)
+
+    def test_clamp_measure_export_uses_code_as_fallback(self):
+        root = Category.objects.create(
+            name="ABRAZADERAS",
+            is_active=True,
+            visible_in_catalog=True,
+        )
+        product = Product.objects.create(
+            sku="ABT3480220P",
+            name="ABRAZADERA ESPECIAL A MEDIDA",
+            price=Decimal("100.00"),
+            stock=1,
+            is_active=True,
+            category=root,
+        )
+        product.categories.add(root)
+
+        template = CatalogExcelTemplate.objects.create(name="Catalogo codigo apoyo")
+        sheet = CatalogExcelTemplateSheet.objects.create(
+            template=template,
+            name="ABRAZADERAS",
+            include_header=True,
+            only_active_products=True,
+            only_catalog_visible=True,
+            include_descendant_categories=True,
+            special_grouping="clamp_measure",
+        )
+        sheet.categories.add(root)
+
+        workbook, stats = build_catalog_workbook(template)
+        worksheet = workbook["ABRAZADERAS"]
+        rows = list(worksheet.iter_rows(values_only=True))
+        flattened = [value for row in rows for value in row if value]
+
+        self.assertEqual(stats["rows_by_sheet"]["ABRAZADERAS"], 1)
+        self.assertIn("ABRAZADERA TREFILADA 3/4 X 80 X 220 PLANA", flattened)
+        self.assertTrue(any("Datos completados desde codigo" in str(value) for value in flattened))
+
     def test_sheet_can_group_products_by_subcategory_blocks(self):
         root = Category.objects.create(name="Elasticos", order=1, is_active=True)
         child = Category.objects.create(name="Bujes", parent=root, order=2, is_active=True)

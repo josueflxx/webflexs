@@ -224,6 +224,9 @@
             <span class="badge badge-info">Solo visible catalogo: {% if sheet.only_catalog_visible %}Si{% else %}No{% endif %}</span>
             <span class="badge badge-info">Incluye subcategorias: {% if sheet.include_descendant_categories %}Si{% else %}No{% endif %}</span>
             <span class="badge badge-info">Bloques por subcategoria: {% if sheet.group_by_subcategories %}Si{% else %}No{% endif %}</span>
+            {% if sheet.special_grouping %}
+            <span class="badge badge-warning">Agrupacion tecnica: {{ sheet.get_special_grouping_display }}</span>
+            {% endif %}
             {% if sheet.max_rows %}
             <span class="badge badge-warning">Limite: {{ sheet.max_rows }}</span>
             {% else %}

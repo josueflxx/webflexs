@@ -622,6 +622,7 @@ class ClampSpecs(models.Model):
     FABRICACION_CHOICES = [
         ("TREFILADA", "TREFILADA"),
         ("LAMINADA", "LAMINADA"),
+        ("FORJADA", "FORJADA"),
     ]
     fabrication = models.CharField(
         max_length=20,

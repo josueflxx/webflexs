@@ -11,7 +11,16 @@ from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 
 from catalog.models import Category, CategoryProductOrder, Product, PriceListItem
-from core.models import CATALOG_EXPORT_COLUMN_CHOICES
+from catalog.services.clamp_measure_parser import (
+    CLAMP_MEASURE_EXCEL_HEADERS,
+    clamp_measure_group_label,
+    parse_product_clamp_measure,
+    sort_clamp_measure_results,
+)
+from core.models import (
+    CATALOG_EXPORT_COLUMN_CHOICES,
+    CATALOG_EXPORT_SPECIAL_GROUPING_CLAMP_MEASURE,
+)
 
 
 SORT_MAP = {
@@ -328,6 +337,7 @@ def _build_synthetic_category_sheet(template, category, columns, order, name=Non
         only_catalog_visible=True,
         include_descendant_categories=True,
         group_by_subcategories=True,
+        special_grouping="",
         search_query="",
         max_rows=None,
         sort_by="name_asc",
@@ -949,6 +959,124 @@ def _append_group_title(worksheet, row_index, label, product_count, total_column
     worksheet.row_dimensions[row_index].height = 22
 
 
+def _sheet_uses_clamp_measure_grouping(sheet):
+    return getattr(sheet, "special_grouping", "") == CATALOG_EXPORT_SPECIAL_GROUPING_CLAMP_MEASURE
+
+
+def _append_clamp_measure_group_title(worksheet, row_index, label, product_count, total_columns):
+    title_cell = worksheet.cell(row=row_index, column=1)
+    if label == "PARA REVISAR":
+        title_cell.value = f"Para revisar ({product_count} productos)"
+    else:
+        title_cell.value = f"Diametro {label} ({product_count} productos)"
+    title_cell.font = GROUP_TITLE_FONT
+    title_cell.fill = GROUP_TITLE_FILL
+    title_cell.alignment = Alignment(horizontal="left", vertical="center")
+    title_cell.border = THIN_BORDER
+
+    if total_columns > 1:
+        for col_idx in range(2, total_columns + 1):
+            cell = worksheet.cell(row=row_index, column=col_idx)
+            cell.fill = GROUP_TITLE_FILL
+            cell.border = THIN_BORDER
+        worksheet.merge_cells(
+            start_row=row_index,
+            start_column=1,
+            end_row=row_index,
+            end_column=total_columns,
+        )
+
+    worksheet.row_dimensions[row_index].height = 22
+
+
+def _apply_clamp_measure_row_styles(worksheet, row_index):
+    for col_idx in range(1, len(CLAMP_MEASURE_EXCEL_HEADERS) + 1):
+        cell = worksheet.cell(row=row_index, column=col_idx)
+        cell.border = THIN_BORDER
+        cell.alignment = Alignment(vertical="top", wrap_text=col_idx in {2, 8})
+        if row_index % 2 == 0:
+            cell.fill = ALT_ROW_FILL
+        if col_idx in {5, 6}:
+            cell.number_format = "0"
+        if col_idx == 9:
+            cell.number_format = '"$"#,##0.00'
+            cell.alignment = Alignment(horizontal="right", vertical="top")
+
+
+def _append_clamp_measure_products(
+    worksheet,
+    sheet_config,
+    price_map,
+    discount_percentage,
+):
+    products = list(
+        _iter_sheet_products(
+            sheet_config,
+            price_map=price_map,
+            discount_percentage=discount_percentage,
+        )
+    )
+    
+    parsed_results = []
+    for product in products:
+        price = _resolve_product_export_price(
+            product, price_map=price_map, discount_percentage=discount_percentage
+        )
+        parsed_results.append(
+            parse_product_clamp_measure(product, price=_decimal_to_excel(price))
+        )
+        
+    results = sort_clamp_measure_results(parsed_results)
+    headers = CLAMP_MEASURE_EXCEL_HEADERS
+    total_columns = len(headers)
+    column_widths = [16, 48, 15, 12, 10, 10, 12, 50, 15]
+
+    if not results:
+        if sheet_config.include_header:
+            worksheet.append(headers)
+            _apply_header_styles(worksheet, total_columns)
+        _set_auto_column_widths(worksheet, column_widths)
+        return 0
+
+    counts_by_group = {}
+    for result in results:
+        label = clamp_measure_group_label(result)
+        counts_by_group[label] = counts_by_group.get(label, 0) + 1
+
+    row_count = 0
+    current_group = None
+    for result in results:
+        group_label = clamp_measure_group_label(result)
+        if group_label != current_group:
+            if current_group is not None:
+                worksheet.append([])
+            next_row = _worksheet_next_row(worksheet)
+            _append_clamp_measure_group_title(
+                worksheet,
+                next_row,
+                group_label,
+                counts_by_group[group_label],
+                total_columns,
+            )
+            current_group = group_label
+
+            if sheet_config.include_header:
+                worksheet.append(headers)
+                _apply_header_styles(worksheet, total_columns, row=worksheet.max_row)
+
+        row_values = result.as_excel_row()
+        worksheet.append(row_values)
+        row_index = worksheet.max_row
+        _apply_clamp_measure_row_styles(worksheet, row_index)
+        for idx, value in enumerate(row_values):
+            column_widths[idx] = max(column_widths[idx], _string_len_for_width(value))
+        row_count += 1
+
+    worksheet.freeze_panes = None
+    _set_auto_column_widths(worksheet, column_widths)
+    return row_count
+
+
 def _append_product_row(
     worksheet,
     excel_row,
@@ -1124,6 +1252,21 @@ def build_catalog_workbook(template, price_list=None, discount_percentage=None):
         ]
         column_keys = [col.key for col in columns]
         column_widths = [_string_len_for_width(header) for header in headers]
+
+        if _sheet_uses_clamp_measure_grouping(sheet_config):
+            row_count = _append_clamp_measure_products(
+                worksheet,
+                sheet_config,
+                price_map,
+                discount_percentage,
+            )
+            if _sheet_requires_public_catalog(sheet_config) and row_count == 0:
+                workbook.remove(worksheet)
+                skipped_sheets.append(sheet_name)
+                continue
+            exported_any_sheet = True
+            rows_by_sheet[sheet_name] = row_count
+            continue
 
         if sheet_config.group_by_subcategories:
             row_count = _append_grouped_products(

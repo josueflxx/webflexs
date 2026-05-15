@@ -119,7 +119,9 @@
                         Descarga la version publicada del catalogo en formato XLSX.
                     </p>
                     <p class="text-muted catalog-excel-updated">
-                        {% if client_catalog_excel_last_generated_at %}
+                        {% if client_catalog_excel_has_pending_changes and client_catalog_excel_last_source_change %}
+                        Cambios detectados {{ client_catalog_excel_last_source_change|date:"d/m/Y H:i" }}
+                        {% elif client_catalog_excel_last_generated_at %}
                         Actualizado {{ client_catalog_excel_last_generated_at|date:"d/m/Y H:i" }}
                         {% else %}
                         Se genera actualizado al descargar.

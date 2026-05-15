@@ -135,6 +135,7 @@ from core.models import (
     CatalogExcelTemplate,
     CatalogExcelTemplateSheet,
     CatalogExcelTemplateColumn,
+    CATALOG_EXPORT_SPECIAL_GROUPING_CLAMP_MEASURE,
     StockMovement,
     Warehouse,
 )
@@ -223,6 +224,7 @@ from core.services.advanced_search import (
     sanitize_search_token,
 )
 from core.services.catalog_excel_exporter import build_catalog_workbook, build_export_filename
+from core.services.catalog_excel_status import latest_catalog_excel_source_change
 from core.services.audit import log_admin_action, log_admin_change, model_snapshot
 from core.services.pricing import resolve_effective_price_list
 import traceback
@@ -415,17 +417,6 @@ def catalog_excel_template_list(request):
     )
 
 
-def _latest_catalog_excel_source_change(template):
-    timestamps = [
-        getattr(template, "updated_at", None),
-        Product.objects.aggregate(value=Max("updated_at")).get("value"),
-        Category.objects.aggregate(value=Max("updated_at")).get("value"),
-        CategoryProductOrder.objects.aggregate(value=Max("updated_at")).get("value"),
-        template.sheets.aggregate(value=Max("updated_at")).get("value"),
-    ]
-    return max((value for value in timestamps if value), default=None)
-
-
 def _build_catalog_quality_summary(template):
     active_products = Product.objects.filter(is_active=True)
     public_products = Product.catalog_visible(
@@ -433,7 +424,7 @@ def _build_catalog_quality_summary(template):
         include_uncategorized=False,
     )
     public_product_ids = public_products.values("pk")
-    last_source_change = _latest_catalog_excel_source_change(template)
+    last_source_change = latest_catalog_excel_source_change(template)
     last_generated_at = template.last_generated_at
 
     duplicate_alerts = 0
@@ -791,6 +782,11 @@ def catalog_excel_template_autogenerate_main_category_sheets(request, template_i
     with transaction.atomic():
         for position, category in enumerate(root_categories, start=1):
             base_name = _build_excel_sheet_base_name(category.name)
+            special_grouping = (
+                CATALOG_EXPORT_SPECIAL_GROUPING_CLAMP_MEASURE
+                if "ABRAZADER" in (category.name or "").upper()
+                else ""
+            )
             target_sheet = existing_sheets.get(base_name)
 
             if target_sheet is None:
@@ -804,6 +800,7 @@ def catalog_excel_template_autogenerate_main_category_sheets(request, template_i
                     only_catalog_visible=not include_inactive_categories,
                     include_descendant_categories=True,
                     group_by_subcategories=True,
+                    special_grouping=special_grouping,
                     search_query="",
                     max_rows=None,
                     sort_by="name_asc",
@@ -818,6 +815,7 @@ def catalog_excel_template_autogenerate_main_category_sheets(request, template_i
                 target_sheet.only_catalog_visible = not include_inactive_categories
                 target_sheet.include_descendant_categories = True
                 target_sheet.group_by_subcategories = True
+                target_sheet.special_grouping = special_grouping
                 target_sheet.search_query = ""
                 target_sheet.max_rows = None
                 target_sheet.sort_by = "name_asc"
@@ -829,6 +827,7 @@ def catalog_excel_template_autogenerate_main_category_sheets(request, template_i
                         "only_catalog_visible",
                         "include_descendant_categories",
                         "group_by_subcategories",
+                        "special_grouping",
                         "search_query",
                         "max_rows",
                         "sort_by",
