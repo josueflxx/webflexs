@@ -14,7 +14,6 @@ from catalog.services.clamp_code import parsearCodigo
 CLAMP_MEASURE_EXCEL_HEADERS = [
     "Codigo original",
     "Nombre original",
-    "Nombre normalizado",
     "Precio",
 ]
 
@@ -49,7 +48,6 @@ class ClampMeasureParseResult:
         return [
             self.codigo_original,
             self.nombre_original,
-            self.nombre_normalizado,
             self.precio if self.precio is not None else "",
         ]
 

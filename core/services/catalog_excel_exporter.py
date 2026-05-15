@@ -993,10 +993,10 @@ def _apply_clamp_measure_row_styles(worksheet, row_index):
     for col_idx in range(1, len(CLAMP_MEASURE_EXCEL_HEADERS) + 1):
         cell = worksheet.cell(row=row_index, column=col_idx)
         cell.border = THIN_BORDER
-        cell.alignment = Alignment(vertical="top", wrap_text=col_idx in {2, 3})
+        cell.alignment = Alignment(vertical="top", wrap_text=col_idx in {2})
         if row_index % 2 == 0:
             cell.fill = ALT_ROW_FILL
-        if col_idx == 4:
+        if col_idx == 3:
             cell.number_format = '"$"#,##0.00'
             cell.alignment = Alignment(horizontal="right", vertical="top")
 
@@ -1027,7 +1027,7 @@ def _append_clamp_measure_products(
     results = sort_clamp_measure_results(parsed_results)
     headers = CLAMP_MEASURE_EXCEL_HEADERS
     total_columns = len(headers)
-    column_widths = [16, 48, 50, 15]
+    column_widths = [16, 48, 15]
 
     if not results:
         if sheet_config.include_header:
