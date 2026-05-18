@@ -826,18 +826,21 @@ def _iter_sheet_products(sheet, price_map=None, discount_percentage=None):
             matched_category_ids.append(canonical_category.pk)
 
     order_map = {
-        (category_id, product_id): sort_order
-        for category_id, product_id, sort_order in CategoryProductOrder.objects.filter(
+        (category_id, product_id): (block_order, sort_order)
+        for category_id, product_id, block_order, sort_order in CategoryProductOrder.objects.filter(
             category_id__in=set(matched_category_ids),
             product_id__in=matched_product_ids,
-        ).values_list("category_id", "product_id", "sort_order")
+        ).values_list("category_id", "product_id", "block_order", "sort_order")
     }
     for product in matched_products:
         category_id = getattr(product, "_catalog_export_category_id", None)
-        product._catalog_export_sort_order = order_map.get((category_id, product.pk), 999999999)
+        block_order, sort_order = order_map.get((category_id, product.pk), (999999999, 999999999))
+        product._catalog_export_block_order = block_order
+        product._catalog_export_sort_order = sort_order
 
     matched_products.sort(
         key=lambda product: (
+            getattr(product, "_catalog_export_block_order", 999999999),
             getattr(product, "_catalog_export_sort_order", 999999999),
             (product.name or "").lower(),
             product.sku or "",
@@ -993,10 +996,10 @@ def _apply_clamp_measure_row_styles(worksheet, row_index):
     for col_idx in range(1, len(CLAMP_MEASURE_EXCEL_HEADERS) + 1):
         cell = worksheet.cell(row=row_index, column=col_idx)
         cell.border = THIN_BORDER
-        cell.alignment = Alignment(vertical="top", wrap_text=col_idx in {2})
+        cell.alignment = Alignment(vertical="top", wrap_text=col_idx in {2, 8, 9})
         if row_index % 2 == 0:
             cell.fill = ALT_ROW_FILL
-        if col_idx == 3:
+        if col_idx == len(CLAMP_MEASURE_EXCEL_HEADERS):
             cell.number_format = '"$"#,##0.00'
             cell.alignment = Alignment(horizontal="right", vertical="top")
 
@@ -1027,7 +1030,7 @@ def _append_clamp_measure_products(
     results = sort_clamp_measure_results(parsed_results)
     headers = CLAMP_MEASURE_EXCEL_HEADERS
     total_columns = len(headers)
-    column_widths = [16, 48, 15]
+    column_widths = [16, 48, 14, 12, 10, 10, 14, 46, 36, 15]
 
     if not results:
         if sheet_config.include_header:

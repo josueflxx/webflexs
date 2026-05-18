@@ -1036,6 +1036,52 @@ class CatalogCategoryVisibilityTests(TestCase):
         self.assertEqual(skus[:2], ["ORD-002", "ORD-001"])
         self.assertEqual(response.context["order_by"], "manual")
 
+    def test_category_page_groups_manual_order_by_blocks(self):
+        category = Category.objects.create(
+            name="Orden por bloques",
+            slug="orden-por-bloques",
+            is_active=True,
+            visible_in_catalog=True,
+        )
+        block_b_product = Product.objects.create(
+            sku="BLK-B",
+            name="Producto bloque B",
+            price=Decimal("100.00"),
+            stock=5,
+            is_active=True,
+            category=category,
+        )
+        block_a_product = Product.objects.create(
+            sku="BLK-A",
+            name="Producto bloque A",
+            price=Decimal("100.00"),
+            stock=5,
+            is_active=True,
+            category=category,
+        )
+        block_b_product.categories.add(category)
+        block_a_product.categories.add(category)
+        CategoryProductOrder.objects.create(
+            category=category,
+            product=block_b_product,
+            block_label="Bloque B",
+            block_order=20,
+            sort_order=10,
+        )
+        CategoryProductOrder.objects.create(
+            category=category,
+            product=block_a_product,
+            block_label="Bloque A",
+            block_order=10,
+            sort_order=20,
+        )
+
+        response = self.client.get(reverse("catalog"), {"category": category.slug})
+
+        self.assertEqual(response.status_code, 200)
+        skus = [item.sku for item in response.context["page_obj"].object_list]
+        self.assertEqual(skus[:2], ["BLK-A", "BLK-B"])
+
 
 class ProductDetailTemplateTests(TestCase):
     def setUp(self):
@@ -1796,6 +1842,70 @@ class CatalogExcelGroupedExportTests(TestCase):
         self.assertEqual(stats["rows_by_sheet"]["Orden publico"], 2)
         self.assertEqual(worksheet["A2"].value, "ORD-002")
         self.assertEqual(worksheet["A3"].value, "ORD-001")
+
+    def test_client_export_respects_manual_product_blocks_per_category(self):
+        root = Category.objects.create(
+            name="Orden bloques",
+            is_active=True,
+            visible_in_catalog=True,
+        )
+        block_b_product = Product.objects.create(
+            sku="EX-B",
+            name="Producto bloque B",
+            price=Decimal("200.00"),
+            stock=1,
+            is_active=True,
+            category=root,
+        )
+        block_a_product = Product.objects.create(
+            sku="EX-A",
+            name="Producto bloque A",
+            price=Decimal("100.00"),
+            stock=1,
+            is_active=True,
+            category=root,
+        )
+        block_b_product.categories.add(root)
+        block_a_product.categories.add(root)
+        CategoryProductOrder.objects.create(
+            category=root,
+            product=block_b_product,
+            block_label="Bloque B",
+            block_order=20,
+            sort_order=10,
+        )
+        CategoryProductOrder.objects.create(
+            category=root,
+            product=block_a_product,
+            block_label="Bloque A",
+            block_order=10,
+            sort_order=20,
+        )
+
+        template = CatalogExcelTemplate.objects.create(
+            name="Catalogo bloques",
+            is_client_download_enabled=True,
+        )
+        sheet = CatalogExcelTemplateSheet.objects.create(
+            template=template,
+            name="Orden bloques",
+            include_header=True,
+            only_active_products=True,
+            only_catalog_visible=True,
+            include_descendant_categories=True,
+            group_by_subcategories=False,
+            sort_by="name_asc",
+        )
+        sheet.categories.add(root)
+        CatalogExcelTemplateColumn.objects.create(sheet=sheet, key="sku", order=1, is_active=True)
+        CatalogExcelTemplateColumn.objects.create(sheet=sheet, key="name", order=2, is_active=True)
+
+        workbook, stats = build_catalog_workbook(template)
+        worksheet = workbook["Orden bloques"]
+
+        self.assertEqual(stats["rows_by_sheet"]["Orden bloques"], 2)
+        self.assertEqual(worksheet["A2"].value, "EX-A")
+        self.assertEqual(worksheet["A3"].value, "EX-B")
 
     def test_public_export_skips_active_empty_category_sheet(self):
         empty_root = Category.objects.create(

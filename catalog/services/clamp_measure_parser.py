@@ -14,6 +14,13 @@ from catalog.services.clamp_code import parsearCodigo
 CLAMP_MEASURE_EXCEL_HEADERS = [
     "Codigo original",
     "Nombre original",
+    "Tipo",
+    "Diametro",
+    "Ancho",
+    "Largo",
+    "Forma",
+    "Nombre normalizado",
+    "Observaciones",
     "Precio",
 ]
 
@@ -48,6 +55,13 @@ class ClampMeasureParseResult:
         return [
             self.codigo_original,
             self.nombre_original,
+            self.tipo,
+            self.diametro,
+            self.ancho if self.ancho is not None else "",
+            self.largo if self.largo is not None else "",
+            self.forma,
+            self.nombre_normalizado,
+            self.observaciones,
             self.precio if self.precio is not None else "",
         ]
 

@@ -3094,6 +3094,100 @@ class CategoryManageProductsTests(TestCase):
             20,
         )
 
+    def test_reorder_category_products_accepts_blocks(self):
+        second_product = Product.objects.create(
+            sku='CAT-TEST-002',
+            name='Producto Categoria Test 2',
+            price=Decimal('120.00'),
+            cost=Decimal('60.00'),
+            stock=5,
+            is_active=True,
+        )
+        third_product = Product.objects.create(
+            sku='CAT-TEST-003',
+            name='Producto Categoria Test 3',
+            price=Decimal('130.00'),
+            cost=Decimal('70.00'),
+            stock=5,
+            is_active=True,
+        )
+        self.product.categories.add(self.category)
+        second_product.categories.add(self.category)
+        third_product.categories.add(self.category)
+
+        self.client.force_login(self.superadmin)
+        response = self.client.post(
+            reverse('admin_category_products_reorder', args=[self.category.pk]),
+            data=json.dumps({
+                'ordered_entries': [
+                    {'product_id': second_product.pk, 'block_label': 'Medidas largas', 'block_order': 20},
+                    {'product_id': self.product.pk, 'block_label': 'Medidas cortas', 'block_order': 10},
+                    {'product_id': third_product.pk, 'block_label': 'Medidas largas', 'block_order': 20},
+                ],
+            }),
+            content_type='application/json',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        first_row = CategoryProductOrder.objects.get(category=self.category, product=second_product)
+        second_row = CategoryProductOrder.objects.get(category=self.category, product=self.product)
+        third_row = CategoryProductOrder.objects.get(category=self.category, product=third_product)
+        self.assertEqual(first_row.block_label, 'Medidas largas')
+        self.assertEqual(first_row.block_order, 10)
+        self.assertEqual(first_row.sort_order, 10)
+        self.assertEqual(second_row.block_label, 'Medidas cortas')
+        self.assertEqual(second_row.block_order, 20)
+        self.assertEqual(second_row.sort_order, 20)
+        self.assertEqual(third_row.block_label, 'Medidas largas')
+        self.assertEqual(third_row.block_order, 10)
+        self.assertEqual(third_row.sort_order, 30)
+
+    def test_import_category_product_order_from_xlsx(self):
+        second_product = Product.objects.create(
+            sku='CAT-TEST-002',
+            name='Producto Categoria Test 2',
+            price=Decimal('120.00'),
+            cost=Decimal('60.00'),
+            stock=5,
+            is_active=True,
+        )
+        self.product.categories.add(self.category)
+        second_product.categories.add(self.category)
+
+        workbook = Workbook()
+        sheet = workbook.active
+        sheet.append(['SKU', 'Orden', 'Bloque', 'Orden bloque'])
+        sheet.append([second_product.sku, 1, 'Bloque B', 20])
+        sheet.append([self.product.sku, 2, 'Bloque A', 10])
+        buffer = BytesIO()
+        workbook.save(buffer)
+        buffer.seek(0)
+        upload = SimpleUploadedFile(
+            'orden-productos.xlsx',
+            buffer.read(),
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        )
+
+        self.client.force_login(self.superadmin)
+        response = self.client.post(
+            reverse('admin_category_products', args=[self.category.pk]),
+            data={
+                'action': 'import_order',
+                'order_file': upload,
+            },
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        first_row = CategoryProductOrder.objects.get(category=self.category, product=second_product)
+        second_row = CategoryProductOrder.objects.get(category=self.category, product=self.product)
+        self.assertEqual(first_row.block_label, 'Bloque B')
+        self.assertEqual(first_row.block_order, 20)
+        self.assertEqual(first_row.sort_order, 20)
+        self.assertEqual(second_row.block_label, 'Bloque A')
+        self.assertEqual(second_row.block_order, 10)
+        self.assertEqual(second_row.sort_order, 10)
+
     def test_manage_products_shows_human_order_numbers(self):
         second_product = Product.objects.create(
             sku='CAT-TEST-002',

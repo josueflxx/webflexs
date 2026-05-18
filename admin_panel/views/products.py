@@ -26,6 +26,7 @@ from django.db.models import (
     F,
     When,
     IntegerField,
+    CharField,
     DecimalField,
     ExpressionWrapper,
     Value,
@@ -44,12 +45,13 @@ from django.utils.http import url_has_allowed_host_and_scheme
 import json
 import os
 import re
+import unicodedata
 from io import BytesIO, StringIO
 from datetime import datetime, time, timedelta
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from urllib.parse import urlencode, parse_qs
 import csv
-from openpyxl import Workbook
+from openpyxl import Workbook, load_workbook
 
 from catalog.models import (
     Product,
@@ -2128,6 +2130,188 @@ def category_attribute_delete(request, category_id, attribute_id):
     return redirect('admin_category_edit', pk=category.pk)
 
 
+def _clean_order_block_label(value):
+    return str(value or "").strip()[:120]
+
+
+def _normalize_order_import_header(value):
+    value = unicodedata.normalize("NFKD", str(value or "").strip().lower())
+    value = "".join(char for char in value if not unicodedata.combining(char))
+    return re.sub(r"[^a-z0-9]+", "_", value).strip("_")
+
+
+def _parse_order_position(value, fallback):
+    if value in (None, ""):
+        return fallback
+    try:
+        parsed = int(Decimal(str(value)).to_integral_value(rounding=ROUND_HALF_UP))
+    except (InvalidOperation, ValueError):
+        return fallback
+    return max(parsed, 1)
+
+
+def _parse_category_order_import_file(uploaded_file):
+    if not uploaded_file:
+        raise ValueError("Subi un archivo XLSX, XLS o CSV con columnas SKU y orden.")
+
+    filename = (uploaded_file.name or "").lower()
+    rows = []
+    if filename.endswith(".csv"):
+        raw = uploaded_file.read()
+        text = raw.decode("utf-8-sig", errors="replace")
+        reader = csv.reader(StringIO(text))
+        rows = list(reader)
+    else:
+        workbook = load_workbook(uploaded_file, read_only=True, data_only=True)
+        worksheet = workbook.active
+        rows = [list(row) for row in worksheet.iter_rows(values_only=True)]
+
+    if not rows:
+        raise ValueError("El archivo esta vacio.")
+
+    headers = [_normalize_order_import_header(value) for value in rows[0]]
+    aliases = {
+        "sku": {"sku", "codigo", "cod", "codigo_producto", "codigo_original"},
+        "order": {"orden", "posicion", "position", "orden_catalogo", "orden_producto"},
+        "block": {"bloque", "block", "grupo", "seccion"},
+        "block_order": {"orden_bloque", "posicion_bloque", "block_order", "grupo_orden"},
+    }
+
+    indexes = {}
+    for field, options in aliases.items():
+        for index, header in enumerate(headers):
+            if header in options:
+                indexes[field] = index
+                break
+
+    if "sku" not in indexes:
+        raise ValueError("No encontre columna SKU/Codigo en el archivo.")
+
+    parsed_rows = []
+    block_orders = {}
+    for row_number, row in enumerate(rows[1:], start=2):
+        def cell(field):
+            index = indexes.get(field)
+            if index is None or index >= len(row):
+                return ""
+            return row[index]
+
+        sku = str(cell("sku") or "").strip()
+        if not sku:
+            continue
+
+        block_label = _clean_order_block_label(cell("block"))
+        if block_label and block_label not in block_orders:
+            block_orders[block_label] = len(block_orders) + 1
+
+        block_order_value = cell("block_order")
+        block_order = _parse_order_position(block_order_value, block_orders.get(block_label, 0))
+        position = _parse_order_position(cell("order"), len(parsed_rows) + 1)
+        parsed_rows.append(
+            {
+                "row": row_number,
+                "sku": sku,
+                "position": position,
+                "block_label": block_label,
+                "block_order": block_order,
+            }
+        )
+
+    if not parsed_rows:
+        raise ValueError("No encontre filas con SKU para importar orden.")
+    return parsed_rows
+
+
+def _save_category_product_order_entries(category, ordered_entries):
+    product_ids = [entry["product_id"] for entry in ordered_entries]
+    linked_ids = set(
+        Product.categories.through.objects.filter(
+            category_id=category.id,
+            product_id__in=product_ids,
+        ).values_list("product_id", flat=True)
+    )
+    normalized_entries = [
+        entry for entry in ordered_entries
+        if entry["product_id"] in linked_ids
+    ]
+    if not normalized_entries:
+        return 0
+
+    existing_rows = {
+        row.product_id: row
+        for row in CategoryProductOrder.objects.filter(
+            category=category,
+            product_id__in=[entry["product_id"] for entry in normalized_entries],
+        )
+    }
+    now = timezone.now()
+    updates = []
+    creates = []
+    for index, entry in enumerate(normalized_entries, start=1):
+        product_id = entry["product_id"]
+        block_label = _clean_order_block_label(entry.get("block_label"))
+        try:
+            block_order = int(entry.get("block_order") or 0)
+        except (TypeError, ValueError):
+            block_order = 0
+        sort_order = index * 10
+        row = existing_rows.get(product_id)
+        if row:
+            row.block_label = block_label
+            row.block_order = max(block_order, 0)
+            row.sort_order = sort_order
+            row.updated_at = now
+            updates.append(row)
+        else:
+            creates.append(
+                CategoryProductOrder(
+                    category=category,
+                    product_id=product_id,
+                    block_label=block_label,
+                    block_order=max(block_order, 0),
+                    sort_order=sort_order,
+                )
+            )
+
+    if creates:
+        CategoryProductOrder.objects.bulk_create(creates, ignore_conflicts=True, batch_size=500)
+    if updates:
+        CategoryProductOrder.objects.bulk_update(
+            updates,
+            ["block_label", "block_order", "sort_order", "updated_at"],
+            batch_size=500,
+        )
+    return len(normalized_entries)
+
+
+def _build_order_entries_from_payload(payload_entries):
+    block_order_by_label = {}
+    normalized_entries = []
+
+    for index, item in enumerate(payload_entries, start=1):
+        try:
+            product_id = int(item.get("product_id") or item.get("id") or 0)
+        except (AttributeError, TypeError, ValueError):
+            continue
+        if not product_id:
+            continue
+
+        block_label = _clean_order_block_label(item.get("block_label"))
+        block_key = block_label or "__sin_bloque__"
+        block_order = block_order_by_label.setdefault(block_key, (len(block_order_by_label) + 1) * 10)
+
+        normalized_entries.append(
+            {
+                "product_id": product_id,
+                "block_label": block_label,
+                "block_order": max(block_order, 0),
+                "position": index,
+            }
+        )
+
+    return normalized_entries
+
+
 @staff_member_required
 @superuser_required_for_modifications
 def category_manage_products(request, pk):
@@ -2135,6 +2319,7 @@ def category_manage_products(request, pk):
     Manage direct category links for products (many-to-many).
     """
     category = get_object_or_404(Category, pk=pk)
+    import_order_preview = None
 
     def get_filtered_queryset(req_data):
         qs = Product.objects.select_related('category').prefetch_related('categories').all()
@@ -2168,33 +2353,87 @@ def category_manage_products(request, pk):
         action = request.POST.get('action', 'assign').strip()
         select_all_pages = request.POST.get('select_all_pages') == 'true'
 
-        if select_all_pages:
-            products_to_update, _, _, _ = get_filtered_queryset(request.POST)
-            target_ids = list(products_to_update.values_list('id', flat=True))
-        else:
-            target_ids = extract_target_product_ids_from_post(request.POST, raw_post_body)
-            if not target_ids:
-                logger.warning(
-                    "category_manage_products without selected products | user=%s | category=%s | keys=%s | action=%s | product_ids=%s | product_ids_csv=%s",
-                    getattr(request.user, "username", "unknown"),
-                    pk,
-                    list(request.POST.keys()),
-                    action,
-                    request.POST.getlist("product_ids"),
-                    request.POST.get("product_ids_csv", ""),
-                )
-                messages.warning(request, 'No se seleccionaron productos.')
+        if action == "import_order":
+            try:
+                parsed_rows = _parse_category_order_import_file(request.FILES.get("order_file"))
+            except ValueError as exc:
+                messages.error(request, str(exc))
                 return redirect('admin_category_products', pk=pk)
 
-        count = 0
-        if action == 'assign':
-            count = add_category_to_products(target_ids, category.id)
-            messages.success(request, f'{count} productos vinculados a "{category.name}".')
-        elif action == 'remove':
-            count = remove_category_from_products(target_ids, category.id)
-            messages.success(request, f'{count} vinculos removidos de "{category.name}".')
+            products_by_sku = {
+                product.sku.strip().lower(): product
+                for product in Product.objects.filter(categories=category).only("id", "sku", "name")
+                if product.sku
+            }
 
-        return redirect('admin_category_products', pk=pk)
+            entries = []
+            preview_rows = []
+            skipped = []
+            for row in sorted(parsed_rows, key=lambda item: (item["block_order"], item["position"], item["row"])):
+                product = products_by_sku.get(row["sku"].lower())
+                if not product:
+                    skipped.append(f"Fila {row['row']}: SKU {row['sku']} no existe en esta categoria")
+                    continue
+                entry = {
+                    "product_id": product.pk,
+                    "block_label": row["block_label"],
+                    "block_order": row["block_order"],
+                }
+                entries.append(entry)
+                if len(preview_rows) < 40:
+                    preview_rows.append({
+                        "sku": product.sku,
+                        "name": product.name,
+                        "position": row["position"],
+                        "block_label": row["block_label"] or "Sin bloque",
+                    })
+
+            if request.POST.get("dry_run") == "true":
+                import_order_preview = {
+                    "rows": preview_rows,
+                    "valid_count": len(entries),
+                    "skipped": skipped[:20],
+                    "skipped_count": len(skipped),
+                }
+                messages.info(
+                    request,
+                    f"Previsualizacion lista: {len(entries)} productos se ordenarian; {len(skipped)} filas se omitirian.",
+                )
+            else:
+                updated = _save_category_product_order_entries(category, entries)
+                if skipped:
+                    messages.warning(request, f"{len(skipped)} filas fueron omitidas. Revisa SKU o categoria.")
+                messages.success(request, f"Orden importado: {updated} productos actualizados.")
+                return redirect('admin_category_products', pk=pk)
+
+        else:
+            if select_all_pages:
+                products_to_update, _, _, _ = get_filtered_queryset(request.POST)
+                target_ids = list(products_to_update.values_list('id', flat=True))
+            else:
+                target_ids = extract_target_product_ids_from_post(request.POST, raw_post_body)
+                if not target_ids:
+                    logger.warning(
+                        "category_manage_products without selected products | user=%s | category=%s | keys=%s | action=%s | product_ids=%s | product_ids_csv=%s",
+                        getattr(request.user, "username", "unknown"),
+                        pk,
+                        list(request.POST.keys()),
+                        action,
+                        request.POST.getlist("product_ids"),
+                        request.POST.get("product_ids_csv", ""),
+                    )
+                    messages.warning(request, 'No se seleccionaron productos.')
+                    return redirect('admin_category_products', pk=pk)
+
+            count = 0
+            if action == 'assign':
+                count = add_category_to_products(target_ids, category.id)
+                messages.success(request, f'{count} productos vinculados a "{category.name}".')
+            elif action == 'remove':
+                count = remove_category_from_products(target_ids, category.id)
+                messages.success(request, f'{count} vinculos removidos de "{category.name}".')
+
+            return redirect('admin_category_products', pk=pk)
 
     products, search, status, cat_filter = get_filtered_queryset(request.GET)
 
@@ -2205,12 +2444,28 @@ def category_manage_products(request, pk):
             CategoryProductOrder.objects.filter(category=category, product_id=OuterRef("pk"))
             .values("sort_order")[:1]
         )
+        block_label_subquery = (
+            CategoryProductOrder.objects.filter(category=category, product_id=OuterRef("pk"))
+            .values("block_label")[:1]
+        )
+        block_order_subquery = (
+            CategoryProductOrder.objects.filter(category=category, product_id=OuterRef("pk"))
+            .values("block_order")[:1]
+        )
         products = products.annotate(
+            category_block_label=Coalesce(
+                Subquery(block_label_subquery, output_field=CharField()),
+                Value(""),
+            ),
+            category_block_order=Coalesce(
+                Subquery(block_order_subquery, output_field=IntegerField()),
+                Value(0),
+            ),
             category_sort_order=Coalesce(
                 Subquery(order_subquery, output_field=IntegerField()),
                 Value(999999999),
             )
-        ).order_by("category_sort_order", "name", "sku", "id")
+        ).order_by("category_block_order", "category_sort_order", "name", "sku", "id")
     else:
         products = products.order_by('name', 'sku', 'id')
 
@@ -2225,6 +2480,16 @@ def category_manage_products(request, pk):
 
     all_categories = Category.objects.exclude(pk=pk).select_related('parent').order_by('order', 'name')
     all_category_options = build_category_options(all_categories, include_inactive_suffix=True)
+    block_summaries = []
+    if cat_filter == 'current':
+        block_summaries = list(
+            CategoryProductOrder.objects.filter(category=category, product__categories=category)
+            .values("block_label", "block_order")
+            .annotate(count=Count("id"))
+            .order_by("block_order", "block_label")
+        )
+        for block in block_summaries:
+            block["display_label"] = block["block_label"] or "Sin bloque"
 
     return render(request, 'admin_panel/categories/manage_products.html', {
         'category': category,
@@ -2237,6 +2502,8 @@ def category_manage_products(request, pk):
         'pagination_count': len(page_obj.object_list),
         'page_start_index': page_start_index,
         'can_reorder_products': can_reorder_products,
+        'block_summaries': block_summaries,
+        'import_order_preview': import_order_preview,
     })
 
 
@@ -2253,8 +2520,19 @@ def category_products_reorder(request, pk):
     except json.JSONDecodeError:
         return JsonResponse({"success": False, "error": "JSON invalido."}, status=400)
 
-    ordered_ids = normalize_category_ids(payload.get("ordered_ids", []))
-    if not ordered_ids:
+    ordered_entries = _build_order_entries_from_payload(payload.get("ordered_entries") or [])
+    if not ordered_entries:
+        ordered_ids = normalize_category_ids(payload.get("ordered_ids", []))
+        ordered_entries = [
+            {
+                "product_id": product_id,
+                "block_label": "",
+                "block_order": 0,
+            }
+            for product_id in ordered_ids
+        ]
+
+    if not ordered_entries:
         return JsonResponse({"success": False, "error": "No hay productos para ordenar."}, status=400)
 
     try:
@@ -2263,55 +2541,23 @@ def category_products_reorder(request, pk):
         base_order = 10
     base_order = max(base_order, 10)
 
-    linked_ids = set(
-        Product.categories.through.objects.filter(
-            category_id=category.id,
-            product_id__in=ordered_ids,
-        ).values_list("product_id", flat=True)
-    )
-    normalized_ids = [product_id for product_id in ordered_ids if product_id in linked_ids]
-    if not normalized_ids:
+    updated = _save_category_product_order_entries(category, ordered_entries)
+    if not updated:
         return JsonResponse({"success": False, "error": "Los productos no pertenecen a esta categoria."}, status=400)
-
-    existing_rows = {
-        row.product_id: row
-        for row in CategoryProductOrder.objects.filter(
-            category=category,
-            product_id__in=normalized_ids,
-        )
-    }
-    now = timezone.now()
-    updates = []
-    creates = []
-    for index, product_id in enumerate(normalized_ids):
-        sort_order = base_order + (index * 10)
-        row = existing_rows.get(product_id)
-        if row:
-            row.sort_order = sort_order
-            row.updated_at = now
-            updates.append(row)
-        else:
-            creates.append(
-                CategoryProductOrder(
-                    category=category,
-                    product_id=product_id,
-                    sort_order=sort_order,
-                )
-            )
-
-    if creates:
-        CategoryProductOrder.objects.bulk_create(creates, ignore_conflicts=True, batch_size=500)
-    if updates:
-        CategoryProductOrder.objects.bulk_update(updates, ["sort_order", "updated_at"], batch_size=500)
 
     log_admin_action(
         request,
         action="category_products_reorder",
         target_type="category",
         target_id=category.id,
-        details={"ordered_ids": normalized_ids[:100], "count": len(normalized_ids), "base_order": base_order},
+        details={
+            "ordered_ids": [entry["product_id"] for entry in ordered_entries[:100]],
+            "count": updated,
+            "base_order": base_order,
+            "blocks": sorted({entry.get("block_label") or "" for entry in ordered_entries}),
+        },
     )
-    return JsonResponse({"success": True, "updated": len(normalized_ids)})
+    return JsonResponse({"success": True, "updated": updated})
 
 # ===================== API =====================
 

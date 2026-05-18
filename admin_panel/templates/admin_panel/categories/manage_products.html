@@ -45,6 +45,87 @@
         </div>
     </section>
     {% endif %}
+
+    {% if can_reorder_products %}
+    <section class="order-toolbox-panel">
+        <div class="order-toolbox-header">
+            <div>
+                <span class="category-products-kicker">Orden rapido</span>
+                <h3>Ordena por posicion, movimientos, bloques o Excel</h3>
+                <p>Selecciona productos para moverlos juntos, crear bloques y previsualizar como queda antes de guardar.</p>
+            </div>
+            <button type="button" class="btn btn-outline" id="previewProductOrder">Previsualizar orden</button>
+        </div>
+        <div class="order-toolbox-grid">
+            <div class="order-toolbox-card">
+                <strong>Mover seleccionados</strong>
+                <div class="order-toolbox-actions">
+                    <button type="button" class="btn btn-outline btn-sm order-selection-action" id="moveSelectedTop">Al inicio</button>
+                    <button type="button" class="btn btn-outline btn-sm order-selection-action" id="moveSelectedUp">Subir</button>
+                    <button type="button" class="btn btn-outline btn-sm order-selection-action" id="moveSelectedDown">Bajar</button>
+                    <button type="button" class="btn btn-outline btn-sm order-selection-action" id="moveSelectedBottom">Al final</button>
+                </div>
+            </div>
+
+            <div class="order-toolbox-card">
+                <strong>Bloques de productos</strong>
+                <div class="order-toolbox-inline">
+                    <input type="text" id="newOrderBlockName" class="form-input" placeholder="Ej: 1/2 x 2, Ford, cortos...">
+                    <button type="button" class="btn btn-primary btn-sm order-selection-action" id="createOrderBlock">Crear bloque</button>
+                </div>
+                <div class="order-toolbox-inline">
+                    <select id="existingOrderBlock" class="form-select">
+                        <option value="">Elegir bloque existente...</option>
+                        {% for block in block_summaries %}
+                        {% if block.block_label %}
+                        <option value="{{ block.block_label }}" data-block-order="{{ block.block_order|unlocalize }}">{{ block.display_label }} ({{ block.count }})</option>
+                        {% endif %}
+                        {% endfor %}
+                    </select>
+                    <button type="button" class="btn btn-outline btn-sm order-selection-action" id="assignOrderBlock">Asignar</button>
+                    <button type="button" class="btn btn-outline btn-sm order-selection-action" id="clearOrderBlock">Sin bloque</button>
+                </div>
+            </div>
+
+            <form method="post" enctype="multipart/form-data" class="order-toolbox-card order-import-form">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="import_order">
+                <strong>Importar orden desde Excel</strong>
+                <p>Columnas aceptadas: SKU/Codigo, Orden/Posicion, Bloque y Orden bloque.</p>
+                <input type="file" name="order_file" accept=".xlsx,.xls,.csv" class="form-input">
+                <div class="order-toolbox-actions">
+                    <button type="submit" name="dry_run" value="true" class="btn btn-outline btn-sm">Vista previa</button>
+                    <button type="submit" class="btn btn-primary btn-sm">Aplicar orden</button>
+                </div>
+            </form>
+        </div>
+
+        <div id="orderPreviewPanel" class="order-preview-panel" hidden></div>
+    </section>
+    {% endif %}
+
+    {% if import_order_preview %}
+    <section class="order-preview-panel import-preview-panel">
+        <strong>Vista previa de importacion</strong>
+        <p>{{ import_order_preview.valid_count }} productos se ordenarian. {{ import_order_preview.skipped_count }} filas se omitirian.</p>
+        <div class="order-preview-list">
+            {% for row in import_order_preview.rows %}
+            <span><b>{{ row.sku }}</b> {{ row.name|truncatechars:44 }} <em>{{ row.block_label }}</em></span>
+            {% endfor %}
+        </div>
+        {% if import_order_preview.skipped %}
+        <details>
+            <summary>Ver filas omitidas</summary>
+            <ul>
+                {% for skipped in import_order_preview.skipped %}
+                <li>{{ skipped }}</li>
+                {% endfor %}
+            </ul>
+        </details>
+        {% endif %}
+    </section>
+    {% endif %}
+
     <div class="admin-toolbar" style="flex-wrap: wrap; gap: 15px;">
         <form method="get" class="toolbar-search" style="flex-grow: 1;">
             <input type="text" name="q" value="{{ search }}" placeholder="Buscar SKU o nombre..." class="form-input">
@@ -123,6 +204,7 @@
                         <th style="width: 150px;">Orden</th>
                         <th>SKU</th>
                         <th>Nombre</th>
+                        <th>Bloque</th>
                         <th>Categorias vinculadas</th>
                         <th>Precio</th>
                         <th>Estado</th>
@@ -134,6 +216,8 @@
                         class="{% if product.is_linked_to_current %}bg-light-success{% endif %}{% if can_reorder_products %} product-order-row{% endif %}"
                         data-product-id="{{ product.pk|unlocalize }}"
                         data-sort-order="{{ product.category_sort_order|default:forloop.counter|unlocalize }}"
+                        data-block-label="{{ product.category_block_label|default:'' }}"
+                        data-block-order="{{ product.category_block_order|default:0|unlocalize }}"
                         {% if can_reorder_products %}draggable="true"{% endif %}
                     >
                         <td>
@@ -143,6 +227,7 @@
                             <div class="product-order-control">
                                 <span class="product-order-number">{{ page_start_index|add:forloop.counter0 }}</span>
                                 {% if can_reorder_products %}
+                                <input type="number" class="product-position-input" value="{{ page_start_index|add:forloop.counter0 }}" min="1" aria-label="Posicion manual">
                                 <span class="product-drag-handle" title="Arrastrar para ordenar">
                                     <span class="drag-dots" aria-hidden="true"></span>
                                     <span>Mover</span>
@@ -152,6 +237,11 @@
                         </td>
                         <td><code>{{ product.sku }}</code></td>
                         <td>{{ product.name|truncatechars:60 }}</td>
+                        <td class="product-block-cell">
+                            <span class="product-block-badge{% if not product.category_block_label %} is-empty{% endif %}">
+                                {% if product.category_block_label %}{{ product.category_block_label }}{% else %}Sin bloque{% endif %}
+                            </span>
+                        </td>
                         <td>
                             {% if product.category_status_rows %}
                             {% if product.is_linked_to_current %}
@@ -192,7 +282,7 @@
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="7" class="text-center text-muted">No se encontraron productos con estos filtros.</td>
+                        <td colspan="8" class="text-center text-muted">No se encontraron productos con estos filtros.</td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -300,6 +390,10 @@
                 bulkButton.setAttribute('disabled', 'true');
                 bulkButton.textContent = `${actionLabel} seleccionados`;
             }
+
+            if (window.updateOrderSelectionTools) {
+                window.updateOrderSelectionTools();
+            }
         }
 
         document.getElementById('bulkActionForm').addEventListener('submit', function(event) {
@@ -340,6 +434,10 @@
 
             let dragRow = null;
             const rows = () => Array.from(tbody.querySelectorAll('tr.product-order-row'));
+            const selectedRows = () => rows().filter((row) => {
+                const checkbox = row.querySelector('.product-checkbox');
+                return checkbox && checkbox.checked;
+            });
 
             function markDirty() {
                 saveButton.removeAttribute('disabled');
@@ -354,7 +452,148 @@
                 rows().forEach((row, index) => {
                     const label = row.querySelector('.product-order-number');
                     if (label) label.textContent = String(ORDER_PAGE_START + index);
+                    const input = row.querySelector('.product-position-input');
+                    if (input) input.value = String(ORDER_PAGE_START + index);
                 });
+            }
+
+            function updateSelectionTools() {
+                const hasSelection = selectedRows().length > 0;
+                document.querySelectorAll('.order-selection-action').forEach((button) => {
+                    button.disabled = !hasSelection;
+                });
+            }
+            window.updateOrderSelectionTools = updateSelectionTools;
+
+            function updateBlockBadge(row) {
+                const badge = row.querySelector('.product-block-badge');
+                if (!badge) return;
+                const label = (row.dataset.blockLabel || '').trim();
+                badge.textContent = label || 'Sin bloque';
+                badge.classList.toggle('is-empty', !label);
+            }
+
+            function normalizeBlockOrdersFromDom() {
+                const seen = new Map();
+                let counter = 0;
+                rows().forEach((row) => {
+                    const label = (row.dataset.blockLabel || '').trim();
+                    const key = label || '__sin_bloque__';
+                    if (!seen.has(key)) {
+                        counter += 10;
+                        seen.set(key, counter);
+                    }
+                    row.dataset.blockOrder = String(seen.get(key));
+                });
+            }
+
+            function applyManualPositions() {
+                const ordered = rows()
+                    .map((row, index) => {
+                        const input = row.querySelector('.product-position-input');
+                        const value = Number(input ? input.value : ORDER_PAGE_START + index);
+                        return { row, index, value: Number.isFinite(value) ? value : ORDER_PAGE_START + index };
+                    })
+                    .sort((a, b) => (a.value - b.value) || (a.index - b.index));
+
+                ordered.forEach((item) => tbody.appendChild(item.row));
+                refreshVisibleOrder();
+            }
+
+            function moveSelected(direction) {
+                const selected = selectedRows();
+                if (!selected.length) return;
+
+                if (direction === 'top') {
+                    selected.slice().reverse().forEach((row) => tbody.prepend(row));
+                } else if (direction === 'bottom') {
+                    selected.forEach((row) => tbody.appendChild(row));
+                } else if (direction === 'up') {
+                    selected.forEach((row) => {
+                        let previous = row.previousElementSibling;
+                        while (previous && selected.includes(previous)) {
+                            previous = previous.previousElementSibling;
+                        }
+                        if (previous) previous.before(row);
+                    });
+                } else if (direction === 'down') {
+                    selected.slice().reverse().forEach((row) => {
+                        let next = row.nextElementSibling;
+                        while (next && selected.includes(next)) {
+                            next = next.nextElementSibling;
+                        }
+                        if (next) next.after(row);
+                    });
+                }
+
+                refreshVisibleOrder();
+                markDirty();
+            }
+
+            function ensureBlockOption(label, blockOrder) {
+                if (!label) return;
+                const select = document.getElementById('existingOrderBlock');
+                if (!select || Array.from(select.options).some((option) => option.value === label)) return;
+                const option = document.createElement('option');
+                option.value = label;
+                option.dataset.blockOrder = String(blockOrder || 0);
+                option.textContent = label;
+                select.appendChild(option);
+            }
+
+            function assignBlockToSelection(label, blockOrder) {
+                const selected = selectedRows();
+                if (!selected.length) return;
+                selected.forEach((row) => {
+                    row.dataset.blockLabel = label || '';
+                    row.dataset.blockOrder = String(blockOrder || 0);
+                    updateBlockBadge(row);
+                });
+                if (label) ensureBlockOption(label, blockOrder);
+                normalizeBlockOrdersFromDom();
+                markDirty();
+                buildOrderPreview(false);
+            }
+
+            function buildOrderPreview(forceOpen = true) {
+                applyManualPositions();
+                normalizeBlockOrdersFromDom();
+                const panel = document.getElementById('orderPreviewPanel');
+                if (!panel) return;
+                const escapeHtml = (value) => String(value || '').replace(/[&<>"']/g, (char) => ({
+                    '&': '&amp;',
+                    '<': '&lt;',
+                    '>': '&gt;',
+                    '"': '&quot;',
+                    "'": '&#39;',
+                }[char]));
+
+                const groups = [];
+                rows().forEach((row) => {
+                    const label = (row.dataset.blockLabel || '').trim() || 'Sin bloque';
+                    let group = groups[groups.length - 1];
+                    if (!group || group.label !== label) {
+                        group = { label, items: [] };
+                        groups.push(group);
+                    }
+                    const sku = row.querySelector('code')?.textContent?.trim() || '';
+                    const nameCell = row.children[3];
+                    const name = nameCell ? nameCell.textContent.trim() : '';
+                    group.items.push(`${sku} - ${name}`.trim());
+                });
+
+                panel.innerHTML = groups.map((group) => {
+                    const sample = group.items.slice(0, 5).map((item) => `<li>${escapeHtml(item)}</li>`).join('');
+                    const more = group.items.length > 5 ? `<li>+${group.items.length - 5} productos mas</li>` : '';
+                    return `
+                        <div class="order-preview-block">
+                            <strong>${escapeHtml(group.label)}</strong>
+                            <span>${group.items.length} productos</span>
+                            <ol>${sample}${more}</ol>
+                        </div>
+                    `;
+                }).join('');
+                if (forceOpen) panel.hidden = !panel.hidden;
             }
 
             rows().forEach((row) => {
@@ -395,15 +634,57 @@
                     refreshVisibleOrder();
                     markDirty();
                 });
+
+                const positionInput = row.querySelector('.product-position-input');
+                if (positionInput) {
+                    positionInput.addEventListener('change', () => {
+                        applyManualPositions();
+                        markDirty();
+                    });
+                }
+
+                const checkbox = row.querySelector('.product-checkbox');
+                if (checkbox) {
+                    checkbox.addEventListener('change', updateSelectionTools);
+                }
             });
 
+            document.getElementById('moveSelectedTop')?.addEventListener('click', () => moveSelected('top'));
+            document.getElementById('moveSelectedUp')?.addEventListener('click', () => moveSelected('up'));
+            document.getElementById('moveSelectedDown')?.addEventListener('click', () => moveSelected('down'));
+            document.getElementById('moveSelectedBottom')?.addEventListener('click', () => moveSelected('bottom'));
+            document.getElementById('previewProductOrder')?.addEventListener('click', () => buildOrderPreview(true));
+            document.getElementById('createOrderBlock')?.addEventListener('click', () => {
+                const input = document.getElementById('newOrderBlockName');
+                const label = (input?.value || '').trim();
+                if (!label) {
+                    alert('Escribi un nombre de bloque.');
+                    return;
+                }
+                assignBlockToSelection(label, 0);
+                input.value = '';
+            });
+            document.getElementById('assignOrderBlock')?.addEventListener('click', () => {
+                const select = document.getElementById('existingOrderBlock');
+                const label = select?.value || '';
+                if (!label) {
+                    alert('Elegi un bloque.');
+                    return;
+                }
+                const selectedOption = select.options[select.selectedIndex];
+                assignBlockToSelection(label, Number(selectedOption?.dataset.blockOrder || 0));
+            });
+            document.getElementById('clearOrderBlock')?.addEventListener('click', () => assignBlockToSelection('', 0));
+
             saveButton.addEventListener('click', async () => {
+                applyManualPositions();
+                normalizeBlockOrdersFromDom();
                 const orderedRows = rows();
-                const orderedIds = orderedRows.map((row) => Number(row.dataset.productId)).filter(Boolean);
-                const currentOrders = orderedRows
-                    .map((row) => Number(row.dataset.sortOrder))
-                    .filter((value) => Number.isFinite(value) && value > 0 && value < 999999999);
-                const baseOrder = currentOrders.length ? Math.min(...currentOrders) : 10;
+                const orderedEntries = orderedRows.map((row) => ({
+                    product_id: Number(row.dataset.productId),
+                    block_label: row.dataset.blockLabel || '',
+                    block_order: Number(row.dataset.blockOrder) || 0,
+                })).filter((entry) => entry.product_id);
 
                 saveButton.setAttribute('disabled', 'true');
                 saveButton.textContent = 'Guardando...';
@@ -418,7 +699,7 @@
                             'Content-Type': 'application/json',
                             'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
                         },
-                        body: JSON.stringify({ ordered_ids: orderedIds, base_order: baseOrder }),
+                        body: JSON.stringify({ ordered_entries: orderedEntries }),
                     });
                     const data = await response.json();
                     if (!response.ok || !data.success) {
@@ -435,6 +716,8 @@
                     }
                 }
             });
+
+            updateSelectionTools();
         }
     </script>
 
@@ -493,6 +776,116 @@
             grid-template-columns: repeat(2, minmax(130px, 1fr));
             gap: 10px;
             min-width: 320px;
+        }
+
+        .order-toolbox-panel,
+        .order-preview-panel {
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 8px;
+            background: rgba(10, 17, 25, 0.94);
+            padding: 14px;
+            margin-bottom: 10px;
+        }
+
+        .order-toolbox-header {
+            display: flex;
+            justify-content: space-between;
+            gap: 14px;
+            align-items: flex-start;
+            margin-bottom: 12px;
+        }
+
+        .order-toolbox-header h3 {
+            margin: 8px 0 4px;
+            color: #f8fafc;
+        }
+
+        .order-toolbox-header p,
+        .order-toolbox-card p,
+        .order-preview-panel p {
+            margin: 0;
+            color: #a9b2bd;
+        }
+
+        .order-toolbox-grid {
+            display: grid;
+            grid-template-columns: minmax(230px, 0.8fr) minmax(360px, 1.3fr) minmax(320px, 1fr);
+            gap: 10px;
+        }
+
+        .order-toolbox-card {
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.035);
+            padding: 12px;
+        }
+
+        .order-toolbox-card strong {
+            display: block;
+            margin-bottom: 8px;
+            color: #f8fafc;
+        }
+
+        .order-toolbox-actions,
+        .order-toolbox-inline {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .order-toolbox-inline + .order-toolbox-inline,
+        .order-import-form .order-toolbox-actions {
+            margin-top: 8px;
+        }
+
+        .order-toolbox-inline .form-input,
+        .order-toolbox-inline .form-select {
+            min-width: 190px;
+            flex: 1;
+        }
+
+        .order-preview-panel[hidden] {
+            display: none;
+        }
+
+        .order-preview-panel {
+            display: grid;
+            gap: 10px;
+        }
+
+        .order-preview-block {
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            padding: 10px 12px;
+            background: rgba(255, 255, 255, 0.035);
+        }
+
+        .order-preview-block strong {
+            color: #ff9f7a;
+        }
+
+        .order-preview-block span {
+            color: #8de6ff;
+            margin-left: 8px;
+            font-weight: 800;
+        }
+
+        .order-preview-block ol {
+            margin: 8px 0 0 18px;
+            color: #d7dde5;
+        }
+
+        .order-preview-list {
+            display: grid;
+            gap: 6px;
+            max-height: 240px;
+            overflow: auto;
+        }
+
+        .order-preview-list span {
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            padding-bottom: 6px;
         }
 
         .category-products-summary > div {
@@ -639,21 +1032,26 @@
 
         .category-products-page .admin-table th:nth-child(4),
         .category-products-page .admin-table td:nth-child(4) {
-            width: 380px;
+            width: 330px;
         }
 
         .category-products-page .admin-table th:nth-child(5),
         .category-products-page .admin-table td:nth-child(5) {
-            width: 280px;
+            width: 180px;
         }
 
         .category-products-page .admin-table th:nth-child(6),
         .category-products-page .admin-table td:nth-child(6) {
-            width: 150px;
+            width: 280px;
         }
 
         .category-products-page .admin-table th:nth-child(7),
         .category-products-page .admin-table td:nth-child(7) {
+            width: 150px;
+        }
+
+        .category-products-page .admin-table th:nth-child(8),
+        .category-products-page .admin-table td:nth-child(8) {
             width: 180px;
         }
 
@@ -686,6 +1084,7 @@
             align-items: center;
             gap: 8px;
             color: var(--muted-text, #9ca3af);
+            flex-wrap: wrap;
         }
 
         .product-drag-handle {
@@ -730,6 +1129,38 @@
             font-weight: 900;
         }
 
+        .product-position-input {
+            width: 58px;
+            height: 30px;
+            border: 1px solid rgba(255, 255, 255, 0.14);
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.05);
+            color: #f8fafc;
+            text-align: center;
+            font-weight: 900;
+        }
+
+        .product-block-badge {
+            display: inline-flex;
+            max-width: 160px;
+            border-radius: 8px;
+            border: 1px solid rgba(141, 230, 255, 0.28);
+            background: rgba(0, 188, 212, 0.12);
+            color: #8de6ff;
+            padding: 4px 8px;
+            font-weight: 900;
+            font-size: 0.74rem;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .product-block-badge.is-empty {
+            border-color: rgba(255, 255, 255, 0.12);
+            background: rgba(255, 255, 255, 0.05);
+            color: #8d97a3;
+        }
+
         @media (max-width: 900px) {
             .category-products-hero,
             .order-guide-panel {
@@ -744,6 +1175,14 @@
             }
 
             .category-products-page > .admin-toolbar:first-of-type .toolbar-search {
+                grid-template-columns: 1fr;
+            }
+
+            .order-toolbox-header {
+                display: block;
+            }
+
+            .order-toolbox-grid {
                 grid-template-columns: 1fr;
             }
         }

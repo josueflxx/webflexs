@@ -845,40 +845,64 @@ def catalog(request):
         if order_by == "relevance":
             products = products.order_by("-search_rank", "name")
         elif order_by == "manual" and current_category:
+            block_order_subquery = (
+                CategoryProductOrder.objects.filter(
+                    category_id__in=category_ids,
+                    product_id=OuterRef("pk"),
+                )
+                .order_by("block_order", "sort_order", "category_id")
+                .values("block_order")[:1]
+            )
             order_subquery = (
                 CategoryProductOrder.objects.filter(
                     category_id__in=category_ids,
                     product_id=OuterRef("pk"),
                 )
-                .order_by("sort_order", "category_id")
+                .order_by("block_order", "sort_order", "category_id")
                 .values("sort_order")[:1]
             )
             products = products.annotate(
+                category_product_block_order=Coalesce(
+                    Subquery(block_order_subquery, output_field=IntegerField()),
+                    Value(999999999),
+                ),
                 category_product_sort_order=Coalesce(
                     Subquery(order_subquery, output_field=IntegerField()),
                     Value(999999999),
                 )
-            ).order_by("category_product_sort_order", "-search_rank", "name", "sku", "id")
+            ).order_by("category_product_block_order", "category_product_sort_order", "-search_rank", "name", "sku", "id")
         else:
             products = products.order_by(order_by)
     else:
         if order_by == "relevance":
             order_by = "name"
         if order_by == "manual" and current_category:
+            block_order_subquery = (
+                CategoryProductOrder.objects.filter(
+                    category_id__in=category_ids,
+                    product_id=OuterRef("pk"),
+                )
+                .order_by("block_order", "sort_order", "category_id")
+                .values("block_order")[:1]
+            )
             order_subquery = (
                 CategoryProductOrder.objects.filter(
                     category_id__in=category_ids,
                     product_id=OuterRef("pk"),
                 )
-                .order_by("sort_order", "category_id")
+                .order_by("block_order", "sort_order", "category_id")
                 .values("sort_order")[:1]
             )
             products = products.annotate(
+                category_product_block_order=Coalesce(
+                    Subquery(block_order_subquery, output_field=IntegerField()),
+                    Value(999999999),
+                ),
                 category_product_sort_order=Coalesce(
                     Subquery(order_subquery, output_field=IntegerField()),
                     Value(999999999),
                 )
-            ).order_by("category_product_sort_order", "name", "sku", "id")
+            ).order_by("category_product_block_order", "category_product_sort_order", "name", "sku", "id")
         else:
             products = products.order_by(order_by)
 

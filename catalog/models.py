@@ -583,6 +583,14 @@ class CategoryProductOrder(models.Model):
         related_name="category_order_rows",
         verbose_name="Producto",
     )
+    block_label = models.CharField(
+        max_length=120,
+        blank=True,
+        default="",
+        db_index=True,
+        verbose_name="Bloque",
+    )
+    block_order = models.PositiveIntegerField(default=0, db_index=True, verbose_name="Orden de bloque")
     sort_order = models.PositiveIntegerField(default=0, db_index=True, verbose_name="Orden")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -590,7 +598,7 @@ class CategoryProductOrder(models.Model):
     class Meta:
         verbose_name = "Orden de producto por categoria"
         verbose_name_plural = "Ordenes de productos por categoria"
-        ordering = ["category_id", "sort_order", "product__name", "product_id"]
+        ordering = ["category_id", "block_order", "sort_order", "product__name", "product_id"]
         constraints = [
             models.UniqueConstraint(
                 fields=["category", "product"],
@@ -598,6 +606,7 @@ class CategoryProductOrder(models.Model):
             )
         ]
         indexes = [
+            models.Index(fields=["category", "block_order", "sort_order", "product"]),
             models.Index(fields=["category", "sort_order", "product"]),
             models.Index(fields=["product", "category"]),
         ]
