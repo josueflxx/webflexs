@@ -3211,6 +3211,84 @@ class CategoryManageProductsTests(TestCase):
         self.assertNotContains(response, '<span class="product-order-number">10</span>', html=True)
         self.assertNotContains(response, '<span class="product-order-number">20</span>', html=True)
 
+    def test_manage_products_can_show_isolated_block(self):
+        second_product = Product.objects.create(
+            sku='CAT-TEST-002',
+            name='Producto Categoria Test 2',
+            price=Decimal('120.00'),
+            cost=Decimal('60.00'),
+            stock=5,
+            is_active=True,
+        )
+        self.product.categories.add(self.category)
+        second_product.categories.add(self.category)
+        CategoryProductOrder.objects.create(
+            category=self.category,
+            product=self.product,
+            block_label='Bloque A',
+            block_order=10,
+            sort_order=10,
+        )
+        CategoryProductOrder.objects.create(
+            category=self.category,
+            product=second_product,
+            block_label='Bloque B',
+            block_order=20,
+            sort_order=20,
+        )
+
+        self.client.force_login(self.superadmin)
+        response = self.client.get(
+            reverse('admin_category_products', args=[self.category.pk]),
+            {'block_filter': 'Bloque A'},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Producto Categoria Test')
+        self.assertNotContains(response, 'Producto Categoria Test 2')
+        self.assertContains(response, 'Viendo: Bloque A')
+
+    def test_reorder_category_product_blocks_keeps_internal_product_order(self):
+        second_product = Product.objects.create(
+            sku='CAT-TEST-002',
+            name='Producto Categoria Test 2',
+            price=Decimal('120.00'),
+            cost=Decimal('60.00'),
+            stock=5,
+            is_active=True,
+        )
+        self.product.categories.add(self.category)
+        second_product.categories.add(self.category)
+        first_row = CategoryProductOrder.objects.create(
+            category=self.category,
+            product=self.product,
+            block_label='Bloque A',
+            block_order=10,
+            sort_order=10,
+        )
+        second_row = CategoryProductOrder.objects.create(
+            category=self.category,
+            product=second_product,
+            block_label='Bloque B',
+            block_order=20,
+            sort_order=20,
+        )
+
+        self.client.force_login(self.superadmin)
+        response = self.client.post(
+            reverse('admin_category_products_reorder', args=[self.category.pk]),
+            data=json.dumps({'block_order_labels': ['Bloque B', 'Bloque A']}),
+            content_type='application/json',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        first_row.refresh_from_db()
+        second_row.refresh_from_db()
+        self.assertEqual(first_row.block_order, 20)
+        self.assertEqual(first_row.sort_order, 10)
+        self.assertEqual(second_row.block_order, 10)
+        self.assertEqual(second_row.sort_order, 20)
+
 
 class CategoryBulkActionTests(TestCase):
     def setUp(self):

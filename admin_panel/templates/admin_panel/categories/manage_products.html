@@ -76,10 +76,8 @@
                 <div class="order-toolbox-inline">
                     <select id="existingOrderBlock" class="form-select">
                         <option value="">Elegir bloque existente...</option>
-                        {% for block in block_summaries %}
-                        {% if block.block_label %}
+                        {% for block in named_block_summaries %}
                         <option value="{{ block.block_label }}" data-block-order="{{ block.block_order|unlocalize }}">{{ block.display_label }} ({{ block.count }})</option>
-                        {% endif %}
                         {% endfor %}
                     </select>
                     <button type="button" class="btn btn-outline btn-sm order-selection-action" id="assignOrderBlock">Asignar</button>
@@ -98,6 +96,61 @@
                     <button type="submit" class="btn btn-primary btn-sm">Aplicar orden</button>
                 </div>
             </form>
+        </div>
+
+        <div class="order-block-workbench">
+            <div class="order-block-filter-card">
+                <div>
+                    <strong>Ver bloque aislado</strong>
+                    <p>Filtra la lista para trabajar solo con una familia sin perder el orden general.</p>
+                </div>
+                <form method="get" class="order-block-filter-form">
+                    <input type="hidden" name="category_filter" value="current">
+                    <input type="hidden" name="q" value="{{ search }}">
+                    <input type="hidden" name="status" value="{{ status }}">
+                    <select name="block_filter" class="form-select" onchange="this.form.submit()">
+                        {% for block_option in block_filter_options %}
+                        <option value="{{ block_option.value }}" {% if selected_block_filter == block_option.value %}selected{% endif %}>
+                            {{ block_option.display_label }} ({{ block_option.count }})
+                        </option>
+                        {% endfor %}
+                    </select>
+                    {% if selected_block_filter %}
+                    <a href="{% url 'admin_category_products' category.pk %}" class="btn btn-outline btn-sm">Ver todos</a>
+                    {% endif %}
+                </form>
+                {% if selected_block_filter %}
+                <span class="isolated-block-pill">Viendo: {{ selected_block_label }}</span>
+                {% endif %}
+            </div>
+
+            <div class="order-block-sort-card">
+                <div class="order-block-sort-header">
+                    <div>
+                        <strong>Ordenar bloques</strong>
+                        <p>Arrastra bloques completos. El orden interno de cada producto se conserva.</p>
+                    </div>
+                    <button type="button" class="btn btn-primary btn-sm" id="saveBlockOrder" disabled>Guardar bloques</button>
+                </div>
+                <div id="orderBlockList" class="order-block-list">
+                    {% for block in named_block_summaries %}
+                    <div class="order-block-row" draggable="true" data-block-label="{{ block.block_label }}">
+                        <span class="order-block-handle" title="Arrastrar bloque"><span class="drag-dots" aria-hidden="true"></span></span>
+                        <span class="order-block-position">{{ block.named_index }}</span>
+                        <div>
+                            <strong>{{ block.display_label }}</strong>
+                            <small>{{ block.count }} productos</small>
+                        </div>
+                        <button type="button" class="btn btn-outline btn-sm block-shift" data-block-shift="up">Subir</button>
+                        <button type="button" class="btn btn-outline btn-sm block-shift" data-block-shift="down">Bajar</button>
+                        <a href="?category_filter=current&block_filter={{ block.block_label|urlencode }}" class="btn btn-outline btn-sm">Ver solo</a>
+                    </div>
+                    {% empty %}
+                    <div class="order-block-empty">Todavia no hay bloques creados.</div>
+                    {% endfor %}
+                </div>
+                <span class="order-status-pill" id="blockOrderStatusPill">Sin cambios en bloques</span>
+            </div>
         </div>
 
         <div id="orderPreviewPanel" class="order-preview-panel" hidden></div>
@@ -128,6 +181,7 @@
 
     <div class="admin-toolbar" style="flex-wrap: wrap; gap: 15px;">
         <form method="get" class="toolbar-search" style="flex-grow: 1;">
+            <input type="hidden" name="block_filter" value="{{ selected_block_filter }}">
             <input type="text" name="q" value="{{ search }}" placeholder="Buscar SKU o nombre..." class="form-input">
 
             <select name="category_filter" class="form-select" onchange="this.form.submit()">
@@ -157,6 +211,7 @@
         <input type="hidden" name="q" value="{{ search }}">
         <input type="hidden" name="category_filter" value="{{ category_filter }}">
         <input type="hidden" name="status" value="{{ status }}">
+        <input type="hidden" name="block_filter" value="{{ selected_block_filter }}">
         <input type="hidden" name="select_all_pages" id="selectAllPagesInput" value="false">
         <input type="hidden" name="product_ids_csv" id="selectedProductIdsCsv" value="">
 
@@ -294,10 +349,10 @@
             <span>Pagina {{ page_obj.number }} de {{ page_obj.paginator.num_pages }} ({{ page_obj.paginator.count }} items)</span>
             <div class="toolbar-actions">
                 {% if page_obj.has_previous %}
-                <a href="?page={{ page_obj.previous_page_number }}&q={{ search }}&category_filter={{ category_filter }}&status={{ status }}" class="btn btn-outline">← Anterior</a>
+                <a href="?page={{ page_obj.previous_page_number }}&q={{ search }}&category_filter={{ category_filter }}&status={{ status }}&block_filter={{ selected_block_filter|urlencode }}" class="btn btn-outline">← Anterior</a>
                 {% endif %}
                 {% if page_obj.has_next %}
-                <a href="?page={{ page_obj.next_page_number }}&q={{ search }}&category_filter={{ category_filter }}&status={{ status }}" class="btn btn-outline">Siguiente →</a>
+                <a href="?page={{ page_obj.next_page_number }}&q={{ search }}&category_filter={{ category_filter }}&status={{ status }}&block_filter={{ selected_block_filter|urlencode }}" class="btn btn-outline">Siguiente →</a>
                 {% endif %}
             </div>
         </div>
@@ -676,6 +731,118 @@
             });
             document.getElementById('clearOrderBlock')?.addEventListener('click', () => assignBlockToSelection('', 0));
 
+            const blockList = document.getElementById('orderBlockList');
+            const saveBlockButton = document.getElementById('saveBlockOrder');
+            const blockStatusPill = document.getElementById('blockOrderStatusPill');
+            let dragBlock = null;
+            const blockRows = () => blockList ? Array.from(blockList.querySelectorAll('.order-block-row')) : [];
+
+            function refreshBlockPositions() {
+                blockRows().forEach((row, index) => {
+                    const position = row.querySelector('.order-block-position');
+                    if (position) position.textContent = String(index + 1);
+                });
+            }
+
+            function markBlocksDirty() {
+                if (saveBlockButton) {
+                    saveBlockButton.removeAttribute('disabled');
+                    saveBlockButton.textContent = 'Guardar bloques';
+                }
+                if (blockStatusPill) {
+                    blockStatusPill.textContent = 'Orden de bloques modificado';
+                    blockStatusPill.classList.add('is-dirty');
+                }
+            }
+
+            function moveBlock(row, direction) {
+                if (!row || !blockList) return;
+                if (direction === 'up' && row.previousElementSibling) {
+                    row.previousElementSibling.before(row);
+                } else if (direction === 'down' && row.nextElementSibling) {
+                    row.nextElementSibling.after(row);
+                }
+                refreshBlockPositions();
+                markBlocksDirty();
+            }
+
+            if (blockList && saveBlockButton) {
+                blockRows().forEach((row) => {
+                    row.addEventListener('dragstart', (event) => {
+                        dragBlock = row;
+                        row.classList.add('dragging');
+                        event.dataTransfer.effectAllowed = 'move';
+                    });
+                    row.addEventListener('dragend', () => {
+                        row.classList.remove('dragging');
+                        dragBlock = null;
+                        blockList.querySelectorAll('.drag-over').forEach((item) => item.classList.remove('drag-over'));
+                    });
+                    row.addEventListener('dragover', (event) => {
+                        if (!dragBlock || dragBlock === row) return;
+                        event.preventDefault();
+                        row.classList.add('drag-over');
+                    });
+                    row.addEventListener('dragleave', () => {
+                        row.classList.remove('drag-over');
+                    });
+                    row.addEventListener('drop', (event) => {
+                        if (!dragBlock || dragBlock === row) return;
+                        event.preventDefault();
+                        row.classList.remove('drag-over');
+                        const box = row.getBoundingClientRect();
+                        const insertAfter = event.clientY > box.top + (box.height / 2);
+                        if (insertAfter) {
+                            row.after(dragBlock);
+                        } else {
+                            row.before(dragBlock);
+                        }
+                        refreshBlockPositions();
+                        markBlocksDirty();
+                    });
+                    row.querySelectorAll('[data-block-shift]').forEach((button) => {
+                        button.addEventListener('click', () => moveBlock(row, button.dataset.blockShift));
+                    });
+                });
+
+                saveBlockButton.addEventListener('click', async () => {
+                    const blockOrderLabels = blockRows()
+                        .map((row) => row.dataset.blockLabel || '')
+                        .filter((label) => label);
+                    if (!blockOrderLabels.length) {
+                        alert('No hay bloques para ordenar.');
+                        return;
+                    }
+                    saveBlockButton.setAttribute('disabled', 'true');
+                    saveBlockButton.textContent = 'Guardando...';
+                    if (blockStatusPill) blockStatusPill.textContent = 'Guardando bloques...';
+
+                    try {
+                        const response = await fetch("{% url 'admin_category_products_reorder' category.pk %}", {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+                            },
+                            body: JSON.stringify({ block_order_labels: blockOrderLabels }),
+                        });
+                        const data = await response.json();
+                        if (!response.ok || !data.success) {
+                            throw new Error(data.error || 'No se pudo guardar el orden de bloques.');
+                        }
+                        window.location.reload();
+                    } catch (error) {
+                        alert(error.message || 'No se pudo guardar el orden de bloques.');
+                        saveBlockButton.removeAttribute('disabled');
+                        saveBlockButton.textContent = 'Guardar bloques';
+                        if (blockStatusPill) {
+                            blockStatusPill.textContent = 'Error al guardar bloques';
+                            blockStatusPill.classList.add('is-dirty');
+                        }
+                    }
+                });
+            }
+
             saveButton.addEventListener('click', async () => {
                 applyManualPositions();
                 normalizeBlockOrdersFromDom();
@@ -843,6 +1010,129 @@
         .order-toolbox-inline .form-select {
             min-width: 190px;
             flex: 1;
+        }
+
+        .order-block-workbench {
+            display: grid;
+            grid-template-columns: minmax(280px, 0.8fr) minmax(420px, 1.4fr);
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .order-block-filter-card,
+        .order-block-sort-card {
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.035);
+            padding: 12px;
+        }
+
+        .order-block-filter-card strong,
+        .order-block-sort-card strong {
+            color: #f8fafc;
+        }
+
+        .order-block-filter-card p,
+        .order-block-sort-card p {
+            margin: 5px 0 0;
+            color: #a9b2bd;
+        }
+
+        .order-block-filter-form {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 10px;
+            align-items: center;
+        }
+
+        .order-block-filter-form .form-select {
+            flex: 1;
+            min-width: 220px;
+        }
+
+        .isolated-block-pill {
+            display: inline-flex;
+            margin-top: 10px;
+            padding: 6px 10px;
+            border-radius: 8px;
+            border: 1px solid rgba(0, 199, 224, 0.35);
+            background: rgba(0, 199, 224, 0.12);
+            color: #8de6ff;
+            font-weight: 900;
+        }
+
+        .order-block-sort-header {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            align-items: flex-start;
+            margin-bottom: 10px;
+        }
+
+        .order-block-list {
+            display: grid;
+            gap: 8px;
+            max-height: 280px;
+            overflow-y: auto;
+            padding-right: 4px;
+        }
+
+        .order-block-row {
+            display: grid;
+            grid-template-columns: auto auto minmax(160px, 1fr) auto auto auto;
+            gap: 8px;
+            align-items: center;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            background: rgba(11, 82, 68, 0.12);
+            padding: 8px;
+            cursor: grab;
+        }
+
+        .order-block-row.dragging {
+            opacity: 0.55;
+        }
+
+        .order-block-row.drag-over {
+            outline: 2px solid rgba(255, 107, 53, 0.9);
+            outline-offset: -3px;
+        }
+
+        .order-block-row small {
+            display: block;
+            color: #8de6ff;
+            margin-top: 2px;
+            font-weight: 800;
+        }
+
+        .order-block-handle,
+        .order-block-position {
+            display: inline-flex;
+            width: 30px;
+            height: 30px;
+            border-radius: 8px;
+            align-items: center;
+            justify-content: center;
+            font-weight: 900;
+        }
+
+        .order-block-handle {
+            border: 1px dashed rgba(255, 107, 53, 0.58);
+            color: #ff8a5c;
+            background: rgba(255, 107, 53, 0.08);
+        }
+
+        .order-block-position {
+            background: rgba(255, 255, 255, 0.08);
+            color: #f8fafc;
+        }
+
+        .order-block-empty {
+            border: 1px dashed rgba(255, 255, 255, 0.16);
+            border-radius: 8px;
+            padding: 12px;
+            color: #a9b2bd;
         }
 
         .order-preview-panel[hidden] {
@@ -1184,6 +1474,26 @@
 
             .order-toolbox-grid {
                 grid-template-columns: 1fr;
+            }
+
+            .order-block-workbench {
+                grid-template-columns: 1fr;
+            }
+
+            .order-block-sort-header {
+                display: block;
+            }
+
+            .order-block-sort-header .btn {
+                margin-top: 10px;
+            }
+
+            .order-block-row {
+                grid-template-columns: auto auto 1fr;
+            }
+
+            .order-block-row .btn {
+                width: 100%;
             }
         }
     </style>

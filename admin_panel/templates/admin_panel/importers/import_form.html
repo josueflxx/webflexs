@@ -86,7 +86,8 @@
             {% if import_type == 'products' %}
             <li>Productos acepta encabezados flexibles: SKU/Codigo, Nombre/Articulo, Proveedor, Precio/Venta, Costo, Stock, Categoria/Rubro/Subrubro y Activo.</li>
             <li>Formato SaaS Argentina: Codigo es SKU, Precio Final ($) es el precio de catalogo y Precio ($) queda guardado como precio neto de origen.</li>
-            <li>Campos utiles de origen como Nro producto, Codigo proveedor, UPC, IVA, Unidad y Utilidad quedan guardados en atributos del producto.</li>
+            <li>En el layout completo de SaaS se ignoran estas columnas por seguridad: C, D, F, G, J, K, L, M, N, O, R, S, V, W, X, Y, Z, AA, AB y AC.</li>
+            <li>Campos utiles conservados del layout SaaS: Nro producto, Estado, Nombre, Codigo, IVA, Proveedor, Precio y Precio Final.</li>
             <li>Por seguridad, actualizar productos existentes conserva las categorias que ya tienen en el sistema.</li>
             <li>Las categorias del Excel no se crean automaticamente salvo que lo autorices explicitamente abajo.</li>
             <li>El orden manual del catalogo y del Excel publicado no se modifica por importar o actualizar productos.</li>

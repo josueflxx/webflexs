@@ -2284,6 +2284,82 @@ def _save_category_product_order_entries(category, ordered_entries):
     return len(normalized_entries)
 
 
+def _save_category_product_block_order(category, raw_block_labels):
+    cleaned_labels = []
+    for raw_label in raw_block_labels:
+        if raw_label == "__no_block__":
+            label = ""
+        else:
+            label = _clean_order_block_label(raw_label)
+        if label not in cleaned_labels:
+            cleaned_labels.append(label)
+
+    if not cleaned_labels:
+        return 0
+
+    block_order_by_label = {
+        label: (index + 1) * 10
+        for index, label in enumerate(cleaned_labels)
+    }
+    linked_ids = list(
+        Product.categories.through.objects.filter(category_id=category.id)
+        .values_list("product_id", flat=True)
+    )
+    if not linked_ids:
+        return 0
+
+    rows = list(
+        CategoryProductOrder.objects.filter(
+            category=category,
+            product_id__in=linked_ids,
+        )
+    )
+    rows_by_product = {row.product_id: row for row in rows}
+    now = timezone.now()
+    updates = []
+    for row in rows:
+        label = row.block_label or ""
+        if label in block_order_by_label:
+            row.block_order = block_order_by_label[label]
+            row.updated_at = now
+            updates.append(row)
+
+    creates = []
+    if "" in block_order_by_label:
+        products_with_named_block = {
+            row.product_id
+            for row in rows
+            if row.block_label
+        }
+        max_sort_order = (
+            CategoryProductOrder.objects.filter(category=category)
+            .aggregate(max_order=Max("sort_order"))
+            .get("max_order")
+            or 0
+        )
+        missing_blank_product_ids = [
+            product_id
+            for product_id in linked_ids
+            if product_id not in products_with_named_block and product_id not in rows_by_product
+        ]
+        for index, product_id in enumerate(missing_blank_product_ids, start=1):
+            creates.append(
+                CategoryProductOrder(
+                    category=category,
+                    product_id=product_id,
+                    block_label="",
+                    block_order=block_order_by_label[""],
+                    sort_order=max_sort_order + (index * 10),
+                )
+            )
+
+    if creates:
+        CategoryProductOrder.objects.bulk_create(creates, ignore_conflicts=True, batch_size=500)
+    if updates:
+        CategoryProductOrder.objects.bulk_update(updates, ["block_order", "updated_at"], batch_size=500)
+    return len(updates) + len(creates)
+
+
 def _build_order_entries_from_payload(payload_entries):
     block_order_by_label = {}
     normalized_entries = []
@@ -2323,6 +2399,9 @@ def category_manage_products(request, pk):
 
     def get_filtered_queryset(req_data):
         qs = Product.objects.select_related('category').prefetch_related('categories').all()
+        block_filter = _clean_order_block_label(
+            req_data.get('block_filter') or req_data.get('block') or ''
+        )
 
         qs, search = apply_admin_text_search(
             qs,
@@ -2336,7 +2415,10 @@ def category_manage_products(request, pk):
         elif status == 'inactive':
             qs = qs.filter(is_active=False)
 
-        cat_filter = req_data.get('category_filter', 'current')
+        cat_filter = req_data.get('category_filter', 'current') or 'current'
+        if block_filter:
+            cat_filter = 'current'
+
         if cat_filter == 'current':
             qs = qs.filter(categories=category)
         elif cat_filter == 'none':
@@ -2346,7 +2428,21 @@ def category_manage_products(request, pk):
         elif cat_filter.isdigit():
             qs = qs.filter(categories__id=int(cat_filter))
 
-        return qs.distinct(), search, status, cat_filter
+        if block_filter:
+            order_rows = CategoryProductOrder.objects.filter(category=category)
+            if block_filter == "__no_block__":
+                named_block_product_ids = order_rows.exclude(block_label="").values("product_id")
+                blank_block_product_ids = order_rows.filter(block_label="").values("product_id")
+                qs = qs.filter(categories=category).filter(
+                    Q(id__in=blank_block_product_ids) | ~Q(id__in=named_block_product_ids)
+                )
+            else:
+                qs = qs.filter(
+                    categories=category,
+                    id__in=order_rows.filter(block_label=block_filter).values("product_id"),
+                )
+
+        return qs.distinct(), search, status, cat_filter, block_filter
 
     if request.method == 'POST':
         raw_post_body = request.body
@@ -2408,7 +2504,7 @@ def category_manage_products(request, pk):
 
         else:
             if select_all_pages:
-                products_to_update, _, _, _ = get_filtered_queryset(request.POST)
+                products_to_update, _, _, _, _ = get_filtered_queryset(request.POST)
                 target_ids = list(products_to_update.values_list('id', flat=True))
             else:
                 target_ids = extract_target_product_ids_from_post(request.POST, raw_post_body)
@@ -2435,7 +2531,7 @@ def category_manage_products(request, pk):
 
             return redirect('admin_category_products', pk=pk)
 
-    products, search, status, cat_filter = get_filtered_queryset(request.GET)
+    products, search, status, cat_filter, block_filter = get_filtered_queryset(request.GET)
 
     can_reorder_products = cat_filter == 'current' and not search and not status
 
@@ -2481,6 +2577,9 @@ def category_manage_products(request, pk):
     all_categories = Category.objects.exclude(pk=pk).select_related('parent').order_by('order', 'name')
     all_category_options = build_category_options(all_categories, include_inactive_suffix=True)
     block_summaries = []
+    named_block_summaries = []
+    block_filter_options = []
+    selected_block_label = ""
     if cat_filter == 'current':
         block_summaries = list(
             CategoryProductOrder.objects.filter(category=category, product__categories=category)
@@ -2488,8 +2587,50 @@ def category_manage_products(request, pk):
             .annotate(count=Count("id"))
             .order_by("block_order", "block_label")
         )
+        named_block_index = 0
         for block in block_summaries:
             block["display_label"] = block["block_label"] or "Sin bloque"
+            block["filter_value"] = block["block_label"] or "__no_block__"
+            if block["block_label"]:
+                named_block_index += 1
+                block["named_index"] = named_block_index
+                named_block_summaries.append(block)
+
+        total_linked_count = Product.objects.filter(categories=category).distinct().count()
+        named_block_count = (
+            CategoryProductOrder.objects.filter(category=category, product__categories=category)
+            .exclude(block_label="")
+            .values("product_id")
+            .distinct()
+            .count()
+        )
+        no_block_count = max(total_linked_count - named_block_count, 0)
+        block_filter_options = [
+            {
+                "value": "",
+                "display_label": "Todos los bloques",
+                "count": total_linked_count,
+            }
+        ]
+        if no_block_count:
+            block_filter_options.append({
+                "value": "__no_block__",
+                "display_label": "Sin bloque",
+                "count": no_block_count,
+            })
+        block_filter_options.extend(
+            {
+                "value": block["block_label"],
+                "display_label": block["display_label"],
+                "count": block["count"],
+            }
+            for block in block_summaries
+            if block["block_label"]
+        )
+        if block_filter == "__no_block__":
+            selected_block_label = "Sin bloque"
+        elif block_filter:
+            selected_block_label = block_filter
 
     return render(request, 'admin_panel/categories/manage_products.html', {
         'category': category,
@@ -2503,6 +2644,10 @@ def category_manage_products(request, pk):
         'page_start_index': page_start_index,
         'can_reorder_products': can_reorder_products,
         'block_summaries': block_summaries,
+        'named_block_summaries': named_block_summaries,
+        'block_filter_options': block_filter_options,
+        'selected_block_filter': block_filter,
+        'selected_block_label': selected_block_label,
         'import_order_preview': import_order_preview,
     })
 
@@ -2519,6 +2664,23 @@ def category_products_reorder(request, pk):
         payload = json.loads(request.body.decode("utf-8"))
     except json.JSONDecodeError:
         return JsonResponse({"success": False, "error": "JSON invalido."}, status=400)
+
+    if "block_order_labels" in payload:
+        block_order_labels = payload.get("block_order_labels")
+        if not isinstance(block_order_labels, list):
+            return JsonResponse({"success": False, "error": "Orden de bloques invalido."}, status=400)
+        updated = _save_category_product_block_order(category, block_order_labels)
+        log_admin_action(
+            request,
+            action="category_product_blocks_reorder",
+            target_type="category",
+            target_id=category.id,
+            details={
+                "block_order_labels": block_order_labels,
+                "updated": updated,
+            },
+        )
+        return JsonResponse({"success": True, "updated": updated})
 
     ordered_entries = _build_order_entries_from_payload(payload.get("ordered_entries") or [])
     if not ordered_entries:

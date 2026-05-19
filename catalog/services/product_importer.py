@@ -54,6 +54,60 @@ class ProductImporter(BaseImporter):
         "filtro_5",
     ]
 
+    SAAS_FIXED_SIGNATURE = [
+        "no_de_producto",
+        "estado",
+        "disponible_para_la_venta",
+        "disponible_para_la_compra",
+        "disponible_para_integrar_otros_productos",
+        "compuesto_por_otros_productos",
+        "rubro",
+        "nombre",
+        "codigo",
+        "codigo_universal_de_producto_upc",
+        "codigo_de_proveedor",
+        "stock_actual",
+        "stock_ideal",
+        "stock_minimo",
+        "unidad",
+        "alicuota_de_iva",
+        "proveedor",
+        "costo",
+        "utilidad",
+        "precio",
+        "precio_final",
+        "controla_stock",
+        "stock_negativo",
+        "mostrar_en_tienda",
+        "no_de_publicacion_en_mercadolibre",
+        "no_de_publicacion_adicional_en_mercadolibre",
+        "descripcion",
+        "descripcion_para_la_tienda",
+        "observaciones_internas",
+    ]
+    SAAS_FIXED_IGNORED_COLUMN_INDEXES = {
+        2,   # C - Disponible para la venta
+        3,   # D - Disponible para la compra
+        5,   # F - Compuesto por otros productos
+        6,   # G - Rubro
+        9,   # J - Codigo universal / UPC
+        10,  # K - Codigo de proveedor
+        11,  # L - Stock actual
+        12,  # M - Stock ideal
+        13,  # N - Stock minimo
+        14,  # O - Unidad
+        17,  # R - Costo
+        18,  # S - Utilidad
+        21,  # V - Controla stock
+        22,  # W - Stock negativo
+        23,  # X - Mostrar en tienda
+        24,  # Y - Publicacion MercadoLibre
+        25,  # Z - Publicacion adicional MercadoLibre
+        26,  # AA - Descripcion
+        27,  # AB - Descripcion para tienda
+        28,  # AC - Observaciones internas
+    }
+
     COLUMN_ALIASES = {
         "sku": "sku",
         "codigo": "sku",
@@ -269,6 +323,7 @@ class ProductImporter(BaseImporter):
 
     def load_data(self):
         super().load_data()
+        self._drop_ignored_saas_fixed_columns()
         self.df = self.df.dropna(how="all")
         mapped_columns, mapping_mode = normalize_columns(
             self.df.columns,
@@ -279,6 +334,18 @@ class ProductImporter(BaseImporter):
         self.df.columns = mapped_columns
         self.column_mapping_mode = mapping_mode
         return True
+
+    def _drop_ignored_saas_fixed_columns(self):
+        normalized_headers = [normalize_header(column) for column in self.df.columns]
+        if normalized_headers[: len(self.SAAS_FIXED_SIGNATURE)] != self.SAAS_FIXED_SIGNATURE:
+            return
+
+        kept_columns = [
+            column
+            for index, column in enumerate(self.df.columns)
+            if index not in self.SAAS_FIXED_IGNORED_COLUMN_INDEXES
+        ]
+        self.df = self.df.loc[:, kept_columns]
 
     @staticmethod
     def _text(value):

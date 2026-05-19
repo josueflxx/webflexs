@@ -482,6 +482,99 @@ class ProductImportTests(TestCase):
         self.assertEqual(product.attributes["Precio final SaaS"], "12.100,00")
         self.assertEqual(product.attributes["Origen importacion"], "SaaS Argentina")
 
+    def test_product_import_ignores_fixed_saas_columns_by_position(self):
+        file_obj = build_import_workbook(
+            [
+                "N\u00ba de producto",
+                "Estado",
+                "Disponible para la venta",
+                "Disponible para la compra",
+                "Disponible para integrar otros productos",
+                "Compuesto por otros productos",
+                "Rubro",
+                "Nombre",
+                "C\u00f3digo",
+                "C\u00f3digo universal de producto (UPC)",
+                "C\u00f3digo de proveedor",
+                "Stock actual",
+                "Stock ideal",
+                "Stock m\u00ednimo",
+                "Unidad",
+                "Alicuota de IVA",
+                "Proveedor",
+                "Costo ($)",
+                "Utilidad (%)",
+                "Precio ($)",
+                "Precio Final ($)",
+                "Controla stock",
+                "Stock negativo",
+                "Mostrar en tienda",
+                "N\u00ba de publicaci\u00f3n en MercadoLibre",
+                "N\u00ba de publicaci\u00f3n adicional en MercadoLibre",
+                "Descripci\u00f3n",
+                "Descripci\u00f3n para la tienda",
+                "Observaciones Internas",
+            ],
+            [
+                [
+                    918,
+                    "Habilitado",
+                    "SI",
+                    "SI",
+                    "SI",
+                    "NO",
+                    "Categoria que no debe crearse",
+                    "Producto SaaS seguro",
+                    "SAAS-FIXED-001",
+                    "7791234567890",
+                    "PROV-55",
+                    99,
+                    100,
+                    10,
+                    "unidad",
+                    "21%",
+                    "Proveedor Seguro",
+                    "1.000,00",
+                    "50",
+                    "10.000,00",
+                    "12.100,00",
+                    "si",
+                    "no",
+                    "si",
+                    123,
+                    456,
+                    "Descripcion que no debe pisar",
+                    "Descripcion tienda ignorada",
+                    "Observacion ignorada",
+                ]
+            ],
+        )
+
+        result = ProductImporter(
+            file_obj,
+            category_mode="create",
+            allow_category_creation=True,
+        ).run(dry_run=False)
+
+        self.assertEqual(result.errors, 0)
+        product = Product.objects.get(sku="SAAS-FIXED-001")
+        self.assertEqual(product.name, "Producto SaaS seguro")
+        self.assertEqual(product.price, Decimal("12100.00"))
+        self.assertEqual(product.cost, Decimal("0.00"))
+        self.assertEqual(product.stock, 0)
+        self.assertEqual(product.supplier, "Proveedor Seguro")
+        self.assertEqual(product.description, "")
+        self.assertFalse(Category.objects.filter(name="Categoria que no debe crearse").exists())
+        self.assertFalse(product.categories.exists())
+        self.assertEqual(product.attributes["Numero SaaS"], "918")
+        self.assertEqual(product.attributes["IVA"], "21%")
+        self.assertEqual(product.attributes["Precio neto SaaS"], "10.000,00")
+        self.assertEqual(product.attributes["Precio final SaaS"], "12.100,00")
+        self.assertNotIn("UPC", product.attributes)
+        self.assertNotIn("Codigo proveedor", product.attributes)
+        self.assertNotIn("Unidad", product.attributes)
+        self.assertNotIn("Utilidad SaaS", product.attributes)
+
     def test_product_import_places_saas_clamps_under_parent_category(self):
         file_obj = build_import_workbook(
             ["Rubro", "Nombre", "Código", "Precio Final ($)", "Proveedor"],
