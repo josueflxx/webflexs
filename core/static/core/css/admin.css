@@ -6006,3 +6006,252 @@
         align-items: flex-start;
     }
 }
+
+/* ============================================
+   Mobile Admin Polish
+   ============================================ */
+
+@media (max-width: 760px) {
+    .admin-body {
+        font-size: 0.8rem;
+    }
+
+    .admin-body .admin-header {
+        grid-template-columns: 1fr;
+        gap: 8px;
+        padding: 10px 12px;
+    }
+
+    .admin-body .header-title {
+        min-width: 0;
+    }
+
+    .admin-body .header-title h1 {
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 1.18rem;
+        line-height: 1.15;
+    }
+
+    .admin-body .header-user {
+        width: 100%;
+        gap: 6px;
+        justify-content: flex-start;
+        overflow-x: auto;
+        overflow-y: hidden;
+        padding-bottom: 2px;
+        scrollbar-width: thin;
+    }
+
+    .admin-body .header-user-name,
+    .admin-body .header-user-company {
+        flex: 0 0 auto;
+        max-width: 128px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .admin-body .header-user-link,
+    .admin-body .header-user-switch,
+    .admin-body .header-user .btn {
+        flex: 0 0 auto;
+        min-height: 30px;
+        padding: 6px 9px;
+        font-size: 0.66rem;
+    }
+
+    .admin-top-nav-wrap {
+        padding: 7px 10px 5px;
+    }
+
+    .admin-top-nav {
+        gap: 8px;
+        padding-bottom: 3px;
+        scroll-snap-type: x proximity;
+    }
+
+    .top-nav-group {
+        gap: 4px;
+        padding: 6px 8px 6px 0;
+        scroll-snap-align: start;
+    }
+
+    .top-nav-group-label {
+        font-size: 7.5px;
+        letter-spacing: 0.06em;
+    }
+
+    .top-nav-item {
+        min-height: 30px;
+        padding: 6px 8px;
+        font-size: 10.8px;
+        white-space: nowrap;
+    }
+
+    .top-nav-item > span:first-child {
+        font-size: 11px;
+    }
+
+    .top-nav-submenu.is-floating {
+        left: 10px !important;
+        right: 10px;
+        width: auto;
+        min-width: 0;
+        max-width: none;
+    }
+
+    .admin-content {
+        width: 100%;
+        max-width: 100%;
+        padding: 12px 10px 22px;
+    }
+
+    .admin-table-container {
+        max-width: 100%;
+        border-radius: 8px;
+    }
+
+    .admin-table-container:not(.no-drag-scroll) {
+        overflow-x: auto;
+        overflow-y: hidden;
+    }
+
+    .admin-toolbar {
+        gap: 8px;
+        padding: 10px;
+    }
+
+    .toolbar-search {
+        width: 100%;
+        flex-direction: column;
+        gap: 7px;
+    }
+
+    .toolbar-search input,
+    .toolbar-search select,
+    .toolbar-search button,
+    .toolbar-search .btn,
+    .admin-toolbar .form-input,
+    .admin-toolbar .form-select {
+        width: 100%;
+        min-width: 0;
+    }
+
+    .toolbar-actions {
+        width: 100%;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 7px;
+        overflow-x: visible;
+        white-space: normal;
+    }
+
+    .toolbar-actions > .btn,
+    .toolbar-actions > button,
+    .toolbar-actions > a,
+    .toolbar-actions > form {
+        flex: 1 1 136px;
+        min-width: 0;
+    }
+
+    .admin-table th,
+    .admin-table td {
+        padding: 8px 9px;
+        font-size: 11.2px;
+        vertical-align: top;
+    }
+
+    .admin-table th {
+        font-size: 8.5px;
+    }
+
+    .admin-table .actions,
+    .admin-table td:last-child {
+        gap: 6px;
+    }
+
+    .admin-body .btn {
+        min-height: 30px;
+        padding: 6px 9px;
+        font-size: 0.66rem;
+    }
+
+    .form-actions {
+        width: 100%;
+        flex-wrap: wrap;
+        overflow-x: visible;
+        gap: 8px;
+    }
+
+    .form-actions .btn,
+    .form-actions button,
+    .form-actions a {
+        flex: 1 1 136px;
+    }
+
+    .admin-card,
+    .settings-card,
+    .dashboard-card,
+    .client-company-summary,
+    .client-audit-item {
+        border-radius: 8px;
+    }
+}
+
+@media (max-width: 520px) {
+    .admin-body .admin-header {
+        padding: 9px 8px;
+    }
+
+    .admin-body .header-title h1 {
+        font-size: 1.05rem;
+    }
+
+    .admin-body .header-user-name,
+    .admin-body .header-user-company {
+        max-width: 98px;
+    }
+
+    .admin-top-nav-wrap {
+        padding-left: 8px;
+        padding-right: 8px;
+    }
+
+    .top-nav-item {
+        min-height: 28px;
+        padding: 6px 7px;
+        font-size: 10px;
+    }
+
+    .admin-content {
+        padding-left: 8px;
+        padding-right: 8px;
+    }
+
+    .admin-table th,
+    .admin-table td {
+        padding: 7px 8px;
+        font-size: 10.5px;
+    }
+
+    .toolbar-actions > .btn,
+    .toolbar-actions > button,
+    .toolbar-actions > a,
+    .toolbar-actions > form,
+    .form-actions .btn,
+    .form-actions button,
+    .form-actions a {
+        flex-basis: 100%;
+    }
+
+    .payment-create-form,
+    .products-bulk-content,
+    .products-bulk-form,
+    .order-filters-grid,
+    .product-filters-grid {
+        grid-template-columns: 1fr;
+    }
+}
