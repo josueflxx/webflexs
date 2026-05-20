@@ -18,7 +18,44 @@
             <div class="clamp-form-title">Datos de Cotizacion</div>
 
             <div class="clamp-rows">
-                <div class="clamp-row">
+                <div class="clamp-row clamp-code-entry-row">
+                    <label class="clamp-row-label" for="clamp_code_input">Codigo:</label>
+                    <div class="clamp-row-control clamp-code-entry-control">
+                        <input
+                            id="clamp_code_input"
+                            type="text"
+                            class="form-input clamp-code-entry-input"
+                            value="{{ form_values.clamp_code }}"
+                            placeholder="Ej: ABT91685270P"
+                            autocomplete="off"
+                            spellcheck="false"
+                            aria-describedby="clampCodeFeedback clampCodeNamePreview"
+                        >
+                        <button type="button" class="btn btn-outline clamp-code-entry-btn" onclick="applyClampCodeFromInput()">
+                            Leer codigo
+                        </button>
+                        <small id="clampCodeFeedback" class="clamp-code-feedback">
+                            Escribi el codigo y se completan tipo, diametro, ancho, largo y forma.
+                        </small>
+                        <div id="clampCodeQuickResult" class="clamp-code-quick-result" hidden>
+                            <div class="clamp-code-name-row">
+                                <strong id="clampCodeNamePreview" class="clamp-code-name-preview"></strong>
+                                <button type="button" class="btn btn-outline btn-sm clamp-code-copy-btn" onclick="copyClampCodeName()">
+                                    Copiar
+                                </button>
+                            </div>
+                            <button type="button" class="btn btn-primary clamp-code-calc-btn" onclick="runClampCalculation()">
+                                Calcular
+                            </button>
+                            <div id="clampBillingQuickResult" class="clamp-billing-quick-result" hidden>
+                                <span>Resultado Facturacion</span>
+                                <strong id="clampBillingQuickValue">-</strong>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="clamp-row clamp-row-wide">
                     <label class="clamp-row-label" for="dollar_rate">Dolar:</label>
                     <div class="clamp-row-control">
                         <label class="clamp-radio-inline">
@@ -60,7 +97,7 @@
                     </div>
                 </div>
 
-                <div class="clamp-row">
+                <div class="clamp-row clamp-row-wide">
                     <label class="clamp-row-label" for="clamp_type">Tipo Abrazadera:</label>
                     <div class="clamp-row-control clamp-controls-inline">
                         <label class="clamp-radio-inline">
@@ -163,33 +200,35 @@
                 <small id="calcError" class="text-muted clamp-error"></small>
             </div>
         </section>
+
+        <aside class="clamp-side-column">
+            <section class="clamp-results-card clamp-results-card-main" id="clampResultsCard" style="display:none;">
+                <div class="clamp-results-header">
+                    <h3 style="margin:0;">Resultado</h3>
+                    <span class="badge badge-info" id="resultWeight">Peso: -</span>
+                </div>
+                <p id="resultDescription" class="clamp-result-description">-</p>
+                <p class="clamp-result-code-line">
+                    Codigo sugerido:
+                    <code id="resultCode">-</code>
+                    <span id="resultCodeWarn" class="badge badge-warning" style="display:none;">Requiere mapeo de diametro</span>
+                </p>
+                <div class="clamp-result-metrics">
+                    <div class="metric">
+                        <span>Costo base</span>
+                        <strong id="resultBaseCost">$0,00</strong>
+                    </div>
+                    <div class="metric">
+                        <span>Desarrollo</span>
+                        <strong id="resultDevelopment">0.0000 m</strong>
+                    </div>
+                </div>
+                <div id="priceCards" class="clamp-price-grid"></div>
+            </section>
+        </aside>
     </div>
 
-    <section class="clamp-results-card" id="clampResultsCard" style="display:none;">
-        <div class="clamp-results-header">
-            <h3 style="margin:0;">Resultado</h3>
-            <span class="badge badge-info" id="resultWeight">Peso: -</span>
-        </div>
-        <p id="resultDescription" class="clamp-result-description">-</p>
-        <p class="clamp-result-code-line">
-            Codigo sugerido:
-            <code id="resultCode">-</code>
-            <span id="resultCodeWarn" class="badge badge-warning" style="display:none;">Requiere mapeo de diametro</span>
-        </p>
-        <div class="clamp-result-metrics">
-            <div class="metric">
-                <span>Costo base</span>
-                <strong id="resultBaseCost">$0,00</strong>
-            </div>
-            <div class="metric">
-                <span>Desarrollo</span>
-                <strong id="resultDevelopment">0.0000 m</strong>
-            </div>
-        </div>
-        <div id="priceCards" class="clamp-price-grid"></div>
-    </section>
-
-    <section class="clamp-results-card">
+    <section class="clamp-results-card clamp-history-card">
         <div class="clamp-results-header">
             <h3 style="margin:0;">Ultimas cotizaciones guardadas</h3>
             <span class="badge badge-secondary">{{ saved_quotes|length }} registros</span>
@@ -240,6 +279,7 @@
 <form id="saveQuoteForm" method="post" style="display:none;">
     {% csrf_token %}
     <input type="hidden" name="action" id="form_action" value="save_quote">
+    <input type="hidden" name="clamp_code" id="save_clamp_code">
     <input type="hidden" name="price_list_key" id="save_price_list_key">
     <input type="hidden" name="client_name" id="save_client_name">
     <input type="hidden" name="dollar_mode" id="save_dollar_mode">
@@ -261,7 +301,10 @@
     const DIAMETER_CODE_MAP = {{ diameter_code_map_json|safe }};
     const ALL_DIAMETER_OPTIONS = {{ all_diameter_options_json|safe }};
     const LAMINATED_DIAMETER_OPTIONS = {{ laminated_diameter_options_json|safe }};
+    const CLAMP_KNOWN_WIDTHS = {{ known_widths_json|safe }};
+    const CLAMP_KNOWN_LENGTHS = {{ known_lengths_json|safe }};
     const CLAMP_PRICE_LISTS = {{ price_lists_json|safe }};
+    const CLAMP_CODE_PARSE_URL = "{% url 'api_clamp_code_parse' %}";
     const CLAMP_ADJUSTMENTS = {
         PLANA: 20,
         SEMICURVA: 10,
@@ -286,6 +329,15 @@
         return parsed;
     }
 
+    function getClampCSRFToken() {
+        const tokenInput = document.querySelector('#saveQuoteForm [name=csrfmiddlewaretoken]');
+        if (tokenInput && tokenInput.value) {
+            return tokenInput.value;
+        }
+        const cookieMatch = document.cookie.match(/(?:^|; )csrftoken=([^;]+)/);
+        return cookieMatch ? decodeURIComponent(cookieMatch[1]) : '';
+    }
+
     function formatMoney(value) {
         return new Intl.NumberFormat('es-AR', {
             minimumFractionDigits: 2,
@@ -295,6 +347,101 @@
 
     function normalizeKey(value) {
         return String(value || '').trim().replace(/\s+/g, ' ').toUpperCase();
+    }
+
+    function normalizeClampCodeInput(value) {
+        return String(value || '')
+            .trim()
+            .toUpperCase()
+            .replace(/[\s._-]+/g, '');
+    }
+
+    function setClampCodeFeedback(message, tone = 'muted') {
+        const node = document.getElementById('clampCodeFeedback');
+        if (!node) return;
+        node.textContent = message || '';
+        node.classList.remove('is-success', 'is-warning', 'is-error');
+        if (tone === 'success') {
+            node.classList.add('is-success');
+        } else if (tone === 'warning') {
+            node.classList.add('is-warning');
+        } else if (tone === 'error') {
+            node.classList.add('is-error');
+        }
+    }
+
+    function setClampCodeNamePreview(description) {
+        const container = document.getElementById('clampCodeQuickResult');
+        const node = document.getElementById('clampCodeNamePreview');
+        if (!node) return;
+        const cleanDescription = String(description || '').trim().replace(/\s+/g, ' ');
+        node.textContent = cleanDescription;
+        if (container) {
+            container.hidden = !cleanDescription;
+        }
+        if (!cleanDescription) {
+            setBillingQuickResult(null);
+        }
+    }
+
+    function setBillingQuickResult(result) {
+        const billingNode = document.getElementById('clampBillingQuickResult');
+        const valueNode = document.getElementById('clampBillingQuickValue');
+        if (!billingNode || !valueNode) return;
+        const billingRow = result?.lists?.find((item) => item.key === 'facturacion');
+        if (!billingRow) {
+            valueNode.textContent = '-';
+            billingNode.hidden = true;
+            return;
+        }
+        valueNode.textContent = `$${formatMoney(billingRow.finalPrice)}`;
+        billingNode.hidden = false;
+    }
+
+    function buildClampDescriptionFromFields() {
+        const clampType = getCurrentClampType();
+        const clampTypeLabel = clampType === 'laminada' ? 'LAMINADA' : 'TREFILADA';
+        const zincLabel = document.getElementById('is_zincated')?.checked ? ' ZINCADA' : '';
+        const diameter = document.getElementById('diameter')?.value || '';
+        const width = (document.getElementById('width_mm')?.value || '').trim();
+        const length = (document.getElementById('length_mm')?.value || '').trim();
+        const profileType = (document.getElementById('profile_type')?.value || '').toUpperCase();
+        if (!diameter || !width || !length || !profileType) {
+            return '';
+        }
+        return `ABRAZADERA ${clampTypeLabel}${zincLabel} DE ${diameter} X ${width} X ${length} ${profileType}`;
+    }
+
+    function refreshClampCodeNamePreview() {
+        const container = document.getElementById('clampCodeQuickResult');
+        if (!container || container.hidden) return;
+        setClampCodeNamePreview(buildClampDescriptionFromFields());
+        setBillingQuickResult(null);
+    }
+
+    async function copyClampCodeName() {
+        const text = (document.getElementById('clampCodeNamePreview')?.textContent || '').trim();
+        if (!text) return;
+        try {
+            await navigator.clipboard.writeText(text);
+            setClampCodeFeedback('Nombre copiado.', 'success');
+        } catch (error) {
+            const textarea = document.createElement('textarea');
+            textarea.value = text;
+            textarea.setAttribute('readonly', '');
+            textarea.style.position = 'fixed';
+            textarea.style.opacity = '0';
+            document.body.appendChild(textarea);
+            textarea.select();
+            try {
+                document.execCommand('copy');
+                setClampCodeFeedback('Nombre copiado.', 'success');
+            } catch (fallbackError) {
+                setClampCodeFeedback('No se pudo copiar automaticamente.', 'error');
+            } finally {
+                textarea.remove();
+            }
+        }
     }
 
     function getAllowedDiameters(clampType) {
@@ -319,6 +466,109 @@
             select.value = previousValue;
         } else if (allowed.length > 0) {
             select.value = allowed[0];
+        }
+    }
+
+    function setClampTypeSelection(clampType) {
+        const normalizedType = String(clampType || 'trefilada').toLowerCase();
+        document.querySelectorAll('input[name="clamp_type_radio"]').forEach((radio) => {
+            radio.checked = radio.value === normalizedType;
+        });
+        const hiddenClampTypeSelect = document.getElementById('clamp_type');
+        if (hiddenClampTypeSelect) {
+            hiddenClampTypeSelect.value = normalizedType;
+        }
+        syncDiameterOptions(normalizedType);
+    }
+
+    function setSelectValueIfPresent(selectId, value) {
+        const select = document.getElementById(selectId);
+        if (!select) return false;
+        const valueString = String(value || '');
+        const exists = Array.from(select.options).some((option) => option.value === valueString);
+        if (!exists) return false;
+        select.value = valueString;
+        return true;
+    }
+
+    function applyParsedClampCode(parsed) {
+        const parsedType = String(parsed.tipo || '').toUpperCase();
+        if (parsedType === 'FORJADA') {
+            setClampCodeFeedback('El codigo es ABF/forjada. El cotizador actual calcula trefiladas y laminadas; ajusta el tipo manualmente si corresponde.', 'warning');
+            return false;
+        }
+
+        const clampType = parsedType === 'LAMINADA' ? 'laminada' : 'trefilada';
+        setClampTypeSelection(clampType);
+
+        const warnings = Array.isArray(parsed.parse_warnings) ? parsed.parse_warnings.slice() : [];
+        const diameterApplied = setSelectValueIfPresent('diameter', parsed.diametro);
+        if (!diameterApplied) {
+            warnings.push(`No pude aplicar el diametro "${parsed.diametro}". Revisalo con el selector.`);
+        }
+
+        const widthInput = document.getElementById('width_mm');
+        const lengthInput = document.getElementById('length_mm');
+        if (widthInput && parsed.ancho) {
+            widthInput.value = parsed.ancho;
+        }
+        if (lengthInput && parsed.largo) {
+            lengthInput.value = parsed.largo;
+        }
+
+        const shapeApplied = setSelectValueIfPresent('profile_type', parsed.forma);
+        if (!shapeApplied) {
+            warnings.push(`No pude aplicar la forma "${parsed.forma}". Revisala con el selector.`);
+        }
+
+        renderCodeLogicPreview();
+        setClampCodeNamePreview(buildClampDescriptionFromFields());
+
+        if (diameterApplied && shapeApplied) {
+            runClampCalculation();
+        }
+
+        if (warnings.length) {
+            setClampCodeFeedback(`Codigo leido, pero conviene revisar: ${warnings.join(' ')}`, 'warning');
+        } else {
+            setClampCodeFeedback('Codigo leido correctamente. Revise los datos y listas calculadas.', 'success');
+        }
+        return diameterApplied && shapeApplied;
+    }
+
+    async function applyClampCodeFromInput() {
+        const input = document.getElementById('clamp_code_input');
+        const code = normalizeClampCodeInput(input?.value);
+        if (!code) {
+            setClampCodeFeedback('Ingresa un codigo para leerlo.', 'error');
+            return;
+        }
+        if (input) {
+            input.value = code;
+        }
+
+        try {
+            setClampCodeFeedback('Leyendo codigo...', 'muted');
+            const response = await fetch(CLAMP_CODE_PARSE_URL, {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getClampCSRFToken(),
+                },
+                body: JSON.stringify({
+                    code,
+                    known_widths: CLAMP_KNOWN_WIDTHS,
+                    known_lengths: CLAMP_KNOWN_LENGTHS,
+                }),
+            });
+            const payload = await response.json().catch(() => ({}));
+            if (!response.ok || !payload.success) {
+                throw new Error(payload.error || 'No se pudo leer el codigo.');
+            }
+            applyParsedClampCode(payload.result || {});
+        } catch (error) {
+            setClampCodeFeedback(error.message || 'No se pudo leer el codigo.', 'error');
         }
     }
 
@@ -501,6 +751,8 @@
 
         resultCard.style.display = 'block';
         document.getElementById('resultDescription').textContent = result.description;
+        setClampCodeNamePreview(result.description);
+        setBillingQuickResult(result);
         document.getElementById('resultCode').textContent = result.codeSuggestion.code || '-';
         const codeWarn = document.getElementById('resultCodeWarn');
         if (codeWarn) {
@@ -511,7 +763,7 @@
         document.getElementById('resultWeight').textContent = `Peso: ${result.totalWeightKg.toFixed(4)} kg`;
 
         cardsContainer.innerHTML = result.lists.map((item) => `
-            <article class="clamp-price-card">
+            <article class="clamp-price-card ${item.key === 'facturacion' ? 'is-billing' : ''}">
                 <h4>${item.label}</h4>
                 <small>x${item.multiplier.toFixed(1)}</small>
                 <strong>$${formatMoney(item.finalPrice)}</strong>
@@ -538,8 +790,10 @@
             const result = calculateClampQuote();
             showCalcError('');
             renderClampResults(result);
+            return result;
         } catch (error) {
             showCalcError(error.message || 'No se pudo calcular.');
+            return null;
         }
     }
 
@@ -562,6 +816,7 @@
         }
 
         copyInputToHidden('client_name', 'save_client_name');
+        copyInputToHidden('clamp_code_input', 'save_clamp_code', (source) => normalizeClampCodeInput(source.value));
         const dollarModeTarget = document.getElementById('save_dollar_mode');
         if (dollarModeTarget) {
             dollarModeTarget.value = document.getElementById('dollar_mode_auto')?.checked ? 'auto' : 'manual';
@@ -652,12 +907,28 @@
                 }
                 syncDiameterOptions(radio.value);
                 renderCodeLogicPreview();
+                refreshClampCodeNamePreview();
             });
         });
         ['diameter', 'width_mm', 'length_mm', 'profile_type'].forEach((id) => {
             const node = document.getElementById(id);
-            node?.addEventListener('input', renderCodeLogicPreview);
-            node?.addEventListener('change', renderCodeLogicPreview);
+            const refreshPreview = () => {
+                renderCodeLogicPreview();
+                refreshClampCodeNamePreview();
+            };
+            node?.addEventListener('input', refreshPreview);
+            node?.addEventListener('change', refreshPreview);
+        });
+        document.getElementById('is_zincated')?.addEventListener('change', refreshClampCodeNamePreview);
+        const codeInput = document.getElementById('clamp_code_input');
+        codeInput?.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter' || event.code === 'Enter' || event.code === 'NumpadEnter') {
+                event.preventDefault();
+                applyClampCodeFromInput();
+            }
+        });
+        codeInput?.addEventListener('input', () => {
+            setClampCodeNamePreview('');
         });
         syncDiameterOptions();
         renderCodeLogicPreview();

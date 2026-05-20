@@ -49,7 +49,7 @@ from urllib.parse import urlencode, parse_qs
 import csv
 from openpyxl import Workbook
 
-from catalog.models import Product, Category, CategoryAttribute, ClampMeasureRequest, Supplier, PriceList
+from catalog.models import Product, Category, CategoryAttribute, ClampMeasureRequest, Supplier, PriceList, ClampSpecs
 from accounts.models import (
     AccountRequest,
     ClientCategory,
@@ -1003,6 +1003,7 @@ def _build_clamp_quote_download_response(quote):
 def clamp_quoter(request):
     """Mini cotizador de abrazaderas."""
     default_form = {
+        "clamp_code": "",
         "client_name": "",
         "dollar_rate": "1450",
         "dollar_mode": "manual",
@@ -1021,6 +1022,7 @@ def clamp_quoter(request):
     form_values = default_form.copy()
     if request.method == "POST":
         form_values.update({
+            "clamp_code": str(request.POST.get("clamp_code", "")).strip(),
             "client_name": str(request.POST.get("client_name", "")).strip(),
             "dollar_rate": str(request.POST.get("dollar_rate", "1450")).strip(),
             "dollar_mode": str(request.POST.get("dollar_mode", "manual")).strip().lower(),
@@ -1131,7 +1133,6 @@ def clamp_quoter(request):
                     )
                     product.categories.add(category)
                     
-                    from catalog.models import ClampSpecs
                     ClampSpecs.objects.create(
                         product=product,
                         fabrication=result["inputs"]["clamp_type"].upper(),
@@ -1188,6 +1189,22 @@ def clamp_quoter(request):
     diameter_code_map_json = json.dumps(DIAMETER_HUMAN_TO_COMPACT_DEFAULT)
     all_diameter_options_json = json.dumps(get_allowed_diameter_options())
     laminated_diameter_options_json = json.dumps(list(CLAMP_LAMINATED_ALLOWED_DIAMETERS))
+    known_widths_json = json.dumps(
+        list(
+            ClampSpecs.objects.exclude(width__isnull=True)
+            .values_list("width", flat=True)
+            .distinct()
+            .order_by("width")
+        )
+    )
+    known_lengths_json = json.dumps(
+        list(
+            ClampSpecs.objects.exclude(length__isnull=True)
+            .values_list("length", flat=True)
+            .distinct()
+            .order_by("length")
+        )
+    )
     price_lists_json = json.dumps([
         {"key": key, "label": label, "multiplier": float(multiplier)}
         for key, label, multiplier in CLAMP_PRICE_LISTS
@@ -1202,6 +1219,8 @@ def clamp_quoter(request):
         "diameter_code_map_json": diameter_code_map_json,
         "all_diameter_options_json": all_diameter_options_json,
         "laminated_diameter_options_json": laminated_diameter_options_json,
+        "known_widths_json": known_widths_json,
+        "known_lengths_json": known_lengths_json,
         "price_lists_json": price_lists_json,
         "saved_quotes": saved_quotes,
     })

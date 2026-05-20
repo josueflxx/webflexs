@@ -1723,8 +1723,11 @@
 
 /* Clamp quoter */
 .clamp-quoter-layout {
-    padding: 14px 16px 10px;
-    display: block;
+    padding: 16px;
+    display: grid;
+    grid-template-columns: minmax(620px, 0.95fr) minmax(380px, 0.75fr);
+    gap: 16px;
+    align-items: start;
 }
 
 .clamp-quoter-card {
@@ -1735,7 +1738,16 @@
 }
 
 .clamp-quoter-card-form {
-    max-width: 760px;
+    max-width: none;
+}
+
+.clamp-side-column {
+    min-width: 0;
+    position: sticky;
+    top: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
 }
 
 .clamp-form-title {
@@ -1750,20 +1762,25 @@
 }
 
 .clamp-rows {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px 12px;
 }
 
 .clamp-row {
     display: grid;
-    grid-template-columns: 170px 1fr;
+    grid-template-columns: 128px minmax(0, 1fr);
     gap: 10px;
     align-items: center;
 }
 
+.clamp-row-wide,
+.clamp-code-entry-row {
+    grid-column: 1 / -1;
+}
+
 .clamp-row-label {
-    font-size: 1.02rem;
+    font-size: 0.94rem;
     font-weight: 500;
     color: #f2f5f7;
 }
@@ -1778,6 +1795,114 @@
 .clamp-row-control .form-input,
 .clamp-row-control .form-select {
     width: 100%;
+}
+
+.clamp-code-entry-row {
+    align-items: start;
+    padding-bottom: 4px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.clamp-code-entry-control {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+    align-items: start;
+}
+
+.clamp-code-entry-input {
+    font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.clamp-code-entry-btn {
+    min-height: 40px;
+    white-space: nowrap;
+}
+
+.clamp-code-feedback {
+    grid-column: 1 / -1;
+    color: var(--color-gray-light);
+    font-size: 0.78rem;
+    line-height: 1.35;
+}
+
+.clamp-code-feedback.is-success {
+    color: #78e69b;
+}
+
+.clamp-code-feedback.is-warning {
+    color: #ffd16d;
+}
+
+.clamp-code-feedback.is-error {
+    color: #ff8f9c;
+}
+
+.clamp-code-quick-result {
+    grid-column: 1 / -1;
+    display: grid;
+    gap: 8px;
+}
+
+.clamp-code-quick-result[hidden] {
+    display: none;
+}
+
+.clamp-code-name-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+    align-items: stretch;
+}
+
+.clamp-code-name-preview {
+    display: block;
+    padding: 10px 12px;
+    border: 1px solid rgba(120, 230, 155, 0.35);
+    border-radius: 6px;
+    background: rgba(120, 230, 155, 0.08);
+    color: #f4fff7;
+    font-size: 0.9rem;
+    line-height: 1.35;
+    min-width: 0;
+}
+
+.clamp-code-copy-btn {
+    min-height: 40px;
+    white-space: nowrap;
+}
+
+.clamp-code-calc-btn {
+    width: 100%;
+    min-height: 40px;
+}
+
+.clamp-billing-quick-result {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 12px;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.clamp-billing-quick-result[hidden] {
+    display: none;
+}
+
+.clamp-billing-quick-result span {
+    color: var(--color-gray-light);
+    font-size: 0.82rem;
+    text-transform: uppercase;
+}
+
+.clamp-billing-quick-result strong {
+    color: #78e69b;
+    font-size: 1rem;
 }
 
 .clamp-controls-inline {
@@ -1921,11 +2046,19 @@
 }
 
 .clamp-results-card {
-    margin: 0 16px 14px;
+    margin: 0;
     border: 1px solid rgba(255, 255, 255, 0.1);
     background: rgba(255, 255, 255, 0.02);
     border-radius: 10px;
     padding: 14px;
+}
+
+.clamp-results-card-main {
+    min-height: 280px;
+}
+
+.clamp-history-card {
+    margin: 0 16px 16px;
 }
 
 .clamp-results-header {
@@ -1992,7 +2125,7 @@
 
 .clamp-price-grid {
     display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 10px;
 }
 
@@ -2019,6 +2152,21 @@
 .clamp-price-card strong {
     font-size: 1.05rem;
     color: var(--color-success);
+}
+
+.clamp-price-card.is-billing {
+    grid-column: 1 / -1;
+    border-color: rgba(120, 230, 155, 0.42);
+    background: rgba(120, 230, 155, 0.08);
+}
+
+.clamp-price-card.is-billing h4,
+.clamp-price-card.is-billing strong {
+    color: #78e69b;
+}
+
+.clamp-price-card.is-billing strong {
+    font-size: 1.25rem;
 }
 
 /* Client order history metric cards */
@@ -4829,6 +4977,14 @@
         grid-template-columns: repeat(3, minmax(0, 1fr));
     }
 
+    .clamp-quoter-layout {
+        grid-template-columns: 1fr;
+    }
+
+    .clamp-side-column {
+        position: static;
+    }
+
     .client-history-metrics {
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
@@ -5158,6 +5314,10 @@
     }
 
     .clamp-results-card {
+        margin: 0;
+    }
+
+    .clamp-history-card {
         margin: 0 12px 12px;
     }
 
@@ -5169,6 +5329,10 @@
         grid-template-columns: 1fr;
     }
 
+    .clamp-rows {
+        grid-template-columns: 1fr;
+    }
+
     .clamp-code-parts {
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
@@ -5176,6 +5340,27 @@
     .clamp-row {
         grid-template-columns: 1fr;
         gap: 6px;
+    }
+
+    .clamp-code-entry-control {
+        grid-template-columns: 1fr;
+    }
+
+    .clamp-code-entry-btn {
+        width: 100%;
+    }
+
+    .clamp-code-name-row {
+        grid-template-columns: 1fr;
+    }
+
+    .clamp-code-copy-btn {
+        width: 100%;
+    }
+
+    .clamp-billing-quick-result {
+        align-items: flex-start;
+        flex-direction: column;
     }
 
     .clamp-row-label {
