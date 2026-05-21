@@ -3289,6 +3289,115 @@ class CategoryManageProductsTests(TestCase):
         self.assertEqual(second_row.block_order, 10)
         self.assertEqual(second_row.sort_order, 20)
 
+    def test_convert_category_blocks_to_subcategories(self):
+        second_product = Product.objects.create(
+            sku='CAT-TEST-002',
+            name='Producto Categoria Test 2',
+            price=Decimal('120.00'),
+            cost=Decimal('60.00'),
+            stock=5,
+            is_active=True,
+        )
+        unblocked_product = Product.objects.create(
+            sku='CAT-TEST-003',
+            name='Producto Categoria Test 3',
+            price=Decimal('130.00'),
+            cost=Decimal('70.00'),
+            stock=5,
+            is_active=True,
+        )
+        self.product.categories.add(self.category)
+        second_product.categories.add(self.category)
+        unblocked_product.categories.add(self.category)
+        CategoryProductOrder.objects.create(
+            category=self.category,
+            product=self.product,
+            block_label='Bloque A',
+            block_order=10,
+            sort_order=10,
+        )
+        CategoryProductOrder.objects.create(
+            category=self.category,
+            product=second_product,
+            block_label='Bloque B',
+            block_order=20,
+            sort_order=20,
+        )
+        CategoryProductOrder.objects.create(
+            category=self.category,
+            product=unblocked_product,
+            sort_order=30,
+        )
+
+        self.client.force_login(self.superadmin)
+        response = self.client.post(
+            reverse('admin_category_products', args=[self.category.pk]),
+            data={'action': 'convert_blocks'},
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Bloques convertidos en subcategorias: 2')
+        child_a = Category.objects.get(parent=self.category, name='Bloque A')
+        child_b = Category.objects.get(parent=self.category, name='Bloque B')
+        self.assertEqual(child_a.order, 10)
+        self.assertEqual(child_b.public_order, 20)
+        self.assertTrue(self.product.categories.filter(pk=self.category.pk).exists())
+        self.assertTrue(self.product.categories.filter(pk=child_a.pk).exists())
+        self.assertTrue(second_product.categories.filter(pk=child_b.pk).exists())
+        self.assertFalse(Category.objects.filter(parent=self.category, name='Sin bloque').exists())
+        child_order = CategoryProductOrder.objects.get(category=child_a, product=self.product)
+        self.assertEqual(child_order.block_label, '')
+        self.assertEqual(child_order.block_order, 10)
+        self.assertEqual(child_order.sort_order, 10)
+
+    def test_rollback_category_block_conversion(self):
+        self.product.categories.add(self.category)
+        parent_order = CategoryProductOrder.objects.create(
+            category=self.category,
+            product=self.product,
+            block_label='Bloque A',
+            block_order=10,
+            sort_order=10,
+        )
+
+        self.client.force_login(self.superadmin)
+        self.client.post(
+            reverse('admin_category_products', args=[self.category.pk]),
+            data={'action': 'convert_blocks'},
+            follow=True,
+        )
+
+        child = Category.objects.get(parent=self.category, name='Bloque A')
+        self.assertTrue(self.product.categories.filter(pk=child.pk).exists())
+        conversion_log = AdminAuditLog.objects.get(
+            action='category_blocks_convert_to_subcategories',
+            target_type='category',
+            target_id=str(self.category.pk),
+        )
+        self.assertIn('rollback', conversion_log.details)
+
+        response = self.client.post(
+            reverse('admin_category_products', args=[self.category.pk]),
+            data={
+                'action': 'rollback_block_conversion',
+                'conversion_log_id': str(conversion_log.pk),
+            },
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Conversion deshecha')
+        self.assertFalse(Category.objects.filter(pk=child.pk).exists())
+        self.assertTrue(self.product.categories.filter(pk=self.category.pk).exists())
+        self.assertFalse(
+            CategoryProductOrder.objects.filter(category_id=child.pk, product=self.product).exists()
+        )
+        parent_order.refresh_from_db()
+        self.assertEqual(parent_order.block_label, 'Bloque A')
+        conversion_log.refresh_from_db()
+        self.assertIn('rolled_back_at', conversion_log.details['rollback'])
+
 
 class CategoryBulkActionTests(TestCase):
     def setUp(self):

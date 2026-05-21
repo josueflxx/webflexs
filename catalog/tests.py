@@ -1175,6 +1175,44 @@ class CatalogCategoryVisibilityTests(TestCase):
         skus = [item.sku for item in response.context["page_obj"].object_list]
         self.assertEqual(skus[:2], ["BLK-A", "BLK-B"])
 
+    def test_clamp_filters_apply_to_abrazadera_subcategory(self):
+        parent = Category.objects.create(
+            name="ABRAZADERAS",
+            slug="abrazaderas",
+            is_active=True,
+            visible_in_catalog=True,
+        )
+        child = Category.objects.create(
+            name="Medidas largas",
+            slug="medidas-largas",
+            parent=parent,
+            is_active=True,
+            visible_in_catalog=True,
+        )
+        product = Product.objects.create(
+            sku="ABL-CHILD-001",
+            name="Abrazadera hija",
+            price=Decimal("100.00"),
+            stock=5,
+            is_active=True,
+            category=child,
+        )
+        product.categories.add(child)
+        ClampSpecs.objects.create(
+            product=product,
+            fabrication="LAMINADA",
+            diameter="7/16",
+            width=80,
+            length=220,
+            shape="CURVA",
+        )
+
+        response = self.client.get(reverse("catalog"), {"category": child.slug})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("clamp_options", response.context)
+        self.assertIn("7/16", response.context["clamp_options"]["diameter"])
+
 
 class ProductDetailTemplateTests(TestCase):
     def setUp(self):

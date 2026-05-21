@@ -123,6 +123,17 @@ def can_use_clamp_measure_feature(user, company=None):
     return True
 
 
+def is_clamp_category_branch(category):
+    current = category
+    seen = set()
+    while current and current.pk not in seen:
+        seen.add(current.pk)
+        if "ABRAZADERA" in (current.name or "").upper():
+            return True
+        current = current.parent
+    return False
+
+
 @lru_cache(maxsize=1)
 def get_compact_diameter_lookup():
     """
@@ -785,7 +796,7 @@ def catalog(request):
                     products = products.filter(**{f"attributes__{attr.slug}": value})
                     active_filters[attr.slug] = value
 
-            if "ABRAZADERA" in current_category.name.upper():
+            if is_clamp_category_branch(current_category):
                 spec_fields = ["fabrication", "diameter", "width", "length", "shape"]
                 products_before_specs = products
 

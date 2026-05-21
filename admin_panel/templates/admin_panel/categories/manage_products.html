@@ -96,6 +96,43 @@
                     <button type="submit" class="btn btn-primary btn-sm">Aplicar orden</button>
                 </div>
             </form>
+
+            <form method="post" class="order-toolbox-card">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="convert_blocks">
+                <strong>Convertir bloques</strong>
+                <p>Crea subcategorias hijas con los nombres de los bloques y vincula sus productos.</p>
+                <div class="order-toolbox-actions">
+                    <button
+                        type="submit"
+                        class="btn btn-primary btn-sm"
+                        {% if not named_block_summaries %}disabled{% endif %}
+                        onclick="return confirm('Se crearan subcategorias para los bloques de esta categoria. Los productos conservaran tambien el vinculo con la categoria padre. Continuar?')"
+                    >
+                        Crear subcategorias
+                    </button>
+                </div>
+            </form>
+
+            <form method="post" class="order-toolbox-card">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="rollback_block_conversion">
+                {% if latest_block_conversion_log %}
+                <input type="hidden" name="conversion_log_id" value="{{ latest_block_conversion_log.pk|unlocalize }}">
+                {% endif %}
+                <strong>Deshacer conversion</strong>
+                <p>Revierte la ultima conversion registrada de bloques a subcategorias.</p>
+                <div class="order-toolbox-actions">
+                    <button
+                        type="submit"
+                        class="btn btn-outline btn-sm"
+                        {% if not latest_block_conversion_log %}disabled{% endif %}
+                        onclick="return confirm('Se intentara deshacer la ultima conversion de bloques. Los cambios manuales posteriores se conservaran. Continuar?')"
+                    >
+                        Volver atras
+                    </button>
+                </div>
+            </form>
         </div>
 
         <div class="order-block-workbench">

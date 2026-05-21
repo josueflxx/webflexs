@@ -199,6 +199,10 @@ from catalog.services.category_assignment import (
     replace_categories_for_products,
     remove_category_from_products,
 )
+from catalog.services.category_block_conversion import (
+    convert_category_blocks_to_subcategories,
+    rollback_category_block_conversion,
+)
 from core.services.import_manager import ImportTaskManager
 from core.services.background_jobs import dispatch_import_job
 from core.services.fiscal import (
@@ -2388,6 +2392,19 @@ def _build_order_entries_from_payload(payload_entries):
     return normalized_entries
 
 
+def _get_latest_block_conversion_log(category):
+    logs = AdminAuditLog.objects.filter(
+        action="category_blocks_convert_to_subcategories",
+        target_type="category",
+        target_id=str(category.pk),
+    ).order_by("-created_at")[:10]
+    for log in logs:
+        rollback_payload = (log.details or {}).get("rollback")
+        if rollback_payload and not rollback_payload.get("rolled_back_at"):
+            return log
+    return None
+
+
 @staff_member_required
 @superuser_required_for_modifications
 def category_manage_products(request, pk):
@@ -2448,6 +2465,104 @@ def category_manage_products(request, pk):
         raw_post_body = request.body
         action = request.POST.get('action', 'assign').strip()
         select_all_pages = request.POST.get('select_all_pages') == 'true'
+
+        if action == "rollback_block_conversion":
+            log_id = str(request.POST.get("conversion_log_id") or "").strip()
+            conversion_log = None
+            if log_id.isdigit():
+                conversion_log = AdminAuditLog.objects.filter(
+                    pk=int(log_id),
+                    action="category_blocks_convert_to_subcategories",
+                    target_type="category",
+                    target_id=str(category.pk),
+                ).first()
+            if conversion_log is None:
+                conversion_log = _get_latest_block_conversion_log(category)
+
+            rollback_payload = (conversion_log.details or {}).get("rollback") if conversion_log else None
+            if not conversion_log or not rollback_payload:
+                messages.warning(request, "No hay una conversion reciente para deshacer.")
+                return redirect('admin_category_products', pk=pk)
+            if rollback_payload.get("rolled_back_at"):
+                messages.info(request, "Esta conversion ya fue deshecha.")
+                return redirect('admin_category_products', pk=pk)
+
+            rollback_result = rollback_category_block_conversion(category, rollback_payload)
+            details = dict(conversion_log.details or {})
+            updated_rollback = dict(details.get("rollback") or {})
+            updated_rollback["rolled_back_at"] = timezone.now().isoformat()
+            updated_rollback["rollback_result"] = rollback_result.as_dict()
+            details["rollback"] = updated_rollback
+            conversion_log.details = details
+            conversion_log.save(update_fields=["details"])
+
+            log_admin_action(
+                request,
+                action="category_blocks_rollback_subcategories",
+                target_type="category",
+                target_id=category.pk,
+                details={
+                    "conversion_log_id": conversion_log.pk,
+                    **rollback_result.as_dict(),
+                },
+            )
+            messages.success(
+                request,
+                f"Conversion deshecha. Vinculos quitados: {rollback_result.product_links_removed}; "
+                f"subcategorias eliminadas: {rollback_result.categories_deleted}; "
+                f"ordenes eliminadas: {rollback_result.order_rows_deleted}.",
+            )
+            if rollback_result.categories_kept or rollback_result.skipped_modified_order_rows:
+                messages.warning(
+                    request,
+                    "Algunas subcategorias o filas de orden se conservaron porque tuvieron cambios posteriores.",
+                )
+            return redirect('admin_category_products', pk=pk)
+
+        if action == "convert_blocks":
+            result = convert_category_blocks_to_subcategories(category)
+            if result.blocks_found:
+                messages.success(
+                    request,
+                    f"Bloques convertidos en subcategorias: {result.blocks_found}. "
+                    f"Subcategorias creadas: {result.categories_created}; "
+                    f"reutilizadas: {result.categories_reused}; "
+                    f"productos vinculados: {result.products_processed}.",
+                )
+                if result.skipped_without_block:
+                    messages.info(
+                        request,
+                        f"{result.skipped_without_block} productos quedaron en la categoria padre por no tener bloque.",
+                    )
+                if result.skipped_unlinked:
+                    messages.warning(
+                        request,
+                        f"{result.skipped_unlinked} filas de orden no se convirtieron porque el producto ya no esta vinculado a esta categoria.",
+                    )
+            else:
+                messages.info(
+                    request,
+                    "No hay bloques con productos vinculados para convertir en subcategorias.",
+                )
+            log_admin_action(
+                request,
+                action="category_blocks_convert_to_subcategories",
+                target_type="category",
+                target_id=category.pk,
+                details={
+                    "blocks_found": result.blocks_found,
+                    "categories_created": result.categories_created,
+                    "categories_reused": result.categories_reused,
+                    "products_processed": result.products_processed,
+                    "product_links_created": result.product_links_created,
+                    "order_rows_created": result.order_rows_created,
+                    "order_rows_updated": result.order_rows_updated,
+                    "skipped_without_block": result.skipped_without_block,
+                    "skipped_unlinked": result.skipped_unlinked,
+                    "rollback": result.rollback_payload,
+                },
+            )
+            return redirect('admin_category_products', pk=pk)
 
         if action == "import_order":
             try:
@@ -2632,6 +2747,8 @@ def category_manage_products(request, pk):
         elif block_filter:
             selected_block_label = block_filter
 
+    latest_block_conversion_log = _get_latest_block_conversion_log(category)
+
     return render(request, 'admin_panel/categories/manage_products.html', {
         'category': category,
         'page_obj': page_obj,
@@ -2649,6 +2766,7 @@ def category_manage_products(request, pk):
         'selected_block_filter': block_filter,
         'selected_block_label': selected_block_label,
         'import_order_preview': import_order_preview,
+        'latest_block_conversion_log': latest_block_conversion_log,
     })
 
 
