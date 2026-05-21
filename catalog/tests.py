@@ -1298,7 +1298,10 @@ class CatalogClientExcelDownloadTests(TestCase):
         workbook = load_workbook(BytesIO(response.content))
         self.assertEqual(workbook.sheetnames[0], "INDICE")
         self.assertEqual(workbook["INDICE"]["A1"].value, "Catalogo Plantilla Cliente XLSX")
+        self.assertEqual(workbook["INDICE"]["E4"].value, "Vigente desde")
+        self.assertEqual(workbook["INDICE"]["C7"].value, "Vigencia")
         self.assertEqual(workbook["INDICE"]["A8"].value, "Categoria XLSX")
+        self.assertEqual(workbook["INDICE"]["D8"].value, "Ir a Categoria XLSX")
         self.assertEqual(workbook["INDICE"]["D8"].hyperlink.target, "#'Categoria XLSX'!A1")
         worksheet = workbook["Categoria XLSX"]
         self.assertEqual(worksheet["A1"].value, "SKU")
@@ -1402,10 +1405,16 @@ class CatalogExcelGroupedExportTests(TestCase):
         sheet.categories.add(root)
 
         workbook, stats = build_catalog_workbook(template)
-        worksheet = workbook["ABRAZADERAS"]
+        output = BytesIO()
+        workbook.save(output)
+        output.seek(0)
+        worksheet = load_workbook(output)["ABRAZADERAS"]
         values = [cell.value for row in worksheet.iter_rows() for cell in row if cell.value]
 
         self.assertEqual(stats["rows_by_sheet"]["ABRAZADERAS"], 2)
+        self.assertEqual(worksheet["A4"].value, " ")
+        self.assertEqual(worksheet.row_dimensions[4].height, 10)
+        self.assertEqual(worksheet["A5"].value, "Diametro 1 (1 productos)")
         self.assertIn("Diametro 7/8 (1 productos)", values)
         self.assertIn("Diametro 1 (1 productos)", values)
         self.assertIn("Codigo original", values)
@@ -1450,6 +1459,45 @@ class CatalogExcelGroupedExportTests(TestCase):
         self.assertIn("ABRAZADERA TREFILADA 3/4 X 80 X 220 PLANA", flattened)
         self.assertTrue(any("Datos completados desde codigo" in str(value) for value in flattened))
 
+    def test_clamp_measure_export_highlights_rows_that_need_review(self):
+        root = Category.objects.create(
+            name="ABRAZADERAS",
+            is_active=True,
+            visible_in_catalog=True,
+        )
+        product = Product.objects.create(
+            sku="SIN-DATOS",
+            name="ABRAZADERA ESPECIAL SIN MEDIDA",
+            price=Decimal("100.00"),
+            stock=1,
+            is_active=True,
+            category=root,
+        )
+        product.categories.add(root)
+
+        template = CatalogExcelTemplate.objects.create(name="Catalogo revisar")
+        sheet = CatalogExcelTemplateSheet.objects.create(
+            template=template,
+            name="ABRAZADERAS",
+            include_header=True,
+            only_active_products=True,
+            only_catalog_visible=True,
+            include_descendant_categories=True,
+            special_grouping="clamp_measure",
+        )
+        sheet.categories.add(root)
+
+        workbook, stats = build_catalog_workbook(template)
+        output = BytesIO()
+        workbook.save(output)
+        output.seek(0)
+        worksheet = load_workbook(output)["ABRAZADERAS"]
+
+        self.assertEqual(stats["rows_by_sheet"]["ABRAZADERAS"], 1)
+        self.assertEqual(worksheet["A1"].value, "Para revisar (1 productos)")
+        self.assertIn("Revisar: falta", worksheet["I3"].value)
+        self.assertTrue(str(worksheet["I3"].fill.fgColor.rgb).endswith("FDE68A"))
+
     def test_sheet_can_group_products_by_subcategory_blocks(self):
         root = Category.objects.create(name="Elasticos", order=1, is_active=True)
         child = Category.objects.create(name="Bujes", parent=root, order=2, is_active=True)
@@ -1487,15 +1535,20 @@ class CatalogExcelGroupedExportTests(TestCase):
         CatalogExcelTemplateColumn.objects.create(sheet=sheet, key="price", order=3, is_active=True)
 
         workbook, stats = build_catalog_workbook(template)
-        worksheet = workbook["Elasticos"]
+        output = BytesIO()
+        workbook.save(output)
+        output.seek(0)
+        worksheet = load_workbook(output)["Elasticos"]
 
         self.assertEqual(stats["rows_by_sheet"]["Elasticos"], 2)
         self.assertEqual(worksheet["A1"].value, "Categoria principal (1 productos)")
         self.assertEqual(worksheet["A2"].value, "SKU")
         self.assertEqual(worksheet["A3"].value, "ROOT-001")
-        self.assertEqual(worksheet["A4"].value, "Subcategoria: Bujes (1 productos)")
-        self.assertEqual(worksheet["A5"].value, "SKU")
-        self.assertEqual(worksheet["A6"].value, "CHILD-001")
+        self.assertEqual(worksheet["A4"].value, " ")
+        self.assertEqual(worksheet.row_dimensions[4].height, 10)
+        self.assertEqual(worksheet["A5"].value, "Subcategoria: Bujes (1 productos)")
+        self.assertEqual(worksheet["A6"].value, "SKU")
+        self.assertEqual(worksheet["A7"].value, "CHILD-001")
         self.assertIsNone(worksheet.freeze_panes)
 
     def test_client_catalog_export_skips_inactive_category_blocks(self):

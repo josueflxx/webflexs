@@ -38,12 +38,66 @@ INTEGER_KEYS = {"stock"}
 STATUS_KEYS = {"is_active", "is_visible_in_catalog"}
 DATE_KEYS = {"created_at", "updated_at"}
 TEXT_WRAP_KEYS = {"description", "attributes_json", "categories"}
+RIGHT_ALIGNED_KEYS = MONEY_KEYS | INTEGER_KEYS
+CLAMP_MEASURE_COLUMN_KEYS = [
+    "sku",
+    "name",
+    "clamp_type",
+    "clamp_diameter",
+    "clamp_width",
+    "clamp_length",
+    "clamp_shape",
+    "clamp_normalized_name",
+    "clamp_observations",
+    "price",
+]
+COLUMN_WIDTH_RULES = {
+    "sku": (12, 18),
+    "name": (34, 58),
+    "description": (32, 72),
+    "supplier": (18, 32),
+    "supplier_normalized": (20, 34),
+    "price": (14, 16),
+    "cost": (14, 16),
+    "stock": (10, 12),
+    "is_active": (12, 16),
+    "is_visible_in_catalog": (16, 22),
+    "primary_category": (22, 34),
+    "categories": (28, 58),
+    "filter_1": (16, 32),
+    "filter_2": (16, 32),
+    "filter_3": (16, 32),
+    "filter_4": (16, 32),
+    "filter_5": (16, 32),
+    "created_at": (18, 22),
+    "updated_at": (18, 22),
+    "attributes_json": (32, 72),
+    "clamp_type": (12, 14),
+    "clamp_diameter": (11, 13),
+    "clamp_width": (9, 11),
+    "clamp_length": (9, 11),
+    "clamp_shape": (12, 14),
+    "clamp_normalized_name": (34, 52),
+    "clamp_observations": (34, 58),
+}
 
 HEADER_FILL = PatternFill(fill_type="solid", fgColor="1F2937")
 HEADER_FONT = Font(color="FFFFFF", bold=True)
 HEADER_ALIGNMENT = Alignment(horizontal="left", vertical="center")
-GROUP_TITLE_FILL = PatternFill(fill_type="solid", fgColor="FFE4D6")
-GROUP_TITLE_FONT = Font(color="C2410C", bold=True, size=12)
+GROUP_TITLE_FILL = PatternFill(fill_type="solid", fgColor="FEF3C7")
+GROUP_TITLE_FONT = Font(color="92400E", bold=True, size=12)
+GROUP_PRIMARY_FILL = PatternFill(fill_type="solid", fgColor="DBEAFE")
+GROUP_PRIMARY_FONT = Font(color="1D4ED8", bold=True, size=12)
+GROUP_SUBCATEGORY_FILL = PatternFill(fill_type="solid", fgColor="FEF3C7")
+GROUP_SUBCATEGORY_FONT = Font(color="92400E", bold=True, size=12)
+GROUP_REVIEW_FILL = PatternFill(fill_type="solid", fgColor="FEE2E2")
+GROUP_REVIEW_FONT = Font(color="991B1B", bold=True, size=12)
+GROUP_TITLE_BORDER = Border(
+    left=Side(style="thin", color="CBD5E1"),
+    right=Side(style="thin", color="CBD5E1"),
+    top=Side(style="medium", color="94A3B8"),
+    bottom=Side(style="thin", color="CBD5E1"),
+)
 INDEX_TITLE_FILL = PatternFill(fill_type="solid", fgColor="FF6B3A")
 INDEX_TITLE_FONT = Font(color="FFFFFF", bold=True, size=16)
 INDEX_SUBTITLE_FILL = PatternFill(fill_type="solid", fgColor="111827")
@@ -56,6 +110,9 @@ INDEX_MUTED_FONT = Font(color="374151", bold=True)
 ALT_ROW_FILL = PatternFill(fill_type="solid", fgColor="F8FAFC")
 STATUS_OK_FILL = PatternFill(fill_type="solid", fgColor="D1FAE5")
 STATUS_BAD_FILL = PatternFill(fill_type="solid", fgColor="FEE2E2")
+CLAMP_REVIEW_ROW_FILL = PatternFill(fill_type="solid", fgColor="FFFBEB")
+CLAMP_REVIEW_CELL_FILL = PatternFill(fill_type="solid", fgColor="FDE68A")
+CLAMP_REVIEW_CELL_FONT = Font(color="92400E", bold=True)
 THIN_BORDER = Border(
     left=Side(style="thin", color="D1D5DB"),
     right=Side(style="thin", color="D1D5DB"),
@@ -547,13 +604,19 @@ def _string_len_for_width(value):
     return len(str(value))
 
 
-def _apply_header_styles(worksheet, total_columns, row=1):
+def _apply_header_styles(worksheet, total_columns, row=1, column_keys=None):
     worksheet.row_dimensions[row].height = 20
     for col_idx in range(1, total_columns + 1):
         cell = worksheet.cell(row=row, column=col_idx)
         cell.font = HEADER_FONT
         cell.fill = HEADER_FILL
-        cell.alignment = HEADER_ALIGNMENT
+        key = column_keys[col_idx - 1] if column_keys and col_idx <= len(column_keys) else ""
+        if key in RIGHT_ALIGNED_KEYS or key in {"clamp_width", "clamp_length"}:
+            cell.alignment = Alignment(horizontal="right", vertical="center")
+        elif key in {"clamp_diameter", "clamp_type", "clamp_shape"}:
+            cell.alignment = Alignment(horizontal="center", vertical="center")
+        else:
+            cell.alignment = HEADER_ALIGNMENT
         cell.border = THIN_BORDER
 
 
@@ -587,9 +650,11 @@ def _apply_row_styles(worksheet, excel_row, row_values, column_keys):
             cell.alignment = Alignment(horizontal="left", vertical="center", wrap_text=wrap)
 
 
-def _set_auto_column_widths(worksheet, column_widths):
+def _set_auto_column_widths(worksheet, column_widths, column_keys=None):
     for idx, width in enumerate(column_widths, start=1):
-        adjusted = max(10, min(width + 2, 72))
+        key = column_keys[idx - 1] if column_keys and idx <= len(column_keys) else None
+        min_width, max_width = COLUMN_WIDTH_RULES.get(key, (10, 72))
+        adjusted = max(min_width, min(width + 2, max_width))
         worksheet.column_dimensions[get_column_letter(idx)].width = adjusted
 
 
@@ -610,22 +675,23 @@ def _append_index_sheet(workbook, template, stats, generated_at):
     _prepare_worksheet(worksheet, "FF6B3A")
     local_generated_at = timezone.localtime(generated_at).replace(tzinfo=None)
     version = local_generated_at.strftime("catalogo-%Y%m%d-%H%M%S")
+    valid_from_label = local_generated_at.strftime("%d/%m/%Y %H:%M")
     rows_by_sheet = stats.get("rows_by_sheet", {})
 
     template_label = (template.name or "").strip() or "General"
     title_text = template_label if template_label.lower().startswith("catalogo") else f"Catalogo {template_label}"
-    worksheet.merge_cells(start_row=1, start_column=1, end_row=1, end_column=4)
+    worksheet.merge_cells(start_row=1, start_column=1, end_row=1, end_column=5)
     worksheet["A1"] = title_text
     worksheet["A1"].font = INDEX_TITLE_FONT
     worksheet["A1"].fill = INDEX_TITLE_FILL
     worksheet["A1"].alignment = Alignment(horizontal="left", vertical="center")
     worksheet.row_dimensions[1].height = 28
 
-    worksheet.merge_cells(start_row=2, start_column=1, end_row=2, end_column=4)
+    worksheet.merge_cells(start_row=2, start_column=1, end_row=2, end_column=5)
     worksheet["A2"] = (
-        "Lista digital vigente: productos activos, visibles para clientes y con precio publicable."
+        f"Lista digital vigente desde {valid_from_label}: productos activos, visibles para clientes y con precio publicable."
         if template.is_client_download_enabled
-        else "Exportacion generada segun la configuracion de la plantilla."
+        else f"Exportacion vigente desde {valid_from_label}, generada segun la configuracion de la plantilla."
     )
     worksheet["A2"].font = INDEX_SUBTITLE_FONT
     worksheet["A2"].fill = INDEX_SUBTITLE_FILL
@@ -637,6 +703,7 @@ def _append_index_sheet(workbook, template, stats, generated_at):
         ("Hojas", len(rows_by_sheet), INDEX_CARD_VALUE_FONT),
         ("Version", version, INDEX_CARD_VALUE_FONT),
         ("Generado", local_generated_at.strftime("%d/%m/%Y %H:%M"), INDEX_CARD_VALUE_FONT),
+        ("Vigente desde", valid_from_label, INDEX_CARD_ACCENT_FONT),
     ]
     for col_idx, (label, value, value_font) in enumerate(stat_cards, start=1):
         label_cell = worksheet.cell(row=4, column=col_idx, value=label)
@@ -651,7 +718,7 @@ def _append_index_sheet(workbook, template, stats, generated_at):
     worksheet.row_dimensions[5].height = 26
 
     header_row = 7
-    headers = ["Hoja", "Productos", "Estado", "Acceso"]
+    headers = ["Hoja", "Productos", "Vigencia", "Abrir"]
     for col_idx, header in enumerate(headers, start=1):
         worksheet.cell(row=header_row, column=col_idx, value=header)
     _apply_header_styles(worksheet, len(headers), row=header_row)
@@ -660,8 +727,8 @@ def _append_index_sheet(workbook, template, stats, generated_at):
     for sheet_name, row_count in rows_by_sheet.items():
         worksheet.cell(row=row_idx, column=1, value=sheet_name)
         worksheet.cell(row=row_idx, column=2, value=row_count)
-        worksheet.cell(row=row_idx, column=3, value="Exportada")
-        link_cell = worksheet.cell(row=row_idx, column=4, value="Abrir hoja")
+        worksheet.cell(row=row_idx, column=3, value=valid_from_label)
+        link_cell = worksheet.cell(row=row_idx, column=4, value=f"Ir a {sheet_name}")
         link_cell.hyperlink = _safe_sheet_link(sheet_name)
         link_cell.style = "Hyperlink"
         for col_idx in range(1, 5):
@@ -671,16 +738,24 @@ def _append_index_sheet(workbook, template, stats, generated_at):
         row_idx += 1
 
     worksheet.freeze_panes = "A8"
-    worksheet.column_dimensions["A"].width = 34
+    worksheet.column_dimensions["A"].width = 38
     worksheet.column_dimensions["B"].width = 18
-    worksheet.column_dimensions["C"].width = 20
-    worksheet.column_dimensions["D"].width = 18
+    worksheet.column_dimensions["C"].width = 22
+    worksheet.column_dimensions["D"].width = 30
+    worksheet.column_dimensions["E"].width = 20
 
 
 def _worksheet_next_row(worksheet):
     if worksheet.max_row == 1 and worksheet.max_column == 1 and worksheet["A1"].value is None:
         return 1
     return worksheet.max_row + 1
+
+
+def _append_separator_row(worksheet, total_columns, height=10):
+    worksheet.append([" "] + [""] * max(total_columns - 1, 0))
+    row_index = worksheet.max_row
+    worksheet.row_dimensions[row_index].height = height
+    return row_index
 
 
 def _category_depth(category, category_lookup):
@@ -938,20 +1013,26 @@ def _append_group_title(worksheet, row_index, label, product_count, total_column
     title_cell = worksheet.cell(row=row_index, column=1)
     if label == "Categoria principal":
         title_cell.value = f"Categoria principal ({product_count} productos)"
+        fill = GROUP_PRIMARY_FILL
+        font = GROUP_PRIMARY_FONT
     elif label == "Sin categoria":
         title_cell.value = f"Sin categoria ({product_count} productos)"
+        fill = INDEX_MUTED_FILL
+        font = INDEX_MUTED_FONT
     else:
         title_cell.value = f"Subcategoria: {label} ({product_count} productos)"
-    title_cell.font = GROUP_TITLE_FONT
-    title_cell.fill = GROUP_TITLE_FILL
+        fill = GROUP_SUBCATEGORY_FILL
+        font = GROUP_SUBCATEGORY_FONT
+    title_cell.font = font
+    title_cell.fill = fill
     title_cell.alignment = Alignment(horizontal="left", vertical="center")
-    title_cell.border = THIN_BORDER
+    title_cell.border = GROUP_TITLE_BORDER
 
     if total_columns > 1:
         for col_idx in range(2, total_columns + 1):
             cell = worksheet.cell(row=row_index, column=col_idx)
-            cell.fill = GROUP_TITLE_FILL
-            cell.border = THIN_BORDER
+            cell.fill = fill
+            cell.border = GROUP_TITLE_BORDER
         worksheet.merge_cells(
             start_row=row_index,
             start_column=1,
@@ -970,18 +1051,22 @@ def _append_clamp_measure_group_title(worksheet, row_index, label, product_count
     title_cell = worksheet.cell(row=row_index, column=1)
     if label == "PARA REVISAR":
         title_cell.value = f"Para revisar ({product_count} productos)"
+        fill = GROUP_REVIEW_FILL
+        font = GROUP_REVIEW_FONT
     else:
         title_cell.value = f"Diametro {label} ({product_count} productos)"
-    title_cell.font = GROUP_TITLE_FONT
-    title_cell.fill = GROUP_TITLE_FILL
+        fill = GROUP_PRIMARY_FILL
+        font = GROUP_PRIMARY_FONT
+    title_cell.font = font
+    title_cell.fill = fill
     title_cell.alignment = Alignment(horizontal="left", vertical="center")
-    title_cell.border = THIN_BORDER
+    title_cell.border = GROUP_TITLE_BORDER
 
     if total_columns > 1:
         for col_idx in range(2, total_columns + 1):
             cell = worksheet.cell(row=row_index, column=col_idx)
-            cell.fill = GROUP_TITLE_FILL
-            cell.border = THIN_BORDER
+            cell.fill = fill
+            cell.border = GROUP_TITLE_BORDER
         worksheet.merge_cells(
             start_row=row_index,
             start_column=1,
@@ -992,16 +1077,40 @@ def _append_clamp_measure_group_title(worksheet, row_index, label, product_count
     worksheet.row_dimensions[row_index].height = 22
 
 
-def _apply_clamp_measure_row_styles(worksheet, row_index):
+def _clamp_measure_needs_review(result):
+    if result is None:
+        return False
+    observations = str(getattr(result, "observaciones", "") or "").lower()
+    return bool(
+        not getattr(result, "diametro", "")
+        or "revisar" in observations
+        or "falta" in observations
+        or "no coincide" in observations
+    )
+
+
+def _apply_clamp_measure_row_styles(worksheet, row_index, result=None):
+    needs_review = _clamp_measure_needs_review(result)
     for col_idx in range(1, len(CLAMP_MEASURE_EXCEL_HEADERS) + 1):
         cell = worksheet.cell(row=row_index, column=col_idx)
         cell.border = THIN_BORDER
         cell.alignment = Alignment(vertical="top", wrap_text=col_idx in {2, 8, 9})
         if row_index % 2 == 0:
             cell.fill = ALT_ROW_FILL
+        if needs_review:
+            cell.fill = CLAMP_REVIEW_ROW_FILL
         if col_idx == len(CLAMP_MEASURE_EXCEL_HEADERS):
             cell.number_format = '"$"#,##0.00'
             cell.alignment = Alignment(horizontal="right", vertical="top")
+        elif col_idx in {5, 6}:
+            cell.alignment = Alignment(horizontal="right", vertical="top")
+        elif col_idx in {3, 4, 7}:
+            cell.alignment = Alignment(horizontal="center", vertical="top")
+
+    if needs_review:
+        observation_cell = worksheet.cell(row=row_index, column=9)
+        observation_cell.fill = CLAMP_REVIEW_CELL_FILL
+        observation_cell.font = CLAMP_REVIEW_CELL_FONT
 
 
 def _append_clamp_measure_products(
@@ -1035,8 +1144,8 @@ def _append_clamp_measure_products(
     if not results:
         if sheet_config.include_header:
             worksheet.append(headers)
-            _apply_header_styles(worksheet, total_columns)
-        _set_auto_column_widths(worksheet, column_widths)
+            _apply_header_styles(worksheet, total_columns, column_keys=CLAMP_MEASURE_COLUMN_KEYS)
+        _set_auto_column_widths(worksheet, column_widths, CLAMP_MEASURE_COLUMN_KEYS)
         return 0
 
     counts_by_group = {}
@@ -1050,7 +1159,7 @@ def _append_clamp_measure_products(
         group_label = clamp_measure_group_label(result)
         if group_label != current_group:
             if current_group is not None:
-                worksheet.append([])
+                _append_separator_row(worksheet, total_columns)
             next_row = _worksheet_next_row(worksheet)
             _append_clamp_measure_group_title(
                 worksheet,
@@ -1063,18 +1172,23 @@ def _append_clamp_measure_products(
 
             if sheet_config.include_header:
                 worksheet.append(headers)
-                _apply_header_styles(worksheet, total_columns, row=worksheet.max_row)
+                _apply_header_styles(
+                    worksheet,
+                    total_columns,
+                    row=worksheet.max_row,
+                    column_keys=CLAMP_MEASURE_COLUMN_KEYS,
+                )
 
         row_values = result.as_excel_row()
         worksheet.append(row_values)
         row_index = worksheet.max_row
-        _apply_clamp_measure_row_styles(worksheet, row_index)
+        _apply_clamp_measure_row_styles(worksheet, row_index, result=result)
         for idx, value in enumerate(row_values):
             column_widths[idx] = max(column_widths[idx], _string_len_for_width(value))
         row_count += 1
 
     worksheet.freeze_panes = None
-    _set_auto_column_widths(worksheet, column_widths)
+    _set_auto_column_widths(worksheet, column_widths, CLAMP_MEASURE_COLUMN_KEYS)
     return row_count
 
 
@@ -1146,14 +1260,18 @@ def _append_grouped_products(
     if not sorted_groups:
         if sheet_config.include_header:
             worksheet.append(headers)
-            _apply_header_styles(worksheet, len(headers))
+            _apply_header_styles(worksheet, len(headers), column_keys=column_keys)
         return 0
 
     row_count = 0
+    has_appended_group = False
     for group in sorted_groups:
         products_in_group = group["products"]
         if not products_in_group:
             continue
+
+        if has_appended_group:
+            _append_separator_row(worksheet, len(headers))
 
         title = _category_group_label(group["category"], grouping_context)
         next_row = _worksheet_next_row(worksheet)
@@ -1163,7 +1281,7 @@ def _append_grouped_products(
         if sheet_config.include_header:
             worksheet.append(headers)
             header_row = worksheet.max_row
-            _apply_header_styles(worksheet, len(headers), row=header_row)
+            _apply_header_styles(worksheet, len(headers), row=header_row, column_keys=column_keys)
 
         for product in products_in_group:
             excel_row = worksheet.max_row + 1
@@ -1179,7 +1297,7 @@ def _append_grouped_products(
             )
             row_count += 1
 
-        worksheet.append([])
+        has_appended_group = True
 
     return row_count
 
@@ -1280,7 +1398,7 @@ def build_catalog_workbook(template, price_list=None, discount_percentage=None):
                 price_map,
                 discount_percentage,
             )
-            _set_auto_column_widths(worksheet, column_widths)
+            _set_auto_column_widths(worksheet, column_widths, column_keys)
             if _sheet_requires_public_catalog(sheet_config) and row_count == 0:
                 workbook.remove(worksheet)
                 skipped_sheets.append(sheet_name)
@@ -1292,7 +1410,7 @@ def build_catalog_workbook(template, price_list=None, discount_percentage=None):
         if sheet_config.include_header:
             worksheet.append(headers)
             worksheet.freeze_panes = "A2"
-            _apply_header_styles(worksheet, len(headers))
+            _apply_header_styles(worksheet, len(headers), column_keys=column_keys)
 
         row_count = 0
         for product in _iter_sheet_products(
@@ -1316,7 +1434,7 @@ def build_catalog_workbook(template, price_list=None, discount_percentage=None):
         if sheet_config.include_header and row_count > 0:
             worksheet.auto_filter.ref = worksheet.dimensions
 
-        _set_auto_column_widths(worksheet, column_widths)
+        _set_auto_column_widths(worksheet, column_widths, column_keys)
 
         if _sheet_requires_public_catalog(sheet_config) and row_count == 0:
             workbook.remove(worksheet)
