@@ -751,7 +751,7 @@ def _worksheet_next_row(worksheet):
     return worksheet.max_row + 1
 
 
-def _append_separator_row(worksheet, total_columns, height=10):
+def _append_separator_row(worksheet, total_columns, height=18):
     worksheet.append([" "] + [""] * max(total_columns - 1, 0))
     row_index = worksheet.max_row
     worksheet.row_dimensions[row_index].height = height

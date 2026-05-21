@@ -1413,7 +1413,7 @@ class CatalogExcelGroupedExportTests(TestCase):
 
         self.assertEqual(stats["rows_by_sheet"]["ABRAZADERAS"], 2)
         self.assertEqual(worksheet["A4"].value, " ")
-        self.assertEqual(worksheet.row_dimensions[4].height, 10)
+        self.assertEqual(worksheet.row_dimensions[4].height, 18)
         self.assertEqual(worksheet["A5"].value, "Diametro 1 (1 productos)")
         self.assertIn("Diametro 7/8 (1 productos)", values)
         self.assertIn("Diametro 1 (1 productos)", values)
@@ -1545,7 +1545,7 @@ class CatalogExcelGroupedExportTests(TestCase):
         self.assertEqual(worksheet["A2"].value, "SKU")
         self.assertEqual(worksheet["A3"].value, "ROOT-001")
         self.assertEqual(worksheet["A4"].value, " ")
-        self.assertEqual(worksheet.row_dimensions[4].height, 10)
+        self.assertEqual(worksheet.row_dimensions[4].height, 18)
         self.assertEqual(worksheet["A5"].value, "Subcategoria: Bujes (1 productos)")
         self.assertEqual(worksheet["A6"].value, "SKU")
         self.assertEqual(worksheet["A7"].value, "CHILD-001")
