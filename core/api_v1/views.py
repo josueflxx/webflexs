@@ -136,7 +136,7 @@ class ApiProductListView(ApiV1BaseListView):
             if active_param is not None:
                 queryset = queryset.filter(is_active=active_param)
         else:
-            queryset = Product.catalog_visible(queryset=queryset, include_uncategorized=True)
+            queryset = Product.catalog_visible(queryset=queryset, include_uncategorized=False)
 
         q = (self.request.query_params.get("q") or "").strip()
         if q:

@@ -12,7 +12,6 @@ from openpyxl.utils import get_column_letter
 
 from catalog.models import Category, CategoryProductOrder, Product, PriceListItem
 from catalog.services.clamp_measure_parser import (
-    CLAMP_MEASURE_EXCEL_HEADERS,
     clamp_measure_group_label,
     parse_product_clamp_measure,
     sort_clamp_measure_results,
@@ -42,15 +41,9 @@ RIGHT_ALIGNED_KEYS = MONEY_KEYS | INTEGER_KEYS
 CLAMP_MEASURE_COLUMN_KEYS = [
     "sku",
     "name",
-    "clamp_type",
-    "clamp_diameter",
-    "clamp_width",
-    "clamp_length",
-    "clamp_shape",
-    "clamp_normalized_name",
-    "clamp_observations",
     "price",
 ]
+CLAMP_MEASURE_EXPORT_HEADERS = ["Codigo", "Nombre", "Precio"]
 COLUMN_WIDTH_RULES = {
     "sku": (12, 18),
     "name": (34, 58),
@@ -72,13 +65,6 @@ COLUMN_WIDTH_RULES = {
     "created_at": (18, 22),
     "updated_at": (18, 22),
     "attributes_json": (32, 72),
-    "clamp_type": (12, 14),
-    "clamp_diameter": (11, 13),
-    "clamp_width": (9, 11),
-    "clamp_length": (9, 11),
-    "clamp_shape": (12, 14),
-    "clamp_normalized_name": (34, 52),
-    "clamp_observations": (34, 58),
 }
 
 HEADER_FILL = PatternFill(fill_type="solid", fgColor="1F2937")
@@ -111,8 +97,6 @@ ALT_ROW_FILL = PatternFill(fill_type="solid", fgColor="F8FAFC")
 STATUS_OK_FILL = PatternFill(fill_type="solid", fgColor="D1FAE5")
 STATUS_BAD_FILL = PatternFill(fill_type="solid", fgColor="FEE2E2")
 CLAMP_REVIEW_ROW_FILL = PatternFill(fill_type="solid", fgColor="FFFBEB")
-CLAMP_REVIEW_CELL_FILL = PatternFill(fill_type="solid", fgColor="FDE68A")
-CLAMP_REVIEW_CELL_FONT = Font(color="92400E", bold=True)
 THIN_BORDER = Border(
     left=Side(style="thin", color="D1D5DB"),
     right=Side(style="thin", color="D1D5DB"),
@@ -611,10 +595,8 @@ def _apply_header_styles(worksheet, total_columns, row=1, column_keys=None):
         cell.font = HEADER_FONT
         cell.fill = HEADER_FILL
         key = column_keys[col_idx - 1] if column_keys and col_idx <= len(column_keys) else ""
-        if key in RIGHT_ALIGNED_KEYS or key in {"clamp_width", "clamp_length"}:
+        if key in RIGHT_ALIGNED_KEYS:
             cell.alignment = Alignment(horizontal="right", vertical="center")
-        elif key in {"clamp_diameter", "clamp_type", "clamp_shape"}:
-            cell.alignment = Alignment(horizontal="center", vertical="center")
         else:
             cell.alignment = HEADER_ALIGNMENT
         cell.border = THIN_BORDER
@@ -1091,26 +1073,17 @@ def _clamp_measure_needs_review(result):
 
 def _apply_clamp_measure_row_styles(worksheet, row_index, result=None):
     needs_review = _clamp_measure_needs_review(result)
-    for col_idx in range(1, len(CLAMP_MEASURE_EXCEL_HEADERS) + 1):
+    for col_idx in range(1, len(CLAMP_MEASURE_EXPORT_HEADERS) + 1):
         cell = worksheet.cell(row=row_index, column=col_idx)
         cell.border = THIN_BORDER
-        cell.alignment = Alignment(vertical="top", wrap_text=col_idx in {2, 8, 9})
+        cell.alignment = Alignment(vertical="top", wrap_text=col_idx == 2)
         if row_index % 2 == 0:
             cell.fill = ALT_ROW_FILL
         if needs_review:
             cell.fill = CLAMP_REVIEW_ROW_FILL
-        if col_idx == len(CLAMP_MEASURE_EXCEL_HEADERS):
+        if col_idx == len(CLAMP_MEASURE_EXPORT_HEADERS):
             cell.number_format = '"$"#,##0.00'
             cell.alignment = Alignment(horizontal="right", vertical="top")
-        elif col_idx in {5, 6}:
-            cell.alignment = Alignment(horizontal="right", vertical="top")
-        elif col_idx in {3, 4, 7}:
-            cell.alignment = Alignment(horizontal="center", vertical="top")
-
-    if needs_review:
-        observation_cell = worksheet.cell(row=row_index, column=9)
-        observation_cell.fill = CLAMP_REVIEW_CELL_FILL
-        observation_cell.font = CLAMP_REVIEW_CELL_FONT
 
 
 def _append_clamp_measure_products(
@@ -1137,9 +1110,9 @@ def _append_clamp_measure_products(
         )
         
     results = sort_clamp_measure_results(parsed_results)
-    headers = CLAMP_MEASURE_EXCEL_HEADERS
+    headers = CLAMP_MEASURE_EXPORT_HEADERS
     total_columns = len(headers)
-    column_widths = [16, 48, 14, 12, 10, 10, 14, 46, 36, 15]
+    column_widths = [16, 52, 15]
 
     if not results:
         if sheet_config.include_header:
@@ -1179,7 +1152,11 @@ def _append_clamp_measure_products(
                     column_keys=CLAMP_MEASURE_COLUMN_KEYS,
                 )
 
-        row_values = result.as_excel_row()
+        row_values = [
+            result.codigo_original,
+            result.nombre_original,
+            result.precio if result.precio is not None else "",
+        ]
         worksheet.append(row_values)
         row_index = worksheet.max_row
         _apply_clamp_measure_row_styles(worksheet, row_index, result=result)

@@ -510,7 +510,7 @@ class Product(models.Model):
         return linked_categories
 
     @classmethod
-    def catalog_visibility_q(cls, include_uncategorized=True):
+    def catalog_visibility_q(cls, include_uncategorized=False):
         visibility_q = (
             Q(category__is_active=True, category__visible_in_catalog=True)
             | Q(categories__is_active=True, categories__visible_in_catalog=True)
@@ -520,19 +520,19 @@ class Product(models.Model):
         return visibility_q
 
     @classmethod
-    def catalog_visible(cls, queryset=None, include_uncategorized=True):
+    def catalog_visible(cls, queryset=None, include_uncategorized=False):
         """
         Products visible in public catalog:
         - Product must be active
-        - At least one assigned category must be active and visible in catalog
-          (or uncategorized if include_uncategorized=True).
+        - At least one assigned category must be active and visible in catalog.
+          Uncategorized products stay hidden unless explicitly requested.
         """
         qs = queryset if queryset is not None else cls.objects.all()
         return qs.filter(is_active=True).filter(
             cls.catalog_visibility_q(include_uncategorized=include_uncategorized)
         ).distinct()
 
-    def is_visible_in_catalog(self, include_uncategorized=True):
+    def is_visible_in_catalog(self, include_uncategorized=False):
         if not self.is_active:
             return False
         linked_categories = self.get_linked_categories()

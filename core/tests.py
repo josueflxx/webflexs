@@ -58,15 +58,17 @@ class SearchSuggestionsTests(TestCase):
         session.save()
 
     def test_catalog_scope_returns_suggestions(self):
-        Category.objects.create(name="ABT716 Bujes", slug="abt716-bujes", is_active=True)
-        Product.objects.create(
+        category = Category.objects.create(name="ABT716 Bujes", slug="abt716-bujes", is_active=True)
+        product = Product.objects.create(
             sku="ABT71665100P",
             name="ABRAZADERA TREFILADA DE 7/16 X 65 X 100 PLANA",
             price=Decimal("100.00"),
             cost=Decimal("60.00"),
             stock=5,
             is_active=True,
+            category=category,
         )
+        product.categories.add(category)
 
         response = self.client.get(
             reverse("search_suggestions"),

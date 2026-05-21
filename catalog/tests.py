@@ -1025,6 +1025,23 @@ class CatalogCategoryVisibilityTests(TestCase):
         skus = [item.sku for item in response.context["page_obj"].object_list]
         self.assertNotIn("INT-001", skus)
 
+    def test_uncategorized_product_is_hidden_from_public_catalog_and_detail(self):
+        product = Product.objects.create(
+            sku="SIN-CAT-001",
+            name="Producto sin categoria",
+            price=Decimal("100.00"),
+            stock=5,
+            is_active=True,
+        )
+
+        response = self.client.get(reverse("catalog"))
+        detail_response = self.client.get(reverse("product_detail", args=[product.sku]))
+
+        self.assertEqual(response.status_code, 200)
+        skus = [item.sku for item in response.context["page_obj"].object_list]
+        self.assertNotIn("SIN-CAT-001", skus)
+        self.assertEqual(detail_response.status_code, 404)
+
     def test_public_tree_hides_empty_categories_and_uses_public_name(self):
         public_category = Category.objects.create(
             name="ELASTICOS Y SUSPENSION",
@@ -1417,10 +1434,14 @@ class CatalogExcelGroupedExportTests(TestCase):
         self.assertEqual(worksheet["A5"].value, "Diametro 1 (1 productos)")
         self.assertIn("Diametro 7/8 (1 productos)", values)
         self.assertIn("Diametro 1 (1 productos)", values)
-        self.assertIn("Codigo original", values)
-        self.assertIn("Nombre normalizado", values)
-        self.assertIn("ABRAZADERA TREFILADA 7/8 X 80 X 320 S/CURVA", values)
-        self.assertIn("ABRAZADERA LAMINADA 1 X 135 X 400 CURVA", values)
+        self.assertEqual(worksheet["A2"].value, "Codigo")
+        self.assertEqual(worksheet["B2"].value, "Nombre")
+        self.assertEqual(worksheet["C2"].value, "Precio")
+        self.assertEqual(worksheet["A3"].value, "ABT7880320S")
+        self.assertEqual(worksheet["B3"].value, "ABRAZADERA TREFILADA 7/8 X 80 X 320 S/CURVA")
+        self.assertEqual(worksheet["C3"].value, 100)
+        self.assertNotIn("Tipo", values)
+        self.assertNotIn("Nombre normalizado", values)
 
     def test_clamp_measure_export_uses_code_as_fallback(self):
         root = Category.objects.create(
@@ -1456,8 +1477,10 @@ class CatalogExcelGroupedExportTests(TestCase):
         flattened = [value for row in rows for value in row if value]
 
         self.assertEqual(stats["rows_by_sheet"]["ABRAZADERAS"], 1)
-        self.assertIn("ABRAZADERA TREFILADA 3/4 X 80 X 220 PLANA", flattened)
-        self.assertTrue(any("Datos completados desde codigo" in str(value) for value in flattened))
+        self.assertIn("Diametro 3/4 (1 productos)", flattened)
+        self.assertIn("ABT3480220P", flattened)
+        self.assertIn("ABRAZADERA ESPECIAL A MEDIDA", flattened)
+        self.assertNotIn("Observaciones", flattened)
 
     def test_clamp_measure_export_highlights_rows_that_need_review(self):
         root = Category.objects.create(
@@ -1495,8 +1518,12 @@ class CatalogExcelGroupedExportTests(TestCase):
 
         self.assertEqual(stats["rows_by_sheet"]["ABRAZADERAS"], 1)
         self.assertEqual(worksheet["A1"].value, "Para revisar (1 productos)")
-        self.assertIn("Revisar: falta", worksheet["I3"].value)
-        self.assertTrue(str(worksheet["I3"].fill.fgColor.rgb).endswith("FDE68A"))
+        self.assertEqual(worksheet["A2"].value, "Codigo")
+        self.assertEqual(worksheet["B2"].value, "Nombre")
+        self.assertEqual(worksheet["C2"].value, "Precio")
+        self.assertTrue(str(worksheet["A3"].fill.fgColor.rgb).endswith("FFFBEB"))
+        self.assertTrue(str(worksheet["B3"].fill.fgColor.rgb).endswith("FFFBEB"))
+        self.assertTrue(str(worksheet["C3"].fill.fgColor.rgb).endswith("FFFBEB"))
 
     def test_sheet_can_group_products_by_subcategory_blocks(self):
         root = Category.objects.create(name="Elasticos", order=1, is_active=True)
