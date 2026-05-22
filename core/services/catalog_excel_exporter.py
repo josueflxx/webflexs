@@ -78,6 +78,14 @@ GROUP_SUBCATEGORY_FILL = PatternFill(fill_type="solid", fgColor="FEF3C7")
 GROUP_SUBCATEGORY_FONT = Font(color="92400E", bold=True, size=12)
 GROUP_NESTED_FILL = PatternFill(fill_type="solid", fgColor="DCFCE7")
 GROUP_NESTED_FONT = Font(color="166534", bold=True, size=12)
+GROUP_DEEP_FILL = PatternFill(fill_type="solid", fgColor="EDE9FE")
+GROUP_DEEP_FONT = Font(color="5B21B6", bold=True, size=12)
+GROUP_LEVEL_STYLES = (
+    (GROUP_PRIMARY_FILL, GROUP_PRIMARY_FONT, 0),
+    (GROUP_SUBCATEGORY_FILL, GROUP_SUBCATEGORY_FONT, 1),
+    (GROUP_NESTED_FILL, GROUP_NESTED_FONT, 2),
+    (GROUP_DEEP_FILL, GROUP_DEEP_FONT, 3),
+)
 GROUP_REVIEW_FILL = PatternFill(fill_type="solid", fgColor="FEE2E2")
 GROUP_REVIEW_FONT = Font(color="991B1B", bold=True, size=12)
 GROUP_TITLE_BORDER = Border(
@@ -1019,11 +1027,13 @@ def _group_title_style(label, category, grouping_context):
         return INDEX_MUTED_FILL, INDEX_MUTED_FONT, 0
 
     level = _category_group_level(category, grouping_context)
-    if label == "Categoria principal" or level == 0:
-        return GROUP_PRIMARY_FILL, GROUP_PRIMARY_FONT, 0
-    if level == 1 or level is None:
-        return GROUP_SUBCATEGORY_FILL, GROUP_SUBCATEGORY_FONT, 1
-    return GROUP_NESTED_FILL, GROUP_NESTED_FONT, min(level, 3)
+    if level is None:
+        level = 1
+    if label == "Categoria principal":
+        level = 0
+    style_index = min(max(int(level), 0), len(GROUP_LEVEL_STYLES) - 1)
+    fill, font, indent = GROUP_LEVEL_STYLES[style_index]
+    return fill, font, min(max(int(level), indent), 4)
 
 
 def _format_group_title(label, product_count, level):
@@ -1034,7 +1044,7 @@ def _format_group_title(label, product_count, level):
     if level == 0:
         return f"Categoria: {label} ({product_count} productos)"
     if level and level >= 2:
-        level_label = "3+" if level >= 3 else str(level)
+        level_label = "4+" if level >= 4 else str(level)
         return f"Subcategoria nivel {level_label}: {label} ({product_count} productos)"
     return f"Subcategoria: {label} ({product_count} productos)"
 

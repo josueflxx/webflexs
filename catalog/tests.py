@@ -1528,7 +1528,8 @@ class CatalogExcelGroupedExportTests(TestCase):
     def test_sheet_can_group_products_by_subcategory_blocks(self):
         root = Category.objects.create(name="Elasticos", order=1, is_active=True)
         child = Category.objects.create(name="Bujes", parent=root, order=2, is_active=True)
-        grandchild = Category.objects.create(name="Con pestaña", parent=child, order=3, is_active=True)
+        grandchild = Category.objects.create(name="Con pestana", parent=child, order=3, is_active=True)
+        greatgrandchild = Category.objects.create(name="Reforzado", parent=grandchild, order=4, is_active=True)
         direct_product = Product.objects.create(
             sku="ROOT-001",
             name="Producto categoria raiz",
@@ -1556,6 +1557,15 @@ class CatalogExcelGroupedExportTests(TestCase):
             category=grandchild,
         )
         grandchild_product.categories.add(grandchild)
+        greatgrandchild_product = Product.objects.create(
+            sku="GREAT-001",
+            name="Producto tercer nivel",
+            price=Decimal("400.00"),
+            stock=4,
+            is_active=True,
+            category=greatgrandchild,
+        )
+        greatgrandchild_product.categories.add(greatgrandchild)
 
         template = CatalogExcelTemplate.objects.create(name="Catalogo agrupado")
         sheet = CatalogExcelTemplateSheet.objects.create(
@@ -1577,22 +1587,34 @@ class CatalogExcelGroupedExportTests(TestCase):
         output.seek(0)
         worksheet = load_workbook(output)["Elasticos"]
 
-        self.assertEqual(stats["rows_by_sheet"]["Elasticos"], 3)
+        self.assertEqual(stats["rows_by_sheet"]["Elasticos"], 4)
         self.assertEqual(worksheet["A1"].value, "Categoria principal (1 productos)")
         self.assertTrue(str(worksheet["A1"].fill.fgColor.rgb).endswith("DBEAFE"))
+        self.assertEqual(worksheet["A1"].alignment.indent, 0)
         self.assertEqual(worksheet["A2"].value, "SKU")
         self.assertEqual(worksheet["A3"].value, "ROOT-001")
         self.assertEqual(worksheet["A4"].value, " ")
         self.assertEqual(worksheet.row_dimensions[4].height, 18)
         self.assertEqual(worksheet["A5"].value, "Subcategoria: Bujes (1 productos)")
         self.assertTrue(str(worksheet["A5"].fill.fgColor.rgb).endswith("FEF3C7"))
+        self.assertEqual(worksheet["A5"].alignment.indent, 1)
         self.assertEqual(worksheet["A6"].value, "SKU")
         self.assertEqual(worksheet["A7"].value, "CHILD-001")
         self.assertEqual(worksheet["A8"].value, " ")
-        self.assertEqual(worksheet["A9"].value, "Subcategoria nivel 2: Bujes > Con pestaña (1 productos)")
+        self.assertEqual(worksheet["A9"].value, "Subcategoria nivel 2: Bujes > Con pestana (1 productos)")
         self.assertTrue(str(worksheet["A9"].fill.fgColor.rgb).endswith("DCFCE7"))
+        self.assertEqual(worksheet["A9"].alignment.indent, 2)
         self.assertEqual(worksheet["A10"].value, "SKU")
         self.assertEqual(worksheet["A11"].value, "GRAND-001")
+        self.assertEqual(worksheet["A12"].value, " ")
+        self.assertEqual(
+            worksheet["A13"].value,
+            "Subcategoria nivel 3: Bujes > Con pestana > Reforzado (1 productos)",
+        )
+        self.assertTrue(str(worksheet["A13"].fill.fgColor.rgb).endswith("EDE9FE"))
+        self.assertEqual(worksheet["A13"].alignment.indent, 3)
+        self.assertEqual(worksheet["A14"].value, "SKU")
+        self.assertEqual(worksheet["A15"].value, "GREAT-001")
         self.assertIsNone(worksheet.freeze_panes)
 
     def test_client_catalog_export_skips_inactive_category_blocks(self):
