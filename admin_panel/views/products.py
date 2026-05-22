@@ -2472,6 +2472,28 @@ def _natural_sku_sort_key(value):
     return tuple(parts), text
 
 
+def _clean_product_view_sort(value):
+    value = str(value or "").strip().lower()
+    if value in {"sku_asc", "sku_desc"}:
+        return value
+    return ""
+
+
+def _sort_products_for_view_by_sku(products, view_sort):
+    if view_sort not in {"sku_asc", "sku_desc"}:
+        return products
+    descending = view_sort == "sku_desc"
+    return sorted(
+        list(products),
+        key=lambda product: (
+            _natural_sku_sort_key(product.sku),
+            _natural_sku_sort_key(product.name),
+            product.id,
+        ),
+        reverse=descending,
+    )
+
+
 def _sort_category_products_by_sku(category, descending=False):
     linked_products = list(
         Product.objects.filter(categories=category)
@@ -2649,7 +2671,7 @@ def category_manage_products(request, pk):
 
     def redirect_with_filters():
         query = {}
-        for key in ("q", "category_filter", "status", "block_filter"):
+        for key in ("q", "category_filter", "status", "block_filter", "view_sort"):
             value = str(request.POST.get(key) or "").strip()
             if value:
                 query[key] = value
@@ -2879,8 +2901,9 @@ def category_manage_products(request, pk):
             return redirect_with_filters()
 
     products, search, status, cat_filter, block_filter = get_filtered_queryset(request.GET)
+    view_sort = _clean_product_view_sort(request.GET.get("view_sort"))
 
-    can_reorder_products = cat_filter == 'current' and not search and not status
+    can_reorder_products = cat_filter == 'current' and not search and not status and not view_sort
 
     if cat_filter == 'current':
         order_subquery = (
@@ -2912,10 +2935,13 @@ def category_manage_products(request, pk):
     else:
         products = products.order_by('name', 'sku', 'id')
 
+    products = _sort_products_for_view_by_sku(products, view_sort)
+
     paginator = Paginator(products, 300 if can_reorder_products else 50)
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
     page_start_index = page_obj.start_index()
+    total_count = paginator.count
 
     enrich_products_with_category_state(page_obj.object_list)
     for product in page_obj.object_list:
@@ -2987,8 +3013,9 @@ def category_manage_products(request, pk):
         'search': search,
         'status': status,
         'category_filter': cat_filter,
+        'view_sort': view_sort,
         'all_category_options': all_category_options,
-        'total_count': products.count(),
+        'total_count': total_count,
         'pagination_count': len(page_obj.object_list),
         'page_start_index': page_start_index,
         'can_reorder_products': can_reorder_products,

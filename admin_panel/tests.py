@@ -3330,6 +3330,39 @@ class CategoryManageProductsTests(TestCase):
         self.assertNotContains(response, 'Producto Categoria Test 2')
         self.assertContains(response, 'Viendo: Bloque A')
 
+    def test_manage_products_can_sort_consultation_view_by_sku(self):
+        self.product.sku = 'VIEW-10'
+        self.product.name = 'Vista Diez'
+        self.product.save(update_fields=['sku', 'name'])
+        sku_2 = Product.objects.create(
+            sku='VIEW-2',
+            name='Vista Dos',
+            price=Decimal('120.00'),
+            cost=Decimal('60.00'),
+            stock=5,
+            is_active=True,
+        )
+        sku_1 = Product.objects.create(
+            sku='VIEW-1',
+            name='Vista Uno',
+            price=Decimal('130.00'),
+            cost=Decimal('70.00'),
+            stock=5,
+            is_active=True,
+        )
+
+        self.client.force_login(self.superadmin)
+        response = self.client.get(
+            reverse('admin_category_products', args=[self.category.pk]),
+            {'category_filter': 'all', 'view_sort': 'sku_asc'},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, '<option value="sku_asc" selected>SKU A-Z</option>', html=True)
+        content = response.content.decode()
+        self.assertLess(content.index('Vista Uno'), content.index('Vista Dos'))
+        self.assertLess(content.index('Vista Dos'), content.index('Vista Diez'))
+
     def test_manage_products_shows_block_bulk_actions_when_searching(self):
         self.product.categories.add(self.category)
         CategoryProductOrder.objects.create(

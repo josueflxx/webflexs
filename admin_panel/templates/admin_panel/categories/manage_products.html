@@ -172,6 +172,7 @@
                     <input type="hidden" name="category_filter" value="current">
                     <input type="hidden" name="q" value="{{ search }}">
                     <input type="hidden" name="status" value="{{ status }}">
+                    <input type="hidden" name="view_sort" value="{{ view_sort }}">
                     <select name="block_filter" class="form-select" onchange="this.form.submit()">
                         {% for block_option in block_filter_options %}
                         <option value="{{ block_option.value }}" {% if selected_block_filter == block_option.value %}selected{% endif %}>
@@ -265,6 +266,12 @@
                 <option value="inactive" {% if status == 'inactive' %}selected{% endif %}>Inactivos</option>
             </select>
 
+            <select name="view_sort" class="form-select" onchange="this.form.submit()">
+                <option value="">Orden actual</option>
+                <option value="sku_asc" {% if view_sort == 'sku_asc' %}selected{% endif %}>SKU A-Z</option>
+                <option value="sku_desc" {% if view_sort == 'sku_desc' %}selected{% endif %}>SKU Z-A</option>
+            </select>
+
             <button type="submit" class="btn btn-primary">Filtrar</button>
             <a href="{% url 'admin_category_products' category.pk %}" class="btn btn-outline" title="Limpiar filtros">Limpiar</a>
         </form>
@@ -276,6 +283,7 @@
         <input type="hidden" name="category_filter" value="{{ category_filter }}">
         <input type="hidden" name="status" value="{{ status }}">
         <input type="hidden" name="block_filter" value="{{ selected_block_filter }}">
+        <input type="hidden" name="view_sort" value="{{ view_sort }}">
         <input type="hidden" name="select_all_pages" id="selectAllPagesInput" value="false">
         <input type="hidden" name="product_ids_csv" id="selectedProductIdsCsv" value="">
 
@@ -426,10 +434,10 @@
             <span>Pagina {{ page_obj.number }} de {{ page_obj.paginator.num_pages }} ({{ page_obj.paginator.count }} items)</span>
             <div class="toolbar-actions">
                 {% if page_obj.has_previous %}
-                <a href="?page={{ page_obj.previous_page_number }}&q={{ search }}&category_filter={{ category_filter }}&status={{ status }}&block_filter={{ selected_block_filter|urlencode }}" class="btn btn-outline">← Anterior</a>
+                <a href="?page={{ page_obj.previous_page_number }}&q={{ search }}&category_filter={{ category_filter }}&status={{ status }}&block_filter={{ selected_block_filter|urlencode }}&view_sort={{ view_sort }}" class="btn btn-outline">← Anterior</a>
                 {% endif %}
                 {% if page_obj.has_next %}
-                <a href="?page={{ page_obj.next_page_number }}&q={{ search }}&category_filter={{ category_filter }}&status={{ status }}&block_filter={{ selected_block_filter|urlencode }}" class="btn btn-outline">Siguiente →</a>
+                <a href="?page={{ page_obj.next_page_number }}&q={{ search }}&category_filter={{ category_filter }}&status={{ status }}&block_filter={{ selected_block_filter|urlencode }}&view_sort={{ view_sort }}" class="btn btn-outline">Siguiente →</a>
                 {% endif %}
             </div>
         </div>
@@ -1377,7 +1385,7 @@
 
         .category-products-page > .admin-toolbar:first-of-type .toolbar-search {
             display: grid;
-            grid-template-columns: minmax(240px, 1.5fr) minmax(190px, 1fr) minmax(160px, 0.8fr) auto auto;
+            grid-template-columns: minmax(220px, 1.45fr) minmax(180px, 0.95fr) minmax(150px, 0.72fr) minmax(130px, 0.62fr) auto auto;
             gap: 10px;
             align-items: center;
         }
