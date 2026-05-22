@@ -76,6 +76,8 @@ GROUP_PRIMARY_FILL = PatternFill(fill_type="solid", fgColor="DBEAFE")
 GROUP_PRIMARY_FONT = Font(color="1D4ED8", bold=True, size=12)
 GROUP_SUBCATEGORY_FILL = PatternFill(fill_type="solid", fgColor="FEF3C7")
 GROUP_SUBCATEGORY_FONT = Font(color="92400E", bold=True, size=12)
+GROUP_NESTED_FILL = PatternFill(fill_type="solid", fgColor="DCFCE7")
+GROUP_NESTED_FONT = Font(color="166534", bold=True, size=12)
 GROUP_REVIEW_FILL = PatternFill(fill_type="solid", fgColor="FEE2E2")
 GROUP_REVIEW_FONT = Font(color="991B1B", bold=True, size=12)
 GROUP_TITLE_BORDER = Border(
@@ -991,23 +993,60 @@ def _category_group_label(category, grouping_context):
     return " > ".join(_category_path(category, category_lookup, public=True)) or category.display_name
 
 
-def _append_group_title(worksheet, row_index, label, product_count, total_columns):
-    title_cell = worksheet.cell(row=row_index, column=1)
+def _category_group_level(category, grouping_context):
+    if category is None:
+        return None
+
+    category_lookup = grouping_context["category_lookup"]
+    selected_categories = grouping_context["selected_categories"]
+    category_depth = _category_depth(category, category_lookup)
+    matching_roots = [
+        root
+        for root in selected_categories
+        if _is_descendant_of(category, root.pk, category_lookup)
+    ]
+    if matching_roots:
+        matching_roots.sort(
+            key=lambda root: _category_depth(root, category_lookup),
+            reverse=True,
+        )
+        return max(0, category_depth - _category_depth(matching_roots[0], category_lookup))
+    return category_depth
+
+
+def _group_title_style(label, category, grouping_context):
+    if label == "Sin categoria":
+        return INDEX_MUTED_FILL, INDEX_MUTED_FONT, 0
+
+    level = _category_group_level(category, grouping_context)
+    if label == "Categoria principal" or level == 0:
+        return GROUP_PRIMARY_FILL, GROUP_PRIMARY_FONT, 0
+    if level == 1 or level is None:
+        return GROUP_SUBCATEGORY_FILL, GROUP_SUBCATEGORY_FONT, 1
+    return GROUP_NESTED_FILL, GROUP_NESTED_FONT, min(level, 3)
+
+
+def _format_group_title(label, product_count, level):
     if label == "Categoria principal":
-        title_cell.value = f"Categoria principal ({product_count} productos)"
-        fill = GROUP_PRIMARY_FILL
-        font = GROUP_PRIMARY_FONT
-    elif label == "Sin categoria":
-        title_cell.value = f"Sin categoria ({product_count} productos)"
-        fill = INDEX_MUTED_FILL
-        font = INDEX_MUTED_FONT
-    else:
-        title_cell.value = f"Subcategoria: {label} ({product_count} productos)"
-        fill = GROUP_SUBCATEGORY_FILL
-        font = GROUP_SUBCATEGORY_FONT
+        return f"Categoria principal ({product_count} productos)"
+    if label == "Sin categoria":
+        return f"Sin categoria ({product_count} productos)"
+    if level == 0:
+        return f"Categoria: {label} ({product_count} productos)"
+    if level and level >= 2:
+        level_label = "3+" if level >= 3 else str(level)
+        return f"Subcategoria nivel {level_label}: {label} ({product_count} productos)"
+    return f"Subcategoria: {label} ({product_count} productos)"
+
+
+def _append_group_title(worksheet, row_index, label, product_count, total_columns, category, grouping_context):
+    title_cell = worksheet.cell(row=row_index, column=1)
+    fill, font, indent_level = _group_title_style(label, category, grouping_context)
+    level = _category_group_level(category, grouping_context)
+    title_cell.value = _format_group_title(label, product_count, level)
     title_cell.font = font
     title_cell.fill = fill
-    title_cell.alignment = Alignment(horizontal="left", vertical="center")
+    title_cell.alignment = Alignment(horizontal="left", vertical="center", indent=indent_level)
     title_cell.border = GROUP_TITLE_BORDER
 
     if total_columns > 1:
@@ -1252,7 +1291,15 @@ def _append_grouped_products(
 
         title = _category_group_label(group["category"], grouping_context)
         next_row = _worksheet_next_row(worksheet)
-        _append_group_title(worksheet, next_row, title, len(products_in_group), len(headers))
+        _append_group_title(
+            worksheet,
+            next_row,
+            title,
+            len(products_in_group),
+            len(headers),
+            group["category"],
+            grouping_context,
+        )
         column_widths[0] = max(column_widths[0], _string_len_for_width(title) + 12)
 
         if sheet_config.include_header:
