@@ -3188,6 +3188,88 @@ class CategoryManageProductsTests(TestCase):
         self.assertEqual(second_row.block_order, 10)
         self.assertEqual(second_row.sort_order, 10)
 
+    def test_sort_category_products_by_sku_keeps_blocks_and_uses_natural_order(self):
+        sku_2 = Product.objects.create(
+            sku='SKU-2',
+            name='Producto SKU 2',
+            price=Decimal('120.00'),
+            cost=Decimal('60.00'),
+            stock=5,
+            is_active=True,
+        )
+        sku_1 = Product.objects.create(
+            sku='SKU-1',
+            name='Producto SKU 1',
+            price=Decimal('130.00'),
+            cost=Decimal('70.00'),
+            stock=5,
+            is_active=True,
+        )
+        sku_11 = Product.objects.create(
+            sku='SKU-11',
+            name='Producto SKU 11',
+            price=Decimal('140.00'),
+            cost=Decimal('80.00'),
+            stock=5,
+            is_active=True,
+        )
+        self.product.sku = 'SKU-10'
+        self.product.save(update_fields=['sku'])
+
+        for product in [self.product, sku_2, sku_1, sku_11]:
+            product.categories.add(self.category)
+
+        CategoryProductOrder.objects.create(
+            category=self.category,
+            product=self.product,
+            block_label='Bloque A',
+            block_order=20,
+            sort_order=10,
+        )
+        CategoryProductOrder.objects.create(
+            category=self.category,
+            product=sku_2,
+            block_label='Bloque A',
+            block_order=20,
+            sort_order=20,
+        )
+        CategoryProductOrder.objects.create(
+            category=self.category,
+            product=sku_11,
+            block_label='Bloque B',
+            block_order=10,
+            sort_order=30,
+        )
+        CategoryProductOrder.objects.create(
+            category=self.category,
+            product=sku_1,
+            block_label='Bloque B',
+            block_order=10,
+            sort_order=40,
+        )
+
+        self.client.force_login(self.superadmin)
+        response = self.client.post(
+            reverse('admin_category_products', args=[self.category.pk]),
+            data={
+                'action': 'sort_sku',
+                'direction': 'asc',
+            },
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Orden por SKU A-Z aplicado dentro de cada bloque')
+        ordered_rows = list(
+            CategoryProductOrder.objects.filter(category=self.category)
+            .select_related('product')
+            .order_by('sort_order')
+        )
+        self.assertEqual([row.product.sku for row in ordered_rows], ['SKU-1', 'SKU-11', 'SKU-2', 'SKU-10'])
+        self.assertEqual([row.block_label for row in ordered_rows], ['Bloque B', 'Bloque B', 'Bloque A', 'Bloque A'])
+        self.assertEqual([row.block_order for row in ordered_rows], [10, 10, 20, 20])
+        self.assertEqual([row.sort_order for row in ordered_rows], [10, 20, 30, 40])
+
     def test_manage_products_shows_human_order_numbers(self):
         second_product = Product.objects.create(
             sku='CAT-TEST-002',

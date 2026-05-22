@@ -85,6 +85,33 @@
                 </div>
             </div>
 
+            <form method="post" class="order-toolbox-card">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="sort_sku">
+                <strong>Ordenar por SKU</strong>
+                <p>Orden natural dentro de cada bloque, manteniendo los bloques en su posicion actual.</p>
+                <div class="order-toolbox-actions">
+                    <button
+                        type="submit"
+                        name="direction"
+                        value="asc"
+                        class="btn btn-primary btn-sm"
+                        onclick="return confirm('Se ordenaran todos los productos de esta categoria por SKU A-Z dentro de cada bloque. Continuar?')"
+                    >
+                        SKU A-Z
+                    </button>
+                    <button
+                        type="submit"
+                        name="direction"
+                        value="desc"
+                        class="btn btn-outline btn-sm"
+                        onclick="return confirm('Se ordenaran todos los productos de esta categoria por SKU Z-A dentro de cada bloque. Continuar?')"
+                    >
+                        SKU Z-A
+                    </button>
+                </div>
+            </form>
+
             <form method="post" enctype="multipart/form-data" class="order-toolbox-card order-import-form">
                 {% csrf_token %}
                 <input type="hidden" name="action" value="import_order">

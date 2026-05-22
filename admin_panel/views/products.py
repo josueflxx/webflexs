@@ -2458,6 +2458,98 @@ def _assign_category_product_block(category, product_ids, block_label):
     return len(target_product_ids)
 
 
+def _natural_sku_sort_key(value):
+    text = unicodedata.normalize("NFKD", str(value or "").strip().upper())
+    text = "".join(char for char in text if not unicodedata.combining(char))
+    parts = []
+    for part in re.split(r"(\d+)", text):
+        if not part:
+            continue
+        if part.isdigit():
+            parts.append((0, int(part), part))
+        else:
+            parts.append((1, part))
+    return tuple(parts), text
+
+
+def _sort_category_products_by_sku(category, descending=False):
+    linked_products = list(
+        Product.objects.filter(categories=category)
+        .only("id", "sku", "name")
+        .distinct()
+    )
+    if not linked_products:
+        return 0
+
+    product_ids = [product.id for product in linked_products]
+    existing_rows = {
+        row.product_id: row
+        for row in CategoryProductOrder.objects.filter(
+            category=category,
+            product_id__in=product_ids,
+        )
+    }
+
+    current_items = []
+    for product in linked_products:
+        row = existing_rows.get(product.id)
+        current_items.append({
+            "product": product,
+            "block_label": row.block_label if row else "",
+            "block_order": max(row.block_order if row else 0, 0),
+            "sort_order": max(row.sort_order if row else 999999999, 0),
+        })
+
+    blocks = []
+    blocks_by_label = {}
+    for item in sorted(
+        current_items,
+        key=lambda entry: (
+            entry["block_order"],
+            entry["sort_order"],
+            str(entry["product"].name or "").upper(),
+            str(entry["product"].sku or "").upper(),
+            entry["product"].id,
+        ),
+    ):
+        label = item["block_label"] or ""
+        block = blocks_by_label.get(label)
+        if block is None:
+            block = {
+                "label": label,
+                "block_order": item["block_order"],
+                "items": [],
+            }
+            blocks_by_label[label] = block
+            blocks.append(block)
+        block["items"].append(item)
+
+    ordered_entries = []
+    for block_index, block in enumerate(blocks, start=1):
+        block_order = block["block_order"]
+        if block["label"] and block_order <= 0:
+            block_order = block_index * 10
+        sorted_items = sorted(
+            block["items"],
+            key=lambda item: (
+                _natural_sku_sort_key(item["product"].sku),
+                _natural_sku_sort_key(item["product"].name),
+                item["product"].id,
+            ),
+            reverse=descending,
+        )
+        ordered_entries.extend(
+            {
+                "product_id": item["product"].id,
+                "block_label": block["label"],
+                "block_order": block_order,
+            }
+            for item in sorted_items
+        )
+
+    return _save_category_product_order_entries(category, ordered_entries)
+
+
 def _build_order_entries_from_payload(payload_entries):
     block_order_by_label = {}
     normalized_entries = []
@@ -2665,6 +2757,27 @@ def category_manage_products(request, pk):
                     "skipped_without_block": result.skipped_without_block,
                     "skipped_unlinked": result.skipped_unlinked,
                     "rollback": result.rollback_payload,
+                },
+            )
+            return redirect('admin_category_products', pk=pk)
+
+        if action == "sort_sku":
+            direction = str(request.POST.get("direction") or "asc").strip().lower()
+            descending = direction == "desc"
+            updated = _sort_category_products_by_sku(category, descending=descending)
+            direction_label = "Z-A" if descending else "A-Z"
+            messages.success(
+                request,
+                f"Orden por SKU {direction_label} aplicado dentro de cada bloque: {updated} productos actualizados.",
+            )
+            log_admin_action(
+                request,
+                action="category_products_sort_sku",
+                target_type="category",
+                target_id=category.pk,
+                details={
+                    "direction": direction_label,
+                    "updated": updated,
                 },
             )
             return redirect('admin_category_products', pk=pk)
