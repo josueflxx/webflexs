@@ -3798,6 +3798,51 @@ class ProductBulkSearchSelectionTests(TestCase):
         self.assertContains(response, 'Seleccionar todos los filtrados (305)')
         self.assertContains(response, 'Se encontraron 305 resultados.')
 
+    def test_product_list_orders_by_sku_with_natural_sort(self):
+        Product.objects.create(
+            sku='NHK01010',
+            name='Hoja diez',
+            price=Decimal('100.00'),
+            cost=Decimal('50.00'),
+            stock=1,
+            is_active=True,
+        )
+        Product.objects.create(
+            sku='NHK0102',
+            name='Hoja dos',
+            price=Decimal('100.00'),
+            cost=Decimal('50.00'),
+            stock=1,
+            is_active=True,
+        )
+        Product.objects.create(
+            sku='NHK0101',
+            name='Hoja uno',
+            price=Decimal('100.00'),
+            cost=Decimal('50.00'),
+            stock=1,
+            is_active=True,
+        )
+
+        self.client.force_login(self.superadmin)
+        response = self.client.get(
+            reverse('admin_product_list'),
+            {'q': 'NHK010', 'order': 'sku'},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, '<option value="sku" selected>SKU A-Z</option>', html=True)
+        content = response.content.decode()
+        self.assertLess(content.index('NHK0101'), content.index('NHK0102'))
+        self.assertLess(content.index('NHK0102'), content.index('NHK01010'))
+
+    def test_product_list_rejects_unknown_order(self):
+        self.client.force_login(self.superadmin)
+        response = self.client.get(reverse('admin_product_list'), {'order': 'bad_field'})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context['order_by'], '-updated_at')
+
     def test_bulk_status_update_can_inactivate_all_filtered_results_beyond_visible_page(self):
         matching_products = []
         for index in range(305):

@@ -308,6 +308,35 @@ from .helpers import *
 
 # ===================== PRODUCTS =====================
 
+PRODUCT_LIST_ORDER_FIELDS = {
+    "-updated_at",
+    "updated_at",
+    "name",
+    "-name",
+    "price",
+    "-price",
+    "stock",
+    "-stock",
+    "sku",
+    "-sku",
+}
+
+
+def _clean_product_list_order(value):
+    value = str(value or "").strip()
+    if value in PRODUCT_LIST_ORDER_FIELDS:
+        return value
+    return "-updated_at"
+
+
+def _apply_product_list_order(products, order):
+    if order == "sku":
+        return _sort_products_for_view_by_sku(products, "sku_asc")
+    if order == "-sku":
+        return _sort_products_for_view_by_sku(products, "sku_desc")
+    return products.order_by(order)
+
+
 def _attach_import_duplicate_alert(product):
     attrs = product.attributes or {}
     duplicate_keys = {
@@ -332,11 +361,11 @@ def product_list(request):
     products, search, current_category_id, active_filter = get_product_queryset(request.GET)
     
     # Ordering
-    order = request.GET.get('order', '-updated_at')
-    products = products.order_by(order)
+    order = _clean_product_list_order(request.GET.get('order', '-updated_at'))
+    products = _apply_product_list_order(products, order)
 
     search_result_limit = 300
-    filtered_total_count = products.count()
+    filtered_total_count = len(products) if isinstance(products, list) else products.count()
     search_total_matches = filtered_total_count if search else 0
     search_results_truncated = False
     if search and search_total_matches > search_result_limit:
