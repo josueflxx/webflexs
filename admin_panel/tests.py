@@ -3248,6 +3248,65 @@ class CategoryManageProductsTests(TestCase):
         self.assertNotContains(response, 'Producto Categoria Test 2')
         self.assertContains(response, 'Viendo: Bloque A')
 
+    def test_manage_products_shows_block_bulk_actions_when_searching(self):
+        self.product.categories.add(self.category)
+        CategoryProductOrder.objects.create(
+            category=self.category,
+            product=self.product,
+            block_label='Bloque A',
+            block_order=10,
+            sort_order=10,
+        )
+
+        self.client.force_login(self.superadmin)
+        response = self.client.get(
+            reverse('admin_category_products', args=[self.category.pk]),
+            {'q': 'CAT-TEST-001', 'category_filter': 'current'},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, '<strong>Consulta</strong>', html=True)
+        self.assertContains(response, '<option value="assign_block">Asignar bloque</option>', html=True)
+        self.assertContains(response, 'id="bulkBlockTarget"')
+        self.assertContains(response, 'Bloque A (1)')
+
+    def test_assign_block_with_filtered_search_updates_matching_products(self):
+        second_product = Product.objects.create(
+            sku='CAT-TEST-002',
+            name='Producto Categoria Test 2',
+            price=Decimal('120.00'),
+            cost=Decimal('60.00'),
+            stock=5,
+            is_active=True,
+        )
+        self.product.categories.add(self.category)
+        second_product.categories.add(self.category)
+
+        self.client.force_login(self.superadmin)
+        response = self.client.post(
+            reverse('admin_category_products', args=[self.category.pk]),
+            data={
+                'action': 'assign_block',
+                'select_all_pages': 'true',
+                'q': 'CAT-TEST-001',
+                'category_filter': 'current',
+                'new_block_label': 'Bloque Buscado',
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn('q=CAT-TEST-001', response['Location'])
+        self.assertIn('category_filter=current', response['Location'])
+        order_row = CategoryProductOrder.objects.get(category=self.category, product=self.product)
+        self.assertEqual(order_row.block_label, 'Bloque Buscado')
+        self.assertFalse(
+            CategoryProductOrder.objects.filter(
+                category=self.category,
+                product=second_product,
+                block_label='Bloque Buscado',
+            ).exists()
+        )
+
     def test_reorder_category_product_blocks_keeps_internal_product_order(self):
         second_product = Product.objects.create(
             sku='CAT-TEST-002',

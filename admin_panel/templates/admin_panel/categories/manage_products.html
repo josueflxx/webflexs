@@ -262,8 +262,21 @@
                     <option value="assign">Vincular seleccionados</option>
                     {% if category_filter == 'current' %}
                     <option value="remove">Desvincular seleccionados</option>
+                    <option value="assign_block">Asignar bloque</option>
+                    <option value="clear_block">Quitar bloque</option>
                     {% endif %}
                 </select>
+                {% if category_filter == 'current' %}
+                <div class="bulk-block-target" id="bulkBlockTarget" hidden>
+                    <select name="existing_block_label" id="bulkBlockSelect" class="form-select">
+                        <option value="">Elegir bloque existente...</option>
+                        {% for block in named_block_summaries %}
+                        <option value="{{ block.block_label }}">{{ block.display_label }} ({{ block.count }})</option>
+                        {% endfor %}
+                    </select>
+                    <input type="text" name="new_block_label" id="bulkBlockInput" class="form-input" placeholder="Nuevo bloque...">
+                </div>
+                {% endif %}
                 <button type="submit" class="btn btn-success" id="bulkActionSubmit" disabled>Vincular seleccionados</button>
                 <a href="{% url 'admin_category_list' %}" class="btn btn-outline">Volver</a>
             </div>
@@ -456,6 +469,34 @@
             updateBulkButtons();
         }
 
+        function getBulkActionLabel(action) {
+            if (action === 'remove') return 'Desvincular';
+            if (action === 'assign_block') return 'Asignar bloque';
+            if (action === 'clear_block') return 'Quitar bloque';
+            return 'Vincular';
+        }
+
+        function getBulkActionEmptyLabel(action) {
+            if (action === 'remove') return 'Desvincular seleccionados';
+            if (action === 'assign_block') return 'Asignar bloque';
+            if (action === 'clear_block') return 'Quitar bloque';
+            return 'Vincular seleccionados';
+        }
+
+        function getBulkBlockTargetLabel() {
+            const inputValue = (document.getElementById('bulkBlockInput')?.value || '').trim();
+            const selectedValue = (document.getElementById('bulkBlockSelect')?.value || '').trim();
+            return inputValue || selectedValue;
+        }
+
+        function updateBulkBlockTargetVisibility() {
+            const action = document.getElementById('bulkActionSelect')?.value || 'assign';
+            const blockTarget = document.getElementById('bulkBlockTarget');
+            if (blockTarget) {
+                blockTarget.hidden = action !== 'assign_block';
+            }
+        }
+
         function updateBulkButtons() {
             const checked = document.querySelectorAll('.product-checkbox:checked').length;
             const selectAllGlobal = document.getElementById('selectAllPagesInput').value === 'true';
@@ -464,7 +505,11 @@
 
             const actionSelect = document.getElementById('bulkActionSelect');
             const bulkButton = document.getElementById('bulkActionSubmit');
-            const actionLabel = actionSelect && actionSelect.value === 'remove' ? 'Desvincular' : 'Vincular';
+            const action = actionSelect?.value || 'assign';
+            const actionLabel = getBulkActionLabel(action);
+            const actionReady = action !== 'assign_block' || Boolean(getBulkBlockTargetLabel());
+
+            updateBulkBlockTargetVisibility();
 
             if (csvInput) {
                 if (selectAllGlobal) {
@@ -475,12 +520,16 @@
                 }
             }
 
-            if (count > 0) {
+            if (count > 0 && actionReady) {
                 bulkButton.removeAttribute('disabled');
                 bulkButton.textContent = `${actionLabel} (${count})`;
             } else {
                 bulkButton.setAttribute('disabled', 'true');
-                bulkButton.textContent = `${actionLabel} seleccionados`;
+                if (count > 0 && action === 'assign_block') {
+                    bulkButton.textContent = `Elegir bloque (${count})`;
+                } else {
+                    bulkButton.textContent = getBulkActionEmptyLabel(action);
+                }
             }
 
             if (window.updateOrderSelectionTools) {
@@ -491,6 +540,13 @@
         document.getElementById('bulkActionForm').addEventListener('submit', function(event) {
             const selectAllGlobal = document.getElementById('selectAllPagesInput').value === 'true';
             const csvInput = document.getElementById('selectedProductIdsCsv');
+            const action = document.getElementById('bulkActionSelect')?.value || 'assign';
+
+            if (action === 'assign_block' && !getBulkBlockTargetLabel()) {
+                event.preventDefault();
+                alert('Elegi o escribi un bloque.');
+                return;
+            }
 
             if (!selectAllGlobal) {
                 const selected = Array.from(document.querySelectorAll('.product-checkbox:checked')).map(cb => cb.value);
@@ -511,6 +567,8 @@
             if (actionSelect) {
                 actionSelect.addEventListener('change', updateBulkButtons);
             }
+            document.getElementById('bulkBlockSelect')?.addEventListener('change', updateBulkButtons);
+            document.getElementById('bulkBlockInput')?.addEventListener('input', updateBulkButtons);
             initProductOrderDrag();
             updateBulkButtons();
         });
@@ -1313,6 +1371,23 @@
             width: 100%;
             margin-left: 0 !important;
             justify-content: flex-end;
+        }
+
+        .bulk-block-target {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .bulk-block-target[hidden] {
+            display: none;
+        }
+
+        .bulk-block-target .form-select,
+        .bulk-block-target .form-input {
+            min-width: 190px;
+            max-width: 240px;
         }
 
         .order-status-pill {

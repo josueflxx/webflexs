@@ -2364,6 +2364,100 @@ def _save_category_product_block_order(category, raw_block_labels):
     return len(updates) + len(creates)
 
 
+def _assign_category_product_block(category, product_ids, block_label):
+    cleaned_label = _clean_order_block_label(block_label)
+    unique_product_ids = []
+    seen_product_ids = set()
+    for raw_product_id in product_ids:
+        try:
+            product_id = int(raw_product_id)
+        except (TypeError, ValueError):
+            continue
+        if product_id and product_id not in seen_product_ids:
+            seen_product_ids.add(product_id)
+            unique_product_ids.append(product_id)
+
+    if not unique_product_ids:
+        return 0
+
+    linked_ids = set(
+        Product.categories.through.objects.filter(
+            category_id=category.id,
+            product_id__in=unique_product_ids,
+        ).values_list("product_id", flat=True)
+    )
+    target_product_ids = [
+        product_id for product_id in unique_product_ids
+        if product_id in linked_ids
+    ]
+    if not target_product_ids:
+        return 0
+
+    block_order = 0
+    if cleaned_label:
+        block_order = (
+            CategoryProductOrder.objects.filter(category=category, block_label=cleaned_label)
+            .exclude(block_order=0)
+            .order_by("block_order")
+            .values_list("block_order", flat=True)
+            .first()
+        )
+        if not block_order:
+            max_block_order = (
+                CategoryProductOrder.objects.filter(category=category, product__categories=category)
+                .exclude(block_label="")
+                .aggregate(max_order=Max("block_order"))
+                .get("max_order")
+                or 0
+            )
+            block_order = max_block_order + 10
+
+    existing_rows = {
+        row.product_id: row
+        for row in CategoryProductOrder.objects.filter(
+            category=category,
+            product_id__in=target_product_ids,
+        )
+    }
+    max_sort_order = (
+        CategoryProductOrder.objects.filter(category=category)
+        .aggregate(max_order=Max("sort_order"))
+        .get("max_order")
+        or 0
+    )
+    now = timezone.now()
+    updates = []
+    creates = []
+    for product_id in target_product_ids:
+        row = existing_rows.get(product_id)
+        if row:
+            row.block_label = cleaned_label
+            row.block_order = block_order
+            row.updated_at = now
+            updates.append(row)
+        else:
+            max_sort_order += 10
+            creates.append(
+                CategoryProductOrder(
+                    category=category,
+                    product_id=product_id,
+                    block_label=cleaned_label,
+                    block_order=block_order,
+                    sort_order=max_sort_order,
+                )
+            )
+
+    if creates:
+        CategoryProductOrder.objects.bulk_create(creates, ignore_conflicts=True, batch_size=500)
+    if updates:
+        CategoryProductOrder.objects.bulk_update(
+            updates,
+            ["block_label", "block_order", "updated_at"],
+            batch_size=500,
+        )
+    return len(target_product_ids)
+
+
 def _build_order_entries_from_payload(payload_entries):
     block_order_by_label = {}
     normalized_entries = []
@@ -2460,6 +2554,17 @@ def category_manage_products(request, pk):
                 )
 
         return qs.distinct(), search, status, cat_filter, block_filter
+
+    def redirect_with_filters():
+        query = {}
+        for key in ("q", "category_filter", "status", "block_filter"):
+            value = str(request.POST.get(key) or "").strip()
+            if value:
+                query[key] = value
+        url = reverse("admin_category_products", args=[pk])
+        if query:
+            url = f"{url}?{urlencode(query)}"
+        return redirect(url)
 
     if request.method == 'POST':
         raw_post_body = request.body
@@ -2634,7 +2739,7 @@ def category_manage_products(request, pk):
                         request.POST.get("product_ids_csv", ""),
                     )
                     messages.warning(request, 'No se seleccionaron productos.')
-                    return redirect('admin_category_products', pk=pk)
+                    return redirect_with_filters()
 
             count = 0
             if action == 'assign':
@@ -2643,8 +2748,22 @@ def category_manage_products(request, pk):
             elif action == 'remove':
                 count = remove_category_from_products(target_ids, category.id)
                 messages.success(request, f'{count} vinculos removidos de "{category.name}".')
+            elif action == 'assign_block':
+                block_label = _clean_order_block_label(
+                    request.POST.get("new_block_label") or request.POST.get("existing_block_label") or ""
+                )
+                if not block_label:
+                    messages.warning(request, "Elegi o escribi un bloque para asignar.")
+                    return redirect_with_filters()
+                count = _assign_category_product_block(category, target_ids, block_label)
+                messages.success(request, f'{count} productos asignados al bloque "{block_label}".')
+            elif action == 'clear_block':
+                count = _assign_category_product_block(category, target_ids, "")
+                messages.success(request, f'{count} productos quedaron sin bloque.')
+            else:
+                messages.warning(request, "Accion masiva no reconocida.")
 
-            return redirect('admin_category_products', pk=pk)
+            return redirect_with_filters()
 
     products, search, status, cat_filter, block_filter = get_filtered_queryset(request.GET)
 
