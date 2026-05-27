@@ -13,23 +13,26 @@
 {% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="{% static 'core/css/home.css' %}?v=4">
+<link rel="stylesheet" href="{% static 'core/css/home.css' %}?v=7-hero">
 {% endblock %}
 
 {% block content %}
 <!-- Hero Section -->
 <section id="inicio" class="hero">
+    <div class="hero-media" aria-hidden="true">
+        <img src="{% static 'core/img/home-hero-abrazadera.webp' %}" alt="">
+    </div>
     <div class="hero-overlay"></div>
     <div class="container hero-content">
         <div class="hero-text">
+            <p class="hero-eyebrow">Repuestos para transporte pesado</p>
             <h1 class="hero-title">
-                <span class="hero-title-line">Descubra la gama de</span>
-                <span class="hero-title-line text-primary">productos FLEXS</span>
+                <span class="hero-title-line">Repuestos FLEXS para</span>
+                <span class="hero-title-line text-primary">camiones y acoplados</span>
             </h1>
-            <h2 class="hero-subtitle">Optimice el rendimiento de sus veh&iacute;culos</h2>
+            <h2 class="hero-subtitle">Stock, fabricaci&oacute;n y atenci&oacute;n comercial para mantener su flota en movimiento.</h2>
             <p class="hero-description">
-                Expertos en repuestos para industrias de transporte.<br>
-                Ayudando a empresas a mantenerse en movimiento.
+                Cat&aacute;logo especializado en el&aacute;sticos, suspensi&oacute;n, buloner&iacute;a y abrazaderas a medida para talleres, distribuidores y empresas.
             </p>
             <div class="hero-buttons">
                 <a href="{% url 'catalog' %}" class="btn btn-primary btn-lg">
@@ -40,6 +43,11 @@
                     Solicitar Cuenta
                 </a>
                 {% endif %}
+            </div>
+            <div class="hero-proof-row" aria-label="Indicadores principales">
+                <span><strong>8.000+</strong> productos</span>
+                <span><strong>30+</strong> a&ntilde;os</span>
+                <span><strong>2.000+</strong> clientes</span>
             </div>
         </div>
     </div>
@@ -127,9 +135,6 @@
                     Producimos nuestras propias abrazaderas U-bolt con la m&aacute;s alta calidad
                     y especificaciones precisas.
                 </p>
-                <a href="https://www.ubolt.com.ar" target="_blank" class="service-link">
-                    Ver ubolt.com.ar &rarr;
-                </a>
             </div>
             <div class="service-card">
                 <div class="service-icon">&#128666;</div>
