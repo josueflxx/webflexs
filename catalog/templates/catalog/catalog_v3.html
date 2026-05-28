@@ -10,7 +10,18 @@
 {% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="{% static 'core/css/catalog.css' %}?v=20260519-mobile">
+<link rel="stylesheet" href="{% static 'core/css/catalog.css' %}?v=20260527-hierarchy">
+<style>
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+    .excel-download-btn.disabled {
+        opacity: 0.75;
+        pointer-events: none;
+        cursor: not-allowed;
+    }
+</style>
 {% endblock %}
 
 {% block content %}
@@ -42,7 +53,7 @@
                 </span>
                 {% if current_category %}
                 <span class="header-stat">
-                    categoria: <strong>{{ current_category.display_name }}</strong>
+                    categoria: <strong>{{ current_category_path_label|default:current_category.display_name }}</strong>
                 </span>
                 {% endif %}
                 {% if search_query %}
@@ -118,6 +129,15 @@
                     <p class="text-muted" style="margin:0 0 8px;">
                         Descarga la version publicada del catalogo en formato XLSX.
                     </p>
+                    {% if not user.is_authenticated %}
+                    <a href="{% url 'login' %}?next={{ request.path }}" class="btn btn-outline" style="width:100%;">
+                        Iniciar sesion para descargar
+                    </a>
+                    {% elif not client_catalog_excel_download_enabled %}
+                    <p class="text-muted" style="margin:0; font-size: 0.9em; color: #b45309;">
+                        Disponible solo para clientes aprobados o administradores.
+                    </p>
+                    {% else %}
                     <p class="text-muted catalog-excel-updated">
                         {% if client_catalog_excel_has_pending_changes and client_catalog_excel_last_source_change %}
                         Cambios detectados {{ client_catalog_excel_last_source_change|date:"d/m/Y H:i" }}
@@ -127,7 +147,7 @@
                         Se genera actualizado al descargar.
                         {% endif %}
                     </p>
-                    <a href="{% url 'catalog_client_excel_download' %}" class="btn btn-outline excel-download-btn" style="width:100%;">
+                    <a href="{% url 'catalog_client_excel_download' %}" class="btn btn-outline excel-download-btn" style="width:100%;" onclick="handleExcelDownload(event, this)">
                         <img
                             src="{% static 'core/img/excel-icon.svg' %}"
                             alt="Excel"
@@ -138,6 +158,7 @@
                         >
                         <span>{{ client_catalog_excel_download_label|default:"Descargar catalogo Excel" }}</span>
                     </a>
+                    {% endif %}
                 </div>
                 {% endif %}
 
@@ -309,17 +330,20 @@
                 </div>
 
                 {% if breadcrumb_categories %}
-                <nav class="catalog-breadcrumb">
-                    <a href="{% url 'catalog' %}">Catalogo</a>
-                    {% for crumb in breadcrumb_categories %}
-                    <span>/</span>
-                    {% if forloop.last %}
-                    <strong>{{ crumb.name }}</strong>
-                    {% else %}
-                    <a href="{{ crumb.url }}">{{ crumb.name }}</a>
-                    {% endif %}
-                    {% endfor %}
-                </nav>
+                <section class="catalog-hierarchy-panel">
+                    <span class="hierarchy-label">Ruta actual</span>
+                    <nav class="catalog-breadcrumb">
+                        <a href="{% url 'catalog' %}">Catalogo</a>
+                        {% for crumb in breadcrumb_categories %}
+                        <span>/</span>
+                        {% if forloop.last %}
+                        <strong>{{ crumb.name }}</strong>
+                        {% else %}
+                        <a href="{{ crumb.url }}">{{ crumb.name }}</a>
+                        {% endif %}
+                        {% endfor %}
+                    </nav>
+                </section>
                 {% endif %}
 
                 {% if current_category and current_category.public_description %}
@@ -376,9 +400,14 @@
                                 {% if can_view_catalog_supplier and product.supplier %}
                                 <span>Prov. {{ product.supplier }}</span>
                                 {% endif %}
-                                {% if product.display_categories %}
-                                {% for cat in product.display_categories %}
-                                <span class="catalog-list-category">{{ cat.display_name }}</span>
+                                {% if product.primary_category_chip %}
+                                <a class="catalog-list-category-path" href="{{ product.primary_category_chip.url }}" title="{{ product.primary_category_chip.path }}">
+                                    {{ product.primary_category_chip.path }}
+                                </a>
+                                {% endif %}
+                                {% if product.category_chips %}
+                                {% for chip in product.category_chips %}
+                                <a class="catalog-list-category" href="{{ chip.url }}" title="{{ chip.path }}">{{ chip.name }}</a>
                                 {% endfor %}
                                 {% endif %}
                             </div>
@@ -445,10 +474,16 @@
                                 <a href="{% url 'product_detail' product.sku %}">{{ product.name }}</a>
                             </h3>
 
-                            {% if product.display_categories %}
+                            {% if product.primary_category_chip %}
+                            <a class="product-category-path" href="{{ product.primary_category_chip.url }}" title="{{ product.primary_category_chip.path }}">
+                                {{ product.primary_category_chip.path }}
+                            </a>
+                            {% endif %}
+
+                            {% if product.category_chips %}
                             <div class="product-category-list">
-                                {% for cat in product.display_categories %}
-                                <span class="product-category">{{ cat.display_name }}</span>
+                                {% for chip in product.category_chips %}
+                                <a class="product-category" href="{{ chip.url }}" title="{{ chip.path }}">{{ chip.name }}</a>
                                 {% endfor %}
                             </div>
                             {% endif %}
@@ -692,6 +727,31 @@
             categoriesWrapper.style.display = isHidden ? 'block' : 'none';
             toggleBtn.textContent = isHidden ? 'Ocultar' : 'Ver';
         });
+    }
+
+    function handleExcelDownload(event, element) {
+        if (element.classList.contains('disabled')) {
+            event.preventDefault();
+            return;
+        }
+        element.classList.add('disabled');
+        const icon = element.querySelector('.excel-download-icon');
+        const label = element.querySelector('span');
+        if (icon) {
+            icon.style.animation = 'spin 1.5s linear infinite';
+        }
+        if (label) {
+            label.textContent = 'Preparando archivo...';
+        }
+        setTimeout(() => {
+            element.classList.remove('disabled');
+            if (icon) {
+                icon.style.animation = 'none';
+            }
+            if (label) {
+                label.textContent = '{{ client_catalog_excel_download_label|default:"Descargar catalogo Excel" }}';
+            }
+        }, 8000);
     }
 
     document.addEventListener('DOMContentLoaded', function () {

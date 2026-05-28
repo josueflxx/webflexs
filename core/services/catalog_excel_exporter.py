@@ -68,18 +68,18 @@ COLUMN_WIDTH_RULES = {
 }
 
 HEADER_FILL = PatternFill(fill_type="solid", fgColor="1F2937")
-HEADER_FONT = Font(color="FFFFFF", bold=True)
+HEADER_FONT = Font(name="Segoe UI", color="FFFFFF", bold=True)
 HEADER_ALIGNMENT = Alignment(horizontal="left", vertical="center")
 GROUP_TITLE_FILL = PatternFill(fill_type="solid", fgColor="FEF3C7")
-GROUP_TITLE_FONT = Font(color="92400E", bold=True, size=12)
+GROUP_TITLE_FONT = Font(name="Segoe UI", color="92400E", bold=True, size=12)
 GROUP_PRIMARY_FILL = PatternFill(fill_type="solid", fgColor="DBEAFE")
-GROUP_PRIMARY_FONT = Font(color="1D4ED8", bold=True, size=12)
+GROUP_PRIMARY_FONT = Font(name="Segoe UI", color="1D4ED8", bold=True, size=12)
 GROUP_SUBCATEGORY_FILL = PatternFill(fill_type="solid", fgColor="FEF3C7")
-GROUP_SUBCATEGORY_FONT = Font(color="92400E", bold=True, size=12)
+GROUP_SUBCATEGORY_FONT = Font(name="Segoe UI", color="92400E", bold=True, size=12)
 GROUP_NESTED_FILL = PatternFill(fill_type="solid", fgColor="DCFCE7")
-GROUP_NESTED_FONT = Font(color="166534", bold=True, size=12)
+GROUP_NESTED_FONT = Font(name="Segoe UI", color="166534", bold=True, size=12)
 GROUP_DEEP_FILL = PatternFill(fill_type="solid", fgColor="EDE9FE")
-GROUP_DEEP_FONT = Font(color="5B21B6", bold=True, size=12)
+GROUP_DEEP_FONT = Font(name="Segoe UI", color="5B21B6", bold=True, size=12)
 GROUP_LEVEL_STYLES = (
     (GROUP_PRIMARY_FILL, GROUP_PRIMARY_FONT, 0),
     (GROUP_SUBCATEGORY_FILL, GROUP_SUBCATEGORY_FONT, 1),
@@ -87,36 +87,47 @@ GROUP_LEVEL_STYLES = (
     (GROUP_DEEP_FILL, GROUP_DEEP_FONT, 3),
 )
 GROUP_REVIEW_FILL = PatternFill(fill_type="solid", fgColor="FEE2E2")
-GROUP_REVIEW_FONT = Font(color="991B1B", bold=True, size=12)
+GROUP_REVIEW_FONT = Font(name="Segoe UI", color="991B1B", bold=True, size=12)
 GROUP_TITLE_BORDER = Border(
     left=Side(style="thin", color="CBD5E1"),
     right=Side(style="thin", color="CBD5E1"),
     top=Side(style="medium", color="94A3B8"),
     bottom=Side(style="thin", color="CBD5E1"),
 )
+GROUP_BACKLINK_FONT = Font(name="Segoe UI", color="2563EB", bold=True, underline="single")
+GROUP_BACKLINK_ALIGNMENT = Alignment(horizontal="right", vertical="center")
+GROUP_TITLE_HEIGHT = 24
+INDEX_SHEET_TITLE = "INDICE"
 INDEX_TITLE_FILL = PatternFill(fill_type="solid", fgColor="FF6B3A")
-INDEX_TITLE_FONT = Font(color="FFFFFF", bold=True, size=16)
+INDEX_TITLE_FONT = Font(name="Segoe UI", color="FFFFFF", bold=True, size=16)
 INDEX_SUBTITLE_FILL = PatternFill(fill_type="solid", fgColor="111827")
-INDEX_SUBTITLE_FONT = Font(color="E5E7EB", italic=True)
+INDEX_SUBTITLE_FONT = Font(name="Segoe UI", color="E5E7EB", italic=True)
 INDEX_CARD_FILL = PatternFill(fill_type="solid", fgColor="F8FAFC")
-INDEX_CARD_VALUE_FONT = Font(color="111827", bold=True, size=14)
-INDEX_CARD_ACCENT_FONT = Font(color="C2410C", bold=True, size=14)
+INDEX_CARD_VALUE_FONT = Font(name="Segoe UI", color="111827", bold=True, size=14)
+INDEX_CARD_ACCENT_FONT = Font(name="Segoe UI", color="C2410C", bold=True, size=14)
 INDEX_MUTED_FILL = PatternFill(fill_type="solid", fgColor="F3F4F6")
-INDEX_MUTED_FONT = Font(color="374151", bold=True)
+INDEX_MUTED_FONT = Font(name="Segoe UI", color="374151", bold=True)
 ALT_ROW_FILL = PatternFill(fill_type="solid", fgColor="F8FAFC")
 STATUS_OK_FILL = PatternFill(fill_type="solid", fgColor="D1FAE5")
 STATUS_BAD_FILL = PatternFill(fill_type="solid", fgColor="FEE2E2")
 CLAMP_REVIEW_ROW_FILL = PatternFill(fill_type="solid", fgColor="FFFBEB")
+SEPARATOR_FILL = PatternFill(fill_type="solid", fgColor="FFFFFF")
+SEPARATOR_BORDER = Border(
+    top=Side(style="thin", color="E5E7EB"),
+    bottom=Side(style="thin", color="E5E7EB"),
+)
+SEPARATOR_ROW_HEIGHT = 28
 THIN_BORDER = Border(
     left=Side(style="thin", color="D1D5DB"),
     right=Side(style="thin", color="D1D5DB"),
     top=Side(style="thin", color="D1D5DB"),
     bottom=Side(style="thin", color="D1D5DB"),
 )
+STANDARD_FONT = Font(name="Segoe UI", size=10)
 
 
 def _prepare_worksheet(worksheet, tab_color=None):
-    worksheet.sheet_view.showGridLines = False
+    worksheet.sheet_view.showGridLines = True
     worksheet.sheet_view.zoomScale = 90
     if tab_color:
         worksheet.sheet_properties.tabColor = tab_color
@@ -599,7 +610,7 @@ def _string_len_for_width(value):
 
 
 def _apply_header_styles(worksheet, total_columns, row=1, column_keys=None):
-    worksheet.row_dimensions[row].height = 20
+    worksheet.row_dimensions[row].height = 22
     for col_idx in range(1, total_columns + 1):
         cell = worksheet.cell(row=row, column=col_idx)
         cell.font = HEADER_FONT
@@ -613,9 +624,11 @@ def _apply_header_styles(worksheet, total_columns, row=1, column_keys=None):
 
 
 def _apply_row_styles(worksheet, excel_row, row_values, column_keys):
+    worksheet.row_dimensions[excel_row].height = 20
     for col_idx, value in enumerate(row_values, start=1):
         key = column_keys[col_idx - 1]
         cell = worksheet.cell(row=excel_row, column=col_idx)
+        cell.font = STANDARD_FONT
 
         if excel_row % 2 == 0:
             cell.fill = ALT_ROW_FILL
@@ -650,13 +663,13 @@ def _set_auto_column_widths(worksheet, column_widths, column_keys=None):
         worksheet.column_dimensions[get_column_letter(idx)].width = adjusted
 
 
-def _safe_sheet_link(sheet_name):
+def _safe_sheet_link(sheet_name, cell_reference="A1"):
     escaped = str(sheet_name).replace("'", "''")
-    return f"#'{escaped}'!A1"
+    return f"#'{escaped}'!{cell_reference}"
 
 
 def _append_index_sheet(workbook, template, stats, generated_at):
-    title = "INDICE"
+    title = INDEX_SHEET_TITLE
     if title in workbook.sheetnames:
         counter = 2
         while f"{title} {counter}" in workbook.sheetnames:
@@ -665,6 +678,7 @@ def _append_index_sheet(workbook, template, stats, generated_at):
 
     worksheet = workbook.create_sheet(title, 0)
     _prepare_worksheet(worksheet, "FF6B3A")
+    worksheet.sheet_view.showGridLines = False
     local_generated_at = timezone.localtime(generated_at).replace(tzinfo=None)
     version = local_generated_at.strftime("catalogo-%Y%m%d-%H%M%S")
     valid_from_label = local_generated_at.strftime("%d/%m/%Y %H:%M")
@@ -743,11 +757,25 @@ def _worksheet_next_row(worksheet):
     return worksheet.max_row + 1
 
 
-def _append_separator_row(worksheet, total_columns, height=18):
+def _append_separator_row(worksheet, total_columns, height=SEPARATOR_ROW_HEIGHT):
     worksheet.append([" "] + [""] * max(total_columns - 1, 0))
     row_index = worksheet.max_row
     worksheet.row_dimensions[row_index].height = height
+    for col_idx in range(1, total_columns + 1):
+        cell = worksheet.cell(row=row_index, column=col_idx)
+        cell.fill = SEPARATOR_FILL
+        cell.border = SEPARATOR_BORDER
     return row_index
+
+
+def _set_group_outline(worksheet, start_row, end_row, level=1):
+    if end_row < start_row:
+        return
+    worksheet.sheet_properties.outlinePr.summaryBelow = False
+    worksheet.sheet_properties.outlinePr.applyStyles = True
+    outline_level = min(max(int(level), 1), 7)
+    for row_index in range(start_row, end_row + 1):
+        worksheet.row_dimensions[row_index].outlineLevel = outline_level
 
 
 def _category_depth(category, category_lookup):
@@ -1049,29 +1077,65 @@ def _format_group_title(label, product_count, level):
     return f"Subcategoria: {label} ({product_count} productos)"
 
 
-def _append_group_title(worksheet, row_index, label, product_count, total_columns, category, grouping_context):
-    title_cell = worksheet.cell(row=row_index, column=1)
-    fill, font, indent_level = _group_title_style(label, category, grouping_context)
-    level = _category_group_level(category, grouping_context)
-    title_cell.value = _format_group_title(label, product_count, level)
+def _append_section_title_row(
+    worksheet,
+    row_index,
+    title,
+    total_columns,
+    fill,
+    font,
+    indent_level=0,
+):
+    title_cell = worksheet.cell(row=row_index, column=1, value=title)
     title_cell.font = font
     title_cell.fill = fill
     title_cell.alignment = Alignment(horizontal="left", vertical="center", indent=indent_level)
     title_cell.border = GROUP_TITLE_BORDER
 
-    if total_columns > 1:
-        for col_idx in range(2, total_columns + 1):
-            cell = worksheet.cell(row=row_index, column=col_idx)
-            cell.fill = fill
-            cell.border = GROUP_TITLE_BORDER
+    title_end_column = total_columns
+    link_column = None
+    if total_columns >= 3:
+        title_end_column = total_columns - 1
+        link_column = total_columns
+
+    for col_idx in range(2, title_end_column + 1):
+        cell = worksheet.cell(row=row_index, column=col_idx)
+        cell.fill = fill
+        cell.border = GROUP_TITLE_BORDER
+
+    if title_end_column > 1:
         worksheet.merge_cells(
             start_row=row_index,
             start_column=1,
             end_row=row_index,
-            end_column=total_columns,
+            end_column=title_end_column,
         )
 
-    worksheet.row_dimensions[row_index].height = 22
+    if link_column:
+        link_cell = worksheet.cell(row=row_index, column=link_column, value="Indice")
+        link_cell.hyperlink = _safe_sheet_link(INDEX_SHEET_TITLE)
+        link_cell.font = GROUP_BACKLINK_FONT
+        link_cell.fill = fill
+        link_cell.alignment = GROUP_BACKLINK_ALIGNMENT
+        link_cell.border = GROUP_TITLE_BORDER
+    else:
+        title_cell.hyperlink = _safe_sheet_link(INDEX_SHEET_TITLE)
+
+    worksheet.row_dimensions[row_index].height = GROUP_TITLE_HEIGHT
+
+
+def _append_group_title(worksheet, row_index, label, product_count, total_columns, category, grouping_context):
+    fill, font, indent_level = _group_title_style(label, category, grouping_context)
+    level = _category_group_level(category, grouping_context)
+    _append_section_title_row(
+        worksheet,
+        row_index,
+        _format_group_title(label, product_count, level),
+        total_columns,
+        fill,
+        font,
+        indent_level=indent_level,
+    )
 
 
 def _sheet_uses_clamp_measure_grouping(sheet):
@@ -1079,33 +1143,16 @@ def _sheet_uses_clamp_measure_grouping(sheet):
 
 
 def _append_clamp_measure_group_title(worksheet, row_index, label, product_count, total_columns):
-    title_cell = worksheet.cell(row=row_index, column=1)
     if label == "PARA REVISAR":
-        title_cell.value = f"Para revisar ({product_count} productos)"
+        title = f"Para revisar ({product_count} productos)"
         fill = GROUP_REVIEW_FILL
         font = GROUP_REVIEW_FONT
     else:
-        title_cell.value = f"Diametro {label} ({product_count} productos)"
+        title = f"Diametro {label} ({product_count} productos)"
         fill = GROUP_PRIMARY_FILL
         font = GROUP_PRIMARY_FONT
-    title_cell.font = font
-    title_cell.fill = fill
-    title_cell.alignment = Alignment(horizontal="left", vertical="center")
-    title_cell.border = GROUP_TITLE_BORDER
 
-    if total_columns > 1:
-        for col_idx in range(2, total_columns + 1):
-            cell = worksheet.cell(row=row_index, column=col_idx)
-            cell.fill = fill
-            cell.border = GROUP_TITLE_BORDER
-        worksheet.merge_cells(
-            start_row=row_index,
-            start_column=1,
-            end_row=row_index,
-            end_column=total_columns,
-        )
-
-    worksheet.row_dimensions[row_index].height = 22
+    _append_section_title_row(worksheet, row_index, title, total_columns, fill, font)
 
 
 def _clamp_measure_needs_review(result):
@@ -1121,9 +1168,11 @@ def _clamp_measure_needs_review(result):
 
 
 def _apply_clamp_measure_row_styles(worksheet, row_index, result=None):
+    worksheet.row_dimensions[row_index].height = 20
     needs_review = _clamp_measure_needs_review(result)
     for col_idx in range(1, len(CLAMP_MEASURE_EXPORT_HEADERS) + 1):
         cell = worksheet.cell(row=row_index, column=col_idx)
+        cell.font = STANDARD_FONT
         cell.border = THIN_BORDER
         cell.alignment = Alignment(vertical="top", wrap_text=col_idx == 2)
         if row_index % 2 == 0:
@@ -1177,10 +1226,12 @@ def _append_clamp_measure_products(
 
     row_count = 0
     current_group = None
+    current_group_detail_start = None
     for result in results:
         group_label = clamp_measure_group_label(result)
         if group_label != current_group:
             if current_group is not None:
+                _set_group_outline(worksheet, current_group_detail_start, worksheet.max_row)
                 _append_separator_row(worksheet, total_columns)
             next_row = _worksheet_next_row(worksheet)
             _append_clamp_measure_group_title(
@@ -1191,6 +1242,7 @@ def _append_clamp_measure_products(
                 total_columns,
             )
             current_group = group_label
+            current_group_detail_start = next_row + 1
 
             if sheet_config.include_header:
                 worksheet.append(headers)
@@ -1213,6 +1265,7 @@ def _append_clamp_measure_products(
             column_widths[idx] = max(column_widths[idx], _string_len_for_width(value))
         row_count += 1
 
+    _set_group_outline(worksheet, current_group_detail_start, worksheet.max_row)
     worksheet.freeze_panes = None
     _set_auto_column_widths(worksheet, column_widths, CLAMP_MEASURE_COLUMN_KEYS)
     return row_count
@@ -1317,6 +1370,7 @@ def _append_grouped_products(
             header_row = worksheet.max_row
             _apply_header_styles(worksheet, len(headers), row=header_row, column_keys=column_keys)
 
+        detail_start_row = next_row + 1
         for product in products_in_group:
             excel_row = worksheet.max_row + 1
             _append_product_row(
@@ -1331,6 +1385,13 @@ def _append_grouped_products(
             )
             row_count += 1
 
+        group_level = _category_group_level(group["category"], grouping_context)
+        _set_group_outline(
+            worksheet,
+            detail_start_row,
+            worksheet.max_row,
+            level=(group_level or 0) + 1,
+        )
         has_appended_group = True
 
     return row_count

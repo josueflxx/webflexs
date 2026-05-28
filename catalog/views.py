@@ -494,6 +494,7 @@ def get_catalog_product_queryset():
             "is_active",
             "visible_in_catalog",
             "slug",
+            "parent_id",
         ),
         to_attr="prefetched_public_categories",
     )
@@ -510,13 +511,15 @@ def get_catalog_product_queryset():
             "stock",
             "image",
             "category_id",
-            "category__id",
-            "category__name",
-            "category__public_name",
-            "category__is_active",
-            "category__visible_in_catalog",
-            "updated_at",
-        )
+                "category__id",
+                "category__name",
+                "category__public_name",
+                "category__slug",
+                "category__parent_id",
+                "category__is_active",
+                "category__visible_in_catalog",
+                "updated_at",
+            )
     )
 
 
@@ -702,6 +705,65 @@ def build_category_breadcrumb(current_category):
         node = node.parent
     chain.reverse()
     return [{"name": cat.display_name, "url": f"{reverse('catalog')}?category={cat.slug}"} for cat in chain]
+
+
+def build_category_path_label(category):
+    return " > ".join(crumb["name"] for crumb in build_category_breadcrumb(category))
+
+
+def collect_public_product_categories(product):
+    linked_categories = list(getattr(product, "prefetched_public_categories", []))
+    primary_category = None
+    if (
+        product.category_id
+        and product.category
+        and product.category.is_active
+        and product.category.visible_in_catalog
+    ):
+        primary_category = product.category
+        if all(cat.id != product.category_id for cat in linked_categories):
+            linked_categories.append(product.category)
+
+    ordered_categories = []
+    seen_ids = set()
+    if primary_category:
+        ordered_categories.append(primary_category)
+        seen_ids.add(primary_category.id)
+    for category in linked_categories:
+        if category.id not in seen_ids:
+            ordered_categories.append(category)
+            seen_ids.add(category.id)
+    return ordered_categories
+
+
+def build_product_category_chips(product, category_path_map=None, limit=3):
+    chips = []
+    for category in collect_public_product_categories(product):
+        path = ""
+        if category_path_map:
+            path = category_path_map.get(category.id, "")
+        if not path:
+            path = build_category_path_label(category) or category.display_name
+        chips.append(
+            {
+                "category": category,
+                "name": category.display_name,
+                "path": path,
+                "url": f"{reverse('catalog')}?category={category.slug}",
+            }
+        )
+    chips.sort(key=lambda chip: (-chip["path"].count(" > "), chip["name"].lower()))
+    return chips[:limit]
+
+
+def attach_product_category_context(product, category_path_map=None, limit=3):
+    chips = build_product_category_chips(product, category_path_map=category_path_map, limit=limit)
+    product.category_chips = chips
+    product.display_categories = [chip["category"] for chip in chips]
+    product.primary_category_chip = chips[0] if chips else None
+    product.primary_category_path = product.primary_category_chip["path"] if chips else ""
+    product.primary_category_url = product.primary_category_chip["url"] if chips else ""
+    return product
 
 
 def log_catalog_analytics(request, search_query, current_category, active_filters, results_count):
@@ -921,6 +983,10 @@ def catalog(request):
     page_obj = paginator.get_page(request.GET.get("page", 1))
 
     category_tree_rows = get_cached_category_tree_rows()
+    category_path_map = {
+        row["category"].id: row["full_path"]
+        for row in category_tree_rows
+    }
 
     settings = SiteSettings.get_settings()
     show_prices = settings.show_public_prices or request.user.is_authenticated
@@ -974,6 +1040,7 @@ def catalog(request):
         )
         product.base_price = pricing.base_price
         product.final_price = pricing.final_price
+        attach_product_category_context(product, category_path_map=category_path_map)
 
     expanded_category_ids = []
     current_category_has_descendants = False
@@ -1006,6 +1073,7 @@ def catalog(request):
     )
 
     breadcrumb_categories = build_category_breadcrumb(current_category)
+    current_category_path_label = build_category_path_label(current_category)
     canonical_url = request.build_absolute_uri(reverse("catalog"))
     if current_category:
         canonical_url = request.build_absolute_uri(f"{reverse('catalog')}?category={current_category.slug}")
@@ -1042,6 +1110,7 @@ def catalog(request):
         "active_filters": active_filters,
         "active_filter_chips": active_filter_chips,
         "breadcrumb_categories": breadcrumb_categories,
+        "current_category_path_label": current_category_path_label,
         "order_by": order_by,
         "view_mode": view_mode,
         "can_view_catalog_supplier": bool(request.user.is_authenticated and request.user.is_staff),
@@ -1073,6 +1142,7 @@ def product_detail(request, sku):
             "is_active",
             "visible_in_catalog",
             "slug",
+            "parent_id",
         ),
         to_attr="prefetched_public_categories",
     )
@@ -1093,6 +1163,7 @@ def product_detail(request, sku):
                 "category__name",
                 "category__public_name",
                 "category__slug",
+                "category__parent_id",
                 "category__is_active",
                 "category__visible_in_catalog",
             )
@@ -1139,25 +1210,39 @@ def product_detail(request, sku):
     )
     final_price = pricing.final_price
     base_price = pricing.base_price
-    linked_categories = list(getattr(product, "prefetched_public_categories", []))
-    if (
-        product.category_id
-        and product.category
-        and product.category.is_active
-        and product.category.visible_in_catalog
-        and all(cat.id != product.category_id for cat in linked_categories)
-    ):
-        linked_categories.append(product.category)
-    if (
-        product.category_id
-        and product.category
-        and product.category.is_active
-        and product.category.visible_in_catalog
-    ):
-        primary_category = product.category
-    else:
-        primary_category = linked_categories[0] if linked_categories else None
+    product_category_chips = build_product_category_chips(product, limit=6)
+    linked_categories = [chip["category"] for chip in product_category_chips]
+    primary_category = linked_categories[0] if linked_categories else None
+    primary_category_chip = product_category_chips[0] if product_category_chips else None
     category_breadcrumb = build_category_breadcrumb(primary_category)
+
+    related_products = []
+    if primary_category:
+        related_products = list(
+            Product.catalog_visible(
+                Product.objects.select_related("category")
+                .prefetch_related(public_category_prefetch)
+                .filter(Q(category_id=primary_category.id) | Q(categories__id=primary_category.id))
+                .exclude(pk=product.pk)
+                .distinct()
+                .order_by("name", "sku", "id")
+            )[:4]
+        )
+        related_price_map = build_price_list_item_map(
+            price_list,
+            [related_product.id for related_product in related_products],
+        )
+        for related_product in related_products:
+            attach_product_category_context(related_product, limit=2)
+            related_pricing = get_product_pricing(
+                related_product,
+                company=company,
+                price_list=price_list,
+                item_map=related_price_map,
+                context=pricing_context,
+            )
+            related_product.base_price = related_pricing.base_price
+            related_product.final_price = related_pricing.final_price
 
     description = (product.description or "").strip()
     seo_description = (
@@ -1167,6 +1252,7 @@ def product_detail(request, sku):
     context = {
         "product": product,
         "display_categories": linked_categories[:6],
+        "category_chips": product_category_chips,
         "show_prices": show_prices,
         "discount": discount,
         "discount_percentage": discount_percentage,
@@ -1174,7 +1260,9 @@ def product_detail(request, sku):
         "base_price": base_price,
         "price_message": settings.public_prices_message,
         "primary_category": primary_category,
+        "primary_category_chip": primary_category_chip,
         "category_breadcrumb": category_breadcrumb,
+        "related_products": related_products,
         "canonical_url": request.build_absolute_uri(request.path),
         "seo_title": f"{product.name} | FLEXS",
         "seo_description": seo_description,
@@ -1187,6 +1275,13 @@ def product_detail(request, sku):
 @login_required
 def client_catalog_excel_download(request):
     """Download the published catalog Excel template for approved clients/admins."""
+    import os
+    from datetime import datetime
+    from django.conf import settings
+    from django.http import FileResponse
+    from django.utils import timezone
+    from core.services.catalog_excel_status import latest_catalog_excel_source_change
+
     if not request.user.is_staff:
         profile = getattr(request.user, "client_profile", None)
         company = get_active_company(request)
@@ -1234,21 +1329,60 @@ def client_catalog_excel_download(request):
         client_company=pricing_context[1] if pricing_context else None,
         client_category=pricing_context[2] if pricing_context else None,
     )
+
+    # Resolve caching
+    cache_dir = os.path.join(settings.MEDIA_ROOT, 'catalog_exports')
+    os.makedirs(cache_dir, exist_ok=True)
+    
+    price_list_id = price_list.id if price_list else 0
+    discount_int = int(discount_percentage * 100) if discount_percentage else 0
+    cache_filename = f"catalogo_client_tpl{template.id}_plist{price_list_id}_disc{discount_int}.xlsx"
+    cache_path = os.path.join(cache_dir, cache_filename)
+
+    source_change = latest_catalog_excel_source_change(template)
+    
+    use_cache = False
+    if os.path.exists(cache_path) and source_change:
+        file_mtime = timezone.make_aware(datetime.fromtimestamp(os.path.getmtime(cache_path)))
+        if file_mtime > source_change:
+            use_cache = True
+
+    file_name = build_export_filename(template)
+
+    if use_cache:
+        with open(cache_path, 'rb') as f:
+            file_data = f.read()
+        response = HttpResponse(
+            file_data,
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+        response["Content-Disposition"] = f'attachment; filename="{file_name}"'
+        response["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+        response["Pragma"] = "no-cache"
+        response["Expires"] = "0"
+        return response
+
+    # Otherwise, rebuild
     workbook, stats = build_catalog_workbook(
         template,
         price_list=price_list,
         discount_percentage=discount_percentage,
     )
     template.mark_generated(stats, user=request.user)
-    file_name = build_export_filename(template)
+    
+    # Save to disk cache
+    workbook.save(cache_path)
+    
+    with open(cache_path, 'rb') as f:
+        file_data = f.read()
     response = HttpResponse(
+        file_data,
         content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
     response["Content-Disposition"] = f'attachment; filename="{file_name}"'
     response["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
     response["Pragma"] = "no-cache"
     response["Expires"] = "0"
-    workbook.save(response)
     return response
 
 

@@ -1230,6 +1230,39 @@ class CatalogCategoryVisibilityTests(TestCase):
         self.assertIn("clamp_options", response.context)
         self.assertIn("7/16", response.context["clamp_options"]["diameter"])
 
+    def test_catalog_products_expose_full_category_path(self):
+        parent = Category.objects.create(
+            name="Suspension",
+            slug="suspension",
+            is_active=True,
+            visible_in_catalog=True,
+        )
+        child = Category.objects.create(
+            name="Bujes",
+            slug="bujes",
+            parent=parent,
+            is_active=True,
+            visible_in_catalog=True,
+        )
+        product = Product.objects.create(
+            sku="PATH-001",
+            name="Producto con ruta",
+            price=Decimal("100.00"),
+            stock=5,
+            is_active=True,
+            category=child,
+        )
+        product.categories.add(child)
+
+        response = self.client.get(reverse("catalog"))
+
+        self.assertEqual(response.status_code, 200)
+        page_product = next(
+            item for item in response.context["page_obj"].object_list if item.sku == "PATH-001"
+        )
+        self.assertEqual(page_product.primary_category_path, "Suspension > Bujes")
+        self.assertContains(response, "Suspension &gt; Bujes")
+
 
 class ProductDetailTemplateTests(TestCase):
     def setUp(self):
@@ -1245,6 +1278,15 @@ class ProductDetailTemplateTests(TestCase):
             category=self.category,
         )
         self.product.categories.add(self.category)
+        self.related_product = Product.objects.create(
+            sku="TPL-REL",
+            name="Producto Relacionado",
+            price=Decimal("900.00"),
+            stock=3,
+            is_active=True,
+            category=self.category,
+        )
+        self.related_product.categories.add(self.category)
 
     def test_product_id_is_unlocalized_in_inline_js(self):
         self.client.force_login(self.user)
@@ -1253,6 +1295,15 @@ class ProductDetailTemplateTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "addToCart(24950)")
         self.assertContains(response, "toggleFavorite(24950, this)")
+
+    def test_product_detail_shows_category_route_and_related_products(self):
+        response = self.client.get(reverse("product_detail", args=[self.product.sku]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Ruta del producto")
+        self.assertContains(response, "Plantillas")
+        self.assertContains(response, "Producto Relacionado")
+        self.assertEqual([product.sku for product in response.context["related_products"]], ["TPL-REL"])
 
 
 class CatalogClientExcelDownloadTests(TestCase):
@@ -1425,13 +1476,20 @@ class CatalogExcelGroupedExportTests(TestCase):
         output = BytesIO()
         workbook.save(output)
         output.seek(0)
-        worksheet = load_workbook(output)["ABRAZADERAS"]
+        loaded_workbook = load_workbook(output)
+        worksheet = loaded_workbook["ABRAZADERAS"]
+        index_sheet = loaded_workbook["INDICE"]
         values = [cell.value for row in worksheet.iter_rows() for cell in row if cell.value]
 
         self.assertEqual(stats["rows_by_sheet"]["ABRAZADERAS"], 2)
+        self.assertIsInstance(index_sheet["C8"].value, str)
+        self.assertIsNone(index_sheet["A9"].value)
         self.assertEqual(worksheet["A4"].value, " ")
-        self.assertEqual(worksheet.row_dimensions[4].height, 18)
+        self.assertEqual(worksheet.row_dimensions[4].height, 28)
         self.assertEqual(worksheet["A5"].value, "Diametro 1 (1 productos)")
+        self.assertEqual(worksheet["C5"].value, "Indice")
+        self.assertEqual(worksheet["C5"].hyperlink.target, "#'INDICE'!A1")
+        self.assertEqual(worksheet.row_dimensions[6].outlineLevel, 1)
         self.assertIn("Diametro 7/8 (1 productos)", values)
         self.assertIn("Diametro 1 (1 productos)", values)
         self.assertEqual(worksheet["A2"].value, "Codigo")
@@ -1585,26 +1643,35 @@ class CatalogExcelGroupedExportTests(TestCase):
         output = BytesIO()
         workbook.save(output)
         output.seek(0)
-        worksheet = load_workbook(output)["Elasticos"]
+        loaded_workbook = load_workbook(output)
+        worksheet = loaded_workbook["Elasticos"]
+        index_sheet = loaded_workbook["INDICE"]
 
         self.assertEqual(stats["rows_by_sheet"]["Elasticos"], 4)
+        self.assertEqual(index_sheet["A8"].value, "Elasticos")
+        self.assertIsNone(index_sheet["A9"].value)
         self.assertEqual(worksheet["A1"].value, "Categoria principal (1 productos)")
         self.assertTrue(str(worksheet["A1"].fill.fgColor.rgb).endswith("DBEAFE"))
         self.assertEqual(worksheet["A1"].alignment.indent, 0)
+        self.assertEqual(worksheet["C1"].value, "Indice")
+        self.assertEqual(worksheet["C1"].hyperlink.target, "#'INDICE'!A1")
         self.assertEqual(worksheet["A2"].value, "SKU")
+        self.assertEqual(worksheet.row_dimensions[2].outlineLevel, 1)
         self.assertEqual(worksheet["A3"].value, "ROOT-001")
         self.assertEqual(worksheet["A4"].value, " ")
-        self.assertEqual(worksheet.row_dimensions[4].height, 18)
+        self.assertEqual(worksheet.row_dimensions[4].height, 28)
         self.assertEqual(worksheet["A5"].value, "Subcategoria: Bujes (1 productos)")
         self.assertTrue(str(worksheet["A5"].fill.fgColor.rgb).endswith("FEF3C7"))
         self.assertEqual(worksheet["A5"].alignment.indent, 1)
         self.assertEqual(worksheet["A6"].value, "SKU")
+        self.assertEqual(worksheet.row_dimensions[6].outlineLevel, 2)
         self.assertEqual(worksheet["A7"].value, "CHILD-001")
         self.assertEqual(worksheet["A8"].value, " ")
         self.assertEqual(worksheet["A9"].value, "Subcategoria nivel 2: Bujes > Con pestana (1 productos)")
         self.assertTrue(str(worksheet["A9"].fill.fgColor.rgb).endswith("DCFCE7"))
         self.assertEqual(worksheet["A9"].alignment.indent, 2)
         self.assertEqual(worksheet["A10"].value, "SKU")
+        self.assertEqual(worksheet.row_dimensions[10].outlineLevel, 3)
         self.assertEqual(worksheet["A11"].value, "GRAND-001")
         self.assertEqual(worksheet["A12"].value, " ")
         self.assertEqual(
@@ -1614,6 +1681,7 @@ class CatalogExcelGroupedExportTests(TestCase):
         self.assertTrue(str(worksheet["A13"].fill.fgColor.rgb).endswith("EDE9FE"))
         self.assertEqual(worksheet["A13"].alignment.indent, 3)
         self.assertEqual(worksheet["A14"].value, "SKU")
+        self.assertEqual(worksheet.row_dimensions[14].outlineLevel, 4)
         self.assertEqual(worksheet["A15"].value, "GREAT-001")
         self.assertIsNone(worksheet.freeze_panes)
 

@@ -9,7 +9,7 @@
 {% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="{% static 'core/css/catalog.css' %}">
+<link rel="stylesheet" href="{% static 'core/css/catalog.css' %}?v=20260527-hierarchy">
 {% endblock %}
 
 {% block content %}
@@ -42,10 +42,17 @@
                 <p class="sku">SKU: {{ product.sku }}</p>
                 <h1>{{ product.name }}</h1>
 
-                {% if display_categories %}
+                {% if primary_category_chip %}
+                <div class="detail-route-panel">
+                    <span>Ruta del producto</span>
+                    <a href="{{ primary_category_chip.url }}">{{ primary_category_chip.path }}</a>
+                </div>
+                {% endif %}
+
+                {% if category_chips %}
                 <div class="detail-categories">
-                    {% for cat in display_categories %}
-                    <span class="detail-category">{{ cat.display_name }}</span>
+                    {% for chip in category_chips %}
+                    <a class="detail-category" href="{{ chip.url }}" title="{{ chip.path }}">{{ chip.name }}</a>
                     {% endfor %}
                 </div>
                 {% endif %}
@@ -88,6 +95,47 @@
                 {% endif %}
             </div>
         </article>
+
+        {% if related_products %}
+        <section class="related-products-section">
+            <div class="related-products-head">
+                <div>
+                    <span>Tambien en esta ruta</span>
+                    <h2>Otros productos de {{ primary_category.display_name }}</h2>
+                </div>
+                {% if primary_category_chip %}
+                <a href="{{ primary_category_chip.url }}" class="btn btn-outline">Ver categoria</a>
+                {% endif %}
+            </div>
+            <div class="related-products-grid">
+                {% for related in related_products %}
+                <article class="related-product-card">
+                    <a class="related-product-thumb" href="{% url 'product_detail' related.sku %}">
+                        {% if related.image %}
+                        <img src="{{ related.image.url }}" alt="{{ related.name }}">
+                        {% else %}
+                        <span>+</span>
+                        {% endif %}
+                    </a>
+                    <div class="related-product-body">
+                        <span class="related-product-sku">{{ related.sku }}</span>
+                        <h3><a href="{% url 'product_detail' related.sku %}">{{ related.name }}</a></h3>
+                        {% if related.primary_category_chip %}
+                        <a class="related-product-path" href="{{ related.primary_category_chip.url }}" title="{{ related.primary_category_chip.path }}">
+                            {{ related.primary_category_chip.path }}
+                        </a>
+                        {% endif %}
+                        {% if show_prices %}
+                        <strong class="related-product-price">${{ related.final_price|floatformat:2 }}</strong>
+                        {% else %}
+                        <a class="related-product-price" href="{% url 'login' %}">Ver precio</a>
+                        {% endif %}
+                    </div>
+                </article>
+                {% endfor %}
+            </div>
+        </section>
+        {% endif %}
     </div>
 </div>
 {% endblock %}
