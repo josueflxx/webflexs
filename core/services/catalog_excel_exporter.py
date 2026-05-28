@@ -669,6 +669,10 @@ def _safe_sheet_link(sheet_name, cell_reference="A1"):
 
 
 def _append_index_sheet(workbook, template, stats, generated_at):
+    from django.conf import settings
+    from openpyxl.drawing.image import Image
+    import os
+
     title = INDEX_SHEET_TITLE
     if title in workbook.sheetnames:
         counter = 2
@@ -679,6 +683,18 @@ def _append_index_sheet(workbook, template, stats, generated_at):
     worksheet = workbook.create_sheet(title, 0)
     _prepare_worksheet(worksheet, "FF6B3A")
     worksheet.sheet_view.showGridLines = False
+
+    # Insert brand logo floating on the top-right (anchored to E1)
+    logo_path = os.path.join(settings.BASE_DIR, 'core', 'static', 'core', 'img', 'flexs-logo.png')
+    if os.path.exists(logo_path):
+        try:
+            img = Image(logo_path)
+            img.height = 50
+            img.width = 240
+            worksheet.add_image(img, 'E1')
+        except Exception:
+            pass
+
     local_generated_at = timezone.localtime(generated_at).replace(tzinfo=None)
     version = local_generated_at.strftime("catalogo-%Y%m%d-%H%M%S")
     valid_from_label = local_generated_at.strftime("%d/%m/%Y %H:%M")
@@ -690,7 +706,7 @@ def _append_index_sheet(workbook, template, stats, generated_at):
     worksheet["A1"] = title_text
     worksheet["A1"].font = INDEX_TITLE_FONT
     worksheet["A1"].fill = INDEX_TITLE_FILL
-    worksheet["A1"].alignment = Alignment(horizontal="left", vertical="center")
+    worksheet["A1"].alignment = Alignment(horizontal="left", vertical="center", indent=1)
     worksheet.row_dimensions[1].height = 28
 
     worksheet.merge_cells(start_row=2, start_column=1, end_row=2, end_column=5)
@@ -701,7 +717,7 @@ def _append_index_sheet(workbook, template, stats, generated_at):
     )
     worksheet["A2"].font = INDEX_SUBTITLE_FONT
     worksheet["A2"].fill = INDEX_SUBTITLE_FILL
-    worksheet["A2"].alignment = Alignment(horizontal="left", vertical="center")
+    worksheet["A2"].alignment = Alignment(horizontal="left", vertical="center", indent=1)
     worksheet.row_dimensions[2].height = 22
 
     stat_cards = [
