@@ -40,8 +40,11 @@
                     {% if not show_prices %}
                     <span class="price-notice">{{ price_message }}</span>
                     {% elif discount %}
-                    <span class="discount-notice">
-                        Tenes un {{ discount|multiply:100|floatformat:0 }}% de descuento aplicado
+                    <span class="discount-notice-premium">
+                        <span class="discount-icon-pulse">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="5" x2="5" y2="19"></line><circle cx="6.5" cy="6.5" r="2.5"></circle><circle cx="17.5" cy="17.5" r="2.5"></circle></svg>
+                        </span>
+                        <span>Tenes un <strong class="discount-percent-highlight">{{ discount|multiply:100|floatformat:0 }}% de descuento</strong> aplicado en todo el catálogo</span>
                     </span>
                     {% endif %}
                 </p>
@@ -380,7 +383,19 @@
                             {% if product.image %}
                             <img src="{{ product.image.url }}" alt="{{ product.name }}">
                             {% else %}
-                            <span>+</span>
+                            <svg class="blueprint-svg blueprint-list-thumb" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" fill="none">
+                                <rect width="100%" height="100%" fill="rgba(15, 15, 20, 0.45)" />
+                                <path d="M 5 5 L 115 5 L 115 115 L 5 115 Z" fill="none" stroke="rgba(255, 107, 53, 0.08)" stroke-width="0.6" stroke-dasharray="2 2" />
+                                <line x1="60" y1="10" x2="60" y2="110" stroke="rgba(23, 162, 184, 0.15)" stroke-width="0.5" stroke-dasharray="4 2" />
+                                <line x1="10" y1="60" x2="110" y2="60" stroke="rgba(23, 162, 184, 0.15)" stroke-width="0.5" stroke-dasharray="4 2" />
+                                <path d="M 25 55 Q 60 75 95 55" stroke="rgba(255, 255, 255, 0.1)" stroke-width="2" stroke-linecap="round" />
+                                <path d="M 32 60 Q 60 78 88 60" stroke="rgba(255, 255, 255, 0.06)" stroke-width="1.6" stroke-linecap="round" />
+                                <path d="M 48 76 L 48 48 A 12 12 0 0 1 72 48 L 72 76" stroke="rgba(255, 107, 53, 0.45)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+                                <circle cx="60" cy="62" r="2.5" fill="rgba(255, 107, 53, 0.25)" stroke="rgba(255, 107, 53, 0.6)" stroke-width="0.5" />
+                                <line x1="48" y1="28" x2="72" y2="28" stroke="rgba(23, 162, 184, 0.4)" stroke-width="0.5" />
+                                <path d="M 50 26 L 48 28 L 50 30 M 70 26 L 72 28 L 70 30" stroke="rgba(23, 162, 184, 0.4)" stroke-width="0.5" fill="none" />
+                                <text x="60" y="24" fill="rgba(23, 162, 184, 0.6)" font-size="5" font-family="monospace" text-anchor="middle">CAD</text>
+                            </svg>
                             {% endif %}
                         </a>
 
@@ -388,7 +403,10 @@
                             <div class="catalog-list-topline">
                                 <span class="catalog-list-sku">{{ product.sku }}</span>
                                 {% if product.stock > 0 %}
-                                <span class="product-stock in-stock">Stock {{ product.stock }}</span>
+                                <span class="product-stock in-stock">
+                                    <span class="stock-pulse-dot"></span>
+                                    Stock {{ product.stock }}
+                                </span>
                                 {% else %}
                                 <span class="product-stock out-stock">Sin stock</span>
                                 {% endif %}
@@ -455,8 +473,50 @@
                             {% if product.image %}
                             <img src="{{ product.image.url }}" alt="{{ product.name }}">
                             {% else %}
-                            <div class="product-placeholder">
-                                <span>+</span>
+                            <div class="product-placeholder-premium">
+                                <svg class="blueprint-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" fill="none">
+                                    <defs>
+                                        <pattern id="blueprint-grid-pattern" width="10" height="10" patternUnits="userSpaceOnUse">
+                                            <path d="M 10 0 L 0 0 0 10" fill="none" stroke="rgba(255, 255, 255, 0.025)" stroke-width="0.4" />
+                                        </pattern>
+                                    </defs>
+                                    <rect width="100%" height="100%" fill="rgba(16, 16, 22, 0.5)" />
+                                    <rect width="100%" height="100%" fill="url(#blueprint-grid-pattern)" />
+                                    <rect x="6" y="6" width="108" height="108" rx="5" stroke="rgba(255, 107, 53, 0.12)" stroke-width="0.8" stroke-dasharray="3 3" />
+                                    
+                                    <!-- Axes -->
+                                    <line x1="60" y1="12" x2="60" y2="108" stroke="rgba(23, 162, 184, 0.18)" stroke-width="0.5" stroke-dasharray="5 2 1 2" />
+                                    <line x1="12" y1="60" x2="108" y2="60" stroke="rgba(23, 162, 184, 0.18)" stroke-width="0.5" stroke-dasharray="5 2 1 2" />
+                                    
+                                    <!-- Leaf Spring Arches -->
+                                    <path d="M 16 52 Q 60 78 104 52" stroke="rgba(255, 255, 255, 0.12)" stroke-width="2.5" stroke-linecap="round" />
+                                    <path d="M 24 57 Q 60 81 96 57" stroke="rgba(255, 255, 255, 0.07)" stroke-width="2" stroke-linecap="round" />
+                                    <path d="M 34 62 Q 60 84 86 62" stroke="rgba(255, 255, 255, 0.04)" stroke-width="1.8" stroke-linecap="round" />
+                                    
+                                    <!-- U-Bolt structure -->
+                                    <path d="M 46 80 L 46 44 A 14 14 0 0 1 74 44 L 74 80" stroke="rgba(255, 107, 53, 0.55)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+                                    
+                                    <!-- Threads texture -->
+                                    <line x1="44" y1="70" x2="48" y2="70" stroke="rgba(255, 107, 53, 0.35)" stroke-width="0.8" />
+                                    <line x1="44" y1="73" x2="48" y2="73" stroke="rgba(255, 107, 53, 0.35)" stroke-width="0.8" />
+                                    <line x1="44" y1="76" x2="48" y2="76" stroke="rgba(255, 107, 53, 0.35)" stroke-width="0.8" />
+                                    <line x1="72" y1="70" x2="76" y2="70" stroke="rgba(255, 107, 53, 0.35)" stroke-width="0.8" />
+                                    <line x1="72" y1="73" x2="76" y2="73" stroke="rgba(255, 107, 53, 0.35)" stroke-width="0.8" />
+                                    <line x1="72" y1="76" x2="76" y2="76" stroke="rgba(255, 107, 53, 0.35)" stroke-width="0.8" />
+                                    
+                                    <!-- Center plate/nuts -->
+                                    <rect x="56" y="62" width="8" height="8" rx="0.5" fill="rgba(255, 107, 53, 0.25)" stroke="rgba(255, 107, 53, 0.65)" stroke-width="0.6" />
+                                    
+                                    <!-- Dimensions leader line -->
+                                    <line x1="46" y1="32" x2="74" y2="32" stroke="rgba(23, 162, 184, 0.45)" stroke-width="0.6" />
+                                    <path d="M 49 30 L 46 32 L 49 34 M 71 30 L 74 32 L 71 34" stroke="rgba(23, 162, 184, 0.45)" stroke-width="0.6" fill="none" />
+                                    <text x="60" y="27" fill="rgba(23, 162, 184, 0.7)" font-size="6" font-family="monospace" text-anchor="middle">CAD PLAN</text>
+                                    
+                                    <!-- Technical branding tags -->
+                                    <text x="12" y="16" fill="rgba(255, 255, 255, 0.16)" font-size="5" font-family="monospace">FLEXS TECH</text>
+                                    <text x="12" y="104" fill="rgba(255, 255, 255, 0.12)" font-size="4" font-family="monospace">SCALE 1:1</text>
+                                    <text x="108" y="104" fill="rgba(255, 255, 255, 0.12)" font-size="4" font-family="monospace" text-anchor="end">No. 00-F</text>
+                                </svg>
                             </div>
                             {% endif %}
                         </a>
@@ -464,7 +524,10 @@
                             <div class="product-head">
                                 <span class="product-sku">{{ product.sku }}</span>
                                 {% if product.stock > 0 %}
-                                <span class="product-stock in-stock">En stock</span>
+                                <span class="product-stock in-stock">
+                                    <span class="stock-pulse-dot"></span>
+                                    En stock
+                                </span>
                                 {% else %}
                                 <span class="product-stock out-stock">Sin stock</span>
                                 {% endif %}

@@ -7,69 +7,561 @@
 
 <div class="client-ledger-page">
     <style>
-        .client-ledger-page{display:grid;gap:18px}
-        .client-ledger-panel{border-radius:16px;border:1px solid rgba(255,255,255,.08);background:linear-gradient(180deg,rgba(16,22,33,.98),rgba(10,15,23,.99));overflow:hidden;box-shadow:0 24px 50px rgba(0,0,0,.2)}
-        .client-ledger-panel.is-sales{background:linear-gradient(180deg,rgba(15,21,31,.98),rgba(10,15,23,.99))}
-        .client-ledger-head,.client-ledger-sales-head,.client-ledger-open-row,.client-ledger-table-head,.client-ledger-table-foot,.client-ledger-inline,.client-ledger-actions,.client-ledger-tabs,.client-ledger-subtabs{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between}
-        .client-ledger-head{padding:16px 18px;background:linear-gradient(180deg,rgba(255,107,53,.14),rgba(255,107,53,.06));border-bottom:1px solid rgba(255,107,53,.16)}
-        .client-ledger-title-row{display:flex;align-items:flex-start;gap:14px;min-width:0}
-        .client-ledger-icon{width:54px;height:54px;border-radius:999px;display:inline-flex;align-items:center;justify-content:center;background:rgba(255,255,255,.96);color:#111722;border:1px solid rgba(255,255,255,.22);font-size:1.5rem;flex:0 0 auto}
-        .client-ledger-head h2,.client-ledger-sales-head h2,.client-ledger-sales-head h3{margin:0;color:var(--color-white)}
-        .client-ledger-head p,.client-ledger-sales-head p,.client-ledger-open-row p,.client-ledger-table-head p{margin:6px 0 0;color:#c7d0df;line-height:1.55}
-        .client-ledger-body,.client-ledger-table-wrap{padding:18px}
-        .client-ledger-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
-        .client-ledger-grid.wide{grid-template-columns:1.25fr .95fr}
-        .client-ledger-box{padding:14px 16px;border-radius:14px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.03);min-width:0}
-        .client-ledger-label{display:inline-flex;align-items:center;padding:5px 10px;margin-bottom:12px;border-left:3px solid var(--color-primary);background:rgba(255,107,53,.1);color:var(--color-primary-light);font-size:.78rem;font-weight:700;letter-spacing:.04em;text-transform:uppercase}
-        .client-ledger-data{display:grid;grid-template-columns:minmax(120px,180px) minmax(0,1fr);gap:8px 10px;margin:0}
-        .client-ledger-data dt{color:#a6b0c0;font-weight:600;margin:0}
-        .client-ledger-data dd{margin:0;color:var(--color-white);overflow-wrap:anywhere}
-        .client-ledger-kpis{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
-        .client-ledger-kpi{padding:12px 13px;border-radius:12px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.04)}
-        .client-ledger-kpi span{display:block;color:#9faac0;font-size:.75rem;text-transform:uppercase;letter-spacing:.08em}
-        .client-ledger-kpi strong{display:block;margin-top:6px;color:var(--color-white);font-size:1.15rem}
-        .client-ledger-open-links{display:flex;flex-wrap:wrap;gap:8px}
-        .client-ledger-open-links a,.client-ledger-open-links span{display:inline-flex;align-items:center;padding:7px 11px;border-radius:999px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.04);color:#eef3f8;text-decoration:none;font-size:.86rem}
-        .client-ledger-open-links a:hover{border-color:rgba(255,107,53,.3);background:rgba(255,107,53,.12)}
-        .client-ledger-sales-head{padding:14px 18px;border-top:2px solid rgba(255,107,53,.8);border-bottom:1px solid rgba(255,255,255,.08);background:linear-gradient(180deg,rgba(255,255,255,.06),rgba(255,255,255,.03))}
-        .client-ledger-plus{width:40px;height:40px;display:inline-flex;align-items:center;justify-content:center;border-radius:999px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.04);color:var(--color-white);font-size:1.2rem}
-        .client-ledger-tabs{padding:0 18px;gap:0;border-bottom:1px solid rgba(255,255,255,.08);overflow-x:auto;background:rgba(255,255,255,.025)}
-        .client-ledger-tab{display:inline-flex;align-items:center;justify-content:center;min-height:38px;padding:0 16px;border-right:1px solid rgba(255,255,255,.08);color:#d8dfeb;text-decoration:none;white-space:nowrap;background:rgba(255,255,255,.03);font-size:.9rem}
-        .client-ledger-tab:first-child{border-left:1px solid rgba(255,255,255,.08)}
-        .client-ledger-tab.active{background:linear-gradient(180deg,rgba(255,107,53,.18),rgba(255,107,53,.08));color:var(--color-white);box-shadow:inset 0 2px 0 rgba(255,107,53,.9)}
-        .client-ledger-open-row{padding:12px 18px 0}
-        .client-ledger-subtab{display:inline-flex;align-items:center;justify-content:center;padding:8px 12px;border-radius:999px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.03);color:#e7edf7;text-decoration:none}
-        .client-ledger-subtab.active{background:rgba(255,107,53,.12);border-color:rgba(255,107,53,.3)}
-        .client-ledger-open-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;padding:14px 18px 0}
-        .client-ledger-open-item,.client-ledger-activity-item{padding:14px;border-radius:14px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.03)}
-        .client-ledger-open-copy{display:grid;gap:6px;color:#c9d1de}
-        .client-ledger-table-card{border-radius:12px;overflow:hidden;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.02)}
-        .client-ledger-table-head{padding:12px 16px;border-bottom:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.02)}
-        .client-ledger-pills{display:flex;flex-wrap:wrap;gap:8px}
-        .client-ledger-pill{display:inline-flex;align-items:center;gap:6px;padding:8px 11px;border-radius:999px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.04);color:#eef3f8;font-size:.84rem}
-        .client-ledger-table-foot{padding:14px 16px;border-top:1px solid rgba(255,255,255,.08);color:#c4cddd}
-        .client-ledger-panel.is-sales .admin-table thead th{background:rgba(255,255,255,.04);color:#e7edf7;font-size:.82rem;text-transform:none;letter-spacing:.01em;padding-top:12px;padding-bottom:12px}
-        .client-ledger-panel.is-sales .admin-table tbody td{padding-top:12px;padding-bottom:12px;vertical-align:middle}
-        .client-ledger-panel.is-sales .admin-table tbody tr:hover{background:rgba(255,255,255,.025)}
-        .client-ledger-panel.is-sales .actions .client-ledger-inline{gap:8px}
-        .client-ledger-panel.is-sales .client-inline-badge{font-size:.68rem}
-        .client-inline-badge{display:inline-flex;padding:4px 8px;border-radius:999px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.06);font-size:.72rem;text-transform:uppercase}
-        .client-inline-badge.is-fiscal{background:rgba(31,143,255,.12);border-color:rgba(31,143,255,.24)}
-        .client-inline-badge.is-internal{background:rgba(255,107,53,.12);border-color:rgba(255,107,53,.24)}
-        .client-inline-badge.is-saas{background:rgba(151,117,250,.12);border-color:rgba(151,117,250,.22)}
-        .client-inline-badge.is-payment{background:rgba(25,209,127,.12);border-color:rgba(25,209,127,.22)}
-        .client-inline-badge.is-movement{background:rgba(255,193,7,.12);border-color:rgba(255,193,7,.22)}
-        .client-ledger-menu{position:relative}
-        .client-ledger-popover{position:absolute;top:calc(100% + 8px);right:0;width:min(420px,86vw);z-index:45;padding:14px;border-radius:14px;border:1px solid rgba(255,255,255,.12);background:linear-gradient(180deg,rgba(18,25,38,.98),rgba(11,18,30,.99));box-shadow:0 16px 40px rgba(0,0,0,.38)}
-        .client-ledger-popover[hidden]{display:none!important}
-        .client-ledger-popover-list{display:grid;gap:8px}
-        .client-ledger-popover-item,.client-ledger-popover-list button{width:100%;display:inline-flex;justify-content:space-between;align-items:center;padding:10px 12px;border-radius:12px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.03);color:#eef3f8;text-decoration:none;text-align:left}
-        .client-ledger-popover-item.is-disabled,.client-ledger-popover-list button:disabled{opacity:.5;pointer-events:none}
-        .client-ledger-activity-list{display:grid;gap:12px;padding:14px 18px 18px}
-        .client-ledger-activity-item p{margin:8px 0 0;color:#c9d1de;line-height:1.55}
-        .client-ledger-activity-top{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:8px;color:#c9d1de}
-        @media (max-width:1100px){.client-ledger-grid,.client-ledger-grid.wide,.client-ledger-open-grid{grid-template-columns:1fr}}
-        @media (max-width:760px){.client-ledger-head,.client-ledger-sales-head,.client-ledger-open-row,.client-ledger-table-head,.client-ledger-table-foot{flex-direction:column;align-items:stretch}.client-ledger-actions{justify-content:flex-start}.client-ledger-data{grid-template-columns:1fr}.client-ledger-kpis{grid-template-columns:1fr}}
+        .client-ledger-page {
+            display: grid;
+            gap: 20px;
+        }
+        
+        .client-ledger-panel {
+            border-radius: 20px;
+            border: 1px solid var(--glass-border-light);
+            background: radial-gradient(circle at top right, rgba(255, 107, 53, 0.04), transparent 45%), var(--glass-bg);
+            backdrop-filter: var(--glass-blur);
+            box-shadow: var(--glass-shadow);
+            overflow: hidden;
+            transition: var(--transition-smooth);
+        }
+        
+        .client-ledger-head,
+        .client-ledger-sales-head,
+        .client-ledger-open-row,
+        .client-ledger-table-head,
+        .client-ledger-table-foot,
+        .client-ledger-inline,
+        .client-ledger-actions,
+        .client-ledger-tabs,
+        .client-ledger-subtabs {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            align-items: center;
+            justify-content: space-between;
+        }
+        
+        .client-ledger-head {
+            padding: 20px 24px;
+            background: linear-gradient(180deg, rgba(255, 107, 53, 0.12), rgba(255, 107, 53, 0.03));
+            border-bottom: 1px solid rgba(255, 107, 53, 0.18);
+        }
+        
+        .client-ledger-title-row {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            min-width: 0;
+        }
+        
+        .client-ledger-icon {
+            width: 50px;
+            height: 50px;
+            border-radius: 12px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(255, 255, 255, 0.95);
+            color: #111722;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            font-size: 1.4rem;
+            flex: 0 0 auto;
+        }
+        
+        .client-ledger-head h2,
+        .client-ledger-sales-head h2,
+        .client-ledger-sales-head h3 {
+            margin: 0;
+            color: #fff;
+            font-weight: 600;
+        }
+        
+        .client-ledger-head p,
+        .client-ledger-sales-head p,
+        .client-ledger-open-row p,
+        .client-ledger-table-head p {
+            margin: 6px 0 0;
+            color: #c7d0df;
+            font-size: 0.78rem;
+            line-height: 1.45;
+        }
+        
+        .client-ledger-body,
+        .client-ledger-table-wrap {
+            padding: 20px 24px;
+        }
+        
+        .client-ledger-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 16px;
+            margin-bottom: 16px;
+        }
+        
+        .client-ledger-grid.wide {
+            grid-template-columns: 1.25fr 0.95fr;
+        }
+        
+        .client-ledger-box {
+            padding: 18px;
+            border-radius: 16px;
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            background: rgba(255, 255, 255, 0.02);
+            backdrop-filter: var(--glass-blur);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+            min-width: 0;
+            transition: var(--transition-smooth);
+        }
+        
+        .client-ledger-box:hover {
+            border-color: rgba(255, 107, 53, 0.15);
+            background: rgba(255, 255, 255, 0.035);
+        }
+        
+        .client-ledger-label {
+            display: inline-flex;
+            align-items: center;
+            padding: 4px 8px;
+            margin-bottom: 14px;
+            border-left: 3px solid var(--color-primary);
+            background: rgba(255, 107, 53, 0.1);
+            color: var(--color-primary-light);
+            font-size: 0.68rem;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+        }
+        
+        .client-ledger-data {
+            display: grid;
+            grid-template-columns: minmax(110px, 140px) minmax(0, 1fr);
+            gap: 8px 12px;
+            margin: 0;
+            font-size: 0.82rem;
+        }
+        
+        .client-ledger-data dt {
+            color: #a6b0c0;
+            font-weight: 600;
+            margin: 0;
+        }
+        
+        .client-ledger-data dd {
+            margin: 0;
+            color: #fff;
+            overflow-wrap: anywhere;
+        }
+        
+        .client-ledger-kpis {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 12px;
+        }
+        
+        .client-ledger-kpi {
+            padding: 12px 14px;
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            background: rgba(255, 255, 255, 0.03);
+            transition: var(--transition-smooth);
+        }
+        
+        .client-ledger-kpi:hover {
+            border-color: rgba(255, 255, 255, 0.12);
+        }
+        
+        .client-ledger-kpi span {
+            display: block;
+            color: #9faac0;
+            font-size: 0.68rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+        }
+        
+        .client-ledger-kpi strong {
+            display: block;
+            margin-top: 6px;
+            color: #fff;
+            font-size: 1.25rem;
+            font-weight: 700;
+        }
+        
+        /* Semantics for Ledger KPIs */
+        .client-ledger-kpi:nth-child(4) { /* Saldo KPI card */
+            border-color: rgba(255, 107, 53, 0.15);
+            background: rgba(255, 107, 53, 0.04);
+        }
+        .client-ledger-kpi:nth-child(4) strong {
+            color: var(--color-primary-light);
+        }
+        
+        .client-ledger-open-links {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        
+        .client-ledger-open-links a,
+        .client-ledger-open-links span {
+            display: inline-flex;
+            align-items: center;
+            padding: 6px 12px;
+            border-radius: 99px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            background: rgba(255, 255, 255, 0.03);
+            color: #eef3f8;
+            text-decoration: none;
+            font-size: 0.8rem;
+            transition: var(--transition-smooth);
+        }
+        
+        .client-ledger-open-links a:hover {
+            border-color: rgba(255, 107, 53, 0.35);
+            background: rgba(255, 107, 53, 0.12);
+            transform: translateY(-1px);
+        }
+        
+        .client-ledger-sales-head {
+            padding: 16px 24px;
+            border-top: 2px solid rgba(255, 107, 53, 0.8);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            background: linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.01));
+        }
+        
+        .client-ledger-plus {
+            width: 36px;
+            height: 36px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 99px;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            background: rgba(255, 255, 255, 0.04);
+            color: #fff;
+            font-size: 1.2rem;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+        }
+        
+        .client-ledger-plus:hover {
+            background: var(--color-primary);
+            border-color: var(--color-primary-light);
+            transform: scale(1.05);
+        }
+        
+        .client-ledger-tabs {
+            padding: 0 24px;
+            gap: 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            overflow-x: auto;
+            background: rgba(255, 255, 255, 0.01);
+        }
+        
+        .client-ledger-tab {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 42px;
+            padding: 0 20px;
+            border-right: 1px solid rgba(255, 255, 255, 0.08);
+            color: #d8dfeb;
+            text-decoration: none;
+            white-space: nowrap;
+            background: rgba(255, 255, 255, 0.02);
+            font-size: 0.85rem;
+            font-weight: 500;
+            transition: var(--transition-smooth);
+        }
+        
+        .client-ledger-tab:first-child {
+            border-left: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        
+        .client-ledger-tab:hover {
+            background: rgba(255, 255, 255, 0.05);
+            color: #fff;
+        }
+        
+        .client-ledger-tab.active {
+            background: linear-gradient(180deg, rgba(255, 107, 53, 0.16), rgba(255, 107, 53, 0.06));
+            color: #fff;
+            box-shadow: inset 0 -2px 0 var(--color-primary);
+        }
+        
+        .client-ledger-open-row {
+            padding: 16px 24px 0;
+        }
+        
+        .client-ledger-subtab {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 6px 14px;
+            border-radius: 99px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            background: rgba(255, 255, 255, 0.03);
+            color: #e7edf7;
+            text-decoration: none;
+            font-size: 0.8rem;
+            transition: var(--transition-smooth);
+        }
+        
+        .client-ledger-subtab:hover {
+            border-color: rgba(255, 255, 255, 0.2);
+            background: rgba(255, 255, 255, 0.06);
+        }
+        
+        .client-ledger-subtab.active {
+            background: rgba(255, 107, 53, 0.12);
+            border-color: rgba(255, 107, 53, 0.35);
+            color: var(--color-primary-light);
+        }
+        
+        .client-ledger-open-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 12px;
+            padding: 16px 24px 0;
+        }
+        
+        .client-ledger-open-item,
+        .client-ledger-activity-item {
+            padding: 16px;
+            border-radius: 16px;
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            background: rgba(255, 255, 255, 0.01);
+            backdrop-filter: var(--glass-blur);
+            transition: var(--transition-smooth);
+        }
+        
+        .client-ledger-open-item:hover,
+        .client-ledger-activity-item:hover {
+            border-color: rgba(255, 255, 255, 0.12);
+            background: rgba(255, 255, 255, 0.025);
+        }
+        
+        .client-ledger-open-copy {
+            display: grid;
+            gap: 6px;
+            color: #c9d1de;
+            font-size: 0.82rem;
+        }
+        
+        .client-ledger-table-card {
+            border-radius: 16px;
+            overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            background: rgba(255, 255, 255, 0.015);
+            box-shadow: 0 10px 24px rgba(0,0,0,0.12);
+        }
+        
+        .client-ledger-table-head {
+            padding: 16px 20px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+            background: rgba(255, 255, 255, 0.02);
+        }
+        
+        .client-ledger-pills {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        
+        .client-ledger-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            border-radius: 99px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            background: rgba(255, 255, 255, 0.04);
+            color: #eef3f8;
+            font-size: 0.8rem;
+        }
+        
+        .client-ledger-table-foot {
+            padding: 16px 20px;
+            border-top: 1px solid rgba(255, 255, 255, 0.06);
+            color: #c4cddd;
+            font-size: 0.82rem;
+        }
+        
+        .client-ledger-panel.is-sales .admin-table thead th {
+            background: rgba(255, 255, 255, 0.04);
+            color: #e7edf7;
+            font-size: 0.8rem;
+            text-transform: none;
+            letter-spacing: 0.01em;
+            padding-top: 14px;
+            padding-bottom: 14px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        
+        .client-ledger-panel.is-sales .admin-table tbody td {
+            padding-top: 14px;
+            padding-bottom: 14px;
+            vertical-align: middle;
+            font-size: 0.84rem;
+        }
+        
+        .client-ledger-panel.is-sales .admin-table tbody tr:hover {
+            background: rgba(255, 255, 255, 0.025);
+        }
+        
+        .client-ledger-panel.is-sales .actions .client-ledger-inline {
+            gap: 6px;
+        }
+        
+        .client-ledger-panel.is-sales .client-inline-badge {
+            font-size: 0.65rem;
+        }
+        
+        .client-inline-badge {
+            display: inline-flex;
+            padding: 3px 8px;
+            border-radius: 99px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(255, 255, 255, 0.05);
+            font-size: 0.68rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+        
+        .client-inline-badge.is-fiscal {
+            background: rgba(31, 143, 255, 0.12);
+            border-color: rgba(31, 143, 255, 0.24);
+            color: #7aa2ff;
+        }
+        
+        .client-inline-badge.is-internal {
+            background: rgba(255, 107, 53, 0.12);
+            border-color: rgba(255, 107, 53, 0.24);
+            color: var(--color-primary-light);
+        }
+        
+        .client-inline-badge.is-saas {
+            background: rgba(151, 117, 250, 0.12);
+            border-color: rgba(151, 117, 250, 0.22);
+            color: #d3b5ff;
+        }
+        
+        .client-inline-badge.is-payment {
+            background: rgba(25, 209, 127, 0.12);
+            border-color: rgba(25, 209, 127, 0.22);
+            color: #57ffd0;
+        }
+        
+        .client-inline-badge.is-movement {
+            background: rgba(255, 193, 7, 0.12);
+            border-color: rgba(255, 193, 7, 0.22);
+            color: #ffe17d;
+        }
+        
+        .client-ledger-menu {
+            position: relative;
+        }
+        
+        .client-ledger-popover {
+            position: absolute;
+            top: calc(100% + 8px);
+            right: 0;
+            width: min(420px, 86vw);
+            z-index: 45;
+            padding: 16px;
+            border-radius: 16px;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            background: radial-gradient(circle at top right, rgba(255, 107, 53, 0.05), transparent 40%), linear-gradient(180deg, rgba(18, 25, 38, 0.98), rgba(11, 18, 30, 0.99));
+            box-shadow: 0 16px 40px rgba(0,0,0,0.38);
+            backdrop-filter: var(--glass-blur);
+        }
+        
+        .client-ledger-popover[hidden] {
+            display: none !important;
+        }
+        
+        .client-ledger-popover-list {
+            display: grid;
+            gap: 8px;
+        }
+        
+        .client-ledger-popover-item,
+        .client-ledger-popover-list button {
+            width: 100%;
+            display: inline-flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px;
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            background: rgba(255, 255, 255, 0.02);
+            color: #eef3f8;
+            text-decoration: none;
+            text-align: left;
+            transition: var(--transition-smooth);
+            cursor: pointer;
+        }
+        
+        .client-ledger-popover-item:hover,
+        .client-ledger-popover-list button:hover {
+            border-color: rgba(255, 107, 53, 0.25);
+            background: rgba(255, 107, 53, 0.08);
+            transform: translateX(1px);
+        }
+        
+        .client-ledger-popover-item.is-disabled,
+        .client-ledger-popover-list button:disabled {
+            opacity: 0.4;
+            pointer-events: none;
+        }
+        
+        .client-ledger-activity-list {
+            display: grid;
+            gap: 12px;
+            padding: 16px 24px 24px;
+        }
+        
+        .client-ledger-activity-item p {
+            margin: 8px 0 0;
+            color: #c9d1de;
+            line-height: 1.45;
+            font-size: 0.8rem;
+        }
+        
+        .client-ledger-activity-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 8px;
+            color: #c9d1de;
+            font-size: 0.76rem;
+        }
+        
+        @media (max-width: 1100px) {
+            .client-ledger-grid,
+            .client-ledger-grid.wide,
+            .client-ledger-open-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        @media (max-width: 760px) {
+            .client-ledger-head,
+            .client-ledger-sales-head,
+            .client-ledger-open-row,
+            .client-ledger-table-head,
+            .client-ledger-table-foot {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            .client-ledger-actions {
+                justify-content: flex-start;
+            }
+            .client-ledger-data {
+                grid-template-columns: 1fr;
+            }
+            .client-ledger-kpis {
+                grid-template-columns: 1fr;
+            }
+        }
     </style>
 
     <section class="client-ledger-panel">

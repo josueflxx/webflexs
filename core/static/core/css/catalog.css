@@ -2614,3 +2614,248 @@
 .revealed .related-product-card:nth-child(5) { animation-delay: 0.25s; }
 .revealed .related-product-card:nth-child(6) { animation-delay: 0.30s; }
 
+
+/* ============================================
+   FLEXS Catalog Ultimate UI Refresh
+   ============================================ */
+
+/* 1. Discount Notice Premium */
+.discount-notice-premium {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(255, 107, 53, 0.07);
+    border: 1px solid rgba(255, 107, 53, 0.22);
+    padding: 6px 14px;
+    border-radius: 999px;
+    color: #ffd5c5;
+    font-size: 0.88rem;
+    font-weight: 500;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    box-shadow: 0 4px 15px rgba(255, 107, 53, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.discount-icon-pulse {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: rgba(255, 107, 53, 0.16);
+    color: #ff6b35;
+    animation: discount-pulse-anim 2s infinite ease-in-out;
+}
+
+.discount-percent-highlight {
+    color: #ff6b35;
+    font-weight: 800;
+}
+
+@keyframes discount-pulse-anim {
+    0%, 100% { transform: scale(1); opacity: 0.95; }
+    50% { transform: scale(1.08); opacity: 1; box-shadow: 0 0 8px rgba(255, 107, 53, 0.35); }
+}
+
+/* 2. Telemetry Stock Pulse */
+.stock-pulse-dot {
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background-color: #39e378;
+    margin-right: 5px;
+    vertical-align: middle;
+    box-shadow: 0 0 0 0 rgba(57, 227, 120, 0.7);
+    animation: stockPulse 1.8s infinite cubic-bezier(0.66, 0, 0, 1);
+}
+
+@keyframes stockPulse {
+    0% {
+        transform: scale(0.95);
+        box-shadow: 0 0 0 0 rgba(57, 227, 120, 0.7);
+    }
+    70% {
+        transform: scale(1);
+        box-shadow: 0 0 0 6px rgba(57, 227, 120, 0);
+    }
+    100% {
+        transform: scale(0.95);
+        box-shadow: 0 0 0 0 rgba(57, 227, 120, 0);
+    }
+}
+
+/* 3. Blueprint SVG Styling */
+.blueprint-svg {
+    width: 100%;
+    height: 100%;
+    transition: all 0.4s ease;
+}
+
+.product-placeholder-premium {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: #0f1015;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.blueprint-list-thumb {
+    width: 100%;
+    height: 100%;
+    border-radius: inherit;
+}
+
+.product-card:hover .blueprint-svg {
+    transform: scale(1.03);
+    opacity: 0.95;
+}
+
+/* 4. Ultimate Glassmorphic Sidebar & Tree Indication */
+.catalog-sidebar {
+    background: rgba(18, 18, 22, 0.74) !important;
+    backdrop-filter: blur(18px) !important;
+    -webkit-backdrop-filter: blur(18px) !important;
+    border: 1px solid rgba(255, 255, 255, 0.07) !important;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4) !important;
+}
+
+/* Sidebar Sections styling refinement */
+.filter-section {
+    background: rgba(255, 255, 255, 0.015);
+    border: 1px solid rgba(255, 255, 255, 0.03);
+    padding: 14px;
+    border-radius: 10px;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
+}
+
+.filter-section h3 {
+    font-size: 0.95rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: #ff6b35;
+    margin-bottom: 12px;
+    border-bottom: 1px solid rgba(255, 107, 53, 0.15);
+    padding-bottom: 4px;
+}
+
+.filter-section .form-input {
+    background: rgba(0, 0, 0, 0.3) !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    color: #fff !important;
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+.filter-section .form-input:focus {
+    border-color: rgba(255, 107, 53, 0.6) !important;
+    box-shadow: 0 0 10px rgba(255, 107, 53, 0.15) !important;
+    background: rgba(0, 0, 0, 0.45) !important;
+}
+
+/* Category Left-border Glow Line on Hover */
+.category-tree-link {
+    position: relative;
+    border-left: 2px solid transparent !important;
+    padding-left: 12px !important;
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+.category-tree-link::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 20%;
+    height: 60%;
+    width: 2px;
+    background: #ff6b35;
+    opacity: 0;
+    transform: scaleY(0.4);
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    box-shadow: 0 0 8px #ff6b35;
+}
+
+.category-tree-link:hover::after {
+    opacity: 0.8;
+    transform: scaleY(1);
+}
+
+.category-tree-link.active::after {
+    opacity: 1;
+    transform: scaleY(1);
+    background: #fff;
+    box-shadow: 0 0 10px #fff;
+}
+
+.category-tree-link.active {
+    background: linear-gradient(135deg, #ff6b35, #e0531b) !important;
+    box-shadow: 0 6px 18px rgba(255, 107, 53, 0.3) !important;
+    border-left-color: transparent !important;
+}
+
+/* 5. Exquisite Card Glows & Transitions */
+.product-card {
+    background: linear-gradient(180deg, rgba(34, 34, 38, 0.85), rgba(20, 20, 24, 0.95)) !important;
+    border: 1px solid rgba(255, 255, 255, 0.06) !important;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.04) !important;
+    transition: transform 0.42s cubic-bezier(0.16, 1, 0.3, 1),
+                border-color 0.42s cubic-bezier(0.16, 1, 0.3, 1),
+                box-shadow 0.42s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+.product-card:hover {
+    transform: translateY(-8px) scale(1.01) !important;
+    border-color: rgba(255, 107, 53, 0.4) !important;
+    box-shadow: 0 16px 36px rgba(0, 0, 0, 0.5), 
+                0 0 20px rgba(255, 107, 53, 0.12),
+                inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
+}
+
+/* Image bounding glow */
+.product-image {
+    background: rgba(10, 10, 12, 0.6) !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+/* Capsule tags refinements */
+.product-category, .catalog-list-category {
+    font-size: 0.68rem !important;
+    font-weight: 700 !important;
+    letter-spacing: 0.3px !important;
+    text-transform: uppercase !important;
+    border-radius: 999px !important;
+    padding: 3px 10px !important;
+    background: rgba(255, 107, 53, 0.08) !important;
+    border: 1px solid rgba(255, 107, 53, 0.28) !important;
+    color: #ffaa88 !important;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+}
+
+.product-category:hover, .catalog-list-category:hover {
+    background: rgba(255, 107, 53, 0.16) !important;
+    border-color: rgba(255, 107, 53, 0.45) !important;
+    color: #fff !important;
+}
+
+.catalog-list-item {
+    background: rgba(24, 25, 29, 0.8) !important;
+    backdrop-filter: blur(12px) !important;
+    -webkit-backdrop-filter: blur(12px) !important;
+    border: 1px solid rgba(255, 255, 255, 0.06) !important;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15) !important;
+    transition: transform 0.38s cubic-bezier(0.16, 1, 0.3, 1),
+                border-color 0.38s cubic-bezier(0.16, 1, 0.3, 1),
+                box-shadow 0.38s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+.catalog-list-item:hover {
+    transform: translateX(6px) !important;
+    border-color: rgba(255, 107, 53, 0.42) !important;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35),
+                0 0 15px rgba(255, 107, 53, 0.08) !important;
+}
+
