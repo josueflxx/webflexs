@@ -5,51 +5,80 @@
 {% block content %}
 <div class="orders-page">
     <div class="container">
-        <div class="page-header">
-            <div>
-                <h1>Mis Solicitudes</h1>
-                <p class="text-muted">Seguimiento de pedidos enviados desde el catalogo antes de su confirmacion comercial.</p>
+        <!-- Page Header -->
+        <div class="portal-welcome">
+            <div class="header-content-wrapper" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;">
+                <div>
+                    <h1>Mis Solicitudes</h1>
+                    <p>Seguimiento de cotizaciones especiales enviadas antes de su confirmación comercial.</p>
+                </div>
+                <a href="{% url 'catalog' %}" class="btn btn-outline" style="border-color: #ff6b35; background: rgba(255,107,53,0.06); color: #fff; font-weight: 700; border-radius: 10px; padding: 10px 20px;">Volver al Catálogo</a>
             </div>
-            <a href="{% url 'catalog' %}" class="btn btn-primary">Volver al catalogo</a>
         </div>
 
+        <!-- Filter Bar -->
         <form method="get" class="request-filter-form">
-            <select name="status" class="form-select request-filter-select">
-                <option value="">Todos los estados</option>
-                {% for value, label in status_choices %}
-                <option value="{{ value }}" {% if status == value %}selected{% endif %}>{{ label }}</option>
-                {% endfor %}
-            </select>
-            <button type="submit" class="btn btn-primary">Filtrar</button>
-            <a href="{% url 'order_request_list' %}" class="btn btn-outline">Limpiar</a>
+            <div class="filter-controls-wrap">
+                <select name="status" class="form-select request-filter-select">
+                    <option value="">Todos los estados</option>
+                    {% for value, label in status_choices %}
+                    <option value="{{ value }}" {% if status == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+                <button type="submit" class="btn btn-primary" style="border-radius: 10px; padding: 10px 22px; font-weight: 700;">Filtrar</button>
+                <a href="{% url 'order_request_list' %}" class="btn btn-outline" style="border-radius: 10px; padding: 10px 22px; font-weight: 700;">Limpiar</a>
+            </div>
         </form>
 
+        <!-- Requests List -->
         {% if order_requests %}
         <div class="orders-list">
             {% for order_request in order_requests %}
             <div class="order-card">
-                <div class="order-header">
-                    <span class="order-number">Solicitud #{{ order_request.pk }}</span>
-                    <span class="badge badge-info">{{ order_request.get_status_display }}</span>
+                <!-- Card Header/Summary -->
+                <div class="order-header-sec">
+                    <div class="order-title-wrapper">
+                        <span class="order-number">Solicitud #{{ order_request.pk }}</span>
+                        <span class="badge-status badge-{{ order_request.status|default:'pending' }}">
+                            {{ order_request.get_status_display }}
+                        </span>
+                    </div>
+                    <span class="order-date">{{ order_request.created_at|date:"d/m/Y H:i" }}</span>
                 </div>
-                <div class="order-info">
-                    <span>{{ order_request.created_at|date:"d/m/Y H:i" }}</span>
-                    <span>{{ order_request.get_item_count }} productos</span>
-                    <span class="order-total">${{ order_request.requested_total|floatformat:2 }}</span>
+
+                <!-- Card Details info grid -->
+                <div class="order-info-sec">
+                    <div class="info-item">
+                        <span class="info-label">Productos</span>
+                        <span class="info-value">{{ order_request.get_item_count }} ítems</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Total Cotizado</span>
+                        <span class="info-value order-total">${{ order_request.requested_total|floatformat:2 }}</span>
+                    </div>
                 </div>
-                <div class="order-actions">
-                    <a href="{% url 'order_request_detail' order_request.pk %}" class="btn btn-outline">Ver detalle</a>
+
+                <!-- Card Actions buttons -->
+                <div class="order-actions-sec">
+                    <a href="{% url 'order_request_detail' order_request.pk %}" class="btn btn-outline" style="border-radius: 10px; font-weight: 700; font-size: 0.85rem; padding: 10px 20px;">Ver Detalle</a>
                     {% if order_request.converted_order %}
-                    <a href="{% url 'order_detail' order_request.converted_order.pk %}" class="btn btn-primary">Ver pedido final</a>
+                    <a href="{% url 'order_detail' order_request.converted_order.pk %}" class="btn btn-primary" style="border-radius: 10px; font-weight: 700; font-size: 0.85rem; padding: 10px 20px; box-shadow: 0 4px 12px rgba(255,107,53,0.25);">Ver Pedido Final</a>
                     {% endif %}
                 </div>
             </div>
             {% endfor %}
         </div>
         {% else %}
-        <div class="empty-orders">
-            <p>No tenes solicitudes comerciales todavia.</p>
-            <a href="{% url 'catalog' %}" class="btn btn-primary">Explorar catalogo</a>
+        <!-- Empty State Card -->
+        <div class="empty-orders-card">
+            <div class="empty-icon-wrapper">
+                <svg width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"/>
+                </svg>
+            </div>
+            <h3>No tienes solicitudes de cotización comerciales</h3>
+            <p>Puedes cotizar abrazaderas a medida o agregar productos del catálogo para enviarle una solicitud de precios al equipo administrativo.</p>
+            <a href="{% url 'catalog' %}" class="btn btn-primary" style="border-radius: 10px; font-weight: 700; padding: 12px 26px; box-shadow: 0 4px 15px rgba(255,107,53,0.3);">Explorar Catálogo</a>
         </div>
         {% endif %}
     </div>
@@ -57,100 +86,309 @@
 
 <style>
     .orders-page {
-        padding: var(--spacing-2xl) 0;
+        padding: 40px 0;
+        background: radial-gradient(circle at top left, rgba(255, 107, 53, 0.04), transparent 45%),
+                    radial-gradient(circle at bottom right, rgba(56, 189, 248, 0.02), transparent 45%);
     }
+
+    .portal-welcome {
+        margin-bottom: 28px;
+        background: linear-gradient(135deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.01));
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        border-radius: 16px;
+        padding: 24px 30px;
+        position: relative;
+        overflow: hidden;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+    }
+    
+    .portal-welcome::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 4px;
+        height: 100%;
+        background: linear-gradient(to bottom, #ff6b35, #ff8c5a);
+    }
+    
+    .portal-welcome h1 {
+        font-size: 1.7rem;
+        font-weight: 800;
+        margin: 0 0 6px 0;
+        color: #fff;
+        letter-spacing: -0.02em;
+    }
+    
+    .portal-welcome p {
+        margin: 0;
+        color: #9cb0c5;
+        font-size: 0.95rem;
+        line-height: 1.45;
+    }
+
     .request-filter-form {
-        display: flex;
-        gap: 10px;
-        flex-wrap: wrap;
-        margin-bottom: 16px;
+        margin-bottom: 28px;
     }
-    .request-filter-select {
-        max-width: 260px;
-    }
-    .page-header {
+
+    .filter-controls-wrap {
         display: flex;
-        justify-content: space-between;
-        align-items: end;
         gap: 12px;
         flex-wrap: wrap;
-        margin-bottom: 16px;
+        align-items: center;
+        background: rgba(255, 255, 255, 0.01);
+        padding: 16px 20px;
+        border-radius: 14px;
+        border: 1px solid rgba(255, 255, 255, 0.04);
     }
-    .page-header h1 {
-        margin-bottom: 4px;
+
+    .request-filter-select {
+        max-width: 260px;
+        background-color: rgba(255, 255, 255, 0.03) !important;
+        border: 1px solid rgba(255, 255, 255, 0.08) !important;
+        border-radius: 10px !important;
+        color: #fff !important;
+        padding: 10px 16px !important;
+        height: auto !important;
     }
+
     .orders-list {
         display: flex;
         flex-direction: column;
-        gap: var(--spacing-lg);
+        gap: 16px;
     }
+
     .order-card {
-        background: var(--color-dark-light);
-        padding: var(--spacing-xl);
-        border-radius: var(--radius-lg);
+        background: rgba(255, 255, 255, 0.02);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        padding: 24px;
+        border-radius: 16px;
+        border: 1px solid rgba(255, 255, 255, 0.06);
         display: flex;
         align-items: center;
-        gap: var(--spacing-xl);
+        justify-content: space-between;
+        gap: 24px;
         flex-wrap: wrap;
         min-width: 0;
+        transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+        box-shadow: 0 4px 30px rgba(0, 0, 0, 0.15), inset 0 1px 1px rgba(255, 255, 255, 0.05);
     }
-    .order-header {
+
+    .order-card:hover {
+        transform: translateY(-4px);
+        border-color: rgba(255, 107, 53, 0.35);
+        background: rgba(255, 255, 255, 0.03);
+        box-shadow: 0 12px 30px rgba(255, 107, 53, 0.06), 0 4px 30px rgba(0, 0, 0, 0.25);
+    }
+
+    .order-header-sec {
         display: flex;
         flex-direction: column;
-        gap: var(--spacing-xs);
-        min-width: 180px;
+        gap: 6px;
+        min-width: 200px;
     }
+
+    .order-title-wrapper {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        flex-wrap: wrap;
+    }
+
     .order-number {
-        font-weight: 700;
-        font-size: var(--font-size-lg);
+        font-weight: 800;
+        font-size: 1.15rem;
+        color: #fff;
+        letter-spacing: -0.01em;
     }
-    .order-info {
+
+    .order-date {
+        font-size: 0.82rem;
+        color: #abb5c3;
+    }
+
+    .order-info-sec {
         flex: 1;
         display: flex;
-        gap: var(--spacing-xl);
-        color: var(--color-gray-light);
+        gap: 40px;
         flex-wrap: wrap;
         min-width: 0;
     }
-    .order-actions {
+
+    .info-item {
         display: flex;
-        gap: 8px;
+        flex-direction: column;
+        gap: 4px;
+    }
+
+    .info-label {
+        font-size: 0.72rem;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: #718096;
+        font-weight: 700;
+    }
+
+    .info-value {
+        font-size: 0.95rem;
+        font-weight: 600;
+        color: #e2e8f0;
+    }
+
+    .order-total {
+        font-weight: 800;
+        font-size: 1.1rem;
+        background: linear-gradient(to right, #ff8c5a, #ff6b35);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+    }
+
+    .order-actions-sec {
+        display: flex;
+        gap: 10px;
         flex-wrap: wrap;
         min-width: 0;
+        align-items: center;
     }
-    .order-total {
+
+    .order-actions-sec .btn-outline {
+        border-color: rgba(255, 255, 255, 0.15);
+        color: #f1f5f9;
+        background: rgba(255, 255, 255, 0.02);
+        transition: all 0.3s ease;
+    }
+
+    .order-actions-sec:hover .btn-outline {
+        border-color: rgba(255, 255, 255, 0.25);
+    }
+    
+    .order-card:hover .order-actions-sec .btn-outline {
+        border-color: #ff6b35;
+        background: rgba(255, 107, 53, 0.05);
+        color: #fff;
+    }
+
+    /* Dynamic Badges with curating design */
+    .badge-status {
+        display: inline-flex;
+        align-items: center;
+        padding: 4px 10px;
+        border-radius: 6px;
+        font-size: 0.75rem;
         font-weight: 700;
-        color: var(--color-primary);
+        letter-spacing: 0.02em;
+        line-height: 1;
+        border: 1px solid transparent;
     }
-    .empty-orders {
+
+    .badge-pending {
+        background: rgba(245, 158, 11, 0.08);
+        border-color: rgba(245, 158, 11, 0.2);
+        color: #f59e0b;
+    }
+
+    .badge-in_review {
+        background: rgba(59, 130, 246, 0.08);
+        border-color: rgba(59, 130, 246, 0.2);
+        color: #3b82f6;
+    }
+
+    .badge-quoted, .badge-completed {
+        background: rgba(16, 185, 129, 0.08);
+        border-color: rgba(16, 185, 129, 0.2);
+        color: #10b981;
+    }
+
+    .badge-canceled, .badge-rejected {
+        background: rgba(239, 68, 68, 0.08);
+        border-color: rgba(239, 68, 68, 0.2);
+        color: #ef4444;
+    }
+
+    /* Empty state */
+    .empty-orders-card {
+        background: rgba(255, 255, 255, 0.02);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border-radius: 20px;
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        padding: 50px 30px;
         text-align: center;
-        padding: var(--spacing-3xl);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 16px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+        max-width: 600px;
+        margin: 40px auto;
     }
-    @media (max-width: 760px) {
-        .request-filter-form {
+
+    .empty-icon-wrapper {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 80px;
+        height: 80px;
+        border-radius: 50%;
+        background: rgba(255, 107, 53, 0.06);
+        border: 1px solid rgba(255, 107, 53, 0.12);
+        color: #ff6b35;
+        margin-bottom: 8px;
+    }
+
+    .empty-orders-card h3 {
+        margin: 0;
+        font-size: 1.3rem;
+        font-weight: 800;
+        color: #fff;
+        letter-spacing: -0.01em;
+    }
+
+    .empty-orders-card p {
+        margin: 0;
+        color: #abb5c3;
+        font-size: 0.92rem;
+        line-height: 1.5;
+        max-width: 460px;
+    }
+
+    @media (max-width: 860px) {
+        .filter-controls-wrap {
             flex-direction: column;
             align-items: stretch;
+            gap: 10px;
         }
 
         .request-filter-select {
             max-width: none;
+            width: 100%;
+        }
+
+        .filter-controls-wrap .btn {
+            width: 100%;
         }
 
         .order-card {
-            padding: var(--spacing-lg);
-            gap: var(--spacing-md);
+            flex-direction: column;
+            align-items: stretch;
+            gap: 20px;
+            padding: 20px;
         }
 
-        .order-header {
-            min-width: 0;
+        .order-info-sec {
+            flex-direction: row;
+            justify-content: space-between;
+            gap: 16px;
         }
 
-        .order-actions {
+        .order-actions-sec {
             width: 100%;
         }
 
-        .order-actions .btn {
+        .order-actions-sec .btn {
             width: 100%;
+            text-align: center;
         }
     }
 </style>
