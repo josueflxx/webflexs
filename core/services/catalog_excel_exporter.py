@@ -684,17 +684,6 @@ def _append_index_sheet(workbook, template, stats, generated_at):
     _prepare_worksheet(worksheet, "FF6B3A")
     worksheet.sheet_view.showGridLines = False
 
-    # Insert brand logo floating on the top-right (anchored to E1)
-    logo_path = os.path.join(settings.BASE_DIR, 'core', 'static', 'core', 'img', 'flexs-logo.png')
-    if os.path.exists(logo_path):
-        try:
-            img = Image(logo_path)
-            img.height = 50
-            img.width = 240
-            worksheet.add_image(img, 'E1')
-        except Exception:
-            pass
-
     local_generated_at = timezone.localtime(generated_at).replace(tzinfo=None)
     version = local_generated_at.strftime("catalogo-%Y%m%d-%H%M%S")
     valid_from_label = local_generated_at.strftime("%d/%m/%Y %H:%M")
@@ -707,7 +696,7 @@ def _append_index_sheet(workbook, template, stats, generated_at):
     worksheet["A1"].font = INDEX_TITLE_FONT
     worksheet["A1"].fill = INDEX_TITLE_FILL
     worksheet["A1"].alignment = Alignment(horizontal="left", vertical="center", indent=1)
-    worksheet.row_dimensions[1].height = 28
+    worksheet.row_dimensions[1].height = 50
 
     worksheet.merge_cells(start_row=2, start_column=1, end_row=2, end_column=5)
     worksheet["A2"] = (
@@ -757,6 +746,7 @@ def _append_index_sheet(workbook, template, stats, generated_at):
             cell = worksheet.cell(row=row_idx, column=col_idx)
             cell.border = THIN_BORDER
             cell.alignment = Alignment(horizontal="left", vertical="center")
+        worksheet.row_dimensions[row_idx].height = 22
         row_idx += 1
 
     worksheet.freeze_panes = "A8"
@@ -765,6 +755,35 @@ def _append_index_sheet(workbook, template, stats, generated_at):
     worksheet.column_dimensions["C"].width = 22
     worksheet.column_dimensions["D"].width = 30
     worksheet.column_dimensions["E"].width = 20
+    worksheet.column_dimensions["F"].width = 35
+
+    # Insert brand logo AFTER all cells/merges are set up to avoid
+    # conflicts with merged cell ranges. Convert RGBA PNG to RGB
+    # (white background) so Excel renders it reliably.
+    logo_path = os.path.join(settings.BASE_DIR, 'core', 'static', 'core', 'img', 'flexs-logo.png')
+    if os.path.exists(logo_path):
+        try:
+            from io import BytesIO
+            from PIL import Image as PILImage
+
+            pil_img = PILImage.open(logo_path)
+            if pil_img.mode == 'RGBA':
+                background = PILImage.new('RGB', pil_img.size, (255, 255, 255))
+                background.paste(pil_img, mask=pil_img.split()[3])
+                pil_img.close()
+                pil_img = background
+
+            logo_buffer = BytesIO()
+            pil_img.save(logo_buffer, 'PNG')
+            pil_img.close()
+            logo_buffer.seek(0)
+
+            img = Image(logo_buffer)
+            img.width = 240
+            img.height = 50
+            worksheet.add_image(img, 'F1')
+        except Exception:
+            pass
 
 
 def _worksheet_next_row(worksheet):

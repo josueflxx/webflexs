@@ -2,6 +2,48 @@
 {% load l10n %}
 
 {% block page_title %}Solicitud #{{ clamp_request.pk }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .shape-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 3px 6px;
+        font-size: 10px;
+        font-weight: 800;
+        border-radius: 4px;
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        color: #f1f5f9;
+        line-height: 1;
+        letter-spacing: 0.04em;
+        vertical-align: middle;
+        text-transform: uppercase;
+        font-family: inherit;
+    }
+    .shape-badge svg {
+        margin-right: 4px;
+        color: #f8fafc;
+        display: inline-block;
+    }
+    .shape-plana {
+        border-color: rgba(56, 189, 248, 0.25);
+        background: rgba(56, 189, 248, 0.08);
+        color: #38bdf8;
+    }
+    .shape-semicurva {
+        border-color: rgba(244, 63, 94, 0.25);
+        background: rgba(244, 63, 94, 0.08);
+        color: #fb7185;
+    }
+    .shape-curva {
+        border-color: rgba(251, 146, 60, 0.25);
+        background: rgba(251, 146, 60, 0.08);
+        color: #fb923c;
+    }
+</style>
+{% endblock %}
+
 {% block extra_js %}
 <script>
     const ALL_DIAMETER_OPTIONS = {{ all_diameter_options_json|safe }};
@@ -259,7 +301,38 @@
                         </label>
                     </div>
                 </div>
-                <div><strong>Medida:</strong> {{ clamp_request.get_clamp_type_display|upper }} {% if clamp_request.is_zincated %}ZINCADA{% endif %} {{ clamp_request.diameter }} x {{ clamp_request.width_mm }} x {{ clamp_request.length_mm }} {{ clamp_request.profile_type }}</div>
+                <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                    <strong>Medida:</strong>
+                    <span>{{ clamp_request.get_clamp_type_display|upper }} {% if clamp_request.is_zincated %}ZINCADA{% endif %} {{ clamp_request.diameter }} x {{ clamp_request.width_mm }} x {{ clamp_request.length_mm }}</span>
+                    {% if clamp_request.profile_type == 'PLANA' %}
+                        <span class="shape-badge shape-plana" title="Forma Plana (Cabeza recta)">
+                            <svg class="mini-clamp-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="butt">
+                                <path d="M 6,24 L 6,6 L 18,6 L 18,24" />
+                                <line x1="6" y1="17" x2="6" y2="24" stroke="#ff8c5a" stroke-width="3" stroke-dasharray="1.5,1.5" />
+                                <line x1="18" y1="17" x2="18" y2="24" stroke="#ff8c5a" stroke-width="3" stroke-dasharray="1.5,1.5" />
+                            </svg>
+                            PLANA
+                        </span>
+                    {% elif clamp_request.profile_type == 'SEMICURVA' %}
+                        <span class="shape-badge shape-semicurva" title="Forma Semicurva (Forma intermedia)">
+                            <svg class="mini-clamp-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="butt">
+                                <path d="M 6,24 L 6,9 A 3,3 0 0,1 9,6 L 15,6 A 3,3 0 0,1 18,9 L 18,24" />
+                                <line x1="6" y1="17" x2="6" y2="24" stroke="#ff8c5a" stroke-width="3" stroke-dasharray="1.5,1.5" />
+                                <line x1="18" y1="17" x2="18" y2="24" stroke="#ff8c5a" stroke-width="3" stroke-dasharray="1.5,1.5" />
+                            </svg>
+                            SEMICURVA
+                        </span>
+                    {% else %}
+                        <span class="shape-badge shape-curva" title="Forma Curva (Cabeza redonda)">
+                            <svg class="mini-clamp-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="butt">
+                                <path d="M 6,24 L 6,12 A 6,6 0 0,1 18,12 L 18,24" />
+                                <line x1="6" y1="17" x2="6" y2="24" stroke="#ff8c5a" stroke-width="3" stroke-dasharray="1.5,1.5" />
+                                <line x1="18" y1="17" x2="18" y2="24" stroke="#ff8c5a" stroke-width="3" stroke-dasharray="1.5,1.5" />
+                            </svg>
+                            CURVA
+                        </span>
+                    {% endif %}
+                </div>
                 <div><strong>Codigo sugerido:</strong> <code>{{ clamp_request.generated_code|default:"-" }}</code></div>
                 <div><strong>Costo base:</strong> ${{ clamp_request.base_cost|floatformat:2 }}</div>
                 {% if quote_preview %}

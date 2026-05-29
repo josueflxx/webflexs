@@ -10,7 +10,7 @@
 {% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="{% static 'core/css/catalog.css' %}?v=20260527-hierarchy">
+<link rel="stylesheet" href="{% static 'core/css/catalog.css' %}?v=20260529-premium">
 <style>
     @keyframes spin {
         0% { transform: rotate(0deg); }
@@ -624,6 +624,10 @@
             const isFavorite = !!data.is_favorite;
             btn.dataset.favorite = isFavorite ? '1' : '0';
             btn.textContent = isFavorite ? 'Favorito' : 'Guardar';
+            
+            // Heart pop micro-interaction
+            btn.classList.add('pop');
+            setTimeout(() => btn.classList.remove('pop'), 500);
         } catch (error) {
             console.error(error);
         }
@@ -754,9 +758,33 @@
         }, 8000);
     }
 
+    function showCatalogLoading() {
+        const main = document.querySelector('.catalog-main');
+        if (main) {
+            main.classList.add('products-loading');
+            main.style.opacity = '0.5';
+            main.style.transition = 'opacity 0.3s ease';
+        }
+    }
+
     document.addEventListener('DOMContentLoaded', function () {
         initializeCategoryTree();
         setupCategoryVisibilityToggle();
+
+        // Bind loading shimmer transitions
+        document.querySelectorAll('.search-form, .inline-filter-form').forEach(form => {
+            form.addEventListener('submit', showCatalogLoading);
+        });
+        const orderSelect = document.querySelector('.order-select');
+        if (orderSelect) {
+            orderSelect.addEventListener('change', showCatalogLoading);
+        }
+        document.querySelectorAll('.page-link').forEach(link => {
+            link.addEventListener('click', showCatalogLoading);
+        });
+        document.querySelectorAll('.category-tree-link').forEach(link => {
+            link.addEventListener('click', showCatalogLoading);
+        });
     });
 </script>
 {% endblock %}

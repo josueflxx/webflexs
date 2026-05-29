@@ -772,3 +772,127 @@
         height: 280px;
     }
 }
+
+/* ============================================
+   FLEXS Landing Page Premium Animations
+   ============================================ */
+
+/* Hero Title Mask Reveal */
+.hero-title-line {
+    display: block;
+    overflow: hidden;
+    padding-bottom: 2px;
+}
+
+.hero-title-line-inner {
+    display: block;
+    transform: translateY(100%);
+    animation: reveal-up 1.05s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.hero-title-line:nth-child(1) .hero-title-line-inner {
+    animation-delay: 0.12s;
+}
+.hero-title-line:nth-child(2) .hero-title-line-inner {
+    animation-delay: 0.28s;
+}
+
+@keyframes reveal-up {
+    0% {
+        transform: translateY(100%);
+    }
+    100% {
+        transform: translateY(0);
+    }
+}
+
+/* Hero Description, Eyebrow, Buttons Fade-in-up */
+.hero-eyebrow {
+    opacity: 0;
+    transform: translateY(15px);
+    animation: fade-in-up-hero 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    animation-delay: 0.05s;
+}
+
+.hero-subtitle {
+    opacity: 0;
+    transform: translateY(20px);
+    animation: fade-in-up-hero 0.9s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    animation-delay: 0.45s;
+}
+
+.hero-description, 
+.hero-buttons, 
+.hero-proof-row {
+    opacity: 0;
+    transform: translateY(20px);
+    animation: fade-in-up-hero 0.95s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.hero-description { animation-delay: 0.55s; }
+.hero-buttons { animation-delay: 0.65s; }
+.hero-proof-row { animation-delay: 0.75s; }
+
+@keyframes fade-in-up-hero {
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Slow Floating Hero Clamp Image */
+@keyframes hero-float {
+    0% {
+        transform: translateY(-50%) rotate(-7deg);
+    }
+    50% {
+        transform: translateY(-54%) rotate(-5deg);
+    }
+    100% {
+        transform: translateY(-50%) rotate(-7deg);
+    }
+}
+
+.hero-media img {
+    animation: hero-float 7.5s ease-in-out infinite !important;
+}
+
+/* 3D Tilt Support */
+.stat-card, 
+.service-card {
+    transition: transform 0.15s cubic-bezier(0.25, 0.8, 0.25, 1),
+                border-color 0.3s ease,
+                box-shadow 0.3s ease !important;
+    will-change: transform;
+}
+
+/* Category Cards Interactive Flashlight Glow Border */
+.product-category-card {
+    position: relative;
+    z-index: 1;
+    overflow: hidden;
+}
+
+.product-category-card::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(
+        150px circle at var(--mouse-x, 0) var(--mouse-y, 0),
+        rgba(255, 107, 53, 0.18),
+        transparent 65%
+    );
+    z-index: -1;
+    opacity: 0;
+    transition: opacity 0.4s ease;
+    pointer-events: none;
+}
+
+.product-category-card:hover::before {
+    opacity: 1;
+}
+
+.product-category-card:hover {
+    border-color: rgba(255, 107, 53, 0.4) !important;
+    box-shadow: 0 12px 30px rgba(255, 107, 53, 0.08) !important;
+}

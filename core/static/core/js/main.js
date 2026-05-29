@@ -329,6 +329,96 @@ document.addEventListener('DOMContentLoaded', function () {
             suppressContextMenuOnce = false;
         }, true);
     }
+
+    /* ============================================
+       FLEXS Premium Animations & Global JS Logic
+       ============================================ */
+
+    // 3. MutationObserver: Cart Badge Bounce
+    const cartBadge = document.getElementById('cartBadge');
+    if (cartBadge) {
+        const observer = new MutationObserver(() => {
+            cartBadge.classList.remove('bounce');
+            void cartBadge.offsetWidth; // Trigger DOM reflow to restart animation
+            cartBadge.classList.add('bounce');
+        });
+        observer.observe(cartBadge, { childList: true, characterData: true, subtree: true });
+    }
+
+    // 5. 3D Tilt Effect on cards (data-tilt)
+    const tilts = document.querySelectorAll('[data-tilt]');
+    tilts.forEach(el => {
+        el.addEventListener('mousemove', e => {
+            const rect = el.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            const xc = rect.width / 2;
+            const yc = rect.height / 2;
+            const dx = x - xc;
+            const dy = y - yc;
+            const tiltX = -(dy / yc) * 8; // max tilt degrees: 8
+            const tiltY = (dx / xc) * 8;
+            el.style.transform = `perspective(1000px) rotateX(${tiltX}deg) rotateY(${tiltY}deg) translateY(-5px)`;
+        });
+        el.addEventListener('mouseleave', () => {
+            el.style.transform = 'perspective(1000px) rotateX(0deg) rotateY(0deg) translateY(0)';
+        });
+    });
+
+    // 6 & 14. Intersection Observer for Scroll Reveals (sections, cascade lists)
+    const observerOptions = {
+        root: null,
+        rootMargin: '0px 0px 50px 0px',
+        threshold: 0.01
+    };
+    const revealObserver = new IntersectionObserver((entries, observer) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                entry.target.classList.add('revealed');
+                observer.unobserve(entry.target);
+            }
+        });
+    }, observerOptions);
+
+    document.querySelectorAll('.reveal-on-scroll, .related-products-grid').forEach(el => {
+        revealObserver.observe(el);
+    });
+
+    // 7. Interactive Flashlight Glow Border tracker for category cards
+    document.querySelectorAll('.product-category-card').forEach(card => {
+        card.addEventListener('mousemove', e => {
+            const rect = card.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            card.style.setProperty('--mouse-x', `${x}px`);
+            card.style.setProperty('--mouse-y', `${y}px`);
+        });
+    });
+
+    // 13. Interactive high-precision zoom magnifier (lupa) for product detail page
+    const mediaContainers = document.querySelectorAll('.product-media');
+    mediaContainers.forEach(container => {
+        const img = container.querySelector('img');
+        if (!img) return;
+
+        container.style.position = 'relative';
+        container.style.overflow = 'hidden';
+
+        container.addEventListener('mousemove', e => {
+            const rect = container.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            const xp = (x / rect.width) * 100;
+            const yp = (y / rect.height) * 100;
+            img.style.transformOrigin = `${xp}% ${yp}%`;
+            img.style.transform = 'scale(1.8)';
+        });
+
+        container.addEventListener('mouseleave', () => {
+            img.style.transform = 'scale(1)';
+            img.style.transformOrigin = 'center center';
+        });
+    });
 });
 
 /**

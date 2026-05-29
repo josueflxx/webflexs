@@ -9,7 +9,7 @@
 {% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="{% static 'core/css/catalog.css' %}?v=20260527-hierarchy">
+<link rel="stylesheet" href="{% static 'core/css/catalog.css' %}?v=20260529-premium">
 {% endblock %}
 
 {% block content %}
@@ -107,7 +107,7 @@
                 <a href="{{ primary_category_chip.url }}" class="btn btn-outline">Ver categoria</a>
                 {% endif %}
             </div>
-            <div class="related-products-grid">
+            <div class="related-products-grid reveal-on-scroll">
                 {% for related in related_products %}
                 <article class="related-product-card">
                     <a class="related-product-thumb" href="{% url 'product_detail' related.sku %}">
@@ -170,6 +170,10 @@
                 const isFavorite = !!data.is_favorite;
                 btn.dataset.favorite = isFavorite ? '1' : '0';
                 btn.textContent = isFavorite ? 'Favorito' : 'Guardar favorito';
+                
+                // Heart pop micro-interaction
+                btn.classList.add('pop');
+                setTimeout(() => btn.classList.remove('pop'), 500);
             }
         } catch (error) {
             console.error('Error toggling favorite', error);
