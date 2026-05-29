@@ -804,9 +804,83 @@
         }
     }
 
+    function setupCustomSelects() {
+        const selects = document.querySelectorAll('.order-select, .form-select-mini');
+        selects.forEach(select => {
+            if (select.parentNode.classList.contains('custom-select-wrapper')) return;
+            
+            const wrapper = document.createElement('div');
+            wrapper.className = 'custom-select-wrapper';
+            if (select.classList.contains('form-select-mini')) {
+                wrapper.classList.add('custom-select-mini');
+            }
+            
+            select.parentNode.insertBefore(wrapper, select);
+            wrapper.appendChild(select);
+            select.style.display = 'none';
+            
+            const trigger = document.createElement('div');
+            trigger.className = 'custom-select-trigger';
+            
+            const triggerText = document.createElement('span');
+            const selectedOpt = select.querySelector('option[selected]') || select.querySelector('option');
+            triggerText.textContent = selectedOpt ? selectedOpt.textContent : '';
+            trigger.appendChild(triggerText);
+            
+            const arrow = document.createElement('div');
+            arrow.className = 'custom-select-arrow';
+            trigger.appendChild(arrow);
+            wrapper.appendChild(trigger);
+            
+            const optionsContainer = document.createElement('div');
+            optionsContainer.className = 'custom-options';
+            
+            const options = select.querySelectorAll('option');
+            options.forEach(opt => {
+                const customOpt = document.createElement('div');
+                customOpt.className = 'custom-option';
+                customOpt.dataset.value = opt.value;
+                customOpt.textContent = opt.textContent;
+                
+                if (opt.value === select.value) {
+                    customOpt.classList.add('active');
+                }
+                
+                customOpt.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    select.value = opt.value;
+                    triggerText.textContent = opt.textContent;
+                    
+                    optionsContainer.querySelectorAll('.custom-option').forEach(el => el.classList.remove('active'));
+                    customOpt.classList.add('active');
+                    
+                    wrapper.classList.remove('open');
+                    
+                    // Dispatch change event to trigger updateOrder
+                    select.dispatchEvent(new Event('change'));
+                });
+                optionsContainer.appendChild(customOpt);
+            });
+            wrapper.appendChild(optionsContainer);
+            
+            trigger.addEventListener('click', (e) => {
+                e.stopPropagation();
+                document.querySelectorAll('.custom-select-wrapper').forEach(w => {
+                    if (w !== wrapper) w.classList.remove('open');
+                });
+                wrapper.classList.toggle('open');
+            });
+        });
+        
+        document.addEventListener('click', () => {
+            document.querySelectorAll('.custom-select-wrapper').forEach(w => w.classList.remove('open'));
+        });
+    }
+
     document.addEventListener('DOMContentLoaded', function () {
         initializeCategoryTree();
         setupCategoryVisibilityToggle();
+        setupCustomSelects();
 
         // Bind loading shimmer transitions
         document.querySelectorAll('.search-form, .inline-filter-form').forEach(form => {

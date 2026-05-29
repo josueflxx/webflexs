@@ -513,8 +513,8 @@
 .form-select-mini optgroup,
 .order-select option,
 .order-select optgroup {
-    color: #10151f;
-    background-color: #f4f6fa;
+    color: #ffffff;
+    background-color: #121319;
 }
 
 /* Scrollbar for select dropdown (Chrome/Edge/Safari) */
@@ -2953,5 +2953,155 @@
         border-color: rgba(255, 107, 53, 0.55);
         box-shadow: 0 4px 20px rgba(255, 107, 53, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.08);
     }
+}
+
+
+/* ============================================
+   FLEXS Catalog Custom Select Dropdown Styles
+   ============================================ */
+
+.custom-select-wrapper {
+    position: relative;
+    user-select: none;
+    display: inline-block;
+    min-width: 190px;
+}
+
+.custom-select-wrapper.custom-select-mini {
+    min-width: 100%;
+}
+
+.custom-select-trigger {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 16px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #ffffff;
+    background: rgba(30, 30, 35, 0.8) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.custom-select-wrapper.custom-select-mini .custom-select-trigger {
+    padding: 6px 12px;
+    font-size: 0.78rem;
+    border-radius: 6px;
+}
+
+.custom-select-wrapper:hover .custom-select-trigger {
+    border-color: rgba(255, 107, 53, 0.5) !important;
+    box-shadow: 0 0 12px rgba(255, 107, 53, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.custom-select-wrapper.open .custom-select-trigger {
+    border-color: #ff6b35 !important;
+    box-shadow: 0 0 15px rgba(255, 107, 53, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    background: rgba(20, 20, 24, 0.95) !important;
+}
+
+/* Custom indicator arrow */
+.custom-select-arrow {
+    width: 14px;
+    height: 14px;
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23ff6b35' stroke-linecap='round' stroke-linejoin='round' stroke-width='2.5' d='m2 5 6 6 6-6'/%3e%3c/svg%3e");
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: contain;
+    transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    opacity: 0.85;
+}
+
+.custom-select-wrapper.open .custom-select-arrow {
+    transform: rotate(180deg);
+    opacity: 1;
+}
+
+/* Options dropdown list */
+.custom-options {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    right: 0;
+    z-index: 1050;
+    display: none;
+    max-height: 260px;
+    overflow-y: auto;
+    background: rgba(20, 20, 25, 0.96) !important;
+    backdrop-filter: blur(16px) !important;
+    -webkit-backdrop-filter: blur(16px) !important;
+    border: 1px solid rgba(255, 107, 53, 0.35) !important;
+    border-radius: 8px;
+    box-shadow: 0 12px 36px rgba(0, 0, 0, 0.55);
+    padding: 6px 0;
+    transform-origin: top center;
+    animation: selectSlide 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.custom-select-wrapper.open .custom-options {
+    display: block;
+}
+
+@keyframes selectSlide {
+    from {
+        opacity: 0;
+        transform: translateY(-8px) scaleY(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scaleY(1);
+    }
+}
+
+/* Scrollbar for options */
+.custom-options::-webkit-scrollbar {
+    width: 6px;
+}
+.custom-options::-webkit-scrollbar-track {
+    background: transparent;
+}
+.custom-options::-webkit-scrollbar-thumb {
+    background-color: rgba(255, 255, 255, 0.15);
+    border-radius: 10px;
+}
+.custom-options::-webkit-scrollbar-thumb:hover {
+    background-color: #ff6b35;
+}
+
+/* Dropdown individual option */
+.custom-option {
+    padding: 10px 16px;
+    font-size: 0.84rem;
+    font-weight: 500;
+    color: #e2e8f0;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-align: left;
+    position: relative;
+    border-left: 2px solid transparent;
+}
+
+.custom-select-wrapper.custom-select-mini .custom-option {
+    padding: 8px 12px;
+    font-size: 0.76rem;
+}
+
+.custom-option:hover {
+    background: rgba(255, 107, 53, 0.12) !important;
+    color: #ffffff !important;
+    border-left-color: rgba(255, 107, 53, 0.7);
+    padding-left: 18px;
+}
+
+.custom-option.active {
+    background: linear-gradient(135deg, #ff6b35, #e0531b) !important;
+    color: #ffffff !important;
+    font-weight: 700;
+    border-left-color: #ffffff;
 }
 
