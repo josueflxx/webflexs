@@ -5,51 +5,137 @@
 {% block content %}
 <div class="orders-page">
     <div class="container">
-        <h1>Portal Cliente</h1>
+        <!-- Premium Welcome Hero Section -->
+        <div class="portal-welcome">
+            <h1>¡Bienvenido a tu Portal, {{ user.get_full_name|default:user.username }}!</h1>
+            <p>Gestiona tus cotizaciones de abrazaderas, pedidos activos y cuenta corriente desde tu panel centralizado de alto rendimiento.</p>
+        </div>
 
+        <!-- Metric Grid -->
         <div class="portal-grid">
+            <!-- Card 1: Solicitudes Abiertas -->
             <div class="portal-card">
-                <h3>Solicitudes abiertas</h3>
-                <p class="portal-number">{{ open_request_count }}</p>
+                <div class="portal-card-header">
+                    <h3>Solicitudes abiertas</h3>
+                    <div class="portal-icon-wrapper">
+                        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                        </svg>
+                    </div>
+                </div>
+                <div class="portal-number-wrap">
+                    <p class="portal-number">{{ open_request_count }}</p>
+                </div>
                 <a href="{% url 'order_request_list' %}" class="btn btn-outline">Ver solicitudes</a>
             </div>
+
+            <!-- Card 2: Pedidos Operativos -->
             <div class="portal-card">
-                <h3>Pedidos operativos</h3>
-                <p class="portal-number">{{ active_orders_count }}</p>
+                <div class="portal-card-header">
+                    <h3>Pedidos operativos</h3>
+                    <div class="portal-icon-wrapper">
+                        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M9 17a2 2 0 11-4 0 2 2 0 014 0zM19 17a2 2 0 11-4 0 2 2 0 014 0z"/>
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10M13 16h6m-6 0H6m13 0a2 2 0 002-2v-4a2 2 0 00-2-2h-3"/>
+                        </svg>
+                    </div>
+                </div>
+                <div class="portal-number-wrap">
+                    <p class="portal-number">{{ active_orders_count }}</p>
+                </div>
                 <a href="{% url 'order_list' %}" class="btn btn-outline">Ver pedidos</a>
             </div>
+
+            <!-- Card 3: Favoritos -->
             <div class="portal-card">
-                <h3>Favoritos</h3>
-                <p class="portal-number">{{ favorites|length }}</p>
-                <a href="{% url 'catalog' %}" class="btn btn-outline">Ver catalogo</a>
+                <div class="portal-card-header">
+                    <h3>Favoritos</h3>
+                    <div class="portal-icon-wrapper">
+                        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/>
+                        </svg>
+                    </div>
+                </div>
+                <div class="portal-number-wrap">
+                    <p class="portal-number">{{ favorites|length }}</p>
+                </div>
+                <a href="{% url 'catalog' %}" class="btn btn-outline">Ver catálogo</a>
             </div>
+
+            <!-- Card 4: Saldo Actual -->
             <div class="portal-card">
-                <h3>Saldo actual</h3>
-                <p class="portal-number {% if current_balance > 0 %}is-danger{% endif %}">
-                    ${{ current_balance|floatformat:2 }}
-                </p>
-                <small class="text-muted">Cuenta corriente</small>
+                <div class="portal-card-header">
+                    <h3>Saldo actual</h3>
+                    <div class="portal-icon-wrapper">
+                        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/>
+                        </svg>
+                    </div>
+                </div>
+                <div class="portal-number-wrap">
+                    <p class="portal-number {% if current_balance > 0 %}is-danger{% endif %}">
+                        ${{ current_balance|floatformat:2 }}
+                    </p>
+                </div>
+                <span class="btn btn-outline" style="pointer-events: none; border-color: rgba(255,255,255,0.06); background: rgba(255,255,255,0.01); color: #718096;">Cuenta Corriente</span>
             </div>
+
+            <!-- Card 5: Historial -->
             <div class="portal-card">
-                <h3>Historial de pedidos</h3>
-                <p class="portal-number">{{ total_orders_count }}</p>
+                <div class="portal-card-header">
+                    <h3>Historial de pedidos</h3>
+                    <div class="portal-icon-wrapper">
+                        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                    </div>
+                </div>
+                <div class="portal-number-wrap">
+                    <p class="portal-number">{{ total_orders_count }}</p>
+                </div>
                 <a href="{% url 'order_list' %}" class="btn btn-outline">Ir al historial</a>
             </div>
+
+            <!-- Card 6: Solicitudes Enviadas -->
             <div class="portal-card">
-                <h3>Solicitudes enviadas</h3>
-                <p class="portal-number">{{ total_request_count }}</p>
+                <div class="portal-card-header">
+                    <h3>Solicitudes enviadas</h3>
+                    <div class="portal-icon-wrapper">
+                        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
+                        </svg>
+                    </div>
+                </div>
+                <div class="portal-number-wrap">
+                    <p class="portal-number">{{ total_request_count }}</p>
+                </div>
                 <a href="{% url 'order_request_list' %}" class="btn btn-outline">Ver seguimiento</a>
             </div>
+
+            <!-- Card 7: Catalogo Excel -->
             {% if client_catalog_excel_download_enabled %}
-            <div class="portal-card">
-                <h3>Catalogo Excel</h3>
-                <p class="portal-number">XLSX</p>
-                <span class="text-muted">{{ client_catalog_excel_download_label|default:"Descargar catalogo Excel" }}</span>
+            <div class="portal-card" style="background: linear-gradient(135deg, rgba(16, 185, 129, 0.03), rgba(255, 255, 255, 0.01)); border-color: rgba(16, 185, 129, 0.12);">
+                <div class="portal-card-header">
+                    <h3 style="color: #a7f3d0;">Catálogo Excel</h3>
+                    <div class="portal-icon-wrapper" style="background: rgba(16, 185, 129, 0.08); border-color: rgba(16, 185, 129, 0.2); color: #10b981;">
+                        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                        </svg>
+                    </div>
+                </div>
+                <div class="portal-number-wrap">
+                    <p class="portal-number" style="background: linear-gradient(to right, #a7f3d0, #34d399); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">XLSX</p>
+                </div>
+                <a href="{% url 'catalog_export_excel' %}" class="btn btn-outline" style="border-color: rgba(16, 185, 129, 0.25); color: #a7f3d0; background: rgba(16, 185, 129, 0.03);">
+                    {{ client_catalog_excel_download_label|default:"Descargar catálogo" }}
+                </a>
             </div>
             {% endif %}
         </div>
 
+        <!-- Detailed Lists Sections -->
         <div class="portal-sections">
+            <!-- Recent Requests -->
             <section class="portal-panel">
                 <div class="panel-header">
                     <h2>Solicitudes recientes</h2>
@@ -61,20 +147,21 @@
                     <li>
                         <div>
                             <strong>Solicitud #{{ order_request.pk }}</strong>
-                            <small>{{ order_request.created_at|date:"d/m/Y H:i" }} - {{ order_request.get_status_display }}</small>
+                            <small>{{ order_request.created_at|date:"d/m/Y H:i" }} — {{ order_request.get_status_display }}</small>
                         </div>
                         <a href="{% url 'order_request_detail' order_request.pk %}" class="btn btn-outline btn-sm">Ver detalle</a>
                     </li>
                     {% endfor %}
                 </ul>
                 {% else %}
-                <p class="text-muted">Todavia no enviaste solicitudes comerciales.</p>
+                <p class="text-muted">Todavía no enviaste solicitudes comerciales.</p>
                 {% endif %}
             </section>
 
+            <!-- Quick Reorders -->
             <section class="portal-panel">
                 <div class="panel-header">
-                    <h2>Recompras rapidas</h2>
+                    <h2>Recompras rápidas</h2>
                     <a href="{% url 'order_list' %}" class="btn btn-outline btn-sm">Ver pedidos</a>
                 </div>
                 {% if recent_orders %}
@@ -83,7 +170,7 @@
                     <li>
                         <div>
                             <strong>Pedido #{{ order.pk }}</strong>
-                            <small>{{ order.created_at|date:"d/m/Y H:i" }} - {{ order.get_status_display }}</small>
+                            <small>{{ order.created_at|date:"d/m/Y H:i" }} — {{ order.get_status_display }}</small>
                         </div>
                         <form method="post" action="{% url 'reorder_to_cart' order.pk %}">
                             {% csrf_token %}
@@ -93,14 +180,15 @@
                     {% endfor %}
                 </ul>
                 {% else %}
-                <p class="text-muted">Todavia no hay pedidos para recompra.</p>
+                <p class="text-muted">Todavía no hay pedidos para recompra.</p>
                 {% endif %}
             </section>
 
+            <!-- Favorites -->
             <section class="portal-panel">
                 <div class="panel-header">
                     <h2>Favoritos</h2>
-                    <a href="{% url 'catalog' %}" class="btn btn-outline btn-sm">Ir al catalogo</a>
+                    <a href="{% url 'catalog' %}" class="btn btn-outline btn-sm">Ir al catálogo</a>
                 </div>
                 {% if favorites %}
                 <ul class="portal-list">
@@ -115,19 +203,23 @@
                     {% endfor %}
                 </ul>
                 {% else %}
-                <p class="text-muted">Aun no tenes productos favoritos.</p>
+                <p class="text-muted">Aún no tenés productos favoritos.</p>
                 {% endif %}
             </section>
 
+            <!-- Recent Payments -->
             <section class="portal-panel">
-                <h2>Pagos recientes</h2>
+                <div class="panel-header">
+                    <h2>Pagos recientes</h2>
+                    <span class="btn btn-outline btn-sm" style="pointer-events: none; opacity: 0.5; border-color: rgba(255,255,255,0.06); background: rgba(255,255,255,0.01);">Historial</span>
+                </div>
                 {% if recent_payments %}
                 <ul class="portal-list">
                     {% for payment in recent_payments %}
                     <li>
                         <div>
                             <strong>${{ payment.amount|floatformat:2 }}</strong>
-                            <small>{{ payment.paid_at|date:"d/m/Y H:i" }} - {{ payment.get_method_display }}</small>
+                            <small>{{ payment.paid_at|date:"d/m/Y H:i" }} — {{ payment.get_method_display }}</small>
                         </div>
                         {% if payment.order_id %}
                         <a href="{% url 'order_detail' payment.order_id %}" class="btn btn-outline btn-sm">Pedido #{{ payment.order_id }}</a>
@@ -138,94 +230,301 @@
                     {% endfor %}
                 </ul>
                 {% else %}
-                <p class="text-muted">Todavia no hay pagos registrados en tu cuenta.</p>
+                <p class="text-muted">Todavía no hay pagos registrados en tu cuenta.</p>
                 {% endif %}
             </section>
-
         </div>
     </div>
 </div>
 
 <style>
     .orders-page {
-        padding: var(--spacing-2xl) 0;
+        padding: 40px 0;
+        background: radial-gradient(circle at top left, rgba(255, 107, 53, 0.04), transparent 45%),
+                    radial-gradient(circle at bottom right, rgba(56, 189, 248, 0.02), transparent 45%);
     }
+    
+    .portal-welcome {
+        margin-bottom: 28px;
+        background: linear-gradient(135deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.01));
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        border-radius: 16px;
+        padding: 24px 30px;
+        position: relative;
+        overflow: hidden;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+    }
+    
+    .portal-welcome::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 4px;
+        height: 100%;
+        background: linear-gradient(to bottom, #ff6b35, #ff8c5a);
+    }
+    
+    .portal-welcome h1 {
+        font-size: 1.7rem;
+        font-weight: 800;
+        margin: 0 0 6px 0;
+        color: #fff;
+        letter-spacing: -0.02em;
+    }
+    
+    .portal-welcome p {
+        margin: 0;
+        color: #9cb0c5;
+        font-size: 0.95rem;
+        line-height: 1.45;
+    }
+
     .portal-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-        gap: 12px;
-        margin-bottom: 16px;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 16px;
+        margin-bottom: 36px;
     }
+    
     .portal-card {
-        background: var(--color-dark-light);
-        border-radius: 12px;
-        padding: 14px;
-        border: 1px solid rgba(255, 255, 255, 0.1);
+        background: rgba(255, 255, 255, 0.02);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border-radius: 16px;
+        padding: 20px;
+        border: 1px solid rgba(255, 255, 255, 0.06);
         display: flex;
         flex-direction: column;
-        gap: 8px;
+        justify-content: space-between;
+        min-height: 172px;
+        transition: all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+        box-shadow: 0 4px 30px rgba(0, 0, 0, 0.2), inset 0 1px 1px rgba(255, 255, 255, 0.05);
+        position: relative;
+        overflow: hidden;
     }
-    .portal-card h3 {
+
+    .portal-card::after {
+        content: '';
+        position: absolute;
+        width: 100px;
+        height: 100px;
+        background: radial-gradient(circle, rgba(255, 107, 53, 0.08) 0%, transparent 70%);
+        top: -20px;
+        right: -20px;
+        border-radius: 50%;
+        pointer-events: none;
+        transition: transform 0.5s ease;
+    }
+    
+    .portal-card:hover {
+        transform: translateY(-6px);
+        border-color: rgba(255, 107, 53, 0.35);
+        background: rgba(255, 255, 255, 0.03);
+        box-shadow: 0 16px 36px rgba(255, 107, 53, 0.08), 0 4px 30px rgba(0, 0, 0, 0.3);
+    }
+    
+    .portal-card:hover::after {
+        transform: scale(1.4);
+    }
+
+    .portal-card-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 12px;
+        margin-bottom: 8px;
+    }
+
+    .portal-card-header h3 {
         margin: 0;
-        font-size: 0.95rem;
+        font-size: 0.85rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: #9cb0c5;
+        line-height: 1.35;
     }
+
+    .portal-icon-wrapper {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 36px;
+        height: 36px;
+        border-radius: 10px;
+        background: rgba(255, 107, 53, 0.08);
+        border: 1px solid rgba(255, 107, 53, 0.15);
+        color: #ff6b35;
+        flex-shrink: 0;
+        transition: all 0.3s ease;
+    }
+    
+    .portal-card:hover .portal-icon-wrapper {
+        background: #ff6b35;
+        color: #fff;
+        box-shadow: 0 0 12px rgba(255, 107, 53, 0.4);
+        transform: scale(1.05);
+    }
+    
+    .portal-number-wrap {
+        display: flex;
+        align-items: baseline;
+        gap: 6px;
+        margin: 6px 0 12px 0;
+    }
+
     .portal-number {
         margin: 0;
-        font-size: 1.4rem;
-        font-weight: 700;
-        color: var(--color-primary);
+        font-size: 2.1rem;
+        font-weight: 800;
+        line-height: 1;
+        color: #fff;
+        letter-spacing: -0.03em;
+        font-family: inherit;
+        background: linear-gradient(to right, #ffffff, #d2e4f9);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
     }
+
     .portal-number.is-danger {
-        color: #ff5e5e;
+        background: linear-gradient(to right, #ff8a8a, #ff4c4c);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
     }
+    
+    .portal-card .btn-outline {
+        border-color: rgba(255, 255, 255, 0.15);
+        color: #f1f5f9;
+        font-size: 0.78rem;
+        font-weight: 700;
+        padding: 8px 12px;
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.02);
+        transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+        text-align: center;
+        width: 100%;
+        display: block;
+        margin-top: auto;
+    }
+    
+    .portal-card:hover .btn-outline {
+        border-color: #ff6b35;
+        background: rgba(255, 107, 53, 0.05);
+        color: #fff;
+    }
+
     .portal-sections {
         display: grid;
         grid-template-columns: repeat(2, minmax(260px, 1fr));
-        gap: 14px;
+        gap: 20px;
     }
+
     .portal-panel {
-        background: var(--color-dark-light);
-        border-radius: 12px;
-        padding: 14px;
-        border: 1px solid rgba(255, 255, 255, 0.1);
+        background: rgba(255, 255, 255, 0.02);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border-radius: 20px;
+        padding: 24px;
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+        display: flex;
+        flex-direction: column;
+        transition: all 0.3s ease;
     }
+
+    .portal-panel:hover {
+        border-color: rgba(255, 255, 255, 0.09);
+        box-shadow: 0 12px 35px rgba(0, 0, 0, 0.2);
+    }
+
     .panel-header {
         display: flex;
         justify-content: space-between;
         align-items: center;
         flex-wrap: wrap;
-        gap: 10px;
-        margin-bottom: 10px;
+        gap: 12px;
+        margin-bottom: 18px;
+        padding-bottom: 14px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
     }
+
     .portal-panel h2 {
         margin: 0;
-        font-size: 1rem;
+        font-size: 1.15rem;
+        font-weight: 800;
+        color: #fff;
+        letter-spacing: -0.01em;
+        position: relative;
     }
+    
+    .portal-panel h2::after {
+        content: '';
+        position: absolute;
+        bottom: -15px;
+        left: 0;
+        width: 40px;
+        height: 2px;
+        background: #ff6b35;
+    }
+
     .portal-list {
         list-style: none;
         margin: 0;
         padding: 0;
     }
+
     .portal-list li {
         display: flex;
         justify-content: space-between;
-        align-items: flex-start;
-        gap: 10px;
-        padding: 8px 0;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+        align-items: center;
+        gap: 14px;
+        padding: 12px 0;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.04);
         min-width: 0;
+        transition: all 0.2s ease;
     }
+
+    .portal-list li:hover {
+        transform: translateX(4px);
+    }
+    
+    .portal-list li:last-child {
+        border-bottom: none;
+    }
+
     .portal-list li > div {
         min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
     }
-    .portal-list strong,
-    .portal-list small {
+
+    .portal-list strong {
+        font-size: 0.95rem;
+        color: #f8fafc;
+        font-weight: 700;
         overflow-wrap: anywhere;
     }
+
     .portal-list small {
         display: block;
-        color: var(--color-gray-light);
+        color: #abb5c3;
+        font-size: 0.8rem;
     }
+
+    .portal-list .btn {
+        flex-shrink: 0;
+    }
+
+    .portal-panel .text-muted {
+        color: #718096 !important;
+        font-size: 0.9rem;
+        text-align: center;
+        padding: 30px 0;
+        margin: 0;
+    }
+
     @media (max-width: 900px) {
         .portal-sections {
             grid-template-columns: 1fr;
@@ -235,9 +534,10 @@
         .portal-list li {
             flex-direction: column;
             align-items: stretch;
+            gap: 10px;
         }
 
-        .portal-list .btn {
+        .portal-list .btn, .portal-list form, .portal-list form button {
             width: 100%;
         }
     }
