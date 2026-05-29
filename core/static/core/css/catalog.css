@@ -129,26 +129,76 @@
     justify-content: space-between;
     align-items: center;
     gap: 10px;
+    margin-bottom: 8px;
+}
+
+/* Toggle pill button: "Ver / Ocultar" */
+.cat-toggle-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 11px 4px 9px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.2px;
+    color: rgba(255, 255, 255, 0.55);
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 999px;
+    cursor: pointer;
+    transition: all 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+    white-space: nowrap;
+}
+
+.cat-toggle-pill svg {
+    transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    opacity: 0.7;
+}
+
+.cat-toggle-pill.open svg {
+    transform: rotate(180deg);
+}
+
+.cat-toggle-pill:hover {
+    color: #ff6b35;
+    border-color: rgba(255, 107, 53, 0.45);
+    background: rgba(255, 107, 53, 0.06);
+}
+
+.cat-toggle-pill:hover svg {
+    opacity: 1;
+}
+
+/* Secondary expand/collapse controls bar */
+.category-tree-controls {
+    display: flex;
+    gap: 6px;
     margin-bottom: 10px;
 }
 
-.category-filter-header-actions {
-    display: flex;
-    gap: 6px;
+.cat-ctrl-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    flex: 1;
+    justify-content: center;
+    padding: 5px 8px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.15px;
+    color: rgba(255, 255, 255, 0.45);
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+    white-space: nowrap;
 }
 
-#toggleCategoriesBtn {
-    padding: 4px 10px;
-    font-size: 0.74rem;
-    line-height: 1;
-    border-radius: 999px;
-    border-color: rgba(255, 255, 255, 0.2);
-    color: var(--color-gray-light);
-}
-
-#toggleCategoriesBtn:hover {
-    border-color: rgba(255, 107, 53, 0.5);
-    color: var(--color-primary);
+.cat-ctrl-btn:hover {
+    color: #ff6b35;
+    background: rgba(255, 107, 53, 0.07);
+    border-color: rgba(255, 107, 53, 0.3);
 }
 
 #categoriesWrapper {

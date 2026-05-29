@@ -168,17 +168,20 @@
                 <div class="filter-section">
                     <div class="category-filter-header">
                         <h3>Categorias</h3>
-                        <div class="category-filter-header-actions">
-                            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="expandAllCategoryTree()">
-                                Expandir
-                            </button>
-                            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="collapseAllCategoryTree()">
-                                Ocultar
-                            </button>
-                            <button type="button" class="btn btn-sm btn-outline-secondary" id="toggleCategoriesBtn">
-                                Ver
-                            </button>
-                        </div>
+                        <button type="button" class="cat-toggle-pill" id="toggleCategoriesBtn">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                            <span class="cat-toggle-label">Ver</span>
+                        </button>
+                    </div>
+                    <div class="category-tree-controls" id="categoryTreeControls" style="display:none;">
+                        <button type="button" class="cat-ctrl-btn" onclick="expandAllCategoryTree()">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="7 13 12 18 17 13"></polyline><polyline points="7 6 12 11 17 6"></polyline></svg>
+                            Expandir todo
+                        </button>
+                        <button type="button" class="cat-ctrl-btn" onclick="collapseAllCategoryTree()">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="7 11 12 6 17 11"></polyline><polyline points="7 18 12 13 17 18"></polyline></svg>
+                            Colapsar todo
+                        </button>
                     </div>
                     <div id="categoriesWrapper" style="display: none;">
                         <div class="category-tree">
@@ -757,16 +760,22 @@
     function setupCategoryVisibilityToggle() {
         const toggleBtn = document.getElementById('toggleCategoriesBtn');
         const categoriesWrapper = document.getElementById('categoriesWrapper');
+        const treeControls = document.getElementById('categoryTreeControls');
         if (!toggleBtn || !categoriesWrapper) return;
 
-        // Always start visible to avoid "disappearing categories" confusion.
+        // Always start visible
         categoriesWrapper.style.display = 'block';
-        toggleBtn.textContent = 'Ocultar';
+        if (treeControls) treeControls.style.display = 'flex';
+        toggleBtn.classList.add('open');
+        const label = toggleBtn.querySelector('.cat-toggle-label');
+        if (label) label.textContent = 'Ocultar';
 
         toggleBtn.addEventListener('click', function () {
             const isHidden = categoriesWrapper.style.display === 'none';
             categoriesWrapper.style.display = isHidden ? 'block' : 'none';
-            toggleBtn.textContent = isHidden ? 'Ocultar' : 'Ver';
+            if (treeControls) treeControls.style.display = isHidden ? 'flex' : 'none';
+            toggleBtn.classList.toggle('open', isHidden);
+            if (label) label.textContent = isHidden ? 'Ocultar' : 'Ver';
         });
     }
 
