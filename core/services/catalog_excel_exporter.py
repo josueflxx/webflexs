@@ -67,8 +67,8 @@ COLUMN_WIDTH_RULES = {
     "attributes_json": (32, 72),
 }
 
-HEADER_FILL = PatternFill(fill_type="solid", fgColor="1F2937")
-HEADER_FONT = Font(name="Segoe UI", color="FFFFFF", bold=True)
+HEADER_FILL = PatternFill(fill_type="solid", fgColor="E2E8F0")
+HEADER_FONT = Font(name="Segoe UI", color="0F172A", bold=True)
 HEADER_ALIGNMENT = Alignment(horizontal="left", vertical="center")
 GROUP_TITLE_FILL = PatternFill(fill_type="solid", fgColor="FEF3C7")
 GROUP_TITLE_FONT = Font(name="Segoe UI", color="92400E", bold=True, size=12)
