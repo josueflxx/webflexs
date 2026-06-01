@@ -44,7 +44,7 @@
     width: min(45rem, 48vw);
     min-width: 34rem;
     transform: translateY(-50%) rotate(-7deg);
-    opacity: 0.58;
+    opacity: 0.85;
     filter: drop-shadow(0 42px 58px rgba(0, 0, 0, 0.58)) saturate(1.02) contrast(1.04);
 }
 
@@ -652,7 +652,7 @@
         right: -12rem;
         width: 38rem;
         min-width: 38rem;
-        opacity: 0.28;
+        opacity: 0.48;
     }
 
     .hero-content {
@@ -716,7 +716,7 @@
         right: -15rem;
         width: 34rem;
         min-width: 34rem;
-        opacity: 0.16;
+        opacity: 0.32;
     }
 
     .hero-eyebrow {
@@ -898,20 +898,20 @@
 }
 
 /* ============================================
-   ROTATING THEMES: BLUEPRINT & FLEET
+   ROTATING THEMES: BLUEPRINT & ELASTICOS
    ============================================ */
 
 /* 1. BLUEPRINT CAD THEME */
 .theme-blueprint {
-    background: linear-gradient(135deg, #020617 0%, #0b1329 48%, #1e1b4b 100%) !important;
+    background: linear-gradient(135deg, #040814 0%, #0c1220 48%, #1f140e 100%) !important;
 }
 
 .theme-blueprint::before {
     background-image: 
-        linear-gradient(rgba(6, 182, 212, 0.04) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(6, 182, 212, 0.04) 1px, transparent 1px) !important;
+        linear-gradient(rgba(255, 107, 53, 0.02) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 107, 53, 0.02) 1px, transparent 1px) !important;
     background-size: 40px 40px !important;
-    mask-image: linear-gradient(90deg, rgba(0, 0, 0, 0.75), transparent 85%) !important;
+    mask-image: linear-gradient(90deg, rgba(0, 0, 0, 0.8), transparent 85%) !important;
 }
 
 .blueprint-grid {
@@ -922,7 +922,7 @@
     overflow: hidden;
 }
 
-/* Blueprint Compass Compass Circle */
+/* Blueprint Compass Circle (Orange/Grey tones) */
 .blueprint-vector-circle {
     position: absolute;
     top: 50%;
@@ -930,7 +930,7 @@
     width: min(440px, 46vw);
     height: min(440px, 46vw);
     transform: translateY(-50%);
-    border: 1px dashed rgba(6, 182, 212, 0.2);
+    border: 1px dashed rgba(255, 107, 53, 0.15);
     border-radius: 50%;
     animation: blueprint-rotate 30s linear infinite;
     opacity: 0.78;
@@ -940,7 +940,7 @@
     content: "";
     position: absolute;
     inset: 20px;
-    border: 1px solid rgba(6, 182, 212, 0.08);
+    border: 1px solid rgba(255, 107, 53, 0.06);
     border-radius: 50%;
 }
 
@@ -948,11 +948,11 @@
     content: "";
     position: absolute;
     inset: -30px;
-    border: 1px solid rgba(6, 182, 212, 0.05);
+    border: 1px solid rgba(255, 107, 53, 0.04);
     border-radius: 50%;
 }
 
-/* Technical Lines on the right */
+/* Technical Lines on the right (Orange/Grey tones) */
 .blueprint-vector-lines {
     position: absolute;
     top: 52%;
@@ -960,9 +960,9 @@
     width: min(450px, 48vw);
     height: min(220px, 24vw);
     transform: translateY(-50%);
-    border-top: 1px solid rgba(6, 182, 212, 0.25);
-    border-bottom: 1px solid rgba(6, 182, 212, 0.25);
-    background: linear-gradient(90deg, rgba(6, 182, 212, 0.03) 0%, rgba(6, 182, 212, 0.07) 50%, rgba(6, 182, 212, 0) 100%);
+    border-top: 1px solid rgba(255, 107, 53, 0.15);
+    border-bottom: 1px solid rgba(255, 107, 53, 0.15);
+    background: linear-gradient(90deg, rgba(255, 107, 53, 0.02) 0%, rgba(255, 107, 53, 0.04) 50%, rgba(255, 107, 53, 0) 100%);
     opacity: 0.65;
     animation: blueprint-pulse 6s ease-in-out infinite;
 }
@@ -974,7 +974,7 @@
     left: 12px;
     font-family: monospace;
     font-size: 10px;
-    color: rgba(6, 182, 212, 0.58);
+    color: rgba(255, 107, 53, 0.4);
     letter-spacing: 2px;
 }
 
@@ -988,53 +988,84 @@
     50% { opacity: 0.78; }
 }
 
-/* Accents & Buttons Parent Overrides for Blueprint */
-.theme-blueprint .text-primary {
-    color: #22d3ee !important; /* Cyan neón */
+/* Floating Technical CAD SVG Media Element */
+.blueprint-svg-media {
+    position: absolute;
+    top: 52%;
+    right: clamp(-3rem, -1vw, 2rem);
+    width: min(420px, 44vw);
+    height: min(420px, 44vw);
+    transform: translateY(-50%) rotate(-4deg);
+    filter: drop-shadow(0 20px 42px rgba(0, 0, 0, 0.45));
+    animation: hero-float 8.5s ease-in-out infinite;
+    z-index: 1;
 }
 
-.theme-blueprint .btn-primary {
-    background: #06b6d4 !important;
-    color: #020617 !important;
-    font-weight: 700 !important;
-    border-color: #06b6d4 !important;
-    box-shadow: 0 0 20px rgba(6, 182, 212, 0.4) !important;
+/* 2. ELASTICOS SUSPENSION THEME */
+.theme-elasticos {
+    background: linear-gradient(135deg, #06090f 0%, #101520 48%, #221711 100%) !important;
 }
 
-.theme-blueprint .btn-primary:hover {
-    background: #22d3ee !important;
-    border-color: #22d3ee !important;
-    box-shadow: 0 0 28px rgba(6, 182, 212, 0.6) !important;
-    transform: translateY(-2px) scale(1.02) !important;
+.elasticos-atmosphere {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: -2;
+    overflow: hidden;
 }
 
-.theme-blueprint .hero-eyebrow {
-    border-color: rgba(6, 182, 212, 0.4) !important;
-    background: rgba(6, 182, 212, 0.08) !important;
-    color: #a5f3fc !important;
+.elasticos-radial-glow {
+    position: absolute;
+    top: 50%;
+    right: -10%;
+    width: 60%;
+    height: 80%;
+    background: radial-gradient(circle, rgba(255, 107, 53, 0.08) 0%, transparent 70%);
+    transform: translateY(-50%);
+    pointer-events: none;
 }
 
-/* Accents & Buttons Parent Overrides for Fleet */
-.theme-fleet .text-primary {
-    color: #e879f9 !important; /* Magenta vibrante */
+/* Floating Leaf Springs Image */
+.hero-img-elasticos {
+    position: absolute;
+    top: 52%;
+    right: clamp(-8rem, -4vw, -1rem);
+    width: min(45rem, 48vw);
+    min-width: 34rem;
+    transform: translateY(-50%) rotate(-7deg);
+    opacity: 0.88;
+    filter: drop-shadow(0 42px 58px rgba(0, 0, 0, 0.58)) saturate(1.04) contrast(1.02);
+    animation: hero-float 7.5s ease-in-out infinite;
 }
 
-.theme-fleet .btn-primary {
-    background: linear-gradient(135deg, #d946ef 0%, #a855f7 100%) !important;
-    color: #ffffff !important;
-    font-weight: 700 !important;
-    border: none !important;
-    box-shadow: 0 0 22px rgba(217, 70, 239, 0.35) !important;
+@media (max-width: 992px) {
+    .blueprint-svg-media {
+        right: -8rem;
+        width: 34rem;
+        min-width: 34rem;
+        opacity: 0.55;
+    }
+    
+    .hero-img-elasticos {
+        right: -12rem;
+        width: 38rem;
+        min-width: 38rem;
+        opacity: 0.55;
+    }
 }
 
-.theme-fleet .btn-primary:hover {
-    background: linear-gradient(135deg, #f472b6 0%, #c084fc 100%) !important;
-    box-shadow: 0 0 30px rgba(217, 70, 239, 0.5) !important;
-    transform: translateY(-2px) scale(1.02) !important;
-}
-
-.theme-fleet .hero-eyebrow {
-    border-color: rgba(217, 70, 239, 0.38) !important;
-    background: rgba(217, 70, 239, 0.08) !important;
-    color: #fdf4ff !important;
+@media (max-width: 576px) {
+    .blueprint-svg-media {
+        right: -10rem;
+        width: 28rem;
+        min-width: 28rem;
+        opacity: 0.38;
+    }
+    
+    .hero-img-elasticos {
+        right: -15rem;
+        width: 34rem;
+        min-width: 34rem;
+        opacity: 0.38;
+    }
 }

@@ -30,7 +30,7 @@ from core.services.presence import build_admin_presence_payload, get_presence_co
 def home(request):
     """Home page view with rotating themes."""
     import random
-    themes = ['classic', 'blueprint', 'fleet']
+    themes = ['classic', 'blueprint', 'elasticos']
     last_theme = request.session.get('last_home_theme')
     
     # Filter out last theme to guarantee a change on reload

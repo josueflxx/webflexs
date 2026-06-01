@@ -26,12 +26,91 @@
             <div class="blueprint-vector-circle"></div>
             <div class="blueprint-vector-lines"></div>
         </div>
-        {% elif active_theme == 'fleet' %}
-        <div class="fleet-atmosphere">
-            <div class="fleet-light-sweep"></div>
+        <svg class="blueprint-svg-media" viewBox="0 0 500 500" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <!-- Grid background lines inside SVG for depth -->
+            <line x1="50" y1="0" x2="50" y2="500" stroke="rgba(255, 107, 53, 0.04)" stroke-width="1" />
+            <line x1="150" y1="0" x2="150" y2="500" stroke="rgba(255, 107, 53, 0.04)" stroke-width="1" />
+            <line x1="250" y1="0" x2="250" y2="500" stroke="rgba(255, 107, 53, 0.04)" stroke-width="1" stroke-dasharray="5,5" />
+            <line x1="350" y1="0" x2="350" y2="500" stroke="rgba(255, 107, 53, 0.04)" stroke-width="1" />
+            <line x1="450" y1="0" x2="450" y2="500" stroke="rgba(255, 107, 53, 0.04)" stroke-width="1" />
+            
+            <line x1="0" y1="50" x2="500" y2="50" stroke="rgba(255, 107, 53, 0.04)" stroke-width="1" />
+            <line x1="0" y1="150" x2="500" y2="150" stroke="rgba(255, 107, 53, 0.04)" stroke-width="1" />
+            <line x1="0" y1="250" x2="500" y2="250" stroke="rgba(255, 107, 53, 0.04)" stroke-width="1" stroke-dasharray="5,5" />
+            <line x1="0" y1="350" x2="500" y2="350" stroke="rgba(255, 107, 53, 0.04)" stroke-width="1" />
+            <line x1="0" y1="450" x2="500" y2="450" stroke="rgba(255, 107, 53, 0.04)" stroke-width="1" />
+
+            <!-- Center lines of the part (dashed orange) -->
+            <line x1="250" y1="30" x2="250" y2="450" stroke="rgba(255, 107, 53, 0.3)" stroke-width="1.5" stroke-dasharray="12,6,3,6" />
+            <line x1="50" y1="130" x2="450" y2="130" stroke="rgba(255, 107, 53, 0.3)" stroke-width="1.5" stroke-dasharray="12,6,3,6" />
+
+            <!-- Outer loop -->
+            <path d="M 170 380 L 170 130 A 80 80 0 0 1 330 130 L 330 380" stroke="#ffffff" stroke-width="4" stroke-linecap="round" />
+            <!-- Inner loop -->
+            <path d="M 200 380 L 200 130 A 50 50 0 0 1 300 130 L 300 380" stroke="#ffffff" stroke-width="3" stroke-linecap="round" />
+            
+            <!-- Threads on legs -->
+            <line x1="165" y1="280" x2="175" y2="280" stroke="#ffffff" stroke-width="2" />
+            <line x1="165" y1="290" x2="175" y2="290" stroke="#ffffff" stroke-width="2" />
+            <line x1="165" y1="300" x2="175" y2="300" stroke="#ffffff" stroke-width="2" />
+            <line x1="165" y1="310" x2="175" y2="310" stroke="#ffffff" stroke-width="2" />
+            <line x1="165" y1="320" x2="175" y2="320" stroke="#ffffff" stroke-width="2" />
+            <line x1="165" y1="330" x2="175" y2="330" stroke="#ffffff" stroke-width="2" />
+            <line x1="165" y1="340" x2="175" y2="340" stroke="#ffffff" stroke-width="2" />
+            <line x1="165" y1="350" x2="175" y2="350" stroke="#ffffff" stroke-width="2" />
+            <line x1="165" y1="360" x2="175" y2="360" stroke="#ffffff" stroke-width="2" />
+            <line x1="165" y1="370" x2="175" y2="370" stroke="#ffffff" stroke-width="2" />
+            
+            <line x1="325" y1="280" x2="335" y2="280" stroke="#ffffff" stroke-width="2" />
+            <line x1="325" y1="290" x2="335" y2="290" stroke="#ffffff" stroke-width="2" />
+            <line x1="325" y1="300" x2="335" y2="300" stroke="#ffffff" stroke-width="2" />
+            <line x1="325" y1="310" x2="335" y2="310" stroke="#ffffff" stroke-width="2" />
+            <line x1="325" y1="320" x2="335" y2="320" stroke="#ffffff" stroke-width="2" />
+            <line x1="325" y1="330" x2="335" y2="330" stroke="#ffffff" stroke-width="2" />
+            <line x1="325" y1="340" x2="335" y2="340" stroke="#ffffff" stroke-width="2" />
+            <line x1="325" y1="350" x2="335" y2="350" stroke="#ffffff" stroke-width="2" />
+            <line x1="325" y1="360" x2="335" y2="360" stroke="#ffffff" stroke-width="2" />
+            <line x1="325" y1="370" x2="335" y2="370" stroke="#ffffff" stroke-width="2" />
+
+            <!-- Clamp Plate (FLEXS Orange) -->
+            <rect x="140" y="380" width="220" height="24" rx="4" fill="rgba(255, 107, 53, 0.2)" stroke="#FF6B35" stroke-width="3" />
+            <circle cx="170" cy="392" r="4" fill="#FF6B35" />
+            <circle cx="330" cy="392" r="4" fill="#FF6B35" />
+
+            <!-- Washers & Nuts at bottom -->
+            <rect x="150" y="404" width="40" height="18" fill="none" stroke="#FF6B35" stroke-width="2.5" />
+            <rect x="310" y="404" width="40" height="18" fill="none" stroke="#FF6B35" stroke-width="2.5" />
+
+            <!-- Dimension line: Width -->
+            <line x1="170" y1="130" x2="330" y2="130" stroke="#FF6B35" stroke-width="1.5" />
+            <path d="M 170 130 L 180 126 L 180 134 Z" fill="#FF6B35" />
+            <path d="M 330 130 L 320 126 L 320 134 Z" fill="#FF6B35" />
+            
+            <!-- Dimension text -->
+            <rect x="225" y="118" width="50" height="20" fill="#0b1329" rx="2" />
+            <text x="250" y="132" fill="#FF6B35" font-family="monospace" font-size="12" font-weight="bold" text-anchor="middle">Ø 3.25"</text>
+
+            <!-- Dimension line: Length/Height -->
+            <line x1="100" y1="50" x2="100" y2="380" stroke="#FF6B35" stroke-width="1.5" />
+            <path d="M 100 50 L 96 60 L 104 60 Z" fill="#FF6B35" />
+            <path d="M 100 380 L 96 370 L 104 370 Z" fill="#FF6B35" />
+            <line x1="90" y1="50" x2="160" y2="50" stroke="#FF6B35" stroke-width="1" stroke-dasharray="4,4" />
+            <line x1="90" y1="380" x2="140" y2="380" stroke="#FF6B35" stroke-width="1" stroke-dasharray="4,4" />
+            
+            <rect x="75" y="200" width="50" height="20" fill="#0b1329" rx="2" transform="rotate(-90 100 210)" />
+            <text x="100" y="214" fill="#FF6B35" font-family="monospace" font-size="12" font-weight="bold" text-anchor="middle" transform="rotate(-90 100 210)">12.00"</text>
+
+            <!-- Title / Label -->
+            <text x="350" y="450" fill="rgba(255, 255, 255, 0.4)" font-family="monospace" font-size="10" font-weight="bold" text-anchor="end">DWG NO: FXS-716-U</text>
+            <text x="350" y="465" fill="#FF6B35" font-family="monospace" font-size="11" font-weight="bold" text-anchor="end">FLEXS MANUFACTURING</text>
+        </svg>
+        {% elif active_theme == 'elasticos' %}
+        <div class="elasticos-atmosphere">
+            <div class="elasticos-radial-glow"></div>
         </div>
+        <img src="{% static 'core/img/home-hero-elasticos.png' %}" alt="Elásticos de suspensión FLEXS" class="hero-img-elasticos">
         {% else %}
-        <img src="{% static 'core/img/home-hero-abrazadera.webp' %}" alt="">
+        <img src="{% static 'core/img/home-hero-abrazadera.webp' %}" alt="Abrazaderas U-bolt FLEXS" class="hero-img-classic">
         {% endif %}
     </div>
     <div class="hero-overlay"></div>
