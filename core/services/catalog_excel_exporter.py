@@ -136,11 +136,8 @@ ALT_ROW_FILL = PatternFill(fill_type="solid", fgColor="F8FAFC")
 STATUS_OK_FILL = PatternFill(fill_type="solid", fgColor="D1FAE5")
 STATUS_BAD_FILL = PatternFill(fill_type="solid", fgColor="FEE2E2")
 CLAMP_REVIEW_ROW_FILL = PatternFill(fill_type="solid", fgColor="FFFBEB")
-SEPARATOR_FILL = PatternFill(fill_type="solid", fgColor="FFFFFF")
-SEPARATOR_BORDER = Border(
-    top=Side(style="thin", color="E5E7EB"),
-    bottom=Side(style="thin", color="E5E7EB"),
-)
+SEPARATOR_FILL = INDEX_BG_FILL
+SEPARATOR_BORDER = Border()
 SEPARATOR_ROW_HEIGHT = 28
 THIN_BORDER = Border(
     left=Side(style="thin", color="D1D5DB"),
