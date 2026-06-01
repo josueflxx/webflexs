@@ -98,13 +98,37 @@ GROUP_BACKLINK_FONT = Font(name="Segoe UI", color="2563EB", bold=True, underline
 GROUP_BACKLINK_ALIGNMENT = Alignment(horizontal="right", vertical="center")
 GROUP_TITLE_HEIGHT = 24
 INDEX_SHEET_TITLE = "INDICE"
-INDEX_TITLE_FILL = PatternFill(fill_type="solid", fgColor="FF6B3A")
+INDEX_TITLE_FILL = PatternFill(fill_type="solid", fgColor="0F172A")  # Slate oscuro premium
 INDEX_TITLE_FONT = Font(name="Segoe UI", color="FFFFFF", bold=True, size=16)
-INDEX_SUBTITLE_FILL = PatternFill(fill_type="solid", fgColor="111827")
-INDEX_SUBTITLE_FONT = Font(name="Segoe UI", color="E5E7EB", italic=True)
-INDEX_CARD_FILL = PatternFill(fill_type="solid", fgColor="F8FAFC")
-INDEX_CARD_VALUE_FONT = Font(name="Segoe UI", color="111827", bold=True, size=14)
-INDEX_CARD_ACCENT_FONT = Font(name="Segoe UI", color="C2410C", bold=True, size=14)
+INDEX_SUBTITLE_FILL = PatternFill(fill_type="solid", fgColor="1E293B")  # Slate mas suave
+INDEX_SUBTITLE_FONT = Font(name="Segoe UI", color="F3F4F6", italic=True, size=10)
+INDEX_CARD_FILL = PatternFill(fill_type="solid", fgColor="F8FAFC")  # Fondo blanco hueso suave
+INDEX_CARD_LABEL_FONT = Font(name="Segoe UI", color="64748B", bold=True, size=9)  # Slate gray suave
+INDEX_CARD_VALUE_FONT = Font(name="Segoe UI", color="0F172A", bold=True, size=13)
+INDEX_CARD_ACCENT_FONT = Font(name="Segoe UI", color="E0531B", bold=True, size=13)  # Naranja FLEXS
+INDEX_CARD_BORDER = Border(
+    left=Side(style="thin", color="E2E8F0"),
+    right=Side(style="thin", color="E2E8F0"),
+    top=Side(style="thin", color="E2E8F0"),
+    bottom=Side(style="thin", color="E2E8F0"),
+)
+INDEX_TABLE_HEADER_FILL = PatternFill(fill_type="solid", fgColor="1E293B")
+INDEX_TABLE_HEADER_FONT = Font(name="Segoe UI", color="FFFFFF", bold=True, size=11)
+INDEX_TABLE_HEADER_BORDER = Border(
+    left=Side(style="thin", color="334155"),
+    right=Side(style="thin", color="334155"),
+    top=Side(style="medium", color="0F172A"),
+    bottom=Side(style="medium", color="FF6B35"),  # Acento naranja inferior
+)
+INDEX_DATA_BORDER = Border(
+    left=Side(style="thin", color="E2E8F0"),
+    right=Side(style="thin", color="E2E8F0"),
+    top=Side(style="thin", color="E2E8F0"),
+    bottom=Side(style="thin", color="E2E8F0"),
+)
+INDEX_ALT_ROW_FILL = PatternFill(fill_type="solid", fgColor="F8FAFC")
+INDEX_LINK_FONT = Font(name="Segoe UI", color="E0531B", bold=True, underline="single", size=10)
+
 INDEX_MUTED_FILL = PatternFill(fill_type="solid", fgColor="F3F4F6")
 INDEX_MUTED_FONT = Font(name="Segoe UI", color="374151", bold=True)
 ALT_ROW_FILL = PatternFill(fill_type="solid", fgColor="F8FAFC")
@@ -681,7 +705,7 @@ def _append_index_sheet(workbook, template, stats, generated_at):
         title = f"{title} {counter}"
 
     worksheet = workbook.create_sheet(title, 0)
-    _prepare_worksheet(worksheet, "FF6B3A")
+    _prepare_worksheet(worksheet, "FF6B35")
     worksheet.sheet_view.showGridLines = False
 
     local_generated_at = timezone.localtime(generated_at).replace(tzinfo=None)
@@ -691,24 +715,38 @@ def _append_index_sheet(workbook, template, stats, generated_at):
 
     template_label = (template.name or "").strip() or "General"
     title_text = template_label if template_label.lower().startswith("catalogo") else f"Catalogo {template_label}"
+    
+    # Merged title block style (A1:E1)
     worksheet.merge_cells(start_row=1, start_column=1, end_row=1, end_column=5)
-    worksheet["A1"] = title_text
-    worksheet["A1"].font = INDEX_TITLE_FONT
-    worksheet["A1"].fill = INDEX_TITLE_FILL
-    worksheet["A1"].alignment = Alignment(horizontal="left", vertical="center", indent=1)
+    for col in range(1, 6):
+        cell = worksheet.cell(row=1, column=col)
+        cell.fill = INDEX_TITLE_FILL
+        if col == 1:
+            cell.value = title_text
+            cell.font = INDEX_TITLE_FONT
+            cell.alignment = Alignment(horizontal="left", vertical="center", indent=1)
     worksheet.row_dimensions[1].height = 50
 
-    worksheet.merge_cells(start_row=2, start_column=1, end_row=2, end_column=5)
-    worksheet["A2"] = (
+    # Merged subtitle block style (A2:E2)
+    subtitle_text = (
         f"Lista digital vigente desde {valid_from_label}: productos activos, visibles para clientes y con precio publicable."
         if template.is_client_download_enabled
         else f"Exportacion vigente desde {valid_from_label}, generada segun la configuracion de la plantilla."
     )
-    worksheet["A2"].font = INDEX_SUBTITLE_FONT
-    worksheet["A2"].fill = INDEX_SUBTITLE_FILL
-    worksheet["A2"].alignment = Alignment(horizontal="left", vertical="center", indent=1)
+    worksheet.merge_cells(start_row=2, start_column=1, end_row=2, end_column=5)
+    for col in range(1, 6):
+        cell = worksheet.cell(row=2, column=col)
+        cell.fill = INDEX_SUBTITLE_FILL
+        if col == 1:
+            cell.value = subtitle_text
+            cell.font = INDEX_SUBTITLE_FONT
+            cell.alignment = Alignment(horizontal="left", vertical="center", indent=1)
     worksheet.row_dimensions[2].height = 22
 
+    # Row 3 is a subtle spacer row
+    worksheet.row_dimensions[3].height = 14
+
+    # KPI Stat Cards on row 4 & 5
     stat_cards = [
         ("Productos", stats.get("total_rows", 0), INDEX_CARD_ACCENT_FONT),
         ("Hojas", len(rows_by_sheet), INDEX_CARD_VALUE_FONT),
@@ -721,32 +759,74 @@ def _append_index_sheet(workbook, template, stats, generated_at):
         value_cell = worksheet.cell(row=5, column=col_idx, value=value)
         for cell in (label_cell, value_cell):
             cell.fill = INDEX_CARD_FILL
-            cell.border = THIN_BORDER
+            cell.border = INDEX_CARD_BORDER
             cell.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
-        label_cell.font = INDEX_MUTED_FONT
+        label_cell.font = INDEX_CARD_LABEL_FONT
         value_cell.font = value_font
-    worksheet.row_dimensions[4].height = 20
-    worksheet.row_dimensions[5].height = 26
+    worksheet.row_dimensions[4].height = 22
+    worksheet.row_dimensions[5].height = 30
 
+    # Row 6 is a spacing row
+    worksheet.row_dimensions[6].height = 16
+
+    # Table Header Row (Row 7)
     header_row = 7
     headers = ["Hoja", "Productos", "Vigencia", "Abrir"]
+    worksheet.row_dimensions[header_row].height = 28
     for col_idx, header in enumerate(headers, start=1):
-        worksheet.cell(row=header_row, column=col_idx, value=header)
-    _apply_header_styles(worksheet, len(headers), row=header_row)
+        cell = worksheet.cell(row=header_row, column=col_idx, value=header)
+        cell.font = INDEX_TABLE_HEADER_FONT
+        cell.fill = INDEX_TABLE_HEADER_FILL
+        cell.border = INDEX_TABLE_HEADER_BORDER
+        if col_idx == 2:
+            cell.alignment = Alignment(horizontal="right", vertical="center")
+        elif col_idx == 3:
+            cell.alignment = Alignment(horizontal="center", vertical="center")
+        else:
+            cell.alignment = Alignment(horizontal="left", vertical="center", indent=1)
 
+    # Table Data Rows (Row 8+)
     row_idx = header_row + 1
     for sheet_name, row_count in rows_by_sheet.items():
+        # Setup values
         worksheet.cell(row=row_idx, column=1, value=sheet_name)
         worksheet.cell(row=row_idx, column=2, value=row_count)
         worksheet.cell(row=row_idx, column=3, value=valid_from_label)
+        
         link_cell = worksheet.cell(row=row_idx, column=4, value=f"Ir a {sheet_name}")
         link_cell.hyperlink = _safe_sheet_link(sheet_name)
-        link_cell.style = "Hyperlink"
+        
+        worksheet.row_dimensions[row_idx].height = 24
+        row_fill = INDEX_ALT_ROW_FILL if row_idx % 2 == 0 else PatternFill(fill_type=None)
+        
+        # Styles for Cell 1 (Hoja)
+        c1 = worksheet.cell(row=row_idx, column=1)
+        c1.font = Font(name="Segoe UI", bold=True, color="0F172A", size=10)
+        c1.alignment = Alignment(horizontal="left", vertical="center", indent=1)
+        
+        # Styles for Cell 2 (Productos)
+        c2 = worksheet.cell(row=row_idx, column=2)
+        c2.font = Font(name="Segoe UI", color="475569", size=10)
+        c2.alignment = Alignment(horizontal="right", vertical="center")
+        c2.number_format = '#,##0'
+        
+        # Styles for Cell 3 (Vigencia)
+        c3 = worksheet.cell(row=row_idx, column=3)
+        c3.font = Font(name="Segoe UI", color="475569", size=10)
+        c3.alignment = Alignment(horizontal="center", vertical="center")
+        
+        # Styles for Cell 4 (Link)
+        c4 = worksheet.cell(row=row_idx, column=4)
+        c4.font = INDEX_LINK_FONT
+        c4.alignment = Alignment(horizontal="left", vertical="center", indent=1)
+        
+        # Apply borders and fills
         for col_idx in range(1, 5):
-            cell = worksheet.cell(row=row_idx, column=col_idx)
-            cell.border = THIN_BORDER
-            cell.alignment = Alignment(horizontal="left", vertical="center")
-        worksheet.row_dimensions[row_idx].height = 22
+            c = worksheet.cell(row=row_idx, column=col_idx)
+            if row_fill.fill_type:
+                c.fill = row_fill
+            c.border = INDEX_DATA_BORDER
+            
         row_idx += 1
 
     worksheet.freeze_panes = "A8"
