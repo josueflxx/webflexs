@@ -274,7 +274,7 @@ class ActiveCompanyMiddlewareTests(TestCase):
         response = self.client.get(reverse("home"))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "FLEXS")
+        self.assertContains(response, "Repuestos FLEXS")
 
     def test_staff_with_multiple_companies_still_needs_company_for_admin_panel(self):
         default_company = get_default_company()

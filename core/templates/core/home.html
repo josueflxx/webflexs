@@ -18,96 +18,21 @@
 
 {% block content %}
 <!-- Hero Section -->
-{% if active_theme == 'blueprint' %}
-<!-- Blueprint CAD Theme -->
-<section id="inicio" class="hero theme-blueprint">
-    <div class="hero-media blueprint-grid" aria-hidden="true">
-        <div class="blueprint-vector-circle"></div>
-        <div class="blueprint-vector-lines"></div>
-    </div>
-    <div class="hero-overlay"></div>
-    <div class="container hero-content">
-        <div class="hero-text">
-            <p class="hero-eyebrow text-blueprint-accent">Plano Técnico &amp; Fabricación</p>
-            <h1 class="hero-title">
-                <span class="hero-title-line"><span class="hero-title-line-inner text-white">Abrazaderas CAD</span></span>
-                <span class="hero-title-line text-blueprint-primary"><span class="hero-title-line-inner">a medida real</span></span>
-            </h1>
-            <h2 class="hero-subtitle">Diseño técnico digital de U-bolts con escala física 1:1 de precisión industrial.</h2>
-            <p class="hero-description text-blueprint-muted">
-                Cotizá abrazaderas redondas, semicuadradas o cuadradas en tiempo real. Visualizá planos técnicos vectoriales acoplados de rosca y acabado de acero zincado.
-            </p>
-            <div class="hero-buttons">
-                <a href="{% url 'catalog_clamp_request' %}" class="btn btn-blueprint btn-lg">
-                    Diseñar Abrazadera
-                </a>
-                <a href="{% url 'catalog' %}" class="btn btn-outline btn-lg">
-                    Ver Catálogo
-                </a>
-            </div>
-            <div class="hero-proof-row" aria-label="Indicadores principales">
-                <span><strong>Precisión</strong> CAD 1:1</span>
-                <span><strong>3 Formas</strong> clásicas</span>
-                <span><strong>Acero</strong> templado</span>
-            </div>
-        </div>
-    </div>
-    <div class="hero-scroll">
-        <a href="#nosotros">
-            <span class="scroll-text">Scroll</span>
-            <span class="scroll-arrow">&darr;</span>
-        </a>
-    </div>
-</section>
-
-{% elif active_theme == 'fleet' %}
-<!-- Fleet Action B2B Theme -->
-<section id="inicio" class="hero theme-fleet">
-    <div class="hero-media fleet-atmosphere" aria-hidden="true">
-        <div class="fleet-light-sweep"></div>
-    </div>
-    <div class="hero-overlay"></div>
-    <div class="container hero-content">
-        <div class="hero-text">
-            <p class="hero-eyebrow text-fleet-accent">Distribución Nacional &amp; Logística</p>
-            <h1 class="hero-title">
-                <span class="hero-title-line"><span class="hero-title-line-inner">Flotas en constante</span></span>
-                <span class="hero-title-line text-fleet-primary"><span class="hero-title-line-inner">movimiento</span></span>
-            </h1>
-            <h2 class="hero-subtitle">Abastecimiento estratégico de elásticos y suspensión pesada para todo el país.</h2>
-            <p class="hero-description text-fleet-muted">
-                Despacho inmediato de repuestos industriales para camiones, acoplados y semirremolques. Telemetría de stock real y soporte comercial B2B.
-            </p>
-            <div class="hero-buttons">
-                <a href="{% url 'catalog' %}" class="btn btn-fleet btn-lg">
-                    Explorar Repuestos
-                </a>
-                {% if not user.is_authenticated %}
-                <a href="{% url 'account_request' %}" class="btn btn-outline btn-lg">
-                    Solicitar Cuenta B2B
-                </a>
-                {% endif %}
-            </div>
-            <div class="hero-proof-row" aria-label="Indicadores principales">
-                <span><strong>+8.000</strong> repuestos</span>
-                <span><strong>Despacho</strong> nacional</span>
-                <span><strong>Soporte</strong> premium</span>
-            </div>
-        </div>
-    </div>
-    <div class="hero-scroll">
-        <a href="#nosotros">
-            <span class="scroll-text">Scroll</span>
-            <span class="scroll-arrow">&darr;</span>
-        </a>
-    </div>
-</section>
-
-{% else %}
-<!-- Classic Industrial Theme (Default) -->
-<section id="inicio" class="hero theme-classic">
+<!-- Hero Section -->
+<section id="inicio" class="hero theme-{{ active_theme }}">
     <div class="hero-media" aria-hidden="true">
+        {% if active_theme == 'blueprint' %}
+        <div class="blueprint-grid">
+            <div class="blueprint-vector-circle"></div>
+            <div class="blueprint-vector-lines"></div>
+        </div>
+        {% elif active_theme == 'fleet' %}
+        <div class="fleet-atmosphere">
+            <div class="fleet-light-sweep"></div>
+        </div>
+        {% else %}
         <img src="{% static 'core/img/home-hero-abrazadera.webp' %}" alt="">
+        {% endif %}
     </div>
     <div class="hero-overlay"></div>
     <div class="container hero-content">
@@ -145,7 +70,6 @@
         </a>
     </div>
 </section>
-{% endif %}
 
 <!-- Nosotros Section -->
 <section id="nosotros" class="section section-dark">
