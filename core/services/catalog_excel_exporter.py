@@ -846,7 +846,12 @@ def _append_index_sheet(workbook, template, stats, generated_at):
     worksheet.column_dimensions["A"].width = 38
     worksheet.column_dimensions["B"].width = 18
     worksheet.column_dimensions["C"].width = 22
-    worksheet.column_dimensions["D"].width = 30
+    max_link_len = 30
+    for sheet_name in rows_by_sheet.keys():
+        link_len = len(f"Ir a {sheet_name}")
+        if link_len + 6 > max_link_len:
+            max_link_len = link_len + 6
+    worksheet.column_dimensions["D"].width = max_link_len
     worksheet.column_dimensions["E"].width = 20
     worksheet.column_dimensions["F"].width = 35
 
