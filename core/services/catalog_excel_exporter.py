@@ -657,6 +657,8 @@ def _apply_row_styles(worksheet, excel_row, row_values, column_keys):
 
         if excel_row % 2 == 0:
             cell.fill = ALT_ROW_FILL
+        else:
+            cell.fill = PatternFill(fill_type="solid", fgColor="FFFFFF")
 
         cell.border = THIN_BORDER
 
@@ -1306,6 +1308,8 @@ def _apply_clamp_measure_row_styles(worksheet, row_index, result=None):
         cell.alignment = Alignment(vertical="top", wrap_text=col_idx == 2)
         if row_index % 2 == 0:
             cell.fill = ALT_ROW_FILL
+        else:
+            cell.fill = PatternFill(fill_type="solid", fgColor="FFFFFF")
         if needs_review:
             cell.fill = CLAMP_REVIEW_ROW_FILL
         if col_idx == len(CLAMP_MEASURE_EXPORT_HEADERS):
@@ -1682,6 +1686,24 @@ def build_catalog_workbook(template, price_list=None, discount_percentage=None):
         "skipped_sheets": skipped_sheets,
     }
     _append_index_sheet(workbook, template, stats, generated_at)
+
+    # Apply deep dark mode background to all empty/unused cells in all sheets of the workbook!
+    for sheet in workbook.worksheets:
+        sheet.sheet_view.showGridLines = False
+        
+        # Determine how far to paint (up to column Z [26 columns] and 40 rows below the table)
+        max_r = max(100, sheet.max_row + 40)
+        max_c = 26  # Column Z
+        
+        # Color empty cells dark slate
+        for r in range(1, max_r + 1):
+            if r > sheet.max_row:
+                sheet.row_dimensions[r].height = 20
+            for c in range(1, max_c + 1):
+                cell = sheet.cell(row=r, column=c)
+                if cell.fill is None or cell.fill.fill_type is None:
+                    cell.fill = INDEX_BG_FILL
+
     return workbook, stats
 
 
