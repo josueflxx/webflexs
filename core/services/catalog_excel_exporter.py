@@ -98,10 +98,10 @@ GROUP_BACKLINK_FONT = Font(name="Segoe UI", color="2563EB", bold=True, underline
 GROUP_BACKLINK_ALIGNMENT = Alignment(horizontal="right", vertical="center")
 GROUP_TITLE_HEIGHT = 24
 INDEX_SHEET_TITLE = "INDICE"
-INDEX_TITLE_FILL = PatternFill(fill_type="solid", fgColor="0F172A")  # Slate oscuro premium
-INDEX_TITLE_FONT = Font(name="Segoe UI", color="FFFFFF", bold=True, size=16)
-INDEX_SUBTITLE_FILL = PatternFill(fill_type="solid", fgColor="1E293B")  # Slate mas suave
-INDEX_SUBTITLE_FONT = Font(name="Segoe UI", color="F3F4F6", italic=True, size=10)
+INDEX_TITLE_FILL = PatternFill(fill_type="solid", fgColor="F8FAFC")  # Fondo blanco hueso unificado
+INDEX_TITLE_FONT = Font(name="Segoe UI", color="0F172A", bold=True, size=18)
+INDEX_SUBTITLE_FILL = PatternFill(fill_type="solid", fgColor="F8FAFC")  # Fondo blanco hueso unificado
+INDEX_SUBTITLE_FONT = Font(name="Segoe UI", color="475569", italic=True, size=10)
 INDEX_CARD_FILL = PatternFill(fill_type="solid", fgColor="F8FAFC")  # Fondo blanco hueso suave
 INDEX_CARD_LABEL_FONT = Font(name="Segoe UI", color="64748B", bold=True, size=9)  # Slate gray suave
 INDEX_CARD_VALUE_FONT = Font(name="Segoe UI", color="0F172A", bold=True, size=13)
@@ -716,9 +716,9 @@ def _append_index_sheet(workbook, template, stats, generated_at):
     template_label = (template.name or "").strip() or "General"
     title_text = template_label if template_label.lower().startswith("catalogo") else f"Catalogo {template_label}"
     
-    # Merged title block style (A1:E1)
+    # Merged title block style (A1:E1) and F1
     worksheet.merge_cells(start_row=1, start_column=1, end_row=1, end_column=5)
-    for col in range(1, 6):
+    for col in range(1, 7):
         cell = worksheet.cell(row=1, column=col)
         cell.fill = INDEX_TITLE_FILL
         if col == 1:
@@ -727,21 +727,23 @@ def _append_index_sheet(workbook, template, stats, generated_at):
             cell.alignment = Alignment(horizontal="left", vertical="center", indent=1)
     worksheet.row_dimensions[1].height = 50
 
-    # Merged subtitle block style (A2:E2)
+    # Merged subtitle block style (A2:E2) and F2
     subtitle_text = (
         f"Lista digital vigente desde {valid_from_label}: productos activos, visibles para clientes y con precio publicable."
         if template.is_client_download_enabled
         else f"Exportacion vigente desde {valid_from_label}, generada segun la configuracion de la plantilla."
     )
     worksheet.merge_cells(start_row=2, start_column=1, end_row=2, end_column=5)
-    for col in range(1, 6):
+    header_bottom_border = Border(bottom=Side(style="medium", color="FF6B35"))
+    for col in range(1, 7):
         cell = worksheet.cell(row=2, column=col)
         cell.fill = INDEX_SUBTITLE_FILL
+        cell.border = header_bottom_border
         if col == 1:
             cell.value = subtitle_text
             cell.font = INDEX_SUBTITLE_FONT
             cell.alignment = Alignment(horizontal="left", vertical="center", indent=1)
-    worksheet.row_dimensions[2].height = 22
+    worksheet.row_dimensions[2].height = 24
 
     # Row 3 is a subtle spacer row
     worksheet.row_dimensions[3].height = 14
@@ -848,7 +850,7 @@ def _append_index_sheet(workbook, template, stats, generated_at):
 
             pil_img = PILImage.open(logo_path)
             if pil_img.mode == 'RGBA':
-                background = PILImage.new('RGB', pil_img.size, (255, 255, 255))
+                background = PILImage.new('RGB', pil_img.size, (248, 250, 252))
                 background.paste(pil_img, mask=pil_img.split()[3])
                 pil_img.close()
                 pil_img = background
