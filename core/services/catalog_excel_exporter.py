@@ -98,11 +98,12 @@ GROUP_BACKLINK_FONT = Font(name="Segoe UI", color="2563EB", bold=True, underline
 GROUP_BACKLINK_ALIGNMENT = Alignment(horizontal="right", vertical="center")
 GROUP_TITLE_HEIGHT = 24
 INDEX_SHEET_TITLE = "INDICE"
-INDEX_TITLE_FILL = PatternFill(fill_type="solid", fgColor="F8FAFC")  # Fondo blanco hueso unificado
+INDEX_BG_FILL = PatternFill(fill_type="solid", fgColor="0B0F19")  # Fondo general pizarra oscuro
+INDEX_TITLE_FILL = PatternFill(fill_type="solid", fgColor="FFFFFF")  # Contenedor blanco puro
 INDEX_TITLE_FONT = Font(name="Segoe UI", color="0F172A", bold=True, size=18)
-INDEX_SUBTITLE_FILL = PatternFill(fill_type="solid", fgColor="F8FAFC")  # Fondo blanco hueso unificado
-INDEX_SUBTITLE_FONT = Font(name="Segoe UI", color="475569", italic=True, size=10)
-INDEX_CARD_FILL = PatternFill(fill_type="solid", fgColor="F8FAFC")  # Fondo blanco hueso suave
+INDEX_SUBTITLE_FILL = PatternFill(fill_type="solid", fgColor="FFFFFF")  # Contenedor blanco puro
+INDEX_SUBTITLE_FONT = Font(name="Segoe UI", color="64748B", italic=True, size=10)
+INDEX_CARD_FILL = PatternFill(fill_type="solid", fgColor="FFFFFF")  # Tarjetas flotantes blancas
 INDEX_CARD_LABEL_FONT = Font(name="Segoe UI", color="64748B", bold=True, size=9)  # Slate gray suave
 INDEX_CARD_VALUE_FONT = Font(name="Segoe UI", color="0F172A", bold=True, size=13)
 INDEX_CARD_ACCENT_FONT = Font(name="Segoe UI", color="E0531B", bold=True, size=13)  # Naranja FLEXS
@@ -117,7 +118,7 @@ INDEX_TABLE_HEADER_FONT = Font(name="Segoe UI", color="FFFFFF", bold=True, size=
 INDEX_TABLE_HEADER_BORDER = Border(
     left=Side(style="thin", color="334155"),
     right=Side(style="thin", color="334155"),
-    top=Side(style="medium", color="0F172A"),
+    top=Side(style="medium", color="0B0F19"),
     bottom=Side(style="medium", color="FF6B35"),  # Acento naranja inferior
 )
 INDEX_DATA_BORDER = Border(
@@ -716,11 +717,21 @@ def _append_index_sheet(workbook, template, stats, generated_at):
     template_label = (template.name or "").strip() or "General"
     title_text = template_label if template_label.lower().startswith("catalogo") else f"Catalogo {template_label}"
     
+    # 1. Fill all background cells with deep slate (rows 1 to 55, columns A to J)
+    for r in range(1, 56):
+        worksheet.row_dimensions[r].height = 20
+        for c in range(1, 11):
+            cell = worksheet.cell(row=r, column=c)
+            cell.fill = INDEX_BG_FILL
+
+    # 2. Style rows 1 and 2 (Columns A to F) as a single white container block
     # Merged title block style (A1:E1) and F1
     worksheet.merge_cells(start_row=1, start_column=1, end_row=1, end_column=5)
+    header_top_border = Border(top=Side(style="medium", color="0B0F19"))
     for col in range(1, 7):
         cell = worksheet.cell(row=1, column=col)
         cell.fill = INDEX_TITLE_FILL
+        cell.border = header_top_border
         if col == 1:
             cell.value = title_text
             cell.font = INDEX_TITLE_FONT
@@ -734,21 +745,23 @@ def _append_index_sheet(workbook, template, stats, generated_at):
         else f"Exportacion vigente desde {valid_from_label}, generada segun la configuracion de la plantilla."
     )
     worksheet.merge_cells(start_row=2, start_column=1, end_row=2, end_column=5)
-    header_bottom_border = Border(bottom=Side(style="medium", color="FF6B35"))
     for col in range(1, 7):
         cell = worksheet.cell(row=2, column=col)
         cell.fill = INDEX_SUBTITLE_FILL
-        cell.border = header_bottom_border
         if col == 1:
             cell.value = subtitle_text
             cell.font = INDEX_SUBTITLE_FONT
             cell.alignment = Alignment(horizontal="left", vertical="center", indent=1)
     worksheet.row_dimensions[2].height = 24
 
-    # Row 3 is a subtle spacer row
-    worksheet.row_dimensions[3].height = 14
+    # 3. Orange accent line (Row 3, Columns A to F)
+    worksheet.row_dimensions[3].height = 5
+    orange_fill = PatternFill(fill_type="solid", fgColor="FF6B35")
+    for col in range(1, 7):
+        cell = worksheet.cell(row=3, column=col)
+        cell.fill = orange_fill
 
-    # KPI Stat Cards on row 4 & 5
+    # 4. KPI Stat Cards on row 4 & 5 (Columns A to E)
     stat_cards = [
         ("Productos", stats.get("total_rows", 0), INDEX_CARD_ACCENT_FONT),
         ("Hojas", len(rows_by_sheet), INDEX_CARD_VALUE_FONT),
@@ -768,10 +781,10 @@ def _append_index_sheet(workbook, template, stats, generated_at):
     worksheet.row_dimensions[4].height = 22
     worksheet.row_dimensions[5].height = 30
 
-    # Row 6 is a spacing row
-    worksheet.row_dimensions[6].height = 16
+    # 5. Row 6 is a spacing row (background is already INDEX_BG_FILL)
+    worksheet.row_dimensions[6].height = 15
 
-    # Table Header Row (Row 7)
+    # 6. Table Header Row (Row 7, Columns A to D)
     header_row = 7
     headers = ["Hoja", "Productos", "Vigencia", "Abrir"]
     worksheet.row_dimensions[header_row].height = 28
@@ -787,7 +800,7 @@ def _append_index_sheet(workbook, template, stats, generated_at):
         else:
             cell.alignment = Alignment(horizontal="left", vertical="center", indent=1)
 
-    # Table Data Rows (Row 8+)
+    # 7. Table Data Rows (Row 8+)
     row_idx = header_row + 1
     for sheet_name, row_count in rows_by_sheet.items():
         # Setup values
@@ -799,7 +812,7 @@ def _append_index_sheet(workbook, template, stats, generated_at):
         link_cell.hyperlink = _safe_sheet_link(sheet_name)
         
         worksheet.row_dimensions[row_idx].height = 24
-        row_fill = INDEX_ALT_ROW_FILL if row_idx % 2 == 0 else PatternFill(fill_type=None)
+        row_fill = INDEX_ALT_ROW_FILL if row_idx % 2 == 0 else PatternFill(fill_type="solid", fgColor="FFFFFF")
         
         # Styles for Cell 1 (Hoja)
         c1 = worksheet.cell(row=row_idx, column=1)
@@ -825,8 +838,7 @@ def _append_index_sheet(workbook, template, stats, generated_at):
         # Apply borders and fills
         for col_idx in range(1, 5):
             c = worksheet.cell(row=row_idx, column=col_idx)
-            if row_fill.fill_type:
-                c.fill = row_fill
+            c.fill = row_fill
             c.border = INDEX_DATA_BORDER
             
         row_idx += 1
@@ -850,7 +862,7 @@ def _append_index_sheet(workbook, template, stats, generated_at):
 
             pil_img = PILImage.open(logo_path)
             if pil_img.mode == 'RGBA':
-                background = PILImage.new('RGB', pil_img.size, (248, 250, 252))
+                background = PILImage.new('RGB', pil_img.size, (255, 255, 255))
                 background.paste(pil_img, mask=pil_img.split()[3])
                 pil_img.close()
                 pil_img = background
