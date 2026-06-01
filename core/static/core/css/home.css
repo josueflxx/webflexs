@@ -896,3 +896,210 @@
     border-color: rgba(255, 107, 53, 0.4) !important;
     box-shadow: 0 12px 30px rgba(255, 107, 53, 0.08) !important;
 }
+
+/* ============================================
+   ROTATING THEMES: BLUEPRINT & FLEET
+   ============================================ */
+
+/* 1. BLUEPRINT CAD THEME */
+.theme-blueprint {
+    background: linear-gradient(135deg, #020617 0%, #0b1329 48%, #1e1b4b 100%) !important;
+}
+
+.theme-blueprint::before {
+    background-image: 
+        linear-gradient(rgba(6, 182, 212, 0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(6, 182, 212, 0.04) 1px, transparent 1px) !important;
+    background-size: 40px 40px !important;
+    mask-image: linear-gradient(90deg, rgba(0, 0, 0, 0.75), transparent 85%) !important;
+}
+
+.blueprint-grid {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: -2;
+    overflow: hidden;
+}
+
+/* Blueprint Compass Compass Circle */
+.blueprint-vector-circle {
+    position: absolute;
+    top: 50%;
+    right: clamp(-6rem, -2vw, 2rem);
+    width: min(440px, 46vw);
+    height: min(440px, 46vw);
+    transform: translateY(-50%);
+    border: 1px dashed rgba(6, 182, 212, 0.2);
+    border-radius: 50%;
+    animation: blueprint-rotate 30s linear infinite;
+    opacity: 0.78;
+}
+
+.blueprint-vector-circle::before {
+    content: "";
+    position: absolute;
+    inset: 20px;
+    border: 1px solid rgba(6, 182, 212, 0.08);
+    border-radius: 50%;
+}
+
+.blueprint-vector-circle::after {
+    content: "";
+    position: absolute;
+    inset: -30px;
+    border: 1px solid rgba(6, 182, 212, 0.05);
+    border-radius: 50%;
+}
+
+/* Technical Lines on the right */
+.blueprint-vector-lines {
+    position: absolute;
+    top: 52%;
+    right: clamp(-8rem, -4vw, -1rem);
+    width: min(450px, 48vw);
+    height: min(220px, 24vw);
+    transform: translateY(-50%);
+    border-top: 1px solid rgba(6, 182, 212, 0.25);
+    border-bottom: 1px solid rgba(6, 182, 212, 0.25);
+    background: linear-gradient(90deg, rgba(6, 182, 212, 0.03) 0%, rgba(6, 182, 212, 0.07) 50%, rgba(6, 182, 212, 0) 100%);
+    opacity: 0.65;
+    animation: blueprint-pulse 6s ease-in-out infinite;
+}
+
+.blueprint-vector-lines::before {
+    content: "CAD SCALE 1:1";
+    position: absolute;
+    top: 8px;
+    left: 12px;
+    font-family: monospace;
+    font-size: 10px;
+    color: rgba(6, 182, 212, 0.58);
+    letter-spacing: 2px;
+}
+
+@keyframes blueprint-rotate {
+    0% { transform: translateY(-50%) rotate(0deg); }
+    100% { transform: translateY(-50%) rotate(360deg); }
+}
+
+@keyframes blueprint-pulse {
+    0%, 100% { opacity: 0.5; }
+    50% { opacity: 0.78; }
+}
+
+/* Accents & Buttons for Blueprint */
+.text-blueprint-accent {
+    border-color: rgba(6, 182, 212, 0.4) !important;
+    background: rgba(6, 182, 212, 0.08) !important;
+    color: #a5f3fc !important;
+}
+
+.text-blueprint-primary {
+    color: #22d3ee !important;
+}
+
+.text-blueprint-muted {
+    color: #94a3b8 !important;
+}
+
+.btn-blueprint {
+    background: #06b6d4 !important;
+    color: #020617 !important;
+    font-weight: 700 !important;
+    box-shadow: 0 0 20px rgba(6, 182, 212, 0.4) !important;
+}
+
+.btn-blueprint:hover {
+    background: #22d3ee !important;
+    box-shadow: 0 0 28px rgba(6, 182, 212, 0.6) !important;
+    transform: translateY(-2px) scale(1.02) !important;
+}
+
+/* 2. FLEET B2B THEME */
+.theme-fleet {
+    background: linear-gradient(135deg, #090514 0%, #130a24 48%, #2d0b1e 100%) !important;
+}
+
+.theme-fleet::before {
+    background-image: 
+        linear-gradient(rgba(217, 70, 239, 0.035) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(217, 70, 239, 0.035) 1px, transparent 1px) !important;
+    background-size: 50px 50px !important;
+    mask-image: linear-gradient(90deg, rgba(0, 0, 0, 0.7), transparent 80%) !important;
+}
+
+.fleet-atmosphere {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: -2;
+    overflow: hidden;
+}
+
+/* Atmospheric pulsate sphere on the right */
+.fleet-atmosphere::before {
+    content: "";
+    position: absolute;
+    top: 50%;
+    right: -100px;
+    width: 600px;
+    height: 600px;
+    transform: translateY(-50%);
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(217, 70, 239, 0.08) 0%, rgba(147, 51, 234, 0.03) 50%, transparent 70%);
+    animation: fleet-pulse 5s ease-in-out infinite;
+}
+
+/* Dynamic Light sweep on the right represent fleet speed */
+.fleet-light-sweep {
+    position: absolute;
+    top: 48%;
+    right: -150px;
+    width: 700px;
+    height: 4px;
+    background: linear-gradient(90deg, transparent, rgba(217, 70, 239, 0.4), rgba(147, 51, 234, 0.6), transparent);
+    transform: translateY(-50%) rotate(-15deg);
+    opacity: 0.7;
+    animation: fleet-sweep 4.5s ease-in-out infinite;
+}
+
+@keyframes fleet-sweep {
+    0% { transform: translateY(-50%) rotate(-15deg) translateX(-150px); opacity: 0.3; }
+    50% { opacity: 0.8; }
+    100% { transform: translateY(-50%) rotate(-15deg) translateX(150px); opacity: 0.3; }
+}
+
+@keyframes fleet-pulse {
+    0%, 100% { transform: translateY(-50%) scale(0.95); opacity: 0.6; }
+    50% { transform: translateY(-50%) scale(1.08); opacity: 0.9; }
+}
+
+/* Accents & Buttons for Fleet */
+.text-fleet-accent {
+    border-color: rgba(217, 70, 239, 0.38) !important;
+    background: rgba(217, 70, 239, 0.08) !important;
+    color: #fdf4ff !important;
+}
+
+.text-fleet-primary {
+    color: #e879f9 !important;
+}
+
+.text-fleet-muted {
+    color: #abb5c3 !important;
+}
+
+.btn-fleet {
+    background: linear-gradient(135deg, #d946ef 0%, #a855f7 100%) !important;
+    color: #ffffff !important;
+    font-weight: 700 !important;
+    border: none !important;
+    box-shadow: 0 0 22px rgba(217, 70, 239, 0.35) !important;
+}
+
+.btn-fleet:hover {
+    background: linear-gradient(135deg, #f472b6 0%, #c084fc 100%) !important;
+    box-shadow: 0 0 30px rgba(217, 70, 239, 0.5) !important;
+    transform: translateY(-2px) scale(1.02) !important;
+}
