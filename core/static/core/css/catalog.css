@@ -3354,5 +3354,144 @@ html[data-theme="light"] {
     }
 }
 
+/* ========================================================
+   FLEXS Premium - Clamp Quoter (Abrazaderas a medida) Light Theme Redesign
+   ======================================================== */
+
+html[data-theme="light"] .clamp-request-card {
+    background: #ffffff !important;
+    border: 1px solid rgba(15, 23, 42, 0.08) !important;
+    box-shadow: 0 10px 30px rgba(15, 23, 42, 0.03) !important;
+}
+
+html[data-theme="light"] .clamp-request-card-title {
+    background: rgba(255, 107, 53, 0.08) !important;
+    border: 1px solid rgba(255, 107, 53, 0.18) !important;
+    color: var(--color-primary-dark) !important;
+}
+
+html[data-theme="light"] .clamp-form-label,
+html[data-theme="light"] .clamp-request-page .clamp-radio-inline,
+html[data-theme="light"] .clamp-request-page .clamp-checkbox-inline {
+    color: #0f172a !important;
+}
+
+html[data-theme="light"] .clamp-simulator-visual-container {
+    background: radial-gradient(circle at center, #fdf8f6, #f8fafc) !important;
+    border: 1px solid rgba(15, 23, 42, 0.08) !important;
+}
+
+html[data-theme="light"] #clampCalculatedDesc {
+    color: #0f172a !important;
+}
+
+html[data-theme="light"] .clamp-simulator-info {
+    color: #475569 !important;
+}
+
+html[data-theme="light"] #threadLeft,
+html[data-theme="light"] #threadRight {
+    stroke: #fdf8f6 !important;
+}
+
+html[data-theme="light"] #clampBase {
+    fill: #334155 !important;
+    stroke: rgba(15, 23, 42, 0.1) !important;
+}
+
+html[data-theme="light"] #nutLeft,
+html[data-theme="light"] #nutRight {
+    fill: #64748b !important;
+    stroke: #0f172a !important;
+}
+
+html[data-theme="light"] #widthText,
+html[data-theme="light"] #lengthText,
+html[data-theme="light"] #diameterText {
+    fill: var(--color-primary-dark) !important;
+}
+
+html[data-theme="light"] #lengthWitnessTop,
+html[data-theme="light"] #lengthWitnessBottom {
+    stroke: rgba(255, 107, 53, 0.2) !important;
+}
+
+html[data-theme="light"] #clampGrid path {
+    stroke: rgba(15, 23, 42, 0.04) !important;
+}
+
+html[data-theme="light"] .clamp-result-description {
+    color: #0f172a !important;
+}
+
+html[data-theme="light"] .clamp-result-code {
+    color: #475569 !important;
+}
+
+html[data-theme="light"] .clamp-existing-check {
+    border-top-color: rgba(15, 23, 42, 0.08) !important;
+}
+
+html[data-theme="light"] .clamp-existing-check p {
+    color: #475569 !important;
+}
+
+html[data-theme="light"] .clamp-existing-check.has-matches h4 {
+    color: #16a34a !important;
+}
+
+html[data-theme="light"] .clamp-existing-check.no-matches h4 {
+    color: #d97706 !important;
+}
+
+html[data-theme="light"] .clamp-match-table-wrap {
+    border: 1px solid rgba(15, 23, 42, 0.08) !important;
+    background: #ffffff !important;
+}
+
+html[data-theme="light"] .clamp-match-table th {
+    background: rgba(15, 23, 42, 0.02) !important;
+    color: #475569 !important;
+    border-bottom: 2px solid rgba(15, 23, 42, 0.08) !important;
+}
+
+html[data-theme="light"] .clamp-match-table td {
+    color: #0f172a !important;
+    border-bottom: 1px solid rgba(15, 23, 42, 0.06) !important;
+}
+
+html[data-theme="light"] .clamp-match-table tr:hover {
+    background: rgba(255, 107, 53, 0.03) !important;
+}
+
+html[data-theme="light"] .shape-badge {
+    background: rgba(15, 23, 42, 0.02) !important;
+    border-color: rgba(15, 23, 42, 0.08) !important;
+    color: #475569 !important;
+}
+
+html[data-theme="light"] .shape-badge svg {
+    color: #334155 !important;
+}
+
+html[data-theme="light"] .shape-plana {
+    border-color: rgba(2, 132, 199, 0.25) !important;
+    background: rgba(2, 132, 199, 0.08) !important;
+    color: #0284c7 !important;
+}
+
+html[data-theme="light"] .shape-semicurva {
+    border-color: rgba(225, 29, 72, 0.25) !important;
+    background: rgba(225, 29, 72, 0.08) !important;
+    color: #e11d48 !important;
+}
+
+html[data-theme="light"] .shape-curva {
+    border-color: rgba(234, 88, 12, 0.25) !important;
+    background: rgba(234, 88, 12, 0.08) !important;
+    color: #ea580c !important;
+}
+
+
 
 

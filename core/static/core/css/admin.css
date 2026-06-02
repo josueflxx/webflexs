@@ -6440,3 +6440,1757 @@
         grid-template-columns: 1fr;
     }
 }
+
+/* ========================================================
+   FLEXS Premium - Dual-Core Light Theme (Modo Claro)
+   ======================================================= */
+
+html[data-theme="light"] .admin-body {
+    --glass-bg: rgba(255, 255, 255, 0.82);
+    --glass-border: rgba(255, 107, 53, 0.15);
+    --glass-border-light: rgba(15, 23, 42, 0.08);
+    --glass-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
+    background:
+        radial-gradient(circle at top left, rgba(255, 107, 53, 0.06), transparent 28%),
+        radial-gradient(circle at top right, rgba(44, 126, 255, 0.04), transparent 22%),
+        linear-gradient(180deg, #f8fafc 0%, #f1f5f9 40%, #e2e8f0 100%) !important;
+    color: #0f172a !important;
+}
+
+/* Scrollbars */
+html[data-theme="light"] ::-webkit-scrollbar-track {
+    background: rgba(15, 23, 42, 0.02) !important;
+}
+html[data-theme="light"] ::-webkit-scrollbar-thumb {
+    background: rgba(15, 23, 42, 0.12) !important;
+    border: 2px solid #f1f5f9 !important;
+}
+html[data-theme="light"] ::-webkit-scrollbar-thumb:hover {
+    background: var(--color-primary-light) !important;
+}
+
+/* Sidebar Izquierdo */
+html[data-theme="light"] .admin-sidebar {
+    background: #ffffff !important;
+    border-right: 1px solid rgba(15, 23, 42, 0.08) !important;
+}
+html[data-theme="light"] .sidebar-header {
+    border-bottom: 1px solid rgba(15, 23, 42, 0.08) !important;
+}
+html[data-theme="light"] .sidebar-logo small {
+    color: #64748b !important;
+}
+html[data-theme="light"] .sidebar-brand-logo {
+    background: rgba(15, 23, 42, 0.02) !important;
+    border: 1px solid rgba(15, 23, 42, 0.08) !important;
+}
+html[data-theme="light"] .nav-section {
+    color: #94a3b8 !important;
+}
+html[data-theme="light"] .nav-item {
+    color: #475569 !important;
+}
+html[data-theme="light"] .nav-item:hover {
+    background: rgba(15, 23, 42, 0.03) !important;
+    color: #0f172a !important;
+}
+html[data-theme="light"] .nav-item.active {
+    background: rgba(255, 107, 53, 0.08) !important;
+    color: var(--color-primary) !important;
+    border-left-color: var(--color-primary) !important;
+}
+html[data-theme="light"] .nav-icon {
+    background: rgba(15, 23, 42, 0.04) !important;
+    border: 1px solid rgba(15, 23, 42, 0.08) !important;
+    color: #475569 !important;
+}
+html[data-theme="light"] .nav-item:hover .nav-icon {
+    background: rgba(255, 107, 53, 0.08) !important;
+    border-color: rgba(255, 107, 53, 0.3) !important;
+    color: var(--color-primary) !important;
+}
+html[data-theme="light"] .nav-item.active .nav-icon {
+    background: rgba(255, 107, 53, 0.14) !important;
+    border-color: rgba(255, 107, 53, 0.4) !important;
+    color: var(--color-primary) !important;
+}
+html[data-theme="light"] .sidebar-footer {
+    border-top: 1px solid rgba(15, 23, 42, 0.08) !important;
+}
+html[data-theme="light"] .sidebar-footer .logout:hover {
+    background: rgba(220, 53, 69, 0.08) !important;
+    color: var(--color-danger) !important;
+}
+
+/* Cabecera Superior */
+html[data-theme="light"] .admin-header {
+    background: rgba(255, 255, 255, 0.85) !important;
+    border-bottom: 1px solid rgba(15, 23, 42, 0.08) !important;
+    box-shadow: 0 4px 20px rgba(15, 23, 42, 0.04) !important;
+}
+html[data-theme="light"] .header-title h1 {
+    color: #0f172a !important;
+}
+html[data-theme="light"] .header-user {
+    color: #475569 !important;
+}
+html[data-theme="light"] .header-user-company {
+    color: #0f172a !important;
+}
+html[data-theme="light"] .admin-top-nav-wrap {
+    background: rgba(255, 255, 255, 0.9) !important;
+    border-bottom: 1px solid rgba(15, 23, 42, 0.08) !important;
+    box-shadow: 0 4px 18px rgba(15, 23, 42, 0.03) !important;
+}
+html[data-theme="light"] .top-nav-group-label {
+    color: #64748b !important;
+}
+html[data-theme="light"] .top-nav-group {
+    border-right: 1px solid rgba(15, 23, 42, 0.08) !important;
+}
+html[data-theme="light"] .top-nav-item {
+    color: #334155 !important;
+}
+html[data-theme="light"] .top-nav-item:hover {
+    color: #0f172a !important;
+    background: rgba(15, 23, 42, 0.03) !important;
+}
+html[data-theme="light"] .top-nav-item.active {
+    color: #ffffff !important;
+    background: linear-gradient(135deg, rgba(255, 107, 53, 0.9), rgba(255, 107, 53, 0.8)) !important;
+}
+html[data-theme="light"] .admin-top-nav::-webkit-scrollbar-track {
+    background: rgba(15, 23, 42, 0.02) !important;
+}
+html[data-theme="light"] .admin-top-nav::-webkit-scrollbar-thumb {
+    background: rgba(15, 23, 42, 0.12) !important;
+}
+
+/* Sub-Menús Desplegables */
+html[data-theme="light"] .top-nav-submenu {
+    background: #ffffff !important;
+    border: 1px solid rgba(15, 23, 42, 0.08) !important;
+    box-shadow: 0 20px 40px rgba(15, 23, 42, 0.12) !important;
+}
+html[data-theme="light"] .top-nav-submenu::before {
+    background: #ffffff !important;
+    border-top: 1px solid rgba(15, 23, 42, 0.08) !important;
+    border-left: 1px solid rgba(15, 23, 42, 0.08) !important;
+}
+html[data-theme="light"] .top-nav-submenu-item {
+    background: rgba(15, 23, 42, 0.02) !important;
+    color: #334155 !important;
+}
+html[data-theme="light"] .top-nav-submenu-item strong {
+    color: #0f172a !important;
+}
+html[data-theme="light"] .top-nav-submenu-item small {
+    color: #64748b !important;
+}
+html[data-theme="light"] .top-nav-submenu-item:hover,
+html[data-theme="light"] .top-nav-submenu-item.is-active {
+    background: rgba(255, 107, 53, 0.08) !important;
+    border-color: rgba(255, 107, 53, 0.18) !important;
+}
+
+/* Tarjetas (Cards) */
+html[data-theme="light"] .admin-card,
+html[data-theme="light"] .stat-card,
+html[data-theme="light"] .activity-card,
+html[data-theme="light"] .dashboard-guide-card {
+    background: rgba(255, 255, 255, 0.8) !important;
+    border: 1px solid rgba(15, 23, 42, 0.08) !important;
+    box-shadow: 0 10px 30px rgba(15, 23, 42, 0.04) !important;
+}
+html[data-theme="light"] .stat-card h3,
+html[data-theme="light"] .activity-card h3,
+html[data-theme="light"] .dashboard-guide-card h3,
+html[data-theme="light"] .dashboard-guide-card h2 {
+    color: #475569 !important;
+}
+html[data-theme="light"] .dashboard-guide-card p {
+    color: #475569 !important;
+}
+html[data-theme="light"] .admin-card-title,
+html[data-theme="light"] .activity-card-title,
+html[data-theme="light"] .stat-card-title {
+    color: #0f172a !important;
+    border-bottom: 1px solid rgba(15, 23, 42, 0.08) !important;
+}
+html[data-theme="light"] .stat-card-value {
+    color: #0f172a !important;
+}
+html[data-theme="light"] .stat-card-desc {
+    color: #64748b !important;
+}
+html[data-theme="light"] .activity-time {
+    color: #94a3b8 !important;
+}
+html[data-theme="light"] .activity-item-content {
+    color: #334155 !important;
+}
+html[data-theme="light"] .no-activity-placeholder {
+    color: #64748b !important;
+    background: rgba(15, 23, 42, 0.02) !important;
+    border: 1px dashed rgba(15, 23, 42, 0.1) !important;
+}
+html[data-theme="light"] .cola-operativa-grid .metric-card {
+    border-bottom: 1px solid rgba(15, 23, 42, 0.08) !important;
+}
+html[data-theme="light"] .cola-operativa-grid .metric-card h4 {
+    color: #475569 !important;
+}
+html[data-theme="light"] .cola-operativa-grid .metric-card:hover {
+    background: rgba(255, 107, 53, 0.04) !important;
+}
+html[data-theme="light"] .cola-operativa-grid .metric-value {
+    color: #0f172a !important;
+}
+html[data-theme="light"] .cola-operativa-grid .metric-desc {
+    color: #64748b !important;
+}
+
+/* Tablas y Grillas de Datos */
+html[data-theme="light"] .admin-table-container {
+    background: #ffffff !important;
+    border: 1px solid rgba(15, 23, 42, 0.08) !important;
+    box-shadow: 0 4px 18px rgba(15, 23, 42, 0.02) !important;
+}
+html[data-theme="light"] .admin-toolbar {
+    background: rgba(15, 23, 42, 0.01) !important;
+    border-bottom: 1px solid rgba(15, 23, 42, 0.06) !important;
+}
+html[data-theme="light"] .admin-table th {
+    background: #f1f5f9 !important;
+    color: #475569 !important;
+    border-bottom: 2px solid rgba(15, 23, 42, 0.08) !important;
+}
+html[data-theme="light"] .admin-table td {
+    color: #1e293b !important;
+    border-bottom: 1px solid rgba(15, 23, 42, 0.06) !important;
+}
+html[data-theme="light"] .admin-table tr:hover {
+    background: rgba(255, 107, 53, 0.03) !important;
+}
+html[data-theme="light"] .pagination-info {
+    color: #64748b !important;
+}
+
+/* Formularios e Inputs */
+html[data-theme="light"] .admin-body .form-label {
+    color: #334155 !important;
+}
+html[data-theme="light"] .admin-body .form-input,
+html[data-theme="light"] .admin-body .form-select,
+html[data-theme="light"] .admin-body .form-textarea {
+    background: #ffffff !important;
+    border: 1px solid #cbd5e1 !important;
+    color: #0f172a !important;
+}
+html[data-theme="light"] .admin-body .form-input:focus,
+html[data-theme="light"] .admin-body .form-select:focus,
+html[data-theme="light"] .admin-body .form-textarea:focus {
+    border-color: var(--color-primary) !important;
+    box-shadow: 0 0 0 3px rgba(255, 107, 53, 0.15) !important;
+}
+html[data-theme="light"] .form-help,
+html[data-theme="light"] .form-text {
+    color: #64748b !important;
+}
+
+/* Custom Dropdowns */
+html[data-theme="light"] .custom-select-trigger {
+    background: #ffffff !important;
+    border: 1px solid #cbd5e1 !important;
+    color: #0f172a !important;
+}
+html[data-theme="light"] .custom-options {
+    background: #ffffff !important;
+    border: 1px solid rgba(15, 23, 42, 0.1) !important;
+    box-shadow: 0 10px 25px rgba(15, 23, 42, 0.08) !important;
+}
+html[data-theme="light"] .custom-option {
+    color: #334155 !important;
+}
+html[data-theme="light"] .custom-option:hover {
+    background: rgba(255, 107, 53, 0.08) !important;
+    color: var(--color-primary) !important;
+}
+
+/* Sidebar Derecha de Presencia */
+html[data-theme="light"] .admin-right-sidebar {
+    background: #ffffff !important;
+    border-left: 1px solid rgba(15, 23, 42, 0.08) !important;
+    box-shadow: -4px 0 20px rgba(15, 23, 42, 0.03) !important;
+}
+html[data-theme="light"] .right-sidebar-header {
+    border-bottom: 1px solid rgba(15, 23, 42, 0.08) !important;
+    background: rgba(255, 255, 255, 0.95) !important;
+}
+html[data-theme="light"] .right-sidebar-header h2 {
+    color: #0f172a !important;
+}
+html[data-theme="light"] .sidebar-toggle-btn {
+    background: rgba(15, 23, 42, 0.04) !important;
+    border: 1px solid rgba(15, 23, 42, 0.08) !important;
+    color: #475569 !important;
+}
+html[data-theme="light"] .sidebar-toggle-btn:hover {
+    background: rgba(15, 23, 42, 0.08) !important;
+    color: #0f172a !important;
+    border-color: var(--color-primary) !important;
+}
+html[data-theme="light"] .admin-profile {
+    background: rgba(15, 23, 42, 0.02) !important;
+    border: 1px solid rgba(15, 23, 42, 0.05) !important;
+}
+html[data-theme="light"] .admin-profile:hover {
+    background: rgba(15, 23, 42, 0.04) !important;
+    border-color: rgba(15, 23, 42, 0.08) !important;
+}
+html[data-theme="light"] .admin-username {
+    color: #0f172a !important;
+}
+html[data-theme="light"] .admin-status {
+    color: #475569 !important;
+}
+html[data-theme="light"] .admin-last-seen {
+    color: #94a3b8 !important;
+}
+html[data-theme="light"] .admin-avatar {
+    background: rgba(15, 23, 42, 0.06) !important;
+    border: 1px solid rgba(15, 23, 42, 0.1) !important;
+    color: #0f172a !important;
+}
+html[data-theme="light"] .sidebar-show-btn {
+    background: #ffffff !important;
+    border: 1px solid rgba(15, 23, 42, 0.08) !important;
+    box-shadow: 0 4px 18px rgba(15, 23, 42, 0.08) !important;
+    color: #475569 !important;
+}
+
+/* Alertas y Botones */
+html[data-theme="light"] .alert {
+    box-shadow: 0 4px 18px rgba(15, 23, 42, 0.06) !important;
+}
+html[data-theme="light"] .admin-body .btn-ghost {
+    color: #475569 !important;
+    border-color: transparent !important;
+    background: transparent !important;
+}
+html[data-theme="light"] .admin-body .btn-ghost:hover {
+    color: #0f172a !important;
+    background: rgba(15, 23, 42, 0.04) !important;
+}
+html[data-theme="light"] .admin-body .btn-ghost.is-danger {
+    color: #dc3545 !important;
+}
+html[data-theme="light"] .admin-body .btn-ghost.is-danger:hover {
+    background: rgba(220, 53, 69, 0.08) !important;
+    color: #bd2130 !important;
+}
+html[data-theme="light"] .admin-body .btn-outline {
+    border-color: rgba(15, 23, 42, 0.15) !important;
+    color: #334155 !important;
+    background: transparent !important;
+}
+html[data-theme="light"] .admin-body .btn-outline:hover {
+    background: rgba(15, 23, 42, 0.04) !important;
+    color: #0f172a !important;
+}
+html[data-theme="light"] .admin-body .btn-primary {
+    color: #ffffff !important;
+}
+html[data-theme="light"] .admin-body .btn-secondary {
+    background: #e2e8f0 !important;
+    border-color: #cbd5e1 !important;
+    color: #334155 !important;
+}
+html[data-theme="light"] .admin-body .btn-secondary:hover {
+    background: #cbd5e1 !important;
+    color: #0f172a !important;
+}
+
+/* ========================================================
+   FLEXS Premium - Clamp Quoter & History Metrics Light Theme Refinement
+   ======================================================== */
+
+/* Cotizador de Abrazaderas (Clamp Quoter) */
+html[data-theme="light"] .clamp-quoter-card,
+html[data-theme="light"] .clamp-results-card {
+    background: rgba(255, 255, 255, 0.8) !important;
+    border: 1px solid rgba(15, 23, 42, 0.08) !important;
+    box-shadow: 0 10px 30px rgba(15, 23, 42, 0.04) !important;
+}
+html[data-theme="light"] .clamp-form-title {
+    background: rgba(15, 23, 42, 0.04) !important;
+    color: #0f172a !important;
+}
+html[data-theme="light"] .clamp-row-label {
+    color: #334155 !important;
+}
+html[data-theme="light"] .clamp-radio-inline,
+html[data-theme="light"] .clamp-checkbox-inline {
+    color: #475569 !important;
+}
+html[data-theme="light"] .clamp-radio-inline input[type="radio"] {
+    accent-color: var(--color-primary) !important;
+}
+html[data-theme="light"] .clamp-code-feedback {
+    color: #475569 !important;
+}
+html[data-theme="light"] .clamp-code-feedback.is-success {
+    color: #16a34a !important;
+}
+html[data-theme="light"] .clamp-code-feedback.is-warning {
+    color: #d97706 !important;
+}
+html[data-theme="light"] .clamp-code-feedback.is-error {
+    color: #dc2626 !important;
+}
+html[data-theme="light"] .clamp-code-name-preview {
+    border: 1px solid rgba(22, 163, 74, 0.25) !important;
+    background: rgba(22, 163, 74, 0.06) !important;
+    color: #14532d !important;
+}
+html[data-theme="light"] .clamp-billing-quick-result {
+    background: rgba(15, 23, 42, 0.02) !important;
+    border: 1px solid rgba(15, 23, 42, 0.08) !important;
+}
+html[data-theme="light"] .clamp-billing-quick-result span {
+    color: #475569 !important;
+}
+html[data-theme="light"] .clamp-billing-quick-result strong {
+    color: #16a34a !important;
+}
+html[data-theme="light"] .clamp-code-logic-card {
+    border: 1px solid rgba(15, 23, 42, 0.08) !important;
+    background: rgba(15, 23, 42, 0.02) !important;
+}
+html[data-theme="light"] .clamp-code-logic-card h4 {
+    color: #0f172a !important;
+}
+html[data-theme="light"] .clamp-code-pill {
+    border: 1px solid rgba(15, 23, 42, 0.08) !important;
+    background: rgba(15, 23, 42, 0.02) !important;
+}
+html[data-theme="light"] .clamp-code-pill small {
+    color: #64748b !important;
+}
+html[data-theme="light"] .clamp-code-pill strong {
+    color: #0f172a !important;
+}
+html[data-theme="light"] .clamp-code-final-line {
+    color: #475569 !important;
+}
+html[data-theme="light"] .clamp-code-final-line code {
+    background: rgba(31, 119, 200, 0.1) !important;
+    border: 1px solid rgba(31, 119, 200, 0.25) !important;
+    color: #1d4ed8 !important;
+}
+html[data-theme="light"] .clamp-result-description {
+    color: #0f172a !important;
+}
+html[data-theme="light"] .clamp-result-code-line {
+    color: #475569 !important;
+}
+html[data-theme="light"] .clamp-result-code-line code {
+    background: rgba(15, 23, 42, 0.03) !important;
+    border: 1px solid rgba(15, 23, 42, 0.08) !important;
+    color: #0f172a !important;
+}
+html[data-theme="light"] .clamp-result-metrics .metric {
+    border: 1px solid rgba(15, 23, 42, 0.08) !important;
+}
+html[data-theme="light"] .clamp-result-metrics .metric span {
+    color: #64748b !important;
+}
+html[data-theme="light"] .clamp-result-metrics .metric strong {
+    color: var(--color-primary-dark) !important;
+}
+html[data-theme="light"] .clamp-price-card {
+    border: 1px solid rgba(15, 23, 42, 0.08) !important;
+    background: rgba(15, 23, 42, 0.02) !important;
+}
+html[data-theme="light"] .clamp-price-card h4 {
+    color: #0f172a !important;
+}
+html[data-theme="light"] .clamp-price-card small {
+    color: #64748b !important;
+}
+html[data-theme="light"] .clamp-price-card strong {
+    color: #16a34a !important;
+}
+html[data-theme="light"] .clamp-price-card.is-billing {
+    border-color: rgba(22, 163, 74, 0.3) !important;
+    background: rgba(22, 163, 74, 0.06) !important;
+}
+html[data-theme="light"] .clamp-price-card.is-billing h4,
+html[data-theme="light"] .clamp-price-card.is-billing strong {
+    color: #14532d !important;
+}
+html[data-theme="light"] .clamp-error {
+    color: #dc2626 !important;
+}
+
+/* Tarjetas de Métricas de Historial de Clientes */
+html[data-theme="light"] .client-history-toolbar {
+    border-top: 1px solid rgba(15, 23, 42, 0.08) !important;
+}
+html[data-theme="light"] .history-metric-card {
+    border: 1px solid rgba(15, 23, 42, 0.08) !important;
+    background: rgba(15, 23, 42, 0.02) !important;
+}
+html[data-theme="light"] .history-metric-label {
+    color: #64748b !important;
+}
+html[data-theme="light"] .history-metric-value {
+    color: #0f172a !important;
+}
+html[data-theme="light"] .history-metric-card.is-info {
+    background: rgba(14, 165, 233, 0.08) !important;
+    border-color: rgba(14, 165, 233, 0.3) !important;
+}
+html[data-theme="light"] .history-metric-card.is-info .history-metric-value {
+    color: #0369a1 !important;
+}
+html[data-theme="light"] .history-metric-card.is-primary {
+    background: rgba(255, 107, 53, 0.08) !important;
+    border-color: rgba(255, 107, 53, 0.3) !important;
+}
+html[data-theme="light"] .history-metric-card.is-primary .history-metric-value {
+    color: #c2410c !important;
+}
+html[data-theme="light"] .history-metric-card.is-success {
+    background: rgba(22, 163, 74, 0.08) !important;
+    border-color: rgba(22, 163, 74, 0.3) !important;
+}
+html[data-theme="light"] .history-metric-card.is-success .history-metric-value {
+    color: #15803d !important;
+}
+html[data-theme="light"] .history-metric-card.is-warning {
+    background: rgba(234, 179, 8, 0.08) !important;
+    border-color: rgba(234, 179, 8, 0.3) !important;
+}
+html[data-theme="light"] .history-metric-card.is-warning .history-metric-value {
+    color: #a16207 !important;
+}
+html[data-theme="light"] .history-metric-card.is-secondary {
+    background: rgba(15, 23, 42, 0.02) !important;
+    border-color: rgba(15, 23, 42, 0.1) !important;
+}
+html[data-theme="light"] .history-metric-card.is-secondary .history-metric-value {
+    color: #334155 !important;
+}
+
+/* ========================================================
+   FLEXS Premium - Dashboard Admin Light Theme Redesign
+   ======================================================== */
+
+/* Paneles del Dashboard */
+html[data-theme="light"] .dashboard-ops-card,
+html[data-theme="light"] .dashboard-activity-card,
+html[data-theme="light"] .dashboard-panel,
+html[data-theme="light"] .dashboard-function-section,
+html[data-theme="light"] .dashboard-rankings-section {
+    background: radial-gradient(circle at top right, rgba(255, 107, 53, 0.03), transparent 45%), rgba(255, 255, 255, 0.8) !important;
+    border: 1px solid rgba(15, 23, 42, 0.08) !important;
+    box-shadow: 0 10px 30px rgba(15, 23, 42, 0.04) !important;
+}
+
+html[data-theme="light"] .dashboard-ops-head,
+html[data-theme="light"] .dashboard-activity-head,
+html[data-theme="light"] .dashboard-panel-head,
+html[data-theme="light"] .dashboard-function-head {
+    border-bottom: 1px solid rgba(15, 23, 42, 0.06) !important;
+}
+
+html[data-theme="light"] .dashboard-ops-head h3,
+html[data-theme="light"] .dashboard-activity-head h3,
+html[data-theme="light"] .dashboard-panel-head h3,
+html[data-theme="light"] .dashboard-function-head h3 {
+    color: #0f172a !important;
+}
+
+html[data-theme="light"] .dashboard-ops-head p,
+html[data-theme="light"] .dashboard-activity-head p,
+html[data-theme="light"] .dashboard-panel-head p,
+html[data-theme="light"] .dashboard-function-head p {
+    color: #475569 !important;
+}
+
+/* Banner Superior */
+html[data-theme="light"] .dashboard-command-header {
+    background: radial-gradient(circle at top left, rgba(255, 107, 53, 0.04), transparent 36%), rgba(255, 255, 255, 0.82) !important;
+    border: 1px solid rgba(15, 23, 42, 0.08) !important;
+    box-shadow: 0 10px 30px rgba(15, 23, 42, 0.04) !important;
+}
+
+html[data-theme="light"] .dashboard-command-header h2 {
+    color: #0f172a !important;
+}
+
+html[data-theme="light"] .dashboard-command-header p {
+    color: #475569 !important;
+}
+
+html[data-theme="light"] .dashboard-command-meta {
+    background: rgba(15, 23, 42, 0.02) !important;
+    border: 1px solid rgba(15, 23, 42, 0.08) !important;
+    color: #475569 !important;
+}
+
+html[data-theme="light"] .dashboard-command-meta strong {
+    color: #0f172a !important;
+}
+
+/* Cola Operativa e Ítems de Prioridad */
+html[data-theme="light"] .dashboard-ops-item {
+    background: rgba(255, 255, 255, 0.75) !important;
+    border: 1px solid rgba(15, 23, 42, 0.06) !important;
+    color: #0f172a !important;
+}
+
+html[data-theme="light"] .dashboard-ops-item:hover {
+    background: rgba(255, 107, 53, 0.04) !important;
+    border-color: rgba(255, 107, 53, 0.25) !important;
+    box-shadow: 0 8px 24px rgba(255, 107, 53, 0.06) !important;
+}
+
+html[data-theme="light"] .dashboard-ops-label {
+    color: #334155 !important;
+}
+
+html[data-theme="light"] .dashboard-ops-value {
+    color: #0f172a !important;
+}
+
+html[data-theme="light"] .dashboard-ops-item small {
+    color: #64748b !important;
+}
+
+html[data-theme="light"] .dashboard-priority-item {
+    background: linear-gradient(90deg, rgba(255, 107, 53, 0.08), transparent 3px), rgba(255, 255, 255, 0.75) !important;
+    border: 1px solid rgba(15, 23, 42, 0.06) !important;
+}
+
+html[data-theme="light"] .dashboard-priority-item:hover {
+    background: rgba(255, 107, 53, 0.06) !important;
+    border-color: rgba(255, 107, 53, 0.25) !important;
+    box-shadow: 0 8px 24px rgba(255, 107, 53, 0.06) !important;
+}
+
+html[data-theme="light"] .dashboard-priority-item span {
+    color: #334155 !important;
+}
+
+html[data-theme="light"] .dashboard-priority-item strong {
+    color: #0f172a !important;
+}
+
+html[data-theme="light"] .dashboard-priority-item small {
+    color: #64748b !important;
+}
+
+/* Actividad Reciente */
+html[data-theme="light"] .dashboard-activity-item {
+    background: rgba(255, 255, 255, 0.75) !important;
+    border: 1px solid rgba(15, 23, 42, 0.06) !important;
+}
+
+html[data-theme="light"] .dashboard-activity-item:hover {
+    background: rgba(255, 255, 255, 0.9) !important;
+    border-color: rgba(15, 23, 42, 0.12) !important;
+}
+
+html[data-theme="light"] .dashboard-activity-badge {
+    background: rgba(15, 23, 42, 0.04) !important;
+    border-color: rgba(15, 23, 42, 0.08) !important;
+    color: #334155 !important;
+}
+
+html[data-theme="light"] .dashboard-activity-time {
+    color: #64748b !important;
+}
+
+html[data-theme="light"] .dashboard-activity-item strong {
+    color: #0f172a !important;
+}
+
+html[data-theme="light"] .dashboard-activity-item p {
+    color: #475569 !important;
+}
+
+html[data-theme="light"] .dashboard-activity-meta {
+    color: #64748b !important;
+}
+
+html[data-theme="light"] .dashboard-activity-amount {
+    color: #0f172a !important;
+}
+
+html[data-theme="light"] .dashboard-activity-compact .dashboard-activity-item {
+    background: linear-gradient(90deg, rgba(0, 197, 255, 0.08), transparent 3px), rgba(255, 255, 255, 0.75) !important;
+}
+
+html[data-theme="light"] .dashboard-activity-compact .dashboard-activity-badge {
+    background: rgba(255, 107, 53, 0.08) !important;
+    border-color: rgba(255, 107, 53, 0.18) !important;
+    color: #c2410c !important;
+}
+
+html[data-theme="light"] .dashboard-activity-compact::-webkit-scrollbar-thumb {
+    background: rgba(15, 23, 42, 0.12) !important;
+}
+
+/* Tarjetas Mini de Módulos (Ventas, B2B, Clientes, Cobros, etc.) */
+html[data-theme="light"] .dashboard-mini-card {
+    background: radial-gradient(circle at top left, color-mix(in srgb, var(--mini-accent, #ff6b35) 8%, transparent), transparent 40%), rgba(255, 255, 255, 0.8) !important;
+    border: 1px solid color-mix(in srgb, var(--mini-accent, #ff6b35) 15%, rgba(15, 23, 42, 0.08)) !important;
+    box-shadow: 0 8px 24px rgba(15, 23, 42, 0.03) !important;
+}
+
+html[data-theme="light"] .dashboard-mini-card:hover {
+    border-color: color-mix(in srgb, var(--mini-accent, #ff6b35) 30%, rgba(15, 23, 42, 0.15)) !important;
+    box-shadow: 0 10px 24px color-mix(in srgb, var(--mini-accent, #ff6b35) 5%, rgba(15, 23, 42, 0.06)) !important;
+}
+
+html[data-theme="light"] .dashboard-mini-icon {
+    background: color-mix(in srgb, var(--mini-accent, #ff6b35) 12%, rgba(15, 23, 42, 0.02)) !important;
+    border-color: color-mix(in srgb, var(--mini-accent, #ff6b35) 30%, transparent) !important;
+    color: color-mix(in srgb, var(--mini-accent, #ff6b35) 85%, #0f172a) !important;
+}
+
+html[data-theme="light"] .dashboard-mini-tag {
+    color: color-mix(in srgb, var(--mini-accent, #ff6b35) 85%, #334155) !important;
+}
+
+html[data-theme="light"] .dashboard-mini-card h4 {
+    color: #0f172a !important;
+}
+
+html[data-theme="light"] .dashboard-mini-card p {
+    color: #475569 !important;
+}
+
+html[data-theme="light"] .dashboard-mini-card .btn-ghost {
+    background: rgba(15, 23, 42, 0.03) !important;
+    color: #475569 !important;
+    border: 1px solid rgba(15, 23, 42, 0.08) !important;
+}
+
+html[data-theme="light"] .dashboard-mini-card .btn-ghost:hover {
+    background: rgba(15, 23, 42, 0.08) !important;
+    color: #0f172a !important;
+}
+
+/* Rankings Comerciales */
+html[data-theme="light"] .dashboard-ranking-card {
+    background: #ffffff !important;
+    border: 1px solid rgba(15, 23, 42, 0.08) !important;
+    box-shadow: 0 8px 24px rgba(15, 23, 42, 0.04) !important;
+}
+
+html[data-theme="light"] .dashboard-ranking-card:hover {
+    border-color: rgba(255, 107, 53, 0.25) !important;
+}
+
+html[data-theme="light"] .dashboard-ranking-head {
+    border-bottom: 1px solid rgba(15, 23, 42, 0.06) !important;
+}
+
+html[data-theme="light"] .dashboard-ranking-head h3 {
+    color: #0f172a !important;
+}
+
+html[data-theme="light"] .dashboard-ranking-position {
+    background: rgba(15, 23, 42, 0.04) !important;
+    color: #475569 !important;
+}
+
+html[data-theme="light"] .dashboard-ranking-item:nth-child(1) .dashboard-ranking-position {
+    background: rgba(255, 107, 53, 0.14) !important;
+    color: #c2410c !important;
+}
+
+html[data-theme="light"] .dashboard-ranking-link {
+    background: rgba(15, 23, 42, 0.01) !important;
+    border-color: rgba(15, 23, 42, 0.05) !important;
+}
+
+html[data-theme="light"] .dashboard-ranking-link:hover {
+    background: rgba(15, 23, 42, 0.03) !important;
+    border-color: rgba(255, 107, 53, 0.2) !important;
+}
+
+html[data-theme="light"] .dashboard-ranking-copy strong {
+    color: #0f172a !important;
+}
+
+html[data-theme="light"] .dashboard-ranking-copy small {
+    color: #64748b !important;
+}
+
+html[data-theme="light"] .dashboard-ranking-value {
+    color: #0f172a !important;
+}
+
+html[data-theme="light"] .dashboard-ranking-empty {
+    color: #64748b !important;
+}
+
+/* ========================================================
+   FLEXS Premium - Settings Hub & Document Types Light Theme Redesign
+   ======================================================== */
+
+/* Contenedor Principal de Configuración */
+html[data-theme="light"] .settings-hub {
+    background:
+        radial-gradient(circle at top right, rgba(255, 107, 53, 0.03), transparent 30%),
+        linear-gradient(180deg, rgba(15, 23, 42, 0.01), rgba(15, 23, 42, 0.02)) !important;
+    border: none !important;
+}
+
+/* Tarjetas y Héroe de Configuración */
+html[data-theme="light"] .settings-hero,
+html[data-theme="light"] .settings-section,
+html[data-theme="light"] .settings-form-card,
+html[data-theme="light"] .settings-link-card {
+    border: 1px solid rgba(15, 23, 42, 0.08) !important;
+    background: rgba(255, 255, 255, 0.8) !important;
+    box-shadow: 0 10px 22px rgba(15, 23, 42, 0.04) !important;
+}
+
+html[data-theme="light"] .settings-eyebrow {
+    color: #64748b !important;
+}
+
+html[data-theme="light"] .settings-hero h2 {
+    color: #0f172a !important;
+}
+
+html[data-theme="light"] .settings-hero-copy {
+    color: #475569 !important;
+}
+
+html[data-theme="light"] .settings-hero-badge {
+    border: 1px solid rgba(15, 23, 42, 0.08) !important;
+    background: rgba(15, 23, 42, 0.02) !important;
+    color: #334155 !important;
+}
+
+html[data-theme="light"] .settings-section-header {
+    border-bottom: 1px solid rgba(15, 23, 42, 0.08) !important;
+}
+
+html[data-theme="light"] .settings-section-header h3 {
+    color: #0f172a !important;
+}
+
+html[data-theme="light"] .settings-section-header p {
+    color: #475569 !important;
+}
+
+/* Tarjetas de Accesos Clave */
+html[data-theme="light"] .settings-link-icon {
+    background: rgba(255, 107, 53, 0.1) !important;
+    border: 1px solid rgba(255, 107, 53, 0.25) !important;
+    color: var(--color-primary-dark) !important;
+}
+
+html[data-theme="light"] .settings-link-kicker {
+    color: color-mix(in srgb, var(--color-primary) 85%, #0f172a) !important;
+}
+
+html[data-theme="light"] .settings-link-card h4,
+html[data-theme="light"] .settings-form-card h4 {
+    color: #0f172a !important;
+}
+
+html[data-theme="light"] .settings-link-card p {
+    color: #475569 !important;
+}
+
+/* Conmutadores y Formulario */
+html[data-theme="light"] .settings-toggle {
+    border-bottom: 1px solid rgba(15, 23, 42, 0.06) !important;
+}
+
+html[data-theme="light"] .settings-toggle strong {
+    color: #0f172a !important;
+}
+
+html[data-theme="light"] .settings-toggle small {
+    color: #64748b !important;
+}
+
+/* Tipos de Documentos y Métricas */
+html[data-theme="light"] .doc-type-metric,
+html[data-theme="light"] .doc-type-overview-card,
+html[data-theme="light"] .doc-type-card {
+    border: 1px solid rgba(15, 23, 42, 0.08) !important;
+    background: rgba(255, 255, 255, 0.8) !important;
+    box-shadow: 0 10px 22px rgba(15, 23, 42, 0.04) !important;
+}
+
+html[data-theme="light"] .doc-type-metric-label,
+html[data-theme="light"] .doc-type-kicker,
+html[data-theme="light"] .doc-type-info-label,
+html[data-theme="light"] .doc-type-number-label {
+    color: #64748b !important;
+}
+
+html[data-theme="light"] .doc-type-metric-value {
+    color: #0f172a !important;
+}
+
+html[data-theme="light"] .doc-type-metric small,
+html[data-theme="light"] .doc-type-number-block small,
+html[data-theme="light"] .doc-type-inline-help,
+html[data-theme="light"] .doc-type-overview-copy {
+    color: #475569 !important;
+}
+
+/* ========================================================
+   FLEXS Premium - Clients Section Light Theme Redesign
+   ======================================================== */
+
+/* Panel Superior de Clientes */
+html[data-theme="light"] .client-module-shell {
+    background:
+        radial-gradient(circle at top right, rgba(255, 107, 53, 0.03), transparent 24%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(248, 250, 252, 0.96)) !important;
+    border: 1px solid rgba(15, 23, 42, 0.08) !important;
+    box-shadow: 0 10px 30px rgba(15, 23, 42, 0.03) !important;
+}
+
+html[data-theme="light"] .client-module-ribbon {
+    background: rgba(15, 23, 42, 0.02) !important;
+    border: 1px solid rgba(15, 23, 42, 0.08) !important;
+    color: #475569 !important;
+}
+
+html[data-theme="light"] .client-module-icon {
+    background:
+        radial-gradient(circle at 30% 30%, rgba(255, 107, 53, 0.12), transparent 58%),
+        rgba(15, 23, 42, 0.02) !important;
+    border: 1px solid rgba(15, 23, 42, 0.08) !important;
+    color: var(--color-primary-dark) !important;
+}
+
+html[data-theme="light"] .client-module-kicker {
+    color: #64748b !important;
+}
+
+html[data-theme="light"] .client-module-copy h2 {
+    color: #0f172a !important;
+}
+
+html[data-theme="light"] .client-module-copy p {
+    color: #475569 !important;
+}
+
+html[data-theme="light"] .client-module-company {
+    background: rgba(15, 23, 42, 0.02) !important;
+    border: 1px solid rgba(15, 23, 42, 0.08) !important;
+}
+
+html[data-theme="light"] .client-module-company span {
+    color: #64748b !important;
+}
+
+html[data-theme="light"] .client-module-company strong {
+    color: #0f172a !important;
+}
+
+/* Tarjetas de Navegación del Panel */
+html[data-theme="light"] .client-module-card {
+    border: 1px solid rgba(15, 23, 42, 0.08) !important;
+    background: rgba(255, 255, 255, 0.75) !important;
+    color: #334155 !important;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8) !important;
+    min-height: 86px !important;
+}
+
+html[data-theme="light"] .client-module-card:hover {
+    background: rgba(15, 23, 42, 0.03) !important;
+    border-color: rgba(15, 23, 42, 0.14) !important;
+}
+
+html[data-theme="light"] .client-module-card.is-active {
+    background: linear-gradient(135deg, rgba(255, 107, 53, 0.08), rgba(255, 255, 255, 0.04)) !important;
+    border-color: rgba(255, 107, 53, 0.28) !important;
+    box-shadow: 0 10px 24px rgba(15, 23, 42, 0.04) !important;
+}
+
+html[data-theme="light"] .client-module-card-icon {
+    background: rgba(15, 23, 42, 0.04) !important;
+    border: 1px solid rgba(15, 23, 42, 0.08) !important;
+    color: #475569 !important;
+}
+
+html[data-theme="light"] .client-module-card.is-active .client-module-card-icon {
+    background: linear-gradient(135deg, rgba(255, 107, 53, 0.14), rgba(255, 255, 255, 0.08)) !important;
+    border-color: rgba(255, 107, 53, 0.22) !important;
+    color: var(--color-primary-dark) !important;
+}
+
+html[data-theme="light"] .client-module-card-label {
+    color: #64748b !important;
+}
+
+html[data-theme="light"] .client-module-card strong {
+    color: #0f172a !important;
+}
+
+html[data-theme="light"] .client-module-card small {
+    color: #475569 !important;
+}
+
+/* Contenedor del Formulario "Agregar un cliente" */
+html[data-theme="light"] .client-flat-card {
+    background: #ffffff !important;
+    border: 1px solid rgba(15, 23, 42, 0.08) !important;
+    box-shadow: 0 10px 30px rgba(15, 23, 42, 0.04) !important;
+}
+
+html[data-theme="light"] .client-flat-heading {
+    background: linear-gradient(180deg, rgba(255, 107, 53, 0.08), rgba(255, 107, 53, 0.03)) !important;
+    border-bottom: 1px solid rgba(255, 107, 53, 0.16) !important;
+    color: #0f172a !important;
+}
+
+html[data-theme="light"] .client-flat-heading-icon {
+    background: #ffffff !important;
+    border: 1px solid rgba(15, 23, 42, 0.08) !important;
+    color: var(--color-primary-dark) !important;
+}
+
+html[data-theme="light"] .client-flat-heading h2 {
+    color: #0f172a !important;
+}
+
+html[data-theme="light"] .client-flat-heading p {
+    color: #475569 !important;
+}
+
+html[data-theme="light"] .client-flat-form {
+    background:
+        radial-gradient(circle at top right, rgba(255, 107, 53, 0.04), transparent 30%),
+        #ffffff !important;
+    color: #0f172a !important;
+}
+
+html[data-theme="light"] .client-flat-section-label {
+    background: rgba(255, 107, 53, 0.08) !important;
+    color: var(--color-primary-dark) !important;
+    border-left-color: var(--color-primary) !important;
+}
+
+html[data-theme="light"] .client-flat-field .form-label {
+    color: #0f172a !important;
+}
+
+html[data-theme="light"] .client-flat-form .form-input,
+html[data-theme="light"] .client-flat-form .form-select,
+html[data-theme="light"] .client-flat-form .form-textarea {
+    background: #ffffff !important;
+    border: 1px solid #cbd5e1 !important;
+    color: #0f172a !important;
+}
+
+html[data-theme="light"] .client-flat-form .form-input:focus,
+html[data-theme="light"] .client-flat-form .form-select:focus,
+html[data-theme="light"] .client-flat-form .form-textarea:focus {
+    border-color: var(--color-primary) !important;
+    background: #ffffff !important;
+    box-shadow: 0 0 0 3px rgba(255, 107, 53, 0.15) !important;
+}
+
+html[data-theme="light"] .client-flat-note,
+html[data-theme="light"] .client-flat-form .text-muted {
+    color: #475569 !important;
+}
+
+html[data-theme="light"] .client-flat-hint {
+    color: #334155 !important;
+}
+
+html[data-theme="light"] .client-flat-hint-icon {
+    background: var(--color-primary) !important;
+    color: #fff !important;
+}
+
+html[data-theme="light"] .client-flat-static {
+    border: 1px solid rgba(15, 23, 42, 0.08) !important;
+    background: rgba(15, 23, 42, 0.02) !important;
+    color: #475569 !important;
+}
+
+html[data-theme="light"] .client-flat-static strong {
+    color: #0f172a !important;
+}
+
+html[data-theme="light"] .client-flat-actions {
+    border-top: 1px solid rgba(15, 23, 42, 0.08) !important;
+}
+
+/* Opciones Avanzadas, Vínculos y Auditoría */
+html[data-theme="light"] .client-flat-advanced {
+    border: 1px solid rgba(15, 23, 42, 0.08) !important;
+    background: rgba(15, 23, 42, 0.01) !important;
+}
+
+html[data-theme="light"] .client-company-links-panel,
+html[data-theme="light"] .client-company-summary {
+    border: 1px solid rgba(15, 23, 42, 0.08) !important;
+    background: rgba(15, 23, 42, 0.01) !important;
+    color: #0f172a !important;
+}
+
+html[data-theme="light"] .client-company-links-header strong,
+html[data-theme="light"] .client-company-summary-head h3,
+html[data-theme="light"] .client-company-link-topline strong {
+    color: #0f172a !important;
+}
+
+html[data-theme="light"] .client-company-links-header p,
+html[data-theme="light"] .client-company-summary-head p,
+html[data-theme="light"] .client-company-link-copy small,
+html[data-theme="light"] .client-audit-item small {
+    color: #475569 !important;
+}
+
+html[data-theme="light"] .client-company-link-card {
+    border: 1px solid rgba(15, 23, 42, 0.08) !important;
+    background: rgba(255, 255, 255, 0.8) !important;
+}
+
+html[data-theme="light"] .client-company-link-card.is-selected {
+    background: linear-gradient(180deg, rgba(255, 107, 53, 0.06), rgba(255, 255, 255, 0.9)) !important;
+    border-color: rgba(255, 107, 53, 0.35) !important;
+}
+
+html[data-theme="light"] .client-audit-item {
+    border: 1px solid rgba(15, 23, 42, 0.08) !important;
+    background: rgba(15, 23, 42, 0.01) !important;
+    color: #0f172a !important;
+}
+
+html[data-theme="light"] .client-flat-page .admin-table {
+    color: #1e293b !important;
+}
+
+html[data-theme="light"] .client-flat-page .admin-table th {
+    background: rgba(255, 107, 53, 0.08) !important;
+    color: var(--color-primary-dark) !important;
+}
+
+html[data-theme="light"] .client-flat-form .form-input::placeholder,
+html[data-theme="light"] .client-flat-form .form-textarea::placeholder {
+    color: #94a3b8 !important;
+}
+
+/* ========================================================
+   FLEXS Premium - Orders, Purchases & Reports Light Theme Redesign
+   ======================================================== */
+
+/* Generales de Secciones y Dashboards de Soporte */
+html[data-theme="light"] .dashboard-section {
+    background: #ffffff !important;
+    border: 1px solid rgba(15, 23, 42, 0.08) !important;
+    box-shadow: 0 10px 30px rgba(15, 23, 42, 0.03) !important;
+}
+
+html[data-theme="light"] .dashboard-section h2 {
+    color: #0f172a !important;
+    border-bottom: 1px solid rgba(15, 23, 42, 0.08) !important;
+}
+
+html[data-theme="light"] .dashboard-section strong {
+    color: #0f172a !important;
+}
+
+/* Fichas de Venta y Páginas de Orden (Detalles y Workspace) */
+html[data-theme="light"] .order-detail-page,
+html[data-theme="light"] .sales-record-page,
+html[data-theme="light"] .order-record-page {
+    background:
+        radial-gradient(circle at top right, rgba(255, 107, 53, 0.04), transparent 34%),
+        #f8fafc !important;
+}
+
+html[data-theme="light"] .order-detail-hero {
+    background:
+        radial-gradient(circle at top left, rgba(255, 107, 53, 0.06), transparent 36%),
+        #ffffff !important;
+    border: 1px solid rgba(15, 23, 42, 0.08) !important;
+    box-shadow: 0 10px 30px rgba(15, 23, 42, 0.03) !important;
+}
+
+html[data-theme="light"] .order-detail-hero h2 {
+    color: #0f172a !important;
+}
+
+html[data-theme="light"] .order-detail-eyebrow {
+    color: #64748b !important;
+}
+
+html[data-theme="light"] .order-chip {
+    background: rgba(15, 23, 42, 0.02) !important;
+    border: 1px solid rgba(15, 23, 42, 0.08) !important;
+    color: #475569 !important;
+}
+
+html[data-theme="light"] .order-stat-card {
+    background: rgba(15, 23, 42, 0.01) !important;
+    border: 1px solid rgba(15, 23, 42, 0.06) !important;
+}
+
+html[data-theme="light"] .order-stat-card.is-total {
+    background: linear-gradient(180deg, rgba(255, 107, 53, 0.08), rgba(255, 107, 53, 0.03)) !important;
+    border-color: rgba(255, 107, 53, 0.16) !important;
+}
+
+html[data-theme="light"] .order-stat-card.is-paid {
+    background: linear-gradient(180deg, rgba(25, 209, 127, 0.08), rgba(25, 209, 127, 0.03)) !important;
+    border-color: rgba(25, 209, 127, 0.16) !important;
+}
+
+html[data-theme="light"] .order-stat-card.is-pending {
+    background: linear-gradient(180deg, rgba(255, 193, 7, 0.08), rgba(255, 193, 7, 0.03)) !important;
+    border-color: rgba(255, 193, 7, 0.16) !important;
+}
+
+html[data-theme="light"] .order-stat-label {
+    color: #475569 !important;
+}
+
+html[data-theme="light"] .order-stat-value {
+    color: #0f172a !important;
+}
+
+html[data-theme="light"] .order-card,
+html[data-theme="light"] .sales-record-shell,
+html[data-theme="light"] .sales-record-card,
+html[data-theme="light"] .sales-record-panel {
+    background: #ffffff !important;
+    border: 1px solid rgba(15, 23, 42, 0.08) !important;
+    box-shadow: 0 10px 30px rgba(15, 23, 42, 0.03) !important;
+}
+
+html[data-theme="light"] .order-card-header,
+html[data-theme="light"] .sales-record-header {
+    border-bottom-color: rgba(15, 23, 42, 0.08) !important;
+}
+
+html[data-theme="light"] .order-card-header h3,
+html[data-theme="light"] .order-card-header h4,
+html[data-theme="light"] .sales-record-panel-title {
+    color: #0f172a !important;
+}
+
+html[data-theme="light"] .order-card-subtitle,
+html[data-theme="light"] .sales-record-subcopy,
+html[data-theme="light"] .sales-record-card-head p {
+    color: #475569 !important;
+}
+
+html[data-theme="light"] .order-info-tile {
+    background: rgba(15, 23, 42, 0.02) !important;
+    border: 1px solid rgba(15, 23, 42, 0.06) !important;
+}
+
+html[data-theme="light"] .order-info-label {
+    color: #475569 !important;
+}
+
+html[data-theme="light"] .order-info-value {
+    color: #0f172a !important;
+}
+
+html[data-theme="light"] .order-info-help {
+    color: #64748b !important;
+}
+
+html[data-theme="light"] .order-add-item-form {
+    border-top-color: rgba(15, 23, 42, 0.08) !important;
+}
+
+html[data-theme="light"] .order-note-card {
+    background: rgba(15, 23, 42, 0.01) !important;
+    border: 1px solid rgba(15, 23, 42, 0.06) !important;
+}
+
+html[data-theme="light"] .order-note-card.is-internal {
+    background: rgba(255, 107, 53, 0.04) !important;
+    border-color: rgba(255, 107, 53, 0.16) !important;
+}
+
+html[data-theme="light"] .order-note-card p {
+    color: #334155 !important;
+}
+
+/* Modificadores Especiales en Plantilla orders/detail.html */
+html[data-theme="light"] .order-record-page .order-record-shell {
+    background: #ffffff !important;
+    border-color: rgba(15, 23, 42, 0.08) !important;
+    box-shadow: 0 10px 30px rgba(15, 23, 42, 0.04) !important;
+}
+
+html[data-theme="light"] .order-record-page .order-record-header {
+    background: rgba(15, 23, 42, 0.01) !important;
+    border-bottom-color: rgba(15, 23, 42, 0.08) !important;
+}
+
+html[data-theme="light"] .order-record-page .sales-record-icon {
+    background: rgba(15, 23, 42, 0.02) !important;
+    border-color: rgba(15, 23, 42, 0.08) !important;
+    color: #0f172a !important;
+}
+
+html[data-theme="light"] .order-record-page .sales-record-heading {
+    color: #0f172a !important;
+}
+
+html[data-theme="light"] .order-record-page .sales-record-subcopy {
+    color: #475569 !important;
+}
+
+html[data-theme="light"] .order-record-page .sales-record-panel-eyebrow,
+html[data-theme="light"] .order-record-page .sales-record-card-head h3,
+html[data-theme="light"] .order-record-page .order-classic-toggle > summary {
+    background: rgba(255, 107, 53, 0.08) !important;
+    color: var(--color-primary-dark) !important;
+}
+
+html[data-theme="light"] .order-record-page .sales-record-field-label {
+    color: #475569 !important;
+}
+
+html[data-theme="light"] .order-record-page .sales-record-field-value {
+    color: #0f172a !important;
+}
+
+html[data-theme="light"] .order-record-page .sales-record-card {
+    border-top-color: rgba(15, 23, 42, 0.08) !important;
+}
+
+html[data-theme="light"] .order-record-page .sales-record-note-box {
+    background: rgba(15, 23, 42, 0.01) !important;
+    border-color: rgba(15, 23, 42, 0.08) !important;
+    color: #0f172a !important;
+}
+
+html[data-theme="light"] .order-record-page .sales-record-summary-row.is-total strong {
+    color: #0f172a !important;
+}
+
+html[data-theme="light"] .sales-record-relate-menu {
+    background: #ffffff !important;
+    border-color: rgba(15, 23, 42, 0.08) !important;
+    box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08) !important;
+}
+
+html[data-theme="light"] .sales-record-relate-btn {
+    background: #f8fafc !important;
+    border-color: rgba(15, 23, 42, 0.08) !important;
+    color: #0f172a !important;
+}
+
+html[data-theme="light"] .sales-record-relate-btn:hover {
+    background: rgba(255, 107, 53, 0.06) !important;
+    border-color: rgba(255, 107, 53, 0.3) !important;
+    color: var(--color-primary-dark) !important;
+}
+
+/* Pasos del Circuito Comercial (Sales & Request Flows) */
+html[data-theme="light"] .sales-flow-step,
+html[data-theme="light"] .request-flow-card {
+    background: rgba(15, 23, 42, 0.01) !important;
+    border: 1px solid rgba(15, 23, 42, 0.06) !important;
+}
+
+html[data-theme="light"] .sales-flow-step strong,
+html[data-theme="light"] .request-flow-card strong {
+    color: #0f172a !important;
+}
+
+html[data-theme="light"] .sales-flow-step-label,
+html[data-theme="light"] .sales-flow-step p,
+html[data-theme="light"] .request-flow-card small {
+    color: #475569 !important;
+}
+
+html[data-theme="light"] .request-flow-kicker {
+    color: var(--color-primary-dark) !important;
+    background: rgba(255, 107, 53, 0.08) !important;
+    border-color: rgba(255, 107, 53, 0.16) !important;
+}
+
+html[data-theme="light"] .request-flow-meta span {
+    color: #475569 !important;
+    background: rgba(15, 23, 42, 0.02) !important;
+    border-color: rgba(15, 23, 42, 0.06) !important;
+}
+
+html[data-theme="light"] .sales-flow-step.is-done,
+html[data-theme="light"] .request-flow-card.is-ready {
+    border-color: rgba(22, 163, 74, 0.28) !important;
+    background: rgba(22, 163, 74, 0.04) !important;
+}
+
+html[data-theme="light"] .sales-flow-step.is-current,
+html[data-theme="light"] .request-flow-card.is-live {
+    border-color: rgba(217, 119, 6, 0.28) !important;
+    background: rgba(217, 119, 6, 0.04) !important;
+}
+
+html[data-theme="light"] .sales-flow-step.is-warning {
+    border-color: rgba(234, 88, 12, 0.28) !important;
+    background: rgba(234, 88, 12, 0.04) !important;
+}
+
+html[data-theme="light"] .sales-flow-step.is-danger {
+    border-color: rgba(220, 38, 38, 0.28) !important;
+    background: rgba(220, 38, 38, 0.04) !important;
+}
+
+html[data-theme="light"] .request-flow-card.is-docs {
+    border-color: rgba(37, 99, 235, 0.28) !important;
+    background: rgba(37, 99, 235, 0.04) !important;
+}
+
+/* Reportes Clientes y Vistas Independientes */
+html[data-theme="light"] .client-reports-nav-item {
+    background: rgba(15, 23, 42, 0.02) !important;
+    border-color: rgba(15, 23, 42, 0.08) !important;
+    color: #475569 !important;
+}
+
+html[data-theme="light"] .client-reports-nav-item:hover,
+html[data-theme="light"] .client-reports-nav-item.is-active {
+    color: var(--color-primary-dark) !important;
+    border-color: rgba(255, 107, 53, 0.28) !important;
+    background: rgba(255, 107, 53, 0.06) !important;
+}
+
+html[data-theme="light"] .client-report-card {
+    background: #ffffff !important;
+    border: 1px solid rgba(15, 23, 42, 0.08) !important;
+    box-shadow: 0 10px 30px rgba(15, 23, 42, 0.03) !important;
+    color: #0f172a !important;
+}
+
+html[data-theme="light"] .client-report-card-icon {
+    background: rgba(255, 107, 53, 0.08) !important;
+    border-color: rgba(255, 107, 53, 0.16) !important;
+    color: var(--color-primary-dark) !important;
+}
+
+html[data-theme="light"] .client-report-card-copy h3 {
+    color: #0f172a !important;
+}
+
+html[data-theme="light"] .client-report-card-copy p {
+    color: #475569 !important;
+}
+
+html[data-theme="light"] .report-standalone-card {
+    background: #ffffff !important;
+    border: 1px solid rgba(15, 23, 42, 0.08) !important;
+    box-shadow: 0 10px 30px rgba(15, 23, 42, 0.04) !important;
+}
+
+html[data-theme="light"] .report-standalone-head {
+    border-bottom-color: rgba(15, 23, 42, 0.08) !important;
+}
+
+html[data-theme="light"] .report-standalone-title h2 {
+    color: #0f172a !important;
+}
+
+html[data-theme="light"] .report-standalone-title p {
+    color: #475569 !important;
+}
+
+/* Modificadores en Detalle de Solicitudes (order_requests/detail.html) */
+html[data-theme="light"] .admin-detail-page .admin-card {
+    background: #ffffff !important;
+    border: 1px solid rgba(15, 23, 42, 0.08) !important;
+    box-shadow: 0 10px 30px rgba(15, 23, 42, 0.03) !important;
+}
+
+html[data-theme="light"] .admin-detail-page .admin-card h2,
+html[data-theme="light"] .admin-detail-page .admin-card h3 {
+    color: #0f172a !important;
+}
+
+html[data-theme="light"] .admin-detail-page .admin-card p {
+    color: #475569 !important;
+}
+
+html[data-theme="light"] .detail-grid strong {
+    color: #0f172a !important;
+}
+
+html[data-theme="light"] .detail-grid p {
+    color: #334155 !important;
+}
+
+html[data-theme="light"] .proposal-history li {
+    border-bottom-color: rgba(15, 23, 42, 0.08) !important;
+}
+
+html[data-theme="light"] .proposal-history li strong {
+    color: #0f172a !important;
+}
+
+html[data-theme="light"] .proposal-history li small {
+    color: #475569 !important;
+}
+
+html[data-theme="light"] .proposal-total strong {
+    color: #0f172a !important;
+}
+
+/* Abrazaderas Técnicas y Forma en Solicitudes de Cotización */
+html[data-theme="light"] .shape-badge {
+    background: rgba(15, 23, 42, 0.02) !important;
+    border-color: rgba(15, 23, 42, 0.08) !important;
+    color: #475569 !important;
+}
+
+html[data-theme="light"] .shape-badge svg {
+    color: #334155 !important;
+}
+
+html[data-theme="light"] .shape-plana {
+    border-color: rgba(2, 132, 199, 0.25) !important;
+    background: rgba(2, 132, 199, 0.08) !important;
+    color: #0284c7 !important;
+}
+
+html[data-theme="light"] .shape-semicurva {
+    border-color: rgba(225, 29, 72, 0.25) !important;
+    background: rgba(225, 29, 72, 0.08) !important;
+    color: #e11d48 !important;
+}
+
+html[data-theme="light"] .shape-curva {
+    border-color: rgba(234, 88, 12, 0.25) !important;
+    background: rgba(234, 88, 12, 0.08) !important;
+    color: #ea580c !important;
+}
+
+/* Control Board de Productos y Paneles Bulk */
+html[data-theme="light"] .products-control-board {
+    border-bottom: 1px solid rgba(15, 23, 42, 0.08) !important;
+    background: rgba(15, 23, 42, 0.01) !important;
+}
+
+html[data-theme="light"] .products-bulk-panel {
+    background: rgba(15, 23, 42, 0.02) !important;
+    border: 1px solid rgba(15, 23, 42, 0.08) !important;
+}
+
+/* KPI de Proveedores y Paneles de Operación masiva */
+html[data-theme="light"] .suppliers-control-board {
+    border-bottom: 1px solid rgba(15, 23, 42, 0.08) !important;
+    background: rgba(15, 23, 42, 0.01) !important;
+}
+
+html[data-theme="light"] .supplier-active-toggle {
+    border: 1px solid #cbd5e1 !important;
+    background: #ffffff !important;
+    color: #0f172a !important;
+}
+
+html[data-theme="light"] .supplier-name-cell,
+html[data-theme="light"] .supplier-number-cell {
+    color: #0f172a !important;
+}
+
+html[data-theme="light"] .suppliers-section-heading {
+    color: #0f172a !important;
+}
+
+html[data-theme="light"] .supplier-kpi-card,
+html[data-theme="light"] .supplier-ops-card {
+    background: #ffffff !important;
+    border: 1px solid rgba(15, 23, 42, 0.08) !important;
+    box-shadow: 0 4px 18px rgba(15, 23, 42, 0.02) !important;
+    color: #0f172a !important;
+}
+
+html[data-theme="light"] .supplier-kpi-card .label {
+    color: #475569 !important;
+}
+
+html[data-theme="light"] .supplier-kpi-card .value {
+    color: #0f172a !important;
+}
+
+html[data-theme="light"] .supplier-ops-card h4 {
+    color: #0f172a !important;
+}
+
+/* Control Board de Pagos y Resumen de Tesorería */
+html[data-theme="light"] .payments-control-board {
+    border-bottom: 1px solid rgba(15, 23, 42, 0.08) !important;
+    background: rgba(15, 23, 42, 0.01) !important;
+}
+
+html[data-theme="light"] .payments-section-heading {
+    color: #0f172a !important;
+}
+
+html[data-theme="light"] .payments-summary-toolbar {
+    border-bottom: 1px solid rgba(15, 23, 42, 0.08) !important;
+}
+
+html[data-theme="light"] .payments-create-panel {
+    border-bottom: 1px solid rgba(15, 23, 42, 0.08) !important;
+    background: rgba(15, 23, 42, 0.01) !important;
+}
+
+/* ========================================================
+   FLEXS Premium - Sales Workspace (Seguimiento de ventas) Light Theme Redesign
+   ======================================================== */
+
+html[data-theme="light"] .sales-workspace-page {
+    background: #ffffff !important;
+    border: 1px solid rgba(15, 23, 42, 0.08) !important;
+    box-shadow: 0 10px 30px rgba(15, 23, 42, 0.03) !important;
+}
+
+html[data-theme="light"] .sales-hub-intro {
+    background: rgba(255, 107, 53, 0.04) !important;
+    border-bottom: 1px solid rgba(255, 107, 53, 0.16) !important;
+    color: #0f172a !important;
+}
+
+html[data-theme="light"] .sales-workspace-shell {
+    background: rgba(15, 23, 42, 0.01) !important;
+    border: 1px solid rgba(15, 23, 42, 0.06) !important;
+    box-shadow: none !important;
+}
+
+html[data-theme="light"] .sales-workspace-head h3 {
+    color: #0f172a !important;
+}
+
+html[data-theme="light"] .sales-workspace-head p {
+    color: #475569 !important;
+}
+
+html[data-theme="light"] .sales-workspace-kicker {
+    background: rgba(255, 107, 53, 0.08) !important;
+    border: 1px solid rgba(255, 107, 53, 0.2) !important;
+    color: var(--color-primary-dark) !important;
+}
+
+html[data-theme="light"] .sales-workspace-card {
+    background: #ffffff !important;
+    border: 1px solid rgba(15, 23, 42, 0.08) !important;
+    box-shadow: 0 4px 12px rgba(15, 23, 42, 0.02) !important;
+}
+
+html[data-theme="light"] .sales-workspace-card:hover {
+    background: rgba(15, 23, 42, 0.02) !important;
+    border-color: rgba(15, 23, 42, 0.14) !important;
+    transform: translateY(-1px) !important;
+}
+
+html[data-theme="light"] .sales-workspace-card.is-active {
+    border-color: rgba(255, 107, 53, 0.35) !important;
+    background: linear-gradient(180deg, rgba(255, 107, 53, 0.06), rgba(255, 255, 255, 0.9)) !important;
+    box-shadow: 0 4px 18px rgba(255, 107, 53, 0.08) !important;
+}
+
+html[data-theme="light"] .sales-workspace-label {
+    color: #475569 !important;
+}
+
+html[data-theme="light"] .sales-workspace-value {
+    color: #0f172a !important;
+}
+
+html[data-theme="light"] .sales-workspace-card.is-active .sales-workspace-value {
+    color: var(--color-primary-dark) !important;
+}
+
+html[data-theme="light"] .sales-workspace-card small {
+    color: #64748b !important;
+}
+
+html[data-theme="light"] .sales-hub-table-wrap {
+    border-top: 1px solid rgba(15, 23, 42, 0.08) !important;
+}
+
+html[data-theme="light"] .sales-hub-table-wrap .admin-table th:last-child {
+    background: #f1f5f9 !important;
+    box-shadow: -12px 0 18px rgba(15, 23, 42, 0.03) !important;
+}
+
+html[data-theme="light"] .sales-hub-table-wrap .admin-table td:last-child {
+    background: #ffffff !important;
+    box-shadow: -12px 0 18px rgba(15, 23, 42, 0.03) !important;
+}
+
+html[data-theme="light"] .sales-hub-table-wrap .admin-table tr:hover td:last-child {
+    background: #fdf5f2 !important;
+}
+
+html[data-theme="light"] .sales-hub-client-link,
+html[data-theme="light"] .sales-hub-client-name {
+    color: #0f172a !important;
+}
+
+html[data-theme="light"] .sales-hub-client-link {
+    border-bottom-color: rgba(255, 107, 53, 0.42) !important;
+}
+
+html[data-theme="light"] .sales-hub-client-link:hover {
+    color: var(--color-primary-dark) !important;
+    border-bottom-color: var(--color-primary-dark) !important;
+}
+
+html[data-theme="light"] .sales-hub-record {
+    color: #475569 !important;
+}
+
+html[data-theme="light"] .sales-hub-next-badge {
+    border: 1px solid rgba(255, 107, 53, 0.28) !important;
+    background: rgba(255, 107, 53, 0.08) !important;
+    color: var(--color-primary-dark) !important;
+}
+
+html[data-theme="light"] .sales-hub-amount-cell {
+    color: #0f172a !important;
+}
+
+html[data-theme="light"] .sales-hub-summary {
+    color: #475569 !important;
+}
+
+html[data-theme="light"] .sales-hub-docs-popover {
+    background: #ffffff !important;
+    border-color: rgba(15, 23, 42, 0.08) !important;
+    box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08) !important;
+}
+
+html[data-theme="light"] .sales-hub-docs-item {
+    background: #f8fafc !important;
+    border-color: rgba(15, 23, 42, 0.08) !important;
+    color: #0f172a !important;
+}
+
+html[data-theme="light"] .sales-hub-docs-item:hover {
+    border-color: rgba(255, 107, 53, 0.3) !important;
+    background: rgba(255, 107, 53, 0.06) !important;
+    color: var(--color-primary-dark) !important;
+}
+
+
+

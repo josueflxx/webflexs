@@ -4,6 +4,12 @@
 
 <head>
     <meta charset="UTF-8">
+    <script>
+        (function() {
+            const theme = localStorage.getItem('theme') || 'dark';
+            document.documentElement.setAttribute('data-theme', theme);
+        })();
+    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Panel Admin{% endblock %} - FLEXS</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -207,6 +213,11 @@
                 </div>
                 <div class="header-user">
                     <div class="header-user-actions">
+                        <button class="theme-toggle-btn" id="themeToggle" type="button" aria-label="Cambiar tema">
+                            <svg viewBox="0 0 24 24" id="themeIcon">
+                                <!-- Cargar SVG dinámicamente -->
+                            </svg>
+                        </button>
                         <a
                             href="{% url 'catalog' %}"
                             class="btn btn-ghost header-user-link"
