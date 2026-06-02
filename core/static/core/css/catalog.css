@@ -3155,3 +3155,101 @@
     border-left-color: #ffffff;
 }
 
+/* ========================================================
+   FLEXS Premium - Catalog Light Mode Refinements
+   ======================================================== */
+html[data-theme="light"] {
+    /* 1. Catalog page background and wrappers */
+    .catalog-page {
+        background: linear-gradient(180deg, #ffffff 0%, #f1f5f9 38%, #e2e8f0 100%) !important;
+    }
+
+    /* 2. Catalog header banner */
+    .catalog-header {
+        background: var(--theme-card-bg) !important;
+        border: 1px solid var(--theme-card-border) !important;
+        box-shadow: 0 10px 30px rgba(15, 23, 42, 0.04) !important;
+        color: var(--theme-text) !important;
+    }
+
+    /* 3. Catalog header stats badges */
+    .header-stat {
+        background: rgba(15, 23, 42, 0.03) !important;
+        border: 1px solid rgba(15, 23, 42, 0.08) !important;
+        color: var(--theme-text-muted) !important;
+    }
+
+    .header-stat strong {
+        color: var(--color-primary-dark) !important;
+    }
+
+    /* 4. Product card image placeholder */
+    .product-placeholder-premium {
+        background: rgba(15, 23, 42, 0.02) !important;
+        border-bottom: 1px solid rgba(15, 23, 42, 0.06) !important;
+    }
+
+    /* 5. Placeholder SVG paths & gradients */
+    .product-placeholder-premium svg rect[fill*="camera-glow-grid"] {
+        fill: rgba(15, 23, 42, 0.01) !important;
+    }
+    
+    .product-placeholder-premium svg rect[stroke] {
+        stroke: rgba(15, 23, 42, 0.04) !important;
+    }
+
+    .product-placeholder-premium svg g rect {
+        stroke: rgba(15, 23, 42, 0.18) !important;
+        fill: rgba(15, 23, 42, 0.01) !important;
+    }
+
+    .product-placeholder-premium svg g circle {
+        fill: rgba(15, 23, 42, 0.1) !important;
+        stroke: rgba(15, 23, 42, 0.18) !important;
+    }
+
+    .product-placeholder-premium svg g path {
+        stroke: rgba(15, 23, 42, 0.18) !important;
+    }
+
+    /* 6. Sidebar filter sections background and border */
+    .filter-section {
+        background: rgba(15, 23, 42, 0.01) !important;
+        border: 1px solid rgba(15, 23, 42, 0.04) !important;
+        box-shadow: none !important;
+    }
+
+    /* 7. Catalog Toolbar dropdown & view mode */
+    .catalog-toolbar {
+        background: var(--theme-card-bg) !important;
+        border: 1px solid var(--theme-card-border) !important;
+    }
+
+    /* 8. Text overrides inside card details */
+    .product-sku {
+        color: var(--theme-text-muted) !important;
+    }
+    
+    .product-category-label {
+        color: var(--theme-text-muted) !important;
+        background: rgba(15, 23, 42, 0.03) !important;
+        border: 1px solid rgba(15, 23, 42, 0.06) !important;
+    }
+
+    .price-label {
+        color: var(--theme-text-muted) !important;
+    }
+
+    .price-final {
+        color: var(--theme-text) !important;
+    }
+    
+    /* Product list items */
+    .product-list-row {
+        background: var(--theme-card-bg) !important;
+        border: 1px solid var(--theme-card-border) !important;
+        color: var(--theme-text) !important;
+    }
+}
+
+
