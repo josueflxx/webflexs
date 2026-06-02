@@ -2175,4 +2175,51 @@ html[data-theme="light"] {
     .auth-footer {
         border-top: 1px solid var(--theme-card-border) !important;
     }
+
+    /* 7. Footer Light Mode Refinements */
+    .footer {
+        background: linear-gradient(180deg, #f8fafc 0%, #e2e8f0 100%) !important;
+        border-top: 1px solid rgba(15, 23, 42, 0.08) !important;
+    }
+    
+    .footer-section h4 {
+        color: var(--theme-text) !important;
+    }
+    
+    .footer-section p,
+    .footer-section a,
+    .footer-bottom {
+        color: var(--theme-text-muted) !important;
+    }
+    
+    .footer-section a:hover {
+        color: var(--color-primary-dark) !important;
+    }
+
+    .footer-bottom {
+        border-top: 1px solid rgba(15, 23, 42, 0.08) !important;
+    }
+
+    /* 8. Header Top & Nav Divider Refinements */
+    .header-top {
+        background: rgba(15, 23, 42, 0.03) !important;
+        border-bottom: 1px solid rgba(15, 23, 42, 0.08) !important;
+    }
+    
+    .header-contact a {
+        color: var(--theme-text-muted) !important;
+    }
+    
+    .header-contact a:hover {
+        color: var(--color-primary-dark) !important;
+    }
+    
+    .separator {
+        color: rgba(15, 23, 42, 0.15) !important;
+    }
+
+    .nav-divider {
+        background: rgba(15, 23, 42, 0.15) !important;
+    }
 }
+
