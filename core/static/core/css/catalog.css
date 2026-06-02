@@ -3190,27 +3190,29 @@ html[data-theme="light"] {
     }
 
     /* 5. Placeholder SVG paths & gradients */
-    .product-placeholder-premium svg rect[fill*="camera-glow-grid"] {
-        fill: rgba(15, 23, 42, 0.01) !important;
+    .product-placeholder-premium svg > rect:first-of-type {
+        fill: #f1f5f9 !important; /* Fondo gris claro suave y limpio */
     }
     
-    .product-placeholder-premium svg rect[stroke] {
-        stroke: rgba(15, 23, 42, 0.04) !important;
+    .product-placeholder-premium svg > rect:nth-of-type(2) {
+        fill: none !important;
+        stroke: rgba(15, 23, 42, 0.05) !important;
     }
 
     .product-placeholder-premium svg g rect {
-        stroke: rgba(15, 23, 42, 0.18) !important;
-        fill: rgba(15, 23, 42, 0.01) !important;
+        stroke: #94a3b8 !important; /* Trazos de cámara definidos en gris pizarra */
+        fill: #ffffff !important;   /* Cuerpo de cámara blanco */
     }
 
     .product-placeholder-premium svg g circle {
-        fill: rgba(15, 23, 42, 0.1) !important;
-        stroke: rgba(15, 23, 42, 0.18) !important;
+        fill: #e2e8f0 !important;   /* Lente de cámara gris suave */
+        stroke: #94a3b8 !important;
     }
 
     .product-placeholder-premium svg g path {
-        stroke: rgba(15, 23, 42, 0.18) !important;
+        stroke: #94a3b8 !important; /* Líneas internas de paisaje definidas */
     }
+
 
     /* 6. Sidebar filter sections background and border */
     .filter-section {
