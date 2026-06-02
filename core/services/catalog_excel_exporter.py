@@ -917,8 +917,8 @@ def _append_index_sheet(workbook, template, stats, generated_at):
 
     worksheet.freeze_panes = "A8"
     worksheet.column_dimensions["A"].width = 38
-    worksheet.column_dimensions["B"].width = 18
-    worksheet.column_dimensions["C"].width = 22
+    worksheet.column_dimensions["B"].width = 24
+    worksheet.column_dimensions["C"].width = 24
     max_link_len = 30
     for sheet_name in rows_by_sheet.keys():
         link_len = len(f"➜ Ver {sheet_name}")
