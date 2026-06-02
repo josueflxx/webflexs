@@ -3492,6 +3492,87 @@ html[data-theme="light"] .shape-curva {
     color: #ea580c !important;
 }
 
+/* ========================================================
+   FLEXS Premium - Main Catalog Page (/catalogo/) Light Theme Redesign
+   ======================================================== */
+
+html[data-theme="light"] .catalog-page {
+    background:
+        radial-gradient(circle at 8% -5%, rgba(255, 107, 53, 0.05), transparent 32%),
+        radial-gradient(circle at 92% 0%, rgba(23, 162, 184, 0.04), transparent 28%),
+        #f8fafc !important;
+    color: #0f172a !important;
+}
+
+html[data-theme="light"] .catalog-header {
+    background: #ffffff !important;
+    border: 1px solid rgba(15, 23, 42, 0.08) !important;
+    box-shadow: 0 10px 30px rgba(15, 23, 42, 0.03) !important;
+}
+
+html[data-theme="light"] .catalog-header h1 {
+    color: #0f172a !important;
+}
+
+html[data-theme="light"] .catalog-subtitle {
+    color: #475569 !important;
+}
+
+html[data-theme="light"] .catalog-header-stats {
+    color: #475569 !important;
+}
+
+html[data-theme="light"] .catalog-sidebar {
+    background: #ffffff !important;
+    border: 1px solid rgba(15, 23, 42, 0.08) !important;
+    box-shadow: 0 10px 30px rgba(15, 23, 42, 0.03) !important;
+}
+
+html[data-theme="light"] .filter-section {
+    background: rgba(15, 23, 42, 0.01) !important;
+    border: 1px solid rgba(15, 23, 42, 0.06) !important;
+    box-shadow: none !important;
+}
+
+html[data-theme="light"] .filter-section h3 {
+    color: var(--color-primary-dark) !important;
+    border-bottom: 1px solid rgba(255, 107, 53, 0.15) !important;
+}
+
+html[data-theme="light"] .filter-section .form-input {
+    background: #ffffff !important;
+    border: 1px solid #cbd5e1 !important;
+    color: #0f172a !important;
+}
+
+html[data-theme="light"] .filter-section .form-input:focus {
+    border-color: var(--color-primary) !important;
+    background: #ffffff !important;
+    box-shadow: 0 0 0 3px rgba(255, 107, 53, 0.15) !important;
+}
+
+html[data-theme="light"] .product-placeholder-premium {
+    background: #f1f5f9 !important;
+    border-bottom: 1px solid rgba(15, 23, 42, 0.06) !important;
+}
+
+html[data-theme="light"] .product-card {
+    background: #ffffff !important;
+    border: 1px solid rgba(15, 23, 42, 0.08) !important;
+    box-shadow: 0 8px 30px rgba(15, 23, 42, 0.03) !important;
+}
+
+html[data-theme="light"] .product-card:hover {
+    border-color: rgba(255, 107, 53, 0.35) !important;
+    box-shadow: 0 16px 36px rgba(15, 23, 42, 0.06), 0 0 20px rgba(255, 107, 53, 0.08) !important;
+}
+
+html[data-theme="light"] .product-image {
+    background: #f8fafc !important;
+    border-bottom-color: rgba(15, 23, 42, 0.06) !important;
+}
+
+
 
 
 
