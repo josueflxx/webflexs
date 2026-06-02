@@ -419,6 +419,371 @@ document.addEventListener('DOMContentLoaded', function () {
             img.style.transformOrigin = 'center center';
         });
     });
+
+    /* ========================================================
+       FLEXS Premium - Theme, Search, Toasts and Portal UX
+       ======================================================== */
+
+    // 1. Dual Core Theme Toggle (Modo Claro / Modo Oscuro)
+    const themeToggleBtn = document.getElementById('themeToggle');
+    const themeIcon = document.getElementById('themeIcon');
+
+    // SVGs for Sun and Moon
+    const sunIconPath = `<path d="M12 7a5 5 0 1 0 0 10 5 5 0 0 0 0-10zM12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"></path>`;
+    const moonIconPath = `<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>`;
+
+    function getPreferredTheme() {
+        return localStorage.getItem('theme') || 'dark';
+    }
+
+    function initTheme() {
+        const currentTheme = getPreferredTheme();
+        document.documentElement.setAttribute('data-theme', currentTheme);
+        if (themeIcon) {
+            themeIcon.setAttribute('fill', currentTheme === 'dark' ? 'currentColor' : 'none');
+            themeIcon.setAttribute('stroke', 'currentColor');
+            themeIcon.setAttribute('stroke-width', currentTheme === 'dark' ? '0' : '2');
+            themeIcon.innerHTML = currentTheme === 'dark' ? sunIconPath : moonIconPath;
+        }
+    }
+
+    if (themeToggleBtn && themeIcon) {
+        themeToggleBtn.addEventListener('click', function () {
+            const activeTheme = document.documentElement.getAttribute('data-theme') || 'dark';
+            const newTheme = activeTheme === 'dark' ? 'light' : 'dark';
+            
+            document.documentElement.setAttribute('data-theme', newTheme);
+            localStorage.setItem('theme', newTheme);
+
+            // Animate transition of the icon
+            themeIcon.style.transform = 'scale(0) rotate(-90deg)';
+            setTimeout(() => {
+                themeIcon.setAttribute('fill', newTheme === 'dark' ? 'currentColor' : 'none');
+                themeIcon.setAttribute('stroke', 'currentColor');
+                themeIcon.setAttribute('stroke-width', newTheme === 'dark' ? '0' : '2');
+                themeIcon.innerHTML = newTheme === 'dark' ? sunIconPath : moonIconPath;
+                themeIcon.style.transform = 'scale(1) rotate(0deg)';
+            }, 180);
+        });
+    }
+
+    initTheme();
+
+    // 2. Toast Notification Center API
+    const toastContainer = document.getElementById('toastContainer');
+
+    window.showFLEXSToast = function (title, message, type = 'success', duration = 5000) {
+        if (!toastContainer) return;
+
+        const toast = document.createElement('div');
+        toast.className = `flexs-toast toast-${type}`;
+        
+        toast.innerHTML = `
+            <div class="toast-header">
+                <span class="toast-title">${title}</span>
+                <button type="button" class="toast-close">&times;</button>
+            </div>
+            <div class="toast-body">${message}</div>
+            <div class="toast-progress"></div>
+        `;
+
+        toastContainer.appendChild(toast);
+
+        const closeBtn = toast.querySelector('.toast-close');
+        const progressBar = toast.querySelector('.toast-progress');
+
+        // Setup progressive countdown
+        let timeoutId;
+        progressBar.style.width = '100%';
+        
+        // Trigger transit width animation in next frame
+        requestAnimationFrame(() => {
+            progressBar.style.transition = `width ${duration}ms linear`;
+            progressBar.style.width = '0%';
+        });
+
+        function dismissToast() {
+            clearTimeout(timeoutId);
+            toast.classList.add('toast-exit');
+            setTimeout(() => {
+                toast.remove();
+            }, 350);
+        }
+
+        closeBtn.addEventListener('click', dismissToast);
+
+        timeoutId = setTimeout(dismissToast, duration);
+
+        // Enable swipe to dismiss on touch devices
+        let startX = 0;
+        toast.addEventListener('touchstart', (e) => {
+            startX = e.touches[0].clientX;
+        }, { passive: true });
+
+        toast.addEventListener('touchend', (e) => {
+            const diffX = e.changedTouches[0].clientX - startX;
+            if (diffX > 80) { // Swiped right
+                dismissToast();
+            }
+        }, { passive: true });
+    };
+
+    // 3. Omni-Search Overlay (Ctrl + B)
+    const omniOverlay = document.getElementById('omniSearchOverlay');
+    const omniInput = document.getElementById('omniSearchInput');
+    const omniResults = document.getElementById('omniSearchResults');
+    let searchDebounceTimeout;
+    let selectedItemIndex = -1;
+
+    function openOmniSearch() {
+        if (!omniOverlay) return;
+        omniOverlay.classList.add('active');
+        if (omniInput) {
+            omniInput.value = '';
+            setTimeout(() => omniInput.focus(), 150);
+        }
+        if (omniResults) {
+            omniResults.innerHTML = '';
+            omniResults.classList.remove('has-content');
+        }
+        selectedItemIndex = -1;
+    }
+
+    function closeOmniSearch() {
+        if (!omniOverlay) return;
+        omniOverlay.classList.remove('active');
+    }
+
+    // Keydown listener for Ctrl+B globally
+    window.addEventListener('keydown', function (e) {
+        if ((e.ctrlKey || e.metaKey) && (e.key === 'b' || e.key === 'B')) {
+            e.preventDefault();
+            openOmniSearch();
+        }
+    });
+
+    if (omniOverlay) {
+        // Close on escape key
+        window.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape' && omniOverlay.classList.contains('active')) {
+                closeOmniSearch();
+            }
+        });
+
+        // Close on clicking outside search box
+        omniOverlay.addEventListener('click', function (e) {
+            if (e.target === omniOverlay) {
+                closeOmniSearch();
+            }
+        });
+    }
+
+    if (omniInput && omniResults) {
+        omniInput.addEventListener('input', function () {
+            clearTimeout(searchDebounceTimeout);
+            const query = omniInput.value.trim();
+
+            if (query.length < 2) {
+                omniResults.innerHTML = '';
+                omniResults.classList.remove('has-content');
+                selectedItemIndex = -1;
+                return;
+            }
+
+            searchDebounceTimeout = setTimeout(async () => {
+                try {
+                    const response = await fetch(`/api/search-suggestions/?q=${encodeURIComponent(query)}&scope=catalog`);
+                    if (response.ok) {
+                        const data = await response.json();
+                        renderOmniSearchResults(data.suggestions || []);
+                    }
+                } catch (e) {
+                    console.error('Error fetching search suggestions:', e);
+                }
+            }, 180);
+        });
+
+        // Results rendering
+        function renderOmniSearchResults(suggestions) {
+            if (!suggestions || suggestions.length === 0) {
+                omniResults.innerHTML = `<div class="omni-search-empty">No se encontraron artículos ni categorías para "${omniInput.value}"</div>`;
+                omniResults.classList.add('has-content');
+                selectedItemIndex = -1;
+                return;
+            }
+
+            let htmlContent = '';
+            suggestions.forEach((item, index) => {
+                let link = '';
+                let iconSymbol = '⚙️';
+                
+                if (item.kind === 'product') {
+                    link = `/catalogo/producto/${encodeURIComponent(item.value)}/`;
+                    iconSymbol = '🔧';
+                } else if (item.kind === 'category') {
+                    const slug = item.value.replace('cat:', '');
+                    link = `/catalogo/?category=${encodeURIComponent(slug)}`;
+                    iconSymbol = '📂';
+                }
+
+                htmlContent += `
+                    <a href="${link}" class="omni-search-item" data-index="${index}">
+                        <div class="omni-search-item-img" style="display:flex;align-items:center;justify-content:center;font-size:20px;">
+                            ${iconSymbol}
+                        </div>
+                        <div class="omni-search-item-info">
+                            <span class="omni-search-item-title">${item.label}</span>
+                            <span class="omni-search-item-sub">${item.meta}</span>
+                        </div>
+                        ${item.kind === 'product' ? `<span class="omni-search-item-price">Ver Detalle ➜</span>` : ''}
+                    </a>
+                `;
+            });
+
+            omniResults.innerHTML = htmlContent;
+            omniResults.classList.add('has-content');
+            selectedItemIndex = -1;
+
+            // Add click listeners to items to close overlay
+            omniResults.querySelectorAll('.omni-search-item').forEach(item => {
+                item.addEventListener('click', () => {
+                    closeOmniSearch();
+                });
+            });
+        }
+
+        // Arrow keys navigation in results
+        omniInput.addEventListener('keydown', function (e) {
+            const items = omniResults.querySelectorAll('.omni-search-item');
+            if (items.length === 0) return;
+
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                selectedItemIndex = (selectedItemIndex + 1) % items.length;
+                updateSelectionState(items);
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                selectedItemIndex = (selectedItemIndex - 1 + items.length) % items.length;
+                updateSelectionState(items);
+            } else if (e.key === 'Enter') {
+                if (selectedItemIndex >= 0 && selectedItemIndex < items.length) {
+                    e.preventDefault();
+                    items[selectedItemIndex].click();
+                    window.location.href = items[selectedItemIndex].getAttribute('href');
+                }
+            }
+        });
+
+        function updateSelectionState(items) {
+            items.forEach((item, idx) => {
+                if (idx === selectedItemIndex) {
+                    item.classList.add('selected');
+                    item.scrollIntoView({ block: 'nearest' });
+                } else {
+                    item.classList.remove('selected');
+                }
+            });
+        }
+    }
+
+    // 4. Analytics Interactive SVG Tooltips
+    const chartNodes = document.querySelectorAll('.chart-node');
+    const segmentNodes = document.querySelectorAll('.donut-segment');
+    
+    // Create central tooltip DOM element if it doesn't exist
+    let activeTooltip = document.querySelector('.svg-tooltip');
+    if (!activeTooltip) {
+        activeTooltip = document.createElement('div');
+        activeTooltip.className = 'svg-tooltip';
+        document.body.appendChild(activeTooltip);
+    }
+
+    chartNodes.forEach(node => {
+        node.addEventListener('mouseenter', function (e) {
+            const value = node.getAttribute('data-value') || '';
+            const label = node.getAttribute('data-label') || '';
+            activeTooltip.innerHTML = `<div><strong>${label}</strong></div><div style="color:var(--color-primary);margin-top:2px;">${value}</div>`;
+            activeTooltip.classList.add('active');
+        });
+
+        node.addEventListener('mousemove', function (e) {
+            activeTooltip.style.left = `${e.pageX}px`;
+            activeTooltip.style.top = `${e.pageY}px`;
+        });
+
+        node.addEventListener('mouseleave', function () {
+            activeTooltip.classList.remove('active');
+        });
+    });
+
+    segmentNodes.forEach(segment => {
+        segment.addEventListener('mouseenter', function (e) {
+            const label = segment.getAttribute('data-label') || '';
+            const percentage = segment.getAttribute('data-percentage') || '';
+            activeTooltip.innerHTML = `<div><strong>${label}</strong></div><div style="color:var(--color-primary);margin-top:2px;">${percentage}</div>`;
+            activeTooltip.classList.add('active');
+        });
+
+        segment.addEventListener('mousemove', function (e) {
+            activeTooltip.style.left = `${e.pageX}px`;
+            activeTooltip.style.top = `${e.pageY}px`;
+        });
+
+        segment.addEventListener('mouseleave', function () {
+            activeTooltip.classList.remove('active');
+        });
+    });
+
+    // 5. Interactive Tab Switching on Analytics Section
+    const analyticsTabs = document.querySelectorAll('.analytics-tab');
+    const chartPanes = document.querySelectorAll('.analytics-chart-pane');
+
+    analyticsTabs.forEach(tab => {
+        tab.addEventListener('click', function () {
+            const targetPaneId = tab.getAttribute('data-target');
+            if (!targetPaneId) return;
+
+            // Remove active class from all tabs & panes
+            analyticsTabs.forEach(t => t.classList.remove('active'));
+            chartPanes.forEach(pane => pane.classList.remove('active'));
+
+            // Add active to current
+            tab.classList.add('active');
+            const activePane = document.getElementById(targetPaneId);
+            if (activePane) {
+                activePane.classList.add('active');
+                
+                // Retrigger SVG draw animations
+                const svgLine = activePane.querySelector('.chart-line');
+                if (svgLine) {
+                    svgLine.style.animation = 'none';
+                    svgLine.offsetHeight; // Trigger reflow
+                    svgLine.style.animation = 'draw-chart 2.2s cubic-bezier(0.25, 1, 0.5, 1) forwards';
+                }
+            }
+        });
+    });
+
+    // 6. Custom intercepting of Django alerts and replace them with Toasts
+    const djangoAlerts = document.querySelectorAll('.alert');
+    djangoAlerts.forEach(alert => {
+        const text = alert.textContent.replace('×', '').trim();
+        let type = 'info';
+        if (alert.classList.contains('alert-success')) type = 'success';
+        if (alert.classList.contains('alert-warning') || alert.classList.contains('alert-error')) type = 'danger';
+        
+        // Trigger Toast instead of default view if it's not a block-level global maintenance alert
+        if (!alert.closest('.messages-container') || text.includes('lectura')) return;
+        
+        // Hide standard Django alerts and trigger Toasts
+        alert.style.display = 'none';
+        window.showFLEXSToast(
+            type === 'success' ? 'Éxito' : (type === 'danger' ? 'Alerta' : 'Notificación'),
+            text,
+            type,
+            6000
+        );
+    });
 });
 
 /**

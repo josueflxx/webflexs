@@ -4,6 +4,12 @@
 
 <head>
     <meta charset="UTF-8">
+    <script>
+        (function() {
+            const theme = localStorage.getItem('theme') || 'dark';
+            document.documentElement.setAttribute('data-theme', theme);
+        })();
+    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description"
         content="{% block meta_description %}FLEXS - Repuestos de elasticos en Argentina. Expertos en repuestos para industrias de transporte.{% endblock %}">
@@ -95,6 +101,13 @@
                     <li><a href="{% url 'catalog' %}" class="btn btn-outline">Ver Catálogo</a></li>
                     <li><a href="{% url 'login' %}" class="btn btn-primary">Iniciar Sesión</a></li>
                     {% endif %}
+                    <li class="theme-toggle-li">
+                        <button class="theme-toggle-btn" id="themeToggle" type="button" aria-label="Cambiar tema">
+                            <svg viewBox="0 0 24 24" id="themeIcon">
+                                <!-- Cargar SVG dinámicamente -->
+                            </svg>
+                        </button>
+                    </li>
                 </ul>
             </div>
         </nav>
@@ -160,6 +173,21 @@
             </div>
         </div>
     </footer>
+
+    <!-- Toast Notification Container -->
+    <div id="toastContainer" class="toast-container"></div>
+
+    <!-- Omni-Search Overlay (Ctrl + B) -->
+    <div id="omniSearchOverlay" class="omni-search-overlay">
+        <div class="omni-search-container">
+            <div class="omni-search-bar-wrap">
+                <span class="omni-search-icon">🔍</span>
+                <input type="text" id="omniSearchInput" class="omni-search-input" placeholder="Buscar repuesto, SKU o categoría..." autocomplete="off">
+                <span class="omni-search-close-hint">ESC para salir</span>
+            </div>
+            <div id="omniSearchResults" class="omni-search-results"></div>
+        </div>
+    </div>
 
     <!-- JavaScript -->
     <script src="{% static 'core/js/main.js' %}?v=20260529-premium"></script>

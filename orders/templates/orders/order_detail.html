@@ -20,6 +20,54 @@
             {% endif %}
         </div>
 
+        <!-- Track & Trace Progress Stepper -->
+        {% with status=order.status|lower %}
+        <div class="tracking-wrapper">
+            <div class="tracking-stepper">
+                <div class="tracking-progress-bar">
+                    <div class="tracking-progress-fill" style="width: {% if status == 'delivered' %}100%{% elif status == 'shipped' %}75%{% elif status == 'ready' %}50%{% elif status == 'approved' or status == 'in_progress' or status == 'procesando' %}25%{% else %}0%{% endif %};">
+                        <div class="tracking-truck">
+                            <!-- Custom Truck SVG -->
+                            <svg width="24" height="24" fill="var(--color-primary)" viewBox="0 0 24 24" style="display:block;">
+                                <path d="M19 8h-2v3h3.24l-1.24-3zm-13 3h8V5H4v11h2c0 1.66 1.34 3 3 3s3-1.34 3-3h4c0 1.66 1.34 3 3 3s3-1.34 3-3h1v-5h-4V8l-3-4H15v7H6zm3 7c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm9 0c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1z"/>
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Node 1: Recibido -->
+                <div class="tracking-node {% if status == 'delivered' or status == 'shipped' or status == 'ready' or status == 'approved' or status == 'in_progress' or status == 'procesando' %}completed{% else %}active{% endif %}">
+                    <div class="tracking-dot">📥</div>
+                    <span class="tracking-label">Recibido</span>
+                </div>
+
+                <!-- Node 2: En Taller -->
+                <div class="tracking-node {% if status == 'delivered' or status == 'shipped' or status == 'ready' %}completed{% elif status == 'approved' or status == 'in_progress' or status == 'procesando' %}active{% endif %}">
+                    <div class="tracking-dot">🔧</div>
+                    <span class="tracking-label">En Taller</span>
+                </div>
+
+                <!-- Node 3: Control de Calidad -->
+                <div class="tracking-node {% if status == 'delivered' or status == 'shipped' %}completed{% elif status == 'ready' %}active{% endif %}">
+                    <div class="tracking-dot">🔬</div>
+                    <span class="tracking-label">Calidad</span>
+                </div>
+
+                <!-- Node 4: Despachado -->
+                <div class="tracking-node {% if status == 'delivered' %}completed{% elif status == 'shipped' %}active{% endif %}">
+                    <div class="tracking-dot">📦</div>
+                    <span class="tracking-label">Despachado</span>
+                </div>
+
+                <!-- Node 5: Entregado -->
+                <div class="tracking-node {% if status == 'delivered' %}active{% endif %}">
+                    <div class="tracking-dot">✅</div>
+                    <span class="tracking-label">Entregado</span>
+                </div>
+            </div>
+        </div>
+        {% endwith %}
+
         <div class="order-items">
             <h3>Productos</h3>
             <div class="items-table-wrap">
