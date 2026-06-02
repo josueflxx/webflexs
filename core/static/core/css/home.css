@@ -1069,3 +1069,154 @@
         opacity: 0.38;
     }
 }
+
+/* ========================================================
+   FLEXS Premium - Homepage Light Mode Refinements
+   ======================================================== */
+html[data-theme="light"] {
+    /* 1. Hero background & rotating theme corrections */
+    .hero,
+    .theme-blueprint,
+    .theme-elasticos {
+        background: linear-gradient(135deg, #ffffff 0%, #f1f5f9 48%, #ffece4 100%) !important;
+    }
+
+    .theme-blueprint::before {
+        background-image: 
+            linear-gradient(rgba(255, 107, 53, 0.05) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(255, 107, 53, 0.05) 1px, transparent 1px) !important;
+    }
+
+    .elasticos-atmosphere,
+    .elasticos-radial-glow {
+        display: none !important;
+    }
+
+    .hero-overlay {
+        background: transparent !important;
+        display: none !important;
+    }
+
+    /* 2. Hero Text Readability */
+    .hero-eyebrow {
+        color: var(--color-primary-dark) !important;
+    }
+    
+    .hero-title,
+    .hero-title-line-inner {
+        color: var(--theme-text) !important;
+    }
+
+    .hero-subtitle,
+    .hero-description {
+        color: var(--theme-text-muted) !important;
+    }
+
+    /* 3. Hero Proof Metrics (Proof Row) */
+    .hero-proof-row span {
+        background: rgba(15, 23, 42, 0.03) !important;
+        border-color: rgba(15, 23, 42, 0.08) !important;
+        color: var(--theme-text-muted) !important;
+    }
+
+    .hero-proof-row strong {
+        color: var(--color-primary-dark) !important;
+    }
+
+    /* 4. Panels & Cards visual container */
+    .hero-panel,
+    .hero-panel-primary,
+    .hero-panel-dark,
+    .hero-metric-card,
+    .about-cta,
+    .stat-card,
+    .service-card,
+    .product-category-card,
+    .contact-actions,
+    .contact-map-wrapper {
+        background: var(--theme-card-bg) !important;
+        border: 1px solid var(--theme-card-border) !important;
+        box-shadow: 0 15px 35px rgba(15, 23, 42, 0.04) !important;
+        color: var(--theme-text) !important;
+    }
+
+    .hero-panel::before,
+    .hero-panel-primary::before,
+    .hero-panel-dark::before {
+        display: none !important;
+    }
+
+    .hero-panel-label {
+        color: var(--color-primary-dark) !important;
+        background: rgba(255, 107, 53, 0.08) !important;
+    }
+
+    .hero-metric-value {
+        color: var(--theme-text) !important;
+    }
+
+    .hero-metric-label {
+        color: var(--theme-text-muted) !important;
+    }
+
+    .hero-panel p,
+    .about-cta p,
+    .stat-label,
+    .service-card p,
+    .product-category-card h4,
+    .contact-item p,
+    .contact-actions p,
+    .contact-map-title {
+        color: var(--theme-text-muted) !important;
+    }
+
+    /* Product category card featured badge */
+    .product-category-card.featured {
+        background: rgba(255, 107, 53, 0.06) !important;
+        border-color: var(--color-primary) !important;
+    }
+
+    .product-category-card.featured h4 {
+        color: var(--color-primary-dark) !important;
+    }
+
+    /* 5. CAD SVG Blueprint vectors adjustments */
+    .blueprint-svg-media path {
+        stroke: var(--theme-text) !important;
+    }
+    .blueprint-svg-media line {
+        stroke: rgba(255, 107, 53, 0.28) !important;
+    }
+    .blueprint-svg-media text {
+        fill: var(--color-primary-dark) !important;
+    }
+    .blueprint-svg-media rect {
+        fill: rgba(255, 107, 53, 0.08) !important;
+        stroke: var(--color-primary) !important;
+    }
+    
+    .blueprint-vector-circle {
+        border-color: rgba(255, 107, 53, 0.28) !important;
+    }
+    .blueprint-vector-circle::before {
+        border-color: rgba(255, 107, 53, 0.12) !important;
+    }
+    .blueprint-vector-circle::after {
+        border-color: rgba(255, 107, 53, 0.08) !important;
+    }
+    .blueprint-vector-lines {
+        border-top-color: rgba(255, 107, 53, 0.28) !important;
+        border-bottom-color: rgba(255, 107, 53, 0.28) !important;
+        background: linear-gradient(90deg, rgba(255, 107, 53, 0.05) 0%, rgba(255, 107, 53, 0.08) 50%, rgba(255, 107, 53, 0) 100%) !important;
+    }
+    .blueprint-vector-lines::before {
+        color: var(--color-primary-dark) !important;
+    }
+    
+    /* Leaf Spring fotorrealistic image shadows adjustment in light mode */
+    .hero-img-elasticos {
+        filter: drop-shadow(0 20px 30px rgba(15, 23, 42, 0.15)) saturate(1.04) contrast(1.02) !important;
+        opacity: 0.95 !important;
+    }
+}
+
