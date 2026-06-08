@@ -139,6 +139,7 @@ urlpatterns = [
     
     # Settings
     path('configuracion/', views.settings_view, name='admin_settings'),
+    path('configuracion/exportar-productos-diagnostico/', views.export_products_diagnostic, name='admin_export_products_diagnostic'),
     path('configuracion/tipos-documento/', views.sales_document_type_list, name='admin_sales_document_type_list'),
     path('configuracion/tipos-venta/', views.sales_document_type_list, name='admin_sales_type_list'),
     path('configuracion/tipos-documento/nuevo/', views.sales_document_type_create, name='admin_sales_document_type_create'),

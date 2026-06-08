@@ -1275,4 +1275,282 @@ def admin_user_permissions(request, user_id):
         },
     )
 
-__all__ = ['company_list', 'company_edit', '_get_settings_active_company', 'warehouse_list', 'warehouse_create', 'warehouse_edit', 'sales_document_type_list', 'sales_document_type_create', 'sales_document_type_edit', 'sales_document_type_toggle_enabled', '_sales_document_type_usage', '_resync_order_charges_for_sales_document_type', 'sales_document_type_delete', '_sync_company_default_pos', 'admin_user_list', 'admin_user_edit', 'admin_user_password_change', 'admin_user_send_password_reset_email', 'admin_user_delete', 'admin_user_permissions']
+
+@user_passes_test(is_primary_superadmin)
+def export_products_diagnostic(request):
+    """
+    Export all products to an Excel workbook with 3 tabs:
+    1. Resumen: Dashboard statistics.
+    2. Sin Categoría (Pendientes): Products without any categories.
+    3. Catalogados (Ok): Products with at least one category.
+    """
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    from openpyxl.utils import get_column_letter
+
+    products = list(
+        Product.objects.select_related('supplier_ref', 'category')
+        .prefetch_related('categories')
+        .all()
+        .order_by('name')
+    )
+
+    categorizados = []
+    sin_categoria = []
+
+    for p in products:
+        linked = p.get_linked_categories()
+        if linked:
+            categorizados.append((p, linked))
+        else:
+            sin_categoria.append(p)
+
+    total_count = len(products)
+    cat_count = len(categorizados)
+    uncat_count = len(sin_categoria)
+    active_count = sum(1 for p in products if p.is_active)
+    inactive_count = total_count - active_count
+
+    cat_pct = (cat_count / total_count * 100) if total_count > 0 else 0
+    uncat_pct = (uncat_count / total_count * 100) if total_count > 0 else 0
+
+    wb = Workbook()
+
+    # Sheet 1: Resumen
+    ws_resumen = wb.active
+    ws_resumen.title = "Resumen de Integridad"
+    ws_resumen.views.sheetView[0].showGridLines = True
+
+    # Styling helpers
+    header_fill = PatternFill(start_color="1F2933", end_color="1F2933", fill_type="solid")
+    accent_fill = PatternFill(start_color="FF6B3D", end_color="FF6B3D", fill_type="solid")
+    zebra_fill = PatternFill(start_color="F9FAFB", end_color="F9FAFB", fill_type="solid")
+    red_alert_fill = PatternFill(start_color="FEE2E2", end_color="FEE2E2", fill_type="solid")
+    green_alert_fill = PatternFill(start_color="D1FAE5", end_color="D1FAE5", fill_type="solid")
+
+    font_title = Font(name="Calibri", size=16, bold=True, color="1F2933")
+    font_section = Font(name="Calibri", size=12, bold=True, color="1F2933")
+    font_header = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
+    font_bold = Font(name="Calibri", size=11, bold=True)
+    font_regular = Font(name="Calibri", size=11)
+    font_italic = Font(name="Calibri", size=10, italic=True, color="6B7280")
+
+    thin_border_side = Side(border_style="thin", color="D1D5DB")
+    thin_border = Border(left=thin_border_side, right=thin_border_side, top=thin_border_side, bottom=thin_border_side)
+
+    # Title
+    ws_resumen["A1"] = "Diagnóstico de Integridad del Catálogo"
+    ws_resumen["A1"].font = font_title
+    ws_resumen.row_dimensions[1].height = 25
+
+    # Subtitle / Timestamp
+    now_str = timezone.localtime(timezone.now()).strftime("%d/%m/%Y %H:%M:%S")
+    ws_resumen["A2"] = f"Generado el: {now_str} (ART)"
+    ws_resumen["A2"].font = font_italic
+
+    # Statistics Section
+    ws_resumen["A4"] = "Métricas Generales"
+    ws_resumen["A4"].font = font_section
+
+    stats_headers = ["Métrica", "Cantidad", "Porcentaje"]
+    for col_idx, header in enumerate(stats_headers, start=1):
+        cell = ws_resumen.cell(row=5, column=col_idx, value=header)
+        cell.font = font_header
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal="center")
+    ws_resumen.row_dimensions[5].height = 20
+
+    stats_rows = [
+        ["Total de Productos", total_count, "100,0%"],
+        ["Productos Categorizados (Ok)", cat_count, f"{cat_pct:.1f}%".replace(".", ",")],
+        ["Productos Sin Categoría (Huérfanos)", uncat_count, f"{uncat_pct:.1f}%".replace(".", ",")],
+        ["Productos Activos", active_count, f"{(active_count/total_count*100 if total_count > 0 else 0):.1f}%".replace(".", ",")],
+        ["Productos Inactivos", inactive_count, f"{(inactive_count/total_count*100 if total_count > 0 else 0):.1f}%".replace(".", ",")],
+    ]
+
+    for row_idx, row_data in enumerate(stats_rows, start=6):
+        for col_idx, value in enumerate(row_data, start=1):
+            cell = ws_resumen.cell(row=row_idx, column=col_idx, value=value)
+            cell.font = font_bold if row_idx == 6 else font_regular
+            cell.border = thin_border
+            if col_idx == 1:
+                cell.alignment = Alignment(horizontal="left")
+            else:
+                cell.alignment = Alignment(horizontal="right")
+            
+            # Highlight uncategorized in red if it exists
+            if row_idx == 8 and uncat_count > 0:
+                cell.fill = red_alert_fill
+            elif row_idx == 7 and cat_count == total_count:
+                cell.fill = green_alert_fill
+
+    # Help block
+    ws_resumen["A13"] = "Notas operativas:"
+    ws_resumen["A13"].font = font_section
+
+    notes = [
+        "- Los productos sin categoría no se muestran en el catálogo público B2B a los clientes.",
+        "- Si un producto activo no está categorizado, permanece oculto aunque su estado sea 'Activo'.",
+        "- Para corregirlos, dirígete a la sección de Productos en el Panel de Administración y asígnales una categoría en lote.",
+        "- La solapa 'Sin Categoría' detalla exactamente cuáles son los productos pendientes de asignación."
+    ]
+    for idx, note in enumerate(notes, start=14):
+        cell = ws_resumen.cell(row=idx, column=1, value=note)
+        cell.font = font_italic
+
+    # Auto-fit Resumen columns
+    for col in ws_resumen.columns:
+        max_len = max(len(str(cell.value or '')) for cell in col)
+        col_letter = get_column_letter(col[0].column)
+        ws_resumen.column_dimensions[col_letter].width = max(max_len + 4, 15)
+
+    # Sheet 2: Sin Categoría (Pendientes)
+    ws_uncat = wb.create_sheet(title="Sin Categoría")
+    ws_uncat.views.sheetView[0].showGridLines = True
+    ws_uncat.freeze_panes = "A2"
+
+    headers_uncat = ["SKU", "Nombre", "Proveedor", "Costo", "Precio", "Stock", "Estado"]
+    for col_idx, header in enumerate(headers_uncat, start=1):
+        cell = ws_uncat.cell(row=1, column=col_idx, value=header)
+        cell.font = font_header
+        cell.fill = accent_fill if header in ("SKU", "Nombre") else header_fill
+        cell.alignment = Alignment(horizontal="center")
+    ws_uncat.row_dimensions[1].height = 24
+
+    for row_idx, p in enumerate(sin_categoria, start=2):
+        row_data = [
+            p.sku,
+            p.name,
+            p.supplier_ref.name if p.supplier_ref else (p.supplier or "-"),
+            p.cost,
+            p.price,
+            p.stock,
+            "Activo" if p.is_active else "Inactivo"
+        ]
+        for col_idx, value in enumerate(row_data, start=1):
+            cell = ws_uncat.cell(row=row_idx, column=col_idx, value=value)
+            cell.font = font_regular
+            cell.border = thin_border
+            
+            # Formatting
+            if col_idx in (1, 2, 3):
+                cell.alignment = Alignment(horizontal="left")
+            elif col_idx in (4, 5):
+                cell.number_format = "$#,##0.00"
+                cell.alignment = Alignment(horizontal="right")
+            elif col_idx == 6:
+                cell.number_format = "#,##0"
+                cell.alignment = Alignment(horizontal="right")
+            else:
+                cell.alignment = Alignment(horizontal="center")
+                if value == "Activo":
+                    cell.fill = green_alert_fill
+                else:
+                    cell.fill = red_alert_fill
+
+            # Zebra striping
+            if row_idx % 2 == 1 and cell.fill.fill_type is None:
+                cell.fill = zebra_fill
+
+    # Auto-fit Sin Categoría columns
+    for col in ws_uncat.columns:
+        max_len = 0
+        for cell in col:
+            # Format check for length calculation
+            val = str(cell.value or '')
+            if cell.number_format == "$#,##0.00" and isinstance(cell.value, (int, float, Decimal)):
+                val = f"${cell.value:,.2f}"
+            max_len = max(max_len, len(val))
+        col_letter = get_column_letter(col[0].column)
+        ws_uncat.column_dimensions[col_letter].width = max(max_len + 4, 12)
+    ws_uncat.auto_filter.ref = ws_uncat.dimensions
+
+    # Sheet 3: Catalogados (Ok)
+    ws_cat = wb.create_sheet(title="Catalogados")
+    ws_cat.views.sheetView[0].showGridLines = True
+    ws_cat.freeze_panes = "A2"
+
+    headers_cat = ["SKU", "Nombre", "Categorías Vinculadas", "Proveedor", "Costo", "Precio", "Stock", "Estado"]
+    for col_idx, header in enumerate(headers_cat, start=1):
+        cell = ws_cat.cell(row=1, column=col_idx, value=header)
+        cell.font = font_header
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal="center")
+    ws_cat.row_dimensions[1].height = 24
+
+    for row_idx, (p, linked_cats) in enumerate(categorizados, start=2):
+        cats_str = "; ".join(c.get_full_path() for c in linked_cats)
+        row_data = [
+            p.sku,
+            p.name,
+            cats_str,
+            p.supplier_ref.name if p.supplier_ref else (p.supplier or "-"),
+            p.cost,
+            p.price,
+            p.stock,
+            "Activo" if p.is_active else "Inactivo"
+        ]
+        for col_idx, value in enumerate(row_data, start=1):
+            cell = ws_cat.cell(row=row_idx, column=col_idx, value=value)
+            cell.font = font_regular
+            cell.border = thin_border
+            
+            # Formatting
+            if col_idx in (1, 2, 3, 4):
+                cell.alignment = Alignment(horizontal="left")
+            elif col_idx in (5, 6):
+                cell.number_format = "$#,##0.00"
+                cell.alignment = Alignment(horizontal="right")
+            elif col_idx == 7:
+                cell.number_format = "#,##0"
+                cell.alignment = Alignment(horizontal="right")
+            else:
+                cell.alignment = Alignment(horizontal="center")
+                if value == "Activo":
+                    cell.fill = green_alert_fill
+                else:
+                    cell.fill = red_alert_fill
+
+            # Zebra striping
+            if row_idx % 2 == 1 and cell.fill.fill_type is None:
+                cell.fill = zebra_fill
+
+    # Auto-fit Catalogados columns
+    for col in ws_cat.columns:
+        max_len = 0
+        for cell in col:
+            val = str(cell.value or '')
+            if cell.number_format == "$#,##0.00" and isinstance(cell.value, (int, float, Decimal)):
+                val = f"${cell.value:,.2f}"
+            max_len = max(max_len, len(val))
+        col_letter = get_column_letter(col[0].column)
+        # Limit width for categories path column so it doesn't span too far
+        if col_letter == 'C':
+            ws_cat.column_dimensions[col_letter].width = min(max(max_len + 4, 15), 50)
+        else:
+            ws_cat.column_dimensions[col_letter].width = max(max_len + 4, 12)
+    ws_cat.auto_filter.ref = ws_cat.dimensions
+
+    # Log action
+    log_admin_action(
+        request,
+        action="export_products_diagnostic",
+        target_type="site_settings",
+        target_id=0,
+        details={
+            "total_products": total_count,
+            "categorized": cat_count,
+            "uncategorized": uncat_count,
+        }
+    )
+
+    # Output response
+    response = HttpResponse(
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+    timestamp = timezone.now().strftime("%Y%m%d_%H%M%S")
+    response["Content-Disposition"] = f'attachment; filename="diagnostico_productos_{timestamp}.xlsx"'
+    wb.save(response)
+    return response
+
+
+__all__ = ['company_list', 'company_edit', '_get_settings_active_company', 'warehouse_list', 'warehouse_create', 'warehouse_edit', 'sales_document_type_list', 'sales_document_type_create', 'sales_document_type_edit', 'sales_document_type_toggle_enabled', '_sales_document_type_usage', '_resync_order_charges_for_sales_document_type', 'sales_document_type_delete', '_sync_company_default_pos', 'admin_user_list', 'admin_user_edit', 'admin_user_password_change', 'admin_user_send_password_reset_email', 'admin_user_delete', 'admin_user_permissions', 'export_products_diagnostic']
