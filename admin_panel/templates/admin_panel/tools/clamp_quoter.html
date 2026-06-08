@@ -2,6 +2,62 @@
 
 {% block page_title %}Cotizador{% endblock %}
 
+{% block extra_css %}
+<style>
+    .clamp-simulator-card {
+        box-shadow: 0 15px 30px rgba(0,0,0,0.22);
+        border-color: rgba(255,255,255,0.08);
+    }
+    
+    /* Light theme overrides */
+    html[data-theme="light"] .clamp-simulator-card {
+        background: #ffffff !important;
+        border: 1px solid rgba(15, 23, 42, 0.08) !important;
+        box-shadow: 0 10px 30px rgba(15, 23, 42, 0.03) !important;
+    }
+    html[data-theme="light"] .clamp-simulator-title {
+        background: rgba(255, 107, 53, 0.08) !important;
+        border: 1px solid rgba(255, 107, 53, 0.18) !important;
+        color: var(--color-primary-dark) !important;
+    }
+    html[data-theme="light"] .clamp-simulator-visual-container {
+        background: radial-gradient(circle at center, #fdf8f6, #f8fafc) !important;
+        border: 1px solid rgba(15, 23, 42, 0.08) !important;
+    }
+    html[data-theme="light"] #clampCalculatedDesc {
+        color: #0f172a !important;
+    }
+    html[data-theme="light"] .clamp-simulator-info {
+        color: #475569 !important;
+    }
+    html[data-theme="light"] #threadLeft,
+    html[data-theme="light"] #threadRight {
+        stroke: #fdf8f6 !important;
+    }
+    html[data-theme="light"] #clampBase {
+        fill: #334155 !important;
+        stroke: rgba(15, 23, 42, 0.1) !important;
+    }
+    html[data-theme="light"] #nutLeft,
+    html[data-theme="light"] #nutRight {
+        fill: #64748b !important;
+        stroke: #0f172a !important;
+    }
+    html[data-theme="light"] #widthText,
+    html[data-theme="light"] #lengthText,
+    html[data-theme="light"] #diameterText {
+        fill: var(--color-primary-dark) !important;
+    }
+    html[data-theme="light"] #lengthWitnessTop,
+    html[data-theme="light"] #lengthWitnessBottom {
+        stroke: rgba(255, 107, 53, 0.2) !important;
+    }
+    html[data-theme="light"] #clampGrid path {
+        stroke: rgba(15, 23, 42, 0.04) !important;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="admin-table-container">
     <div class="admin-toolbar">
@@ -202,6 +258,68 @@
         </section>
 
         <aside class="clamp-side-column">
+            <!-- FLEXS SVG Clamp Interactive Simulator -->
+            <section class="clamp-results-card clamp-simulator-card">
+                <div class="clamp-form-title clamp-simulator-title" style="margin: 0 0 12px; text-align: center; background: rgba(255, 107, 53, 0.12); color: #ffd5c4; border: 1px solid rgba(255, 107, 53, 0.22); font-weight: 700;">Vista Previa Interactiva</div>
+                <div class="clamp-simulator-visual-container" style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 18px 12px; background: radial-gradient(circle at center, rgba(17, 23, 34, 0.95), rgba(10, 13, 19, 0.98)); border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.05); min-height: 280px; position: relative;">
+                    <!-- Custom Interactive SVG -->
+                    <svg id="clampSvg" width="100%" height="360" viewBox="0 0 600 600" style="max-width: 440px; filter: drop-shadow(0 6px 16px rgba(255, 107, 53, 0.16));">
+                        <!-- Background Grid -->
+                        <defs>
+                            <pattern id="clampGrid" width="30" height="30" patternUnits="userSpaceOnUse">
+                                <path d="M 30 0 L 0 0 0 30" fill="none" stroke="rgba(255, 255, 255, 0.03)" stroke-width="1"/>
+                            </pattern>
+                            <linearGradient id="dynamicClampGlow" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop id="glowStop0" offset="0%" stop-color="#ff8c5a" />
+                                <stop id="glowStop50" offset="50%" stop-color="#ff6b35" />
+                                <stop id="glowStop100" offset="100%" stop-color="#e55a2b" />
+                            </linearGradient>
+                        </defs>
+                        <rect width="100%" height="100%" fill="url(#clampGrid)" rx="8" />
+
+                        <!-- Length Witness Lines (Horizontal extension lines) -->
+                        <line id="lengthWitnessTop" x1="50" y1="100" x2="100" y2="100" stroke="rgba(255, 140, 90, 0.35)" stroke-width="1" />
+                        <line id="lengthWitnessBottom" x1="50" y1="480" x2="100" y2="480" stroke="rgba(255, 140, 90, 0.35)" stroke-width="1" />
+
+                        <!-- Length Dimension Lines (Cota de Largo C) -->
+                        <line id="lengthLine" x1="55" y1="100" x2="55" y2="480" stroke="#ff8c5a" stroke-dasharray="3,3" stroke-width="1.5" />
+                        <path id="lengthArrowTop" d="M51,106 L55,100 L59,106" fill="none" stroke="#ff8c5a" stroke-width="1.5" />
+                        <path id="lengthArrowBottom" d="M51,474 L55,480 L59,474" fill="none" stroke="#ff8c5a" stroke-width="1.5" />
+                        <text id="lengthText" x="42" y="290" fill="#ffd0bd" font-size="12" font-weight="700" text-anchor="middle" transform="rotate(-90 42 290)">Largo: 180mm</text>
+
+                        <!-- Width Dimension Lines (Cota de Ancho B) -->
+                        <line id="widthLine" x1="100" y1="520" x2="300" y2="520" stroke="#ff8c5a" stroke-dasharray="3,3" stroke-width="1.5" />
+                        <path id="widthArrowLeft" d="M106,516 L100,520 L106,524" fill="none" stroke="#ff8c5a" stroke-width="1.5" />
+                        <path id="widthArrowRight" d="M294,516 L300,520 L294,524" fill="none" stroke="#ff8c5a" stroke-width="1.5" />
+                        <text id="widthText" x="300" y="540" fill="#ffd0bd" font-size="12" font-weight="700" text-anchor="middle">B: 120mm</text>
+
+                        <!-- Diameter Dimension (Cota de Varilla A) -->
+                        <path id="diameterPointerLine" d="M360,260 L340,260 L315,290" fill="none" stroke="#ff8c5a" stroke-width="1.5" />
+                        <path id="diameterArrow" d="M319,284 L315,290 L322,288" fill="none" stroke="#ff8c5a" stroke-width="1.5" />
+                        <text id="diameterText" x="342" y="255" fill="#ffd0bd" font-size="12" font-weight="700" text-anchor="start">A: 1/2"</text>
+
+                        <!-- 1. Solid U-Bolt body (renders underneath plates/nuts/threads) -->
+                        <path id="clampPath" d="M100,480 L100,200 A100,100 0 0,1 300,200 L300,480" fill="none" stroke="url(#dynamicClampGlow)" stroke-width="9.5" stroke-linecap="butt" />
+
+                        <!-- 2. Thread Overlays (Dashed lines to render screw threads directly on the U-bolt legs) -->
+                        <line id="threadLeft" x1="100" y1="480" x2="100" y2="350" stroke="#0d121f" stroke-width="10.5" stroke-dasharray="2,2" />
+                        <line id="threadRight" x1="300" y1="480" x2="300" y2="350" stroke="#0d121f" stroke-width="10.5" stroke-dasharray="2,2" />
+
+                        <!-- 3. Clamp base plate (Renders on top of threads and legs) -->
+                        <rect id="clampBase" x="80" y="456" width="240" height="10" rx="2" fill="#4b5563" stroke="rgba(255,255,255,0.12)" stroke-width="1.5" />
+                        
+                        <!-- 4. Nut Left & Nut Right (Screw nuts onto legs/threads from below) -->
+                        <rect id="nutLeft" x="88" y="466" width="24" height="12" rx="1.5" fill="#9ca3af" stroke="#111827" stroke-width="1.5" />
+                        <rect id="nutRight" x="288" y="466" width="24" height="12" rx="1.5" fill="#9ca3af" stroke="#111827" stroke-width="1.5" />
+                    </svg>
+                    
+                    <!-- Reactive textual summary -->
+                    <div class="clamp-simulator-info" style="margin-top: 14px; font-size: 0.84rem; color: #abb5c3; text-align: center; max-width: 380px; line-height: 1.45;">
+                        Medida interactiva: <strong id="clampCalculatedDesc" style="color: #fff;">Trefilada 1/2" x 120 x 180 Redonda</strong>
+                    </div>
+                </div>
+            </section>
+
             <section class="clamp-results-card clamp-results-card-main" id="clampResultsCard" style="display:none;">
                 <div class="clamp-results-header">
                     <h3 style="margin:0;">Resultado</h3>
@@ -785,11 +903,269 @@
         errorNode.textContent = message || '';
     }
 
+    function updateSimulator() {
+        const clampPath = document.getElementById('clampPath');
+        if (!clampPath) return;
+
+        const diameterSelect = document.getElementById('diameter');
+        const widthInput = document.getElementById('width_mm');
+        const lengthInput = document.getElementById('length_mm');
+        const profileSelect = document.getElementById('profile_type');
+        const zincatedCheckbox = document.getElementById('is_zincated');
+
+        const widthLine = document.getElementById('widthLine');
+        const widthArrowLeft = document.getElementById('widthArrowLeft');
+        const widthArrowRight = document.getElementById('widthArrowRight');
+        const widthText = document.getElementById('widthText');
+
+        const lengthLine = document.getElementById('lengthLine');
+        const lengthArrowTop = document.getElementById('lengthArrowTop');
+        const lengthArrowBottom = document.getElementById('lengthArrowBottom');
+        const lengthText = document.getElementById('lengthText');
+        const lengthWitnessTop = document.getElementById('lengthWitnessTop');
+        const lengthWitnessBottom = document.getElementById('lengthWitnessBottom');
+
+        const diameterPointerLine = document.getElementById('diameterPointerLine');
+        const diameterArrow = document.getElementById('diameterArrow');
+        const diameterText = document.getElementById('diameterText');
+
+        const clampBase = document.getElementById('clampBase');
+        const nutLeft = document.getElementById('nutLeft');
+        const nutRight = document.getElementById('nutRight');
+        const threadLeft = document.getElementById('threadLeft');
+        const threadRight = document.getElementById('threadRight');
+        const clampCalculatedDesc = document.getElementById('clampCalculatedDesc');
+
+        const type = getCurrentClampType();
+        const zincated = zincatedCheckbox ? zincatedCheckbox.checked : false;
+        const diameterVal = diameterSelect ? diameterSelect.value : '1/2"';
+        const profile = (profileSelect ? profileSelect.value : 'CURVA').toUpperCase();
+
+        // 1. Map rod diameter (A) fraction to physical mm
+        let realA = 12.70; // Default 1/2"
+        if (diameterVal.includes('1/4')) realA = 6.35;
+        else if (diameterVal.includes('5/16')) realA = 7.94;
+        else if (diameterVal.includes('3/8')) realA = 9.53;
+        else if (diameterVal.includes('7/16')) realA = 11.11;
+        else if (diameterVal.includes('1/2')) realA = 12.70;
+        else if (diameterVal.includes('9/16')) realA = 14.29;
+        else if (diameterVal.includes('5/8')) realA = 15.88;
+        else if (diameterVal.includes('3/4')) realA = 19.05;
+        else if (diameterVal.includes('7/8')) realA = 22.23;
+        else if (diameterVal === '1' || diameterVal.includes('1"') || diameterVal.includes('1in')) realA = 25.40;
+        else {
+            let num = parseFloat(diameterVal);
+            if (!isNaN(num) && num > 0) {
+                realA = num;
+            }
+        }
+
+        // 2. Apply coherent physical limits dynamically to avoid impossible dimensions or broken graphics
+        const minW = Math.max(20, Math.ceil(realA * 1.2));
+        const maxW = 1000;
+        if (widthInput) {
+            widthInput.setAttribute('min', minW);
+            widthInput.setAttribute('max', maxW);
+        }
+
+        let rawB = parseFloat(widthInput ? widthInput.value : 120);
+        if (isNaN(rawB)) rawB = 120;
+        const B_real = Math.min(maxW, Math.max(minW, rawB));
+
+        let minC = Math.max(30, Math.ceil(realA * 1.5));
+        // Semicircular Redonda shape requires length C to be at least half the inner width (radius B/2)
+        if (profile.includes('CURV') && !profile.includes('SEMI')) {
+            minC = Math.max(minC, Math.ceil(B_real / 2));
+        }
+        const maxC = 1200;
+        if (lengthInput) {
+            lengthInput.setAttribute('min', minC);
+            lengthInput.setAttribute('max', maxC);
+        }
+
+        let rawC = parseFloat(lengthInput ? lengthInput.value : 180);
+        if (isNaN(rawC)) rawC = 180;
+        const C_real = Math.min(maxC, Math.max(minC, rawC));
+
+        const widthVal = B_real;
+        const lengthVal = C_real;
+
+        // 3. Bounding Box calculations in real mm
+        const W_physical = B_real + (2 * realA); // Total width
+        const H_physical = C_real + realA;      // Total height
+
+        // 4. Calculate dynamic scaling factor (S) to perfectly fit inside the 440x440 visual box in the 600x600 canvas
+        const scaleX = 440 / W_physical;
+        const scaleY = 440 / H_physical;
+        // Preserves 1:1 real aspect ratio (proportional scale)
+        const S = Math.min(scaleX, scaleY);
+
+        // 5. Convert to visual coordinates (pixels)
+        const strokeW = realA * S;
+        const visualB = B_real * S;
+        const visualC = C_real * S;
+
+        clampPath.setAttribute('stroke-width', strokeW);
+
+        // Anchored baseline for consistent U-bolt placement
+        const Y_bottom = 480;
+        const leftX = 300 - (visualB + strokeW) / 2;
+        const rightX = 300 + (visualB + strokeW) / 2;
+        
+        const innerLeftX = 300 - visualB / 2;
+        const innerRightX = 300 + visualB / 2;
+
+        const Y_ceiling = Y_bottom - visualC;
+        const Y_centerline = Y_ceiling - strokeW / 2;
+
+        // 6. Generate smooth mathematical path profiles
+        let pathD = '';
+        if (profile.includes('PLAN')) {
+            // PLANA: flat horizontal ceiling with tight, physically realistic rounded corner bends (6mm real radius)
+            let r_real = Math.min(6, B_real / 4);
+            let r_inner = r_real * S;
+            let R = r_inner + strokeW / 2;
+            pathD = `M ${leftX},${Y_bottom} L ${leftX},${Y_centerline + R} A ${R},${R} 0 0,1 ${leftX + R},${Y_centerline} L ${rightX - R},${Y_centerline} A ${R},${R} 0 0,1 ${rightX},${Y_centerline + R} L ${rightX},${Y_bottom}`;
+        } else if (profile.includes('SEMI') || profile.includes('BASTARD')) {
+            // SEMICURVA: flat horizontal ceiling with wider, smoother rounded corner bends (24mm real radius)
+            let r_real = Math.min(24, B_real * 0.3);
+            let r_inner = r_real * S;
+            let R = r_inner + strokeW / 2;
+            pathD = `M ${leftX},${Y_bottom} L ${leftX},${Y_centerline + R} A ${R},${R} 0 0,1 ${leftX + R},${Y_centerline} L ${rightX - R},${Y_centerline} A ${R},${R} 0 0,1 ${rightX},${Y_centerline + R} L ${rightX},${Y_bottom}`;
+        } else {
+            // CURVA (Curva / Redonda): seamless semicircular curve top
+            let R_centerline = (visualB + strokeW) / 2;
+            let Y_arc_center = Y_ceiling + (visualB / 2);
+            pathD = `M ${leftX},${Y_bottom} L ${leftX},${Y_arc_center} A ${R_centerline},${R_centerline} 0 0,1 ${rightX},${Y_arc_center} L ${rightX},${Y_bottom}`;
+        }
+        clampPath.setAttribute('d', pathD);
+
+        // 7. Zinc Plating Metallic Colors and Luminous Glow Accentuation
+        const stop0 = document.getElementById('glowStop0');
+        const stop50 = document.getElementById('glowStop50');
+        const stop100 = document.getElementById('glowStop100');
+        if (stop0 && stop50 && stop100) {
+            if (zincated) {
+                stop0.setAttribute('stop-color', '#a5f3fc');
+                stop50.setAttribute('stop-color', '#38bdf8');
+                stop100.setAttribute('stop-color', '#0284c7');
+            } else {
+                stop0.setAttribute('stop-color', '#ffd5c4');
+                stop50.setAttribute('stop-color', '#ff6b35');
+                stop100.setAttribute('stop-color', '#d94814');
+            }
+        }
+
+        // 8. Update Width Cota B (Ancho interior) - Points exactly from inner face to inner face
+        const cotaY = Y_bottom + 40;
+        widthLine.setAttribute('x1', innerLeftX);
+        widthLine.setAttribute('x2', innerRightX);
+        widthLine.setAttribute('y1', cotaY);
+        widthLine.setAttribute('y2', cotaY);
+
+        widthArrowLeft.setAttribute('d', `M${innerLeftX + 6},${cotaY - 4} L${innerLeftX},${cotaY} L${innerLeftX + 6},${cotaY + 4}`);
+        widthArrowRight.setAttribute('d', `M${innerRightX - 6},${cotaY - 4} L${innerRightX},${cotaY} L${innerRightX - 6},${cotaY + 4}`);
+        widthText.textContent = `B: ${widthVal}mm`;
+        widthText.setAttribute('x', 300);
+        widthText.setAttribute('y', cotaY + 20);
+
+        // 9. Update Length Cota C (Largo interior útil) - From inner curve ceiling down to leg tip
+        const X_cota = Math.max(20, leftX - (strokeW / 2) - 35);
+        lengthLine.setAttribute('x1', X_cota);
+        lengthLine.setAttribute('x2', X_cota);
+        lengthLine.setAttribute('y1', Y_ceiling);
+        lengthLine.setAttribute('y2', Y_bottom);
+
+        lengthArrowTop.setAttribute('d', `M${X_cota - 4},${Y_ceiling + 6} L${X_cota},${Y_ceiling} L${X_cota + 4},${Y_ceiling + 6}`);
+        lengthArrowBottom.setAttribute('d', `M${X_cota - 4},${Y_bottom - 6} L${X_cota},${Y_bottom} L${X_cota + 4},${Y_bottom - 6}`);
+        lengthText.textContent = `C: ${lengthVal}mm`;
+        lengthText.setAttribute('x', X_cota - 12);
+        const midY = (Y_ceiling + Y_bottom) / 2;
+        lengthText.setAttribute('y', midY);
+        lengthText.setAttribute('transform', `rotate(-90 ${X_cota - 12} ${midY})`);
+
+        // Length horizontal witness lines
+        if (lengthWitnessTop && lengthWitnessBottom) {
+            lengthWitnessTop.setAttribute('x1', X_cota);
+            lengthWitnessTop.setAttribute('x2', innerLeftX);
+            lengthWitnessTop.setAttribute('y1', Y_ceiling);
+            lengthWitnessTop.setAttribute('y2', Y_ceiling);
+
+            lengthWitnessBottom.setAttribute('x1', X_cota);
+            lengthWitnessBottom.setAttribute('x2', innerLeftX);
+            lengthWitnessBottom.setAttribute('y1', Y_bottom);
+            lengthWitnessBottom.setAttribute('y2', Y_bottom);
+        }
+
+        // 10. Update Varilla Cota A (Rod Diameter) - Custom technical leader arrow pointing at rod
+        const outerRightX = rightX + strokeW / 2;
+        const Y_point = Y_bottom - visualC / 2;
+        if (diameterPointerLine && diameterArrow && diameterText) {
+            diameterPointerLine.setAttribute('d', `M${outerRightX + 70},${Y_point - 30} L${outerRightX + 35},${Y_point - 30} L${outerRightX},${Y_point}`);
+            diameterArrow.setAttribute('d', `M${outerRightX + 2},${Y_point - 8} L${outerRightX},${Y_point} L${outerRightX + 8},${Y_point - 2}`);
+            diameterText.textContent = `A: ${diameterVal}`;
+            diameterText.setAttribute('x', outerRightX + 38);
+            diameterText.setAttribute('y', Y_point - 35);
+        }
+
+        // 11. Update Thread Length Overlays - Default to 35% of length
+        let visualRosca = Math.max(45, visualC * 0.35);
+        visualRosca = Math.min(visualRosca, visualC * 0.85);
+        const Y_thread_top = Y_bottom - visualRosca;
+
+        if (threadLeft && threadRight) {
+            threadLeft.setAttribute('x1', leftX);
+            threadLeft.setAttribute('x2', leftX);
+            threadLeft.setAttribute('y1', Y_bottom);
+            threadLeft.setAttribute('y2', Y_thread_top);
+            threadLeft.setAttribute('stroke-width', strokeW + 1.6);
+
+            threadRight.setAttribute('x1', rightX);
+            threadRight.setAttribute('x2', rightX);
+            threadRight.setAttribute('y1', Y_bottom);
+            threadRight.setAttribute('y2', Y_thread_top);
+            threadRight.setAttribute('stroke-width', strokeW + 1.6);
+        }
+
+        // 12. Precise Plate & Assembly Nuts positioning
+        const nutWidth = Math.max(24, strokeW * 1.8);
+        const nutHeight = Math.max(12, strokeW * 0.9);
+        const bottomGap = Math.max(2, strokeW * 0.15);
+        const nutY = Y_bottom - bottomGap - nutHeight;
+        const baseHeight = Math.max(8, strokeW * 0.6);
+        const baseY = nutY - baseHeight;
+
+        if (clampBase && nutLeft && nutRight) {
+            clampBase.setAttribute('x', leftX - Math.max(20, strokeW * 1.3));
+            clampBase.setAttribute('width', visualB + strokeW + Math.max(40, strokeW * 2.6));
+            clampBase.setAttribute('y', baseY);
+            clampBase.setAttribute('height', baseHeight);
+
+            nutLeft.setAttribute('x', leftX - nutWidth / 2);
+            nutLeft.setAttribute('width', nutWidth);
+            nutLeft.setAttribute('y', nutY);
+            nutLeft.setAttribute('height', nutHeight);
+
+            nutRight.setAttribute('x', rightX - nutWidth / 2);
+            nutRight.setAttribute('width', nutWidth);
+            nutRight.setAttribute('y', nutY);
+            nutRight.setAttribute('height', nutHeight);
+        }
+
+        // 13. Update Reactive Textual Descriptions
+        if (clampCalculatedDesc) {
+            const isZincStr = zincated ? ' Zincada' : '';
+            const profileLabel = profile.charAt(0).toUpperCase() + profile.slice(1).toLowerCase();
+            clampCalculatedDesc.innerHTML = `${type.charAt(0).toUpperCase() + type.slice(1)}${isZincStr} <strong>${diameterVal} x ${widthVal} x ${lengthVal}</strong> (${profileLabel})`;
+        }
+    }
+
     function runClampCalculation() {
         try {
             const result = calculateClampQuote();
             showCalcError('');
             renderClampResults(result);
+            updateSimulator();
             return result;
         } catch (error) {
             showCalcError(error.message || 'No se pudo calcular.');
@@ -908,6 +1284,7 @@
                 syncDiameterOptions(radio.value);
                 renderCodeLogicPreview();
                 refreshClampCodeNamePreview();
+                updateSimulator();
             });
         });
         ['diameter', 'width_mm', 'length_mm', 'profile_type'].forEach((id) => {
@@ -915,11 +1292,15 @@
             const refreshPreview = () => {
                 renderCodeLogicPreview();
                 refreshClampCodeNamePreview();
+                updateSimulator();
             };
             node?.addEventListener('input', refreshPreview);
             node?.addEventListener('change', refreshPreview);
         });
-        document.getElementById('is_zincated')?.addEventListener('change', refreshClampCodeNamePreview);
+        document.getElementById('is_zincated')?.addEventListener('change', () => {
+            refreshClampCodeNamePreview();
+            updateSimulator();
+        });
         const codeInput = document.getElementById('clamp_code_input');
         codeInput?.addEventListener('keydown', (event) => {
             if (event.key === 'Enter' || event.code === 'Enter' || event.code === 'NumpadEnter') {
@@ -932,6 +1313,7 @@
         });
         syncDiameterOptions();
         renderCodeLogicPreview();
+        updateSimulator();
 
         // Pre-calculate only when required values are present.
         const width = (document.getElementById('width_mm')?.value || '').trim();
