@@ -489,6 +489,19 @@ def product_create(request):
                     image=uploaded_image,
                 )
                 assign_categories_to_product(product, selected_category_ids, primary_category_id)
+                blocks_payload = request.POST.get('product_blocks_json', '{}')
+                try:
+                    blocks_data = json.loads(blocks_payload or '{}')
+                except Exception:
+                    blocks_data = {}
+                for cid_str, block_label in blocks_data.items():
+                    if cid_str.isdigit():
+                        cid = int(cid_str)
+                        clean_block = " ".join(str(block_label or "").split())[:120]
+                        CategoryProductOrder.objects.filter(
+                            product=product,
+                            category_id=cid
+                        ).update(block_label=clean_block)
                 log_admin_action(
                     request,
                     action="product_create",
@@ -510,6 +523,7 @@ def product_create(request):
         'selected_category_ids': [],
         'supplier_suggestions': supplier_suggestions,
         'action': 'Crear',
+        'existing_blocks_json': '{}',
     })
 
 
@@ -520,6 +534,11 @@ def product_edit(request, pk):
     product = get_object_or_404(Product, pk=pk)
     _attach_import_duplicate_alert(product)
     category_options = get_cached_category_options(only_active=True, include_inactive_suffix=False)
+    existing_blocks = {
+        row.category_id: row.block_label or ''
+        for row in CategoryProductOrder.objects.filter(product=product)
+    }
+    existing_blocks_json = json.dumps(existing_blocks)
     supplier_suggestions = list(Supplier.objects.order_by('name').values_list('name', flat=True)[:400])
     
     if request.method == 'POST':
@@ -559,6 +578,7 @@ def product_edit(request, pk):
                     'selected_category_ids': selected_category_ids,
                     'supplier_suggestions': supplier_suggestions,
                     'action': 'Editar',
+                    'existing_blocks_json': existing_blocks_json,
                 })
 
             product.category_id = int(primary_category_id) if str(primary_category_id).isdigit() else None
@@ -587,6 +607,7 @@ def product_edit(request, pk):
                     'selected_category_ids': selected_category_ids,
                     'supplier_suggestions': supplier_suggestions,
                     'action': 'Editar',
+                    'existing_blocks_json': existing_blocks_json,
                 })
             if missing_recommended:
                 messages.warning(
@@ -605,6 +626,19 @@ def product_edit(request, pk):
             
             product.save()
             assign_categories_to_product(product, selected_category_ids, primary_category_id)
+            blocks_payload = request.POST.get('product_blocks_json', '{}')
+            try:
+                blocks_data = json.loads(blocks_payload or '{}')
+            except Exception:
+                blocks_data = {}
+            for cid_str, block_label in blocks_data.items():
+                if cid_str.isdigit():
+                    cid = int(cid_str)
+                    clean_block = " ".join(str(block_label or "").split())[:120]
+                    CategoryProductOrder.objects.filter(
+                        product=product,
+                        category_id=cid
+                    ).update(block_label=clean_block)
             if new_image_applied and old_image_name:
                 _delete_orphan_product_image(old_image_name)
             log_admin_action(
@@ -634,6 +668,7 @@ def product_edit(request, pk):
         'selected_category_ids': selected_category_ids,
         'supplier_suggestions': supplier_suggestions,
         'action': 'Editar',
+        'existing_blocks_json': existing_blocks_json,
     })
 
 
@@ -3135,7 +3170,17 @@ def get_category_attributes(request, category_id):
     attributes = CategoryAttribute.objects.filter(category_id=category_id).values(
         'name', 'slug', 'type', 'options', 'required', 'is_recommended', 'regex_pattern'
     )
-    return JsonResponse({'attributes': list(attributes)})
+    blocks = list(
+        CategoryProductOrder.objects.filter(category_id=category_id)
+        .exclude(block_label="")
+        .values_list("block_label", flat=True)
+        .distinct()
+        .order_by("block_label")
+    )
+    return JsonResponse({
+        'attributes': list(attributes),
+        'blocks': blocks
+    })
 
 
 @staff_member_required

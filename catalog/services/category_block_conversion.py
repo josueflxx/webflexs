@@ -92,7 +92,7 @@ def _created_order_matches(row, snapshot):
     )
 
 
-def convert_category_blocks_to_subcategories(category):
+def convert_category_blocks_to_subcategories(category, conversions=None):
     """
     Create one direct child category per named product block.
 
@@ -121,6 +121,14 @@ def convert_category_blocks_to_subcategories(category):
         ).values_list("product_id", flat=True)
     )
 
+    conversions_map = {}
+    if conversions is not None:
+        for item in conversions:
+            orig = _clean_block_name(item.get("original")).lower()
+            new_n = _clean_block_name(item.get("new_name"))
+            if orig and new_n:
+                conversions_map[orig] = new_n
+
     rows_to_convert = []
     block_meta = {}
     for row in order_rows:
@@ -132,11 +140,17 @@ def convert_category_blocks_to_subcategories(category):
             result.skipped_unlinked += 1
             continue
 
-        rows_to_convert.append({**row, "block_name": block_name})
-        if block_name.lower() not in block_meta:
+        block_name_lower = block_name.lower()
+        if conversions is not None and block_name_lower not in conversions_map:
+            continue
+
+        target_block_name = conversions_map.get(block_name_lower, block_name) if conversions is not None else block_name
+
+        rows_to_convert.append({**row, "block_name": target_block_name})
+        if target_block_name.lower() not in block_meta:
             block_order = _as_positive_int(row.get("block_order"), fallback=0)
-            block_meta[block_name.lower()] = {
-                "name": block_name,
+            block_meta[target_block_name.lower()] = {
+                "name": target_block_name,
                 "order": block_order,
             }
 

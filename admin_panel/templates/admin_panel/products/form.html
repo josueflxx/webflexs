@@ -163,6 +163,18 @@
             <small class="text-muted">Puedes vincular el producto a multiples categorias sin perder historial.</small>
         </div>
 
+        <!-- Contenedor para asignar bloques a las categorías seleccionadas (Sugerencia 5) -->
+        <div id="product-blocks-assignment-section" class="form-group" style="display: none; border: 1px solid rgba(255,255,255,0.12); padding: 16px; border-radius: 8px; margin-top: 15px; background-color: rgba(255,255,255,0.025);">
+            <h4 style="margin: 0 0 10px 0; color: #ff6b35; font-size: 0.95rem; font-weight: 700;">Bloques de Ordenación por Categoría</h4>
+            <p style="margin: 0 0 14px 0; font-size: 0.82rem; color: #94a3b8;">
+                Asigna el producto a un bloque de ordenación específico en cada categoría vinculada. Si se deja en blanco, quedará sin bloque.
+            </p>
+            <div id="product-blocks-assignment-list" style="display: flex; flex-direction: column; gap: 10px;">
+                <!-- Se llena dinámicamente -->
+            </div>
+            <input type="hidden" name="product_blocks_json" id="product_blocks_json_input" value="{}">
+        </div>
+
         <!-- Dynamic Attributes Container -->
         <div id="dynamic-attributes-container" class="form-group" style="display:none; border: 1px solid #eee; padding: 15px; border-radius: 5px; margin-top: 15px; background-color: #f9f9f9;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
@@ -230,6 +242,7 @@
 </div>
 
 {{ product.attributes|json_script:"attributes-data" }}
+{{ existing_blocks_json|json_script:"existing-blocks-data" }}
 
 <style>
     .category-check-grid {
@@ -360,21 +373,170 @@
     const currentAttributes = JSON.parse(document.getElementById('attributes-data').textContent || '{}');
     const isReadOnly = {% if user.is_superuser %}false{% else %}true{% endif %};
 
+    // Store block assignments
+    let currentBlocks = {};
+    const categoryBlocksCache = {};
+
+    try {
+        const initialBlocksScript = document.getElementById('existing-blocks-data');
+        if (initialBlocksScript) {
+            currentBlocks = JSON.parse(initialBlocksScript.textContent || '{}');
+        }
+    } catch(e) {
+        console.error("Error parsing existing blocks data:", e);
+    }
+
+    function escapeHtml(str) {
+        if (!str) return '';
+        return String(str)
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+    }
+
+    function updateHiddenInput() {
+        const checkedIds = Array.from(document.querySelectorAll('.category-check:checked')).map(cb => cb.value);
+        const filteredBlocks = {};
+        checkedIds.forEach(cid => {
+            if (currentBlocks[cid]) {
+                filteredBlocks[cid] = currentBlocks[cid];
+            }
+        });
+        document.getElementById('product_blocks_json_input').value = JSON.stringify(filteredBlocks);
+    }
+
+    async function fetchCategoryBlocks(categoryId) {
+        if (categoryBlocksCache[categoryId] !== undefined) {
+            return categoryBlocksCache[categoryId];
+        }
+        try {
+            const response = await fetch(`/admin-panel/api/category-attributes/${categoryId}/`);
+            const data = await response.json();
+            categoryBlocksCache[categoryId] = data.blocks || [];
+        } catch (err) {
+            console.error("Error fetching blocks:", err);
+            categoryBlocksCache[categoryId] = [];
+        }
+        return categoryBlocksCache[categoryId];
+    }
+
+    async function updateBlocksUI() {
+        const listContainer = document.getElementById('product-blocks-assignment-list');
+        const section = document.getElementById('product-blocks-assignment-section');
+        const checkedCheckboxes = Array.from(document.querySelectorAll('.category-check:checked'));
+
+        if (checkedCheckboxes.length === 0) {
+            section.style.display = 'none';
+            listContainer.innerHTML = '';
+            updateHiddenInput();
+            return;
+        }
+
+        section.style.display = 'block';
+        const checkedIds = checkedCheckboxes.map(cb => cb.value);
+
+        // Remove rows for categories that are no longer checked
+        const existingRows = listContainer.querySelectorAll('.block-assignment-row');
+        existingRows.forEach(row => {
+            const cid = row.dataset.categoryId;
+            if (!checkedIds.includes(cid)) {
+                row.remove();
+            }
+        });
+
+        // Add/update rows for checked categories
+        for (const cb of checkedCheckboxes) {
+            const cid = cb.value;
+            const labelText = cb.closest('.category-check-item').querySelector('strong').textContent.trim();
+            const fullPath = cb.closest('.category-check-item').querySelector('small').textContent.trim();
+            
+            let row = listContainer.querySelector(`.block-assignment-row[data-category-id="${cid}"]`);
+            if (!row) {
+                const blocks = await fetchCategoryBlocks(cid);
+                const currentValue = currentBlocks[cid] || '';
+                const isExisting = blocks.includes(currentValue);
+                const isNewSelected = currentValue && !isExisting;
+                const customValue = isNewSelected ? currentValue : '';
+                
+                let optionsHtml = '';
+                blocks.forEach(b => {
+                    const selected = (currentValue === b) ? 'selected' : '';
+                    optionsHtml += `<option value="${escapeHtml(b)}" ${selected}>${escapeHtml(b)}</option>`;
+                });
+
+                const rowHtml = `
+                    <div class="block-assignment-row" data-category-id="${cid}" style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap; background: rgba(255,255,255,0.015); border: 1px solid rgba(255,255,255,0.05); padding: 8px 12px; border-radius: 6px;">
+                        <div style="flex: 1; min-width: 150px;">
+                            <span style="font-weight: 600; font-size: 0.88rem; color: #f1f5f9;">${escapeHtml(labelText)}</span>
+                            <div style="font-size: 0.72rem; color: #64748b; margin-top: 1px;">${escapeHtml(fullPath)}</div>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 8px; flex: 2; min-width: 250px;">
+                            <select class="form-select block-select" style="max-width: 180px; font-size: 0.82rem; height: 32px; padding: 4px 8px;" ${isReadOnly ? 'disabled' : ''}>
+                                <option value="">-- Sin bloque --</option>
+                                ${optionsHtml}
+                                <option value="__NEW__" ${isNewSelected ? 'selected' : ''}>+ Nuevo bloque...</option>
+                            </select>
+                            <input type="text" class="form-input block-custom-input" placeholder="Nombre del bloque..." style="flex: 1; font-size: 0.82rem; height: 32px; padding: 4px 8px; display: ${isNewSelected ? 'block' : 'none'};" value="${escapeHtml(customValue)}" ${isReadOnly ? 'disabled' : ''}>
+                        </div>
+                    </div>
+                `;
+                listContainer.insertAdjacentHTML('beforeend', rowHtml);
+                row = listContainer.querySelector(`.block-assignment-row[data-category-id="${cid}"]`);
+                
+                const select = row.querySelector('.block-select');
+                const customInput = row.querySelector('.block-custom-input');
+                
+                select.addEventListener('change', function() {
+                    if (this.value === '__NEW__') {
+                        customInput.style.display = 'block';
+                        customInput.focus();
+                        currentBlocks[cid] = customInput.value.trim();
+                    } else {
+                        customInput.style.display = 'none';
+                        currentBlocks[cid] = this.value;
+                    }
+                    updateHiddenInput();
+                });
+                
+                customInput.addEventListener('input', function() {
+                    currentBlocks[cid] = this.value.trim();
+                    updateHiddenInput();
+                });
+            }
+        }
+        updateHiddenInput();
+    }
+
     document.addEventListener('DOMContentLoaded', function() {
         // Initial load
         loadCategoryAttributes();
         bindCategorySearch();
+        updateBlocksUI();
+
+        // Listen for category checkbox changes
+        document.querySelectorAll('.category-check').forEach(cb => {
+            cb.addEventListener('change', updateBlocksUI);
+        });
+
+        // Listen for primary category changes
+        document.getElementById('category').addEventListener('change', function() {
+            setTimeout(updateBlocksUI, 50);
+        });
 
         // Intercept form submission to collect JSON
         const form = document.querySelector('form');
         form.addEventListener('submit', function(e) {
             try {
                 collectAttributes();
+                updateHiddenInput();
             } catch (err) {
                 e.preventDefault();
             }
         });
     });
+
 
     
     function bindCategorySearch() {

@@ -124,17 +124,19 @@
                 </div>
             </form>
 
-            <form method="post" class="order-toolbox-card">
+            <form id="convertBlocksForm" method="post" class="order-toolbox-card">
                 {% csrf_token %}
                 <input type="hidden" name="action" value="convert_blocks">
+                <input type="hidden" name="conversions_json" id="conversionsJsonInput" value="">
                 <strong>Convertir bloques</strong>
                 <p>Crea subcategorias hijas con los nombres de los bloques y vincula sus productos.</p>
                 <div class="order-toolbox-actions">
                     <button
-                        type="submit"
+                        type="button"
+                        id="btnOpenConvertModal"
                         class="btn btn-primary btn-sm"
                         {% if not named_block_summaries %}disabled{% endif %}
-                        onclick="return confirm('Se crearan subcategorias para los bloques de esta categoria. Los productos conservaran tambien el vinculo con la categoria padre. Continuar?')"
+                        onclick="openConvertBlocksModal()"
                     >
                         Crear subcategorias
                     </button>
@@ -219,6 +221,25 @@
         </div>
 
         <div id="orderPreviewPanel" class="order-preview-panel" hidden></div>
+
+        <!-- Modal para Convertir Bloques a Subcategorías (Sugerencia 3) -->
+        <div id="convertBlocksModal" class="category-modal" style="display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.5);">
+            <div class="category-modal-content" style="background-color: #1e293b; color: #f8fafc; border: 1px solid rgba(255,255,255,0.15); margin: 12% auto; padding: 22px; width: 500px; max-width: calc(100% - 32px); border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
+                <h3 style="margin-top: 0; color: #ff6b35; font-size: 1.25rem;">Convertir Bloques a Subcategorías</h3>
+                <p style="margin-bottom: 16px; font-size: 0.9rem; color: #94a3b8;">
+                    Elige qué bloques deseas convertir en subcategorías y personaliza sus nombres. Los productos mantendrán su relación con la categoría principal.
+                </p>
+                
+                <div id="convertBlocksList" style="max-height: 240px; overflow-y: auto; margin-bottom: 18px; display: flex; flex-direction: column; gap: 10px;">
+                    <!-- Dinámicamente poblado con JS -->
+                </div>
+
+                <div style="display: flex; justify-content: flex-end; gap: 10px;">
+                    <button type="button" class="btn btn-outline" onclick="closeConvertBlocksModal()">Cancelar</button>
+                    <button type="button" class="btn btn-primary" id="btnConfirmBlockConversion">Confirmar Conversión</button>
+                </div>
+            </div>
+        </div>
     </section>
     {% endif %}
 
@@ -672,7 +693,7 @@
                 });
             }
 
-            function applyManualPositions() {
+             function applyManualPositions() {
                 const ordered = rows()
                     .map((row, index) => {
                         const input = row.querySelector('.product-position-input');
@@ -683,6 +704,30 @@
 
                 ordered.forEach((item) => tbody.appendChild(item.row));
                 refreshVisibleOrder();
+            }
+
+            function moveRowToPosition(row, targetPosition) {
+                const allRows = rows();
+                const currentIndex = allRows.indexOf(row);
+                if (currentIndex === -1) return;
+
+                let targetIndex = targetPosition - ORDER_PAGE_START;
+                if (targetIndex < 0) targetIndex = 0;
+                if (targetIndex >= allRows.length) targetIndex = allRows.length - 1;
+
+                if (currentIndex === targetIndex) return;
+
+                allRows.splice(currentIndex, 1);
+                allRows.splice(targetIndex, 0, row);
+
+                allRows.forEach((r) => tbody.appendChild(r));
+                refreshVisibleOrder();
+                markDirty();
+
+                row.classList.remove('row-moved-highlight');
+                void row.offsetWidth;
+                row.classList.add('row-moved-highlight');
+                setTimeout(() => row.classList.remove('row-moved-highlight'), 2000);
             }
 
             function moveSelected(direction) {
@@ -713,6 +758,13 @@
 
                 refreshVisibleOrder();
                 markDirty();
+
+                selected.forEach((row) => {
+                    row.classList.remove('row-moved-highlight');
+                    void row.offsetWidth;
+                    row.classList.add('row-moved-highlight');
+                    setTimeout(() => row.classList.remove('row-moved-highlight'), 2000);
+                });
             }
 
             function ensureBlockOption(label, blockOrder) {
@@ -823,8 +875,12 @@
                 const positionInput = row.querySelector('.product-position-input');
                 if (positionInput) {
                     positionInput.addEventListener('change', () => {
-                        applyManualPositions();
-                        markDirty();
+                        const targetPos = parseInt(positionInput.value, 10);
+                        if (Number.isInteger(targetPos)) {
+                            moveRowToPosition(row, targetPos);
+                        } else {
+                            refreshVisibleOrder();
+                        }
                     });
                 }
 
@@ -1016,6 +1072,98 @@
 
             updateSelectionTools();
         }
+
+        function openConvertBlocksModal() {
+            const modal = document.getElementById('convertBlocksModal');
+            const listContainer = document.getElementById('convertBlocksList');
+            if (!modal || !listContainer) return;
+
+            const blockRows = Array.from(document.querySelectorAll('.order-block-row'));
+            listContainer.innerHTML = '';
+
+            if (blockRows.length === 0) {
+                listContainer.innerHTML = '<div style="color: #94a3b8; font-size: 0.9rem; text-align: center; padding: 10px;">No hay bloques para convertir.</div>';
+                return;
+            }
+
+            blockRows.forEach((row) => {
+                const blockLabel = row.dataset.blockLabel;
+                if (!blockLabel) return;
+                
+                const countText = row.querySelector('small')?.textContent || '';
+                const uniqueId = 'block_conv_' + Math.random().toString(36).substr(2, 9);
+
+                const itemHtml = `
+                    <div style="display: flex; align-items: center; gap: 12px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); padding: 10px 14px; border-radius: 8px;">
+                        <input type="checkbox" id="${uniqueId}" class="block-convert-check" data-original="${blockLabel}" checked style="width: 18px; height: 18px; accent-color: #ff6b35; cursor: pointer;">
+                        <div style="flex-grow: 1; display: flex; flex-direction: column; gap: 4px;">
+                            <label for="${uniqueId}" style="font-weight: 700; font-size: 0.9rem; cursor: pointer; color: #f8fafc;">
+                                ${blockLabel} <span style="font-weight: normal; font-size: 0.8rem; color: #94a3b8;">(${countText})</span>
+                            </label>
+                            <input type="text" class="block-convert-name form-input" data-original="${blockLabel}" value="${blockLabel}" placeholder="Nombre de subcategoría..." style="width: 100%; height: 32px; border-radius: 6px; font-size: 0.85rem; border-color: rgba(255,255,255,0.14); background: rgba(255,255,255,0.05); color: #f8fafc; padding: 4px 8px;">
+                        </div>
+                    </div>
+                `;
+                listContainer.insertAdjacentHTML('beforeend', itemHtml);
+            });
+
+            modal.style.display = 'block';
+        }
+
+        function closeConvertBlocksModal() {
+            const modal = document.getElementById('convertBlocksModal');
+            if (modal) modal.style.display = 'none';
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const confirmBtn = document.getElementById('btnConfirmBlockConversion');
+            if (confirmBtn) {
+                confirmBtn.addEventListener('click', () => {
+                    const checkedItems = Array.from(document.querySelectorAll('.block-convert-check:checked'));
+                    if (checkedItems.length === 0) {
+                        alert('Debes seleccionar al menos un bloque para convertir.');
+                        return;
+                    }
+
+                    const conversions = [];
+                    let hasError = false;
+                    
+                    checkedItems.forEach((check) => {
+                        const original = check.dataset.original;
+                        const rowContainer = check.closest('div');
+                        const nameInput = rowContainer.querySelector('.block-convert-name');
+                        const newName = nameInput ? nameInput.value.trim() : '';
+
+                        if (!newName) {
+                            alert(`El nombre para el bloque "${original}" no puede estar vacío.`);
+                            hasError = true;
+                            return;
+                        }
+                        conversions.push({
+                            original: original,
+                            new_name: newName
+                        });
+                    });
+
+                    if (hasError) return;
+
+                    const inputJson = document.getElementById('conversionsJsonInput');
+                    const form = document.getElementById('convertBlocksForm');
+                    if (inputJson && form) {
+                        inputJson.value = JSON.stringify(conversions);
+                        form.submit();
+                    }
+                });
+            }
+
+            // Close modal when clicking outside
+            window.addEventListener('click', (e) => {
+                const modal = document.getElementById('convertBlocksModal');
+                if (e.target === modal) {
+                    closeConvertBlocksModal();
+                }
+            });
+        });
     </script>
 
     <style>
@@ -1575,6 +1723,14 @@
             color: #f8fafc;
             text-align: center;
             font-weight: 900;
+        }
+
+        @keyframes row-highlight-fade {
+            0% { background-color: rgba(255, 107, 53, 0.35); }
+            100% { background-color: transparent; }
+        }
+        .row-moved-highlight {
+            animation: row-highlight-fade 2s ease-out;
         }
 
         .product-block-badge {

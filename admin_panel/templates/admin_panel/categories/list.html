@@ -454,7 +454,8 @@
 
     <div class="admin-toolbar category-filterbar">
         <form method="get" class="category-filter-form">
-            <input type="text" name="q" value="{{ search }}" class="form-input" placeholder="Buscar categoria o subcategoria...">
+            <input type="text" name="q" value="{{ search }}" class="form-input" placeholder="Buscar en BD (recarga)...">
+            <input type="text" id="realtimeSearchInput" class="form-input" placeholder="Filtrar en pantalla..." style="max-width: 250px;">
             <select name="status" class="form-select">
                 <option value="all" {% if status == 'all' %}selected{% endif %}>Todos los estados</option>
                 <option value="active" {% if status == 'active' %}selected{% endif %}>Solo activas</option>
@@ -733,6 +734,127 @@
 {% endif %}
 
 <script>
+    function escapeHtml(str) {
+        if (!str) return '';
+        return String(str)
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+    }
+
+    let inSearchMode = false;
+    function filterCategoriesRealtime(query) {
+        const rows = Array.from(document.querySelectorAll('.category-row'));
+        const q = query.toLowerCase().trim();
+        
+        if (!q) {
+            // Restore original state if we were in search mode
+            rows.forEach(row => {
+                if (row.dataset.origExpanded !== undefined) {
+                    if (row.dataset.origExpanded === '1') {
+                        row.classList.add('expanded');
+                    } else {
+                        row.classList.remove('expanded');
+                    }
+                    delete row.dataset.origExpanded;
+                }
+                
+                const nameContainer = row.querySelector('.category-name-cell .category-name-meta strong');
+                if (nameContainer) {
+                    nameContainer.innerHTML = escapeHtml(row.dataset.categoryName);
+                }
+            });
+            
+            rows.forEach(row => {
+                const depth = parseInt(row.dataset.depth || '0', 10);
+                if (depth === 0) {
+                    row.style.display = 'table-row';
+                } else {
+                    const parentId = row.dataset.parentId;
+                    let show = false;
+                    if (parentId) {
+                        const parentRow = document.querySelector(`.category-row[data-category-id="${parentId}"]`);
+                        if (parentRow && parentRow.classList.contains('expanded') && parentRow.style.display !== 'none') {
+                            show = true;
+                        }
+                    }
+                    row.style.display = show ? 'table-row' : 'none';
+                }
+            });
+            
+            inSearchMode = false;
+            updateBulkSelectionUI();
+            return;
+        }
+        
+        if (!inSearchMode) {
+            rows.forEach(row => {
+                row.dataset.origExpanded = row.classList.contains('expanded') ? '1' : '0';
+            });
+            inSearchMode = true;
+        }
+        
+        const shownIds = new Set();
+        const idsToExpand = new Set();
+        
+        rows.forEach(row => {
+            const name = (row.dataset.categoryName || '').toLowerCase();
+            if (name.includes(q)) {
+                let currRow = row;
+                shownIds.add(currRow.dataset.categoryId);
+                
+                let parentId = currRow.dataset.parentId;
+                while (parentId) {
+                    shownIds.add(parentId);
+                    idsToExpand.add(parentId);
+                    const parentRow = document.querySelector(`.category-row[data-category-id="${parentId}"]`);
+                    if (parentRow) {
+                        parentId = parentRow.dataset.parentId;
+                    } else {
+                        break;
+                    }
+                }
+            }
+        });
+        
+        rows.forEach(row => {
+            const cid = row.dataset.categoryId;
+            const nameContainer = row.querySelector('.category-name-cell .category-name-meta strong');
+            
+            if (shownIds.has(cid)) {
+                row.style.display = 'table-row';
+                if (idsToExpand.has(cid)) {
+                    row.classList.add('expanded');
+                } else {
+                    row.classList.remove('expanded');
+                }
+                
+                if (nameContainer) {
+                    const origName = row.dataset.categoryName;
+                    const index = origName.toLowerCase().indexOf(q);
+                    if (index !== -1) {
+                        const part1 = origName.substring(0, index);
+                        const part2 = origName.substring(index, index + q.length);
+                        const part3 = origName.substring(index + q.length);
+                        nameContainer.innerHTML = `${escapeHtml(part1)}<mark style="background-color: var(--color-primary); color: var(--color-white); border-radius: 2px; padding: 0 2px;">${escapeHtml(part2)}</mark>${escapeHtml(part3)}`;
+                    } else {
+                        nameContainer.innerHTML = escapeHtml(origName);
+                    }
+                }
+            } else {
+                row.style.display = 'none';
+                row.classList.remove('expanded');
+                if (nameContainer) {
+                    nameContainer.innerHTML = escapeHtml(row.dataset.categoryName);
+                }
+            }
+        });
+        
+        updateBulkSelectionUI();
+    }
+
     function openDeleteModal() { document.getElementById('deleteModal').style.display = 'block'; }
     function closeDeleteModal() { document.getElementById('deleteModal').style.display = 'none'; }
     function checkDeleteInput(input, expected) {
@@ -860,6 +982,11 @@
     }
 
     function expandAllCategories() {
+        const realtimeInput = document.getElementById('realtimeSearchInput');
+        if (realtimeInput && realtimeInput.value) {
+            realtimeInput.value = '';
+            filterCategoriesRealtime('');
+        }
         document.querySelectorAll('.category-row').forEach((row) => {
             if (row.dataset.depth !== '0') {
                 row.style.display = 'table-row';
@@ -872,6 +999,11 @@
     }
 
     function collapseAllCategories() {
+        const realtimeInput = document.getElementById('realtimeSearchInput');
+        if (realtimeInput && realtimeInput.value) {
+            realtimeInput.value = '';
+            filterCategoriesRealtime('');
+        }
         document.querySelectorAll('.category-row').forEach((row) => {
             if (row.dataset.depth !== '0') {
                 row.style.display = 'none';
@@ -1151,6 +1283,17 @@
 
     document.addEventListener('DOMContentLoaded', () => {
         initDragAndDrop();
+        const realtimeInput = document.getElementById('realtimeSearchInput');
+        if (realtimeInput) {
+            realtimeInput.addEventListener('input', function() {
+                filterCategoriesRealtime(this.value);
+            });
+            realtimeInput.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                }
+            });
+        }
         const masterCheckbox = document.getElementById('selectAllCategories');
         if (masterCheckbox) {
             masterCheckbox.addEventListener('change', (event) => {

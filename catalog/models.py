@@ -2,6 +2,7 @@
 Catalog app models - products, categories, and clamp specs.
 """
 from django.db import models
+from django.core.exceptions import ValidationError
 from django.db.models import Q
 from django.utils import timezone
 from django.utils.text import slugify
@@ -78,7 +79,18 @@ class Category(models.Model):
             models.Index(fields=["parent", "visible_in_catalog"]),
         ]
 
+    def clean(self):
+        super().clean()
+        if self.parent_id:
+            if self.pk and self.parent_id == self.pk:
+                raise ValidationError("Una categoria no puede ser su propio padre.")
+            descendant_ids = self.get_descendant_ids(include_self=False)
+            if self.parent_id in descendant_ids:
+                raise ValidationError("No puedes mover esta categoria dentro de una de sus subcategorias.")
+
     def save(self, *args, **kwargs):
+        if not kwargs.get("raw", False):
+            self.full_clean()
         previous_is_active = None
         previous_visible_in_catalog = None
         if self.pk:
