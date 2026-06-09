@@ -380,7 +380,7 @@
 
                         <!-- Center Dashed Lines -->
                         <line x1="250" y1="30" x2="250" y2="450" stroke="rgba(255, 107, 53, 0.15)" stroke-width="1.5" stroke-dasharray="8,4" />
-                        <line x1="50" y1="130" x2="450" y2="130" stroke="rgba(255, 107, 53, 0.15)" stroke-width="1.5" stroke-dasharray="8,4" />
+                        <line x1="50" y1="180" x2="450" y2="180" stroke="rgba(255, 107, 53, 0.15)" stroke-width="1.5" stroke-dasharray="8,4" />
 
                         <!-- U-Bolt Body (Renders dynamically) -->
                         <path id="uBoltBody" class="u-bolt-body" d="" fill="none" stroke-width="26" stroke-linecap="butt" />
@@ -405,13 +405,13 @@
                         <text id="widthText" x="250" y="252" fill="#FF6B35" font-family="monospace" font-size="11" font-weight="bold" text-anchor="middle">Ancho (B)</text>
 
                         <!-- Length Cota (C) -->
-                        <line id="lengthLine" x1="85" y1="143" x2="85" y2="380" stroke="#FF6B35" stroke-width="1.5" />
+                        <line id="lengthLine" x1="85" y1="93" x2="85" y2="380" stroke="#FF6B35" stroke-width="1.5" />
                         <path id="lengthArrowTop" d="" fill="#FF6B35" />
                         <path id="lengthArrowBottom" d="" fill="#FF6B35" />
-                        <line id="lengthWitnessTop" x1="75" y1="143" x2="163" y2="143" stroke="#FF6B35" stroke-width="1" stroke-dasharray="3,3" />
+                        <line id="lengthWitnessTop" x1="75" y1="93" x2="163" y2="93" stroke="#FF6B35" stroke-width="1" stroke-dasharray="3,3" />
                         <line id="lengthWitnessBottom" x1="75" y1="380" x2="163" y2="380" stroke="#FF6B35" stroke-width="1" stroke-dasharray="3,3" />
-                        <rect id="lengthBg" x="35" y="251.5" width="100" height="20" fill="var(--theme-input-bg)" rx="2" stroke="rgba(255, 107, 53, 0.3)" stroke-width="1" transform="rotate(-90 85 261.5)" />
-                        <text id="lengthText" x="85" y="265.5" fill="#FF6B35" font-family="monospace" font-size="11" font-weight="bold" text-anchor="middle" transform="rotate(-90 85 261.5)">Largo (C)</text>
+                        <rect id="lengthBg" x="35" y="226.5" width="100" height="20" fill="var(--theme-input-bg)" rx="2" stroke="rgba(255, 107, 53, 0.3)" stroke-width="1" transform="rotate(-90 85 236.5)" />
+                        <text id="lengthText" x="85" y="240.5" fill="#FF6B35" font-family="monospace" font-size="11" font-weight="bold" text-anchor="middle" transform="rotate(-90 85 236.5)">Largo (C)</text>
 
                         <!-- Diameter Cota (A) -->
                         <path id="diameterLeader" d="M 337 240 L 385 200 L 435 200" stroke="#FF6B35" stroke-width="1.5" fill="none" />
@@ -541,38 +541,38 @@
         curva: {
             title: 'Abrazadera Curva (Redonda)',
             desc: 'La longitud útil (C) se mide exactamente desde el <strong>techo interno del arco</strong> hasta el extremo de las patas.',
-            d: 'M 150 380 L 150 230 A 100 100 0 0 1 350 230 L 350 380',
+            d: 'M 150 380 L 150 180 A 100 100 0 0 1 350 180 L 350 380',
             widthX1: 163,
             widthX2: 337,
-            lengthY1: 143, // Inner peak of the round curve (y = 230 - (100 - 13) = 143)
-            lengthArrowTop: 'M 85 143 L 81 151 L 89 151 Z',
+            lengthY1: 93, // Inner peak of the round curve (y = 180 - (100 - 13) = 93)
+            lengthArrowTop: 'M 85 93 L 81 101 L 89 101 Z',
             lengthArrowBottom: 'M 85 380 L 81 372 L 89 372 Z',
-            lengthWitnessTopY: 143,
-            rotateCenter: '85 261.5'
+            lengthWitnessTopY: 93,
+            rotateCenter: '85 236.5'
         },
         semicurva: {
             title: 'Abrazadera Semicurva',
             desc: 'Tiene un techo superior con mayor radio de curvatura. La longitud (C) se mide desde la <strong>cara interna de apoyo</strong>.',
-            d: 'M 150 380 L 150 250 A 40 40 0 0 1 190 210 L 310 210 A 40 40 0 0 1 350 250 L 350 380',
+            d: 'M 150 380 L 150 200 A 40 40 0 0 1 190 160 L 310 160 A 40 40 0 0 1 350 200 L 350 380',
             widthX1: 163,
             widthX2: 337,
-            lengthY1: 223, // Inner ceiling of the semicurva (y = 210 + 13 = 223)
-            lengthArrowTop: 'M 85 223 L 81 231 L 89 231 Z',
+            lengthY1: 173, // Inner ceiling of the semicurva (y = 160 + 13 = 173)
+            lengthArrowTop: 'M 85 173 L 81 181 L 89 181 Z',
             lengthArrowBottom: 'M 85 380 L 81 372 L 89 372 Z',
-            lengthWitnessTopY: 223,
-            rotateCenter: '85 301.5'
+            lengthWitnessTopY: 173,
+            rotateCenter: '85 276.5'
         },
         plana: {
             title: 'Abrazadera Plana',
             desc: 'Para ejes cuadrados. La longitud útil (C) se toma desde la <strong>superficie plana interior</strong> de la curva.',
-            d: 'M 150 380 L 150 220 A 10 10 0 0 1 160 210 L 340 210 A 10 10 0 0 1 350 220 L 350 380',
+            d: 'M 150 380 L 150 170 A 10 10 0 0 1 160 160 L 340 160 A 10 10 0 0 1 350 170 L 350 380',
             widthX1: 163,
             widthX2: 337,
-            lengthY1: 223, // Inner flat ceiling (y = 210 + 13 = 223)
-            lengthArrowTop: 'M 85 223 L 81 231 L 89 231 Z',
+            lengthY1: 173, // Inner flat ceiling (y = 160 + 13 = 173)
+            lengthArrowTop: 'M 85 173 L 81 181 L 89 181 Z',
             lengthArrowBottom: 'M 85 380 L 81 372 L 89 372 Z',
-            lengthWitnessTopY: 223,
-            rotateCenter: '85 301.5'
+            lengthWitnessTopY: 173,
+            rotateCenter: '85 276.5'
         }
     };
 
