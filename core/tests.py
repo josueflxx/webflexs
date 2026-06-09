@@ -752,3 +752,11 @@ class FiscalTypeCompatibilityTests(TestCase):
 
         self.assertTrue(is_valid)
         self.assertEqual(errors, [])
+
+
+class CoreHomePageTests(TestCase):
+    def test_home_page_renders_manual_link(self):
+        response = self.client.get(reverse("home"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, reverse("catalog_how_to_measure"))
+        self.assertContains(response, "Manual de Medición")

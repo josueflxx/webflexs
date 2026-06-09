@@ -2255,3 +2255,14 @@ class CatalogExcelGroupedExportTests(TestCase):
         self.assertEqual(stats["skipped_sheets"], ["Vacia visible"])
         self.assertIn("Catalogo", workbook.sheetnames)
         self.assertEqual(stats["rows_by_sheet"]["Catalogo"], 0)
+
+
+class CatalogHowToMeasureTests(TestCase):
+    def test_how_to_measure_view_returns_ok_and_uses_correct_template(self):
+        response = self.client.get(reverse("catalog_how_to_measure"))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "catalog/how_to_measure.html")
+        self.assertContains(response, "Cómo medir una abrazadera")
+        self.assertContains(response, "Ancho (B)")
+        self.assertContains(response, "Largo (C)")
+        self.assertContains(response, "Diám. (A)")

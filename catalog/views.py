@@ -1710,3 +1710,10 @@ def clamp_request_add_to_cart(request, pk):
         f"Se agrego la medida solicitada (#{clamp_request.pk}) al carrito.",
     )
     return redirect("cart")
+
+
+def how_to_measure(request):
+    """
+    Renders the U-bolt measurement guide page with interactive SVG diagrams, steps, and reference tables.
+    """
+    return render(request, "catalog/how_to_measure.html")

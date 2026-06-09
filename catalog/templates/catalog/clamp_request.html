@@ -388,7 +388,10 @@
                     Busca por tipo, medidas y forma. Si no existe, envia "Consultar precio".
                 </p>
             </div>
-            <div class="catalog-header-stats">
+            <div class="catalog-header-stats" style="display: flex; gap: 8px; flex-wrap: wrap;">
+                <span class="header-stat">
+                    <a href="{% url 'catalog_how_to_measure' %}" class="btn btn-outline btn-sm" style="color: var(--color-primary); border-color: var(--color-primary);">¿Cómo medir?</a>
+                </span>
                 <span class="header-stat">
                     <a href="{% url 'catalog' %}" class="btn btn-outline btn-sm">Volver al catalogo</a>
                 </span>

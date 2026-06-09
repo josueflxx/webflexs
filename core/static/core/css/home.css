@@ -1220,3 +1220,156 @@ html[data-theme="light"] {
     }
 }
 
+/* ========================================================
+   FLEXS Premium - Measurement Manual Section
+   ======================================================== */
+.measurement-manual-grid {
+    display: grid;
+    grid-template-columns: 1fr 1.2fr;
+    gap: var(--spacing-3xl);
+    align-items: center;
+    margin-top: var(--spacing-xl);
+}
+
+.measurement-manual-visual {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    position: relative;
+}
+
+.manual-preview-svg-container {
+    width: 100%;
+    max-width: 360px;
+    aspect-ratio: 1;
+    background: radial-gradient(circle at center, #111827 0%, #030712 100%);
+    border: 1px solid rgba(255, 107, 53, 0.25);
+    border-radius: var(--radius-lg);
+    padding: var(--spacing-md);
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.35), inset 0 2px 8px rgba(0,0,0,0.5);
+    position: relative;
+    overflow: hidden;
+}
+
+.manual-preview-svg-container::before {
+    content: "CAD PREVIEW";
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    font-family: monospace;
+    font-size: 0.65rem;
+    font-weight: 700;
+    color: rgba(255, 107, 53, 0.5);
+    letter-spacing: 1px;
+}
+
+#manualPreviewSvg path.u-bolt-body {
+    stroke: #e2e8f0;
+}
+
+#manualPreviewSvg path.u-bolt-thread {
+    stroke: #0f172a;
+}
+
+#manualPreviewSvg rect.assembly-plate {
+    fill: rgba(255, 107, 53, 0.1);
+    stroke: var(--color-primary, #FF6B35);
+}
+
+#manualPreviewSvg rect.assembly-nut {
+    fill: #374151;
+    stroke: #e2e8f0;
+}
+
+/* Light mode adjustments for the manual preview SVG */
+html[data-theme="light"] .manual-preview-svg-container {
+    background: radial-gradient(circle at center, #ffffff 0%, #f8fafc 100%) !important;
+    border-color: rgba(15, 23, 42, 0.08) !important;
+    box-shadow: 0 20px 40px rgba(15, 23, 42, 0.05), inset 0 2px 8px rgba(0,0,0,0.02) !important;
+}
+
+html[data-theme="light"] #manualPreviewSvg path.u-bolt-body {
+    stroke: #1e293b !important;
+}
+
+html[data-theme="light"] #manualPreviewSvg path.u-bolt-thread {
+    stroke: #ffffff !important;
+}
+
+html[data-theme="light"] #manualPreviewSvg rect.assembly-nut {
+    fill: #e2e8f0 !important;
+    stroke: #1e293b !important;
+}
+
+.measurement-manual-info h3 {
+    font-size: var(--font-size-2xl);
+    font-weight: 700;
+    margin-bottom: var(--spacing-md);
+    color: var(--color-primary);
+}
+
+.measurement-manual-info p {
+    color: var(--color-gray-light);
+    line-height: 1.75;
+    margin-bottom: var(--spacing-md);
+}
+
+/* Light theme overrides for general texts if needed */
+html[data-theme="light"] {
+    .measurement-manual-info p,
+    .manual-features-list li,
+    .manual-teaser-text {
+        color: var(--color-gray-dark) !important;
+    }
+}
+
+.manual-features-list {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 var(--spacing-lg) 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+}
+
+.manual-features-list li {
+    position: relative;
+    padding-left: var(--spacing-lg);
+    color: var(--color-gray-light);
+    font-size: 0.95rem;
+    line-height: 1.6;
+}
+
+.manual-features-list li::before {
+    content: "✓";
+    position: absolute;
+    left: 0;
+    color: var(--color-primary);
+    font-weight: bold;
+}
+
+.manual-teaser-text {
+    font-style: italic;
+    border-left: 3px solid var(--color-primary);
+    padding-left: var(--spacing-md);
+    color: var(--color-gray-light) !important;
+    margin-bottom: var(--spacing-lg) !important;
+}
+
+.manual-actions {
+    display: flex;
+    gap: var(--spacing-md);
+    margin-top: var(--spacing-lg);
+}
+
+@media (max-width: 992px) {
+    .measurement-manual-grid {
+        grid-template-columns: 1fr;
+        gap: var(--spacing-xl);
+    }
+    .measurement-manual-visual {
+        order: 2;
+    }
+}
+
+
