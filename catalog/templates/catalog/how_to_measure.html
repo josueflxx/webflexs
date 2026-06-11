@@ -422,6 +422,15 @@
                         <path id="diameterLeader" d="M 337 240 L 385 200 L 435 200" stroke="#FF6B35" stroke-width="1.5" fill="none" />
                         <path id="diameterArrow" d="M 337 240 L 345 238 L 339 232 Z" fill="#FF6B35" />
                         <text x="390" y="193" fill="#FF6B35" font-family="monospace" font-size="11" font-weight="bold" text-anchor="start">Diám. (A)</text>
+
+                        <!-- Thread Length Cota (D) -->
+                        <line id="threadLengthLine" x1="415" y1="280" x2="415" y2="425" stroke="#FF6B35" stroke-width="1.5" />
+                        <path id="threadLengthArrowTop" d="M 415 280 L 411 288 L 419 288 Z" fill="#FF6B35" />
+                        <path id="threadLengthArrowBottom" d="M 415 425 L 411 417 L 419 417 Z" fill="#FF6B35" />
+                        <line id="threadLengthWitnessTop" x1="350" y1="280" x2="425" y2="280" stroke="#FF6B35" stroke-width="1" stroke-dasharray="3,3" />
+                        <line id="threadLengthWitnessBottom" x1="350" y1="425" x2="425" y2="425" stroke="#FF6B35" stroke-width="1" stroke-dasharray="3,3" />
+                        <rect id="threadLengthBg" x="365" y="342.5" width="100" height="20" fill="var(--theme-input-bg)" rx="2" stroke="rgba(255, 107, 53, 0.3)" stroke-width="1" transform="rotate(-90 415 352.5)" />
+                        <text id="threadLengthText" x="415" y="356.5" fill="#FF6B35" font-family="monospace" font-size="11" font-weight="bold" text-anchor="middle" transform="rotate(-90 415 352.5)">Rosca (D)</text>
                     </svg>
                 </div>
 
@@ -469,6 +478,16 @@
                                 <h3>Largo Útil (C)</h3>
                                 <p>
                                     Mide la longitud total **desde la cara interior de la curva (punto de apoyo)** hasta el final de las patas de la varilla.
+                                </p>
+                            </div>
+                        </div>
+
+                        <div class="step-item">
+                            <span class="step-number">4</span>
+                            <div class="step-content">
+                                <h3>Largo de Rosca (D)</h3>
+                                <p>
+                                    Mide la longitud de la porción roscada desde el extremo de las patas hacia arriba. Es fundamental para garantizar que las tuercas tengan suficiente recorrido de apriete.
                                 </p>
                             </div>
                         </div>
