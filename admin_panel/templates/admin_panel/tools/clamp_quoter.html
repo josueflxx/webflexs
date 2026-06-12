@@ -55,6 +55,137 @@
     html[data-theme="light"] #clampGrid path {
         stroke: rgba(15, 23, 42, 0.04) !important;
     }
+
+    /* Clean parameters form organization styling overrides */
+    .clamp-quoter-card-form {
+        max-width: none;
+    }
+    .clamp-rows {
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 16px !important;
+    }
+    .clamp-form-section {
+        background: rgba(255, 255, 255, 0.015);
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        border-radius: 8px;
+        padding: 16px;
+    }
+    html[data-theme="light"] .clamp-form-section {
+        background: rgba(15, 23, 42, 0.01);
+        border-color: rgba(15, 23, 42, 0.06);
+    }
+    .clamp-section-header {
+        font-size: 0.88rem;
+        font-weight: 700;
+        color: #ff6b35;
+        margin: 0 0 16px;
+        text-transform: uppercase;
+        letter-spacing: 0.8px;
+        border-left: 3px solid #ff6b35;
+        padding-left: 8px;
+        line-height: 1;
+    }
+    .clamp-field-group {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
+    .clamp-field-label {
+        font-size: 0.84rem;
+        font-weight: 600;
+        color: #abb5c3;
+    }
+    html[data-theme="light"] .clamp-field-label {
+        color: #475569;
+    }
+    
+    .clamp-dolar-row {
+        display: grid;
+        grid-template-columns: 3fr 2fr;
+        gap: 16px;
+        align-items: flex-end;
+    }
+    .clamp-dolar-modes {
+        height: 38px;
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        background: rgba(255, 255, 255, 0.03);
+        padding: 0 12px;
+        border-radius: 6px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    html[data-theme="light"] .clamp-dolar-modes {
+        background: #f1f5f9;
+        border-color: rgba(15, 23, 42, 0.08);
+    }
+    .clamp-radio-label {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        cursor: pointer;
+        font-size: 0.88rem;
+        font-weight: 500;
+        margin: 0;
+    }
+    .clamp-radio-label input[type="radio"] {
+        margin: 0;
+    }
+    
+    .clamp-grid-3 {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 16px;
+    }
+    .clamp-grid-4 {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 16px;
+    }
+    .clamp-grid-2-custom {
+        display: grid;
+        grid-template-columns: 3fr 1fr;
+        gap: 16px;
+    }
+    
+    .clamp-type-row {
+        display: flex;
+        gap: 16px;
+        align-items: center;
+        background: rgba(255, 255, 255, 0.03);
+        padding: 8px 14px;
+        border-radius: 6px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        height: 42px;
+    }
+    html[data-theme="light"] .clamp-type-row {
+        background: #f1f5f9;
+        border-color: rgba(15, 23, 42, 0.08);
+    }
+    .clamp-type-divider {
+        margin-left: auto;
+        border-left: 1px solid rgba(255, 255, 255, 0.15);
+        padding-left: 16px;
+        height: 20px;
+        display: flex;
+        align-items: center;
+    }
+    html[data-theme="light"] .clamp-type-divider {
+        border-color: rgba(15, 23, 42, 0.15);
+    }
+    .clamp-checkbox-label {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        cursor: pointer;
+        font-size: 0.88rem;
+        font-weight: 500;
+        margin: 0;
+    }
+    .clamp-checkbox-label input[type="checkbox"] {
+        margin: 0;
+    }
 </style>
 {% endblock %}
 
@@ -74,160 +205,162 @@
             <div class="clamp-form-title">Datos de Cotizacion</div>
 
             <div class="clamp-rows">
-                <div class="clamp-row clamp-code-entry-row">
-                    <label class="clamp-row-label" for="clamp_code_input">Codigo:</label>
-                    <div class="clamp-row-control clamp-code-entry-control">
-                        <input
-                            id="clamp_code_input"
-                            type="text"
-                            class="form-input clamp-code-entry-input"
-                            value="{{ form_values.clamp_code }}"
-                            placeholder="Ej: ABT91685270P"
-                            autocomplete="off"
-                            spellcheck="false"
-                            aria-describedby="clampCodeFeedback clampCodeNamePreview"
-                        >
-                        <button type="button" class="btn btn-outline clamp-code-entry-btn" onclick="applyClampCodeFromInput()">
-                            Leer codigo
-                        </button>
-                        <small id="clampCodeFeedback" class="clamp-code-feedback">
-                            Escribi el codigo y se completan tipo, diametro, ancho, largo y forma.
+                <!-- Buscador por Código -->
+                <div class="clamp-form-section" style="border-color: rgba(255, 107, 53, 0.15); background: rgba(255, 107, 53, 0.025); margin-bottom: 4px;">
+                    <div class="clamp-section-header" style="color: #ff8c5a; border-color: #ff8c5a;">Buscador por Código</div>
+                    <div class="clamp-field-group">
+                        <label class="clamp-field-label" for="clamp_code_input">Ingresar Código de Abrazadera</label>
+                        <div style="display: flex; gap: 12px; align-items: center;">
+                            <input
+                                id="clamp_code_input"
+                                type="text"
+                                class="form-input"
+                                style="height: 38px; text-transform: uppercase;"
+                                value="{{ form_values.clamp_code }}"
+                                placeholder="Ej: ABT91685270P"
+                                autocomplete="off"
+                                spellcheck="false"
+                            >
+                            <button type="button" class="btn btn-outline" style="height: 38px; white-space: nowrap;" onclick="applyClampCodeFromInput()">
+                                Leer código
+                            </button>
+                        </div>
+                        <small id="clampCodeFeedback" class="clamp-code-feedback" style="margin-top: 4px; display: block; color: #abb5c3; font-size: 0.76rem;">
+                            Escribe el código para autocompletar tipo, diámetro, ancho, largo y forma.
                         </small>
-                        <div id="clampCodeQuickResult" class="clamp-code-quick-result" hidden>
-                            <div class="clamp-code-name-row">
-                                <strong id="clampCodeNamePreview" class="clamp-code-name-preview"></strong>
+                        <div id="clampCodeQuickResult" class="clamp-code-quick-result" style="margin-top: 10px; padding: 10px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 6px;" hidden>
+                            <div class="clamp-code-name-row" style="display: flex; align-items: center; justify-content: space-between;">
+                                <strong id="clampCodeNamePreview" class="clamp-code-name-preview" style="color: #fff; font-size: 0.9rem;"></strong>
                                 <button type="button" class="btn btn-outline btn-sm clamp-code-copy-btn" onclick="copyClampCodeName()">
                                     Copiar
                                 </button>
                             </div>
-                            <button type="button" class="btn btn-primary clamp-code-calc-btn" onclick="runClampCalculation()">
-                                Calcular
-                            </button>
-                            <div id="clampBillingQuickResult" class="clamp-billing-quick-result" hidden>
-                                <span>Resultado Facturacion</span>
-                                <strong id="clampBillingQuickValue">-</strong>
+                            <div id="clampBillingQuickResult" class="clamp-billing-quick-result" style="margin-top: 8px; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 8px; display: flex; align-items: center; justify-content: space-between;" hidden>
+                                <span style="font-size: 0.85rem; color: #abb5c3;">Resultado Facturación:</span>
+                                <strong id="clampBillingQuickValue" style="color: #ff6b35; font-size: 1.1rem; font-weight: 700;">-</strong>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <div class="clamp-row clamp-row-wide">
-                    <label class="clamp-row-label" for="dollar_rate">Dolar:</label>
-                    <div class="clamp-row-control">
-                        <label class="clamp-radio-inline">
-                            <input type="radio" name="dollar_mode" id="dollar_mode_manual" value="manual"
-                                {% if form_values.dollar_mode != 'auto' %}checked{% endif %}>
-                            Manual
-                        </label>
-                        <label class="clamp-radio-inline">
-                            <input type="radio" name="dollar_mode" id="dollar_mode_auto" value="auto"
-                                {% if form_values.dollar_mode == 'auto' %}checked{% endif %}>
-                            Auto (API)
-                        </label>
-                        <input id="dollar_rate" type="number" step="0.01" min="0" class="form-input"
-                            value="{{ form_values.dollar_rate }}" placeholder="Valor Dolar">
+                <!-- Variables Económicas -->
+                <div class="clamp-form-section">
+                    <div class="clamp-section-header">Variables Económicas</div>
+                    
+                    <div class="clamp-dolar-row" style="margin-bottom: 14px;">
+                        <div class="clamp-field-group">
+                            <label class="clamp-field-label">Modo Dólar</label>
+                            <div class="clamp-dolar-modes">
+                                <label class="clamp-radio-label">
+                                    <input type="radio" name="dollar_mode" id="dollar_mode_manual" value="manual"
+                                        {% if form_values.dollar_mode != 'auto' %}checked{% endif %}>
+                                    <span>Manual</span>
+                                </label>
+                                <label class="clamp-radio-label">
+                                    <input type="radio" name="dollar_mode" id="dollar_mode_auto" value="auto"
+                                        {% if form_values.dollar_mode == 'auto' %}checked{% endif %}>
+                                    <span>Auto (API)</span>
+                                </label>
+                            </div>
+                        </div>
+                        <div class="clamp-field-group">
+                            <label class="clamp-field-label" for="dollar_rate">Valor Dólar (ARS)</label>
+                            <input id="dollar_rate" type="number" step="0.01" min="0" class="form-input" style="height: 38px;"
+                                value="{{ form_values.dollar_rate }}" placeholder="Valor Dolar">
+                        </div>
+                    </div>
+
+                    <div class="clamp-grid-3">
+                        <div class="clamp-field-group">
+                            <label class="clamp-field-label" for="steel_price_usd">Precio Acero (USD)</label>
+                            <input id="steel_price_usd" type="number" step="0.0001" min="0" class="form-input" style="height: 38px;"
+                                value="{{ form_values.steel_price_usd }}">
+                        </div>
+                        <div class="clamp-field-group">
+                            <label class="clamp-field-label" for="supplier_discount_pct">Desc. Proveedor (%)</label>
+                            <input id="supplier_discount_pct" type="number" step="0.01" min="0" class="form-input" style="height: 38px;"
+                                value="{{ form_values.supplier_discount_pct }}">
+                        </div>
+                        <div class="clamp-field-group">
+                            <label class="clamp-field-label" for="general_increase_pct">Aumento Gral. (%)</label>
+                            <input id="general_increase_pct" type="number" step="0.01" min="0" class="form-input" style="height: 38px;"
+                                value="{{ form_values.general_increase_pct }}">
+                        </div>
                     </div>
                 </div>
 
-                <div class="clamp-row">
-                    <label class="clamp-row-label" for="steel_price_usd">Precio Acero (USD):</label>
-                    <div class="clamp-row-control">
-                        <input id="steel_price_usd" type="number" step="0.0001" min="0" class="form-input"
-                            value="{{ form_values.steel_price_usd }}">
+                <!-- Especificaciones Técnicas -->
+                <div class="clamp-form-section">
+                    <div class="clamp-section-header">Especificaciones Técnicas</div>
+                    
+                    <div class="clamp-field-group" style="margin-bottom: 14px;">
+                        <label class="clamp-field-label">Tipo y Acabado</label>
+                        <div class="clamp-type-row">
+                            <div style="display: flex; gap: 16px;">
+                                <label class="clamp-radio-label">
+                                    <input type="radio" name="clamp_type_radio" value="trefilada"
+                                        {% if form_values.clamp_type == 'trefilada' %}checked{% endif %}>
+                                    <span>Trefilada</span>
+                                </label>
+                                <label class="clamp-radio-label">
+                                    <input type="radio" name="clamp_type_radio" value="laminada"
+                                        {% if form_values.clamp_type == 'laminada' %}checked{% endif %}>
+                                    <span>Laminada</span>
+                                </label>
+                            </div>
+                            <div class="clamp-type-divider">
+                                <label class="clamp-checkbox-label">
+                                    <input id="is_zincated" type="checkbox" {% if form_values.is_zincated %}checked{% endif %}>
+                                    <span>Zincado (+20%)</span>
+                                </label>
+                            </div>
+                            <select id="clamp_type" class="form-select clamp-hidden-select" aria-hidden="true" tabindex="-1" style="display:none;">
+                                <option value="trefilada" {% if form_values.clamp_type == 'trefilada' %}selected{% endif %}>Trefilada</option>
+                                <option value="laminada" {% if form_values.clamp_type == 'laminada' %}selected{% endif %}>Laminada</option>
+                            </select>
+                        </div>
                     </div>
-                </div>
 
-                <div class="clamp-row">
-                    <label class="clamp-row-label" for="supplier_discount_pct">Desc. Proveedor (%):</label>
-                    <div class="clamp-row-control">
-                        <input id="supplier_discount_pct" type="number" step="0.01" min="0" class="form-input"
-                            value="{{ form_values.supplier_discount_pct }}">
+                    <div class="clamp-grid-4" style="margin-bottom: 14px;">
+                        <div class="clamp-field-group">
+                            <label class="clamp-field-label" for="diameter">Diámetro (A)</label>
+                            <select id="diameter" class="form-select clamp-select-highlight" style="height: 38px;">
+                                {% for diameter in diameter_options %}
+                                <option value="{{ diameter }}" {% if form_values.diameter == diameter %}selected{% endif %}>
+                                    {{ diameter }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="clamp-field-group">
+                            <label class="clamp-field-label" for="width_mm">Ancho (B) (mm)</label>
+                            <input id="width_mm" type="number" step="1" min="1" class="form-input" style="height: 38px;" value="{{ form_values.width_mm }}">
+                        </div>
+                        <div class="clamp-field-group">
+                            <label class="clamp-field-label" for="length_mm">Largo (C) (mm)</label>
+                            <input id="length_mm" type="number" step="1" min="1" class="form-input" style="height: 38px;" value="{{ form_values.length_mm }}">
+                        </div>
+                        <div class="clamp-field-group">
+                            <label class="clamp-field-label" for="profile_type">Forma / Perfil</label>
+                            <select id="profile_type" class="form-select clamp-select-highlight" style="height: 38px;">
+                                {% for profile in profile_options %}
+                                <option value="{{ profile }}" {% if form_values.profile_type == profile %}selected{% endif %}>
+                                    {{ profile }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
                     </div>
-                </div>
 
-                <div class="clamp-row">
-                    <label class="clamp-row-label" for="general_increase_pct">Aumento Gral. (%):</label>
-                    <div class="clamp-row-control">
-                        <input id="general_increase_pct" type="number" step="0.01" min="0" class="form-input"
-                            value="{{ form_values.general_increase_pct }}">
-                    </div>
-                </div>
-
-                <div class="clamp-row clamp-row-wide">
-                    <label class="clamp-row-label" for="clamp_type">Tipo Abrazadera:</label>
-                    <div class="clamp-row-control clamp-controls-inline">
-                        <label class="clamp-radio-inline">
-                            <input type="radio" name="clamp_type_radio" value="trefilada"
-                                {% if form_values.clamp_type == 'trefilada' %}checked{% endif %}>
-                            Trefilada
-                        </label>
-                        <label class="clamp-radio-inline">
-                            <input type="radio" name="clamp_type_radio" value="laminada"
-                                {% if form_values.clamp_type == 'laminada' %}checked{% endif %}>
-                            Laminada
-                        </label>
-                        <label class="clamp-checkbox-inline clamp-zinc-inline">
-                            <input id="is_zincated" type="checkbox" {% if form_values.is_zincated %}checked{% endif %}>
-                            Zincado (+20%)
-                        </label>
-                        <select id="clamp_type" class="form-select clamp-hidden-select" aria-hidden="true" tabindex="-1">
-                            <option value="trefilada" {% if form_values.clamp_type == 'trefilada' %}selected{% endif %}>Trefilada</option>
-                            <option value="laminada" {% if form_values.clamp_type == 'laminada' %}selected{% endif %}>Laminada</option>
-                        </select>
-                    </div>
-                </div>
-
-                <div class="clamp-row">
-                    <label class="clamp-row-label" for="diameter">Diametro:</label>
-                    <div class="clamp-row-control">
-                        <select id="diameter" class="form-select clamp-select-highlight">
-                            {% for diameter in diameter_options %}
-                            <option value="{{ diameter }}" {% if form_values.diameter == diameter %}selected{% endif %}>
-                                {{ diameter }}
-                            </option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                </div>
-
-                <div class="clamp-row">
-                    <label class="clamp-row-label" for="width_mm">Ancho (mm):</label>
-                    <div class="clamp-row-control">
-                        <input id="width_mm" type="number" step="1" min="1" class="form-input" value="{{ form_values.width_mm }}">
-                    </div>
-                </div>
-
-                <div class="clamp-row">
-                    <label class="clamp-row-label" for="length_mm">Largo (mm):</label>
-                    <div class="clamp-row-control">
-                        <input id="length_mm" type="number" step="1" min="1" class="form-input" value="{{ form_values.length_mm }}">
-                    </div>
-                </div>
-
-                <div class="clamp-row">
-                    <label class="clamp-row-label" for="profile_type">Tipo:</label>
-                    <div class="clamp-row-control">
-                        <select id="profile_type" class="form-select clamp-select-highlight">
-                            {% for profile in profile_options %}
-                            <option value="{{ profile }}" {% if form_values.profile_type == profile %}selected{% endif %}>
-                                {{ profile }}
-                            </option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                </div>
-
-                <div class="clamp-row">
-                    <label class="clamp-row-label" for="client_name">Cliente:</label>
-                    <div class="clamp-row-control">
-                        <input id="client_name" type="text" class="form-input" value="{{ form_values.client_name }}">
-                    </div>
-                </div>
-
-                <div class="clamp-row">
-                    <label class="clamp-row-label" for="product_stock">Stock inicial:</label>
-                    <div class="clamp-row-control">
-                        <input id="product_stock" type="number" step="1" min="1" class="form-input" value="{{ form_values.product_stock|default:'1' }}">
+                    <div class="clamp-grid-2-custom">
+                        <div class="clamp-field-group">
+                            <label class="clamp-field-label" for="client_name">Cliente</label>
+                            <input id="client_name" type="text" class="form-input" style="height: 38px;" value="{{ form_values.client_name }}" placeholder="Nombre del cliente (opcional)">
+                        </div>
+                        <div class="clamp-field-group">
+                            <label class="clamp-field-label" for="product_stock">Stock Inicial</label>
+                            <input id="product_stock" type="number" step="1" min="0" class="form-input" style="height: 38px;" value="{{ form_values.product_stock|default:'1' }}">
+                        </div>
                     </div>
                 </div>
             </div>
