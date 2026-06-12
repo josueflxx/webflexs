@@ -41,18 +41,15 @@
     }
 
     document.addEventListener('DOMContentLoaded', function () {
-        document.querySelectorAll('input[name="clamp_type"]').forEach((radio) => {
-            radio.addEventListener('change', syncDiameterOptions);
-        });
-        syncDiameterOptions();
-
-        // ============================================
-        // FLEXS Interactive SVG Clamp Simulator (CAD Engine)
-        // ============================================
+        // Elements selector configuration
         const clampTypeRadios = document.querySelectorAll('input[name="clamp_type"]');
         const diameterSelect = document.getElementById('diameter');
         const widthInput = document.getElementById('width_mm');
+        const widthSlider = document.getElementById('width_slider');
         const lengthInput = document.getElementById('length_mm');
+        const lengthSlider = document.getElementById('length_slider');
+        const threadInput = document.getElementById('thread_length_mm');
+        const threadSlider = document.getElementById('thread_length_slider');
         const profileSelect = document.getElementById('profile_type');
         const zincatedCheckbox = document.querySelector('input[name="is_zincated"]');
         const clientNoteTextarea = document.getElementById('client_note');
@@ -74,6 +71,13 @@
         const diameterArrow = document.getElementById('diameterArrow');
         const diameterText = document.getElementById('diameterText');
 
+        const threadLengthLine = document.getElementById('threadLengthLine');
+        const threadLengthArrowTop = document.getElementById('threadLengthArrowTop');
+        const threadLengthArrowBottom = document.getElementById('threadLengthArrowBottom');
+        const threadLengthWitnessTop = document.getElementById('threadLengthWitnessTop');
+        const threadLengthWitnessBottom = document.getElementById('threadLengthWitnessBottom');
+        const threadLengthText = document.getElementById('threadLengthText');
+
         const clampBase = document.getElementById('clampBase');
         const nutLeft = document.getElementById('nutLeft');
         const nutRight = document.getElementById('nutRight');
@@ -81,15 +85,11 @@
         const threadRight = document.getElementById('threadRight');
         const clampCalculatedDesc = document.getElementById('clampCalculatedDesc');
 
-        function updateSimulator() {
-            if (!clampPath) return;
+        let threadManuallyAdjusted = false;
 
-            const type = (document.querySelector('input[name="clamp_type"]:checked')?.value || 'trefilada').toLowerCase();
-            const zincated = zincatedCheckbox ? zincatedCheckbox.checked : false;
+        // helper logic to parse fractions to real mm for visual scale
+        function getRealDiameterMM() {
             const diameterVal = diameterSelect ? diameterSelect.value : '1/2"';
-            const profile = (profileSelect ? profileSelect.value : 'curva').toLowerCase();
-
-            // 1. Map rod diameter (A) fraction to physical mm
             let realA = 12.70; // Default 1/2"
             if (diameterVal.includes('1/4')) realA = 6.35;
             else if (diameterVal.includes('5/16')) realA = 7.94;
@@ -107,33 +107,115 @@
                     realA = num;
                 }
             }
+            return realA;
+        }
+
+        function syncThreadLengthToNote() {
+            if (!threadInput || !clientNoteTextarea) return;
+            const threadVal = parseFloat(threadInput.value) || 0;
+            let noteText = clientNoteTextarea.value;
+            
+            const regex = /(\r?\n)?(largo\s+de\s+)?rosca:\s*\d+\s*mm/i;
+            const regex2 = /(\r?\n)?(\d+)\s*(?:mm|m)?\s*de?\s*rosca/i;
+            const regex3 = /(\r?\n)?rosca\s*(?:de)?\s*(\d+)\s*(?:mm)?/i;
+            
+            const newText = `Largo de rosca: ${threadVal} mm`;
+            
+            if (regex.test(noteText)) {
+                noteText = noteText.replace(regex, `$1${newText}`);
+            } else if (regex2.test(noteText)) {
+                noteText = noteText.replace(regex2, `$1${newText}`);
+            } else if (regex3.test(noteText)) {
+                noteText = noteText.replace(regex3, `$1${newText}`);
+            } else {
+                if (noteText.trim() === "") {
+                    noteText = newText;
+                } else {
+                    noteText = noteText.trim() + "\n" + newText;
+                }
+            }
+            clientNoteTextarea.value = noteText;
+        }
+
+        function initThreadLengthFromNote() {
+            if (!clientNoteTextarea || !threadInput || !threadSlider) return;
+            let noteText = clientNoteTextarea.value;
+            const match = noteText.match(/rosca:\s*(\d+)\s*mm/i) || 
+                          noteText.match(/(\d+)\s*(?:mm|m)?\s*de?\s*rosca/i) || 
+                          noteText.match(/rosca\s*(?:de)?\s*(\d+)\s*(?:mm)?/i);
+            
+            const lengthVal = parseFloat(lengthInput ? lengthInput.value : 180) || 180;
+            const maxThread = Math.floor(lengthVal * 0.85);
+
+            if (match) {
+                const val = parseInt(match[1]);
+                if (!isNaN(val)) {
+                    const finalVal = Math.min(val, maxThread);
+                    threadInput.value = finalVal;
+                    threadSlider.value = finalVal;
+                    threadManuallyAdjusted = true;
+                    return;
+                }
+            }
+            
+            // Fallback default: 35% of length
+            const defaultRosca = Math.round(lengthVal * 0.35);
+            threadInput.value = defaultRosca;
+            threadSlider.value = defaultRosca;
+            threadManuallyAdjusted = false;
+        }
+
+        function adjustMinLengthConstraint() {
+            const profile = (profileSelect ? profileSelect.value : 'CURVA').toLowerCase();
+            const realA = getRealDiameterMM();
+            let rawB = parseFloat(widthInput ? widthInput.value : 120);
+            if (isNaN(rawB)) rawB = 120;
+            
+            let minC = Math.max(30, Math.ceil(realA * 1.5));
+            if (profile.includes('curv') && !profile.includes('semi')) {
+                minC = Math.max(minC, Math.ceil(rawB / 2));
+            }
+            
+            if (lengthInput && lengthSlider) {
+                lengthInput.min = minC;
+                lengthSlider.min = minC;
+                if (parseFloat(lengthInput.value) < minC) {
+                    lengthInput.value = minC;
+                    lengthSlider.value = minC;
+                }
+            }
+        }
+
+        function updateSimulator() {
+            if (!clampPath) return;
+
+            const type = (document.querySelector('input[name="clamp_type"]:checked')?.value || 'trefilada').toLowerCase();
+            const zincated = zincatedCheckbox ? zincatedCheckbox.checked : false;
+            const diameterVal = diameterSelect ? diameterSelect.value : '1/2"';
+            const profile = (profileSelect ? profileSelect.value : 'curva').toLowerCase();
+
+            // 1. Map rod diameter (A) fraction to physical mm
+            const realA = getRealDiameterMM();
 
             // 2. Apply coherent physical limits dynamically to avoid impossible dimensions or broken graphics
             const minW = Math.max(20, Math.ceil(realA * 1.2));
             const maxW = 1000;
-            if (widthInput) {
-                widthInput.setAttribute('min', minW);
-                widthInput.setAttribute('max', maxW);
+            if (widthInput && widthSlider) {
+                widthInput.min = minW;
+                widthSlider.min = minW;
             }
 
             let rawB = parseFloat(widthInput ? widthInput.value : 120);
             if (isNaN(rawB)) rawB = 120;
             const B_real = Math.min(maxW, Math.max(minW, rawB));
 
-            let minC = Math.max(30, Math.ceil(realA * 1.5));
-            // Semicircular Redonda shape requires length C to be at least half the inner width (radius B/2)
-            if (profile.includes('curv') && !profile.includes('semi')) {
-                minC = Math.max(minC, Math.ceil(B_real / 2));
-            }
-            const maxC = 1200;
-            if (lengthInput) {
-                lengthInput.setAttribute('min', minC);
-                lengthInput.setAttribute('max', maxC);
-            }
+            // Dynamic ceiling constraint for C length based on shape
+            adjustMinLengthConstraint();
 
             let rawC = parseFloat(lengthInput ? lengthInput.value : 180);
             if (isNaN(rawC)) rawC = 180;
-            const C_real = Math.min(maxC, Math.max(minC, rawC));
+            const maxC = 1200;
+            const C_real = Math.min(maxC, Math.max(parseFloat(lengthInput.min), rawC));
 
             const widthVal = B_real;
             const lengthVal = C_real;
@@ -218,7 +300,6 @@
             widthText.setAttribute('y', cotaY + 20);
 
             // 9. Update Length Cota C (Largo interior útil) - From inner curve ceiling down to leg tip
-            // Dynamically calculate X_cota to prevent overlap with the U-bolt leg when diameter is large
             const X_cota = Math.max(20, leftX - (strokeW / 2) - 35);
             lengthLine.setAttribute('x1', X_cota);
             lengthLine.setAttribute('x2', X_cota);
@@ -246,8 +327,7 @@
                 lengthWitnessBottom.setAttribute('y2', Y_bottom);
             }
 
-            // 10. Update Varilla Cota A (Rod Diameter) - Custom technical leader arrow pointing at rod
-            // Dynamically adjust leader line and text offset to prevent overlapping larger diameters
+            // 10. Update Varilla Cota A (Rod Diameter)
             const outerRightX = rightX + strokeW / 2;
             const Y_point = Y_bottom - visualC / 2;
             if (diameterPointerLine && diameterArrow && diameterText) {
@@ -258,18 +338,12 @@
                 diameterText.setAttribute('y', Y_point - 35);
             }
 
-            // 11. Update Thread Length Overlays (Reactive to notes textarea)
-            // Parse "80 mm de rosca" or "80mm rosca" or "rosca 80 mm" from notes
-            let roscaVal = 0;
-            const noteText = clientNoteTextarea ? clientNoteTextarea.value : '';
-            const roscaMatch = noteText.match(/(\d+)\s*(?:mm|m)?\s*de?\s*rosca/i) || noteText.match(/rosca\s*(?:de)?\s*(\d+)\s*(?:mm)?/i);
-            if (roscaMatch) {
-                roscaVal = parseFloat(roscaMatch[1]);
-            }
+            // 11. Thread Length Visual representation & Cota D
+            let roscaVal = parseFloat(threadInput ? threadInput.value : 0) || 0;
+            const maxThreadVal = Math.floor(lengthVal * 0.85);
+            if (roscaVal > maxThreadVal) roscaVal = maxThreadVal;
 
-            // Scale thread visual representation or default to 35% of length
             let visualRosca = roscaVal ? (roscaVal / lengthVal) * visualC : Math.max(45, visualC * 0.35);
-            // Cap thread representation at 85% of total visual length so it doesn't overlap bends
             visualRosca = Math.min(visualRosca, visualC * 0.85);
             const Y_thread_top = Y_bottom - visualRosca;
 
@@ -287,7 +361,36 @@
                 threadRight.setAttribute('stroke-width', strokeW + 1.6);
             }
 
-            // 12. Precise Plate & Assembly Nuts positioning on threads (Fully dynamic and proportional to selected rod diameter)
+            // Update Thread Length Cota D
+            const X_cota_rosca = rightX + (strokeW / 2) + 35;
+            if (threadLengthLine && threadLengthArrowTop && threadLengthArrowBottom && threadLengthWitnessTop && threadLengthWitnessBottom && threadLengthText) {
+                threadLengthLine.setAttribute('x1', X_cota_rosca);
+                threadLengthLine.setAttribute('x2', X_cota_rosca);
+                threadLengthLine.setAttribute('y1', Y_thread_top);
+                threadLengthLine.setAttribute('y2', Y_bottom);
+
+                threadLengthArrowTop.setAttribute('d', `M${X_cota_rosca - 4},${Y_thread_top + 6} L${X_cota_rosca},${Y_thread_top} L${X_cota_rosca + 4},${Y_thread_top + 6}`);
+                threadLengthArrowBottom.setAttribute('d', `M${X_cota_rosca - 4},${Y_bottom - 6} L${X_cota_rosca},${Y_bottom} L${X_cota + 4},${Y_bottom - 6}`);
+
+                threadLengthWitnessTop.setAttribute('x1', rightX);
+                threadLengthWitnessTop.setAttribute('x2', X_cota_rosca + 10);
+                threadLengthWitnessTop.setAttribute('y1', Y_thread_top);
+                threadLengthWitnessTop.setAttribute('y2', Y_thread_top);
+
+                threadLengthWitnessBottom.setAttribute('x1', rightX);
+                threadLengthWitnessBottom.setAttribute('x2', X_cota_rosca + 10);
+                threadLengthWitnessBottom.setAttribute('y1', Y_bottom);
+                threadLengthWitnessBottom.setAttribute('y2', Y_bottom);
+
+                const roscaValLabel = roscaVal || Math.round(lengthVal * 0.35);
+                threadLengthText.textContent = `D: ${roscaValLabel}mm`;
+                threadLengthText.setAttribute('x', X_cota_rosca + 12);
+                const midY_rosca = (Y_thread_top + Y_bottom) / 2;
+                threadLengthText.setAttribute('y', midY_rosca);
+                threadLengthText.setAttribute('transform', `rotate(90 ${X_cota_rosca + 12} ${midY_rosca})`);
+            }
+
+            // 12. Plate & Assembly Nuts positioning
             const nutWidth = Math.max(24, strokeW * 1.8);
             const nutHeight = Math.max(12, strokeW * 0.9);
             const bottomGap = Math.max(2, strokeW * 0.15);
@@ -296,13 +399,11 @@
             const baseY = nutY - baseHeight;
 
             if (clampBase && nutLeft && nutRight) {
-                // Base Plate: sits nicely clamped on top of nuts
                 clampBase.setAttribute('x', leftX - Math.max(20, strokeW * 1.3));
                 clampBase.setAttribute('width', visualB + strokeW + Math.max(40, strokeW * 2.6));
                 clampBase.setAttribute('y', baseY);
                 clampBase.setAttribute('height', baseHeight);
 
-                // Assembly Nuts: screw from bottom, perfectly centered on left/right legs
                 nutLeft.setAttribute('x', leftX - nutWidth / 2);
                 nutLeft.setAttribute('width', nutWidth);
                 nutLeft.setAttribute('y', nutY);
@@ -314,7 +415,7 @@
                 nutRight.setAttribute('height', nutHeight);
             }
 
-            // 12. Update Reactive Textual Descriptions
+            // 13. Update Reactive Summary Description
             if (clampCalculatedDesc) {
                 const isZincStr = zincated ? ' Zincada' : '';
                 const threadStr = roscaVal ? ` con ${roscaVal}mm de rosca` : '';
@@ -322,16 +423,166 @@
             }
         }
 
-        // Add real-time event listeners
-        if (widthInput) widthInput.addEventListener('input', updateSimulator);
-        if (lengthInput) lengthInput.addEventListener('input', updateSimulator);
-        if (diameterSelect) diameterSelect.addEventListener('change', updateSimulator);
-        if (profileSelect) profileSelect.addEventListener('change', updateSimulator);
-        if (zincatedCheckbox) zincatedCheckbox.addEventListener('change', updateSimulator);
-        if (clientNoteTextarea) clientNoteTextarea.addEventListener('input', updateSimulator);
-        clampTypeRadios.forEach(radio => radio.addEventListener('change', updateSimulator));
+        // --- Interactive Controller Bindings ---
 
-        // Sync options and trigger initial draw
+        // Segmented Control (Pill switcher)
+        const segmentBtns = document.querySelectorAll('.segment-btn');
+        segmentBtns.forEach(btn => {
+            btn.addEventListener('click', function() {
+                segmentBtns.forEach(b => b.classList.remove('active'));
+                this.classList.add('active');
+                
+                const val = this.dataset.value;
+                const radioTrefilada = document.getElementById('clamp_type_trefilada');
+                const radioLaminada = document.getElementById('clamp_type_laminada');
+                
+                if (val === 'trefilada' && radioTrefilada) {
+                    radioTrefilada.checked = true;
+                    radioTrefilada.dispatchEvent(new Event('change'));
+                } else if (val === 'laminada' && radioLaminada) {
+                    radioLaminada.checked = true;
+                    radioLaminada.dispatchEvent(new Event('change'));
+                }
+            });
+        });
+
+        // Toggle Switch for Zincado
+        const zincadoToggle = document.getElementById('zincado_toggle');
+        if (zincadoToggle && zincatedCheckbox) {
+            zincadoToggle.addEventListener('change', function() {
+                zincatedCheckbox.checked = this.checked;
+                zincatedCheckbox.dispatchEvent(new Event('change'));
+            });
+        }
+
+        // Profile shape visual cards selection
+        const profileCards = document.querySelectorAll('.profile-card');
+        profileCards.forEach(card => {
+            card.addEventListener('click', function() {
+                profileCards.forEach(c => c.classList.remove('active'));
+                this.classList.add('active');
+                
+                const val = this.dataset.value;
+                if (profileSelect) {
+                    profileSelect.value = val;
+                    profileSelect.dispatchEvent(new Event('change'));
+                }
+                
+                adjustMinLengthConstraint();
+                updateSimulator();
+            });
+        });
+
+        // Sync inputs & sliders
+        if (widthInput && widthSlider) {
+            widthInput.addEventListener('input', function() {
+                widthSlider.value = this.value;
+                updateSimulator();
+            });
+            widthSlider.addEventListener('input', function() {
+                widthInput.value = this.value;
+                updateSimulator();
+            });
+        }
+
+        if (lengthInput && lengthSlider) {
+            lengthInput.addEventListener('input', function() {
+                lengthSlider.value = this.value;
+                
+                // Keep thread length within boundaries
+                const maxThread = Math.floor(parseFloat(this.value) * 0.85);
+                if (threadInput && threadSlider) {
+                    threadInput.max = maxThread;
+                    threadSlider.max = maxThread;
+                    if (!threadManuallyAdjusted) {
+                        const defaultRosca = Math.round(parseFloat(this.value) * 0.35);
+                        threadInput.value = defaultRosca;
+                        threadSlider.value = defaultRosca;
+                        syncThreadLengthToNote();
+                    } else if (parseFloat(threadInput.value) > maxThread) {
+                        threadInput.value = maxThread;
+                        threadSlider.value = maxThread;
+                        syncThreadLengthToNote();
+                    }
+                }
+                updateSimulator();
+            });
+            lengthSlider.addEventListener('input', function() {
+                lengthInput.value = this.value;
+                
+                // Keep thread length within boundaries
+                const maxThread = Math.floor(parseFloat(this.value) * 0.85);
+                if (threadInput && threadSlider) {
+                    threadInput.max = maxThread;
+                    threadSlider.max = maxThread;
+                    if (!threadManuallyAdjusted) {
+                        const defaultRosca = Math.round(parseFloat(this.value) * 0.35);
+                        threadInput.value = defaultRosca;
+                        threadSlider.value = defaultRosca;
+                        syncThreadLengthToNote();
+                    } else if (parseFloat(threadInput.value) > maxThread) {
+                        threadInput.value = maxThread;
+                        threadSlider.value = maxThread;
+                        syncThreadLengthToNote();
+                    }
+                }
+                updateSimulator();
+            });
+        }
+
+        if (threadInput && threadSlider) {
+            threadInput.addEventListener('input', function() {
+                threadSlider.value = this.value;
+                threadManuallyAdjusted = true;
+                syncThreadLengthToNote();
+                updateSimulator();
+            });
+            threadSlider.addEventListener('input', function() {
+                threadInput.value = this.value;
+                threadManuallyAdjusted = true;
+                syncThreadLengthToNote();
+                updateSimulator();
+            });
+        }
+
+        // Initialize diameter select listener
+        if (diameterSelect) {
+            diameterSelect.addEventListener('change', function() {
+                adjustMinLengthConstraint();
+                updateSimulator();
+            });
+        }
+
+        // Textarea Note real-time sync with sliders
+        if (clientNoteTextarea) {
+            clientNoteTextarea.addEventListener('input', function() {
+                const match = this.value.match(/rosca:\s*(\d+)\s*mm/i) || 
+                              this.value.match(/(\d+)\s*(?:mm|m)?\s*de?\s*rosca/i) || 
+                              this.value.match(/rosca\s*(?:de)?\s*(\d+)\s*(?:mm)?/i);
+                if (match) {
+                    const val = parseInt(match[1]);
+                    if (!isNaN(val) && val !== parseFloat(threadInput.value)) {
+                        threadInput.value = val;
+                        threadSlider.value = val;
+                        threadManuallyAdjusted = true;
+                    }
+                }
+                updateSimulator();
+            });
+        }
+
+        // Connect global radio toggle
+        document.querySelectorAll('input[name="clamp_type"]').forEach((radio) => {
+            radio.addEventListener('change', function() {
+                syncDiameterOptions();
+                updateSimulator();
+            });
+        });
+
+        // Initialize state
+        syncDiameterOptions();
+        initThreadLengthFromNote();
+        adjustMinLengthConstraint();
         updateSimulator();
     });
 </script>
@@ -374,6 +625,359 @@
         border-color: rgba(251, 146, 60, 0.25);
         background: rgba(251, 146, 60, 0.08);
         color: #fb923c;
+    }
+
+    /* Modern segmented control styling */
+    .segmented-control {
+        display: flex;
+        background: rgba(15, 23, 42, 0.25);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 999px;
+        padding: 4px;
+        width: 100%;
+        position: relative;
+    }
+    html[data-theme="light"] .segmented-control {
+        background: rgba(15, 23, 42, 0.05);
+        border-color: rgba(0, 0, 0, 0.08);
+    }
+    .segment-btn {
+        flex: 1;
+        background: none;
+        border: none;
+        outline: none;
+        padding: 8px 16px;
+        font-size: 0.9rem;
+        font-weight: 600;
+        color: var(--theme-text-muted);
+        border-radius: 999px;
+        cursor: pointer;
+        transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        text-align: center;
+    }
+    .segment-btn:hover {
+        color: var(--theme-text);
+    }
+    .segment-btn.active {
+        background: var(--color-primary);
+        color: #ffffff !important;
+        box-shadow: 0 4px 12px rgba(255, 107, 53, 0.3);
+    }
+
+    /* Switch toggle styling */
+    .switch-container {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        width: 100%;
+    }
+    .switch {
+        position: relative;
+        display: inline-block;
+        width: 46px;
+        height: 24px;
+    }
+    .switch input {
+        opacity: 0;
+        width: 0;
+        height: 0;
+    }
+    .toggle-slider {
+        position: absolute;
+        cursor: pointer;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: rgba(15, 23, 42, 0.4);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        transition: .3s;
+    }
+    html[data-theme="light"] .toggle-slider {
+        background-color: rgba(15, 23, 42, 0.1);
+        border-color: rgba(0, 0, 0, 0.1);
+    }
+    .toggle-slider:before {
+        position: absolute;
+        content: "";
+        height: 16px;
+        width: 16px;
+        left: 3px;
+        bottom: 3px;
+        background-color: #fff;
+        transition: .3s;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    }
+    .switch input:checked + .toggle-slider {
+        background-color: #22d3ee;
+        border-color: #06b6d4;
+        box-shadow: 0 0 10px rgba(6, 182, 212, 0.3);
+    }
+    .switch input:checked + .toggle-slider:before {
+        transform: translateX(22px);
+    }
+    .toggle-slider.round {
+        border-radius: 34px;
+    }
+    .toggle-slider.round:before {
+        border-radius: 50%;
+    }
+
+    /* Visual Shape/Profile Cards styling */
+    .profile-cards-container {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 10px;
+        margin-top: 4px;
+    }
+    .profile-card {
+        background: rgba(255, 255, 255, 0.02);
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        border-radius: 12px;
+        padding: 12px 6px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        cursor: pointer;
+        transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    html[data-theme="light"] .profile-card {
+        background: rgba(0, 0, 0, 0.02);
+        border-color: rgba(0, 0, 0, 0.06);
+    }
+    .profile-card:hover {
+        background: rgba(255, 107, 53, 0.03);
+        border-color: rgba(255, 107, 53, 0.2);
+        transform: translateY(-2px);
+    }
+    .profile-card.active {
+        background: rgba(255, 107, 53, 0.08);
+        border-color: var(--color-primary);
+        box-shadow: 0 0 14px rgba(255, 107, 53, 0.15);
+    }
+    .profile-card-icon {
+        width: 38px;
+        height: 38px;
+        color: var(--theme-text-muted);
+        margin-bottom: 6px;
+        transition: color 0.25s ease;
+    }
+    .profile-card.active .profile-card-icon {
+        color: var(--color-primary);
+    }
+    .profile-card-title {
+        font-size: 0.88rem;
+        font-weight: 700;
+        color: var(--theme-text);
+        line-height: 1.2;
+    }
+    .profile-card-desc {
+        font-size: 0.72rem;
+        color: var(--theme-text-muted);
+        margin-top: 2px;
+    }
+
+    /* Dimension control and sliders */
+    .dimension-control-group {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        background: rgba(255, 255, 255, 0.01);
+        border: 1px solid rgba(255, 255, 255, 0.04);
+        padding: 12px;
+        border-radius: 12px;
+    }
+    html[data-theme="light"] .dimension-control-group {
+        background: rgba(0, 0, 0, 0.01);
+        border-color: rgba(0, 0, 0, 0.04);
+    }
+    .dimension-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+    .dimension-input-wrapper {
+        display: flex;
+        align-items: center;
+        background: rgba(15, 23, 42, 0.2);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 8px;
+        padding-right: 8px;
+        max-width: 100px;
+    }
+    html[data-theme="light"] .dimension-input-wrapper {
+        background: rgba(255, 255, 255, 0.8);
+        border-color: rgba(0, 0, 0, 0.12);
+    }
+    .dimension-num-input {
+        background: none !important;
+        border: none !important;
+        padding: 5px 8px !important;
+        color: var(--theme-text) !important;
+        font-weight: 700;
+        text-align: right;
+        width: 100% !important;
+        outline: none !important;
+        font-size: 0.95rem;
+    }
+    .dimension-unit {
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: var(--theme-text-muted);
+    }
+    
+    .form-range-slider {
+        -webkit-appearance: none;
+        width: 100%;
+        height: 6px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.1);
+        outline: none;
+        margin: 8px 0;
+        transition: background 0.25s ease;
+    }
+    html[data-theme="light"] .form-range-slider {
+        background: rgba(0, 0, 0, 0.1);
+    }
+    .form-range-slider:hover {
+        background: rgba(255, 255, 255, 0.15);
+    }
+    .form-range-slider::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        background: var(--color-primary);
+        cursor: pointer;
+        box-shadow: 0 0 8px rgba(255, 107, 53, 0.5);
+        transition: transform 0.1s ease;
+    }
+    .form-range-slider::-webkit-slider-thumb:hover {
+        transform: scale(1.25);
+    }
+    .form-range-slider::-moz-range-thumb {
+        width: 18px;
+        height: 18px;
+        border: none;
+        border-radius: 50%;
+        background: var(--color-primary);
+        cursor: pointer;
+        box-shadow: 0 0 8px rgba(255, 107, 53, 0.5);
+        transition: transform 0.1s ease;
+    }
+    .form-range-slider::-moz-range-thumb:hover {
+        transform: scale(1.25);
+    }
+
+    .modern-configurator-card {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+        background: var(--theme-card-bg);
+        border: 1px solid var(--theme-card-border);
+        box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+        border-radius: 18px;
+        padding: 24px;
+    }
+    .config-section {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        padding-bottom: 20px;
+    }
+    html[data-theme="light"] .config-section {
+        border-bottom-color: rgba(0, 0, 0, 0.05);
+    }
+    .config-section:last-of-type {
+        border-bottom: none;
+        padding-bottom: 0;
+    }
+    .config-section-title {
+        font-size: 0.98rem;
+        font-weight: 800;
+        color: var(--color-primary);
+        margin: 0 0 4px;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+    }
+    .form-group {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
+    .form-row {
+        display: flex;
+        gap: 12px;
+    }
+    .flex-1 {
+        flex: 1;
+    }
+    .flex-row-align {
+        flex-direction: row;
+        align-items: center;
+    }
+    
+    .modern-select {
+        background-color: rgba(15, 23, 42, 0.25);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 8px;
+        padding: 10px 12px;
+        color: var(--theme-text);
+        font-weight: 600;
+    }
+    html[data-theme="light"] .modern-select {
+        background-color: #ffffff;
+        border-color: rgba(0, 0, 0, 0.15);
+    }
+    .modern-input, .modern-textarea {
+        background-color: rgba(15, 23, 42, 0.2);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 8px;
+        padding: 10px 12px;
+        color: var(--theme-text);
+        font-size: 0.92rem;
+    }
+    html[data-theme="light"] .modern-input,
+    html[data-theme="light"] .modern-textarea {
+        background-color: #ffffff;
+        border-color: rgba(0, 0, 0, 0.12);
+    }
+    .modern-input:focus, .modern-textarea:focus, .modern-select:focus {
+        border-color: var(--color-primary);
+        box-shadow: 0 0 0 2px rgba(255, 107, 53, 0.15);
+    }
+
+    .form-actions-modern {
+        margin-top: 10px;
+    }
+    .btn-full-width {
+        width: 100%;
+        text-align: center;
+        justify-content: center;
+    }
+    .glow-effect {
+        box-shadow: 0 4px 15px rgba(255, 107, 53, 0.2);
+        transition: all 0.3s ease;
+    }
+    .glow-effect:hover {
+        box-shadow: 0 6px 20px rgba(255, 107, 53, 0.35);
+        transform: translateY(-1px);
+    }
+
+    .clamp-request-layout {
+        grid-template-columns: minmax(360px, 540px) 1fr !important;
+    }
+    @media (max-width: 992px) {
+        .clamp-request-layout {
+            grid-template-columns: 1fr !important;
+        }
+        .form-row {
+            flex-direction: column;
+            gap: 14px;
+        }
     }
 </style>
 {% endblock %}
@@ -419,94 +1023,174 @@
             {% endif %}
         </section>
         {% endif %}
-
         <form method="post" class="clamp-request-layout">
             {% csrf_token %}
 
-            <section class="clamp-request-card">
-                <div class="clamp-request-card-title">Buscar medida</div>
+            <section class="clamp-request-card modern-configurator-card">
+                <div class="clamp-request-card-title">Configurar Abrazadera</div>
 
-                <div class="clamp-form-grid">
-                    <label class="clamp-form-label">Tipo abrazadera</label>
-                    <div class="clamp-form-control clamp-inline-controls">
-                        <label class="clamp-radio-inline">
-                            <input type="radio" name="clamp_type" value="trefilada" {% if form_values.clamp_type == 'trefilada' %}checked{% endif %}>
-                            Trefilada
-                        </label>
-                        <label class="clamp-radio-inline">
-                            <input type="radio" name="clamp_type" value="laminada" {% if form_values.clamp_type == 'laminada' %}checked{% endif %}>
-                            Laminada
-                        </label>
-                        <label class="clamp-checkbox-inline">
-                            <input type="checkbox" name="is_zincated" {% if form_values.is_zincated %}checked{% endif %}>
-                            Zincado
-                        </label>
+                <!-- Section 1: Material -->
+                <div class="config-section">
+                    <h4 class="config-section-title">1. Material y Espesor</h4>
+                    
+                    <div class="form-group">
+                        <label class="clamp-form-label">Tipo de Abrazadera</label>
+                        <!-- Hidden inputs for radio to work with Django view -->
+                        <div style="display: none;">
+                            <input type="radio" id="clamp_type_trefilada" name="clamp_type" value="trefilada" {% if form_values.clamp_type == 'trefilada' %}checked{% endif %}>
+                            <input type="radio" id="clamp_type_laminada" name="clamp_type" value="laminada" {% if form_values.clamp_type == 'laminada' %}checked{% endif %}>
+                        </div>
+                        <!-- Beautiful segmented pill control -->
+                        <div class="segmented-control">
+                            <button type="button" class="segment-btn {% if form_values.clamp_type == 'trefilada' %}active{% endif %}" data-value="trefilada">Trefilada</button>
+                            <button type="button" class="segment-btn {% if form_values.clamp_type == 'laminada' %}active{% endif %}" data-value="laminada">Laminada</button>
+                        </div>
                     </div>
 
-                    <label class="clamp-form-label" for="diameter">Diametro</label>
-                    <div class="clamp-form-control">
-                        <select id="diameter" name="diameter" class="form-select" required>
+                    <div class="form-group flex-row-align">
+                        <!-- Toggle Switch for Zincado -->
+                        <div class="switch-container">
+                            <span class="clamp-form-label" style="margin-bottom: 0;">Acabado Zincado</span>
+                            <label class="switch">
+                                <input type="checkbox" id="zincado_toggle" name="is_zincated" {% if form_values.is_zincated %}checked{% endif %}>
+                                <span class="toggle-slider round"></span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="clamp-form-label" for="diameter">Diámetro de Varilla (A)</label>
+                        <select id="diameter" name="diameter" class="form-select modern-select" required>
                             {% for diameter in diameter_options %}
                             <option value="{{ diameter }}" {% if form_values.diameter == diameter %}selected{% endif %}>{{ diameter }}</option>
                             {% endfor %}
                         </select>
                     </div>
+                </div>
 
-                    <label class="clamp-form-label" for="width_mm">Ancho (mm)</label>
-                    <div class="clamp-form-control">
-                        <input id="width_mm" name="width_mm" type="number" min="1" step="1" value="{{ form_values.width_mm }}" class="form-input" required>
-                    </div>
+                <!-- Section 2: Shape & Dimensions -->
+                <div class="config-section">
+                    <h4 class="config-section-title">2. Forma y Dimensiones</h4>
 
-                    <label class="clamp-form-label" for="length_mm">Largo (mm)</label>
-                    <div class="clamp-form-control">
-                        <input id="length_mm" name="length_mm" type="number" min="1" step="1" value="{{ form_values.length_mm }}" class="form-input" required>
-                    </div>
-
-                    <label class="clamp-form-label" for="profile_type">Forma</label>
-                    <div class="clamp-form-control">
-                        <select id="profile_type" name="profile_type" class="form-select" required>
+                    <div class="form-group">
+                        <label class="clamp-form-label">Perfil de Forma</label>
+                        <!-- Hidden select for django -->
+                        <select id="profile_type" name="profile_type" class="form-select" style="display: none;" required>
                             {% for profile in profile_options %}
                             <option value="{{ profile }}" {% if form_values.profile_type == profile %}selected{% endif %}>{{ profile }}</option>
                             {% endfor %}
                         </select>
+                        
+                        <!-- Visual shape cards -->
+                        <div class="profile-cards-container">
+                            <div class="profile-card {% if form_values.profile_type == 'CURVA' %}active{% endif %}" data-value="CURVA">
+                                <div class="profile-card-icon">
+                                    <svg viewBox="0 0 100 80" fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="round">
+                                        <path d="M 20,70 L 20,40 A 30,30 0 0,1 80,40 L 80,70" />
+                                    </svg>
+                                </div>
+                                <div class="profile-card-title">Curva</div>
+                                <div class="profile-card-desc">Redonda</div>
+                            </div>
+                            <div class="profile-card {% if form_values.profile_type == 'SEMICURVA' %}active{% endif %}" data-value="SEMICURVA">
+                                <div class="profile-card-icon">
+                                    <svg viewBox="0 0 100 80" fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="round">
+                                        <path d="M 20,70 L 20,45 A 15,15 0 0,1 35,30 L 65,30 A 15,15 0 0,1 80,45 L 80,70" />
+                                    </svg>
+                                </div>
+                                <div class="profile-card-title">Semicurva</div>
+                                <div class="profile-card-desc">Semi-recto</div>
+                            </div>
+                            <div class="profile-card {% if form_values.profile_type == 'PLANA' %}active{% endif %}" data-value="PLANA">
+                                <div class="profile-card-icon">
+                                    <svg viewBox="0 0 100 80" fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="round">
+                                        <path d="M 20,70 L 20,30 L 80,30 L 80,70" />
+                                    </svg>
+                                </div>
+                                <div class="profile-card-title">Plana</div>
+                                <div class="profile-card-desc">Cuadrada</div>
+                            </div>
+                        </div>
                     </div>
 
-                    <label class="clamp-form-label" for="quantity">Cantidad</label>
-                    <div class="clamp-form-control">
-                        <input id="quantity" name="quantity" type="number" min="1" step="1" value="{{ form_values.quantity|default:'1' }}" class="form-input" required>
+                    <!-- Width Input & Slider -->
+                    <div class="dimension-control-group">
+                        <div class="dimension-header">
+                            <label class="clamp-form-label" for="width_mm" style="margin-bottom: 0;">Ancho Interior (B)</label>
+                            <div class="dimension-input-wrapper">
+                                <input id="width_mm" name="width_mm" type="number" min="20" max="600" step="1" value="{{ form_values.width_mm|default:120 }}" class="form-input dimension-num-input" required>
+                                <span class="dimension-unit">mm</span>
+                            </div>
+                        </div>
+                        <input type="range" id="width_slider" min="20" max="600" step="1" value="{{ form_values.width_mm|default:120 }}" class="form-range-slider">
                     </div>
 
-                    <label class="clamp-form-label" for="client_name">Cliente</label>
-                    <div class="clamp-form-control">
-                        <input id="client_name" name="client_name" type="text" value="{{ form_values.client_name }}" class="form-input" placeholder="Nombre o razon social" required>
+                    <!-- Length Input & Slider -->
+                    <div class="dimension-control-group">
+                        <div class="dimension-header">
+                            <label class="clamp-form-label" for="length_mm" style="margin-bottom: 0;">Largo Útil (C)</label>
+                            <div class="dimension-input-wrapper">
+                                <input id="length_mm" name="length_mm" type="number" min="30" max="800" step="1" value="{{ form_values.length_mm|default:180 }}" class="form-input dimension-num-input" required>
+                                <span class="dimension-unit">mm</span>
+                            </div>
+                        </div>
+                        <input type="range" id="length_slider" min="30" max="800" step="1" value="{{ form_values.length_mm|default:180 }}" class="form-range-slider">
                     </div>
 
-                    <label class="clamp-form-label" for="client_email">Email</label>
-                    <div class="clamp-form-control">
-                        <input id="client_email" name="client_email" type="email" value="{{ form_values.client_email }}" class="form-input" placeholder="Opcional">
-                    </div>
-
-                    <label class="clamp-form-label" for="client_phone">Telefono</label>
-                    <div class="clamp-form-control">
-                        <input id="client_phone" name="client_phone" type="text" value="{{ form_values.client_phone }}" class="form-input" placeholder="Opcional">
-                    </div>
-
-                    <label class="clamp-form-label" for="client_note">Detalle</label>
-                    <div class="clamp-form-control">
-                        <textarea id="client_note" name="client_note" class="form-input" rows="3" placeholder="Notas adicionales para tu solicitud">{{ form_values.client_note }}</textarea>
+                    <!-- Thread Length Input & Slider -->
+                    <div class="dimension-control-group">
+                        <div class="dimension-header">
+                            <label class="clamp-form-label" for="thread_length_mm" style="margin-bottom: 0;">Largo de Rosca (D)</label>
+                            <div class="dimension-input-wrapper">
+                                <input id="thread_length_mm" type="number" min="10" max="500" step="1" class="form-input dimension-num-input" required>
+                                <span class="dimension-unit">mm</span>
+                            </div>
+                        </div>
+                        <input type="range" id="thread_length_slider" min="10" max="500" step="1" class="form-range-slider">
                     </div>
                 </div>
 
-                <div class="form-actions">
-                    <button type="submit" name="action" value="check_exists" class="btn btn-primary">Buscar medida</button>
+                <!-- Section 3: Client Info & Quantity -->
+                <div class="config-section">
+                    <h4 class="config-section-title">3. Cantidad y Cliente</h4>
+
+                    <div class="form-group">
+                        <label class="clamp-form-label" for="quantity">Cantidad Solicitada</label>
+                        <input id="quantity" name="quantity" type="number" min="1" step="1" value="{{ form_values.quantity|default:'1' }}" class="form-input modern-input" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="clamp-form-label" for="client_name">Nombre de Cliente / Empresa</label>
+                        <input id="client_name" name="client_name" type="text" value="{{ form_values.client_name }}" class="form-input modern-input" placeholder="Ej: Transportes SRL" required>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group flex-1">
+                            <label class="clamp-form-label" for="client_email">Email de Contacto</label>
+                            <input id="client_email" name="client_email" type="email" value="{{ form_values.client_email }}" class="form-input modern-input" placeholder="correo@ejemplo.com">
+                        </div>
+                        <div class="form-group flex-1">
+                            <label class="clamp-form-label" for="client_phone">Teléfono de Contacto</label>
+                            <input id="client_phone" name="client_phone" type="text" value="{{ form_values.client_phone }}" class="form-input modern-input" placeholder="Opcional">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="clamp-form-label" for="client_note">Detalles / Notas Adicionales</label>
+                        <textarea id="client_note" name="client_note" class="form-input modern-textarea" rows="3" placeholder="Ingresa especificaciones adicionales si lo deseas">{{ form_values.client_note }}</textarea>
+                    </div>
+                </div>
+
+                <div class="form-actions-modern">
+                    <button type="submit" name="action" value="check_exists" class="btn btn-primary btn-lg btn-full-width glow-effect">Buscar medida en catálogo</button>
                 </div>
             </section>
 
             <div class="clamp-request-column-right" style="display: flex; flex-direction: column; gap: 16px;">
                 <!-- FLEXS SVG Clamp Interactive Simulator -->
-                <section class="clamp-request-card clamp-simulator-card" style="box-shadow: 0 15px 30px rgba(0,0,0,0.22); border-color: rgba(255,255,255,0.08);">
-                    <div class="clamp-request-card-title" style="background: rgba(255,107,53,0.12); color: #ffd5c4; border: 1px solid rgba(255,107,53,0.22); font-weight: 700;">Vista Previa Interactiva</div>
-                    <div class="clamp-simulator-visual-container" style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 18px 12px; background: radial-gradient(circle at center, rgba(17, 23, 34, 0.95), rgba(10, 13, 19, 0.98)); border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.05); min-height: 280px; position: relative;">
+                <section class="clamp-request-card clamp-simulator-card" style="box-shadow: 0 15px 30px rgba(0,0,0,0.22); border-color: rgba(255,255,255,0.08); overflow: hidden; border-radius: 18px;">
+                    <div class="clamp-request-card-title" style="background: rgba(255,107,53,0.12); color: #ffd5c4; border: 1px solid rgba(255,107,53,0.22); font-weight: 700; border-radius: 6px; margin: 12px 14px 0;">Vista Previa Interactiva</div>
+                    <div class="clamp-simulator-visual-container" style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 18px 12px; background: radial-gradient(circle at center, rgba(17, 23, 34, 0.95), rgba(10, 13, 19, 0.98)); border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.05); min-height: 280px; position: relative; margin: 14px;">
                         <!-- Custom Interactive SVG -->
                         <svg id="clampSvg" width="100%" height="360" viewBox="0 0 600 600" style="max-width: 440px; filter: drop-shadow(0 6px 16px rgba(255, 107, 53, 0.16));">
                             <!-- Background Grid -->
@@ -543,6 +1227,14 @@
                             <path id="diameterArrow" d="M319,284 L315,290 L322,288" fill="none" stroke="#ff8c5a" stroke-width="1.5" />
                             <text id="diameterText" x="342" y="255" fill="#ffd0bd" font-size="12" font-weight="700" text-anchor="start">A: 1/2"</text>
 
+                            <!-- Thread Length Dimension (Cota de Rosca D) -->
+                            <line id="threadLengthLine" x1="0" y1="0" x2="0" y2="0" stroke="#ff8c5a" stroke-dasharray="3,3" stroke-width="1.5" />
+                            <path id="threadLengthArrowTop" d="" fill="none" stroke="#ff8c5a" stroke-width="1.5" />
+                            <path id="threadLengthArrowBottom" d="" fill="none" stroke="#ff8c5a" stroke-width="1.5" />
+                            <line id="threadLengthWitnessTop" x1="0" y1="0" x2="0" y2="0" stroke="rgba(255, 140, 90, 0.35)" stroke-width="1" />
+                            <line id="threadLengthWitnessBottom" x1="0" y1="0" x2="0" y2="0" stroke="rgba(255, 140, 90, 0.35)" stroke-width="1" />
+                            <text id="threadLengthText" x="0" y="0" fill="#ffd0bd" font-size="12" font-weight="700" text-anchor="middle">Rosca: 0mm</text>
+
                             <!-- 1. Solid U-Bolt body (renders underneath plates/nuts/threads) -->
                             <path id="clampPath" d="M100,480 L100,200 A100,100 0 0,1 300,200 L300,480" fill="none" stroke="url(#dynamicClampGlow)" stroke-width="9.5" stroke-linecap="butt" />
 
@@ -557,7 +1249,7 @@
                             <rect id="nutLeft" x="88" y="466" width="24" height="12" rx="1.5" fill="#9ca3af" stroke="#111827" stroke-width="1.5" />
                             <rect id="nutRight" x="288" y="466" width="24" height="12" rx="1.5" fill="#9ca3af" stroke="#111827" stroke-width="1.5" />
                         </svg>
-                        
+
                         <!-- Reactive textual summary -->
                         <div class="clamp-simulator-info" style="margin-top: 14px; font-size: 0.84rem; color: #abb5c3; text-align: center; max-width: 380px; line-height: 1.45;">
                             Medida interactiva: <strong id="clampCalculatedDesc" style="color: #fff;">Trefilada 1/2" x 120 x 180 Redonda</strong>
