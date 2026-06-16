@@ -1342,7 +1342,7 @@ def client_catalog_excel_download(request):
     source_change = latest_catalog_excel_source_change(template)
     
     use_cache = False
-    if os.path.exists(cache_path) and source_change:
+    if os.path.exists(cache_path) and os.path.getsize(cache_path) > 15000 and source_change:
         file_mtime = timezone.make_aware(datetime.fromtimestamp(os.path.getmtime(cache_path)))
         if file_mtime > source_change:
             use_cache = True
@@ -1370,8 +1370,10 @@ def client_catalog_excel_download(request):
     )
     template.mark_generated(stats, user=request.user)
     
-    # Save to disk cache
-    workbook.save(cache_path)
+    # Save to disk cache atomically
+    temp_cache_path = cache_path + ".tmp"
+    workbook.save(temp_cache_path)
+    os.replace(temp_cache_path, cache_path)
     
     with open(cache_path, 'rb') as f:
         file_data = f.read()

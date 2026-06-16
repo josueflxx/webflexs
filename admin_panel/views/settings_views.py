@@ -1277,18 +1277,27 @@ def admin_user_permissions(request, user_id):
 
 
 @user_passes_test(is_primary_superadmin)
+@user_passes_test(is_primary_superadmin)
 def export_products_diagnostic(request):
     """
-    Export all products to an Excel workbook with 3 tabs:
+    Export all products to an Excel workbook with multiple tabs:
     1. Resumen: Dashboard statistics.
     2. Sin Categoría (Pendientes): Products without any categories.
-    3. Catalogados (Ok): Products with at least one category.
+    3. Nombres Duplicados: Products sharing the same name.
+    4. Medidas Duplicadas: Products sharing the same clamp dimensions (U-bolt specs).
+    5. Inconsistencias SKU: Clamp U-bolt products whose SKU differs from their generated model code.
+    6. Precios Inconsistentes: Active products with null/negative cost/price, or cost > price.
+    7. Cat Inactivas (Ocultos): Active products whose linked categories are all inactive.
+    8. Sin Imagen: Active products without an image.
+    9. Catalogados (Ok): Products with at least one category.
     """
     from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
     from openpyxl.utils import get_column_letter
+    from collections import Counter
+    from catalog.services.clamp_code import generarCodigo
 
     products = list(
-        Product.objects.select_related('supplier_ref', 'category')
+        Product.objects.select_related('supplier_ref', 'category', 'clamp_specs')
         .prefetch_related('categories')
         .all()
         .order_by('name')
@@ -1297,6 +1306,79 @@ def export_products_diagnostic(request):
     categorizados = []
     sin_categoria = []
 
+    # 1. Nombres Duplicados
+    name_counts = Counter(p.name.strip().upper() for p in products)
+    nombres_duplicados = [p for p in products if name_counts[p.name.strip().upper()] > 1]
+    nombres_duplicados.sort(key=lambda p: p.name.strip().upper())
+
+    # 2. Medidas Duplicadas (U-bolts)
+    specs_map = {}
+    for p in products:
+        if hasattr(p, 'clamp_specs') and p.clamp_specs:
+            cs = p.clamp_specs
+            specs_key = (
+                (cs.fabrication or "").strip().upper(),
+                (cs.diameter or "").strip().upper(),
+                cs.width,
+                cs.length,
+                (cs.shape or "").strip().upper(),
+            )
+            if any(specs_key):
+                specs_map.setdefault(specs_key, []).append(p)
+    
+    medidas_duplicadas = []
+    for key, plist in specs_map.items():
+        if len(plist) > 1:
+            medidas_duplicadas.extend(plist)
+            
+    medidas_duplicadas.sort(key=lambda p: (
+        (p.clamp_specs.fabrication or ""),
+        (p.clamp_specs.diameter or ""),
+        p.clamp_specs.width or 0,
+        p.clamp_specs.length or 0,
+        (p.clamp_specs.shape or "")
+    ))
+
+    # 3. Inconsistencias de Código / SKU (U-bolts)
+    inconsistencias_sku = []
+    for p in products:
+        if hasattr(p, 'clamp_specs') and p.clamp_specs:
+            cs = p.clamp_specs
+            if cs.fabrication and cs.diameter and cs.width and cs.length and cs.shape:
+                try:
+                    suggested = generarCodigo(
+                        tipo=cs.fabrication,
+                        diametro=cs.diameter,
+                        ancho=cs.width,
+                        largo=cs.length,
+                        forma=cs.shape,
+                    )
+                    norm_sku = p.sku.strip().upper().replace(" ", "").replace("-", "")
+                    norm_suggested = suggested.strip().upper().replace(" ", "").replace("-", "")
+                    if norm_sku != norm_suggested:
+                        inconsistencias_sku.append((p, suggested))
+                except Exception:
+                    inconsistencias_sku.append((p, "ERROR_GEN"))
+
+    # 4. Inconsistencias de Precios/Costo
+    inconsistencias_precio = []
+    for p in products:
+        if p.is_active:
+            if p.price <= 0 or p.cost < 0 or p.cost > p.price:
+                inconsistencias_precio.append(p)
+
+    # 5. Ocultos por Categoría Inactiva
+    ocultos_categoria_inactiva = []
+    for p in products:
+        if p.is_active:
+            linked_cats = p.get_linked_categories()
+            if linked_cats and all(not c.is_active for c in linked_cats):
+                ocultos_categoria_inactiva.append(p)
+
+    # 6. Imágenes Faltantes
+    sin_imagen = [p for p in products if p.is_active and not p.image]
+
+    # Sin Categoría y Catalogados (Ok)
     for p in products:
         linked = p.get_linked_categories()
         if linked:
@@ -1312,6 +1394,14 @@ def export_products_diagnostic(request):
 
     cat_pct = (cat_count / total_count * 100) if total_count > 0 else 0
     uncat_pct = (uncat_count / total_count * 100) if total_count > 0 else 0
+
+    # New counts
+    dup_names_count = len(nombres_duplicados)
+    dup_specs_count = len(medidas_duplicadas)
+    sku_err_count = len(inconsistencias_sku)
+    price_err_count = len(inconsistencias_precio)
+    hidden_cat_count = len(ocultos_categoria_inactiva)
+    no_img_count = len(sin_imagen)
 
     wb = Workbook()
 
@@ -1365,6 +1455,12 @@ def export_products_diagnostic(request):
         ["Productos Sin Categoría (Huérfanos)", uncat_count, f"{uncat_pct:.1f}%".replace(".", ",")],
         ["Productos Activos", active_count, f"{(active_count/total_count*100 if total_count > 0 else 0):.1f}%".replace(".", ",")],
         ["Productos Inactivos", inactive_count, f"{(inactive_count/total_count*100 if total_count > 0 else 0):.1f}%".replace(".", ",")],
+        ["Productos con Nombres Duplicados", dup_names_count, f"{(dup_names_count/total_count*100 if total_count > 0 else 0):.1f}%".replace(".", ",")],
+        ["Abrazaderas con Medidas Duplicadas", dup_specs_count, f"{(dup_specs_count/total_count*100 if total_count > 0 else 0):.1f}%".replace(".", ",")],
+        ["Productos con SKU Inconsistente", sku_err_count, f"{(sku_err_count/total_count*100 if total_count > 0 else 0):.1f}%".replace(".", ",")],
+        ["Productos Activos con Precio/Costo Inconsistente", price_err_count, f"{(price_err_count/total_count*100 if total_count > 0 else 0):.1f}%".replace(".", ",")],
+        ["Productos Activos Ocultos por Categoría Inactiva", hidden_cat_count, f"{(hidden_cat_count/total_count*100 if total_count > 0 else 0):.1f}%".replace(".", ",")],
+        ["Productos Activos Sin Imagen", no_img_count, f"{(no_img_count/total_count*100 if total_count > 0 else 0):.1f}%".replace(".", ",")],
     ]
 
     for row_idx, row_data in enumerate(stats_rows, start=6):
@@ -1377,23 +1473,36 @@ def export_products_diagnostic(request):
             else:
                 cell.alignment = Alignment(horizontal="right")
             
-            # Highlight uncategorized in red if it exists
+            # Highlight uncategorized or any inconsistencies in red if > 0
             if row_idx == 8 and uncat_count > 0:
                 cell.fill = red_alert_fill
             elif row_idx == 7 and cat_count == total_count:
                 cell.fill = green_alert_fill
+            elif row_idx == 11 and dup_names_count > 0:
+                cell.fill = red_alert_fill
+            elif row_idx == 12 and dup_specs_count > 0:
+                cell.fill = red_alert_fill
+            elif row_idx == 13 and sku_err_count > 0:
+                cell.fill = red_alert_fill
+            elif row_idx == 14 and price_err_count > 0:
+                cell.fill = red_alert_fill
+            elif row_idx == 15 and hidden_cat_count > 0:
+                cell.fill = red_alert_fill
+            elif row_idx == 16 and no_img_count > 0:
+                cell.fill = red_alert_fill
 
     # Help block
-    ws_resumen["A13"] = "Notas operativas:"
-    ws_resumen["A13"].font = font_section
+    ws_resumen["A19"] = "Notas operativas:"
+    ws_resumen["A19"].font = font_section
 
     notes = [
         "- Los productos sin categoría no se muestran en el catálogo público B2B a los clientes.",
         "- Si un producto activo no está categorizado, permanece oculto aunque su estado sea 'Activo'.",
-        "- Para corregirlos, dirígete a la sección de Productos en el Panel de Administración y asígnales una categoría en lote.",
-        "- La solapa 'Sin Categoría' detalla exactamente cuáles son los productos pendientes de asignación."
+        "- Las solapas de diagnóstico detallan problemas específicos que afectan la calidad de los datos del catálogo.",
+        "- Corregir inconsistencias de SKU y precios ayuda a mantener la coherencia en la facturación y ventas en lote.",
+        "- Un producto activo sin imagen o cuya categoría esté inactiva impedirá que el cliente lo encuentre correctamente."
     ]
-    for idx, note in enumerate(notes, start=14):
+    for idx, note in enumerate(notes, start=20):
         cell = ws_resumen.cell(row=idx, column=1, value=note)
         cell.font = font_italic
 
@@ -1403,21 +1512,70 @@ def export_products_diagnostic(request):
         col_letter = get_column_letter(col[0].column)
         ws_resumen.column_dimensions[col_letter].width = max(max_len + 4, 15)
 
-    # Sheet 2: Sin Categoría (Pendientes)
-    ws_uncat = wb.create_sheet(title="Sin Categoría")
-    ws_uncat.views.sheetView[0].showGridLines = True
-    ws_uncat.freeze_panes = "A2"
+    # General helper to populate sheets with formatting consistency
+    def format_and_populate_sheet(ws, headers, rows_data):
+        from decimal import Decimal
+        
+        # Write headers
+        for col_idx, header in enumerate(headers, start=1):
+            cell = ws.cell(row=1, column=col_idx, value=header)
+            cell.font = font_header
+            cell.fill = accent_fill if header in ("SKU", "SKU Actual", "Código Sugerido", "Nombre") else header_fill
+            cell.alignment = Alignment(horizontal="center")
+        ws.row_dimensions[1].height = 24
 
-    headers_uncat = ["SKU", "Nombre", "Proveedor", "Costo", "Precio", "Stock", "Estado"]
-    for col_idx, header in enumerate(headers_uncat, start=1):
-        cell = ws_uncat.cell(row=1, column=col_idx, value=header)
-        cell.font = font_header
-        cell.fill = accent_fill if header in ("SKU", "Nombre") else header_fill
-        cell.alignment = Alignment(horizontal="center")
-    ws_uncat.row_dimensions[1].height = 24
+        # Write rows
+        for row_idx, row in enumerate(rows_data, start=2):
+            for col_idx, value in enumerate(row, start=1):
+                cell = ws.cell(row=row_idx, column=col_idx, value=value)
+                cell.font = font_regular
+                cell.border = thin_border
+                
+                # Text/Number Formatting & Alignment
+                header_name = headers[col_idx - 1]
+                if header_name in ("SKU", "SKU Actual", "Código Sugerido", "Nombre", "Categorías Vinculadas", "Categorías Vinculadas (Todas Inactivas)", "Proveedor", "Fabricación", "Diámetro", "Forma", "Detalle Inconsistencia"):
+                    cell.alignment = Alignment(horizontal="left")
+                elif header_name in ("Costo", "Precio"):
+                    cell.number_format = "$#,##0.00"
+                    cell.alignment = Alignment(horizontal="right")
+                elif header_name in ("Stock", "Stock Inicial", "Ancho (mm)", "Largo (mm)"):
+                    cell.number_format = "#,##0"
+                    cell.alignment = Alignment(horizontal="right")
+                elif header_name == "Estado":
+                    cell.alignment = Alignment(horizontal="center")
+                    if value == "Activo":
+                        cell.fill = green_alert_fill
+                    else:
+                        cell.fill = red_alert_fill
+                else:
+                    cell.alignment = Alignment(horizontal="center")
 
-    for row_idx, p in enumerate(sin_categoria, start=2):
-        row_data = [
+                # Zebra striping
+                if row_idx % 2 == 1 and cell.fill.fill_type is None:
+                    cell.fill = zebra_fill
+
+        # Auto-fit columns
+        for col in ws.columns:
+            max_len = 0
+            col_letter = get_column_letter(col[0].column)
+            header_name = headers[col[0].column - 1]
+            for cell in col:
+                val = str(cell.value or '')
+                if cell.number_format == "$#,##0.00" and isinstance(cell.value, (int, float, Decimal)):
+                    val = f"${cell.value:,.2f}"
+                max_len = max(max_len, len(val))
+            
+            # Limit width for wide columns
+            if header_name in ("Categorías Vinculadas", "Categorías Vinculadas (Todas Inactivas)", "Nombre"):
+                ws.column_dimensions[col_letter].width = min(max(max_len + 4, 15), 50)
+            else:
+                ws.column_dimensions[col_letter].width = max(max_len + 4, 12)
+                
+        ws.auto_filter.ref = ws.dimensions
+
+    # Helper function to extract basic product row data
+    def get_basic_row_data(p):
+        return [
             p.sku,
             p.name,
             p.supplier_ref.name if p.supplier_ref else (p.supplier or "-"),
@@ -1426,60 +1584,130 @@ def export_products_diagnostic(request):
             p.stock,
             "Activo" if p.is_active else "Inactivo"
         ]
-        for col_idx, value in enumerate(row_data, start=1):
-            cell = ws_uncat.cell(row=row_idx, column=col_idx, value=value)
-            cell.font = font_regular
-            cell.border = thin_border
-            
-            # Formatting
-            if col_idx in (1, 2, 3):
-                cell.alignment = Alignment(horizontal="left")
-            elif col_idx in (4, 5):
-                cell.number_format = "$#,##0.00"
-                cell.alignment = Alignment(horizontal="right")
-            elif col_idx == 6:
-                cell.number_format = "#,##0"
-                cell.alignment = Alignment(horizontal="right")
-            else:
-                cell.alignment = Alignment(horizontal="center")
-                if value == "Activo":
-                    cell.fill = green_alert_fill
-                else:
-                    cell.fill = red_alert_fill
 
-            # Zebra striping
-            if row_idx % 2 == 1 and cell.fill.fill_type is None:
-                cell.fill = zebra_fill
+    # Sheet 2: Sin Categoría (Pendientes)
+    ws_uncat = wb.create_sheet(title="Sin Categoría")
+    ws_uncat.freeze_panes = "A2"
+    headers_uncat = ["SKU", "Nombre", "Proveedor", "Costo", "Precio", "Stock", "Estado"]
+    rows_uncat = [get_basic_row_data(p) for p in sin_categoria]
+    format_and_populate_sheet(ws_uncat, headers_uncat, rows_uncat)
 
-    # Auto-fit Sin Categoría columns
-    for col in ws_uncat.columns:
-        max_len = 0
-        for cell in col:
-            # Format check for length calculation
-            val = str(cell.value or '')
-            if cell.number_format == "$#,##0.00" and isinstance(cell.value, (int, float, Decimal)):
-                val = f"${cell.value:,.2f}"
-            max_len = max(max_len, len(val))
-        col_letter = get_column_letter(col[0].column)
-        ws_uncat.column_dimensions[col_letter].width = max(max_len + 4, 12)
-    ws_uncat.auto_filter.ref = ws_uncat.dimensions
+    # Sheet 3: Nombres Duplicados
+    ws_dup_names = wb.create_sheet(title="Nombres Duplicados")
+    ws_dup_names.freeze_panes = "A2"
+    headers_dup_names = ["SKU", "Nombre", "Proveedor", "Costo", "Precio", "Stock", "Estado"]
+    rows_dup_names = [get_basic_row_data(p) for p in nombres_duplicados]
+    format_and_populate_sheet(ws_dup_names, headers_dup_names, rows_dup_names)
 
-    # Sheet 3: Catalogados (Ok)
+    # Sheet 4: Medidas Duplicadas (U-bolts)
+    ws_dup_specs = wb.create_sheet(title="Medidas Duplicadas")
+    ws_dup_specs.freeze_panes = "A2"
+    headers_dup_specs = ["SKU", "Nombre", "Fabricación", "Diámetro", "Ancho (mm)", "Largo (mm)", "Forma", "Proveedor", "Costo", "Precio", "Stock", "Estado"]
+    rows_dup_specs = []
+    for p in medidas_duplicadas:
+        cs = p.clamp_specs
+        rows_dup_specs.append([
+            p.sku,
+            p.name,
+            cs.fabrication or "-",
+            cs.diameter or "-",
+            cs.width or 0,
+            cs.length or 0,
+            cs.shape or "-",
+            p.supplier_ref.name if p.supplier_ref else (p.supplier or "-"),
+            p.cost,
+            p.price,
+            p.stock,
+            "Activo" if p.is_active else "Inactivo"
+        ])
+    format_and_populate_sheet(ws_dup_specs, headers_dup_specs, rows_dup_specs)
+
+    # Sheet 5: Inconsistencias SKU
+    ws_sku_err = wb.create_sheet(title="Inconsistencias SKU")
+    ws_sku_err.freeze_panes = "A2"
+    headers_sku_err = ["SKU Actual", "Código Sugerido", "Nombre", "Fabricación", "Diámetro", "Ancho (mm)", "Largo (mm)", "Forma", "Estado"]
+    rows_sku_err = []
+    for p, suggested in inconsistencias_sku:
+        cs = p.clamp_specs
+        rows_sku_err.append([
+            p.sku,
+            suggested,
+            p.name,
+            cs.fabrication or "-",
+            cs.diameter or "-",
+            cs.width or 0,
+            cs.length or 0,
+            cs.shape or "-",
+            "Activo" if p.is_active else "Inactivo"
+        ])
+    format_and_populate_sheet(ws_sku_err, headers_sku_err, rows_sku_err)
+
+    # Sheet 6: Precios Inconsistentes
+    ws_price_err = wb.create_sheet(title="Precios Inconsistentes")
+    ws_price_err.freeze_panes = "A2"
+    headers_price_err = ["SKU", "Nombre", "Costo", "Precio", "Detalle Inconsistencia", "Stock", "Estado"]
+    rows_price_err = []
+    for p in inconsistencias_precio:
+        issues = []
+        if p.price <= 0:
+            issues.append("Precio menor o igual a cero")
+        if p.cost < 0:
+            issues.append("Costo negativo")
+        if p.cost > p.price:
+            issues.append("Venta a pérdida (Costo > Precio)")
+        rows_price_err.append([
+            p.sku,
+            p.name,
+            p.cost,
+            p.price,
+            ", ".join(issues),
+            p.stock,
+            "Activo" if p.is_active else "Inactivo"
+        ])
+    format_and_populate_sheet(ws_price_err, headers_price_err, rows_price_err)
+
+    # Sheet 7: Cat Inactivas (Ocultos)
+    ws_hidden_cat = wb.create_sheet(title="Cat Inactivas (Ocultos)")
+    ws_hidden_cat.freeze_panes = "A2"
+    headers_hidden_cat = ["SKU", "Nombre", "Categorías Vinculadas (Todas Inactivas)", "Proveedor", "Costo", "Precio", "Stock"]
+    rows_hidden_cat = []
+    for p in ocultos_categoria_inactiva:
+        cats_str = "; ".join(c.get_full_path() for c in p.get_linked_categories())
+        rows_hidden_cat.append([
+            p.sku,
+            p.name,
+            cats_str,
+            p.supplier_ref.name if p.supplier_ref else (p.supplier or "-"),
+            p.cost,
+            p.price,
+            p.stock
+        ])
+    format_and_populate_sheet(ws_hidden_cat, headers_hidden_cat, rows_hidden_cat)
+
+    # Sheet 8: Sin Imagen
+    ws_no_img = wb.create_sheet(title="Sin Imagen")
+    ws_no_img.freeze_panes = "A2"
+    headers_no_img = ["SKU", "Nombre", "Proveedor", "Costo", "Precio", "Stock"]
+    rows_no_img = []
+    for p in sin_imagen:
+        rows_no_img.append([
+            p.sku,
+            p.name,
+            p.supplier_ref.name if p.supplier_ref else (p.supplier or "-"),
+            p.cost,
+            p.price,
+            p.stock
+        ])
+    format_and_populate_sheet(ws_no_img, headers_no_img, rows_no_img)
+
+    # Sheet 9: Catalogados (Ok)
     ws_cat = wb.create_sheet(title="Catalogados")
-    ws_cat.views.sheetView[0].showGridLines = True
     ws_cat.freeze_panes = "A2"
-
     headers_cat = ["SKU", "Nombre", "Categorías Vinculadas", "Proveedor", "Costo", "Precio", "Stock", "Estado"]
-    for col_idx, header in enumerate(headers_cat, start=1):
-        cell = ws_cat.cell(row=1, column=col_idx, value=header)
-        cell.font = font_header
-        cell.fill = header_fill
-        cell.alignment = Alignment(horizontal="center")
-    ws_cat.row_dimensions[1].height = 24
-
-    for row_idx, (p, linked_cats) in enumerate(categorizados, start=2):
+    rows_cat = []
+    for p, linked_cats in categorizados:
         cats_str = "; ".join(c.get_full_path() for c in linked_cats)
-        row_data = [
+        rows_cat.append([
             p.sku,
             p.name,
             cats_str,
@@ -1488,47 +1716,8 @@ def export_products_diagnostic(request):
             p.price,
             p.stock,
             "Activo" if p.is_active else "Inactivo"
-        ]
-        for col_idx, value in enumerate(row_data, start=1):
-            cell = ws_cat.cell(row=row_idx, column=col_idx, value=value)
-            cell.font = font_regular
-            cell.border = thin_border
-            
-            # Formatting
-            if col_idx in (1, 2, 3, 4):
-                cell.alignment = Alignment(horizontal="left")
-            elif col_idx in (5, 6):
-                cell.number_format = "$#,##0.00"
-                cell.alignment = Alignment(horizontal="right")
-            elif col_idx == 7:
-                cell.number_format = "#,##0"
-                cell.alignment = Alignment(horizontal="right")
-            else:
-                cell.alignment = Alignment(horizontal="center")
-                if value == "Activo":
-                    cell.fill = green_alert_fill
-                else:
-                    cell.fill = red_alert_fill
-
-            # Zebra striping
-            if row_idx % 2 == 1 and cell.fill.fill_type is None:
-                cell.fill = zebra_fill
-
-    # Auto-fit Catalogados columns
-    for col in ws_cat.columns:
-        max_len = 0
-        for cell in col:
-            val = str(cell.value or '')
-            if cell.number_format == "$#,##0.00" and isinstance(cell.value, (int, float, Decimal)):
-                val = f"${cell.value:,.2f}"
-            max_len = max(max_len, len(val))
-        col_letter = get_column_letter(col[0].column)
-        # Limit width for categories path column so it doesn't span too far
-        if col_letter == 'C':
-            ws_cat.column_dimensions[col_letter].width = min(max(max_len + 4, 15), 50)
-        else:
-            ws_cat.column_dimensions[col_letter].width = max(max_len + 4, 12)
-    ws_cat.auto_filter.ref = ws_cat.dimensions
+        ])
+    format_and_populate_sheet(ws_cat, headers_cat, rows_cat)
 
     # Log action
     log_admin_action(
@@ -1540,6 +1729,12 @@ def export_products_diagnostic(request):
             "total_products": total_count,
             "categorized": cat_count,
             "uncategorized": uncat_count,
+            "duplicate_names": dup_names_count,
+            "duplicate_specs": dup_specs_count,
+            "sku_inconsistencies": sku_err_count,
+            "price_inconsistencies": price_err_count,
+            "hidden_by_inactive_cat": hidden_cat_count,
+            "missing_images": no_img_count,
         }
     )
 

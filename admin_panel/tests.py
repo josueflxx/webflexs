@@ -4985,3 +4985,195 @@ class ImportFormSecurityTests(TestCase):
         form = ClientImportForm(data={}, files={"file": upload})
 
         self.assertTrue(form.is_valid(), form.errors)
+
+
+class ExportProductsDiagnosticTests(TestCase):
+    def setUp(self):
+        self.primary_superadmin = User.objects.create_superuser(
+            username='josueflexs',
+            email='josue@example.com',
+            password='secret123',
+        )
+        self.staff = User.objects.create_user(
+            username='staff_export_diag',
+            password='secret123',
+            is_staff=True,
+        )
+        self.category_active = Category.objects.create(name='Cat Activa', slug='cat-activa', is_active=True)
+        self.category_inactive = Category.objects.create(name='Cat Inactiva', slug='cat-inactiva', is_active=False)
+        self.supplier = Supplier.objects.create(name='Proveedor Test')
+        self.company = get_default_company()
+
+    def _activate_company(self):
+        session = self.client.session
+        session['active_company_id'] = self.company.pk
+        session.save()
+
+    def test_export_products_diagnostic_requires_primary_superadmin(self):
+        self.client.force_login(self.staff)
+        self._activate_company()
+        response = self.client.get(reverse('admin_export_products_diagnostic'))
+        self.assertEqual(response.status_code, 302)  # redirects due to user_passes_test failing
+
+    def test_export_products_diagnostic_success_and_contents(self):
+        from catalog.models import ClampSpecs
+
+        # 1. Cataloged Product (Ok)
+        p_ok = Product.objects.create(
+            sku='OK-001',
+            name='Abrazadera OK',
+            price=Decimal('100.00'),
+            cost=Decimal('50.00'),
+            stock=10,
+            category=self.category_active,
+            is_active=True,
+            image='products/ok.jpg',
+        )
+        p_ok.categories.add(self.category_active)
+
+        # 2. Product Uncategorized
+        p_uncat = Product.objects.create(
+            sku='UNCAT-001',
+            name='Abrazadera Huérfana',
+            price=Decimal('100.00'),
+            cost=Decimal('50.00'),
+            stock=5,
+            is_active=True,
+        )
+
+        # 3. Duplicate Names
+        p_dup_name1 = Product.objects.create(
+            sku='DUP-N1',
+            name='Abrazadera Duplicada',
+            price=Decimal('100.00'),
+            cost=Decimal('50.00'),
+            stock=5,
+            is_active=True,
+        )
+        p_dup_name2 = Product.objects.create(
+            sku='DUP-N2',
+            name='Abrazadera Duplicada',
+            price=Decimal('100.00'),
+            cost=Decimal('50.00'),
+            stock=5,
+            is_active=True,
+        )
+
+        # 4. Duplicate Specs
+        p_dup_spec1 = Product.objects.create(
+            sku='DUP-S1',
+            name='Abrazadera Espec 1',
+            price=Decimal('100.00'),
+            cost=Decimal('50.00'),
+            stock=5,
+            is_active=True,
+        )
+        ClampSpecs.objects.create(
+            product=p_dup_spec1,
+            fabrication='TREFILADA',
+            diameter='1/2',
+            width=50,
+            length=100,
+            shape='CURVA',
+        )
+
+        p_dup_spec2 = Product.objects.create(
+            sku='DUP-S2',
+            name='Abrazadera Espec 2',
+            price=Decimal('100.00'),
+            cost=Decimal('50.00'),
+            stock=5,
+            is_active=True,
+        )
+        ClampSpecs.objects.create(
+            product=p_dup_spec2,
+            fabrication='TREFILADA',
+            diameter='1/2',
+            width=50,
+            length=100,
+            shape='CURVA',
+        )
+
+        # 5. SKU Inconsistency
+        p_sku_inc = Product.objects.create(
+            sku='DIFERENTE-SKU',
+            name='Abrazadera SKU Inconsistente',
+            price=Decimal('100.00'),
+            cost=Decimal('50.00'),
+            stock=5,
+            is_active=True,
+        )
+        ClampSpecs.objects.create(
+            product=p_sku_inc,
+            fabrication='TREFILADA',
+            diameter='1/2',
+            width=50,
+            length=100,
+            shape='CURVA',
+        )
+
+        # 6. Pricing Inconsistency (price <= 0)
+        p_price_inc1 = Product.objects.create(
+            sku='PRICE-INC1',
+            name='Abrazadera Sin Precio',
+            price=Decimal('0.00'),
+            cost=Decimal('50.00'),
+            stock=5,
+            is_active=True,
+        )
+        p_price_inc2 = Product.objects.create(
+            sku='PRICE-INC2',
+            name='Abrazadera A Perdida',
+            price=Decimal('100.00'),
+            cost=Decimal('150.00'),
+            stock=5,
+            is_active=True,
+        )
+
+        # 7. Category Inactive
+        p_cat_inact = Product.objects.create(
+            sku='CAT-INACT-001',
+            name='Abrazadera Cat Inactiva',
+            price=Decimal('100.00'),
+            cost=Decimal('50.00'),
+            stock=5,
+            is_active=True,
+        )
+        p_cat_inact.categories.add(self.category_inactive)
+
+        # 8. Missing Image
+        p_no_img = Product.objects.create(
+            sku='NO-IMG-001',
+            name='Abrazadera Sin Imagen',
+            price=Decimal('100.00'),
+            cost=Decimal('50.00'),
+            stock=5,
+            is_active=True,
+            image='',
+        )
+
+        self.client.force_login(self.primary_superadmin)
+        self._activate_company()
+        response = self.client.get(reverse('admin_export_products_diagnostic'))
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('spreadsheetml.sheet', response['Content-Type'])
+
+        wb = load_workbook(BytesIO(response.content))
+        self.assertIn("Resumen de Integridad", wb.sheetnames)
+        self.assertIn("Sin Categoría", wb.sheetnames)
+        self.assertIn("Nombres Duplicados", wb.sheetnames)
+        self.assertIn("Medidas Duplicadas", wb.sheetnames)
+        self.assertIn("Inconsistencias SKU", wb.sheetnames)
+        self.assertIn("Precios Inconsistentes", wb.sheetnames)
+        self.assertIn("Cat Inactivas (Ocultos)", wb.sheetnames)
+        self.assertIn("Sin Imagen", wb.sheetnames)
+        self.assertIn("Catalogados", wb.sheetnames)
+
+        # Check Resumen data
+        ws_resumen = wb["Resumen de Integridad"]
+        total_products_val = ws_resumen.cell(row=6, column=2).value
+        # Total of products should be 11 (including the ones created in setup/test)
+        # We had 0 in setup for this class (the database is empty except setup)
+        # Total = 11 products created in this test case
+        self.assertEqual(total_products_val, 11)
+

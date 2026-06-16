@@ -231,7 +231,14 @@ def _serialize_product_value(product, key, price_map=None, discount_percentage=N
     if key == "is_visible_in_catalog":
         return _yes_no(product.is_visible_in_catalog())
     if key == "primary_category":
-        primary = product.get_primary_category()
+        if product.category_id:
+            primary = product.category
+        else:
+            prefetched_cats = list(product.categories.all()) if hasattr(product, "_prefetched_objects_cache") and "categories" in product._prefetched_objects_cache else None
+            if prefetched_cats:
+                primary = sorted(prefetched_cats, key=lambda c: c.name or "")[0]
+            else:
+                primary = product.get_primary_category()
         return primary.name if primary else ""
     if key == "categories":
         linked = product.get_linked_categories()
