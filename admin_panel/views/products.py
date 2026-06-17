@@ -1356,8 +1356,14 @@ def products_uncategorized(request):
     """View to show and quickly categorize products without category."""
     if request.method == 'POST':
         try:
-            if request.content_type == 'application/json' or request.headers.get('x-requested-with') == 'XMLHttpRequest':
-                payload = json.loads(request.body.decode('utf-8'))
+            payload = {}
+            if request.body:
+                try:
+                    payload = json.loads(request.body.decode('utf-8'))
+                except json.JSONDecodeError:
+                    pass
+
+            if payload:
                 action = payload.get('action', 'categorize')
                 product_ids = payload.get('product_ids', [])
                 category_id = payload.get('category_id')
