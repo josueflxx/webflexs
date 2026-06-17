@@ -696,8 +696,34 @@
     const csrfToken = '{{ csrf_token }}';
     const categoryExpanded = {};
 
+    let lastChecked = null;
+
     document.addEventListener('DOMContentLoaded', function() {
         setupCategoryTree();
+
+        // Shift-click selection support
+        const tableBody = document.querySelector('#products-table tbody');
+        if (tableBody) {
+            tableBody.addEventListener('click', function(e) {
+                const target = e.target;
+                if (target.classList.contains('product-checkbox')) {
+                    if (e.shiftKey && lastChecked) {
+                        const checkboxes = Array.from(document.querySelectorAll('.product-checkbox'));
+                        const start = checkboxes.indexOf(target);
+                        const end = checkboxes.indexOf(lastChecked);
+                        
+                        if (start !== -1 && end !== -1) {
+                            const range = checkboxes.slice(Math.min(start, end), Math.max(start, end) + 1);
+                            range.forEach(cb => {
+                                cb.checked = target.checked;
+                            });
+                        }
+                    }
+                    lastChecked = target;
+                    updateBulkBar();
+                }
+            });
+        }
     });
 
     // --- SELECCION MASIVA ---
