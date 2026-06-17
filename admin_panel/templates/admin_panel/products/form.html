@@ -745,10 +745,30 @@
                 updateBlocksUI();
                 loadCategoryAttributes();
 
-                // 6. Highlight and scroll to the new item
+                // 6. Expand ancestors of the new category, then scroll and highlight it
                 setTimeout(() => {
                     const newItem = document.getElementById(`category-item-${newCategoryId}`);
                     if (newItem) {
+                        const itemsList = Array.from(document.querySelectorAll('.category-check-item'));
+                        const newIndex = itemsList.indexOf(newItem);
+                        const newDepth = parseInt(newItem.style.getPropertyValue('--depth') || '0', 10);
+                        let currentDepth = newDepth;
+                        
+                        for (let i = newIndex - 1; i >= 0; i--) {
+                            const prevItem = itemsList[i];
+                            const prevDepth = parseInt(prevItem.style.getPropertyValue('--depth') || '0', 10);
+                            if (prevDepth < currentDepth) {
+                                const prevCheckbox = prevItem.querySelector('.category-check');
+                                if (prevCheckbox) {
+                                    categoryExpanded[prevCheckbox.value] = true;
+                                }
+                                currentDepth = prevDepth;
+                            }
+                            if (currentDepth === 0) break;
+                        }
+                        
+                        updateTreeVisibility();
+
                         newItem.scrollIntoView({ behavior: 'smooth', block: 'center' });
                         newItem.classList.add('glow-highlight');
                         setTimeout(() => {
@@ -966,7 +986,7 @@
             const depth = parseInt(item.style.getPropertyValue('--depth') || '0', 10);
             
             if (categoryExpanded[id] === undefined) {
-                categoryExpanded[id] = true; // expanded by default
+                categoryExpanded[id] = false; // collapsed by default
             }
             
             // Check if it has children (next item has greater depth)
@@ -1004,6 +1024,27 @@
                         toggleSpan.innerHTML = categoryExpanded[id] ? '▼' : '▶';
                         updateTreeVisibility();
                     });
+                }
+            }
+        });
+
+        // Force-expand ancestors of any checked categories so the active selections are visible initially
+        items.forEach((item, index) => {
+            const checkbox = item.querySelector('.category-check');
+            if (checkbox && checkbox.checked) {
+                const depth = parseInt(item.style.getPropertyValue('--depth') || '0', 10);
+                let currentDepth = depth;
+                for (let i = index - 1; i >= 0; i--) {
+                    const prevItem = items[i];
+                    const prevDepth = parseInt(prevItem.style.getPropertyValue('--depth') || '0', 10);
+                    if (prevDepth < currentDepth) {
+                        const prevCheckbox = prevItem.querySelector('.category-check');
+                        if (prevCheckbox) {
+                            categoryExpanded[prevCheckbox.value] = true;
+                        }
+                        currentDepth = prevDepth;
+                    }
+                    if (currentDepth === 0) break;
                 }
             }
         });
