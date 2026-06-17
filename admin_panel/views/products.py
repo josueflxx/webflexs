@@ -1356,12 +1356,15 @@ def products_uncategorized(request):
     """View to show and quickly categorize products without category."""
     if request.method == 'POST':
         try:
+            body_str = ""
+            decode_error = None
             payload = {}
             if request.body:
                 try:
-                    payload = json.loads(request.body.decode('utf-8'))
-                except json.JSONDecodeError:
-                    pass
+                    body_str = request.body.decode('utf-8')
+                    payload = json.loads(body_str)
+                except Exception as e:
+                    decode_error = str(e)
 
             if payload:
                 action = payload.get('action', 'categorize')
@@ -1379,6 +1382,8 @@ def products_uncategorized(request):
                 product_id = request.POST.get('product_id')
                 name_val = request.POST.get('name')
                 sku_val = request.POST.get('sku')
+
+            debug_info = f" [Debug: BodyLen={len(request.body) if request.body else 0}, Body={body_str[:200]}, DecodeError={decode_error}, POST={dict(request.POST)}, ContentType={request.headers.get('Content-Type') if hasattr(request, 'headers') else request.META.get('CONTENT_TYPE')}]"
 
             # Process actions
             if action == 'quick_edit':
@@ -1415,7 +1420,7 @@ def products_uncategorized(request):
             elif action == 'bulk_deactivate':
                 product_ids = [int(x) for x in product_ids if str(x).isdigit()]
                 if not product_ids:
-                    return JsonResponse({'success': False, 'error': 'No se seleccionaron productos.'})
+                    return JsonResponse({'success': False, 'error': 'No se seleccionaron productos.' + debug_info})
                 products_qs = Product.objects.filter(pk__in=product_ids)
                 count = products_qs.count()
                 for prod in products_qs:
@@ -1432,7 +1437,7 @@ def products_uncategorized(request):
             elif action == 'bulk_delete':
                 product_ids = [int(x) for x in product_ids if str(x).isdigit()]
                 if not product_ids:
-                    return JsonResponse({'success': False, 'error': 'No se seleccionaron productos.'})
+                    return JsonResponse({'success': False, 'error': 'No se seleccionaron productos.' + debug_info})
                 products_qs = Product.objects.filter(pk__in=product_ids)
                 count = products_qs.count()
                 for prod in products_qs:
@@ -1452,7 +1457,7 @@ def products_uncategorized(request):
                 category_id = int(category_id) if category_id and str(category_id).isdigit() else None
 
                 if not product_ids:
-                    return JsonResponse({'success': False, 'error': 'No se seleccionaron productos.'})
+                    return JsonResponse({'success': False, 'error': 'No se seleccionaron productos.' + debug_info})
 
                 primary_cat = None
                 if category_id:
