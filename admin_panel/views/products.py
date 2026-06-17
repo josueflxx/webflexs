@@ -1533,60 +1533,21 @@ def products_uncategorized(request):
 @superuser_required_for_modifications
 @require_POST
 def import_triler_excel(request):
-    """Import and categorize products from Triler excel file."""
+    """Import and categorize products from Triler excel file (supports .xlsx and .xls)."""
     if 'excel_file' not in request.FILES:
         return JsonResponse({'success': False, 'error': 'No se subió ningún archivo.'})
         
     excel_file = request.FILES['excel_file']
-    if not excel_file.name.endswith('.xlsx'):
-        return JsonResponse({'success': False, 'error': 'El archivo debe ser de formato .xlsx (Excel).'})
+    filename = excel_file.name.lower()
+    
+    if not (filename.endswith('.xlsx') or filename.endswith('.xls')):
+        return JsonResponse({'success': False, 'error': 'El archivo debe ser de formato .xlsx o .xls.'})
         
     try:
-        import openpyxl
-        wb = openpyxl.load_workbook(excel_file, data_only=True)
-        
-        # Find product data sheet
-        sheet = None
-        for name in ['Interno categorizado', 'Sheet1']:
-            if name in wb.sheetnames:
-                sheet = wb[name]
-                break
-        if not sheet:
-            sheet = wb.active
-            
-        rows = list(sheet.iter_rows(values_only=True))
-        if len(rows) < 2:
-            return JsonResponse({'success': False, 'error': 'El archivo Excel está vacío.'})
-            
-        header = rows[0]
-        sku_idx = -1
-        cat_idx = -1
-        
-        for idx, col in enumerate(header):
-            if not col:
-                continue
-            col_str = str(col).strip().lower()
-            if col_str == 'sku' or 'codigo' in col_str or 'código' in col_str:
-                sku_idx = idx
-            elif 'categoria' in col_str or 'categoría' in col_str or 'triler' in col_str:
-                cat_idx = idx
-                
-        if sku_idx == -1 or cat_idx == -1:
-            # Fallback by names/positions
-            for idx, col in enumerate(header):
-                if not col:
-                    continue
-                col_str = str(col).strip().lower()
-                if 'sku' in col_str:
-                    sku_idx = idx
-            if sku_idx == -1:
-                sku_idx = 0
-            if cat_idx == -1:
-                cat_idx = 2 if len(header) > 2 else 1
-                
-        # Get or create parent category TRILER
         from django.utils.text import slugify
+        from django.db import transaction
         
+        # Get or create parent category TRILER
         parent_cat, _ = Category.objects.get_or_create(
             name="TRILER",
             defaults={
@@ -1598,23 +1559,90 @@ def import_triler_excel(request):
         
         matched_count = 0
         created_subcats = {}
+        parsed_rows = [] # Contains (excel_sku, excel_cat) tuples
         
-        # Process rows
-        from django.db import transaction
-        
-        with transaction.atomic():
+        if filename.endswith('.xlsx'):
+            import openpyxl
+            wb = openpyxl.load_workbook(excel_file, data_only=True)
+            
+            # Find product data sheet
+            sheet = None
+            for name in ['Interno categorizado', 'Sheet1']:
+                if name in wb.sheetnames:
+                    sheet = wb[name]
+                    break
+            if not sheet:
+                sheet = wb.active
+                
+            rows = list(sheet.iter_rows(values_only=True))
+            if len(rows) < 2:
+                return JsonResponse({'success': False, 'error': 'El archivo Excel está vacío.'})
+                
+            header = rows[0]
+            sku_idx = -1
+            cat_idx = -1
+            
+            for idx, col in enumerate(header):
+                if not col:
+                    continue
+                col_str = str(col).strip().lower()
+                if col_str == 'sku' or 'codigo' in col_str or 'código' in col_str:
+                    sku_idx = idx
+                elif 'categoria' in col_str or 'categoría' in col_str or 'triler' in col_str:
+                    cat_idx = idx
+                    
+            if sku_idx == -1 or cat_idx == -1:
+                # Fallback by names/positions
+                for idx, col in enumerate(header):
+                    if not col:
+                        continue
+                    col_str = str(col).strip().lower()
+                    if 'sku' in col_str:
+                        sku_idx = idx
+                if sku_idx == -1:
+                    sku_idx = 0
+                if cat_idx == -1:
+                    cat_idx = 2 if len(header) > 2 else 1
+            
             for r in rows[1:]:
                 if len(r) <= max(sku_idx, cat_idx):
                     continue
                 excel_sku = r[sku_idx]
                 excel_cat = r[cat_idx]
-                
-                if not excel_sku or not excel_cat:
-                    continue
+                if excel_sku and excel_cat:
+                    parsed_rows.append((str(excel_sku).strip(), str(excel_cat).strip()))
                     
-                excel_sku_str = str(excel_sku).strip()
-                excel_cat_str = str(excel_cat).strip()
+        else:  # .xls file
+            import xlrd
+            file_contents = excel_file.read()
+            book = xlrd.open_workbook(file_contents=file_contents)
+            
+            sheet = None
+            for name in ['Hoja1', 'Sheet1']:
+                if name in book.sheet_names():
+                    sheet = book.sheet_by_name(name)
+                    break
+            if not sheet:
+                sheet = book.sheet_by_index(0)
                 
+            current_category = None
+            for r_idx in range(60, sheet.nrows):
+                row_vals = sheet.row_values(r_idx)
+                if len(row_vals) < 2:
+                    continue
+                sku = str(row_vals[0]).strip() if row_vals[0] is not None else ""
+                name = str(row_vals[1]).strip() if row_vals[1] is not None else ""
+                
+                if not sku:
+                    if name and name not in ["$", "PRECIO", "PRODUCTO"]:
+                        current_category = name
+                else:
+                    if current_category:
+                        parsed_rows.append((sku, current_category))
+                        
+        # Process database updates inside transaction
+        with transaction.atomic():
+            for excel_sku_str, excel_cat_str in parsed_rows:
                 if excel_cat_str == "NO ENCONTRADO EN TRILER" or not excel_cat_str:
                     continue
                     
@@ -1653,7 +1681,7 @@ def import_triler_excel(request):
                     
         return JsonResponse({
             'success': True, 
-            'message': f'Importación completada. Se categorizaron {matched_count} productos exitosamente en {len(created_subcats)} subcategorías de "TRILER".'
+            'message': f'Importación completada. Se procesaron {len(parsed_rows)} artículos y se categorizaron {matched_count} productos exitosamente en {len(created_subcats)} subcategorías de "TRILER".'
         })
         
     except Exception as e:

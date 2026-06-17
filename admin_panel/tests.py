@@ -5506,4 +5506,51 @@ class ProductsUncategorizedViewTests(TestCase):
         self.assertEqual(prod.category.name, 'ACABADOS')
         self.assertEqual(prod.category.parent.name, 'TRILER')
 
+    @patch('xlrd.open_workbook')
+    def test_import_triler_xls_view(self, mock_open_workbook):
+        from unittest.mock import MagicMock
+        from io import BytesIO
+        
+        # Setup mock book and sheet
+        mock_sheet = MagicMock()
+        mock_sheet.nrows = 68
+        mock_sheet.row_values.side_effect = lambda idx: (
+            ['', 'VALVULAS', '', ''] if idx == 66 else (
+                ['TEST-SKU-XLS', 'Test Product Triler XLS', '$', 100.00] if idx == 67 else ['', '', '', '']
+            )
+        )
+        mock_book = MagicMock()
+        mock_book.sheet_names.return_value = ['Hoja1']
+        mock_book.sheet_by_name.return_value = mock_sheet
+        mock_open_workbook.return_value = mock_book
+        
+        # Create product in db
+        Product.objects.create(
+            sku='T-TEST-SKU-XLS',
+            name='Test Product Triler XLS',
+            price=Decimal('100.00'),
+        )
+        
+        # In-memory dummy file
+        excel_file = BytesIO(b"fake xls content")
+        excel_file.name = 'triler.xls'
+        
+        self.client.force_login(self.primary_superadmin)
+        self._activate_company()
+        
+        response = self.client.post(
+            reverse('admin_products_uncategorized_import_excel'),
+            {'excel_file': excel_file},
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest'
+        )
+        
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertTrue(data['success'])
+        
+        # Check DB
+        prod = Product.objects.get(sku='T-TEST-SKU-XLS')
+        self.assertIsNotNone(prod.category)
+        self.assertEqual(prod.category.name, 'VALVULAS')
+
 
