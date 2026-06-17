@@ -139,6 +139,20 @@
         min-height: 108px;
     }
 
+    a.catalog-diagnostic-card {
+        text-decoration: none;
+        color: inherit;
+        display: block;
+        transition: all 0.2s ease;
+    }
+
+    a.catalog-diagnostic-card:hover {
+        background: rgba(255, 255, 255, 0.07);
+        border-color: rgba(255, 107, 53, 0.45);
+        box-shadow: 0 4px 12px rgba(255, 107, 53, 0.15);
+        transform: translateY(-2px);
+    }
+
     .catalog-diagnostic-card strong {
         display: block;
         color: #ffffff;
@@ -534,16 +548,16 @@
             <strong>{{ catalog_diagnostics.visible_empty_count }}</strong>
             <small>Categorias publicas vacias. Se ocultan del arbol cliente hasta tener productos visibles.</small>
         </div>
-        <div class="catalog-diagnostic-card">
+        <a href="?status=hidden" class="catalog-diagnostic-card">
             <span>Ocultas</span>
             <strong>{{ catalog_diagnostics.hidden_with_products_count }}</strong>
-            <small>Categorias ocultas con productos vinculados. Sirven para orden interno o revision.</small>
-        </div>
-        <div class="catalog-diagnostic-card">
+            <small>Categorias ocultas con productos vinculados. Haz clic para verlas.</small>
+        </a>
+        <a href="{% url 'admin_product_list' %}?category=__uncategorized__" class="catalog-diagnostic-card">
             <span>Sin categoria</span>
             <strong>{{ catalog_diagnostics.uncategorized_active_products }}</strong>
-            <small>Productos activos sin categoria. Pueden aparecer sin filtro especifico.</small>
-        </div>
+            <small>Productos activos sin categoria. Haz clic para ver y categorizar rápido.</small>
+        </a>
         <div class="catalog-diagnostic-card">
             <span>Solo ocultas</span>
             <strong>{{ catalog_diagnostics.active_products_only_hidden }}</strong>
