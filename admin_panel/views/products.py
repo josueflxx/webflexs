@@ -1351,6 +1351,176 @@ def category_list(request):
 
 
 @staff_member_required
+@superuser_required_for_modifications
+def products_uncategorized(request):
+    """View to show and quickly categorize products without category."""
+    if request.method == 'POST':
+        try:
+            if request.content_type == 'application/json' or request.headers.get('x-requested-with') == 'XMLHttpRequest':
+                payload = json.loads(request.body.decode('utf-8'))
+                action = payload.get('action', 'categorize')
+                product_ids = payload.get('product_ids', [])
+                category_id = payload.get('category_id')
+                categories_ids = payload.get('categories', [])
+                product_id = payload.get('product_id')
+                name_val = payload.get('name')
+                sku_val = payload.get('sku')
+            else:
+                action = request.POST.get('action', 'categorize')
+                product_ids = request.POST.getlist('product_ids')
+                category_id = request.POST.get('category_id')
+                categories_ids = request.POST.getlist('categories')
+                product_id = request.POST.get('product_id')
+                name_val = request.POST.get('name')
+                sku_val = request.POST.get('sku')
+
+            # Process actions
+            if action == 'quick_edit':
+                if not product_id:
+                    return JsonResponse({'success': False, 'error': 'Falta el ID del producto.'})
+                prod = Product.objects.filter(pk=product_id).first()
+                if not prod:
+                    return JsonResponse({'success': False, 'error': 'Producto no encontrado.'})
+                
+                if name_val is not None:
+                    name_clean = name_val.strip()
+                    if not name_clean:
+                        return JsonResponse({'success': False, 'error': 'El nombre no puede estar vacío.'})
+                    prod.name = name_clean
+                
+                if sku_val is not None:
+                    sku_clean = sku_val.strip()
+                    if not sku_clean:
+                        return JsonResponse({'success': False, 'error': 'El SKU no puede estar vacío.'})
+                    if Product.objects.filter(sku=sku_clean).exclude(pk=product_id).exists():
+                        return JsonResponse({'success': False, 'error': f'El SKU "{sku_clean}" ya está en uso.'})
+                    prod.sku = sku_clean
+
+                prod.save()
+                log_admin_action(
+                    request,
+                    action="products_uncategorized_quick_edit",
+                    target_type="product",
+                    target_id=prod.pk,
+                    details={'name': prod.name, 'sku': prod.sku},
+                )
+                return JsonResponse({'success': True})
+
+            elif action == 'bulk_deactivate':
+                product_ids = [int(x) for x in product_ids if str(x).isdigit()]
+                if not product_ids:
+                    return JsonResponse({'success': False, 'error': 'No se seleccionaron productos.'})
+                products_qs = Product.objects.filter(pk__in=product_ids)
+                count = products_qs.count()
+                for prod in products_qs:
+                    prod.is_active = False
+                    prod.save()
+                    log_admin_action(
+                        request,
+                        action="products_uncategorized_deactivate",
+                        target_type="product",
+                        target_id=prod.pk,
+                    )
+                return JsonResponse({'success': True, 'count': count})
+
+            elif action == 'bulk_delete':
+                product_ids = [int(x) for x in product_ids if str(x).isdigit()]
+                if not product_ids:
+                    return JsonResponse({'success': False, 'error': 'No se seleccionaron productos.'})
+                products_qs = Product.objects.filter(pk__in=product_ids)
+                count = products_qs.count()
+                for prod in products_qs:
+                    pk = prod.pk
+                    prod.delete()
+                    log_admin_action(
+                        request,
+                        action="products_uncategorized_delete",
+                        target_type="product",
+                        target_id=pk,
+                    )
+                return JsonResponse({'success': True, 'count': count})
+
+            elif action == 'categorize':
+                product_ids = [int(x) for x in product_ids if str(x).isdigit()]
+                categories_ids = [int(x) for x in categories_ids if str(x).isdigit()]
+                category_id = int(category_id) if category_id and str(category_id).isdigit() else None
+
+                if not product_ids:
+                    return JsonResponse({'success': False, 'error': 'No se seleccionaron productos.'})
+
+                primary_cat = None
+                if category_id:
+                    primary_cat = Category.objects.filter(pk=category_id).first()
+
+                products_qs = Product.objects.filter(pk__in=product_ids)
+                
+                for prod in products_qs:
+                    if primary_cat:
+                        prod.category = primary_cat
+                    if categories_ids:
+                        cats = Category.objects.filter(pk__in=categories_ids)
+                        prod.categories.set(cats)
+                        if not prod.category and cats.exists():
+                            prod.category = cats.first()
+                    elif category_id and not categories_ids:
+                        prod.categories.set([primary_cat])
+                    
+                    prod.save()
+                    
+                    log_admin_action(
+                        request,
+                        action="products_uncategorized_assign",
+                        target_type="product",
+                        target_id=prod.pk,
+                        details={'msg': f'Categorización rápida. Primaria: {prod.category_id}, M2M: {list(categories_ids)}'},
+                    )
+                    
+                return JsonResponse({'success': True, 'count': products_qs.count()})
+            else:
+                return JsonResponse({'success': False, 'error': f'Acción no válida: {action}'})
+                
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)})
+
+    # GET Request
+    q = request.GET.get('q', '').strip()
+    supplier_id = request.GET.get('supplier', '').strip()
+    
+    products = Product.objects.filter(category__isnull=True, categories__isnull=True)
+    
+    if q:
+        products = products.filter(Q(name__icontains=q) | Q(sku__icontains=q) | Q(supplier__icontains=q))
+    if supplier_id and supplier_id.isdigit():
+        products = products.filter(supplier_ref_id=int(supplier_id))
+        
+    products = products.select_related('supplier_ref').order_by('name')
+    
+    # Smart suggestions matching
+    all_cats = list(Category.objects.filter(is_active=True))
+    sorted_cats = sorted(all_cats, key=lambda c: len(c.name), reverse=True)
+    
+    for prod in products:
+        prod_name_lower = prod.name.lower()
+        suggested = None
+        for cat in sorted_cats:
+            if len(cat.name) >= 3 and cat.name.lower() in prod_name_lower:
+                suggested = cat
+                break
+        prod.suggested_category = suggested
+        
+    category_options = get_cached_category_options(only_active=True, include_inactive_suffix=False)
+    suppliers = Supplier.objects.all().order_by('name')
+    
+    return render(request, 'admin_panel/categories/uncategorized.html', {
+        'products': products,
+        'category_options': category_options,
+        'suppliers': suppliers,
+        'q': q,
+        'selected_supplier_id': int(supplier_id) if supplier_id.isdigit() else None,
+    })
+
+
+@staff_member_required
 @require_POST
 @superuser_required_for_modifications
 def category_reorder(request):
@@ -3278,4 +3448,4 @@ def parse_clamp_code_api(request):
         logger.exception("Error parsing clamp code")
         return JsonResponse({"success": False, "error": "No se pudo parsear el codigo."}, status=500)
 
-__all__ = ['product_list', 'product_create', 'product_edit', 'product_delete', 'product_toggle_active', 'product_bulk_category_update', 'product_bulk_status_update', 'product_bulk_image_update', 'supplier_list', 'supplier_detail', 'supplier_bulk_action', 'supplier_export', 'supplier_print', 'supplier_unassigned', 'supplier_toggle_active', 'category_list', 'category_reorder', 'category_sort_roots_alpha', 'category_bulk_status', 'category_create', 'category_create_ajax', 'category_edit', 'category_move', 'category_delete', 'category_attribute_create', 'category_attribute_edit', 'category_attribute_delete', 'category_manage_products', 'category_products_reorder', 'get_category_attributes', 'parse_product_description', 'parse_clamp_code_api']
+__all__ = ['product_list', 'product_create', 'product_edit', 'product_delete', 'product_toggle_active', 'product_bulk_category_update', 'product_bulk_status_update', 'product_bulk_image_update', 'supplier_list', 'supplier_detail', 'supplier_bulk_action', 'supplier_export', 'supplier_print', 'supplier_unassigned', 'supplier_toggle_active', 'category_list', 'category_reorder', 'category_sort_roots_alpha', 'category_bulk_status', 'category_create', 'category_create_ajax', 'category_edit', 'category_move', 'category_delete', 'category_attribute_create', 'category_attribute_edit', 'category_attribute_delete', 'category_manage_products', 'category_products_reorder', 'get_category_attributes', 'parse_product_description', 'parse_clamp_code_api', 'products_uncategorized']

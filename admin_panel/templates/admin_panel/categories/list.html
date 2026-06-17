@@ -553,7 +553,7 @@
             <strong>{{ catalog_diagnostics.hidden_with_products_count }}</strong>
             <small>Categorias ocultas con productos vinculados. Haz clic para verlas.</small>
         </a>
-        <a href="{% url 'admin_product_list' %}?category=__uncategorized__" class="catalog-diagnostic-card">
+        <a href="{% url 'admin_products_uncategorized' %}" class="catalog-diagnostic-card">
             <span>Sin categoria</span>
             <strong>{{ catalog_diagnostics.uncategorized_active_products }}</strong>
             <small>Productos activos sin categoria. Haz clic para ver y categorizar rápido.</small>

@@ -5259,3 +5259,208 @@ class CategoryAjaxCreationTests(TestCase):
         self.assertIn('error', data)
 
 
+class ProductsUncategorizedViewTests(TestCase):
+    def setUp(self):
+        self.primary_superadmin = User.objects.create_superuser(
+            username='josueflexs',
+            email='josue@example.com',
+            password='secret123',
+        )
+        self.staff = User.objects.create_user(
+            username='staff_test',
+            password='secret123',
+            is_staff=True,
+        )
+        self.category = Category.objects.create(
+            name='Tornillos',
+            slug='tornillos',
+            is_active=True,
+            visible_in_catalog=True,
+        )
+        self.supplier = Supplier.objects.create(
+            name='Proveedor A',
+        )
+        self.product_uncat = Product.objects.create(
+            sku='UNCAT-01',
+            name='Tornillos Autoperforantes de prueba',
+            price=Decimal('10.50'),
+            supplier_ref=self.supplier,
+        )
+        self.product_cat = Product.objects.create(
+            sku='CATEGORIZED-01',
+            name='Producto categorizado',
+            price=Decimal('20.00'),
+            category=self.category,
+        )
+        self.company = get_default_company()
+
+    def _activate_company(self):
+        session = self.client.session
+        session['active_company_id'] = self.company.pk
+        session.save()
+
+    def test_anonymous_cannot_access_view(self):
+        response = self.client.get(reverse('admin_products_uncategorized'))
+        self.assertEqual(response.status_code, 302)
+
+    def test_staff_can_view_uncategorized_get(self):
+        self.client.force_login(self.staff)
+        self._activate_company()
+        response = self.client.get(reverse('admin_products_uncategorized'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'UNCAT-01')
+        self.assertNotContains(response, 'CATEGORIZED-01')
+        self.assertIn('products', response.context)
+        products = response.context['products']
+        self.assertEqual(len(products), 1)
+        self.assertEqual(products[0].sku, 'UNCAT-01')
+        self.assertEqual(products[0].suggested_category, self.category)  # matches "Tornillo" in category name "Tornillos"
+
+    def test_get_filter_by_search_query(self):
+        self.client.force_login(self.staff)
+        self._activate_company()
+        
+        # Match search
+        response = self.client.get(reverse('admin_products_uncategorized') + '?q=Tornillo')
+        self.assertEqual(len(response.context['products']), 1)
+        
+        # No match search
+        response = self.client.get(reverse('admin_products_uncategorized') + '?q=Nonexistent')
+        self.assertEqual(len(response.context['products']), 0)
+
+    def test_get_filter_by_supplier(self):
+        self.client.force_login(self.staff)
+        self._activate_company()
+        
+        # Match supplier
+        response = self.client.get(reverse('admin_products_uncategorized') + f'?supplier={self.supplier.id}')
+        self.assertEqual(len(response.context['products']), 1)
+        
+        # No match supplier
+        response = self.client.get(reverse('admin_products_uncategorized') + '?supplier=99999')
+        self.assertEqual(len(response.context['products']), 0)
+
+    def test_staff_cannot_perform_post_modifications(self):
+        self.client.force_login(self.staff)
+        self._activate_company()
+        response = self.client.post(reverse('admin_products_uncategorized'), {
+            'action': 'categorize',
+            'product_ids': [self.product_uncat.pk],
+            'category_id': self.category.pk,
+        })
+        self.assertEqual(response.status_code, 302)
+        # Check that product remains uncategorized
+        self.product_uncat.refresh_from_db()
+        self.assertIsNone(self.product_uncat.category)
+
+    def test_superadmin_can_categorize_ajax_success(self):
+        self.client.force_login(self.primary_superadmin)
+        self._activate_company()
+        
+        response = self.client.post(
+            reverse('admin_products_uncategorized'),
+            json.dumps({
+                'action': 'categorize',
+                'product_ids': [self.product_uncat.pk],
+                'category_id': self.category.pk,
+                'categories': [self.category.pk]
+            }),
+            content_type='application/json',
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest'
+        )
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertTrue(data['success'])
+        self.assertEqual(data['count'], 1)
+        
+        # Verify db
+        self.product_uncat.refresh_from_db()
+        self.assertEqual(self.product_uncat.category, self.category)
+        self.assertIn(self.category, self.product_uncat.categories.all())
+
+    def test_superadmin_quick_edit_ajax_success(self):
+        self.client.force_login(self.primary_superadmin)
+        self._activate_company()
+        
+        response = self.client.post(
+            reverse('admin_products_uncategorized'),
+            json.dumps({
+                'action': 'quick_edit',
+                'product_id': self.product_uncat.pk,
+                'name': 'Nombre Editado Inline',
+                'sku': 'SKU-EDITADO-01'
+            }),
+            content_type='application/json',
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest'
+        )
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertTrue(data['success'])
+        
+        # Verify db
+        self.product_uncat.refresh_from_db()
+        self.assertEqual(self.product_uncat.name, 'Nombre Editado Inline')
+        self.assertEqual(self.product_uncat.sku, 'SKU-EDITADO-01')
+
+    def test_superadmin_quick_edit_sku_collision(self):
+        self.client.force_login(self.primary_superadmin)
+        self._activate_company()
+        
+        response = self.client.post(
+            reverse('admin_products_uncategorized'),
+            json.dumps({
+                'action': 'quick_edit',
+                'product_id': self.product_uncat.pk,
+                'sku': 'CATEGORIZED-01'  # exists on product_cat
+            }),
+            content_type='application/json',
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest'
+        )
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertFalse(data['success'])
+        self.assertIn('ya está en uso', data['error'])
+
+    def test_superadmin_bulk_deactivate_ajax_success(self):
+        self.client.force_login(self.primary_superadmin)
+        self._activate_company()
+        
+        response = self.client.post(
+            reverse('admin_products_uncategorized'),
+            json.dumps({
+                'action': 'bulk_deactivate',
+                'product_ids': [self.product_uncat.pk]
+            }),
+            content_type='application/json',
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest'
+        )
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertTrue(data['success'])
+        
+        # Verify db
+        self.product_uncat.refresh_from_db()
+        self.assertFalse(self.product_uncat.is_active)
+
+    def test_superadmin_bulk_delete_ajax_success(self):
+        self.client.force_login(self.primary_superadmin)
+        self._activate_company()
+        
+        pk = self.product_uncat.pk
+        response = self.client.post(
+            reverse('admin_products_uncategorized'),
+            json.dumps({
+                'action': 'bulk_delete',
+                'product_ids': [pk]
+            }),
+            content_type='application/json',
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest'
+        )
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertTrue(data['success'])
+        
+        # Verify db
+        self.assertFalse(Product.objects.filter(pk=pk).exists())
+
+

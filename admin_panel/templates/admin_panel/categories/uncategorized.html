@@ -1,0 +1,1354 @@
+{% extends 'admin_panel/base.html' %}
+{% load static %}
+
+{% block title %}Productos sin Categoría | Panel de Administración{% endblock %}
+
+{% block content %}
+<div class="uncategorized-container">
+    <!-- Header -->
+    <div class="uncategorized-header">
+        <div class="header-info">
+            <h1 class="page-title">Productos sin Categoría</h1>
+            <p class="page-subtitle">Visualiza, edita y clasifica productos activos que no están asignados a ninguna categoría.</p>
+        </div>
+        <div class="header-actions">
+            <a href="{% url 'admin_category_list' %}" class="btn btn-secondary">
+                ← Volver a Categorías
+            </a>
+        </div>
+    </div>
+
+    <!-- Filters Bar -->
+    <div class="filters-card">
+        <form method="get" class="filters-form">
+            <div class="form-row">
+                <div class="form-group flex-2">
+                    <label class="form-label" for="search-input">Buscador</label>
+                    <div class="input-search-wrapper">
+                        <input type="text" id="search-input" name="q" value="{{ q }}" class="form-input" placeholder="Buscar por nombre, SKU o proveedor...">
+                    </div>
+                </div>
+                <div class="form-group flex-1">
+                    <label class="form-label" for="supplier-select">Proveedor Normalizado</label>
+                    <select id="supplier-select" name="supplier" class="form-select" onchange="this.form.submit()">
+                        <option value="">Todos los proveedores</option>
+                        {% for sup in suppliers %}
+                        <option value="{{ sup.id }}" {% if selected_supplier_id == sup.id %}selected{% endif %}>
+                            {{ sup.name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-actions-inline">
+                    <button type="submit" class="btn btn-primary">Buscar</button>
+                    {% if q or selected_supplier_id %}
+                    <a href="{% url 'admin_products_uncategorized' %}" class="btn btn-outline-secondary">Limpiar</a>
+                    {% endif %}
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <!-- Bulk Actions Floating Bar (Sticky) -->
+    <div id="bulk-actions-bar" class="bulk-actions-bar" style="display: none;">
+        <div class="bulk-info">
+            <span class="bulk-badge" id="bulk-count-badge">0</span>
+            <span class="bulk-text">productos seleccionados</span>
+        </div>
+        <div class="bulk-buttons">
+            <button type="button" class="btn btn-primary" onclick="openBulkCategorizeModal()">
+                📂 Categorizar en Lote
+            </button>
+            <button type="button" class="btn btn-warning" onclick="executeBulkAction('bulk_deactivate')">
+                👁️ Desactivar
+            </button>
+            <button type="button" class="btn btn-danger" onclick="executeBulkAction('bulk_delete')">
+                🗑️ Eliminar
+            </button>
+        </div>
+    </div>
+
+    <!-- Main Content Table -->
+    <div class="table-card">
+        {% if products %}
+        <div class="table-responsive">
+            <table class="products-table" id="products-table">
+                <thead>
+                    <tr>
+                        <th width="40" class="text-center">
+                            <input type="checkbox" id="select-all-checkbox" onclick="toggleSelectAll(this)">
+                        </th>
+                        <th width="60" class="text-center">Imagen</th>
+                        <th width="150">SKU / Código</th>
+                        <th>Nombre del Producto</th>
+                        <th width="200">Proveedor</th>
+                        <th width="220">Sugerencia Inteligente</th>
+                        <th width="120" class="text-center">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for prod in products %}
+                    <tr id="product-row-{{ prod.pk }}" data-product-id="{{ prod.pk }}">
+                        <td class="text-center">
+                            <input type="checkbox" class="product-checkbox" value="{{ prod.pk }}" onclick="updateBulkBar()">
+                        </td>
+                        <td class="text-center">
+                            <div class="product-img-wrapper">
+                                {% if prod.image %}
+                                <img src="{{ prod.image.url }}" alt="{{ prod.name }}" class="product-thumb">
+                                {% else %}
+                                <div class="product-thumb-placeholder">📦</div>
+                                {% endif %}
+                            </div>
+                        </td>
+                        <td class="editable-cell cell-sku" title="Doble clic para editar SKU" ondblclick="startInlineEdit(this, 'sku')">
+                            <span class="cell-text">{{ prod.sku }}</span>
+                        </td>
+                        <td class="editable-cell cell-name" title="Doble clic para editar Nombre" ondblclick="startInlineEdit(this, 'name')">
+                            <span class="cell-text">{{ prod.name }}</span>
+                        </td>
+                        <td>
+                            <span class="supplier-text">
+                                {% if prod.supplier_ref %}
+                                {{ prod.supplier_ref.name }}
+                                {% else %}
+                                <span class="text-muted">{{ prod.supplier|default:"Sin proveedor" }}</span>
+                                {% endif %}
+                            </span>
+                        </td>
+                        <td>
+                            {% if prod.suggested_category %}
+                            <button type="button" 
+                                    class="btn-smart-suggestion" 
+                                    onclick="applySmartSuggestion('{{ prod.pk }}', '{{ prod.suggested_category.id }}', '{{ prod.suggested_category.name|escapejs }}')"
+                                    title="Hacer clic para asignar directamente la categoría '{{ prod.suggested_category.name }}'">
+                                💡 Sugerir: {{ prod.suggested_category.name }}
+                            </button>
+                            {% else %}
+                            <span class="text-muted text-xs">Sin sugerencia clara</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-center">
+                            <button type="button" class="btn btn-sm btn-outline-primary" onclick="openIndividualCategorizeModal('{{ prod.pk }}', '{{ prod.name|escapejs }}')">
+                                Categorizar
+                            </button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <!-- Empty State -->
+        <div class="empty-state-card">
+            <div class="empty-state-icon">🎉</div>
+            <h2>¡Todo al día!</h2>
+            <p>No se encontraron productos activos sin categoría. Todos los artículos están clasificados correctamente.</p>
+            {% if q or selected_supplier_id %}
+            <a href="{% url 'admin_products_uncategorized' %}" class="btn btn-primary mt-3">Ver todos los productos</a>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Modal de Categorización -->
+<div id="categorize-modal" class="modal-backdrop" style="display: none;">
+    <div class="modal-content-card">
+        <div class="modal-header">
+            <h3 id="modal-title">Categorizar Producto</h3>
+            <button type="button" class="modal-close-btn" onclick="closeCategorizeModal()">×</button>
+        </div>
+        <div class="modal-body">
+            <input type="hidden" id="modal-product-ids" value="">
+
+            <!-- Categoría Principal -->
+            <div class="form-group mb-4">
+                <label for="primary-category-select" class="form-label font-bold">Categoría Principal (requerido para atributos/filtros)</label>
+                <select id="primary-category-select" class="form-select">
+                    <option value="">Sin categoría principal</option>
+                    {% for cat in category_options %}
+                    <option value="{{ cat.id }}">{{ cat.label }}</option>
+                    {% endfor %}
+                </select>
+                <small class="text-muted block mt-1">Ubicación canónica en catálogo y exportaciones.</small>
+            </div>
+
+            <!-- Categorías Vinculadas (Multi-categorización) -->
+            <div class="form-group mb-4">
+                <div class="flex-between mb-2">
+                    <label class="form-label font-bold">Categorías Vinculadas (Múltiple Selección)</label>
+                    <button type="button" class="btn-inline-add" onclick="toggleInlineCategoryForm()">
+                        ➕ Nueva Categoría
+                    </button>
+                </div>
+
+                <!-- Formulario Inline para Crear Categorías -->
+                <div id="inline-category-form" class="inline-category-card" style="display: none;">
+                    <h4>Crear Categoría en Caliente</h4>
+                    <div class="form-group mb-2">
+                        <label class="form-label text-xs">Nombre de Categoría</label>
+                        <input type="text" id="inline-cat-name" class="form-input form-input-sm" placeholder="Ej: Tornillos Autoperforantes">
+                    </div>
+                    <div class="form-group mb-2">
+                        <label class="form-label text-xs">Categoría Padre (Opcional)</label>
+                        <select id="inline-cat-parent" class="form-select form-select-sm">
+                            <option value="">Ninguna (Raíz)</option>
+                            {% for cat in category_options %}
+                            <option value="{{ cat.id }}">{{ cat.label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="flex-end gap-2">
+                        <button type="button" class="btn btn-sm btn-secondary" onclick="toggleInlineCategoryForm()">Cancelar</button>
+                        <button type="button" class="btn btn-sm btn-primary" onclick="submitInlineCategory()">Crear y Seleccionar</button>
+                    </div>
+                </div>
+
+                <!-- Árbol de Selección M2M -->
+                <div class="tree-search-wrapper mb-2">
+                    <input type="text" id="categoryTreeSearch" class="form-input form-input-sm" placeholder="Buscar categoría en el árbol..." oninput="filterCategoryTree()">
+                </div>
+                
+                <div id="categoryCheckGrid" class="category-tree-grid">
+                    {% for cat in category_options %}
+                    <label class="category-check-item depth-{{ cat.depth }}"
+                           style="--depth: {{ cat.depth }};"
+                           data-name="{{ cat.full_path|lower }} {{ cat.name|lower }}">
+                        <input type="checkbox"
+                               name="categories"
+                               value="{{ cat.id }}"
+                               class="category-check"
+                               onclick="syncPrimaryFromCheckboxes()">
+                        <span class="category-info">
+                            <strong>
+                                {% if cat.depth > 0 %}
+                                <span class="tree-arrow">↳</span>
+                                {% endif %}
+                                <span class="cat-label-text">{{ cat.name }}</span>
+                            </strong>
+                            <small class="text-muted">{{ cat.full_path }}</small>
+                        </span>
+                    </label>
+                    {% endfor %}
+                </div>
+                <small class="text-muted block mt-1">Puedes vincular múltiples categorías secundarias.</small>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" onclick="closeCategorizeModal()">Cancelar</button>
+            <button type="button" class="btn btn-primary" onclick="submitCategorize()">Guardar y Clasificar</button>
+        </div>
+    </div>
+</div>
+
+<style>
+    /* Estilos Premium para la Interfaz Oscura */
+    .uncategorized-container {
+        padding: 20px 0;
+        max-width: 1400px;
+        margin: 0 auto;
+        color: #f1f5f9;
+    }
+    .uncategorized-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 24px;
+    }
+    .page-title {
+        font-size: 1.8rem;
+        font-weight: 800;
+        color: #ffffff;
+        margin: 0 0 6px 0;
+    }
+    .page-subtitle {
+        color: #94a3b8;
+        margin: 0;
+        font-size: 0.95rem;
+    }
+    
+    /* Tarjetas */
+    .filters-card, .table-card {
+        background: #0f172a;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 12px;
+        padding: 20px;
+        margin-bottom: 24px;
+        box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+    }
+    .filters-form .form-row {
+        display: flex;
+        gap: 16px;
+        align-items: flex-end;
+    }
+    .flex-2 { flex: 2; }
+    .flex-1 { flex: 1; }
+    .form-actions-inline {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 2px;
+    }
+    
+    /* Barra de Acciones Masivas Flotante */
+    .bulk-actions-bar {
+        position: sticky;
+        top: 20px;
+        z-index: 100;
+        background: rgba(15, 23, 42, 0.95);
+        border: 2px solid #ff6b35;
+        border-radius: 8px;
+        padding: 14px 20px;
+        margin-bottom: 24px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        backdrop-filter: blur(8px);
+        box-shadow: 0 10px 15px -3px rgba(255, 107, 53, 0.15);
+        animation: slideDown 0.3s ease;
+    }
+    @keyframes slideDown {
+        from { transform: translateY(-10px); opacity: 0; }
+        to { transform: translateY(0); opacity: 1; }
+    }
+    .bulk-info {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+    .bulk-badge {
+        background: #ff6b35;
+        color: #ffffff;
+        font-weight: 800;
+        border-radius: 9999px;
+        padding: 4px 12px;
+        font-size: 0.9rem;
+    }
+    .bulk-text {
+        font-weight: 600;
+        color: #e2e8f0;
+    }
+    .bulk-buttons {
+        display: flex;
+        gap: 10px;
+    }
+
+    /* Tabla */
+    .table-responsive {
+        overflow-x: auto;
+    }
+    .products-table {
+        width: 100%;
+        border-collapse: collapse;
+        text-align: left;
+    }
+    .products-table th {
+        background: rgba(255, 255, 255, 0.03);
+        padding: 12px 16px;
+        font-weight: 700;
+        color: #94a3b8;
+        font-size: 0.82rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .products-table td {
+        padding: 14px 16px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+        vertical-align: middle;
+        font-size: 0.9rem;
+        transition: background-color 0.2s;
+    }
+    .products-table tr {
+        transition: opacity 0.5s ease, transform 0.5s ease;
+    }
+    .products-table tr:hover td {
+        background: rgba(255, 255, 255, 0.015);
+    }
+    .products-table tr.fade-out {
+        opacity: 0;
+        transform: scale(0.95);
+        pointer-events: none;
+    }
+    .text-center { text-align: center; }
+    
+    /* Imágen del Producto */
+    .product-img-wrapper {
+        width: 38px;
+        height: 38px;
+        border-radius: 6px;
+        overflow: hidden;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        background: rgba(255, 255, 255, 0.02);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .product-thumb {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+    .product-thumb-placeholder {
+        font-size: 1.1rem;
+    }
+
+    /* Celdas Editables Inline */
+    .editable-cell {
+        cursor: pointer;
+        position: relative;
+        transition: background-color 0.2s;
+    }
+    .editable-cell:hover {
+        background: rgba(255, 255, 255, 0.03) !important;
+        border-radius: 4px;
+    }
+    .editable-cell::after {
+        content: '✏️';
+        position: absolute;
+        right: 8px;
+        top: 50%;
+        transform: translateY(-50%);
+        font-size: 0.75rem;
+        opacity: 0;
+        transition: opacity 0.2s;
+    }
+    .editable-cell:hover::after {
+        opacity: 0.6;
+    }
+    .inline-edit-input {
+        width: 100%;
+        background: #1e293b !important;
+        border: 1px solid #ff6b35 !important;
+        color: #ffffff !important;
+        padding: 6px 10px;
+        border-radius: 4px;
+        font-size: 0.9rem;
+        box-shadow: 0 0 0 2px rgba(255, 107, 53, 0.2);
+        outline: none;
+    }
+    .cell-save-glow {
+        animation: saveGlow 1s ease;
+    }
+    @keyframes saveGlow {
+        0% { background-color: rgba(34, 197, 94, 0.2); }
+        100% { background-color: transparent; }
+    }
+
+    /* Sugerencias Inteligentes */
+    .btn-smart-suggestion {
+        background: rgba(255, 107, 53, 0.1);
+        border: 1px solid rgba(255, 107, 53, 0.35);
+        color: #ff6b35;
+        padding: 5px 12px;
+        border-radius: 20px;
+        font-size: 0.78rem;
+        font-weight: 700;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        transition: all 0.2s;
+    }
+    .btn-smart-suggestion:hover {
+        background: #ff6b35;
+        color: #ffffff;
+        box-shadow: 0 0 10px rgba(255, 107, 53, 0.3);
+    }
+    
+    /* Empty State */
+    .empty-state-card {
+        padding: 60px 20px;
+        text-align: center;
+    }
+    .empty-state-icon {
+        font-size: 4rem;
+        margin-bottom: 20px;
+    }
+    .empty-state-card h2 {
+        font-size: 1.6rem;
+        color: #ffffff;
+        margin: 0 0 10px 0;
+    }
+    .empty-state-card p {
+        color: #94a3b8;
+        max-width: 500px;
+        margin: 0 auto;
+    }
+    .mt-3 { margin-top: 1rem; }
+    .text-xs { font-size: 0.75rem; }
+    .block { display: block; }
+    .font-bold { font-weight: 700; }
+    .mb-2 { margin-bottom: 0.5rem; }
+    .mb-4 { margin-bottom: 1rem; }
+    .flex-between { display: flex; justify-content: space-between; align-items: center; }
+    .flex-end { display: flex; justify-content: flex-end; }
+    .gap-2 { gap: 0.5rem; }
+
+    /* Modales */
+    .modal-backdrop {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.75);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+        backdrop-filter: blur(4px);
+    }
+    .modal-content-card {
+        background: #0f172a;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 12px;
+        width: 100%;
+        max-width: 650px;
+        max-height: 90vh;
+        display: flex;
+        flex-direction: column;
+        box-shadow: 0 25px 50px -12px rgb(0 0 0 / 0.5);
+        animation: modalFadeIn 0.2s ease;
+    }
+    @keyframes modalFadeIn {
+        from { transform: scale(0.95); opacity: 0; }
+        to { transform: scale(1); opacity: 1; }
+    }
+    .modal-header {
+        padding: 16px 20px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    .modal-header h3 {
+        margin: 0;
+        font-size: 1.2rem;
+        color: #ffffff;
+    }
+    .modal-close-btn {
+        background: transparent;
+        border: none;
+        color: #94a3b8;
+        font-size: 1.6rem;
+        cursor: pointer;
+        transition: color 0.2s;
+    }
+    .modal-close-btn:hover {
+        color: #ffffff;
+    }
+    .modal-body {
+        padding: 20px;
+        overflow-y: auto;
+        flex: 1;
+    }
+    .modal-footer {
+        padding: 16px 20px;
+        border-top: 1px solid rgba(255, 255, 255, 0.08);
+        display: flex;
+        justify-content: flex-end;
+        gap: 12px;
+    }
+
+    /* Sub-formulario Categoría Inline */
+    .btn-inline-add {
+        background: rgba(34, 197, 94, 0.1);
+        border: 1px solid rgba(34, 197, 94, 0.3);
+        color: #22c55e;
+        padding: 4px 10px;
+        font-size: 0.78rem;
+        font-weight: 600;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+    .btn-inline-add:hover {
+        background: #22c55e;
+        color: #ffffff;
+    }
+    .inline-category-card {
+        background: rgba(255, 255, 255, 0.02);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 8px;
+        padding: 14px;
+        margin-bottom: 14px;
+        box-shadow: inset 0 2px 4px 0 rgba(0,0,0,0.2);
+    }
+    .inline-category-card h4 {
+        margin: 0 0 10px 0;
+        font-size: 0.88rem;
+        color: #ffffff;
+        font-weight: 700;
+    }
+    .form-input-sm {
+        padding: 6px 10px;
+        font-size: 0.8rem;
+    }
+    .form-select-sm {
+        padding: 6px 10px;
+        font-size: 0.8rem;
+        height: auto;
+    }
+
+    /* Árbol Jerárquico de Categorías en el Modal */
+    .category-tree-grid {
+        margin-top: 10px;
+        max-height: 280px;
+        overflow-y: auto;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 8px;
+        padding: 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        background: rgba(255, 255, 255, 0.015);
+    }
+    .tree-search-wrapper .form-input-sm {
+        background: #1e293b;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 6px;
+    }
+    .category-check-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        background: rgba(255, 255, 255, 0.02);
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        border-radius: 6px;
+        padding: 8px 12px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        user-select: none;
+    }
+    .category-check-item:hover {
+        background: rgba(255, 255, 255, 0.06);
+        border-color: rgba(255, 255, 255, 0.15);
+    }
+    .category-check-item:has(input:checked) {
+        background: rgba(255, 107, 53, 0.06);
+        border-color: rgba(255, 107, 53, 0.35);
+    }
+    .category-check-item input[type="checkbox"] {
+        cursor: pointer;
+        width: 16px;
+        height: 16px;
+        accent-color: #ff6b35;
+    }
+    .category-check-item .category-info {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        flex: 1;
+    }
+    .category-check-item strong {
+        font-size: 0.9rem;
+        font-weight: 600;
+        color: #f1f5f9;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+    .category-check-item small {
+        font-size: 0.76rem;
+        color: #64748b;
+    }
+    .category-check-item.depth-0 {
+        background: rgba(255, 255, 255, 0.05);
+        border-left: 3px solid #ff6b35;
+        font-weight: 700;
+        margin-top: 4px;
+    }
+    .category-check-item.depth-0 strong {
+        color: #ffffff;
+        font-size: 0.94rem;
+    }
+    .category-check-item.depth-0:has(input:checked) {
+        background: rgba(255, 107, 53, 0.09);
+    }
+    .category-check-item.depth-1 {
+        padding-left: 28px;
+        border-left: 1px dashed rgba(255, 255, 255, 0.15);
+        border-radius: 0 6px 6px 0;
+    }
+    .category-check-item.depth-2 {
+        padding-left: 48px;
+        border-left: 1px dashed rgba(255, 255, 255, 0.15);
+        border-radius: 0 6px 6px 0;
+    }
+    .category-check-item.depth-3 {
+        padding-left: 68px;
+        border-left: 1px dashed rgba(255, 255, 255, 0.15);
+        border-radius: 0 6px 6px 0;
+    }
+
+    /* Animación de pulso para la nueva categoría */
+    .glow-new-category {
+        animation: borderPulse 1.5s infinite alternate;
+    }
+    @keyframes borderPulse {
+        0% { border-color: rgba(34, 197, 94, 0.4); background: rgba(34, 197, 94, 0.05); }
+        100% { border-color: rgba(34, 197, 94, 1); background: rgba(34, 197, 94, 0.2); }
+    }
+</style>
+
+<script>
+    const csrfToken = '{{ csrf_token }}';
+    const categoryExpanded = {};
+
+    document.addEventListener('DOMContentLoaded', function() {
+        setupCategoryTree();
+    });
+
+    // --- SELECCION MASIVA ---
+    function toggleSelectAll(master) {
+        const checkboxes = document.querySelectorAll('.product-checkbox');
+        checkboxes.forEach(cb => {
+            cb.checked = master.checked;
+        });
+        updateBulkBar();
+    }
+
+    function updateBulkBar() {
+        const selected = document.querySelectorAll('.product-checkbox:checked');
+        const bar = document.getElementById('bulk-actions-bar');
+        const badge = document.getElementById('bulk-count-badge');
+        
+        if (selected.length > 0) {
+            badge.innerText = selected.length;
+            bar.style.display = 'flex';
+        } else {
+            bar.style.display = 'none';
+            document.getElementById('select-all-checkbox').checked = false;
+        }
+    }
+
+    // --- ACCIONES DE FILAS (FADE OUT) ---
+    function fadeOutRow(productId) {
+        const row = document.getElementById(`product-row-${productId}`);
+        if (row) {
+            row.classList.add('fade-out');
+            setTimeout(() => {
+                row.remove();
+                checkEmptyState();
+                updateBulkBar();
+            }, 500);
+        }
+    }
+
+    function checkEmptyState() {
+        const tableBody = document.querySelector('#products-table tbody');
+        if (tableBody && tableBody.querySelectorAll('tr').length === 0) {
+            const card = document.querySelector('.table-card');
+            card.innerHTML = `
+                <div class="empty-state-card">
+                    <div class="empty-state-icon">🎉</div>
+                    <h2>¡Todo al día!</h2>
+                    <p>No quedan productos sin categoría en esta lista.</p>
+                </div>
+            `;
+        }
+    }
+
+    // --- SUGERENCIAS INTELIGENTES ---
+    function applySmartSuggestion(productId, categoryId, categoryName) {
+        if (!confirm(`¿Confirmas asignar la categoría "${categoryName}" a este producto?`)) return;
+
+        fetch('{% url "admin_products_uncategorized" %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken,
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: JSON.stringify({
+                action: 'categorize',
+                product_ids: [productId],
+                category_id: categoryId,
+                categories: [categoryId]
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                fadeOutRow(productId);
+            } else {
+                alert('Error: ' + data.error);
+            }
+        })
+        .catch(err => {
+            console.error('Error al aplicar sugerencia:', err);
+            alert('Ocurrió un error al guardar.');
+        });
+    }
+
+    // --- EDICIÓN INLINE (DOBLE CLIC) ---
+    let activeInlineInput = null;
+
+    function startInlineEdit(cell, field) {
+        if (activeInlineInput) return; // Only edit one cell at a time
+
+        const textSpan = cell.querySelector('.cell-text');
+        const originalValue = textSpan.innerText.trim();
+        const row = cell.closest('tr');
+        const productId = row.dataset.productId;
+
+        cell.classList.remove('editable-cell');
+        
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.value = originalValue;
+        input.className = 'inline-edit-input';
+        
+        cell.innerHTML = '';
+        cell.appendChild(input);
+        input.focus();
+        
+        activeInlineInput = input;
+
+        function saveValue() {
+            const newValue = input.value.trim();
+            if (!newValue) {
+                cancelEdit();
+                alert('El valor no puede estar vacío.');
+                return;
+            }
+            if (newValue === originalValue) {
+                cancelEdit();
+                return;
+            }
+
+            const bodyData = {
+                action: 'quick_edit',
+                product_id: productId
+            };
+            bodyData[field] = newValue;
+
+            fetch('{% url "admin_products_uncategorized" %}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken,
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: JSON.stringify(bodyData)
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    textSpan.innerText = newValue;
+                    cell.innerHTML = '';
+                    cell.appendChild(textSpan);
+                    cell.classList.add('editable-cell');
+                    cell.classList.add('cell-save-glow');
+                    setTimeout(() => cell.classList.remove('cell-save-glow'), 1000);
+                    activeInlineInput = null;
+                } else {
+                    alert('Error: ' + data.error);
+                    cancelEdit();
+                }
+            })
+            .catch(err => {
+                console.error('Error en edición rápida:', err);
+                alert('Ocurrió un error al guardar.');
+                cancelEdit();
+            });
+        }
+
+        function cancelEdit() {
+            textSpan.innerText = originalValue;
+            cell.innerHTML = '';
+            cell.appendChild(textSpan);
+            cell.classList.add('editable-cell');
+            activeInlineInput = null;
+        }
+
+        input.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                saveValue();
+            } else if (e.key === 'Escape') {
+                cancelEdit();
+            }
+        });
+
+        input.addEventListener('blur', function() {
+            // Wait slightly in case user hit enter and triggered keydown first
+            setTimeout(() => {
+                if (activeInlineInput === input) saveValue();
+            }, 150);
+        });
+    }
+
+    // --- MODAL Y ÁRBOL DE CATEGORÍAS ---
+    function openIndividualCategorizeModal(productId, productName) {
+        document.getElementById('modal-title').innerText = `Categorizar: "${productName}"`;
+        document.getElementById('modal-product-ids').value = productId;
+        
+        // Reset inputs
+        document.getElementById('primary-category-select').value = '';
+        const checkboxes = document.querySelectorAll('.category-check');
+        checkboxes.forEach(cb => cb.checked = false);
+        
+        // Open modal
+        document.getElementById('categorize-modal').style.display = 'flex';
+        resetCategoryTreeDisplay();
+    }
+
+    function openBulkCategorizeModal() {
+        const selected = document.querySelectorAll('.product-checkbox:checked');
+        const ids = Array.from(selected).map(cb => cb.value);
+        
+        document.getElementById('modal-title').innerText = `Categorizar ${selected.length} productos en lote`;
+        document.getElementById('modal-product-ids').value = ids.join(',');
+        
+        // Reset inputs
+        document.getElementById('primary-category-select').value = '';
+        const checkboxes = document.querySelectorAll('.category-check');
+        checkboxes.forEach(cb => cb.checked = false);
+
+        // Open modal
+        document.getElementById('categorize-modal').style.display = 'flex';
+        resetCategoryTreeDisplay();
+    }
+
+    function closeCategorizeModal() {
+        document.getElementById('categorize-modal').style.display = 'none';
+        document.getElementById('inline-category-form').style.display = 'none';
+    }
+
+    function syncPrimaryFromCheckboxes() {
+        const primarySelect = document.getElementById('primary-category-select');
+        const checked = document.querySelectorAll('.category-check:checked');
+        
+        // If there's currently no primary category selected, but some linked categories are checked,
+        // automatically select the first checked category as the primary one.
+        if (primarySelect.value === '' && checked.length > 0) {
+            primarySelect.value = checked[0].value;
+        }
+    }
+
+    function setupCategoryTree() {
+        const grid = document.getElementById('categoryCheckGrid');
+        if (!grid) return;
+        const items = Array.from(grid.querySelectorAll('.category-check-item'));
+        
+        items.forEach((item, index) => {
+            const checkbox = item.querySelector('.category-check');
+            if (!checkbox) return;
+            const id = checkbox.value;
+            const depth = parseInt(item.style.getPropertyValue('--depth') || '0', 10);
+            
+            if (categoryExpanded[id] === undefined) {
+                categoryExpanded[id] = false; // collapsed by default
+            }
+            
+            // Check if it has children
+            let hasChildren = false;
+            if (index < items.length - 1) {
+                const nextItem = items[index + 1];
+                const nextDepth = parseInt(nextItem.style.getPropertyValue('--depth') || '0', 10);
+                if (nextDepth > depth) {
+                    hasChildren = true;
+                }
+            }
+            
+            const existingToggle = item.querySelector('.tree-toggle');
+            if (existingToggle) existingToggle.remove();
+            
+            if (hasChildren) {
+                const strong = item.querySelector('strong');
+                if (strong) {
+                    const toggleSpan = document.createElement('span');
+                    toggleSpan.className = 'tree-toggle';
+                    toggleSpan.innerHTML = categoryExpanded[id] ? '▼' : '▶';
+                    toggleSpan.style.cursor = 'pointer';
+                    toggleSpan.style.marginRight = '8px';
+                    toggleSpan.style.color = '#ff6b35';
+                    toggleSpan.style.userSelect = 'none';
+                    
+                    strong.insertBefore(toggleSpan, strong.firstChild);
+                    
+                    toggleSpan.addEventListener('click', function(e) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        categoryExpanded[id] = !categoryExpanded[id];
+                        toggleSpan.innerHTML = categoryExpanded[id] ? '▼' : '▶';
+                        updateTreeVisibility();
+                    });
+                }
+            }
+        });
+        
+        updateTreeVisibility();
+    }
+
+    function updateTreeVisibility() {
+        const grid = document.getElementById('categoryCheckGrid');
+        if (!grid) return;
+        const items = Array.from(grid.querySelectorAll('.category-check-item'));
+        
+        const searchInput = document.getElementById('categoryTreeSearch');
+        const query = searchInput ? searchInput.value.trim().toLowerCase() : '';
+        
+        const forceExpand = {};
+        if (query) {
+            items.forEach((item, index) => {
+                const text = item.dataset.name || '';
+                if (text.includes(query)) {
+                    const depth = parseInt(item.style.getPropertyValue('--depth') || '0', 10);
+                    let currentDepth = depth;
+                    
+                    for (let i = index - 1; i >= 0; i--) {
+                        const prevItem = items[i];
+                        const prevDepth = parseInt(prevItem.style.getPropertyValue('--depth') || '0', 10);
+                        if (prevDepth < currentDepth) {
+                            const prevCheckbox = prevItem.querySelector('.category-check');
+                            if (prevCheckbox) {
+                                forceExpand[prevCheckbox.value] = true;
+                            }
+                            currentDepth = prevDepth;
+                        }
+                        if (currentDepth === 0) break;
+                    }
+                }
+            });
+        }
+        
+        items.forEach((item, index) => {
+            const checkbox = item.querySelector('.category-check');
+            if (!checkbox) return;
+            const id = checkbox.value;
+            const depth = parseInt(item.style.getPropertyValue('--depth') || '0', 10);
+            
+            let ancestorCollapsed = false;
+            let currentDepth = depth;
+            
+            for (let i = index - 1; i >= 0; i--) {
+                const prevItem = items[i];
+                const prevDepth = parseInt(prevItem.style.getPropertyValue('--depth') || '0', 10);
+                if (prevDepth < currentDepth) {
+                    const prevCheckbox = prevItem.querySelector('.category-check');
+                    if (prevCheckbox) {
+                        const prevId = prevCheckbox.value;
+                        const isExpanded = forceExpand[prevId] || categoryExpanded[prevId];
+                        if (!isExpanded) {
+                            ancestorCollapsed = true;
+                            break;
+                        }
+                    }
+                    currentDepth = prevDepth;
+                }
+                if (currentDepth === 0) break;
+            }
+            
+            if (ancestorCollapsed) {
+                item.style.display = 'none';
+            } else {
+                if (query) {
+                    const text = item.dataset.name || '';
+                    const matchesSearch = text.includes(query);
+                    
+                    let ancestorMatches = false;
+                    let tempDepth = depth;
+                    for (let i = index - 1; i >= 0; i--) {
+                        const prevItem = items[i];
+                        const prevDepth = parseInt(prevItem.style.getPropertyValue('--depth') || '0', 10);
+                        if (prevDepth < tempDepth) {
+                            const prevText = prevItem.dataset.name || '';
+                            if (prevText.includes(query)) {
+                                ancestorMatches = true;
+                                break;
+                            }
+                            tempDepth = prevDepth;
+                        }
+                        if (tempDepth === 0) break;
+                    }
+                    
+                    let descendantMatches = false;
+                    for (let i = index + 1; i < items.length; i++) {
+                        const nextItem = items[i];
+                        const nextDepth = parseInt(nextItem.style.getPropertyValue('--depth') || '0', 10);
+                        if (nextDepth <= depth) break;
+                        const nextText = nextItem.dataset.name || '';
+                        if (nextText.includes(query)) {
+                            descendantMatches = true;
+                            break;
+                        }
+                    }
+                    
+                    if (matchesSearch || ancestorMatches || descendantMatches) {
+                        item.style.display = 'flex';
+                    } else {
+                        item.style.display = 'none';
+                    }
+                } else {
+                    item.style.display = 'flex';
+                }
+            }
+            
+            const toggleSpan = item.querySelector('.tree-toggle');
+            if (toggleSpan) {
+                const isExpanded = forceExpand[id] || categoryExpanded[id];
+                toggleSpan.innerHTML = isExpanded ? '▼' : '▶';
+            }
+        });
+    }
+
+    function filterCategoryTree() {
+        updateTreeVisibility();
+    }
+
+    function resetCategoryTreeDisplay() {
+        document.getElementById('categoryTreeSearch').value = '';
+        // Collapse all by default
+        for (const key in categoryExpanded) {
+            categoryExpanded[key] = false;
+        }
+        setupCategoryTree();
+    }
+
+    // --- ACCIONES MASIVAS GENERALES ---
+    function executeBulkAction(action) {
+        const selected = document.querySelectorAll('.product-checkbox:checked');
+        const ids = Array.from(selected).map(cb => cb.value);
+        if (ids.length === 0) return;
+
+        let confirmMsg = '';
+        if (action === 'bulk_deactivate') {
+            confirmMsg = `¿Estás seguro de que deseas desactivar los ${ids.length} productos seleccionados?`;
+        } else if (action === 'bulk_delete') {
+            confirmMsg = `⚠️ ¡ATENCIÓN! ¿Estás completamente seguro de que deseas eliminar permanentemente los ${ids.length} productos seleccionados? Esta acción no se puede deshacer.`;
+        }
+
+        if (!confirm(confirmMsg)) return;
+
+        fetch('{% url "admin_products_uncategorized" %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken,
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: JSON.stringify({
+                action: action,
+                product_ids: ids
+            })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                ids.forEach(id => fadeOutRow(id));
+            } else {
+                alert('Error: ' + data.error);
+            }
+        })
+        .catch(err => {
+            console.error('Error al ejecutar acción masiva:', err);
+            alert('Ocurrió un error en el servidor.');
+        });
+    }
+
+    // --- SUBMIT DEL MODAL ---
+    function submitCategorize() {
+        const productIdsStr = document.getElementById('modal-product-ids').value;
+        const productIds = productIdsStr.split(',');
+        const primaryCat = document.getElementById('primary-category-select').value;
+        
+        const categories = [];
+        const checked = document.querySelectorAll('.category-check:checked');
+        checked.forEach(cb => categories.push(cb.value));
+
+        if (!primaryCat && categories.length === 0) {
+            alert('Debes seleccionar al menos una Categoría Principal o una Categoría Vinculada.');
+            return;
+        }
+
+        fetch('{% url "admin_products_uncategorized" %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken,
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: JSON.stringify({
+                action: 'categorize',
+                product_ids: productIds,
+                category_id: primaryCat,
+                categories: categories
+            })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                closeCategorizeModal();
+                productIds.forEach(id => fadeOutRow(id));
+            } else {
+                alert('Error: ' + data.error);
+            }
+        })
+        .catch(err => {
+            console.error('Error al categorizar:', err);
+            alert('Ocurrió un error al guardar.');
+        });
+    }
+
+    // --- CATEGORIZACIÓN INLINE DENTRO DEL MODAL ---
+    function toggleInlineCategoryForm() {
+        const form = document.getElementById('inline-category-form');
+        if (form.style.display === 'none') {
+            form.style.display = 'block';
+            document.getElementById('inline-cat-name').value = '';
+            document.getElementById('inline-cat-parent').value = '';
+            document.getElementById('inline-cat-name').focus();
+        } else {
+            form.style.display = 'none';
+        }
+    }
+
+    function submitInlineCategory() {
+        const name = document.getElementById('inline-cat-name').value.trim();
+        const parentId = document.getElementById('inline-cat-parent').value;
+
+        if (!name) {
+            alert('El nombre de la categoría es obligatorio.');
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append('name', name);
+        if (parentId) {
+            formData.append('parent_id', parentId);
+        }
+
+        fetch('{% url "admin_category_create_ajax" %}', {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': csrfToken,
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: formData
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                const newId = data.new_category_id;
+                const categoriesList = data.categories;
+                
+                // 1. Update both selectors with the new list
+                updateDropdownSelectors(categoriesList, newId, parentId);
+                
+                // 2. Rebuild the M2M check tree in the modal
+                rebuildCheckTree(categoriesList, newId);
+                
+                // 3. Close subform
+                toggleInlineCategoryForm();
+                
+                // 4. Scroll to new category item and flash it
+                setTimeout(() => {
+                    const newItem = document.querySelector(`.category-check-item:has(input[value="${newId}"])`);
+                    if (newItem) {
+                        newItem.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        newItem.classList.add('glow-new-category');
+                        setTimeout(() => newItem.classList.remove('glow-new-category'), 3000);
+                    }
+                }, 400);
+
+            } else {
+                alert('Error al crear categoría: ' + data.error);
+            }
+        })
+        .catch(err => {
+            console.error('Error al guardar categoría inline:', err);
+            alert('Ocurrió un error al guardar.');
+        });
+    }
+
+    function updateDropdownSelectors(categoriesList, newId, parentId) {
+        const selectPrimary = document.getElementById('primary-category-select');
+        const selectInlineParent = document.getElementById('inline-cat-parent');
+        
+        // Save current primary selected
+        const currentPrimarySelected = selectPrimary.value;
+
+        // Clear choices
+        selectPrimary.innerHTML = '<option value="">Sin categoría principal</option>';
+        selectInlineParent.innerHTML = '<option value="">Ninguna (Raíz)</option>';
+
+        categoriesList.forEach(cat => {
+            const opt1 = document.createElement('option');
+            opt1.value = cat.id;
+            opt1.innerText = cat.label;
+            
+            const opt2 = document.createElement('option');
+            opt2.value = cat.id;
+            opt2.innerText = cat.label;
+
+            selectPrimary.appendChild(opt1);
+            selectInlineParent.appendChild(opt2);
+        });
+
+        // Set values
+        selectPrimary.value = newId; // Select the newly created category as primary by default
+    }
+
+    function rebuildCheckTree(categoriesList, newId) {
+        const grid = document.getElementById('categoryCheckGrid');
+        if (!grid) return;
+
+        // Save current checked category IDs
+        const checkedIds = Array.from(grid.querySelectorAll('.category-check:checked')).map(cb => cb.value);
+        // Include the new category
+        checkedIds.push(String(newId));
+
+        grid.innerHTML = '';
+
+        categoriesList.forEach(cat => {
+            const label = document.createElement('label');
+            label.className = `category-check-item depth-${cat.depth}`;
+            label.style.setProperty('--depth', cat.depth);
+            label.dataset.name = `${cat.full_path.toLowerCase()} ${cat.name.toLowerCase()}`;
+            
+            const isChecked = checkedIds.includes(String(cat.id)) ? 'checked' : '';
+            const arrowSpan = cat.depth > 0 ? '<span class="tree-arrow">↳</span>' : '';
+            
+            label.innerHTML = `
+                <input type="checkbox" name="categories" value="${cat.id}" class="category-check" ${isChecked} onclick="syncPrimaryFromCheckboxes()">
+                <span class="category-info">
+                    <strong>
+                        ${arrowSpan}
+                        <span class="cat-label-text">${cat.name}</span>
+                    </strong>
+                    <small class="text-muted">${cat.full_path}</small>
+                </span>
+            `;
+            grid.appendChild(label);
+        });
+
+        // Expand tree to show the newly created item
+        if (newId) {
+            // Find ancestors of the new item and expand them
+            const itemsList = Array.from(grid.querySelectorAll('.category-check-item'));
+            const newIndex = itemsList.findIndex(item => item.querySelector('.category-check').value === String(newId));
+            if (newIndex >= 0) {
+                const newItem = itemsList[newIndex];
+                const depth = parseInt(newItem.style.getPropertyValue('--depth') || '0', 10);
+                let currentDepth = depth;
+                for (let i = newIndex - 1; i >= 0; i--) {
+                    const prevItem = itemsList[i];
+                    const prevDepth = parseInt(prevItem.style.getPropertyValue('--depth') || '0', 10);
+                    if (prevDepth < currentDepth) {
+                        const prevCheckbox = prevItem.querySelector('.category-check');
+                        if (prevCheckbox) {
+                            categoryExpanded[prevCheckbox.value] = true;
+                        }
+                        currentDepth = prevDepth;
+                    }
+                    if (currentDepth === 0) break;
+                }
+            }
+        }
+
+        setupCategoryTree();
+    }
+</script>
+{% endblock %}
