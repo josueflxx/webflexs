@@ -697,33 +697,102 @@
     const categoryExpanded = {};
 
     let lastChecked = null;
+    let isDragging = false;
+    let dragState = true;
 
     document.addEventListener('DOMContentLoaded', function() {
         setupCategoryTree();
 
-        // Shift-click selection support
         const tableBody = document.querySelector('#products-table tbody');
         if (tableBody) {
+            // Row-Click and Shift-Click logic
             tableBody.addEventListener('click', function(e) {
                 const target = e.target;
-                if (target.classList.contains('product-checkbox')) {
-                    if (e.shiftKey && lastChecked) {
-                        const checkboxes = Array.from(document.querySelectorAll('.product-checkbox'));
-                        const start = checkboxes.indexOf(target);
-                        const end = checkboxes.indexOf(lastChecked);
-                        
-                        if (start !== -1 && end !== -1) {
-                            const range = checkboxes.slice(Math.min(start, end), Math.max(start, end) + 1);
-                            range.forEach(cb => {
-                                cb.checked = target.checked;
-                            });
+                
+                // Ignore click if user clicked a button, a link, a non-checkbox input, or inside an editable cell
+                if (
+                    target.closest('button') || 
+                    target.closest('a') || 
+                    (target.closest('input') && !target.classList.contains('product-checkbox')) || 
+                    target.closest('.editable-cell')
+                ) {
+                    return;
+                }
+                
+                const row = target.closest('tr');
+                if (!row) return;
+                
+                const checkbox = row.querySelector('.product-checkbox');
+                if (!checkbox) return;
+                
+                const isCheckboxClick = target.classList.contains('product-checkbox');
+                if (!isCheckboxClick) {
+                    checkbox.checked = !checkbox.checked;
+                }
+                
+                // Shift range selection
+                if (e.shiftKey && lastChecked) {
+                    const checkboxes = Array.from(document.querySelectorAll('.product-checkbox'));
+                    const start = checkboxes.indexOf(checkbox);
+                    const end = checkboxes.indexOf(lastChecked);
+                    
+                    if (start !== -1 && end !== -1) {
+                        const range = checkboxes.slice(Math.min(start, end), Math.max(start, end) + 1);
+                        range.forEach(cb => {
+                            cb.checked = checkbox.checked;
+                        });
+                    }
+                }
+                
+                lastChecked = checkbox;
+                updateBulkBar();
+            });
+
+            // Drag-to-select logic
+            tableBody.addEventListener('mousedown', function(e) {
+                const target = e.target;
+                
+                // Only start drag-select if clicking the checkbox or its enclosing cell
+                const isCheckbox = target.classList.contains('product-checkbox');
+                const isCheckboxCell = target.closest('td') && target.closest('td').querySelector('.product-checkbox') && !target.closest('button') && !target.closest('.editable-cell');
+                
+                if (isCheckbox || isCheckboxCell) {
+                    isDragging = true;
+                    const row = target.closest('tr');
+                    if (row) {
+                        const checkbox = row.querySelector('.product-checkbox');
+                        if (checkbox) {
+                            dragState = !checkbox.checked;
                         }
                     }
-                    lastChecked = target;
-                    updateBulkBar();
+                }
+            });
+
+            tableBody.addEventListener('mouseover', function(e) {
+                if (!isDragging) return;
+                
+                const target = e.target;
+                const row = target.closest('tr');
+                if (row) {
+                    const checkbox = row.querySelector('.product-checkbox');
+                    if (checkbox && checkbox.checked !== dragState) {
+                        checkbox.checked = dragState;
+                        updateBulkBar();
+                    }
                 }
             });
         }
+        
+        // Disable text selection during dragging
+        window.addEventListener('selectstart', function(e) {
+            if (isDragging) {
+                e.preventDefault();
+            }
+        });
+
+        window.addEventListener('mouseup', function() {
+            isDragging = false;
+        });
     });
 
     // --- SELECCION MASIVA ---
