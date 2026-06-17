@@ -169,6 +169,14 @@
                         </strong>
                         <small class="text-muted">{{ cat.full_path }}</small>
                     </span>
+                    {% if user.is_superuser %}
+                    <button type="button"
+                            class="btn-add-subcategory"
+                            onclick="openCategoryModalWithParent(event, '{{ cat.id }}')"
+                            title="Crear subcategoría dentro de esta">
+                        + Sub
+                    </button>
+                    {% endif %}
                 </label>
                 {% endfor %}
             </div>
@@ -358,6 +366,29 @@
     }
     .tree-toggle:hover {
         background: rgba(255, 107, 53, 0.2);
+    }
+    .btn-add-subcategory {
+        font-size: 0.74rem;
+        font-weight: 600;
+        padding: 4px 8px;
+        background: rgba(255, 107, 53, 0.08);
+        border: 1px solid rgba(255, 107, 53, 0.25);
+        color: #ff6b35;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        opacity: 0;
+        margin-left: auto;
+    }
+    .category-check-item:hover .btn-add-subcategory {
+        opacity: 0.75;
+    }
+    .btn-add-subcategory:hover {
+        opacity: 1 !important;
+        background: #ff6b35;
+        color: #ffffff;
+        border-color: #ff6b35;
+        box-shadow: 0 0 8px rgba(255, 107, 53, 0.4);
     }
 </style>
 
@@ -559,6 +590,19 @@
         document.getElementById('categoryModal').style.display = 'none';
     }
 
+    function openCategoryModalWithParent(event, parentId) {
+        if (isReadOnly) return;
+        if (event) {
+            event.preventDefault();
+            event.stopPropagation();
+        }
+        openCategoryModal();
+        const parentSelect = document.getElementById('modalCategoryParent');
+        if (parentSelect) {
+            parentSelect.value = parentId;
+        }
+    }
+
     // Close modal if user clicks outside of card
     window.addEventListener('click', function(event) {
         const modal = document.getElementById('categoryModal');
@@ -659,6 +703,14 @@
                     const checkedAttr = isChecked ? 'checked' : '';
                     const disabledAttr = isReadOnly ? 'disabled' : '';
                     const arrowHtml = cat.depth > 0 ? '<span class="tree-arrow">↳</span> ' : '';
+                    const subBtnHtml = isReadOnly ? '' : `
+                        <button type="button"
+                                class="btn-add-subcategory"
+                                onclick="openCategoryModalWithParent(event, '${cat.id}')"
+                                title="Crear subcategoría dentro de esta">
+                            + Sub
+                        </button>
+                    `;
                     gridHtml += `
                         <label class="category-check-item depth-${cat.depth}"
                                 id="category-item-${cat.id}"
@@ -674,6 +726,7 @@
                                 <strong>${arrowHtml}${escapeHtml(cat.name)}</strong>
                                 <small class="text-muted">${escapeHtml(cat.full_path)}</small>
                             </span>
+                            ${subBtnHtml}
                         </label>
                     `;
                 });
