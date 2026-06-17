@@ -1650,6 +1650,20 @@ def import_triler_excel(request):
                 prod = Product.objects.filter(sku=db_sku).first()
                 
                 if prod:
+                    # Enforce that the product is currently WITHOUT category
+                    if prod.category_id is not None or prod.categories.exists():
+                        continue
+                        
+                    # Enforce that the product belongs to 'ESTABLECIMIENTO MECANICO OCE S R L'
+                    supplier_name = 'ESTABLECIMIENTO MECANICO OCE S R L'
+                    is_supplier_match = False
+                    if prod.supplier and prod.supplier.strip().upper() == supplier_name:
+                        is_supplier_match = True
+                    elif prod.supplier_ref and prod.supplier_ref.name.strip().upper() == supplier_name:
+                        is_supplier_match = True
+                        
+                    if not is_supplier_match:
+                        continue
                     # Get or create subcategory
                     if excel_cat_str not in created_subcats:
                         subcat, _ = Category.objects.get_or_create(

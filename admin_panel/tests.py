@@ -5472,6 +5472,7 @@ class ProductsUncategorizedViewTests(TestCase):
             sku='T-TEST-SKU',
             name='Test Product Triler',
             price=Decimal('100.00'),
+            supplier='ESTABLECIMIENTO MECANICO OCE S R L',
         )
         
         # Create in-memory excel
@@ -5529,6 +5530,7 @@ class ProductsUncategorizedViewTests(TestCase):
             sku='T-TEST-SKU-XLS',
             name='Test Product Triler XLS',
             price=Decimal('100.00'),
+            supplier='ESTABLECIMIENTO MECANICO OCE S R L',
         )
         
         # In-memory dummy file
