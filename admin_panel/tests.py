@@ -5171,6 +5171,7 @@ class ExportProductsDiagnosticTests(TestCase):
 
         # Check Resumen data
         ws_resumen = wb["Resumen de Integridad"]
+        total_products_val = ws_resumen.cell(row=6, column=2).value
         self.assertEqual(total_products_val, 11)
 
 

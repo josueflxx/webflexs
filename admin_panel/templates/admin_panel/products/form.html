@@ -149,9 +149,9 @@
                 {% endif %}
             </div>
             <input type="text" id="categorySearchInput" class="form-input" placeholder="Buscar categoria..." {% if not user.is_superuser %}disabled{% endif %}>
-            <div class="category-check-grid" id="categoryCheckGrid">
+            <div id="categoryCheckGrid">
                 {% for cat in category_options %}
-                <label class="category-check-item"
+                <label class="category-check-item depth-{{ cat.depth }}"
                        style="--depth: {{ cat.depth }};"
                        data-name="{{ cat.full_path|lower }} {{ cat.name|lower }}">
                     <input type="checkbox"
@@ -160,8 +160,13 @@
                            class="category-check"
                            {% if cat.id in selected_category_ids %}checked{% endif %}
                            {% if not user.is_superuser %}disabled{% endif %}>
-                    <span>
-                        <strong>{{ cat.label }}</strong>
+                    <span class="category-info">
+                        <strong>
+                            {% if cat.depth > 0 %}
+                            <span class="tree-arrow">↳</span>
+                            {% endif %}
+                            {{ cat.name }}
+                        </strong>
                         <small class="text-muted">{{ cat.full_path }}</small>
                     </span>
                 </label>
@@ -252,38 +257,95 @@
 {{ existing_blocks_json|json_script:"existing-blocks-data" }}
 
 <style>
-    .category-check-grid {
+    #categoryCheckGrid {
         margin-top: 10px;
-        max-height: 260px;
-        overflow: auto;
+        max-height: 380px;
+        overflow-y: auto;
         border: 1px solid rgba(255, 255, 255, 0.12);
         border-radius: 8px;
-        padding: 10px;
-        display: grid;
-        grid-template-columns: repeat(2, minmax(220px, 1fr));
-        gap: 8px 14px;
+        padding: 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        background: rgba(255, 255, 255, 0.015);
     }
     .category-check-item {
         display: flex;
         align-items: center;
-        gap: 8px;
-        background: rgba(255, 255, 255, 0.03);
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        border-radius: 8px;
-        padding: 8px 10px;
-        padding-left: calc(10px + (var(--depth, 0) * 14px));
+        gap: 10px;
+        background: rgba(255, 255, 255, 0.02);
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        border-radius: 6px;
+        padding: 8px 12px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        user-select: none;
     }
-    .category-check-item span {
+    .category-check-item:hover {
+        background: rgba(255, 255, 255, 0.06);
+        border-color: rgba(255, 255, 255, 0.15);
+    }
+    .category-check-item:has(input:checked) {
+        background: rgba(255, 107, 53, 0.06);
+        border-color: rgba(255, 107, 53, 0.35);
+    }
+    .category-check-item input[type="checkbox"] {
+        cursor: pointer;
+        width: 16px;
+        height: 16px;
+        accent-color: #ff6b35;
+    }
+    .category-check-item .category-info {
         display: flex;
         flex-direction: column;
         gap: 2px;
+        flex: 1;
     }
     .category-check-item strong {
-        font-size: 0.92rem;
+        font-size: 0.9rem;
         font-weight: 600;
+        color: #f1f5f9;
+        display: flex;
+        align-items: center;
+        gap: 6px;
     }
-    @media (max-width: 900px) {
-        .category-check-grid { grid-template-columns: 1fr; }
+    .category-check-item small {
+        font-size: 0.76rem;
+        color: #64748b;
+    }
+    .category-check-item.depth-0 {
+        background: rgba(255, 255, 255, 0.05);
+        border-left: 3px solid #ff6b35;
+        font-weight: 700;
+        margin-top: 4px;
+    }
+    .category-check-item.depth-0 strong {
+        color: #ffffff;
+        font-size: 0.94rem;
+    }
+    .category-check-item.depth-0:has(input:checked) {
+        background: rgba(255, 107, 53, 0.09);
+    }
+    .category-check-item.depth-1 {
+        padding-left: 28px;
+        border-left: 1px dashed rgba(255, 255, 255, 0.15);
+        border-radius: 0 6px 6px 0;
+    }
+    .category-check-item.depth-2 {
+        padding-left: 48px;
+        border-left: 1px dashed rgba(255, 255, 255, 0.15);
+        border-radius: 0 6px 6px 0;
+    }
+    .category-check-item.depth-3 {
+        padding-left: 68px;
+        border-left: 1px dashed rgba(255, 255, 255, 0.15);
+        border-radius: 0 6px 6px 0;
+    }
+    .tree-arrow {
+        color: #ff6b35;
+        font-weight: bold;
+        font-size: 0.95rem;
+        opacity: 0.8;
     }
 </style>
 
@@ -397,6 +459,7 @@
         <div style="display: flex; flex-direction: column; gap: 6px;">
             <label style="color: #cbd5e1; font-size: 0.85rem; font-weight: 600;">Nombre de la Categoría *</label>
             <input type="text" id="modalCategoryName" class="form-input" placeholder="Ej: Curvas Zincadas" style="width: 100%; box-sizing: border-box; background-color: rgba(255,255,255,0.03); color: #fff; border: 1px solid rgba(255,255,255,0.12); border-radius: 4px; padding: 8px 12px;">
+            <div id="modalCategoryError" style="display: none; color: #f87171; font-size: 0.78rem; font-weight: 500; margin-top: 2px;"></div>
         </div>
         
         <div style="display: flex; flex-direction: column; gap: 6px;">
@@ -407,6 +470,11 @@
                 <option value="{{ cat.id }}">{{ cat.label }}</option>
                 {% endfor %}
             </select>
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 8px; margin-top: 4px; margin-bottom: 4px;">
+            <input type="checkbox" id="modalCategorySetPrimary" style="cursor: pointer; width: 16px; height: 16px; accent-color: #ff6b35;">
+            <label for="modalCategorySetPrimary" style="color: #cbd5e1; font-size: 0.82rem; font-weight: 500; cursor: pointer; user-select: none;">Definir como categoría principal de este producto</label>
         </div>
         
         <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 8px; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 16px;">
@@ -442,6 +510,17 @@
     // Modal controls for quick category creation
     function openCategoryModal() {
         if (isReadOnly) return;
+
+        // Reset error message and setPrimary checkbox
+        const errorDiv = document.getElementById('modalCategoryError');
+        if (errorDiv) {
+            errorDiv.style.display = 'none';
+            errorDiv.textContent = '';
+        }
+        const setPrimaryCheckbox = document.getElementById('modalCategorySetPrimary');
+        if (setPrimaryCheckbox) {
+            setPrimaryCheckbox.checked = false;
+        }
         
         // Populate parent dropdown with latest options from allCategoriesList
         const parentSelect = document.getElementById('modalCategoryParent');
@@ -491,9 +570,18 @@
         const nameInput = document.getElementById('modalCategoryName');
         const name = nameInput.value.trim();
         const parentId = document.getElementById('modalCategoryParent').value;
+        const errorDiv = document.getElementById('modalCategoryError');
+
+        if (errorDiv) {
+            errorDiv.style.display = 'none';
+            errorDiv.textContent = '';
+        }
 
         if (!name) {
-            alert('Por favor, ingresa el nombre de la categoría.');
+            if (errorDiv) {
+                errorDiv.textContent = 'Por favor, ingresa el nombre de la categoría.';
+                errorDiv.style.display = 'block';
+            }
             nameInput.focus();
             return;
         }
@@ -525,13 +613,23 @@
                 // Update global options list
                 allCategoriesList = data.categories;
                 const newCategoryId = data.new_category_id;
+                const setAsPrimary = document.getElementById('modalCategorySetPrimary').checked;
 
                 // 1. Rebuild primary category select
                 const currentPrimaryId = document.getElementById('category').value;
                 const select = document.getElementById('category');
                 let selectHtml = '<option value="">Sin categoria principal</option>';
                 allCategoriesList.forEach(cat => {
-                    const isSelected = (cat.id == newCategoryId) ? 'selected' : (cat.id == currentPrimaryId ? 'selected' : '');
+                    let isSelected = '';
+                    if (setAsPrimary) {
+                        if (cat.id == newCategoryId) {
+                            isSelected = 'selected';
+                        }
+                    } else {
+                        if (cat.id == currentPrimaryId) {
+                            isSelected = 'selected';
+                        }
+                    }
                     selectHtml += `<option value="${cat.id}" ${isSelected}>${escapeHtml(cat.label)}</option>`;
                 });
                 select.innerHTML = selectHtml;
@@ -548,19 +646,20 @@
                     const isChecked = checkedIds.includes(String(cat.id));
                     const checkedAttr = isChecked ? 'checked' : '';
                     const disabledAttr = isReadOnly ? 'disabled' : '';
+                    const arrowHtml = cat.depth > 0 ? '<span class="tree-arrow">↳</span> ' : '';
                     gridHtml += `
-                        <label class="category-check-item"
-                               id="category-item-${cat.id}"
-                               style="--depth: ${cat.depth};"
-                               data-name="${escapeHtml(cat.full_path.toLowerCase())} ${escapeHtml(cat.name.toLowerCase())}">
+                        <label class="category-check-item depth-${cat.depth}"
+                                id="category-item-${cat.id}"
+                                style="--depth: ${cat.depth};"
+                                data-name="${escapeHtml(cat.full_path.toLowerCase())} ${escapeHtml(cat.name.toLowerCase())}">
                             <input type="checkbox"
                                    name="categories"
                                    value="${cat.id}"
                                    class="category-check"
                                    ${checkedAttr}
                                    ${disabledAttr}>
-                            <span>
-                                <strong>${escapeHtml(cat.label)}</strong>
+                            <span class="category-info">
+                                <strong>${arrowHtml}${escapeHtml(cat.name)}</strong>
                                 <small class="text-muted">${escapeHtml(cat.full_path)}</small>
                             </span>
                         </label>
@@ -594,11 +693,17 @@
 
                 closeCategoryModal();
             } else {
-                alert(data.error || 'Error al guardar la categoría.');
+                if (errorDiv) {
+                    errorDiv.textContent = data.error || 'Error al guardar la categoría.';
+                    errorDiv.style.display = 'block';
+                }
             }
         } catch (err) {
             console.error('Error:', err);
-            alert('Ocurrió un error al procesar la solicitud.');
+            if (errorDiv) {
+                errorDiv.textContent = 'Ocurrió un error al procesar la solicitud.';
+                errorDiv.style.display = 'block';
+            }
         }
     }
 
@@ -753,6 +858,17 @@
         document.getElementById('category').addEventListener('change', function() {
             setTimeout(updateBlocksUI, 50);
         });
+
+        // Keydown listener for inline creation name field to submit on Enter
+        const modalCategoryNameInput = document.getElementById('modalCategoryName');
+        if (modalCategoryNameInput) {
+            modalCategoryNameInput.addEventListener('keydown', function(event) {
+                if (event.key === 'Enter') {
+                    event.preventDefault();
+                    submitCategoryAjax();
+                }
+            });
+        }
 
         // Intercept form submission to collect JSON
         const form = document.querySelector('form');
