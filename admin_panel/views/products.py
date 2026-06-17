@@ -1952,6 +1952,53 @@ def category_create(request):
         'action': 'Crear',
     })
 
+
+@staff_member_required
+@superuser_required_for_modifications
+@require_POST
+def category_create_ajax(request):
+    """Create a new category via AJAX and return the updated tree options."""
+    name = request.POST.get('name', '').strip()
+    parent_id = request.POST.get('parent_id', '').strip()
+
+    if not name:
+        return JsonResponse({'success': False, 'error': 'El nombre de la categoría es obligatorio.'})
+
+    parent = None
+    if parent_id.isdigit():
+        parent = Category.objects.filter(pk=int(parent_id)).first()
+        if not parent:
+            return JsonResponse({'success': False, 'error': 'La categoría padre seleccionada no existe.'})
+
+    try:
+        # Create category with safe default slug and active status
+        category = Category.objects.create(
+            name=name,
+            parent=parent,
+            is_active=True,
+            visible_in_catalog=True,
+        )
+
+        log_admin_action(
+            request,
+            action="category_create_ajax",
+            target_type="category",
+            target_id=category.pk,
+            details={"name": category.name, "parent_id": category.parent_id},
+        )
+
+        # Clear and reload cache of category choices
+        category_options = get_cached_category_options(only_active=True, include_inactive_suffix=False)
+
+        return JsonResponse({
+            'success': True,
+            'new_category_id': category.pk,
+            'categories': category_options
+        })
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': f'Error al guardar la categoría: {str(e)}'})
+
+
 @staff_member_required
 @superuser_required_for_modifications
 def category_edit(request, pk):
@@ -3231,4 +3278,4 @@ def parse_clamp_code_api(request):
         logger.exception("Error parsing clamp code")
         return JsonResponse({"success": False, "error": "No se pudo parsear el codigo."}, status=500)
 
-__all__ = ['product_list', 'product_create', 'product_edit', 'product_delete', 'product_toggle_active', 'product_bulk_category_update', 'product_bulk_status_update', 'product_bulk_image_update', 'supplier_list', 'supplier_detail', 'supplier_bulk_action', 'supplier_export', 'supplier_print', 'supplier_unassigned', 'supplier_toggle_active', 'category_list', 'category_reorder', 'category_sort_roots_alpha', 'category_bulk_status', 'category_create', 'category_edit', 'category_move', 'category_delete', 'category_attribute_create', 'category_attribute_edit', 'category_attribute_delete', 'category_manage_products', 'category_products_reorder', 'get_category_attributes', 'parse_product_description', 'parse_clamp_code_api']
+__all__ = ['product_list', 'product_create', 'product_edit', 'product_delete', 'product_toggle_active', 'product_bulk_category_update', 'product_bulk_status_update', 'product_bulk_image_update', 'supplier_list', 'supplier_detail', 'supplier_bulk_action', 'supplier_export', 'supplier_print', 'supplier_unassigned', 'supplier_toggle_active', 'category_list', 'category_reorder', 'category_sort_roots_alpha', 'category_bulk_status', 'category_create', 'category_create_ajax', 'category_edit', 'category_move', 'category_delete', 'category_attribute_create', 'category_attribute_edit', 'category_attribute_delete', 'category_manage_products', 'category_products_reorder', 'get_category_attributes', 'parse_product_description', 'parse_clamp_code_api']

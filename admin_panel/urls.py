@@ -115,6 +115,9 @@ urlpatterns = [
     path('exportar-catalogo/<int:template_id>/hojas/nueva/', views.catalog_excel_sheet_create, name='admin_catalog_excel_sheet_create'),
     path('exportar-catalogo/hojas/<int:sheet_id>/editar/', views.catalog_excel_sheet_edit, name='admin_catalog_excel_sheet_edit'),
     path('exportar-catalogo/hojas/<int:sheet_id>/eliminar/', views.catalog_excel_sheet_delete, name='admin_catalog_excel_sheet_delete'),
+    path('exportar-catalogo/<int:template_id>/hojas/nueva/', views.catalog_excel_sheet_create, name='admin_catalog_excel_sheet_create'),
+    path('exportar-catalogo/hojas/<int:sheet_id>/editar/', views.catalog_excel_sheet_edit, name='admin_catalog_excel_sheet_edit'),
+    path('exportar-catalogo/hojas/<int:sheet_id>/eliminar/', views.catalog_excel_sheet_delete, name='admin_catalog_excel_sheet_delete'),
     path('exportar-catalogo/hojas/<int:sheet_id>/columnas/nueva/', views.catalog_excel_column_create, name='admin_catalog_excel_column_create'),
     path('exportar-catalogo/columnas/<int:column_id>/editar/', views.catalog_excel_column_edit, name='admin_catalog_excel_column_edit'),
     path('exportar-catalogo/columnas/<int:column_id>/eliminar/', views.catalog_excel_column_delete, name='admin_catalog_excel_column_delete'),
@@ -122,6 +125,7 @@ urlpatterns = [
     # Categories
     path('categorias/', views.category_list, name='admin_category_list'),
     path('categorias/nueva/', views.category_create, name='admin_category_create'),
+    path('categorias/crear-ajax/', views.category_create_ajax, name='admin_category_create_ajax'),
     path('categorias/<int:pk>/editar/', views.category_edit, name='admin_category_edit'),
     path('categorias/<int:pk>/mover/', views.category_move, name='admin_category_move'),
     path('categorias/<int:pk>/eliminar/', views.category_delete, name='admin_category_delete'),

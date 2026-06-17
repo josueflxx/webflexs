@@ -140,7 +140,14 @@
         </div>
 
         <div class="form-group">
-            <label class="form-label">Categorias vinculadas (multi-categoria)</label>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <label class="form-label" style="margin-bottom: 0;">Categorias vinculadas (multi-categoria)</label>
+                {% if user.is_superuser %}
+                <button type="button" onclick="openCategoryModal()" class="btn btn-sm" style="font-size: 0.75rem; padding: 4px 10px; background: rgba(255, 107, 53, 0.1); border: 1px solid rgba(255, 107, 53, 0.3); color: #ff6b35; border-radius: 4px; cursor: pointer; transition: all 0.2s; font-weight: 600;">
+                    ➕ Nueva Categoría
+                </button>
+                {% endif %}
+            </div>
             <input type="text" id="categorySearchInput" class="form-input" placeholder="Buscar categoria..." {% if not user.is_superuser %}disabled{% endif %}>
             <div class="category-check-grid" id="categoryCheckGrid">
                 {% for cat in category_options %}
@@ -366,12 +373,234 @@
         color: var(--color-white);
         font-size: 0.86rem;
     }
+    
+    /* Glow effect animation for newly created categories */
+    @keyframes glowEffect {
+        0% { box-shadow: 0 0 0px #ff6b35; background: rgba(255,107,53,0.1); border-color: rgba(255,107,53,0.4); }
+        50% { box-shadow: 0 0 15px #ff6b35; background: rgba(255,107,53,0.3); border-color: #ff6b35; }
+        100% { box-shadow: 0 0 0px #ff6b35; background: transparent; border-color: rgba(255,255,255,0.08); }
+    }
+    .glow-highlight {
+        animation: glowEffect 3s ease-in-out;
+        border-radius: 6px;
+    }
 </style>
 
+<!-- Modal for Quick Category Creation -->
+<div id="categoryModal" style="display: none; position: fixed; z-index: 9999; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.6); backdrop-filter: blur(4px); justify-content: center; align-items: center;">
+    <div style="background-color: #1e1e24; margin: auto; padding: 24px; border: 1px solid rgba(255,255,255,0.12); width: 90%; max-width: 450px; border-radius: 8px; box-shadow: 0 8px 32px rgba(0,0,0,0.5); display: flex; flex-direction: column; gap: 16px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 12px;">
+            <h3 style="margin: 0; color: #ff6b35; font-size: 1.15rem; font-weight: 700;">Crear Nueva Categoría</h3>
+            <span onclick="closeCategoryModal()" style="color: #94a3b8; font-size: 1.5rem; font-weight: bold; cursor: pointer; line-height: 1;">&times;</span>
+        </div>
+        
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+            <label style="color: #cbd5e1; font-size: 0.85rem; font-weight: 600;">Nombre de la Categoría *</label>
+            <input type="text" id="modalCategoryName" class="form-input" placeholder="Ej: Curvas Zincadas" style="width: 100%; box-sizing: border-box; background-color: rgba(255,255,255,0.03); color: #fff; border: 1px solid rgba(255,255,255,0.12); border-radius: 4px; padding: 8px 12px;">
+        </div>
+        
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+            <label style="color: #cbd5e1; font-size: 0.85rem; font-weight: 600;">Categoría Padre (Subcategoría de...)</label>
+            <select id="modalCategoryParent" class="form-select" style="width: 100%; box-sizing: border-box; background-color: rgba(255,255,255,0.03); color: #fff; border: 1px solid rgba(255,255,255,0.12); border-radius: 4px; padding: 8px 12px; height: 38px;">
+                <option value="">Ninguna (Categoría Raíz)</option>
+                {% for cat in category_options %}
+                <option value="{{ cat.id }}">{{ cat.label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        
+        <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 8px; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 16px;">
+            <button type="button" onclick="closeCategoryModal()" class="btn btn-secondary" style="font-size: 0.85rem; padding: 6px 14px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.12); color: #cbd5e1; border-radius: 4px; cursor: pointer; transition: all 0.2s;">
+                Cancelar
+            </button>
+            <button type="button" onclick="submitCategoryAjax()" class="btn btn-primary" style="font-size: 0.85rem; padding: 6px 14px; background: #ff6b35; border: 1px solid #ff6b35; color: #ffffff; border-radius: 4px; cursor: pointer; font-weight: 600; transition: all 0.2s;">
+                Crear Categoría
+            </button>
+        </div>
+    </div>
+</div>
+
 <script>
+    // Global cached list of all category choices
+    let allCategoriesList = [
+        {% for cat in category_options %}
+        {
+            id: {{ cat.id }},
+            name: "{{ cat.name|escapejs }}",
+            depth: {{ cat.depth }},
+            full_path: "{{ cat.full_path|escapejs }}",
+            label: "{{ cat.label|escapejs }}",
+            is_active: {% if cat.is_active %}true{% else %}false{% endif %}
+        },
+        {% endfor %}
+    ];
+
     // Store current attributes if editing
     const currentAttributes = JSON.parse(document.getElementById('attributes-data').textContent || '{}');
     const isReadOnly = {% if user.is_superuser %}false{% else %}true{% endif %};
+
+    // Modal controls for quick category creation
+    function openCategoryModal() {
+        if (isReadOnly) return;
+        
+        // Populate parent dropdown with latest options from allCategoriesList
+        const parentSelect = document.getElementById('modalCategoryParent');
+        if (parentSelect) {
+            let optionsHtml = '<option value="">Ninguna (Categoría Raíz)</option>';
+            allCategoriesList.forEach(cat => {
+                optionsHtml += `<option value="${cat.id}">${escapeHtml(cat.label)}</option>`;
+            });
+            parentSelect.innerHTML = optionsHtml;
+        }
+        
+        // Pre-select current primary category as parent if selected
+        const currentPrimary = document.getElementById('category').value;
+        if (currentPrimary && parentSelect) {
+            parentSelect.value = currentPrimary;
+        }
+
+        document.getElementById('modalCategoryName').value = '';
+        document.getElementById('categoryModal').style.display = 'flex';
+        document.getElementById('modalCategoryName').focus();
+    }
+
+    function closeCategoryModal() {
+        document.getElementById('categoryModal').style.display = 'none';
+    }
+
+    // Close modal if user clicks outside of card
+    window.addEventListener('click', function(event) {
+        const modal = document.getElementById('categoryModal');
+        if (event.target === modal) {
+            closeCategoryModal();
+        }
+    });
+
+    // Close modal if user presses Escape key
+    window.addEventListener('keydown', function(event) {
+        if (event.key === 'Escape') {
+            const modal = document.getElementById('categoryModal');
+            if (modal && modal.style.display === 'flex') {
+                closeCategoryModal();
+            }
+        }
+    });
+
+    async function submitCategoryAjax() {
+        if (isReadOnly) return;
+        const nameInput = document.getElementById('modalCategoryName');
+        const name = nameInput.value.trim();
+        const parentId = document.getElementById('modalCategoryParent').value;
+
+        if (!name) {
+            alert('Por favor, ingresa el nombre de la categoría.');
+            nameInput.focus();
+            return;
+        }
+
+        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+        const formData = new FormData();
+        formData.append('name', name);
+        formData.append('parent_id', parentId);
+        formData.append('csrfmiddlewaretoken', csrfToken);
+
+        try {
+            const createBtn = document.querySelector('#categoryModal button[onclick="submitCategoryAjax()"]');
+            createBtn.disabled = true;
+            createBtn.textContent = 'Guardando...';
+
+            const response = await fetch('/admin-panel/categorias/crear-ajax/', {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            });
+            const data = await response.json();
+
+            createBtn.disabled = false;
+            createBtn.textContent = 'Crear Categoría';
+
+            if (data.success) {
+                // Update global options list
+                allCategoriesList = data.categories;
+                const newCategoryId = data.new_category_id;
+
+                // 1. Rebuild primary category select
+                const currentPrimaryId = document.getElementById('category').value;
+                const select = document.getElementById('category');
+                let selectHtml = '<option value="">Sin categoria principal</option>';
+                allCategoriesList.forEach(cat => {
+                    const isSelected = (cat.id == newCategoryId) ? 'selected' : (cat.id == currentPrimaryId ? 'selected' : '');
+                    selectHtml += `<option value="${cat.id}" ${isSelected}>${escapeHtml(cat.label)}</option>`;
+                });
+                select.innerHTML = selectHtml;
+
+                // 2. Rebuild checkboxes list
+                const checkedIds = Array.from(document.querySelectorAll('.category-check:checked')).map(cb => cb.value);
+                // Auto check the newly created category
+                if (!checkedIds.includes(String(newCategoryId))) {
+                    checkedIds.push(String(newCategoryId));
+                }
+                const grid = document.getElementById('categoryCheckGrid');
+                let gridHtml = '';
+                allCategoriesList.forEach(cat => {
+                    const isChecked = checkedIds.includes(String(cat.id));
+                    const checkedAttr = isChecked ? 'checked' : '';
+                    const disabledAttr = isReadOnly ? 'disabled' : '';
+                    gridHtml += `
+                        <label class="category-check-item"
+                               id="category-item-${cat.id}"
+                               style="--depth: ${cat.depth};"
+                               data-name="${escapeHtml(cat.full_path.toLowerCase())} ${escapeHtml(cat.name.toLowerCase())}">
+                            <input type="checkbox"
+                                   name="categories"
+                                   value="${cat.id}"
+                                   class="category-check"
+                                   ${checkedAttr}
+                                   ${disabledAttr}>
+                            <span>
+                                <strong>${escapeHtml(cat.label)}</strong>
+                                <small class="text-muted">${escapeHtml(cat.full_path)}</small>
+                            </span>
+                        </label>
+                    `;
+                });
+                grid.innerHTML = gridHtml;
+
+                // 3. Re-bind event listeners to new checkboxes
+                document.querySelectorAll('.category-check').forEach(cb => {
+                    cb.addEventListener('change', updateBlocksUI);
+                });
+
+                // 4. Re-bind search functionality
+                bindCategorySearch();
+
+                // 5. Update blocks UI and load attributes
+                updateBlocksUI();
+                loadCategoryAttributes();
+
+                // 6. Highlight and scroll to the new item
+                setTimeout(() => {
+                    const newItem = document.getElementById(`category-item-${newCategoryId}`);
+                    if (newItem) {
+                        newItem.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        newItem.classList.add('glow-highlight');
+                        setTimeout(() => {
+                            newItem.classList.remove('glow-highlight');
+                        }, 3000);
+                    }
+                }, 100);
+
+                closeCategoryModal();
+            } else {
+                alert(data.error || 'Error al guardar la categoría.');
+            }
+        } catch (err) {
+            console.error('Error:', err);
+            alert('Ocurrió un error al procesar la solicitud.');
+        }
+    }
 
     // Store block assignments
     let currentBlocks = {};

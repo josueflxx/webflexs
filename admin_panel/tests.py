@@ -5171,9 +5171,90 @@ class ExportProductsDiagnosticTests(TestCase):
 
         # Check Resumen data
         ws_resumen = wb["Resumen de Integridad"]
-        total_products_val = ws_resumen.cell(row=6, column=2).value
-        # Total of products should be 11 (including the ones created in setup/test)
-        # We had 0 in setup for this class (the database is empty except setup)
-        # Total = 11 products created in this test case
         self.assertEqual(total_products_val, 11)
+
+
+class CategoryAjaxCreationTests(TestCase):
+    def setUp(self):
+        self.primary_superadmin = User.objects.create_superuser(
+            username='josueflexs',
+            email='josue@example.com',
+            password='secret123',
+        )
+        self.staff = User.objects.create_user(
+            username='staff_test',
+            password='secret123',
+            is_staff=True,
+        )
+        self.parent_category = Category.objects.create(
+            name='Padre',
+            slug='padre',
+            is_active=True,
+            visible_in_catalog=True,
+        )
+        self.company = get_default_company()
+
+    def _activate_company(self):
+        session = self.client.session
+        session['active_company_id'] = self.company.pk
+        session.save()
+
+    def test_anonymous_cannot_create_category_ajax(self):
+        response = self.client.post(reverse('admin_category_create_ajax'), {
+            'name': 'Hijo',
+            'parent_id': self.parent_category.pk,
+        })
+        self.assertEqual(response.status_code, 302)
+
+    def test_staff_cannot_create_category_ajax(self):
+        self.client.force_login(self.staff)
+        self._activate_company()
+        response = self.client.post(reverse('admin_category_create_ajax'), {
+            'name': 'Hijo',
+            'parent_id': self.parent_category.pk,
+        })
+        self.assertEqual(response.status_code, 302)
+
+    def test_superadmin_can_create_category_ajax_success(self):
+        self.client.force_login(self.primary_superadmin)
+        self._activate_company()
+        response = self.client.post(reverse('admin_category_create_ajax'), {
+            'name': 'Hijo Nuevo',
+            'parent_id': self.parent_category.pk,
+        })
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertTrue(data['success'])
+        self.assertIn('new_category_id', data)
+        self.assertIn('categories', data)
+        
+        # Verify category exists in db
+        new_cat = Category.objects.get(pk=data['new_category_id'])
+        self.assertEqual(new_cat.name, 'Hijo Nuevo')
+        self.assertEqual(new_cat.parent, self.parent_category)
+        self.assertTrue(new_cat.is_active)
+        self.assertTrue(new_cat.visible_in_catalog)
+
+        # Verify options list contains the new category
+        categories_list = data['categories']
+        found = False
+        for opt in categories_list:
+            if opt['id'] == new_cat.pk:
+                found = True
+                self.assertEqual(opt['name'], 'Hijo Nuevo')
+                self.assertEqual(opt['depth'], 1)  # Parent is depth 0, child is depth 1
+        self.assertTrue(found)
+
+    def test_missing_name_returns_error(self):
+        self.client.force_login(self.primary_superadmin)
+        self._activate_company()
+        response = self.client.post(reverse('admin_category_create_ajax'), {
+            'name': '',
+            'parent_id': '',
+        })
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertFalse(data['success'])
+        self.assertIn('error', data)
+
 
