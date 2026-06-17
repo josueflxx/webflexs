@@ -347,6 +347,18 @@
         font-size: 0.95rem;
         opacity: 0.8;
     }
+    .tree-toggle {
+        display: inline-block;
+        width: 18px;
+        height: 18px;
+        line-height: 18px;
+        text-align: center;
+        border-radius: 4px;
+        transition: background 0.2s;
+    }
+    .tree-toggle:hover {
+        background: rgba(255, 107, 53, 0.2);
+    }
 </style>
 
 <style>
@@ -674,6 +686,7 @@
 
                 // 4. Re-bind search functionality
                 bindCategorySearch();
+                setupCategoryTree();
 
                 // 5. Update blocks UI and load attributes
                 updateBlocksUI();
@@ -847,6 +860,7 @@
         // Initial load
         loadCategoryAttributes();
         bindCategorySearch();
+        setupCategoryTree();
         updateBlocksUI();
 
         // Listen for category checkbox changes
@@ -884,16 +898,183 @@
 
 
     
+    // Global category expanded state map
+    const categoryExpanded = {};
+
+    function setupCategoryTree() {
+        const grid = document.getElementById('categoryCheckGrid');
+        if (!grid) return;
+        const items = Array.from(grid.querySelectorAll('.category-check-item'));
+        
+        items.forEach((item, index) => {
+            const checkbox = item.querySelector('.category-check');
+            if (!checkbox) return;
+            const id = checkbox.value;
+            const depth = parseInt(item.style.getPropertyValue('--depth') || '0', 10);
+            
+            if (categoryExpanded[id] === undefined) {
+                categoryExpanded[id] = true; // expanded by default
+            }
+            
+            // Check if it has children (next item has greater depth)
+            let hasChildren = false;
+            if (index < items.length - 1) {
+                const nextItem = items[index + 1];
+                const nextDepth = parseInt(nextItem.style.getPropertyValue('--depth') || '0', 10);
+                if (nextDepth > depth) {
+                    hasChildren = true;
+                }
+            }
+            
+            const existingToggle = item.querySelector('.tree-toggle');
+            if (existingToggle) {
+                existingToggle.remove();
+            }
+            
+            if (hasChildren) {
+                const strong = item.querySelector('strong');
+                if (strong) {
+                    const toggleSpan = document.createElement('span');
+                    toggleSpan.className = 'tree-toggle';
+                    toggleSpan.innerHTML = categoryExpanded[id] ? '▼' : '▶';
+                    toggleSpan.style.cursor = 'pointer';
+                    toggleSpan.style.marginRight = '8px';
+                    toggleSpan.style.color = '#ff6b35';
+                    toggleSpan.style.userSelect = 'none';
+                    
+                    strong.insertBefore(toggleSpan, strong.firstChild);
+                    
+                    toggleSpan.addEventListener('click', function(e) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        categoryExpanded[id] = !categoryExpanded[id];
+                        toggleSpan.innerHTML = categoryExpanded[id] ? '▼' : '▶';
+                        updateTreeVisibility();
+                    });
+                }
+            }
+        });
+        
+        updateTreeVisibility();
+    }
+
+    function updateTreeVisibility() {
+        const grid = document.getElementById('categoryCheckGrid');
+        if (!grid) return;
+        const items = Array.from(grid.querySelectorAll('.category-check-item'));
+        
+        const searchInput = document.getElementById('categorySearchInput');
+        const query = searchInput ? searchInput.value.trim().toLowerCase() : '';
+        
+        const forceExpand = {};
+        if (query) {
+            items.forEach((item, index) => {
+                const text = item.dataset.name || '';
+                if (text.includes(query)) {
+                    const depth = parseInt(item.style.getPropertyValue('--depth') || '0', 10);
+                    let currentDepth = depth;
+                    
+                    for (let i = index - 1; i >= 0; i--) {
+                        const prevItem = items[i];
+                        const prevDepth = parseInt(prevItem.style.getPropertyValue('--depth') || '0', 10);
+                        if (prevDepth < currentDepth) {
+                            const prevCheckbox = prevItem.querySelector('.category-check');
+                            if (prevCheckbox) {
+                                forceExpand[prevCheckbox.value] = true;
+                            }
+                            currentDepth = prevDepth;
+                        }
+                        if (currentDepth === 0) break;
+                    }
+                }
+            });
+        }
+        
+        items.forEach((item, index) => {
+            const checkbox = item.querySelector('.category-check');
+            if (!checkbox) return;
+            const id = checkbox.value;
+            const depth = parseInt(item.style.getPropertyValue('--depth') || '0', 10);
+            
+            let ancestorCollapsed = false;
+            let currentDepth = depth;
+            
+            for (let i = index - 1; i >= 0; i--) {
+                const prevItem = items[i];
+                const prevDepth = parseInt(prevItem.style.getPropertyValue('--depth') || '0', 10);
+                if (prevDepth < currentDepth) {
+                    const prevCheckbox = prevItem.querySelector('.category-check');
+                    if (prevCheckbox) {
+                        const prevId = prevCheckbox.value;
+                        const isExpanded = forceExpand[prevId] || categoryExpanded[prevId];
+                        if (!isExpanded) {
+                            ancestorCollapsed = true;
+                            break;
+                        }
+                    }
+                    currentDepth = prevDepth;
+                }
+                if (currentDepth === 0) break;
+            }
+            
+            if (ancestorCollapsed) {
+                item.style.display = 'none';
+            } else {
+                if (query) {
+                    const text = item.dataset.name || '';
+                    const matchesSearch = text.includes(query);
+                    
+                    let ancestorMatches = false;
+                    let tempDepth = depth;
+                    for (let i = index - 1; i >= 0; i--) {
+                        const prevItem = items[i];
+                        const prevDepth = parseInt(prevItem.style.getPropertyValue('--depth') || '0', 10);
+                        if (prevDepth < tempDepth) {
+                            const prevText = prevItem.dataset.name || '';
+                            if (prevText.includes(query)) {
+                                ancestorMatches = true;
+                                break;
+                            }
+                            tempDepth = prevDepth;
+                        }
+                        if (tempDepth === 0) break;
+                    }
+                    
+                    let descendantMatches = false;
+                    for (let i = index + 1; i < items.length; i++) {
+                        const nextItem = items[i];
+                        const nextDepth = parseInt(nextItem.style.getPropertyValue('--depth') || '0', 10);
+                        if (nextDepth <= depth) break;
+                        const nextText = nextItem.dataset.name || '';
+                        if (nextText.includes(query)) {
+                            descendantMatches = true;
+                            break;
+                        }
+                    }
+                    
+                    if (matchesSearch || ancestorMatches || descendantMatches) {
+                        item.style.display = 'flex';
+                    } else {
+                        item.style.display = 'none';
+                    }
+                } else {
+                    item.style.display = 'flex';
+                }
+            }
+            
+            const toggleSpan = item.querySelector('.tree-toggle');
+            if (toggleSpan) {
+                const isExpanded = forceExpand[id] || categoryExpanded[id];
+                toggleSpan.innerHTML = isExpanded ? '▼' : '▶';
+            }
+        });
+    }
+
     function bindCategorySearch() {
         const input = document.getElementById('categorySearchInput');
-        const items = document.querySelectorAll('.category-check-item');
         if (!input) return;
         input.addEventListener('input', function() {
-            const q = this.value.trim().toLowerCase();
-            items.forEach(item => {
-                const text = item.dataset.name || '';
-                item.style.display = (!q || text.includes(q)) ? 'flex' : 'none';
-            });
+            updateTreeVisibility();
         });
     }
 
