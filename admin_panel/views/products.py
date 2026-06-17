@@ -1530,6 +1530,137 @@ def products_uncategorized(request):
 
 
 @staff_member_required
+@superuser_required_for_modifications
+@require_POST
+def import_triler_excel(request):
+    """Import and categorize products from Triler excel file."""
+    if 'excel_file' not in request.FILES:
+        return JsonResponse({'success': False, 'error': 'No se subió ningún archivo.'})
+        
+    excel_file = request.FILES['excel_file']
+    if not excel_file.name.endswith('.xlsx'):
+        return JsonResponse({'success': False, 'error': 'El archivo debe ser de formato .xlsx (Excel).'})
+        
+    try:
+        import openpyxl
+        wb = openpyxl.load_workbook(excel_file, data_only=True)
+        
+        # Find product data sheet
+        sheet = None
+        for name in ['Interno categorizado', 'Sheet1']:
+            if name in wb.sheetnames:
+                sheet = wb[name]
+                break
+        if not sheet:
+            sheet = wb.active
+            
+        rows = list(sheet.iter_rows(values_only=True))
+        if len(rows) < 2:
+            return JsonResponse({'success': False, 'error': 'El archivo Excel está vacío.'})
+            
+        header = rows[0]
+        sku_idx = -1
+        cat_idx = -1
+        
+        for idx, col in enumerate(header):
+            if not col:
+                continue
+            col_str = str(col).strip().lower()
+            if col_str == 'sku' or 'codigo' in col_str or 'código' in col_str:
+                sku_idx = idx
+            elif 'categoria' in col_str or 'categoría' in col_str or 'triler' in col_str:
+                cat_idx = idx
+                
+        if sku_idx == -1 or cat_idx == -1:
+            # Fallback by names/positions
+            for idx, col in enumerate(header):
+                if not col:
+                    continue
+                col_str = str(col).strip().lower()
+                if 'sku' in col_str:
+                    sku_idx = idx
+            if sku_idx == -1:
+                sku_idx = 0
+            if cat_idx == -1:
+                cat_idx = 2 if len(header) > 2 else 1
+                
+        # Get or create parent category TRILER
+        from django.utils.text import slugify
+        
+        parent_cat, _ = Category.objects.get_or_create(
+            name="TRILER",
+            defaults={
+                'slug': slugify('TRILER'),
+                'is_active': True,
+                'visible_in_catalog': True,
+            }
+        )
+        
+        matched_count = 0
+        created_subcats = {}
+        
+        # Process rows
+        from django.db import transaction
+        
+        with transaction.atomic():
+            for r in rows[1:]:
+                if len(r) <= max(sku_idx, cat_idx):
+                    continue
+                excel_sku = r[sku_idx]
+                excel_cat = r[cat_idx]
+                
+                if not excel_sku or not excel_cat:
+                    continue
+                    
+                excel_sku_str = str(excel_sku).strip()
+                excel_cat_str = str(excel_cat).strip()
+                
+                if excel_cat_str == "NO ENCONTRADO EN TRILER" or not excel_cat_str:
+                    continue
+                    
+                db_sku = f"T-{excel_sku_str}"
+                prod = Product.objects.filter(sku=db_sku).first()
+                
+                if prod:
+                    # Get or create subcategory
+                    if excel_cat_str not in created_subcats:
+                        subcat, _ = Category.objects.get_or_create(
+                            name=excel_cat_str,
+                            parent=parent_cat,
+                            defaults={
+                                'slug': slugify(f"triler-{excel_cat_str}"),
+                                'is_active': True,
+                                'visible_in_catalog': True,
+                            }
+                        )
+                        created_subcats[excel_cat_str] = subcat
+                    else:
+                        subcat = created_subcats[excel_cat_str]
+                        
+                    prod.category = subcat
+                    prod.categories.set([subcat])
+                    prod.save()
+                    
+                    log_admin_action(
+                        request,
+                        action="products_uncategorized_assign",
+                        target_type="product",
+                        target_id=prod.pk,
+                        details={'msg': f'Categorización automática vía Excel Triler. Subcategoría: {subcat.name}'},
+                    )
+                    
+                    matched_count += 1
+                    
+        return JsonResponse({
+            'success': True, 
+            'message': f'Importación completada. Se categorizaron {matched_count} productos exitosamente en {len(created_subcats)} subcategorías de "TRILER".'
+        })
+        
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': f'Error al procesar el archivo: {str(e)}'})
+
+
+@staff_member_required
 @require_POST
 @superuser_required_for_modifications
 def category_reorder(request):
@@ -3457,4 +3588,4 @@ def parse_clamp_code_api(request):
         logger.exception("Error parsing clamp code")
         return JsonResponse({"success": False, "error": "No se pudo parsear el codigo."}, status=500)
 
-__all__ = ['product_list', 'product_create', 'product_edit', 'product_delete', 'product_toggle_active', 'product_bulk_category_update', 'product_bulk_status_update', 'product_bulk_image_update', 'supplier_list', 'supplier_detail', 'supplier_bulk_action', 'supplier_export', 'supplier_print', 'supplier_unassigned', 'supplier_toggle_active', 'category_list', 'category_reorder', 'category_sort_roots_alpha', 'category_bulk_status', 'category_create', 'category_create_ajax', 'category_edit', 'category_move', 'category_delete', 'category_attribute_create', 'category_attribute_edit', 'category_attribute_delete', 'category_manage_products', 'category_products_reorder', 'get_category_attributes', 'parse_product_description', 'parse_clamp_code_api', 'products_uncategorized']
+__all__ = ['product_list', 'product_create', 'product_edit', 'product_delete', 'product_toggle_active', 'product_bulk_category_update', 'product_bulk_status_update', 'product_bulk_image_update', 'supplier_list', 'supplier_detail', 'supplier_bulk_action', 'supplier_export', 'supplier_print', 'supplier_unassigned', 'supplier_toggle_active', 'category_list', 'category_reorder', 'category_sort_roots_alpha', 'category_bulk_status', 'category_create', 'category_create_ajax', 'category_edit', 'category_move', 'category_delete', 'category_attribute_create', 'category_attribute_edit', 'category_attribute_delete', 'category_manage_products', 'category_products_reorder', 'get_category_attributes', 'parse_product_description', 'parse_clamp_code_api', 'products_uncategorized', 'import_triler_excel']

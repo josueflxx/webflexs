@@ -5463,4 +5463,47 @@ class ProductsUncategorizedViewTests(TestCase):
         # Verify db
         self.assertFalse(Product.objects.filter(pk=pk).exists())
 
+    def test_import_triler_excel_view(self):
+        from io import BytesIO
+        import openpyxl
+        
+        # Create a mock product in db
+        Product.objects.create(
+            sku='T-TEST-SKU',
+            name='Test Product Triler',
+            price=Decimal('100.00'),
+        )
+        
+        # Create in-memory excel
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Interno categorizado"
+        ws.append(["SKU", "Nombre", "Categoría TRILER", "Proveedor"])
+        ws.append(["TEST-SKU", "Test Product Triler", "ACABADOS", "Proveedor A"])
+        
+        excel_file = BytesIO()
+        wb.save(excel_file)
+        excel_file.seek(0)
+        excel_file.name = 'triler.xlsx'
+        
+        # Post to endpoint
+        self.client.force_login(self.primary_superadmin)
+        self._activate_company()
+        
+        response = self.client.post(
+            reverse('admin_products_uncategorized_import_excel'),
+            {'excel_file': excel_file},
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest'
+        )
+        
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertTrue(data['success'])
+        
+        # Check DB
+        prod = Product.objects.get(sku='T-TEST-SKU')
+        self.assertIsNotNone(prod.category)
+        self.assertEqual(prod.category.name, 'ACABADOS')
+        self.assertEqual(prod.category.parent.name, 'TRILER')
+
 

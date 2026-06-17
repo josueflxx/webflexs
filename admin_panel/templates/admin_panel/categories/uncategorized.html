@@ -11,7 +11,11 @@
             <h1 class="page-title">Productos sin Categoría</h1>
             <p class="page-subtitle">Visualiza, edita y clasifica productos activos que no están asignados a ninguna categoría.</p>
         </div>
-        <div class="header-actions">
+        <div class="header-actions" style="display: flex; gap: 10px; align-items: center;">
+            <input type="file" id="triler-file-input" accept=".xlsx" style="display: none;" onchange="handleTrilerExcelUpload(this)">
+            <button type="button" class="btn btn-primary" onclick="document.getElementById('triler-file-input').click()">
+                📂 Importar Excel Triler
+            </button>
             <a href="{% url 'admin_category_list' %}" class="btn btn-secondary">
                 ← Volver a Categorías
             </a>
@@ -1444,6 +1448,53 @@
         }
 
         setupCategoryTree();
+    }
+
+    function handleTrilerExcelUpload(input) {
+        if (!input.files || input.files.length === 0) return;
+        
+        const file = input.files[0];
+        if (!confirm(`¿Deseas importar y categorizar automáticamente los productos usando el archivo "${file.name}"?`)) {
+            input.value = '';
+            return;
+        }
+        
+        const btn = document.querySelector('button[onclick*="triler-file-input"]');
+        const originalText = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '⏳ Procesando...';
+        
+        const formData = new FormData();
+        formData.append('excel_file', file);
+        
+        fetch('{% url "admin_products_uncategorized_import_excel" %}', {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': csrfToken,
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: formData
+        })
+        .then(res => res.json())
+        .then(data => {
+            btn.disabled = false;
+            btn.innerHTML = originalText;
+            input.value = '';
+            
+            if (data.success) {
+                alert('¡Éxito! ' + data.message);
+                location.reload();
+            } else {
+                alert('Error al importar: ' + data.error);
+            }
+        })
+        .catch(err => {
+            console.error('Error al importar Excel:', err);
+            alert('Ocurrió un error en el servidor al procesar el archivo.');
+            btn.disabled = false;
+            btn.innerHTML = originalText;
+            input.value = '';
+        });
     }
 </script>
 {% endblock %}
