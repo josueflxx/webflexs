@@ -1,5 +1,5 @@
 {% extends 'admin_panel/base.html' %}
-{% load static %}
+{% load static l10n %}
 
 {% block title %}Productos sin Categoría | Panel de Administración{% endblock %}
 
@@ -33,7 +33,7 @@
                     <select id="supplier-select" name="supplier" class="form-select" onchange="this.form.submit()">
                         <option value="">Todos los proveedores</option>
                         {% for sup in suppliers %}
-                        <option value="{{ sup.id }}" {% if selected_supplier_id == sup.id %}selected{% endif %}>
+                        <option value="{{ sup.id|unlocalize }}" {% if selected_supplier_id == sup.id %}selected{% endif %}>
                             {{ sup.name }}
                         </option>
                         {% endfor %}
@@ -88,9 +88,9 @@
                 </thead>
                 <tbody>
                     {% for prod in products %}
-                    <tr id="product-row-{{ prod.pk }}" data-product-id="{{ prod.pk }}">
+                    <tr id="product-row-{{ prod.pk|unlocalize }}" data-product-id="{{ prod.pk|unlocalize }}">
                         <td class="text-center">
-                            <input type="checkbox" class="product-checkbox" value="{{ prod.pk }}" onclick="updateBulkBar()">
+                            <input type="checkbox" class="product-checkbox" value="{{ prod.pk|unlocalize }}" onclick="updateBulkBar()">
                         </td>
                         <td class="text-center">
                             <div class="product-img-wrapper">
@@ -120,7 +120,7 @@
                             {% if prod.suggested_category %}
                             <button type="button" 
                                     class="btn-smart-suggestion" 
-                                    onclick="applySmartSuggestion('{{ prod.pk }}', '{{ prod.suggested_category.id }}', '{{ prod.suggested_category.name|escapejs }}')"
+                                    onclick="applySmartSuggestion('{{ prod.pk|unlocalize }}', '{{ prod.suggested_category.id|unlocalize }}', '{{ prod.suggested_category.name|escapejs }}')"
                                     title="Hacer clic para asignar directamente la categoría '{{ prod.suggested_category.name }}'">
                                 💡 Sugerir: {{ prod.suggested_category.name }}
                             </button>
@@ -129,7 +129,7 @@
                             {% endif %}
                         </td>
                         <td class="text-center">
-                            <button type="button" class="btn btn-sm btn-outline-primary" onclick="openIndividualCategorizeModal('{{ prod.pk }}', '{{ prod.name|escapejs }}')">
+                            <button type="button" class="btn btn-sm btn-outline-primary" onclick="openIndividualCategorizeModal('{{ prod.pk|unlocalize }}', '{{ prod.name|escapejs }}')">
                                 Categorizar
                             </button>
                         </td>
@@ -168,7 +168,7 @@
                 <select id="primary-category-select" class="form-select">
                     <option value="">Sin categoría principal</option>
                     {% for cat in category_options %}
-                    <option value="{{ cat.id }}">{{ cat.label }}</option>
+                    <option value="{{ cat.id|unlocalize }}">{{ cat.label }}</option>
                     {% endfor %}
                 </select>
                 <small class="text-muted block mt-1">Ubicación canónica en catálogo y exportaciones.</small>
@@ -195,7 +195,7 @@
                         <select id="inline-cat-parent" class="form-select form-select-sm">
                             <option value="">Ninguna (Raíz)</option>
                             {% for cat in category_options %}
-                            <option value="{{ cat.id }}">{{ cat.label }}</option>
+                            <option value="{{ cat.id|unlocalize }}">{{ cat.label }}</option>
                             {% endfor %}
                         </select>
                     </div>
@@ -217,7 +217,7 @@
                            data-name="{{ cat.full_path|lower }} {{ cat.name|lower }}">
                         <input type="checkbox"
                                name="categories"
-                               value="{{ cat.id }}"
+                               value="{{ cat.id|unlocalize }}"
                                class="category-check"
                                onclick="syncPrimaryFromCheckboxes()">
                         <span class="category-info">
