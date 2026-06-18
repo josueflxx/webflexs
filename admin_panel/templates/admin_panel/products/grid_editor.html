@@ -392,8 +392,254 @@
         border-radius: 6px;
         margin-bottom: 12px;
         display: flex;
-        justify-content: space-between;
         align-items: center;
+    }
+
+    /* Quick Filter Tabs */
+    .quick-filter-tabs {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        border-top: 1px solid #1f2937;
+        padding-top: 12px;
+        margin-top: 4px;
+    }
+    .quick-tab {
+        background: rgba(31, 41, 55, 0.4);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        color: #94a3b8;
+        padding: 6px 14px;
+        border-radius: 9999px;
+        font-size: 12px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+    .quick-tab:hover {
+        background: rgba(255, 255, 255, 0.05);
+        color: #f1f5f9;
+        border-color: rgba(255, 255, 255, 0.15);
+    }
+    .quick-tab.active {
+        background: rgba(255, 107, 53, 0.15) !important;
+        color: #ff6b35 !important;
+        border-color: rgba(255, 107, 53, 0.3) !important;
+        font-weight: 600;
+    }
+    
+    /* Suggestion Pill styling */
+    .suggestion-pill {
+        display: block;
+        margin-top: 4px;
+        background: rgba(59, 130, 246, 0.12);
+        color: #60a5fa;
+        border: 1px solid rgba(59, 130, 246, 0.2);
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-size: 10px;
+        font-weight: 500;
+        cursor: pointer;
+        width: fit-content;
+        transition: all 0.15s ease;
+        user-select: none;
+    }
+    .suggestion-pill:hover {
+        background: rgba(59, 130, 246, 0.2);
+        color: #93c5fd;
+        border-color: rgba(59, 130, 246, 0.3);
+        transform: translateY(-1px);
+    }
+
+    /* Autocomplete dropdown styles */
+    .autocomplete-container {
+        position: relative;
+        width: 100%;
+        height: 100%;
+    }
+    .autocomplete-dropdown {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        width: 120%; /* wider than column if needed */
+        min-width: 260px;
+        max-height: 220px;
+        overflow-y: auto;
+        background: #0b0f19;
+        border: 2px solid #ff6b35;
+        border-radius: 6px;
+        box-shadow: 0 10px 20px rgba(0, 0, 0, 0.5);
+        z-index: 999;
+        margin-top: 2px;
+        scrollbar-width: thin;
+    }
+    .autocomplete-option {
+        padding: 8px 12px;
+        cursor: pointer;
+        color: #cbd5e1;
+        font-size: 12px;
+        transition: all 0.1s ease;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+        text-align: left;
+    }
+    .autocomplete-option:hover,
+    .autocomplete-option.highlighted {
+        background: #ff6b35;
+        color: #ffffff;
+    }
+    .autocomplete-option.none-option {
+        font-style: italic;
+        color: #94a3b8;
+    }
+
+    /* Categories Sidebar Styles */
+    .categories-sidebar {
+        position: fixed;
+        top: 0;
+        right: -380px;
+        width: 380px;
+        height: 100vh;
+        background: #0f1524;
+        border-left: 1px solid rgba(255, 107, 53, 0.2);
+        box-shadow: -10px 0 35px rgba(0, 0, 0, 0.5);
+        z-index: 1050;
+        transition: right 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        display: flex;
+        flex-direction: column;
+        box-sizing: border-box;
+    }
+    .categories-sidebar.open {
+        right: 0;
+    }
+    .sidebar-header {
+        padding: 20px 24px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+    .sidebar-title {
+        margin: 0;
+        font-size: 16px;
+        font-weight: 600;
+        color: #f1f5f9;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .sidebar-close-btn {
+        background: none;
+        border: none;
+        color: #94a3b8;
+        font-size: 20px;
+        cursor: pointer;
+        padding: 4px;
+        border-radius: 4px;
+        line-height: 1;
+        transition: all 0.2s;
+    }
+    .sidebar-close-btn:hover {
+        color: #f87171;
+        background: rgba(239, 68, 68, 0.1);
+    }
+    .sidebar-search-container {
+        padding: 16px 24px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+    .sidebar-info-banner {
+        padding: 12px 24px;
+        background: rgba(255, 107, 53, 0.05);
+        border-bottom: 1px solid rgba(255, 107, 53, 0.1);
+        font-size: 11px;
+        color: #cbd5e1;
+        line-height: 1.4;
+    }
+    .sidebar-tree-wrapper {
+        flex: 1;
+        overflow-y: auto;
+        padding: 16px 24px;
+        scrollbar-width: thin;
+    }
+    .category-tree-node {
+        display: flex;
+        align-items: center;
+        padding: 6px 8px;
+        margin: 2px 0;
+        border-radius: 6px;
+        cursor: pointer;
+        user-select: none;
+        transition: all 0.15s ease;
+        font-size: 13px;
+        color: #cbd5e1;
+    }
+    .category-tree-node:hover {
+        background: rgba(255, 107, 53, 0.1);
+        color: #ff6b35;
+    }
+    .category-tree-node.selected-active {
+        background: rgba(255, 107, 53, 0.15);
+        color: #ff6b35;
+        font-weight: 500;
+    }
+    .category-tree-node .node-toggle {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 18px;
+        height: 18px;
+        margin-right: 6px;
+        color: #64748b;
+        border-radius: 4px;
+        transition: all 0.2s;
+    }
+    .category-tree-node:hover .node-toggle {
+        color: #ff6b35;
+    }
+    .category-tree-node .node-text {
+        flex: 1;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    /* Floating Sidebar Toggle Button */
+    .sidebar-toggle-floating {
+        position: fixed;
+        right: 0;
+        top: 50%;
+        transform: translateY(-50%);
+        background: #ff6b35;
+        color: white;
+        border: none;
+        border-radius: 8px 0 0 8px;
+        padding: 14px 10px;
+        cursor: pointer;
+        z-index: 1040;
+        writing-mode: vertical-rl;
+        text-orientation: mixed;
+        font-weight: 600;
+        font-size: 12px;
+        letter-spacing: 0.1em;
+        box-shadow: -4px 0 15px rgba(255, 107, 53, 0.3);
+        transition: all 0.2s ease;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .sidebar-toggle-floating:hover {
+        background: #ff8552;
+        box-shadow: -4px 0 20px rgba(255, 107, 53, 0.5);
+        padding-right: 14px;
+    }
+    .sidebar-toggle-floating.pulse {
+        animation: floating-pulse 2s infinite;
+    }
+    @keyframes floating-pulse {
+        0% { box-shadow: 0 0 0 0 rgba(255, 107, 53, 0.7); }
+        70% { box-shadow: 0 0 0 10px rgba(255, 107, 53, 0); }
+        100% { box-shadow: 0 0 0 0 rgba(255, 107, 53, 0); }
     }
 </style>
 {% endblock %}
@@ -416,6 +662,14 @@
                 <span class="status-icon">✓</span>
                 <span class="status-text">Cambios guardados</span>
             </div>
+        </div>
+
+        <!-- Quick Filter Tabs -->
+        <div class="quick-filter-tabs">
+            <span style="font-size: 11px; font-weight: 600; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.05em; margin-right: 8px;">Filtros rápidos:</span>
+            <button type="button" class="quick-tab {% if not f_category and not f_supplier %}active{% endif %}" onclick="applyQuickFilter('all')">Todos</button>
+            <button type="button" class="quick-tab {% if f_category|lower == 'sin categoría' or f_category|lower == 'sin categoria' %}{% if not f_supplier %}active{% endif %}{% endif %}" onclick="applyQuickFilter('uncategorized')">⚠️ Sin Categoría</button>
+            <button type="button" class="quick-tab {% if f_category|lower == 'sin categoría' or f_category|lower == 'sin categoria' %}{% if f_supplier|lower == 'establecimiento mecanico oce s r l' %}active{% endif %}{% endif %}" onclick="applyQuickFilter('uncategorized_triler')">⚙️ Sin Categoría (TRILER)</button>
         </div>
 
         <!-- Bulk Operations Panel -->
@@ -443,6 +697,7 @@
                         {% endfor %}
                     </select>
                     <button type="button" class="btn btn-outline btn-sm" style="height: 30px; line-height: 1;" onclick="applyBulkAction('category')">Asignar Categ.</button>
+                    <button type="button" class="btn btn-info btn-sm" style="height: 30px; line-height: 1; background: rgba(59, 130, 246, 0.2); border-color: rgba(59, 130, 246, 0.4); color: #60a5fa;" onclick="toggleCategoriesSidebar(true)">📂 Panel Lateral</button>
                 </div>
 
                 <div style="width: 1px; height: 20px; background: #374151;"></div>
@@ -644,10 +899,37 @@
     {% endfor %}
 </datalist>
 
+<!-- Categories Sidebar -->
+<div id="categoriesSidebar" class="categories-sidebar">
+    <div class="sidebar-header">
+        <h3 class="sidebar-title">📁 Categorías</h3>
+        <button class="sidebar-close-btn" onclick="toggleCategoriesSidebar(false)">✕</button>
+    </div>
+    <div class="sidebar-info-banner">
+        Selecciona uno o más productos en la planilla, luego haz clic en una categoría para asignarla.
+    </div>
+    <div class="sidebar-search-container">
+        <input type="text" id="sidebarSearch" placeholder="Buscar categoría..." class="filter-input" oninput="renderSidebarCategories()">
+    </div>
+    <div id="sidebarTreeWrapper" class="sidebar-tree-wrapper">
+        <!-- Rendered dynamically -->
+    </div>
+</div>
+
+<!-- Floating Toggle Button -->
+<button type="button" id="sidebarToggleFloating" class="sidebar-toggle-floating" onclick="toggleCategoriesSidebar()">
+    📁 CATEGORÍAS
+</button>
+
 <script>
     const CATEGORIES = [
         {% for cat in category_options %}
-        { id: {{ cat.id }}, label: "{{ cat.label|escapejs }}" },
+        { 
+            id: {{ cat.id }}, 
+            name: "{{ cat.name|escapejs }}",
+            depth: {{ cat.depth }},
+            label: "{{ cat.label|escapejs }}" 
+        },
         {% endfor %}
     ];
 </script>
@@ -658,6 +940,7 @@
     let selectedProducts = new Set();
     let selectAllDatabase = false;
     let lastCheckedBox = null;
+    let collapsedCategories = new Set(); // Stores category IDs that are collapsed in the tree
 
     document.addEventListener("DOMContentLoaded", function () {
         // 1. Initial calculation of profit margins
@@ -668,7 +951,111 @@
 
         // 3. Setup global key listener for spreadsheet navigation
         document.getElementById("productGrid").addEventListener("keydown", handleTableKeyDown);
+
+        // 4. Initial calculation of category suggestions
+        applyCategorySuggestions();
+
+        // 5. Initial render of the Categories Sidebar tree
+        renderSidebarCategories();
     });
+
+    // Helper functions for intelligent category suggestions
+    function getCategoryKeywords(label) {
+        return label.toLowerCase()
+            .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+            .replace(/[^a-z0-9]/g, ' ')
+            .split(/\s+/)
+            .filter(w => w.length > 3);
+    }
+
+    const CATEGORY_KEYWORDS = CATEGORIES.map(cat => {
+        return {
+            id: cat.id,
+            label: cat.label.replace(/^-+/g, '').trim(),
+            keywords: getCategoryKeywords(cat.label)
+        };
+    });
+
+    function suggestCategoryForProduct(productName) {
+        if (!productName) return null;
+        
+        const nameWords = productName.toLowerCase()
+            .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+            .replace(/[^a-z0-9]/g, ' ')
+            .split(/\s+/)
+            .filter(w => w.length > 2);
+            
+        if (nameWords.length === 0) return null;
+        
+        let bestCat = null;
+        let maxScore = 0;
+        
+        CATEGORY_KEYWORDS.forEach(cat => {
+            if (cat.keywords.length === 0) return;
+            
+            let score = 0;
+            cat.keywords.forEach(catWord => {
+                nameWords.forEach(nameWord => {
+                    if (catWord === nameWord) {
+                        score += 10;
+                    } else if (nameWord.startsWith(catWord) || catWord.startsWith(nameWord)) {
+                        score += 5;
+                    } else if (nameWord.includes(catWord) || catWord.includes(nameWord)) {
+                        score += 2;
+                    }
+                });
+            });
+            
+            if (score > 0) {
+                if (score > maxScore) {
+                    maxScore = score;
+                    bestCat = cat;
+                }
+            }
+        });
+        
+        if (maxScore >= 5) {
+            return bestCat;
+        }
+        return null;
+    }
+
+    function applyCategorySuggestions() {
+        document.querySelectorAll("tbody tr").forEach(row => {
+            const rowId = row.dataset.id;
+            const catCell = row.querySelector("[data-field='category_id']");
+            if (!catCell) return;
+            
+            const catId = catCell.dataset.val;
+            if (!catId || catId === "") {
+                const nameCell = row.querySelector("[data-field='name']");
+                if (nameCell) {
+                    const productName = nameCell.querySelector(".cell-display").textContent.trim();
+                    const suggestion = suggestCategoryForProduct(productName);
+                    
+                    const oldPill = catCell.querySelector(".suggestion-pill");
+                    if (oldPill) oldPill.remove();
+                    
+                    if (suggestion) {
+                        const pill = document.createElement("div");
+                        pill.className = "suggestion-pill";
+                        pill.textContent = `💡 Sugerido: ${suggestion.label}`;
+                        pill.title = `Haga clic para asignar la categoría "${suggestion.label}"`;
+                        
+                        pill.addEventListener("click", function (e) {
+                            e.stopPropagation();
+                            saveCellChange(catCell, "category_id", suggestion.id);
+                        });
+                        
+                        catCell.appendChild(pill);
+                    }
+                }
+            } else {
+                const oldPill = catCell.querySelector(".suggestion-pill");
+                if (oldPill) oldPill.remove();
+            }
+        });
+    }
 
     // Calculate margin: ((Price - Cost) / Price) * 100
     function calculateMargin(cost, price) {
@@ -732,6 +1119,30 @@
         }
     }
 
+    function applyQuickFilter(type) {
+        const form = document.getElementById("filtersForm");
+        const categoryInput = form.querySelector("input[name='f_category']");
+        const supplierInput = form.querySelector("input[name='f_supplier']");
+        const skuInput = form.querySelector("input[name='f_sku']");
+        const nameInput = form.querySelector("input[name='f_name']");
+        const refInput = form.querySelector("input[name='f_ref']");
+        
+        categoryInput.value = "";
+        supplierInput.value = "";
+        skuInput.value = "";
+        nameInput.value = "";
+        refInput.value = "";
+        
+        if (type === "uncategorized") {
+            categoryInput.value = "Sin categoría";
+        } else if (type === "uncategorized_triler") {
+            categoryInput.value = "Sin categoría";
+            supplierInput.value = "ESTABLECIMIENTO MECANICO OCE S R L";
+        }
+        
+        form.submit();
+    }
+
     // Interactive cells
     function setupCellListeners() {
         document.querySelectorAll(".spreadsheet-cell").forEach(cell => {
@@ -776,40 +1187,139 @@
         cell.innerHTML = "";
 
         if (field === "category_id") {
-            const select = document.createElement("select");
+            const container = document.createElement("div");
+            container.className = "autocomplete-container";
             
-            const optNone = document.createElement("option");
-            optNone.value = "";
-            optNone.textContent = "Sin categoría";
-            select.appendChild(optNone);
-
-            CATEGORIES.forEach(cat => {
-                const opt = document.createElement("option");
-                opt.value = cat.id;
-                opt.textContent = cat.label;
-                if (String(cat.id) === String(rawVal)) {
-                    opt.selected = true;
+            const input = document.createElement("input");
+            input.type = "text";
+            input.placeholder = "Buscar subrubro...";
+            
+            const currentCat = CATEGORIES.find(c => String(c.id) === String(rawVal));
+            input.value = currentCat ? currentCat.label.replace(/^-+/g, '').trim() : "";
+            
+            let selectedId = rawVal;
+            
+            const dropdown = document.createElement("div");
+            dropdown.className = "autocomplete-dropdown";
+            dropdown.style.display = "none";
+            
+            container.appendChild(input);
+            container.appendChild(dropdown);
+            cell.appendChild(container);
+            input.focus();
+            input.select();
+            
+            let highlightedIndex = -1;
+            let currentFiltered = [];
+            
+            function renderOptions() {
+                const query = input.value.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+                
+                currentFiltered = CATEGORIES.filter(cat => {
+                    const cleanLabel = cat.label.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+                    return cleanLabel.includes(query);
+                });
+                
+                dropdown.innerHTML = "";
+                highlightedIndex = -1;
+                
+                // Option "Sin categoría"
+                const noneOpt = document.createElement("div");
+                noneOpt.className = "autocomplete-option none-option";
+                noneOpt.textContent = "Sin categoría";
+                noneOpt.dataset.id = "";
+                
+                noneOpt.addEventListener("mousedown", function (e) {
+                    e.preventDefault();
+                    selectOption("");
+                });
+                dropdown.appendChild(noneOpt);
+                
+                currentFiltered.forEach((cat) => {
+                    const opt = document.createElement("div");
+                    opt.className = "autocomplete-option";
+                    opt.textContent = cat.label.replace(/^-+/g, '').trim();
+                    opt.dataset.id = cat.id;
+                    
+                    opt.addEventListener("mousedown", function (e) {
+                        e.preventDefault();
+                        selectOption(cat.id);
+                    });
+                    
+                    dropdown.appendChild(opt);
+                });
+                
+                if (dropdown.children.length > 0) {
+                    dropdown.style.display = "block";
+                } else {
+                    dropdown.style.display = "none";
                 }
-                select.appendChild(opt);
+            }
+            
+            function selectOption(id) {
+                selectedId = id;
+                const foundCat = CATEGORIES.find(c => String(c.id) === String(id));
+                input.value = foundCat ? foundCat.label.replace(/^-+/g, '').trim() : "";
+                dropdown.style.display = "none";
+                cell.dataset.val = id;
+                exitEditMode(cell, true);
+            }
+            
+            function highlightOption(index) {
+                const opts = dropdown.querySelectorAll(".autocomplete-option");
+                opts.forEach(o => o.classList.remove("highlighted"));
+                
+                if (index >= 0 && index < opts.length) {
+                    opts[index].classList.add("highlighted");
+                    opts[index].scrollIntoView({ block: "nearest" });
+                    highlightedIndex = index;
+                }
+            }
+            
+            renderOptions();
+            
+            input.addEventListener("input", function () {
+                renderOptions();
             });
             
-            cell.appendChild(select);
-            select.focus();
+            input.addEventListener("blur", function () {
+                cell.dataset.val = selectedId;
+                exitEditMode(cell, true);
+            });
             
-            select.addEventListener("blur", function () {
-                exitEditMode(cell, true);
-            });
-            select.addEventListener("change", function () {
-                exitEditMode(cell, true);
-            });
-            select.addEventListener("keydown", function (e) {
-                if (e.key === "Enter" || e.key === "Tab") {
+            input.addEventListener("keydown", function (e) {
+                const opts = dropdown.querySelectorAll(".autocomplete-option");
+                
+                if (e.key === "ArrowDown") {
                     e.preventDefault();
-                    exitEditMode(cell, true);
+                    if (dropdown.style.display === "none") {
+                        dropdown.style.display = "block";
+                    }
+                    let next = highlightedIndex + 1;
+                    if (next >= opts.length) next = 0;
+                    highlightOption(next);
+                }
+                else if (e.key === "ArrowUp") {
+                    e.preventDefault();
+                    let prev = highlightedIndex - 1;
+                    if (prev < 0) prev = opts.length - 1;
+                    highlightOption(prev);
+                }
+                else if (e.key === "Enter" || e.key === "Tab") {
+                    e.preventDefault();
+                    if (highlightedIndex >= 0 && highlightedIndex < opts.length) {
+                        const activeOpt = opts[highlightedIndex];
+                        selectOption(activeOpt.dataset.id);
+                    } else if (currentFiltered.length > 0) {
+                        selectOption(currentFiltered[0].id);
+                    } else {
+                        exitEditMode(cell, true);
+                    }
                     moveFocusDown();
-                } else if (e.key === "Escape") {
+                }
+                else if (e.key === "Escape") {
                     e.preventDefault();
-                    exitEditMode(cell, false); // Cancel
+                    exitEditMode(cell, false);
                 }
             });
         } 
@@ -874,10 +1384,14 @@
     function exitEditMode(cell, save) {
         if (!cell.classList.contains("editing")) return;
         
-        cell.classList.remove("editing");
         const field = cell.dataset.field;
-        const input = cell.querySelector("input, select");
-        let newVal = input ? input.value : "";
+        let newVal;
+        if (field === "category_id") {
+            newVal = cell.dataset.val;
+        } else {
+            const input = cell.querySelector("input, select");
+            newVal = input ? input.value : "";
+        }
         
         cell.innerHTML = '<span class="cell-display"></span>';
         const displaySpan = cell.querySelector(".cell-display");
@@ -955,6 +1469,10 @@
                 const costCell = row.querySelector("[data-field='cost']");
                 const priceCell = row.querySelector("[data-field='price']");
                 updateMarginDisplay(productId, getCellRawValue(costCell), getCellRawValue(priceCell));
+
+                if (field === "name" || field === "category_id") {
+                    applyCategorySuggestions();
+                }
 
                 cell.classList.add("flash-success");
                 setTimeout(() => cell.classList.remove("flash-success"), 1000);
@@ -1147,7 +1665,19 @@
     }
 
     function updateSelectedCounter() {
-        document.getElementById("selectedCount").textContent = selectedProducts.size;
+        const count = selectedProducts.size;
+        document.getElementById("selectedCount").textContent = count;
+        
+        const floatingBtn = document.getElementById("sidebarToggleFloating");
+        if (floatingBtn) {
+            if (count > 0) {
+                floatingBtn.classList.add("pulse");
+                floatingBtn.textContent = `📁 ASIGNAR (${count})`;
+            } else {
+                floatingBtn.classList.remove("pulse");
+                floatingBtn.textContent = "📁 CATEGORÍAS";
+            }
+        }
     }
 
     // Apply bulk action
@@ -1314,6 +1844,182 @@
             checkbox.checked = !isActive;
             alert("Error al actualizar estado: " + err.message);
         });
+    }
+
+    // --- Categories Sidebar Logic ---
+    function toggleCategoriesSidebar(open) {
+        const sidebar = document.getElementById("categoriesSidebar");
+        if (!sidebar) return;
+        
+        if (open === undefined) {
+            sidebar.classList.toggle("open");
+        } else if (open) {
+            sidebar.classList.add("open");
+        } else {
+            sidebar.classList.remove("open");
+        }
+    }
+
+    function renderSidebarCategories() {
+        const wrapper = document.getElementById("sidebarTreeWrapper");
+        if (!wrapper) return;
+        
+        const query = document.getElementById("sidebarSearch").value.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        wrapper.innerHTML = "";
+        
+        // 1. Calculate parent relationships and hasChildren flags
+        const parentsStack = [];
+        CATEGORIES.forEach(cat => {
+            while (parentsStack.length > 0 && parentsStack[parentsStack.length - 1].depth >= cat.depth) {
+                parentsStack.pop();
+            }
+            cat.parentId = parentsStack.length > 0 ? parentsStack[parentsStack.length - 1].id : null;
+            parentsStack.push({ depth: cat.depth, id: cat.id });
+        });
+        
+        for (let i = 0; i < CATEGORIES.length; i++) {
+            const cat = CATEGORIES[i];
+            cat.hasChildren = (i + 1 < CATEGORIES.length) && (CATEGORIES[i+1].depth > cat.depth);
+        }
+        
+        // 2. Helper to check if any ancestor is collapsed
+        function isAncestorCollapsed(cat) {
+            let currentParentId = cat.parentId;
+            while (currentParentId !== null) {
+                if (collapsedCategories.has(currentParentId)) {
+                    return true;
+                }
+                const parentCat = CATEGORIES.find(c => c.id === currentParentId);
+                currentParentId = parentCat ? parentCat.parentId : null;
+            }
+            return false;
+        }
+        
+        // 3. Render tree nodes
+        CATEGORIES.forEach(cat => {
+            const cleanName = cat.name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+            const matchesSearch = cleanName.includes(query);
+            
+            if (query) {
+                if (!matchesSearch) return; // Hide nodes that don't match the query
+            } else {
+                if (isAncestorCollapsed(cat)) return; // Hide nodes if an ancestor is collapsed
+            }
+            
+            const node = document.createElement("div");
+            node.className = "category-tree-node";
+            node.style.paddingLeft = `${cat.depth * 16 + 8}px`;
+            node.dataset.id = cat.id;
+            
+            const toggleSpan = document.createElement("span");
+            toggleSpan.className = "node-toggle";
+            
+            if (cat.hasChildren) {
+                const isCollapsed = collapsedCategories.has(cat.id);
+                toggleSpan.textContent = isCollapsed ? "▶" : "▼";
+                toggleSpan.style.cursor = "pointer";
+                toggleSpan.addEventListener("click", function (e) {
+                    e.stopPropagation();
+                    if (isCollapsed) {
+                        collapsedCategories.delete(cat.id);
+                    } else {
+                        collapsedCategories.add(cat.id);
+                    }
+                    renderSidebarCategories();
+                });
+            } else {
+                toggleSpan.innerHTML = "&#9675;"; // hollow bullet
+                toggleSpan.style.fontSize = "10px";
+            }
+            
+            const textSpan = document.createElement("span");
+            textSpan.className = "node-text";
+            textSpan.textContent = cat.name;
+            
+            if (query && matchesSearch) {
+                const index = cat.name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").indexOf(query);
+                if (index >= 0) {
+                    const originalText = cat.name;
+                    const matchLen = query.length;
+                    const before = originalText.substring(0, index);
+                    const match = originalText.substring(index, index + matchLen);
+                    const after = originalText.substring(index + matchLen);
+                    textSpan.innerHTML = `${escapeHtml(before)}<mark style="background: #ff6b35; color: white; border-radius: 2px; padding: 0 2px;">${escapeHtml(match)}</mark>${escapeHtml(after)}`;
+                }
+            }
+            
+            node.appendChild(toggleSpan);
+            node.appendChild(textSpan);
+            
+            node.addEventListener("click", function () {
+                applySidebarCategory(cat.id, cat.name);
+            });
+            
+            wrapper.appendChild(node);
+        });
+    }
+
+    function applySidebarCategory(catId, catName) {
+        if (!selectAllDatabase && selectedProducts.size === 0) {
+            alert("Por favor, selecciona al menos un producto en la planilla para asignarle la categoría.");
+            return;
+        }
+        
+        const count = selectAllDatabase ? "{{ total_count }}" : selectedProducts.size;
+        if (!confirm(`¿Deseas asignar la categoría "${catName}" a los ${count} productos seleccionados?`)) {
+            return;
+        }
+
+        let payload = {
+            product_ids: Array.from(selectedProducts),
+            action: "category",
+            category_id: catId
+        };
+
+        if (selectAllDatabase) {
+            payload.product_ids = "all_filtered";
+            payload.filters = {
+                f_category: "{{ f_category }}",
+                f_sku: "{{ f_sku }}",
+                f_name: "{{ f_name }}",
+                f_ref: "{{ f_ref }}",
+                f_supplier: "{{ f_supplier }}",
+                active: "{{ active_filter }}"
+            };
+        }
+
+        setSyncState("saving", "Asignando categoría...");
+
+        fetch("{% url 'admin_product_grid_bulk_update' %}", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "X-CSRFToken": "{{ csrf_token }}"
+            },
+            body: JSON.stringify(payload)
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === "success") {
+                setSyncState("saved", "Categoría asignada");
+                window.location.reload();
+            } else {
+                throw new Error(data.message || "Error al aplicar cambios en lote");
+            }
+        })
+        .catch(err => {
+            setSyncState("error", err.message || "Error al aplicar cambios");
+            alert("Error en acción masiva: " + err.message);
+        });
+    }
+
+    function escapeHtml(text) {
+        return text
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
     }
 </script>
 {% endblock %}
