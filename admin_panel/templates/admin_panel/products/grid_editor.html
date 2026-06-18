@@ -975,6 +975,12 @@
         },
         {% endfor %}
     ];
+
+    const SUPPLIERS = [
+        {% for s in suppliers_list %}
+        "{{ s.name|escapejs }}",
+        {% endfor %}
+    ];
 </script>
 
 <script>
@@ -1398,25 +1404,152 @@
             });
         } 
         else if (field === "supplier") {
+            const container = document.createElement("div");
+            container.className = "autocomplete-container";
+            
             const input = document.createElement("input");
             input.type = "text";
+            input.placeholder = "Buscar o escribir proveedor...";
             input.value = rawVal;
-            input.setAttribute("list", "suppliersDatalist");
-            cell.appendChild(input);
+            
+            const dropdown = document.createElement("div");
+            dropdown.className = "autocomplete-dropdown";
+            dropdown.style.display = "none";
+            
+            container.appendChild(input);
+            container.appendChild(dropdown);
+            cell.appendChild(container);
             input.focus();
             input.select();
+            
+            let highlightedIndex = -1;
+            let currentFiltered = [];
+            
+            function renderSupplierOptions() {
+                const query = input.value.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+                
+                currentFiltered = SUPPLIERS.filter(s => {
+                    const cleanS = s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+                    return cleanS.includes(query);
+                });
+                
+                dropdown.innerHTML = "";
+                highlightedIndex = -1;
+                
+                // Option: Create new supplier if query is custom and not exactly matching
+                const exactMatch = currentFiltered.some(s => s.toLowerCase() === query);
+                if (input.value.trim() !== "" && !exactMatch) {
+                    const createOpt = document.createElement("div");
+                    createOpt.className = "autocomplete-option none-option";
+                    createOpt.innerHTML = `➕ Crear nuevo: <strong>${escapeHtml(input.value.trim())}</strong>`;
+                    createOpt.addEventListener("mousedown", function (e) {
+                        e.preventDefault();
+                        selectSupplier(input.value.trim());
+                    });
+                    dropdown.appendChild(createOpt);
+                }
+
+                currentFiltered.forEach(s => {
+                    const opt = document.createElement("div");
+                    opt.className = "autocomplete-option";
+                    opt.textContent = s;
+                    
+                    if (query) {
+                        const index = s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").indexOf(query);
+                        if (index >= 0) {
+                            const before = s.substring(0, index);
+                            const match = s.substring(index, index + query.length);
+                            const after = s.substring(index + query.length);
+                            opt.innerHTML = `${escapeHtml(before)}<mark style="background: #ff6b35; color: white; border-radius: 2px; padding: 0 2px;">${escapeHtml(match)}</mark>${escapeHtml(after)}`;
+                        }
+                    }
+                    
+                    opt.addEventListener("mousedown", function (e) {
+                        e.preventDefault();
+                        selectSupplier(s);
+                    });
+                    
+                    dropdown.appendChild(opt);
+                });
+                
+                if (dropdown.children.length > 0) {
+                    dropdown.style.display = "block";
+                } else {
+                    dropdown.style.display = "none";
+                }
+            }
+            
+            function selectSupplier(val) {
+                input.value = val;
+                dropdown.style.display = "none";
+                exitEditMode(cell, true);
+            }
+            
+            function highlightSupplierOption(index) {
+                const opts = dropdown.querySelectorAll(".autocomplete-option");
+                opts.forEach(o => o.classList.remove("highlighted"));
+                
+                if (index >= 0 && index < opts.length) {
+                    opts[index].classList.add("highlighted");
+                    opts[index].scrollIntoView({ block: "nearest" });
+                    highlightedIndex = index;
+                }
+            }
+            
+            renderSupplierOptions();
+            
+            input.addEventListener("input", function () {
+                renderSupplierOptions();
+            });
+
+            input.addEventListener("focus", function () {
+                renderSupplierOptions();
+            });
+
+            input.addEventListener("click", function (e) {
+                e.stopPropagation();
+                renderSupplierOptions();
+            });
             
             input.addEventListener("blur", function () {
                 exitEditMode(cell, true);
             });
+            
             input.addEventListener("keydown", function (e) {
-                if (e.key === "Enter" || e.key === "Tab") {
+                const opts = dropdown.querySelectorAll(".autocomplete-option");
+                
+                if (e.key === "ArrowDown") {
                     e.preventDefault();
-                    exitEditMode(cell, true);
+                    if (dropdown.style.display === "none") {
+                        dropdown.style.display = "block";
+                    }
+                    let next = highlightedIndex + 1;
+                    if (next >= opts.length) next = 0;
+                    highlightSupplierOption(next);
+                }
+                else if (e.key === "ArrowUp") {
+                    e.preventDefault();
+                    let prev = highlightedIndex - 1;
+                    if (prev < 0) prev = opts.length - 1;
+                    highlightSupplierOption(prev);
+                }
+                else if (e.key === "Enter" || e.key === "Tab") {
+                    e.preventDefault();
+                    if (highlightedIndex >= 0 && highlightedIndex < opts.length) {
+                        const opt = opts[highlightedIndex];
+                        if (opt.classList.contains("none-option")) {
+                            selectSupplier(input.value.trim());
+                        } else {
+                            selectSupplier(opt.textContent);
+                        }
+                    } else {
+                        selectSupplier(input.value.trim());
+                    }
                     moveFocusDown();
-                } else if (e.key === "Escape") {
+                }
+                else if (e.key === "Escape") {
                     e.preventDefault();
-                    exitEditMode(cell, false); // Cancel
+                    exitEditMode(cell, false);
                 }
             });
         }
