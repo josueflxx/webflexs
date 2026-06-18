@@ -7,21 +7,31 @@
 {% block extra_head %}
 <style>
     /* Premium Compact Grid Layout */
+    /* Override standard container width to enable widescreen editing */
+    .admin-main .admin-content {
+        max-width: 100% !important;
+        width: 100% !important;
+        padding-left: 20px !important;
+        padding-right: 20px !important;
+        box-sizing: border-box;
+    }
+
     .grid-editor-container {
         display: flex;
         flex-direction: column;
-        gap: 16px;
+        gap: 20px;
         margin-bottom: 30px;
     }
     
     .grid-control-bar {
         background: #111827;
         border: 1px solid #1f2937;
-        border-radius: 8px;
-        padding: 16px;
+        border-radius: 12px;
+        padding: 20px;
         display: flex;
         flex-direction: column;
-        gap: 12px;
+        gap: 16px;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
     }
 
     .grid-tools-row {
@@ -36,144 +46,205 @@
         display: flex;
         flex-wrap: wrap;
         align-items: center;
-        gap: 10px;
-        background: #1f2937;
-        padding: 8px 12px;
-        border-radius: 6px;
-        border: 1px solid #374151;
+        gap: 12px;
+        background: rgba(31, 41, 55, 0.5);
+        padding: 10px 16px;
+        border-radius: 8px;
+        border: 1px solid rgba(255, 255, 255, 0.05);
     }
 
     .bulk-action-item {
         display: flex;
         align-items: center;
-        gap: 6px;
+        gap: 8px;
     }
 
     .autosave-status {
         display: flex;
         align-items: center;
-        gap: 6px;
-        font-size: 0.875rem;
-        font-weight: 500;
-        padding: 6px 12px;
-        border-radius: 4px;
+        gap: 8px;
+        font-size: 0.8rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        padding: 6px 14px;
+        border-radius: 9999px;
         transition: all 0.3s ease;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     }
     .status-saved {
-        background: rgba(16, 185, 129, 0.15);
-        color: #10b981;
-        border: 1px solid rgba(16, 185, 129, 0.3);
+        background: rgba(16, 185, 129, 0.12);
+        color: #34d399;
+        border: 1px solid rgba(16, 185, 129, 0.2);
     }
     .status-saving {
-        background: rgba(245, 158, 11, 0.15);
-        color: #f59e0b;
-        border: 1px solid rgba(245, 158, 11, 0.3);
+        background: rgba(245, 158, 11, 0.12);
+        color: #fbbf24;
+        border: 1px solid rgba(245, 158, 11, 0.2);
+        animation: pulse 1.5s infinite ease-in-out;
     }
     .status-error {
-        background: rgba(239, 68, 68, 0.15);
-        color: #ef4444;
-        border: 1px solid rgba(239, 68, 68, 0.3);
+        background: rgba(239, 68, 68, 0.12);
+        color: #f87171;
+        border: 1px solid rgba(239, 68, 68, 0.2);
+    }
+
+    @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.6; }
     }
 
     /* Spreadsheet Table Styling */
     .spreadsheet-wrapper {
         overflow-x: auto;
-        border-radius: 8px;
-        border: 1px solid #1f2937;
-        background: #0b0f19;
+        border-radius: 12px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        background: #090d16;
+        box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
     }
 
     .spreadsheet-table {
         width: 100%;
         border-collapse: collapse;
-        font-family: 'Inter', system-ui, sans-serif;
+        font-family: 'Inter', system-ui, -apple-system, sans-serif;
         font-size: 13px;
-        color: #e5e7eb;
+        color: #f1f5f9;
         table-layout: fixed;
     }
 
     /* Column widths */
-    .col-select { width: 40px; }
-    .col-category { width: 180px; }
-    .col-sku { width: 120px; }
-    .col-name { width: 320px; }
-    .col-ref { width: 120px; }
-    .col-supplier { width: 180px; }
-    .col-cost { width: 100px; }
-    .col-price { width: 100px; }
-    .col-margin { width: 80px; }
-    .col-stock { width: 80px; }
-    .col-active { width: 80px; }
-    .col-actions { width: 60px; }
+    .col-select { width: 45px; }
+    .col-category { width: 220px; }
+    .col-sku { width: 140px; }
+    .col-name { width: 440px; }
+    .col-ref { width: 140px; }
+    .col-supplier { width: 220px; }
+    .col-cost { width: 110px; }
+    .col-price { width: 110px; }
+    .col-margin { width: 95px; }
+    .col-stock { width: 90px; }
+    .col-active { width: 90px; }
+    .col-actions { width: 70px; }
 
     .spreadsheet-table th, .spreadsheet-table td {
-        border: 1px solid #1f2937;
-        padding: 4px 8px;
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        padding: 8px 12px;
         text-overflow: ellipsis;
         overflow: hidden;
         white-space: nowrap;
         vertical-align: middle;
+        transition: background-color 0.15s ease, border-color 0.15s ease;
     }
 
     .spreadsheet-table th {
         background: #111827;
         font-weight: 600;
         text-align: left;
-        color: #9ca3af;
+        color: #94a3b8;
         position: sticky;
         top: 0;
         z-index: 10;
-        height: 32px;
+        height: 38px;
         user-select: none;
+        text-transform: uppercase;
+        font-size: 11px;
+        letter-spacing: 0.05em;
+        border-bottom: 2px solid rgba(255, 255, 255, 0.1);
     }
 
     /* Autofilter Row */
-    .filter-row {
-        background: #1f2937;
-    }
     .filter-row td {
-        padding: 2px 4px;
-        background: #161e2e;
+        padding: 6px 8px;
+        background: #0f1524;
+        border-bottom: 2px solid rgba(255, 255, 255, 0.08);
     }
+    
     .filter-input {
         width: 100%;
-        background: #0b0f19;
-        border: 1px solid #374151;
-        border-radius: 4px;
-        color: #f3f4f6;
-        padding: 4px 6px;
+        background: rgba(13, 19, 31, 0.8);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 6px;
+        color: #f1f5f9;
+        padding: 6px 10px;
         font-size: 12px;
         outline: none;
         box-sizing: border-box;
-        transition: border-color 0.2s;
+        transition: all 0.2s ease;
     }
     .filter-input:focus {
         border-color: #ff6b35;
+        background: #0b0f19;
+        box-shadow: 0 0 0 2px rgba(255, 107, 53, 0.25);
+    }
+    
+    .filter-select {
+        background: rgba(13, 19, 31, 0.8);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 6px;
+        color: #f1f5f9;
+        font-size: 11px;
+        padding: 4px 24px 4px 8px;
+        cursor: pointer;
+        outline: none;
+        transition: all 0.2s ease;
+        appearance: none;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%239ca3af'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: right 8px center;
+        background-size: 10px;
+    }
+    .filter-select:focus {
+        border-color: #ff6b35;
+        background-color: #0b0f19;
+        box-shadow: 0 0 0 2px rgba(255, 107, 53, 0.25);
     }
 
     /* Grid Row States */
     .spreadsheet-table tbody tr {
-        background: #0f1422;
-        transition: background-color 0.15s;
+        background: #090d16;
+    }
+    .spreadsheet-table tbody tr:nth-child(even) {
+        background: #0e1524;
     }
     .spreadsheet-table tbody tr:hover {
-        background: #161e31;
+        background: #172033 !important;
     }
     .spreadsheet-table tr.selected {
         background: rgba(255, 107, 53, 0.08) !important;
     }
+    .spreadsheet-table tr.inactive-row td:not(.col-select):not(.col-actions) {
+        color: #64748b !important;
+        opacity: 0.65;
+    }
 
-    /* Cell Editing States */
+    /* Cell Editing & Interactive States */
     .spreadsheet-cell {
         cursor: cell;
         position: relative;
         outline: none;
-        height: 28px;
     }
+    .spreadsheet-cell:hover::after {
+        content: "✏️";
+        position: absolute;
+        right: 6px;
+        top: 50%;
+        transform: translateY(-50%);
+        font-size: 10px;
+        opacity: 0.35;
+        pointer-events: none;
+        transition: opacity 0.15s;
+    }
+    .spreadsheet-cell:hover:focus::after,
+    .spreadsheet-cell.editing::after {
+        display: none;
+    }
+    
     .spreadsheet-cell:focus {
         outline: 2px solid #ff6b35 !important;
         outline-offset: -2px;
-        background: rgba(255, 107, 53, 0.03);
+        background: rgba(255, 107, 53, 0.08) !important;
+        box-shadow: inset 0 0 4px rgba(255, 107, 53, 0.2);
+        z-index: 5;
     }
     
     .spreadsheet-cell.editing {
@@ -184,19 +255,29 @@
     .spreadsheet-cell input, .spreadsheet-cell select {
         width: 100%;
         height: 100%;
-        background: transparent;
-        border: none;
-        color: #f3f4f6;
+        min-height: 34px;
+        background: #0f172a !important;
+        border: 2px solid #ff6b35 !important;
+        color: #f1f5f9;
         font-size: 13px;
         font-family: inherit;
         padding: 0 8px;
         outline: none;
         box-sizing: border-box;
+        border-radius: 4px;
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
     }
     
     .spreadsheet-cell select {
-        background-color: #0b0f19;
         cursor: pointer;
+    }
+
+    /* Typography helpers */
+    .spreadsheet-cell[data-field="sku"],
+    .spreadsheet-cell[data-field="ref"] {
+        font-family: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
+        font-size: 12px;
+        color: #cbd5e1;
     }
 
     /* Feedback Animations */
@@ -220,13 +301,47 @@
     .text-right { text-align: right; }
     
     /* Margins status colors */
-    .margin-badge {
-        font-weight: 600;
+    .margin-value {
+        display: inline-block;
+        padding: 3px 8px;
+        border-radius: 6px;
         font-size: 11px;
+        font-weight: 600;
+        min-width: 52px;
+        text-align: center;
+        border: 1px solid transparent;
     }
-    .margin-positive { color: #10b981; }
-    .margin-low { color: #f59e0b; }
-    .margin-negative { color: #ef4444; }
+    .margin-positive {
+        background: rgba(16, 185, 129, 0.12);
+        color: #34d399;
+        border-color: rgba(16, 185, 129, 0.2);
+    }
+    .margin-low {
+        background: rgba(245, 158, 11, 0.12);
+        color: #fbbf24;
+        border-color: rgba(245, 158, 11, 0.2);
+    }
+    .margin-negative {
+        background: rgba(239, 68, 68, 0.12);
+        color: #f87171;
+        border-color: rgba(239, 68, 68, 0.2);
+    }
+
+    /* Empty states */
+    .category-empty {
+        color: #94a3b8;
+        font-style: italic;
+        opacity: 0.5;
+    }
+    .stock-empty {
+        color: #94a3b8;
+        opacity: 0.4;
+        font-weight: 400;
+    }
+    .stock-low {
+        color: #f87171;
+        font-weight: 600;
+    }
 
     /* Centered toggle switches */
     .grid-checkbox {
@@ -234,6 +349,8 @@
         height: 16px;
         cursor: pointer;
         accent-color: #ff6b35;
+        border-radius: 4px;
+        border: 1px solid rgba(255, 255, 255, 0.2);
     }
 
     .row-action-btn {
@@ -241,13 +358,14 @@
         border: none;
         color: #9ca3af;
         cursor: pointer;
-        padding: 2px 6px;
+        padding: 4px 8px;
         border-radius: 4px;
         transition: all 0.2s;
     }
     .row-action-btn:hover {
         background: rgba(239, 68, 68, 0.15);
         color: #ef4444;
+        transform: scale(1.1);
     }
 
     /* Pagination controls */
@@ -255,8 +373,9 @@
         display: flex;
         align-items: center;
         justify-content: space-between;
-        margin-top: 16px;
+        margin-top: 20px;
         color: #9ca3af;
+        padding: 10px 4px;
     }
 
     .pagination-btns {
@@ -404,11 +523,11 @@
                         <td>
                             <input type="text" name="f_supplier" value="{{ f_supplier }}" class="filter-input" placeholder="Filtrar Proveedor..." onkeydown="handleFilterKey(event)">
                         </td>
-                        <td colspan="6" style="background: #111827;">
+                        <td colspan="6" style="background: #0f1524;">
                             <!-- Active Status Quick Filter dropdown -->
                             <div style="display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding-right: 8px;">
                                 <label style="font-size: 11px; color: #9ca3af; font-weight: 500;">Estado:</label>
-                                <select name="active" onchange="this.form.submit()" style="background: #0b0f19; border: 1px solid #374151; border-radius: 4px; color: #f3f4f6; font-size: 11px; padding: 2px 4px;">
+                                <select name="active" onchange="this.form.submit()" class="filter-select">
                                     <option value="" {% if not active_filter %}selected{% endif %}>Todos</option>
                                     <option value="1" {% if active_filter == '1' %}selected{% endif %}>Activos</option>
                                     <option value="0" {% if active_filter == '0' %}selected{% endif %}>Inactivos</option>
@@ -421,14 +540,14 @@
                 </thead>
                 <tbody>
                     {% for product in page_obj %}
-                    <tr id="row-{{ product.id }}" data-id="{{ product.id }}">
+                    <tr id="row-{{ product.id }}" data-id="{{ product.id }}" class="{% if not product.is_active %}inactive-row{% endif %}">
                         <td class="text-center">
                             <input type="checkbox" class="grid-checkbox row-select-checkbox" data-id="{{ product.id }}" onclick="handleRowCheckboxClick(this, event)">
                         </td>
                         
                         <!-- Category Cell -->
                         <td class="spreadsheet-cell" tabindex="0" data-field="category_id" data-val="{{ product.category_id|default:'' }}">
-                            <span class="cell-display">{{ product.category.name|default:'Sin categoría' }}</span>
+                            <span class="cell-display {% if not product.category_id %}category-empty{% endif %}">{{ product.category.name|default:'Sin categoría' }}</span>
                         </td>
                         
                         <!-- SKU Cell -->
@@ -467,8 +586,8 @@
                         </td>
                         
                         <!-- Stock -->
-                        <td class="spreadsheet-cell text-center" tabindex="0" data-field="stock">
-                            <span class="cell-display">{{ product.stock }}</span>
+                        <td class="spreadsheet-cell text-center" tabindex="0" data-field="stock" data-val="{{ product.stock }}">
+                            <span class="cell-display {% if product.stock == 0 %}stock-empty{% elif product.stock < 5 %}stock-low{% endif %}">{{ product.stock }}</span>
                         </td>
                         
                         <!-- Active Status Checkbox -->
@@ -723,9 +842,11 @@
             
             if (field === "cost" || field === "price") {
                 input.type = "text";
+                input.style.textAlign = "right";
             } else if (field === "stock") {
                 input.type = "number";
                 input.min = 0;
+                input.style.textAlign = "center";
             } else {
                 input.type = "text";
             }
@@ -778,12 +899,25 @@
         const displaySpan = cell.querySelector(".cell-display");
         cell.dataset.val = val;
         
+        displaySpan.className = "cell-display"; // Reset class names
+        
         if (field === "category_id") {
             const cat = CATEGORIES.find(c => String(c.id) === String(val));
             displaySpan.textContent = cat ? cat.label.replace(/^-+/g, '').trim() : "Sin categoría";
+            if (!val) {
+                displaySpan.classList.add("category-empty");
+            }
         } else if (field === "cost" || field === "price") {
             const num = parseFloat(val) || 0;
             displaySpan.textContent = "$" + num.toFixed(2);
+        } else if (field === "stock") {
+            displaySpan.textContent = val;
+            const num = parseInt(val) || 0;
+            if (num === 0) {
+                displaySpan.classList.add("stock-empty");
+            } else if (num < 5) {
+                displaySpan.classList.add("stock-low");
+            }
         } else {
             displaySpan.textContent = val;
         }
