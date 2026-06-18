@@ -250,6 +250,8 @@
     .spreadsheet-cell.editing {
         padding: 0 !important;
         background: #0b0f19 !important;
+        overflow: visible !important;
+        z-index: 100 !important;
     }
 
     .spreadsheet-cell input, .spreadsheet-cell select {
@@ -1247,8 +1249,24 @@
                 currentFiltered.forEach((cat) => {
                     const opt = document.createElement("div");
                     opt.className = "autocomplete-option";
-                    opt.textContent = cat.label.replace(/^-+/g, '').trim();
+                    
+                    // Indentation based on depth
+                    opt.style.paddingLeft = `${cat.depth * 16 + 10}px`;
+                    
+                    const prefix = cat.depth > 0 ? "↳ " : "";
+                    opt.textContent = prefix + cat.name;
                     opt.dataset.id = cat.id;
+
+                    // Highlight matching text
+                    if (query) {
+                        const index = cat.name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").indexOf(query);
+                        if (index >= 0) {
+                            const before = cat.name.substring(0, index);
+                            const match = cat.name.substring(index, index + query.length);
+                            const after = cat.name.substring(index + query.length);
+                            opt.innerHTML = `${prefix}${escapeHtml(before)}<mark style="background: #ff6b35; color: white; border-radius: 2px; padding: 0 2px;">${escapeHtml(match)}</mark>${escapeHtml(after)}`;
+                        }
+                    }
                     
                     opt.addEventListener("mousedown", function (e) {
                         e.preventDefault();
@@ -1288,6 +1306,15 @@
             renderOptions();
             
             input.addEventListener("input", function () {
+                renderOptions();
+            });
+
+            input.addEventListener("focus", function () {
+                renderOptions();
+            });
+
+            input.addEventListener("click", function (e) {
+                e.stopPropagation();
                 renderOptions();
             });
             
