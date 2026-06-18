@@ -5556,3 +5556,192 @@ class ProductsUncategorizedViewTests(TestCase):
         self.assertEqual(prod.category.name, 'VALVULAS')
 
 
+class ProductGridEditorViewTests(TestCase):
+    def setUp(self):
+        from django.contrib.auth.models import User
+        from catalog.models import Product, Category, Supplier
+        from core.services.company_context import get_default_company
+
+        self.primary_superadmin = User.objects.create_superuser(
+            username='josueflexs',
+            email='super_editor@example.com',
+            password='secret123',
+        )
+        self.staff = User.objects.create_user(
+            username='staff_editor',
+            password='secret123',
+            is_staff=True,
+        )
+        self.category = Category.objects.create(
+            name='Abrazaderas',
+            slug='abrazaderas',
+            is_active=True,
+        )
+        self.supplier = Supplier.objects.create(
+            name='Aceros Arroyo Seco S.R.L.',
+        )
+        self.product1 = Product.objects.create(
+            sku='OJO1003',
+            name='OJAL DE LANZA Nº 3 MEC',
+            cost=Decimal('100.00'),
+            price=Decimal('150.00'),
+            stock=10,
+            supplier='Aceros Arroyo Seco S.R.L.',
+            supplier_ref=self.supplier,
+            category=self.category,
+            filter_1='7-002', # Referencia
+        )
+        self.product2 = Product.objects.create(
+            sku='A-7-009',
+            name='PINO PORTA CONTENEDOR',
+            cost=Decimal('200.00'),
+            price=Decimal('300.00'),
+            stock=5,
+            supplier='TORMECAN',
+            filter_1='A-7-009', # Referencia
+        )
+        self.company = get_default_company()
+
+    def _activate_company(self):
+        session = self.client.session
+        session['active_company_id'] = self.company.pk
+        session.save()
+
+    def test_anonymous_cannot_access_grid_editor(self):
+        response = self.client.get(reverse('admin_product_grid_editor'))
+        self.assertEqual(response.status_code, 302)
+
+    def test_staff_can_view_grid_editor_get(self):
+        self.client.force_login(self.staff)
+        self._activate_company()
+        response = self.client.get(reverse('admin_product_grid_editor'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'OJO1003')
+        self.assertContains(response, 'A-7-009')
+
+    def test_grid_editor_column_filters(self):
+        self.client.force_login(self.staff)
+        self._activate_company()
+
+        # Filter by SKU
+        response = self.client.get(reverse('admin_product_grid_editor') + '?f_sku=OJO')
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'OJO1003')
+        self.assertNotContains(response, 'A-7-009')
+
+        # Filter by name
+        response = self.client.get(reverse('admin_product_grid_editor') + '?f_name=PINO')
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, 'OJO1003')
+        self.assertContains(response, 'A-7-009')
+
+        # Filter by reference (filter_1)
+        response = self.client.get(reverse('admin_product_grid_editor') + '?f_ref=7-002')
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'OJO1003')
+        self.assertNotContains(response, 'A-7-009')
+
+    def test_update_cell_ajax_success(self):
+        self.client.force_login(self.primary_superadmin)
+        self._activate_company()
+
+        # Update Cost
+        response = self.client.post(
+            reverse('admin_product_grid_update_cell'),
+            json.dumps({
+                'product_id': self.product1.pk,
+                'field': 'cost',
+                'value': '120.50'
+            }),
+            content_type='application/json',
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest'
+        )
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data['status'], 'success')
+        
+        # Verify db
+        self.product1.refresh_from_db()
+        self.assertEqual(self.product1.cost, Decimal('120.50'))
+
+        # Update SKU
+        response = self.client.post(
+            reverse('admin_product_grid_update_cell'),
+            json.dumps({
+                'product_id': self.product1.pk,
+                'field': 'sku',
+                'value': 'NEW-SKU-123'
+            }),
+            content_type='application/json',
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest'
+        )
+        self.assertEqual(response.status_code, 200)
+        self.product1.refresh_from_db()
+        self.assertEqual(self.product1.sku, 'NEW-SKU-123')
+
+    def test_update_cell_ajax_validation_error(self):
+        self.client.force_login(self.primary_superadmin)
+        self._activate_company()
+
+        # Try to update to duplicate SKU
+        response = self.client.post(
+            reverse('admin_product_grid_update_cell'),
+            json.dumps({
+                'product_id': self.product1.pk,
+                'field': 'sku',
+                'value': 'A-7-009'
+            }),
+            content_type='application/json',
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest'
+        )
+        self.assertEqual(response.status_code, 400)
+        data = response.json()
+        self.assertEqual(data['status'], 'error')
+        self.assertIn('ya existe', data['message'])
+
+    def test_bulk_update_ajax_markup(self):
+        self.client.force_login(self.primary_superadmin)
+        self._activate_company()
+
+        response = self.client.post(
+            reverse('admin_product_grid_bulk_update'),
+            json.dumps({
+                'product_ids': [self.product1.pk, self.product2.pk],
+                'action': 'markup',
+                'target_field': 'price',
+                'percentage': '10'
+            }),
+            content_type='application/json',
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest'
+        )
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data['status'], 'success')
+        self.assertEqual(data['updated_count'], 2)
+
+        self.product1.refresh_from_db()
+        self.product2.refresh_from_db()
+        
+        # 150 * 1.10 = 165
+        self.assertEqual(self.product1.price, Decimal('165.00'))
+        # 300 * 1.10 = 330
+        self.assertEqual(self.product2.price, Decimal('330.00'))
+
+    def test_bulk_update_ajax_delete(self):
+        self.client.force_login(self.primary_superadmin)
+        self._activate_company()
+
+        response = self.client.post(
+            reverse('admin_product_grid_bulk_update'),
+            json.dumps({
+                'product_ids': [self.product1.pk],
+                'action': 'delete'
+            }),
+            content_type='application/json',
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest'
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(Product.objects.filter(pk=self.product1.pk).exists())
+
+
+

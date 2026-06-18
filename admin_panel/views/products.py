@@ -3630,4 +3630,351 @@ def parse_clamp_code_api(request):
         logger.exception("Error parsing clamp code")
         return JsonResponse({"success": False, "error": "No se pudo parsear el codigo."}, status=500)
 
-__all__ = ['product_list', 'product_create', 'product_edit', 'product_delete', 'product_toggle_active', 'product_bulk_category_update', 'product_bulk_status_update', 'product_bulk_image_update', 'supplier_list', 'supplier_detail', 'supplier_bulk_action', 'supplier_export', 'supplier_print', 'supplier_unassigned', 'supplier_toggle_active', 'category_list', 'category_reorder', 'category_sort_roots_alpha', 'category_bulk_status', 'category_create', 'category_create_ajax', 'category_edit', 'category_move', 'category_delete', 'category_attribute_create', 'category_attribute_edit', 'category_attribute_delete', 'category_manage_products', 'category_products_reorder', 'get_category_attributes', 'parse_product_description', 'parse_clamp_code_api', 'products_uncategorized', 'import_triler_excel']
+
+@staff_member_required
+def product_grid_editor(request):
+    """
+    Excel-like product grid editor view.
+    """
+    products = Product.objects.select_related('category', 'supplier_ref').prefetch_related('categories').all()
+    
+    f_category = request.GET.get('f_category', '').strip()
+    f_sku = request.GET.get('f_sku', '').strip()
+    f_name = request.GET.get('f_name', '').strip()
+    f_ref = request.GET.get('f_ref', '').strip()
+    f_supplier = request.GET.get('f_supplier', '').strip()
+    active_filter = request.GET.get('active', '').strip()
+
+    if f_category:
+        products = products.filter(
+            Q(category__name__icontains=f_category) | 
+            Q(categories__name__icontains=f_category)
+        ).distinct()
+        
+    if f_sku:
+        products = products.filter(sku__icontains=f_sku)
+        
+    if f_name:
+        products = products.filter(name__icontains=f_name)
+        
+    if f_ref:
+        products = products.filter(filter_1__icontains=f_ref)
+        
+    if f_supplier:
+        products = products.filter(
+            Q(supplier__icontains=f_supplier) | 
+            Q(supplier_ref__name__icontains=f_supplier)
+        )
+        
+    if active_filter:
+        products = products.filter(is_active=(active_filter == '1'))
+
+    order = _clean_product_list_order(request.GET.get('order', '-updated_at'))
+    products = _apply_product_list_order(products, order)
+
+    paginator = Paginator(products, 50)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+
+    enrich_products_with_category_state(page_obj.object_list)
+
+    category_options = get_cached_category_options(only_active=True, include_inactive_suffix=False)
+    suppliers = list(Supplier.objects.filter(is_active=True).order_by('name').values('id', 'name'))
+    
+    context = {
+        'page_obj': page_obj,
+        'category_options': category_options,
+        'suppliers_list': suppliers,
+        'f_category': f_category,
+        'f_sku': f_sku,
+        'f_name': f_name,
+        'f_ref': f_ref,
+        'f_supplier': f_supplier,
+        'active_filter': active_filter,
+        'order_by': order,
+        'total_count': products.count() if hasattr(products, 'count') else len(products),
+    }
+    return render(request, 'admin_panel/products/grid_editor.html', context)
+
+
+@staff_member_required
+@superuser_required_for_modifications
+@csrf_protect
+@require_POST
+def product_grid_update_cell(request):
+    """
+    AJAX endpoint to update a single cell of a product.
+    """
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({'status': 'error', 'message': 'JSON inválido.'}, status=400)
+
+    product_id = data.get('product_id')
+    field = data.get('field')
+    value = data.get('value')
+
+    if not product_id or not field:
+        return JsonResponse({'status': 'error', 'message': 'Faltan parámetros requeridos.'}, status=400)
+
+    product = get_object_or_404(Product, pk=product_id)
+    old_value_repr = ""
+
+    try:
+        with transaction.atomic():
+            if field == 'sku':
+                val_clean = str(value or '').strip()
+                if not val_clean:
+                    return JsonResponse({'status': 'error', 'message': 'El SKU no puede estar vacío.'}, status=400)
+                if Product.objects.filter(sku=val_clean).exclude(pk=product.pk).exists():
+                    return JsonResponse({'status': 'error', 'message': f'El SKU "{val_clean}" ya existe en otro producto.'}, status=400)
+                old_value_repr = product.sku
+                product.sku = val_clean
+                product.save(update_fields=['sku', 'updated_at'])
+
+            elif field == 'name':
+                val_clean = str(value or '').strip()
+                if not val_clean:
+                    return JsonResponse({'status': 'error', 'message': 'El Nombre no puede estar vacío.'}, status=400)
+                old_value_repr = product.name
+                product.name = val_clean
+                product.save(update_fields=['name', 'updated_at'])
+
+            elif field == 'cost':
+                val_clean = parse_admin_decimal_input(value, 'Costo', min_value='0')
+                old_value_repr = str(product.cost)
+                product.cost = val_clean
+                product.save(update_fields=['cost', 'updated_at'])
+
+            elif field == 'price':
+                val_clean = parse_admin_decimal_input(value, 'Precio', min_value='0')
+                old_value_repr = str(product.price)
+                product.price = val_clean
+                product.save(update_fields=['price', 'updated_at'])
+
+            elif field == 'stock':
+                val_clean = parse_int_value(value, 'Stock', min_value=0)
+                old_value_repr = str(product.stock)
+                product.stock = val_clean
+                product.save(update_fields=['stock', 'updated_at'])
+
+            elif field == 'ref':
+                val_clean = str(value or '').strip()
+                old_value_repr = product.filter_1
+                product.filter_1 = val_clean
+                product.save(update_fields=['filter_1', 'updated_at'])
+
+            elif field == 'supplier':
+                val_clean = clean_supplier_name(value)
+                old_value_repr = product.supplier
+                product.supplier = val_clean
+                product.supplier_ref = ensure_supplier(val_clean) if val_clean else None
+                product.save(update_fields=['supplier', 'supplier_ref', 'updated_at'])
+
+            elif field == 'category_id':
+                if value == '' or value is None:
+                    cat_id = None
+                else:
+                    try:
+                        cat_id = int(value)
+                    except (ValueError, TypeError):
+                        return JsonResponse({'status': 'error', 'message': 'ID de categoría inválido.'}, status=400)
+                
+                old_value_repr = str(product.category_id or '')
+                product.category_id = cat_id
+                product.save(update_fields=['category', 'updated_at'])
+                if cat_id:
+                    product.categories.add(cat_id)
+                else:
+                    product.categories.clear()
+
+            elif field == 'is_active':
+                val_clean = bool(value)
+                old_value_repr = str(product.is_active)
+                product.is_active = val_clean
+                product.save(update_fields=['is_active', 'updated_at'])
+
+            else:
+                return JsonResponse({'status': 'error', 'message': f'Campo "{field}" no editable.'}, status=400)
+
+            log_admin_action(
+                request,
+                action="product_grid_edit",
+                target_type="product",
+                target_id=product.pk,
+                details={
+                    "field": field,
+                    "old_value": old_value_repr,
+                    "new_value": str(value),
+                    "sku": product.sku
+                }
+            )
+
+    except Exception as e:
+        logger.exception("Error updating product cell via grid editor")
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
+
+    try:
+        cost = product.cost
+        price = product.price
+        if price > 0:
+            margin = float((price - cost) / price * 100)
+        else:
+            margin = 0.0
+    except Exception:
+        margin = 0.0
+
+    return JsonResponse({
+        'status': 'success',
+        'product_id': product.pk,
+        'margin': margin
+    })
+
+
+@staff_member_required
+@superuser_required_for_modifications
+@csrf_protect
+@require_POST
+def product_grid_bulk_update(request):
+    """
+    AJAX endpoint for bulk updates of products selected in the grid editor.
+    """
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({'status': 'error', 'message': 'JSON inválido.'}, status=400)
+
+    product_ids = data.get('product_ids', [])
+    action = data.get('action')
+
+    if not product_ids or not action:
+        return JsonResponse({'status': 'error', 'message': 'Faltan parámetros requeridos.'}, status=400)
+
+    try:
+        product_ids = [int(pid) for pid in product_ids]
+    except (ValueError, TypeError):
+        return JsonResponse({'status': 'error', 'message': 'IDs de producto inválidos.'}, status=400)
+
+    products_qs = Product.objects.filter(pk__in=product_ids)
+    updated_count = 0
+
+    try:
+        with transaction.atomic():
+            if action == 'markup':
+                target_field = data.get('target_field')
+                percentage_str = data.get('percentage')
+                
+                if target_field not in ['price', 'cost']:
+                    return JsonResponse({'status': 'error', 'message': 'Campo destino de recargo inválido.'}, status=400)
+
+                try:
+                    pct = Decimal(str(percentage_str or '0').replace(',', '.'))
+                except (InvalidOperation, ValueError):
+                    return JsonResponse({'status': 'error', 'message': 'Porcentaje inválido.'}, status=400)
+
+                multiplier = Decimal('1') + (pct / Decimal('100'))
+
+                for prod in products_qs:
+                    current_val = getattr(prod, target_field)
+                    new_val = (current_val * multiplier).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+                    if new_val < Decimal('0.00'):
+                        new_val = Decimal('0.00')
+                    setattr(prod, target_field, new_val)
+                    prod.save(update_fields=[target_field, 'updated_at'])
+                    updated_count += 1
+
+                log_admin_action(
+                    request,
+                    action="product_grid_bulk_markup",
+                    target_type="product_list",
+                    target_id=",".join(map(str, product_ids[:100])),
+                    details={"field": target_field, "percentage": str(pct), "count": updated_count}
+                )
+
+            elif action == 'category':
+                category_id_str = data.get('category_id')
+                if category_id_str == '' or category_id_str is None:
+                    cat_id = None
+                else:
+                    try:
+                        cat_id = int(category_id_str)
+                    except (ValueError, TypeError):
+                        return JsonResponse({'status': 'error', 'message': 'ID de categoría inválido.'}, status=400)
+
+                for prod in products_qs:
+                    prod.category_id = cat_id
+                    prod.save(update_fields=['category', 'updated_at'])
+                    if cat_id:
+                        prod.categories.add(cat_id)
+                    else:
+                        prod.categories.clear()
+                    updated_count += 1
+
+                log_admin_action(
+                    request,
+                    action="product_grid_bulk_category",
+                    target_type="product_list",
+                    target_id=",".join(map(str, product_ids[:100])),
+                    details={"category_id": str(cat_id), "count": updated_count}
+                )
+
+            elif action == 'supplier':
+                supplier_name = clean_supplier_name(data.get('supplier', ''))
+                supplier_obj = ensure_supplier(supplier_name) if supplier_name else None
+
+                for prod in products_qs:
+                    prod.supplier = supplier_name
+                    prod.supplier_ref = supplier_obj
+                    prod.save(update_fields=['supplier', 'supplier_ref', 'updated_at'])
+                    updated_count += 1
+
+                log_admin_action(
+                    request,
+                    action="product_grid_bulk_supplier",
+                    target_type="product_list",
+                    target_id=",".join(map(str, product_ids[:100])),
+                    details={"supplier": supplier_name, "count": updated_count}
+                )
+
+            elif action == 'status':
+                set_active = bool(data.get('is_active'))
+                for prod in products_qs:
+                    prod.is_active = set_active
+                    prod.save(update_fields=['is_active', 'updated_at'])
+                    updated_count += 1
+
+                log_admin_action(
+                    request,
+                    action="product_grid_bulk_status",
+                    target_type="product_list",
+                    target_id=",".join(map(str, product_ids[:100])),
+                    details={"is_active": set_active, "count": updated_count}
+                )
+
+            elif action == 'delete':
+                count, _ = products_qs.delete()
+                updated_count = count
+
+                log_admin_action(
+                    request,
+                    action="product_grid_bulk_delete",
+                    target_type="product_list",
+                    target_id=",".join(map(str, product_ids[:100])),
+                    details={"count": updated_count}
+                )
+
+            else:
+                return JsonResponse({'status': 'error', 'message': f'Acción masiva "{action}" no soportada.'}, status=400)
+
+    except Exception as e:
+        logger.exception("Error during product grid bulk update")
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
+
+    return JsonResponse({
+        'status': 'success',
+        'updated_count': updated_count
+    })
+
+
+__all__ = ['product_list', 'product_create', 'product_edit', 'product_delete', 'product_toggle_active', 'product_bulk_category_update', 'product_bulk_status_update', 'product_bulk_image_update', 'supplier_list', 'supplier_detail', 'supplier_bulk_action', 'supplier_export', 'supplier_print', 'supplier_unassigned', 'supplier_toggle_active', 'category_list', 'category_reorder', 'category_sort_roots_alpha', 'category_bulk_status', 'category_create', 'category_create_ajax', 'category_edit', 'category_move', 'category_delete', 'category_attribute_create', 'category_attribute_edit', 'category_attribute_delete', 'category_manage_products', 'category_products_reorder', 'get_category_attributes', 'parse_product_description', 'parse_clamp_code_api', 'products_uncategorized', 'import_triler_excel', 'product_grid_editor', 'product_grid_update_cell', 'product_grid_bulk_update']
+

@@ -89,9 +89,14 @@
 
                 <div class="nav-section">Catalogo</div>
                 <a href="{% url 'admin_product_list' %}"
-                    class="nav-item {% if 'product' in request.resolver_match.url_name and 'uncategorized' not in request.resolver_match.url_name %}active{% endif %}">
+                    class="nav-item {% if 'product' in request.resolver_match.url_name and 'uncategorized' not in request.resolver_match.url_name and 'grid_editor' not in request.resolver_match.url_name %}active{% endif %}">
                     <span class="nav-icon" aria-hidden="true">&#128230;</span>
                     Productos
+                </a>
+                <a href="{% url 'admin_product_grid_editor' %}"
+                    class="nav-item {% if 'grid_editor' in request.resolver_match.url_name %}active{% endif %}">
+                    <span class="nav-icon" aria-hidden="true">📊</span>
+                    Editor Masivo
                 </a>
                 <a href="{% url 'admin_category_list' %}"
                     class="nav-item {% if 'category' in request.resolver_match.url_name and 'uncategorized' not in request.resolver_match.url_name %}active{% endif %}">
@@ -269,8 +274,11 @@
                     <div class="top-nav-group">
                         <span class="top-nav-group-label">Catalogo</span>
                         <div class="top-nav-group-links">
-                            <a href="{% url 'admin_product_list' %}" class="top-nav-item {% if 'product' in request.resolver_match.url_name and 'uncategorized' not in request.resolver_match.url_name %}active{% endif %}">
+                            <a href="{% url 'admin_product_list' %}" class="top-nav-item {% if 'product' in request.resolver_match.url_name and 'uncategorized' not in request.resolver_match.url_name and 'grid_editor' not in request.resolver_match.url_name %}active{% endif %}">
                                 <span aria-hidden="true">&#128230;</span> Productos
+                            </a>
+                            <a href="{% url 'admin_product_grid_editor' %}" class="top-nav-item {% if 'grid_editor' in request.resolver_match.url_name %}active{% endif %}">
+                                <span aria-hidden="true">📊</span> Editor Masivo
                             </a>
                             <a href="{% url 'admin_category_list' %}" class="top-nav-item {% if 'category' in request.resolver_match.url_name and 'uncategorized' not in request.resolver_match.url_name %}active{% endif %}">
                                 <span aria-hidden="true">&#128193;</span> Categorias

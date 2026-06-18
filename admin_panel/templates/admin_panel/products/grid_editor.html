@@ -1,0 +1,1185 @@
+{% extends 'admin_panel/base.html' %}
+{% load l10n %}
+{% load static %}
+
+{% block page_title %}Editor Masivo de Productos 📊{% endblock %}
+
+{% block extra_head %}
+<style>
+    /* Premium Compact Grid Layout */
+    .grid-editor-container {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+        margin-bottom: 30px;
+    }
+    
+    .grid-control-bar {
+        background: #111827;
+        border: 1px solid #1f2937;
+        border-radius: 8px;
+        padding: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    .grid-tools-row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+    }
+
+    .bulk-actions-group {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 10px;
+        background: #1f2937;
+        padding: 8px 12px;
+        border-radius: 6px;
+        border: 1px solid #374151;
+    }
+
+    .bulk-action-item {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .autosave-status {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 0.875rem;
+        font-weight: 500;
+        padding: 6px 12px;
+        border-radius: 4px;
+        transition: all 0.3s ease;
+    }
+    .status-saved {
+        background: rgba(16, 185, 129, 0.15);
+        color: #10b981;
+        border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+    .status-saving {
+        background: rgba(245, 158, 11, 0.15);
+        color: #f59e0b;
+        border: 1px solid rgba(245, 158, 11, 0.3);
+    }
+    .status-error {
+        background: rgba(239, 68, 68, 0.15);
+        color: #ef4444;
+        border: 1px solid rgba(239, 68, 68, 0.3);
+    }
+
+    /* Spreadsheet Table Styling */
+    .spreadsheet-wrapper {
+        overflow-x: auto;
+        border-radius: 8px;
+        border: 1px solid #1f2937;
+        background: #0b0f19;
+    }
+
+    .spreadsheet-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-family: 'Inter', system-ui, sans-serif;
+        font-size: 13px;
+        color: #e5e7eb;
+        table-layout: fixed;
+    }
+
+    /* Column widths */
+    .col-select { width: 40px; }
+    .col-category { width: 180px; }
+    .col-sku { width: 120px; }
+    .col-name { width: 320px; }
+    .col-ref { width: 120px; }
+    .col-supplier { width: 180px; }
+    .col-cost { width: 100px; }
+    .col-price { width: 100px; }
+    .col-margin { width: 80px; }
+    .col-stock { width: 80px; }
+    .col-active { width: 80px; }
+    .col-actions { width: 60px; }
+
+    .spreadsheet-table th, .spreadsheet-table td {
+        border: 1px solid #1f2937;
+        padding: 4px 8px;
+        text-overflow: ellipsis;
+        overflow: hidden;
+        white-space: nowrap;
+        vertical-align: middle;
+    }
+
+    .spreadsheet-table th {
+        background: #111827;
+        font-weight: 600;
+        text-align: left;
+        color: #9ca3af;
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        height: 32px;
+        user-select: none;
+    }
+
+    /* Autofilter Row */
+    .filter-row {
+        background: #1f2937;
+    }
+    .filter-row td {
+        padding: 2px 4px;
+        background: #161e2e;
+    }
+    .filter-input {
+        width: 100%;
+        background: #0b0f19;
+        border: 1px solid #374151;
+        border-radius: 4px;
+        color: #f3f4f6;
+        padding: 4px 6px;
+        font-size: 12px;
+        outline: none;
+        box-sizing: border-box;
+        transition: border-color 0.2s;
+    }
+    .filter-input:focus {
+        border-color: #ff6b35;
+    }
+
+    /* Grid Row States */
+    .spreadsheet-table tbody tr {
+        background: #0f1422;
+        transition: background-color 0.15s;
+    }
+    .spreadsheet-table tbody tr:hover {
+        background: #161e31;
+    }
+    .spreadsheet-table tr.selected {
+        background: rgba(255, 107, 53, 0.08) !important;
+    }
+
+    /* Cell Editing States */
+    .spreadsheet-cell {
+        cursor: cell;
+        position: relative;
+        outline: none;
+        height: 28px;
+    }
+    .spreadsheet-cell:focus {
+        outline: 2px solid #ff6b35 !important;
+        outline-offset: -2px;
+        background: rgba(255, 107, 53, 0.03);
+    }
+    
+    .spreadsheet-cell.editing {
+        padding: 0 !important;
+        background: #0b0f19 !important;
+    }
+
+    .spreadsheet-cell input, .spreadsheet-cell select {
+        width: 100%;
+        height: 100%;
+        background: transparent;
+        border: none;
+        color: #f3f4f6;
+        font-size: 13px;
+        font-family: inherit;
+        padding: 0 8px;
+        outline: none;
+        box-sizing: border-box;
+    }
+    
+    .spreadsheet-cell select {
+        background-color: #0b0f19;
+        cursor: pointer;
+    }
+
+    /* Feedback Animations */
+    @keyframes flash-success {
+        0% { background-color: rgba(16, 185, 129, 0.4); }
+        100% { background-color: transparent; }
+    }
+    @keyframes flash-error {
+        0% { background-color: rgba(239, 68, 68, 0.4); }
+        100% { background-color: transparent; }
+    }
+    .flash-success {
+        animation: flash-success 1s ease-out;
+    }
+    .flash-error {
+        animation: flash-error 1.5s ease-out;
+    }
+
+    /* Text Alignments */
+    .text-center { text-align: center; }
+    .text-right { text-align: right; }
+    
+    /* Margins status colors */
+    .margin-badge {
+        font-weight: 600;
+        font-size: 11px;
+    }
+    .margin-positive { color: #10b981; }
+    .margin-low { color: #f59e0b; }
+    .margin-negative { color: #ef4444; }
+
+    /* Centered toggle switches */
+    .grid-checkbox {
+        width: 16px;
+        height: 16px;
+        cursor: pointer;
+        accent-color: #ff6b35;
+    }
+
+    .row-action-btn {
+        background: none;
+        border: none;
+        color: #9ca3af;
+        cursor: pointer;
+        padding: 2px 6px;
+        border-radius: 4px;
+        transition: all 0.2s;
+    }
+    .row-action-btn:hover {
+        background: rgba(239, 68, 68, 0.15);
+        color: #ef4444;
+    }
+
+    /* Pagination controls */
+    .pagination-bar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-top: 16px;
+        color: #9ca3af;
+    }
+
+    .pagination-btns {
+        display: flex;
+        gap: 6px;
+    }
+    
+    /* Select all pages label */
+    .select-info-banner {
+        background: #1e3a8a;
+        color: #bfdbfe;
+        border: 1px solid #3b82f6;
+        padding: 8px 16px;
+        border-radius: 6px;
+        margin-bottom: 12px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="admin-table-container grid-editor-container">
+    
+    <!-- Title & Control Board -->
+    <div class="grid-control-bar">
+        <div class="grid-tools-row">
+            <div>
+                <h2 style="margin: 0; color: #f3f4f6; font-size: 1.25rem;">Editor Masivo de Productos (Planilla)</h2>
+                <p style="margin: 4px 0 0 0; color: #9ca3af; font-size: 0.875rem;">
+                    Navega con las flechas del teclado, pulsa Enter para editar y Enter para guardar. Los cambios se guardan automáticamente.
+                </p>
+            </div>
+            
+            <!-- Autosave Sync Status -->
+            <div id="syncStatus" class="autosave-status status-saved">
+                <span class="status-icon">✓</span>
+                <span class="status-text">Cambios guardados</span>
+            </div>
+        </div>
+
+        <!-- Bulk Operations Panel -->
+        {% if user.is_superuser %}
+        <div class="grid-tools-row" style="border-top: 1px solid #1f2937; padding-top: 12px;">
+            <div class="bulk-actions-group">
+                <span style="font-weight: 600; color: #9ca3af; font-size: 12px; text-transform: uppercase; margin-right: 4px;">Acciones en lote (<span id="selectedCount">0</span>):</span>
+                
+                <!-- Price Markup -->
+                <div class="bulk-action-item">
+                    <input type="number" step="0.01" id="bulkMarkupPct" placeholder="Porcentaje (ej. 10)" class="form-input" style="width: 110px; height: 30px; font-size: 12px; padding: 4px 8px; background: #0b0f19; border-color: #374151;">
+                    <button type="button" class="btn btn-primary btn-sm" style="height: 30px; line-height: 1;" onclick="applyBulkAction('markup', 'price')">Recargo Precio %</button>
+                    <button type="button" class="btn btn-outline btn-sm" style="height: 30px; line-height: 1;" onclick="applyBulkAction('markup', 'cost')">Recargo Costo %</button>
+                </div>
+
+                <div style="width: 1px; height: 20px; background: #374151;"></div>
+
+                <!-- Category Update -->
+                <div class="bulk-action-item">
+                    <select id="bulkCategorySelect" class="form-select" style="width: 160px; height: 30px; font-size: 12px; padding: 0 8px; background: #0b0f19; border-color: #374151;">
+                        <option value="">Categoría...</option>
+                        <option value="clear">Ninguna (Sin categoría)</option>
+                        {% for cat in category_options %}
+                        <option value="{{ cat.id }}">{{ cat.label }}</option>
+                        {% endfor %}
+                    </select>
+                    <button type="button" class="btn btn-outline btn-sm" style="height: 30px; line-height: 1;" onclick="applyBulkAction('category')">Asignar Categ.</button>
+                </div>
+
+                <div style="width: 1px; height: 20px; background: #374151;"></div>
+
+                <!-- Supplier Update -->
+                <div class="bulk-action-item">
+                    <input type="text" id="bulkSupplierInput" list="suppliersDatalist" placeholder="Proveedor..." class="form-input" style="width: 140px; height: 30px; font-size: 12px; padding: 4px 8px; background: #0b0f19; border-color: #374151;">
+                    <button type="button" class="btn btn-outline btn-sm" style="height: 30px; line-height: 1;" onclick="applyBulkAction('supplier')">Asignar Prov.</button>
+                </div>
+
+                <div style="width: 1px; height: 20px; background: #374151;"></div>
+
+                <!-- Active/Inactive/Delete -->
+                <div class="bulk-action-item">
+                    <button type="button" class="btn btn-info btn-sm" style="height: 30px; line-height: 1;" onclick="applyBulkAction('status', true)">Activar</button>
+                    <button type="button" class="btn btn-warning-outline btn-sm" style="height: 30px; line-height: 1;" onclick="applyBulkAction('status', false)">Inactivar</button>
+                    <button type="button" class="btn btn-danger-outline btn-sm" style="height: 30px; line-height: 1;" onclick="applyBulkAction('delete')">Eliminar</button>
+                </div>
+            </div>
+            
+            <div>
+                <a href="{% url 'admin_product_list' %}" class="btn btn-outline btn-sm" style="height: 30px;">Volver al Listado Estándar</a>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Bulk Select Banner -->
+    <div id="bulkSelectAllBanner" class="select-info-banner" style="display: none;">
+        <span>Se han seleccionado todos los <strong><span id="bannerPageCount">50</span></strong> productos de esta página.</span>
+        <button type="button" class="btn btn-primary btn-sm" id="btnSelectAllDatabase" onclick="selectAllDatabaseProducts()">
+            Seleccionar los <strong>{{ total_count }}</strong> productos que coinciden con los filtros
+        </button>
+        <button type="button" class="btn btn-outline btn-sm" onclick="clearAllSelections()" style="color: #fff; border-color: #fff;">
+            Desmarcar todo
+        </button>
+    </div>
+
+    <!-- Spreadsheet Grid Table Wrapper -->
+    <div class="spreadsheet-wrapper">
+        <form id="filtersForm" method="get" action="{% url 'admin_product_grid_editor' %}">
+            <!-- Order field preservation -->
+            <input type="hidden" name="order" value="{{ order_by }}">
+            <input type="hidden" name="active" value="{{ active_filter }}">
+            
+            <table class="spreadsheet-table" id="productGrid">
+                <thead>
+                    <tr>
+                        <th class="col-select text-center"><input type="checkbox" id="selectAllCheckbox" class="grid-checkbox" onclick="toggleSelectAllPage(this)"></th>
+                        <th class="col-category">Subrubro (Categoría)</th>
+                        <th class="col-sku">Código</th>
+                        <th class="col-name">Artículo</th>
+                        <th class="col-ref">Referencia</th>
+                        <th class="col-supplier">Proveedor</th>
+                        <th class="col-cost text-right">Costo ($)</th>
+                        <th class="col-price text-right">Venta ($)</th>
+                        <th class="col-margin text-right">Margen %</th>
+                        <th class="col-stock text-center">Stock</th>
+                        <th class="col-active text-center">Activo</th>
+                        <th class="col-actions text-center">Acción</th>
+                    </tr>
+                    
+                    <!-- Excel Autofilters Row -->
+                    <tr class="filter-row">
+                        <td class="text-center">🔍</td>
+                        <td>
+                            <input type="text" name="f_category" value="{{ f_category }}" class="filter-input" placeholder="Filtrar Subrubro..." onkeydown="handleFilterKey(event)">
+                        </td>
+                        <td>
+                            <input type="text" name="f_sku" value="{{ f_sku }}" class="filter-input" placeholder="Filtrar Código..." onkeydown="handleFilterKey(event)">
+                        </td>
+                        <td>
+                            <input type="text" name="f_name" value="{{ f_name }}" class="filter-input" placeholder="Filtrar Artículo..." onkeydown="handleFilterKey(event)">
+                        </td>
+                        <td>
+                            <input type="text" name="f_ref" value="{{ f_ref }}" class="filter-input" placeholder="Filtrar Referencia..." onkeydown="handleFilterKey(event)">
+                        </td>
+                        <td>
+                            <input type="text" name="f_supplier" value="{{ f_supplier }}" class="filter-input" placeholder="Filtrar Proveedor..." onkeydown="handleFilterKey(event)">
+                        </td>
+                        <td colspan="6" style="background: #111827;">
+                            <!-- Active Status Quick Filter dropdown -->
+                            <div style="display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding-right: 8px;">
+                                <label style="font-size: 11px; color: #9ca3af; font-weight: 500;">Estado:</label>
+                                <select name="active" onchange="this.form.submit()" style="background: #0b0f19; border: 1px solid #374151; border-radius: 4px; color: #f3f4f6; font-size: 11px; padding: 2px 4px;">
+                                    <option value="" {% if not active_filter %}selected{% endif %}>Todos</option>
+                                    <option value="1" {% if active_filter == '1' %}selected{% endif %}>Activos</option>
+                                    <option value="0" {% if active_filter == '0' %}selected{% endif %}>Inactivos</option>
+                                </select>
+                                <button type="submit" style="display: none;">Buscar</button>
+                                <a href="{% url 'admin_product_grid_editor' %}" style="font-size: 11px; color: #ff6b35; text-decoration: none; font-weight: 600; margin-left: 10px;">Limpiar Filtros</a>
+                            </div>
+                        </td>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for product in page_obj %}
+                    <tr id="row-{{ product.id }}" data-id="{{ product.id }}">
+                        <td class="text-center">
+                            <input type="checkbox" class="grid-checkbox row-select-checkbox" data-id="{{ product.id }}" onclick="handleRowCheckboxClick(this, event)">
+                        </td>
+                        
+                        <!-- Category Cell -->
+                        <td class="spreadsheet-cell" tabindex="0" data-field="category_id" data-val="{{ product.category_id|default:'' }}">
+                            <span class="cell-display">{{ product.category.name|default:'Sin categoría' }}</span>
+                        </td>
+                        
+                        <!-- SKU Cell -->
+                        <td class="spreadsheet-cell" tabindex="0" data-field="sku">
+                            <span class="cell-display">{{ product.sku }}</span>
+                        </td>
+                        
+                        <!-- Name Cell -->
+                        <td class="spreadsheet-cell" tabindex="0" data-field="name" style="text-align: left;">
+                            <span class="cell-display" style="white-space: nowrap; text-overflow: ellipsis; overflow: hidden; display: block;" title="{{ product.name }}">{{ product.name }}</span>
+                        </td>
+                        
+                        <!-- Supplier Ref (filter_1) -->
+                        <td class="spreadsheet-cell" tabindex="0" data-field="ref">
+                            <span class="cell-display">{{ product.filter_1|default:'' }}</span>
+                        </td>
+                        
+                        <!-- Supplier Name -->
+                        <td class="spreadsheet-cell" tabindex="0" data-field="supplier">
+                            <span class="cell-display">{{ product.supplier|default:'' }}</span>
+                        </td>
+                        
+                        <!-- Cost -->
+                        <td class="spreadsheet-cell text-right" tabindex="0" data-field="cost" data-val="{{ product.cost|unlocalize }}">
+                            <span class="cell-display">${{ product.cost }}</span>
+                        </td>
+                        
+                        <!-- Price -->
+                        <td class="spreadsheet-cell text-right" tabindex="0" data-field="price" data-val="{{ product.price|unlocalize }}">
+                            <span class="cell-display">${{ product.price }}</span>
+                        </td>
+                        
+                        <!-- Calculated Margin % -->
+                        <td class="text-right" id="margin-{{ product.id }}" style="font-weight: 600; user-select: none;">
+                            <span class="margin-value">0%</span>
+                        </td>
+                        
+                        <!-- Stock -->
+                        <td class="spreadsheet-cell text-center" tabindex="0" data-field="stock">
+                            <span class="cell-display">{{ product.stock }}</span>
+                        </td>
+                        
+                        <!-- Active Status Checkbox -->
+                        <td class="text-center" style="padding: 0;">
+                            <input type="checkbox" class="grid-checkbox status-toggle" data-id="{{ product.id }}" {% if product.is_active %}checked{% endif %} onchange="toggleProductActive(this)">
+                        </td>
+                        
+                        <!-- Actions -->
+                        <td class="text-center">
+                            <button type="button" class="row-action-btn" title="Eliminar Producto" onclick="deleteProductSingle({{ product.id }})">🗑</button>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="12" class="text-center" style="padding: 40px; color: #9ca3af;">
+                            No se encontraron productos que coincidan con los filtros aplicados.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </form>
+    </div>
+
+    <!-- Pagination & Footer -->
+    {% if page_obj.has_other_pages %}
+    <div class="pagination-bar">
+        <div>
+            Mostrando <strong>{{ page_obj.start_index }}</strong> al <strong>{{ page_obj.end_index }}</strong> de <strong>{{ total_count }}</strong> productos
+        </div>
+        <div class="pagination-btns">
+            {% if page_obj.has_previous %}
+            <a href="?page=1{% if f_category %}&f_category={{ f_category }}{% endif %}{% if f_sku %}&f_sku={{ f_sku }}{% endif %}{% if f_name %}&f_name={{ f_name }}{% endif %}{% if f_ref %}&f_ref={{ f_ref }}{% endif %}{% if f_supplier %}&f_supplier={{ f_supplier }}{% endif %}{% if active_filter %}&active={{ active_filter }}{% endif %}{% if order_by %}&order={{ order_by }}{% endif %}" class="btn btn-outline btn-sm">« Primera</a>
+            <a href="?page={{ page_obj.previous_page_number }}{% if f_category %}&f_category={{ f_category }}{% endif %}{% if f_sku %}&f_sku={{ f_sku }}{% endif %}{% if f_name %}&f_name={{ f_name }}{% endif %}{% if f_ref %}&f_ref={{ f_ref }}{% endif %}{% if f_supplier %}&f_supplier={{ f_supplier }}{% endif %}{% if active_filter %}&active={{ active_filter }}{% endif %}{% if order_by %}&order={{ order_by }}{% endif %}" class="btn btn-outline btn-sm">‹ Anterior</a>
+            {% endif %}
+
+            <span style="display: flex; align-items: center; padding: 0 10px; font-weight: 600; color: #ff6b35;">
+                Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}
+            </span>
+
+            {% if page_obj.has_next %}
+            <a href="?page={{ page_obj.next_page_number }}{% if f_category %}&f_category={{ f_category }}{% endif %}{% if f_sku %}&f_sku={{ f_sku }}{% endif %}{% if f_name %}&f_name={{ f_name }}{% endif %}{% if f_ref %}&f_ref={{ f_ref }}{% endif %}{% if f_supplier %}&f_supplier={{ f_supplier }}{% endif %}{% if active_filter %}&active={{ active_filter }}{% endif %}{% if order_by %}&order={{ order_by }}{% endif %}" class="btn btn-outline btn-sm">Siguiente ›</a>
+            <a href="?page={{ page_obj.paginator.num_pages }}{% if f_category %}&f_category={{ f_category }}{% endif %}{% if f_sku %}&f_sku={{ f_sku }}{% endif %}{% if f_name %}&f_name={{ f_name }}{% endif %}{% if f_ref %}&f_ref={{ f_ref }}{% endif %}{% if f_supplier %}&f_supplier={{ f_supplier }}{% endif %}{% if active_filter %}&active={{ active_filter }}{% endif %}{% if order_by %}&order={{ order_by }}{% endif %}" class="btn btn-outline btn-sm">Última »</a>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Datalist for Suppliers suggestions -->
+<datalist id="suppliersDatalist">
+    {% for s in suppliers_list %}
+    <option value="{{ s.name }}"></option>
+    {% endfor %}
+</datalist>
+
+<script>
+    const CATEGORIES = [
+        {% for cat in category_options %}
+        { id: {{ cat.id }}, label: "{{ cat.label|escapejs }}" },
+        {% endfor %}
+    ];
+</script>
+
+<script>
+    let activeCell = null;
+    let originalCellValue = null;
+    let selectedProducts = new Set();
+    let selectAllDatabase = false;
+    let lastCheckedBox = null;
+
+    document.addEventListener("DOMContentLoaded", function () {
+        // 1. Initial calculation of profit margins
+        calculateAllMargins();
+
+        // 2. Setup cell selection & focus listeners
+        setupCellListeners();
+
+        // 3. Setup global key listener for spreadsheet navigation
+        document.getElementById("productGrid").addEventListener("keydown", handleTableKeyDown);
+    });
+
+    // Calculate margin: ((Price - Cost) / Price) * 100
+    function calculateMargin(cost, price) {
+        cost = parseFloat(cost) || 0;
+        price = parseFloat(price) || 0;
+        if (price <= 0) return 0;
+        return ((price - cost) / price) * 100;
+    }
+
+    function updateMarginDisplay(rowId, cost, price) {
+        const marginEl = document.getElementById("margin-" + rowId);
+        if (!marginEl) return;
+        
+        const margin = calculateMargin(cost, price);
+        const marginSpan = marginEl.querySelector(".margin-value");
+        marginSpan.textContent = margin.toFixed(1) + "%";
+        
+        // Remove old margin colors
+        marginSpan.className = "margin-value";
+        if (margin > 20) {
+            marginSpan.classList.add("margin-positive");
+        } else if (margin > 0) {
+            marginSpan.classList.add("margin-low");
+        } else {
+            marginSpan.classList.add("margin-negative");
+        }
+    }
+
+    function calculateAllMargins() {
+        document.querySelectorAll("tbody tr").forEach(row => {
+            const rowId = row.dataset.id;
+            if (!rowId) return;
+            const costCell = row.querySelector("[data-field='cost']");
+            const priceCell = row.querySelector("[data-field='price']");
+            
+            const cost = getCellRawValue(costCell);
+            const price = getCellRawValue(priceCell);
+            updateMarginDisplay(rowId, cost, price);
+        });
+    }
+
+    function getCellRawValue(cell) {
+        if (!cell) return 0;
+        if (cell.dataset.val !== undefined) {
+            return parseFloat(cell.dataset.val) || 0;
+        }
+        return parseFloat(cell.querySelector(".cell-display").textContent.replace('$', '').trim()) || 0;
+    }
+
+    // Debounced Filter inputs submission on typing
+    let filterDebounceTimer = null;
+    function handleFilterKey(event) {
+        if (event.key === "Enter") {
+            event.preventDefault();
+            event.target.form.submit();
+        } else {
+            clearTimeout(filterDebounceTimer);
+            filterDebounceTimer = setTimeout(() => {
+                event.target.form.submit();
+            }, 650);
+        }
+    }
+
+    // Interactive cells
+    function setupCellListeners() {
+        document.querySelectorAll(".spreadsheet-cell").forEach(cell => {
+            cell.addEventListener("dblclick", function () {
+                enterEditMode(cell);
+            });
+            cell.addEventListener("click", function () {
+                focusCell(cell);
+            });
+        });
+
+        // Click outside editing cell saves it
+        document.addEventListener("click", function (e) {
+            if (activeCell && !activeCell.contains(e.target) && !e.target.closest(".spreadsheet-cell")) {
+                exitEditMode(activeCell, true); // Save changes
+            }
+        });
+    }
+
+    function focusCell(cell) {
+        if (activeCell === cell) return;
+        if (activeCell && activeCell !== cell) {
+            exitEditMode(activeCell, true);
+        }
+        activeCell = cell;
+        cell.focus();
+    }
+
+    function enterEditMode(cell) {
+        if (cell.classList.contains("editing")) return;
+        
+        focusCell(cell);
+        cell.classList.add("editing");
+        
+        const field = cell.dataset.field;
+        const displaySpan = cell.querySelector(".cell-display");
+        let currentText = displaySpan ? displaySpan.textContent.trim() : "";
+        
+        let rawVal = cell.dataset.val !== undefined ? cell.dataset.val : currentText;
+        originalCellValue = rawVal;
+
+        cell.innerHTML = "";
+
+        if (field === "category_id") {
+            const select = document.createElement("select");
+            
+            const optNone = document.createElement("option");
+            optNone.value = "";
+            optNone.textContent = "Sin categoría";
+            select.appendChild(optNone);
+
+            CATEGORIES.forEach(cat => {
+                const opt = document.createElement("option");
+                opt.value = cat.id;
+                opt.textContent = cat.label;
+                if (String(cat.id) === String(rawVal)) {
+                    opt.selected = true;
+                }
+                select.appendChild(opt);
+            });
+            
+            cell.appendChild(select);
+            select.focus();
+            
+            select.addEventListener("blur", function () {
+                exitEditMode(cell, true);
+            });
+            select.addEventListener("change", function () {
+                exitEditMode(cell, true);
+            });
+            select.addEventListener("keydown", function (e) {
+                if (e.key === "Enter" || e.key === "Tab") {
+                    e.preventDefault();
+                    exitEditMode(cell, true);
+                    moveFocusDown();
+                } else if (e.key === "Escape") {
+                    e.preventDefault();
+                    exitEditMode(cell, false); // Cancel
+                }
+            });
+        } 
+        else if (field === "supplier") {
+            const input = document.createElement("input");
+            input.type = "text";
+            input.value = rawVal;
+            input.setAttribute("list", "suppliersDatalist");
+            cell.appendChild(input);
+            input.focus();
+            input.select();
+            
+            input.addEventListener("blur", function () {
+                exitEditMode(cell, true);
+            });
+            input.addEventListener("keydown", function (e) {
+                if (e.key === "Enter" || e.key === "Tab") {
+                    e.preventDefault();
+                    exitEditMode(cell, true);
+                    moveFocusDown();
+                } else if (e.key === "Escape") {
+                    e.preventDefault();
+                    exitEditMode(cell, false); // Cancel
+                }
+            });
+        }
+        else {
+            const input = document.createElement("input");
+            input.value = rawVal;
+            
+            if (field === "cost" || field === "price") {
+                input.type = "text";
+            } else if (field === "stock") {
+                input.type = "number";
+                input.min = 0;
+            } else {
+                input.type = "text";
+            }
+            
+            cell.appendChild(input);
+            input.focus();
+            input.select();
+            
+            input.addEventListener("blur", function () {
+                exitEditMode(cell, true);
+            });
+            input.addEventListener("keydown", function (e) {
+                if (e.key === "Enter" || e.key === "Tab") {
+                    e.preventDefault();
+                    exitEditMode(cell, true);
+                    moveFocusDown();
+                } else if (e.key === "Escape") {
+                    e.preventDefault();
+                    exitEditMode(cell, false); // Cancel
+                }
+            });
+        }
+    }
+
+    function exitEditMode(cell, save) {
+        if (!cell.classList.contains("editing")) return;
+        
+        cell.classList.remove("editing");
+        const field = cell.dataset.field;
+        const input = cell.querySelector("input, select");
+        let newVal = input ? input.value : "";
+        
+        cell.innerHTML = '<span class="cell-display"></span>';
+        const displaySpan = cell.querySelector(".cell-display");
+
+        if (save && newVal !== originalCellValue) {
+            displaySpan.textContent = "⏳";
+            saveCellChange(cell, field, newVal);
+        } else {
+            restoreCellDisplay(cell, field, originalCellValue);
+        }
+        
+        if (activeCell === cell) {
+            activeCell = null;
+            cell.focus();
+        }
+    }
+
+    function restoreCellDisplay(cell, field, val) {
+        const displaySpan = cell.querySelector(".cell-display");
+        cell.dataset.val = val;
+        
+        if (field === "category_id") {
+            const cat = CATEGORIES.find(c => String(c.id) === String(val));
+            displaySpan.textContent = cat ? cat.label.replace(/^-+/g, '').trim() : "Sin categoría";
+        } else if (field === "cost" || field === "price") {
+            const num = parseFloat(val) || 0;
+            displaySpan.textContent = "$" + num.toFixed(2);
+        } else {
+            displaySpan.textContent = val;
+        }
+    }
+
+    function saveCellChange(cell, field, value) {
+        const row = cell.closest("tr");
+        const productId = row.dataset.id;
+        
+        setSyncState("saving", "Guardando cambios...");
+
+        fetch("{% url 'admin_product_grid_update_cell' %}", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "X-CSRFToken": "{{ csrf_token }}"
+            },
+            body: JSON.stringify({
+                product_id: productId,
+                field: field,
+                value: value
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === "success") {
+                setSyncState("saved", "Cambios guardados");
+                
+                let finalVal = value;
+                if (field === "cost" || field === "price") {
+                    finalVal = String(value).replace(',', '.');
+                }
+                restoreCellDisplay(cell, field, finalVal);
+                
+                const costCell = row.querySelector("[data-field='cost']");
+                const priceCell = row.querySelector("[data-field='price']");
+                updateMarginDisplay(productId, getCellRawValue(costCell), getCellRawValue(priceCell));
+
+                cell.classList.add("flash-success");
+                setTimeout(() => cell.classList.remove("flash-success"), 1000);
+            } else {
+                throw new Error(data.message || "Error en el servidor");
+            }
+        })
+        .catch(err => {
+            setSyncState("error", err.message || "Error al conectar con el servidor");
+            restoreCellDisplay(cell, field, originalCellValue);
+            
+            cell.classList.add("flash-error");
+            setTimeout(() => cell.classList.remove("flash-error"), 1500);
+            alert("Error al guardar: " + err.message);
+        });
+    }
+
+    function setSyncState(state, message) {
+        const statusEl = document.getElementById("syncStatus");
+        if (!statusEl) return;
+        
+        statusEl.className = "autosave-status";
+        const iconEl = statusEl.querySelector(".status-icon");
+        const textEl = statusEl.querySelector(".status-text");
+        
+        textEl.textContent = message;
+
+        if (state === "saved") {
+            statusEl.classList.add("status-saved");
+            iconEl.textContent = "✓";
+        } else if (state === "saving") {
+            statusEl.classList.add("status-saving");
+            iconEl.textContent = "⏳";
+        } else if (state === "error") {
+            statusEl.classList.add("status-error");
+            iconEl.textContent = "⚠";
+        }
+    }
+
+    // Keyboard Spreadsheet Navigation
+    function handleTableKeyDown(e) {
+        if (!activeCell) {
+            const focused = document.activeElement;
+            if (focused && focused.classList.contains("spreadsheet-cell")) {
+                if (e.key === "ArrowUp") {
+                    e.preventDefault();
+                    moveFocus(focused, "up");
+                } else if (e.key === "ArrowDown") {
+                    e.preventDefault();
+                    moveFocus(focused, "down");
+                } else if (e.key === "ArrowLeft") {
+                    e.preventDefault();
+                    moveFocus(focused, "left");
+                } else if (e.key === "ArrowRight") {
+                    e.preventDefault();
+                    moveFocus(focused, "right");
+                } else if (e.key === "Enter") {
+                    e.preventDefault();
+                    enterEditMode(focused);
+                }
+            }
+        }
+    }
+
+    function moveFocus(cell, direction) {
+        const row = cell.closest("tr");
+        const cells = Array.from(row.querySelectorAll(".spreadsheet-cell"));
+        const cellIdx = cells.indexOf(cell);
+        
+        if (direction === "left" && cellIdx > 0) {
+            cells[cellIdx - 1].focus();
+        } else if (direction === "right" && cellIdx < cells.length - 1) {
+            cells[cellIdx + 1].focus();
+        } else if (direction === "up") {
+            const prevRow = row.previousElementSibling;
+            if (prevRow && !prevRow.classList.contains("filter-row")) {
+                const targetCell = prevRow.querySelectorAll(".spreadsheet-cell")[cellIdx];
+                if (targetCell) targetCell.focus();
+            }
+        } else if (direction === "down") {
+            const nextRow = row.nextElementSibling;
+            if (nextRow) {
+                const targetCell = nextRow.querySelectorAll(".spreadsheet-cell")[cellIdx];
+                if (targetCell) targetCell.focus();
+            }
+        }
+    }
+
+    function moveFocusDown() {
+        if (activeCell) {
+            const current = activeCell;
+            setTimeout(() => {
+                moveFocus(current, "down");
+            }, 50);
+        }
+    }
+
+    // Bulk selection logic
+    function handleRowCheckboxClick(checkbox, event) {
+        const row = checkbox.closest("tr");
+        const pid = checkbox.dataset.id;
+        
+        if (checkbox.checked) {
+            selectedProducts.add(pid);
+            row.classList.add("selected");
+        } else {
+            selectedProducts.delete(pid);
+            row.classList.remove("selected");
+            selectAllDatabase = false;
+        }
+
+        if (event.shiftKey && lastCheckedBox && lastCheckedBox !== checkbox) {
+            let inRange = false;
+            const checkboxes = Array.from(document.querySelectorAll(".row-select-checkbox"));
+            const startIdx = checkboxes.indexOf(lastCheckedBox);
+            const endIdx = checkboxes.indexOf(checkbox);
+            const low = Math.min(startIdx, endIdx);
+            const high = Math.max(startIdx, endIdx);
+            
+            for (let i = low; i <= high; i++) {
+                const cb = checkboxes[i];
+                cb.checked = lastCheckedBox.checked;
+                const r = cb.closest("tr");
+                const id = cb.dataset.id;
+                if (cb.checked) {
+                    selectedProducts.add(id);
+                    r.classList.add("selected");
+                } else {
+                    selectedProducts.delete(id);
+                    r.classList.remove("selected");
+                }
+            }
+        }
+
+        lastCheckedBox = checkbox;
+        updateSelectedCounter();
+    }
+
+    function toggleSelectAllPage(headerCheckbox) {
+        const checkboxes = document.querySelectorAll(".row-select-checkbox");
+        checkboxes.forEach(cb => {
+            cb.checked = headerCheckbox.checked;
+            const row = cb.closest("tr");
+            const pid = cb.dataset.id;
+            if (headerCheckbox.checked) {
+                selectedProducts.add(pid);
+                row.classList.add("selected");
+            } else {
+                selectedProducts.delete(pid);
+                row.classList.remove("selected");
+            }
+        });
+        
+        selectAllDatabase = false;
+        updateSelectedCounter();
+
+        const banner = document.getElementById("bulkSelectAllBanner");
+        if (headerCheckbox.checked && {{ total_count }} > checkboxes.length) {
+            document.getElementById("bannerPageCount").textContent = checkboxes.length;
+            banner.style.display = "flex";
+        } else {
+            banner.style.display = "none";
+        }
+    }
+
+    function selectAllDatabaseProducts() {
+        selectAllDatabase = true;
+        document.getElementById("selectedCount").textContent = "{{ total_count }}";
+        const btn = document.getElementById("btnSelectAllDatabase");
+        btn.disabled = true;
+        btn.textContent = "✓ Todos los {{ total_count }} productos seleccionados";
+    }
+
+    function clearAllSelections() {
+        selectedProducts.clear();
+        selectAllDatabase = false;
+        
+        document.getElementById("selectAllCheckbox").checked = false;
+        document.querySelectorAll(".row-select-checkbox").forEach(cb => {
+            cb.checked = false;
+            cb.closest("tr").classList.remove("selected");
+        });
+        
+        document.getElementById("bulkSelectAllBanner").style.display = "none";
+        const btn = document.getElementById("btnSelectAllDatabase");
+        btn.disabled = false;
+        btn.textContent = "Seleccionar los {{ total_count }} productos que coinciden con los filtros";
+        
+        updateSelectedCounter();
+    }
+
+    function updateSelectedCounter() {
+        document.getElementById("selectedCount").textContent = selectedProducts.size;
+    }
+
+    // Apply bulk action
+    function applyBulkAction(action, targetFieldExtra) {
+        if (!selectAllDatabase && selectedProducts.size === 0) {
+            alert("Por favor, selecciona al menos un producto para aplicar la acción masiva.");
+            return;
+        }
+
+        let payload = {
+            product_ids: Array.from(selectedProducts),
+            action: action
+        };
+
+        if (action === "markup") {
+            const pct = document.getElementById("bulkMarkupPct").value;
+            if (!pct) {
+                alert("Por favor, especifica un porcentaje de recargo.");
+                return;
+            }
+            payload.target_field = targetFieldExtra;
+            payload.percentage = pct;
+        } 
+        else if (action === "category") {
+            const catId = document.getElementById("bulkCategorySelect").value;
+            if (catId === "") {
+                alert("Por favor, selecciona una categoría.");
+                return;
+            }
+            payload.category_id = catId === "clear" ? "" : catId;
+        } 
+        else if (action === "supplier") {
+            const supplier = document.getElementById("bulkSupplierInput").value;
+            payload.supplier = supplier;
+        } 
+        else if (action === "status") {
+            payload.is_active = targetFieldExtra;
+        }
+        else if (action === "delete") {
+            const count = selectAllDatabase ? "{{ total_count }}" : selectedProducts.size;
+            if (!confirm(`¿Estás seguro de que deseas ELIMINAR definitivamente los ${count} productos seleccionados? Esta acción es irreversible.`)) {
+                return;
+            }
+        }
+
+        if (selectAllDatabase) {
+            payload.product_ids = "all_filtered";
+            payload.filters = {
+                f_category: "{{ f_category }}",
+                f_sku: "{{ f_sku }}",
+                f_name: "{{ f_name }}",
+                f_ref: "{{ f_ref }}",
+                f_supplier: "{{ f_supplier }}",
+                active: "{{ active_filter }}"
+            };
+        }
+
+        setSyncState("saving", "Aplicando cambios masivos...");
+
+        fetch("{% url 'admin_product_grid_bulk_update' %}", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "X-CSRFToken": "{{ csrf_token }}"
+            },
+            body: JSON.stringify(payload)
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === "success") {
+                setSyncState("saved", "Cambios masivos aplicados");
+                alert(`Acción completada con éxito. Se actualizaron/eliminaron ${data.updated_count} productos.`);
+                window.location.reload();
+            } else {
+                throw new Error(data.message || "Error al aplicar cambios en lote");
+            }
+        })
+        .catch(err => {
+            setSyncState("error", err.message || "Error al aplicar cambios masivos");
+            alert("Error en acción masiva: " + err.message);
+        });
+    }
+
+    // Delete single product
+    function deleteProductSingle(productId) {
+        if (!confirm("¿Estás seguro de que deseas eliminar definitivamente este producto?")) {
+            return;
+        }
+        
+        setSyncState("saving", "Eliminando producto...");
+        
+        fetch("{% url 'admin_product_grid_bulk_update' %}", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "X-CSRFToken": "{{ csrf_token }}"
+            },
+            body: JSON.stringify({
+                product_ids: [productId],
+                action: "delete"
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === "success") {
+                setSyncState("saved", "Producto eliminado");
+                
+                const row = document.getElementById("row-" + productId);
+                if (row) {
+                    row.style.transition = "opacity 0.5s ease";
+                    row.style.opacity = 0;
+                    setTimeout(() => {
+                        row.remove();
+                        updateSelectedCounter();
+                    }, 500);
+                }
+            } else {
+                throw new Error(data.message || "Error al eliminar");
+            }
+        })
+        .catch(err => {
+            setSyncState("error", err.message || "Error al eliminar");
+            alert("Error al eliminar: " + err.message);
+        });
+    }
+
+    // Quick toggle active checkbox in cell
+    function toggleProductActive(checkbox) {
+        const productId = checkbox.dataset.id;
+        const isActive = checkbox.checked;
+        
+        setSyncState("saving", "Actualizando estado...");
+        
+        fetch("{% url 'admin_product_grid_update_cell' %}", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "X-CSRFToken": "{{ csrf_token }}"
+            },
+            body: JSON.stringify({
+                product_id: productId,
+                field: "is_active",
+                value: isActive
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === "success") {
+                setSyncState("saved", "Estado actualizado");
+                
+                const row = document.getElementById("row-" + productId);
+                if (row) {
+                    row.style.backgroundColor = isActive ? "rgba(16, 185, 129, 0.05)" : "rgba(239, 68, 68, 0.05)";
+                    setTimeout(() => {
+                        row.style.backgroundColor = "";
+                    }, 800);
+                }
+            } else {
+                throw new Error(data.message || "Error al actualizar estado");
+            }
+        })
+        .catch(err => {
+            setSyncState("error", err.message || "Error al actualizar estado");
+            checkbox.checked = !isActive;
+            alert("Error al actualizar estado: " + err.message);
+        });
+    }
+</script>
+{% endblock %}
