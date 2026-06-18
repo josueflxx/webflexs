@@ -688,14 +688,20 @@
                 <div style="width: 1px; height: 20px; background: #374151;"></div>
 
                 <!-- Category Update -->
-                <div class="bulk-action-item">
-                    <select id="bulkCategorySelect" class="form-select" style="width: 160px; height: 30px; font-size: 12px; padding: 0 8px; background: #0b0f19; border-color: #374151;">
-                        <option value="">Categoría...</option>
-                        <option value="clear">Ninguna (Sin categoría)</option>
-                        {% for cat in category_options %}
-                        <option value="{{ cat.id }}">{{ cat.label }}</option>
-                        {% endfor %}
-                    </select>
+                <div class="bulk-action-item" style="position: relative;">
+                    <!-- Hidden input to store selected category ID -->
+                    <input type="hidden" id="bulkCategorySelect" value="">
+                    
+                    <div class="custom-select-wrapper" style="position: relative; width: 180px;">
+                        <input type="text" id="bulkCategorySearchInput" placeholder="Categoría..." class="filter-input" style="width: 100%; height: 30px; font-size: 12px; padding: 0 34px 0 10px; background: #0b0f19; border: 1px solid #374151; border-radius: 6px; color: #f1f5f9; cursor: pointer; box-sizing: border-box;" autocomplete="off" onfocus="showBulkCategoryDropdown()" onclick="showBulkCategoryDropdown(event)">
+                        <span id="bulkCategoryClear" style="position: absolute; right: 20px; top: 50%; transform: translateY(-50%); font-size: 11px; color: #f87171; cursor: pointer; display: none; user-select: none;" onclick="clearBulkCategory(event)">✕</span>
+                        <span id="bulkCategoryArrow" style="position: absolute; right: 8px; top: 50%; transform: translateY(-50%); font-size: 8px; color: #9ca3af; pointer-events: none; user-select: none; transition: transform 0.2s;">▼</span>
+                    </div>
+                    
+                    <div id="bulkCategoryDropdown" class="autocomplete-dropdown" style="display: none; position: absolute; top: 100%; left: 0; width: 320px; max-height: 250px; overflow-y: auto; background: #0b0f19; border: 2px solid #ff6b35; border-radius: 6px; box-shadow: 0 10px 20px rgba(0, 0, 0, 0.5); z-index: 999; margin-top: 4px; scrollbar-width: thin;">
+                        <!-- Options rendered dynamically -->
+                    </div>
+                    
                     <button type="button" class="btn btn-outline btn-sm" style="height: 30px; line-height: 1;" onclick="applyBulkAction('category')">Asignar Categ.</button>
                     <button type="button" class="btn btn-info btn-sm" style="height: 30px; line-height: 1; background: rgba(59, 130, 246, 0.2); border-color: rgba(59, 130, 246, 0.4); color: #60a5fa;" onclick="toggleCategoriesSidebar(true)">📂 Panel Lateral</button>
                 </div>
@@ -957,6 +963,9 @@
 
         // 5. Initial render of the Categories Sidebar tree
         renderSidebarCategories();
+
+        // 6. Setup custom bulk category dropdown
+        setupBulkCategorySelectCustom();
     });
 
     // Helper functions for intelligent category suggestions
@@ -2020,6 +2029,185 @@
             .replace(/>/g, "&gt;")
             .replace(/"/g, "&quot;")
             .replace(/'/g, "&#039;");
+    }
+
+    // --- Custom Bulk Category Dropdown Logic ---
+    let bulkHighlightedIndex = -1;
+
+    function showBulkCategoryDropdown(e) {
+        if (e) e.stopPropagation();
+        const dropdown = document.getElementById("bulkCategoryDropdown");
+        if (dropdown) {
+            renderBulkCategoryOptions();
+        }
+    }
+
+    function renderBulkCategoryOptions() {
+        const dropdown = document.getElementById("bulkCategoryDropdown");
+        if (!dropdown) return;
+
+        const input = document.getElementById("bulkCategorySearchInput");
+        const query = input.value.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        dropdown.innerHTML = "";
+        bulkHighlightedIndex = -1;
+
+        // 1. None Option
+        if (!query || "ninguna sin categoria".includes(query)) {
+            const noneOpt = document.createElement("div");
+            noneOpt.className = "autocomplete-option none-option";
+            noneOpt.textContent = "Ninguna (Sin categoría)";
+            noneOpt.addEventListener("mousedown", function (e) {
+                e.preventDefault();
+                selectBulkCategory("clear", "Ninguna (Sin categoría)");
+            });
+            dropdown.appendChild(noneOpt);
+        }
+
+        // 2. Filter and render category options
+        const filtered = CATEGORIES.filter(cat => {
+            const cleanLabel = cat.label.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+            return cleanLabel.includes(query);
+        });
+
+        filtered.forEach(cat => {
+            const opt = document.createElement("div");
+            opt.className = "autocomplete-option";
+            
+            // Premium Hierarchical Styling: indent with spaces and render tree branch symbol
+            opt.style.paddingLeft = `${cat.depth * 16 + 10}px`;
+            
+            const prefix = cat.depth > 0 ? "↳ " : "";
+            opt.textContent = prefix + cat.name;
+
+            // Highlight search matching text
+            if (query) {
+                const index = cat.name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").indexOf(query);
+                if (index >= 0) {
+                    const before = cat.name.substring(0, index);
+                    const match = cat.name.substring(index, index + query.length);
+                    const after = cat.name.substring(index + query.length);
+                    opt.innerHTML = `${prefix}${escapeHtml(before)}<mark style="background: #ff6b35; color: white; border-radius: 2px; padding: 0 2px;">${escapeHtml(match)}</mark>${escapeHtml(after)}`;
+                }
+            }
+
+            opt.addEventListener("mousedown", function (e) {
+                e.preventDefault();
+                selectBulkCategory(cat.id, cat.name);
+            });
+
+            dropdown.appendChild(opt);
+        });
+
+        if (dropdown.children.length > 0) {
+            dropdown.style.display = "block";
+            document.getElementById("bulkCategoryArrow").style.transform = "translateY(-50%) rotate(180deg)";
+        } else {
+            dropdown.style.display = "none";
+            document.getElementById("bulkCategoryArrow").style.transform = "translateY(-50%)";
+        }
+    }
+
+    function selectBulkCategory(id, name) {
+        const hiddenInput = document.getElementById("bulkCategorySelect");
+        const searchInput = document.getElementById("bulkCategorySearchInput");
+        const clearBtn = document.getElementById("bulkCategoryClear");
+        const arrow = document.getElementById("bulkCategoryArrow");
+        const dropdown = document.getElementById("bulkCategoryDropdown");
+
+        hiddenInput.value = id;
+        searchInput.value = name;
+        clearBtn.style.display = "block";
+        dropdown.style.display = "none";
+        arrow.style.transform = "translateY(-50%)";
+    }
+
+    function clearBulkCategory(e) {
+        if (e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+        const hiddenInput = document.getElementById("bulkCategorySelect");
+        const searchInput = document.getElementById("bulkCategorySearchInput");
+        const clearBtn = document.getElementById("bulkCategoryClear");
+        const dropdown = document.getElementById("bulkCategoryDropdown");
+        const arrow = document.getElementById("bulkCategoryArrow");
+
+        hiddenInput.value = "";
+        searchInput.value = "";
+        clearBtn.style.display = "none";
+        dropdown.style.display = "none";
+        arrow.style.transform = "translateY(-50%)";
+    }
+
+    function setupBulkCategorySelectCustom() {
+        const input = document.getElementById("bulkCategorySearchInput");
+        const dropdown = document.getElementById("bulkCategoryDropdown");
+        const arrow = document.getElementById("bulkCategoryArrow");
+        if (!input || !dropdown) return;
+
+        input.addEventListener("input", function () {
+            renderBulkCategoryOptions();
+        });
+
+        input.addEventListener("blur", function () {
+            // Close with slight delay to permit clicks on option items
+            setTimeout(() => {
+                dropdown.style.display = "none";
+                arrow.style.transform = "translateY(-50%)";
+            }, 200);
+        });
+
+        input.addEventListener("keydown", function (e) {
+            const opts = dropdown.querySelectorAll(".autocomplete-option");
+            
+            if (e.key === "ArrowDown") {
+                e.preventDefault();
+                if (dropdown.style.display === "none") {
+                    renderBulkCategoryOptions();
+                }
+                let next = bulkHighlightedIndex + 1;
+                if (next >= opts.length) next = 0;
+                highlightBulkOption(next);
+            }
+            else if (e.key === "ArrowUp") {
+                e.preventDefault();
+                let prev = bulkHighlightedIndex - 1;
+                if (prev < 0) prev = opts.length - 1;
+                highlightBulkOption(prev);
+            }
+            else if (e.key === "Enter") {
+                e.preventDefault();
+                if (bulkHighlightedIndex >= 0 && bulkHighlightedIndex < opts.length) {
+                    opts[bulkHighlightedIndex].dispatchEvent(new MouseEvent("mousedown"));
+                } else if (opts.length > 0) {
+                    opts[0].dispatchEvent(new MouseEvent("mousedown"));
+                }
+            }
+            else if (e.key === "Escape") {
+                e.preventDefault();
+                dropdown.style.display = "none";
+                arrow.style.transform = "translateY(-50%)";
+            }
+        });
+
+        function highlightBulkOption(index) {
+            const opts = dropdown.querySelectorAll(".autocomplete-option");
+            opts.forEach(o => o.classList.remove("highlighted"));
+            
+            if (index >= 0 && index < opts.length) {
+                opts[index].classList.add("highlighted");
+                opts[index].scrollIntoView({ block: "nearest" });
+                bulkHighlightedIndex = index;
+            }
+        }
+
+        // Global click listener to close dropdown when clicking outside
+        document.addEventListener("click", function (e) {
+            if (!input.contains(e.target) && !dropdown.contains(e.target)) {
+                dropdown.style.display = "none";
+                arrow.style.transform = "translateY(-50%)";
+            }
+        });
     }
 </script>
 {% endblock %}
