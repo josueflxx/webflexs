@@ -926,11 +926,20 @@
             <input type="text" id="sidebarNewCatName" placeholder="Ej: ABRAZADERA NEUMATICA" class="filter-input" style="width: 100%; height: 30px; font-size: 12px; padding: 0 8px; background: #0b0f19;">
         </div>
         
-        <div style="margin-bottom: 12px;">
+        <div style="margin-bottom: 12px; position: relative;">
             <label style="display: block; font-size: 11px; color: #94a3b8; margin-bottom: 4px;">Categoría Padre (Subcategoría de...):</label>
-            <select id="sidebarNewCatParent" class="filter-select" style="width: 100%; height: 30px; font-size: 12px; padding: 0 8px; background: #0b0f19; border-color: #374151;">
-                <option value="">Ninguna (Raíz)</option>
-            </select>
+            <!-- Hidden input to store selected category ID -->
+            <input type="hidden" id="sidebarNewCatParent" value="">
+            
+            <div class="custom-select-wrapper" style="position: relative; width: 100%;">
+                <input type="text" id="sidebarNewCatParentSearchInput" placeholder="Ninguna (Raíz)..." class="filter-input" style="width: 100%; height: 30px; font-size: 12px; padding: 0 34px 0 10px; background: #0b0f19; border: 1px solid #374151; border-radius: 6px; color: #f1f5f9; cursor: pointer; box-sizing: border-box;" autocomplete="off" onfocus="showSidebarParentDropdown()" onclick="showSidebarParentDropdown(event)">
+                <span id="sidebarParentClear" style="position: absolute; right: 20px; top: 50%; transform: translateY(-50%); font-size: 11px; color: #f87171; cursor: pointer; display: none; user-select: none;" onclick="clearSidebarParentCategory(event)">✕</span>
+                <span id="sidebarParentArrow" style="position: absolute; right: 8px; top: 50%; transform: translateY(-50%); font-size: 8px; color: #9ca3af; pointer-events: none; user-select: none; transition: transform 0.2s;">▼</span>
+            </div>
+            
+            <div id="sidebarParentDropdown" class="autocomplete-dropdown" style="display: none; position: absolute; top: 100%; left: 0; width: 100%; max-height: 200px; overflow-y: auto; background: #0b0f19; border: 2px solid #ff6b35; border-radius: 6px; box-shadow: 0 10px 20px rgba(0, 0, 0, 0.5); z-index: 1060; margin-top: 4px; scrollbar-width: thin;">
+                <!-- Options rendered dynamically -->
+            </div>
         </div>
         
         <div style="display: flex; justify-content: flex-end; gap: 8px;">
@@ -994,6 +1003,9 @@
 
         // 6. Setup custom bulk category dropdown
         setupBulkCategorySelectCustom();
+
+        // 7. Setup custom category parent dropdown in creation form
+        setupSidebarParentCategorySelect();
     });
 
     // Helper functions for intelligent category suggestions
@@ -2271,13 +2283,13 @@
             const isHidden = form.style.display === "none";
             form.style.display = isHidden ? "block" : "none";
             if (isHidden) {
-                populateParentCategoryDropdown();
+                clearSidebarParentCategory();
                 document.getElementById("sidebarNewCatName").value = "";
                 document.getElementById("sidebarNewCatName").focus();
             }
         } else if (show) {
             form.style.display = "block";
-            populateParentCategoryDropdown();
+            clearSidebarParentCategory();
             document.getElementById("sidebarNewCatName").value = "";
             document.getElementById("sidebarNewCatName").focus();
         } else {
@@ -2285,21 +2297,186 @@
         }
     }
 
-    function populateParentCategoryDropdown() {
-        const parentSelect = document.getElementById("sidebarNewCatParent");
-        if (!parentSelect) return;
-        
-        const currentValue = parentSelect.value;
-        parentSelect.innerHTML = '<option value="">Ninguna (Raíz)</option>';
-        
-        CATEGORIES.forEach(cat => {
-            const opt = document.createElement("option");
-            opt.value = cat.id;
-            opt.textContent = cat.label;
-            parentSelect.appendChild(opt);
+    // --- Custom Sidebar Parent Category Dropdown Logic ---
+    let sidebarParentHighlightedIndex = -1;
+
+    function showSidebarParentDropdown(e) {
+        if (e) e.stopPropagation();
+        const dropdown = document.getElementById("sidebarParentDropdown");
+        if (dropdown) {
+            renderSidebarParentOptions();
+        }
+    }
+
+    function renderSidebarParentOptions() {
+        const dropdown = document.getElementById("sidebarParentDropdown");
+        if (!dropdown) return;
+
+        const input = document.getElementById("sidebarNewCatParentSearchInput");
+        const query = input.value.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        dropdown.innerHTML = "";
+        sidebarParentHighlightedIndex = -1;
+
+        // 1. None Option (Raíz)
+        if (!query || "ninguna raiz".includes(query)) {
+            const noneOpt = document.createElement("div");
+            noneOpt.className = "autocomplete-option none-option";
+            noneOpt.textContent = "Ninguna (Raíz)";
+            noneOpt.addEventListener("mousedown", function (e) {
+                e.preventDefault();
+                selectSidebarParentCategory("", "Ninguna (Raíz)");
+            });
+            dropdown.appendChild(noneOpt);
+        }
+
+        // 2. Filter and render category options
+        const filtered = CATEGORIES.filter(cat => {
+            const cleanLabel = cat.label.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+            return cleanLabel.includes(query);
         });
+
+        filtered.forEach(cat => {
+            const opt = document.createElement("div");
+            opt.className = "autocomplete-option";
+            opt.style.paddingLeft = `${cat.depth * 16 + 10}px`;
+            
+            const prefix = cat.depth > 0 ? "↳ " : "";
+            opt.textContent = prefix + cat.name;
+
+            // Highlight search matching text
+            if (query) {
+                const index = cat.name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").indexOf(query);
+                if (index >= 0) {
+                    const before = cat.name.substring(0, index);
+                    const match = cat.name.substring(index, index + query.length);
+                    const after = cat.name.substring(index + query.length);
+                    opt.innerHTML = `${prefix}${escapeHtml(before)}<mark style="background: #ff6b35; color: white; border-radius: 2px; padding: 0 2px;">${escapeHtml(match)}</mark>${escapeHtml(after)}`;
+                }
+            }
+
+            opt.addEventListener("mousedown", function (e) {
+                e.preventDefault();
+                selectSidebarParentCategory(cat.id, cat.name);
+            });
+
+            dropdown.appendChild(opt);
+        });
+
+        if (dropdown.children.length > 0) {
+            dropdown.style.display = "block";
+            document.getElementById("sidebarParentArrow").style.transform = "translateY(-50%) rotate(180deg)";
+        } else {
+            dropdown.style.display = "none";
+            document.getElementById("sidebarParentArrow").style.transform = "translateY(-50%)";
+        }
+    }
+
+    function selectSidebarParentCategory(id, name) {
+        const hiddenInput = document.getElementById("sidebarNewCatParent");
+        const searchInput = document.getElementById("sidebarNewCatParentSearchInput");
+        const clearBtn = document.getElementById("sidebarParentClear");
+        const arrow = document.getElementById("sidebarParentArrow");
+        const dropdown = document.getElementById("sidebarParentDropdown");
+
+        hiddenInput.value = id;
+        searchInput.value = name;
         
-        parentSelect.value = currentValue;
+        if (id !== "") {
+            clearBtn.style.display = "block";
+        } else {
+            clearBtn.style.display = "none";
+        }
+        dropdown.style.display = "none";
+        arrow.style.transform = "translateY(-50%)";
+    }
+
+    function clearSidebarParentCategory(e) {
+        if (e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+        const hiddenInput = document.getElementById("sidebarNewCatParent");
+        const searchInput = document.getElementById("sidebarNewCatParentSearchInput");
+        const clearBtn = document.getElementById("sidebarParentClear");
+        const dropdown = document.getElementById("sidebarParentDropdown");
+        const arrow = document.getElementById("sidebarParentArrow");
+
+        hiddenInput.value = "";
+        searchInput.value = "";
+        clearBtn.style.display = "none";
+        dropdown.style.display = "none";
+        arrow.style.transform = "translateY(-50%)";
+    }
+
+    function setupSidebarParentCategorySelect() {
+        const input = document.getElementById("sidebarNewCatParentSearchInput");
+        const dropdown = document.getElementById("sidebarParentDropdown");
+        const arrow = document.getElementById("sidebarParentArrow");
+        if (!input || !dropdown) return;
+
+        input.addEventListener("input", function () {
+            renderSidebarParentOptions();
+        });
+
+        input.addEventListener("blur", function () {
+            // Close with slight delay to permit clicks on option items
+            setTimeout(() => {
+                dropdown.style.display = "none";
+                arrow.style.transform = "translateY(-50%)";
+            }, 200);
+        });
+
+        input.addEventListener("keydown", function (e) {
+            const opts = dropdown.querySelectorAll(".autocomplete-option");
+            
+            if (e.key === "ArrowDown") {
+                e.preventDefault();
+                if (dropdown.style.display === "none") {
+                    renderSidebarParentOptions();
+                }
+                let next = sidebarParentHighlightedIndex + 1;
+                if (next >= opts.length) next = 0;
+                highlightParentOption(next);
+            }
+            else if (e.key === "ArrowUp") {
+                e.preventDefault();
+                let prev = sidebarParentHighlightedIndex - 1;
+                if (prev < 0) prev = opts.length - 1;
+                highlightParentOption(prev);
+            }
+            else if (e.key === "Enter") {
+                e.preventDefault();
+                if (sidebarParentHighlightedIndex >= 0 && sidebarParentHighlightedIndex < opts.length) {
+                    opts[sidebarParentHighlightedIndex].dispatchEvent(new MouseEvent("mousedown"));
+                } else if (opts.length > 0) {
+                    opts[0].dispatchEvent(new MouseEvent("mousedown"));
+                }
+            }
+            else if (e.key === "Escape") {
+                e.preventDefault();
+                dropdown.style.display = "none";
+                arrow.style.transform = "translateY(-50%)";
+            }
+        });
+
+        function highlightParentOption(index) {
+            const opts = dropdown.querySelectorAll(".autocomplete-option");
+            opts.forEach(o => o.classList.remove("highlighted"));
+            
+            if (index >= 0 && index < opts.length) {
+                opts[index].classList.add("highlighted");
+                opts[index].scrollIntoView({ block: "nearest" });
+                sidebarParentHighlightedIndex = index;
+            }
+        }
+
+        // Global click listener to close dropdown when clicking outside
+        document.addEventListener("click", function (e) {
+            if (!input.contains(e.target) && !dropdown.contains(e.target)) {
+                dropdown.style.display = "none";
+                arrow.style.transform = "translateY(-50%)";
+            }
+        });
     }
 
     function submitSidebarNewCat() {
