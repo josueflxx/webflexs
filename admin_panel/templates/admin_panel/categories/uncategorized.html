@@ -442,42 +442,41 @@
         gap: 10px;
     }
 
-    /* Tabla */
-    .table-responsive {
-        max-height: 68vh;
-        overflow-y: auto;
-        overflow-x: auto;
+    /* Shift browser scrollbar to left edge of screen */
+    html {
         direction: rtl;
         scrollbar-width: thin;
-        scrollbar-color: rgba(255, 107, 53, 0.4) rgba(255, 255, 255, 0.02);
+        scrollbar-color: rgba(255, 107, 53, 0.5) #0b0f19;
     }
-    .table-responsive::-webkit-scrollbar {
-        width: 8px;
-        height: 8px;
+    html::-webkit-scrollbar {
+        width: 10px;
     }
-    .table-responsive::-webkit-scrollbar-track {
-        background: rgba(255, 255, 255, 0.02);
-        border-radius: 4px;
+    html::-webkit-scrollbar-track {
+        background: #0b0f19;
     }
-    .table-responsive::-webkit-scrollbar-thumb {
+    html::-webkit-scrollbar-thumb {
         background: rgba(255, 107, 53, 0.4);
-        border-radius: 4px;
-        transition: background 0.2s;
+        border-radius: 5px;
+        transition: background-color 0.2s;
     }
-    .table-responsive::-webkit-scrollbar-thumb:hover {
+    html::-webkit-scrollbar-thumb:hover {
         background: #ff6b35;
+    }
+    body {
+        direction: ltr;
+    }
+
+    /* Tabla */
+    .table-responsive {
+        overflow-x: auto;
     }
     .products-table {
         width: 100%;
         border-collapse: collapse;
         text-align: left;
-        direction: ltr;
     }
     .products-table th {
-        position: sticky;
-        top: 0;
-        z-index: 10;
-        background: #0f172a;
+        background: rgba(255, 255, 255, 0.03);
         padding: 12px 16px;
         font-weight: 700;
         color: #94a3b8;
