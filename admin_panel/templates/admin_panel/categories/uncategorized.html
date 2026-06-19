@@ -155,9 +155,6 @@
         {% endif %}
 </div>
 
-<!-- Alphabet Fast Scrollbar -->
-<div id="alphabet-scrollbar" class="alphabet-scrollbar"></div>
-
 <!-- Categories Sidebar -->
 <div id="categoriesSidebar" class="categories-sidebar">
     <div class="sidebar-header">
@@ -447,15 +444,40 @@
 
     /* Tabla */
     .table-responsive {
+        max-height: 68vh;
+        overflow-y: auto;
         overflow-x: auto;
+        direction: rtl;
+        scrollbar-width: thin;
+        scrollbar-color: rgba(255, 107, 53, 0.4) rgba(255, 255, 255, 0.02);
+    }
+    .table-responsive::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+    }
+    .table-responsive::-webkit-scrollbar-track {
+        background: rgba(255, 255, 255, 0.02);
+        border-radius: 4px;
+    }
+    .table-responsive::-webkit-scrollbar-thumb {
+        background: rgba(255, 107, 53, 0.4);
+        border-radius: 4px;
+        transition: background 0.2s;
+    }
+    .table-responsive::-webkit-scrollbar-thumb:hover {
+        background: #ff6b35;
     }
     .products-table {
         width: 100%;
         border-collapse: collapse;
         text-align: left;
+        direction: ltr;
     }
     .products-table th {
-        background: rgba(255, 255, 255, 0.03);
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        background: #0f172a;
         padding: 12px 16px;
         font-weight: 700;
         color: #94a3b8;
@@ -966,63 +988,6 @@
         70% { box-shadow: 0 0 0 15px rgba(255, 107, 53, 0); }
         100% { box-shadow: 0 0 0 0 rgba(255, 107, 53, 0); }
     }
-
-    /* Alphabet Fast Scrollbar Styles */
-    .alphabet-scrollbar {
-        position: fixed;
-        left: 20px;
-        top: 50%;
-        transform: translateY(-50%);
-        z-index: 999;
-        display: flex;
-        flex-direction: column;
-        gap: 3px;
-        background: rgba(15, 23, 42, 0.85);
-        backdrop-filter: blur(8px);
-        padding: 10px 5px;
-        border-radius: 20px;
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        box-shadow: 0 10px 25px rgba(0,0,0,0.5);
-        max-height: 80vh;
-        overflow-y: auto;
-        scrollbar-width: none;
-    }
-    .alphabet-scrollbar::-webkit-scrollbar {
-        display: none;
-    }
-    .alphabet-link {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        width: 24px;
-        height: 24px;
-        font-size: 11px;
-        font-weight: 700;
-        color: #94a3b8;
-        border-radius: 50%;
-        cursor: pointer;
-        transition: all 0.2s ease;
-        user-select: none;
-    }
-    .alphabet-link:hover {
-        background: rgba(255, 107, 53, 0.15);
-        color: #ff6b35;
-    }
-    .alphabet-link.active {
-        background: #ff6b35;
-        color: #ffffff;
-        box-shadow: 0 4px 10px rgba(255, 107, 53, 0.3);
-    }
-    .alphabet-link.disabled {
-        opacity: 0.2;
-        cursor: not-allowed;
-        pointer-events: none;
-    }
-    @media (max-width: 1200px) {
-        .alphabet-scrollbar {
-            display: none !important;
-        }
-    }
 </style>
 
 <script>
@@ -1054,7 +1019,6 @@
         // Initialize Categories Sidebar
         renderSidebarCategories();
         setupSidebarParentCategorySelect();
-        setupAlphabetScrollbar();
 
         const tableBody = document.querySelector('#products-table tbody');
         if (tableBody) {
@@ -2592,125 +2556,6 @@
         .catch(err => {
             alert("Error: " + err.message);
         });
-    }
-
-    // --- Alphabet Scrollbar Logic ---
-    function setupAlphabetScrollbar() {
-        const rows = Array.from(document.querySelectorAll('#products-table tbody tr'));
-        const lettersInUse = new Set();
-        
-        rows.forEach(row => {
-            const nameCell = row.querySelector('.cell-name .cell-text');
-            if (nameCell) {
-                const firstChar = nameCell.innerText.trim().charAt(0).toUpperCase();
-                if (/[A-Z]/.test(firstChar)) {
-                    lettersInUse.add(firstChar);
-                }
-            }
-        });
-        
-        const alphabetContainer = document.getElementById('alphabet-scrollbar');
-        if (!alphabetContainer) return;
-        
-        const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
-        alphabetContainer.innerHTML = '';
-        
-        alphabet.forEach(letter => {
-            const item = document.createElement('span');
-            item.className = 'alphabet-link';
-            item.textContent = letter;
-            
-            if (lettersInUse.has(letter)) {
-                item.classList.add('in-use');
-                item.addEventListener('click', () => {
-                    scrollToLetter(letter);
-                });
-            } else {
-                item.classList.add('disabled');
-            }
-            alphabetContainer.appendChild(item);
-        });
-        
-        // Highlight active letter on scroll
-        window.addEventListener('scroll', throttle(highlightActiveLetterOnScroll, 100));
-        highlightActiveLetterOnScroll();
-    }
-
-    function scrollToLetter(letter) {
-        const rows = Array.from(document.querySelectorAll('#products-table tbody tr'));
-        const targetRow = rows.find(row => {
-            const nameCell = row.querySelector('.cell-name .cell-text');
-            if (nameCell) {
-                return nameCell.innerText.trim().charAt(0).toUpperCase() === letter;
-            }
-            return false;
-        });
-        
-        if (targetRow) {
-            // Smooth scroll to row
-            targetRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            
-            // Add a temporary glow animation
-            targetRow.style.backgroundColor = 'rgba(255, 107, 53, 0.15)';
-            targetRow.style.transition = 'background-color 0.3s ease';
-            setTimeout(() => {
-                targetRow.style.backgroundColor = '';
-            }, 1500);
-        }
-    }
-
-    function highlightActiveLetterOnScroll() {
-        const rows = Array.from(document.querySelectorAll('#products-table tbody tr'));
-        const links = document.querySelectorAll('.alphabet-link');
-        
-        const viewportCenter = window.innerHeight / 2;
-        let currentLetter = null;
-        
-        for (let row of rows) {
-            const rect = row.getBoundingClientRect();
-            if (rect.top <= viewportCenter && rect.bottom >= viewportCenter) {
-                const nameCell = row.querySelector('.cell-name .cell-text');
-                if (nameCell) {
-                    currentLetter = nameCell.innerText.trim().charAt(0).toUpperCase();
-                }
-                break;
-            }
-        }
-        
-        if (!currentLetter && rows.length > 0) {
-            for (let row of rows) {
-                const rect = row.getBoundingClientRect();
-                if (rect.bottom > 0 && rect.top < window.innerHeight) {
-                    const nameCell = row.querySelector('.cell-name .cell-text');
-                    if (nameCell) {
-                        currentLetter = nameCell.innerText.trim().charAt(0).toUpperCase();
-                    }
-                    break;
-                }
-            }
-        }
-        
-        links.forEach(link => {
-            if (link.textContent === currentLetter) {
-                link.classList.add('active');
-                link.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-            } else {
-                link.classList.remove('active');
-            }
-        });
-    }
-
-    function throttle(func, limit) {
-        let inThrottle;
-        return function() {
-            const args = arguments;
-            const context = this;
-            if (!inThrottle) {
-                func.apply(context, args);
-                inThrottle = true;
-                setTimeout(() => inThrottle = false, limit);
-            }
-        }
     }
 </script>
 {% endblock %}
