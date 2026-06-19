@@ -3646,10 +3646,15 @@ def product_grid_editor(request):
     active_filter = request.GET.get('active', '').strip()
 
     if f_category:
-        products = products.filter(
-            Q(category__name__icontains=f_category) | 
-            Q(categories__name__icontains=f_category)
-        ).distinct()
+        normalized_query = unicodedata.normalize("NFKD", f_category.lower())
+        normalized_query = "".join(char for char in normalized_query if not unicodedata.combining(char))
+        if normalized_query == "sin categoria":
+            products = products.filter(category__isnull=True)
+        else:
+            products = products.filter(
+                Q(category__name__icontains=f_category) | 
+                Q(categories__name__icontains=f_category)
+            ).distinct()
         
     if f_sku:
         products = products.filter(sku__icontains=f_sku)
