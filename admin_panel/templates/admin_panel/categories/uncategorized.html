@@ -167,14 +167,19 @@
             <input type="hidden" id="modal-product-ids" value="">
 
             <!-- Categoría Principal -->
-            <div class="form-group mb-4">
-                <label for="primary-category-select" class="form-label font-bold">Categoría Principal (requerido para atributos/filtros)</label>
-                <select id="primary-category-select" class="form-select">
-                    <option value="">Sin categoría principal</option>
-                    {% for cat in category_options %}
-                    <option value="{{ cat.id|unlocalize }}">{{ cat.label }}</option>
-                    {% endfor %}
-                </select>
+            <div class="form-group mb-4" style="position: relative;">
+                <label class="form-label font-bold">Categoría Principal (requerido para atributos/filtros)</label>
+                <input type="hidden" id="primary-category-select" value="">
+                
+                <div class="custom-select-wrapper" style="position: relative; width: 100%;">
+                    <input type="text" id="primary-category-search-input" placeholder="Sin categoría principal..." class="form-input" style="cursor: pointer; background: #0b0f19; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 6px; color: #f1f5f9; width: 100%; box-sizing: border-box;" autocomplete="off" onfocus="showPrimaryDropdown()" onclick="showPrimaryDropdown(event)">
+                    <span id="primary-clear" style="position: absolute; right: 26px; top: 50%; transform: translateY(-50%); font-size: 14px; color: #f87171; cursor: pointer; display: none; user-select: none;" onclick="clearPrimaryCategory(event)">✕</span>
+                    <span id="primary-arrow" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); font-size: 10px; color: #9ca3af; pointer-events: none; user-select: none; transition: transform 0.2s;">▼</span>
+                </div>
+                
+                <div id="primary-dropdown" class="autocomplete-dropdown" style="display: none;">
+                    <!-- Options rendered dynamically -->
+                </div>
                 <small class="text-muted block mt-1">Ubicación canónica en catálogo y exportaciones.</small>
             </div>
 
@@ -194,14 +199,19 @@
                         <label class="form-label text-xs">Nombre de Categoría</label>
                         <input type="text" id="inline-cat-name" class="form-input form-input-sm" placeholder="Ej: Tornillos Autoperforantes">
                     </div>
-                    <div class="form-group mb-2">
+                    <div class="form-group mb-2" style="position: relative; width: 100%;">
                         <label class="form-label text-xs">Categoría Padre (Opcional)</label>
-                        <select id="inline-cat-parent" class="form-select form-select-sm">
-                            <option value="">Ninguna (Raíz)</option>
-                            {% for cat in category_options %}
-                            <option value="{{ cat.id|unlocalize }}">{{ cat.label }}</option>
-                            {% endfor %}
-                        </select>
+                        <input type="hidden" id="inline-cat-parent" value="">
+                        
+                        <div class="custom-select-wrapper" style="position: relative; width: 100%;">
+                            <input type="text" id="inline-cat-parent-search-input" placeholder="Ninguna (Raíz)..." class="form-input form-input-sm" style="cursor: pointer; background: #0b0f19; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 6px; color: #f1f5f9; width: 100%; box-sizing: border-box;" autocomplete="off" onfocus="showInlineParentDropdown()" onclick="showInlineParentDropdown(event)">
+                            <span id="inline-parent-clear" style="position: absolute; right: 26px; top: 50%; transform: translateY(-50%); font-size: 12px; color: #f87171; cursor: pointer; display: none; user-select: none;" onclick="clearInlineParentCategory(event)">✕</span>
+                            <span id="inline-parent-arrow" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); font-size: 8px; color: #9ca3af; pointer-events: none; user-select: none; transition: transform 0.2s;">▼</span>
+                        </div>
+                        
+                        <div id="inline-parent-dropdown" class="autocomplete-dropdown" style="display: none;">
+                            <!-- Options rendered dynamically -->
+                        </div>
                     </div>
                     <div class="flex-end gap-2">
                         <button type="button" class="btn btn-sm btn-secondary" onclick="toggleInlineCategoryForm()">Cancelar</button>
@@ -247,6 +257,46 @@
 </div>
 
 <style>
+    /* Custom Dropdown Search Styles */
+    .autocomplete-dropdown {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        width: 100%;
+        max-height: 200px;
+        overflow-y: auto;
+        background: #0b0f19;
+        border: 2px solid #ff6b35;
+        border-radius: 6px;
+        box-shadow: 0 10px 20px rgba(0,0,0,0.5);
+        z-index: 2200;
+        margin-top: 4px;
+        box-sizing: border-box;
+    }
+    .autocomplete-option {
+        padding: 8px 12px;
+        font-size: 13px;
+        color: #f1f5f9;
+        cursor: pointer;
+        transition: background 0.15s;
+        text-align: left;
+        box-sizing: border-box;
+    }
+    .autocomplete-option:hover,
+    .autocomplete-option.highlighted {
+        background: rgba(255, 107, 53, 0.15);
+        color: #ff6b35;
+    }
+    .autocomplete-option.none-option {
+        color: #94a3b8;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+    .autocomplete-option.none-option:hover,
+    .autocomplete-option.none-option.highlighted {
+        color: #f87171;
+        background: rgba(248, 113, 113, 0.08);
+    }
+
     /* Estilos Premium para la Interfaz Oscura */
     .uncategorized-container {
         padding: 20px 0;
@@ -698,6 +748,18 @@
 
 <script>
     const csrfToken = '{{ csrf_token }}';
+    
+    let CATEGORIES = [
+        {% for cat in category_options %}
+        { 
+            id: {{ cat.id }}, 
+            name: "{{ cat.name|escapejs }}",
+            depth: {{ cat.depth }},
+            label: "{{ cat.label|escapejs }}" 
+        },
+        {% endfor %}
+    ];
+
     const categoryExpanded = {};
 
     let lastChecked = null;
@@ -706,6 +768,8 @@
 
     document.addEventListener('DOMContentLoaded', function() {
         setupCategoryTree();
+        setupPrimaryCategorySelect();
+        setupInlineParentCategorySelect();
 
         const tableBody = document.querySelector('#products-table tbody');
         if (tableBody) {
@@ -984,7 +1048,7 @@
         document.getElementById('modal-product-ids').value = productId;
         
         // Reset inputs
-        document.getElementById('primary-category-select').value = '';
+        clearPrimaryCategory();
         const checkboxes = document.querySelectorAll('.category-check');
         checkboxes.forEach(cb => cb.checked = false);
         
@@ -1001,7 +1065,7 @@
         document.getElementById('modal-product-ids').value = ids.join(',');
         
         // Reset inputs
-        document.getElementById('primary-category-select').value = '';
+        clearPrimaryCategory();
         const checkboxes = document.querySelectorAll('.category-check');
         checkboxes.forEach(cb => cb.checked = false);
 
@@ -1022,7 +1086,9 @@
         // If there's currently no primary category selected, but some linked categories are checked,
         // automatically select the first checked category as the primary one.
         if (primarySelect.value === '' && checked.length > 0) {
-            primarySelect.value = checked[0].value;
+            const firstCheckedId = checked[0].value;
+            const cat = CATEGORIES.find(c => String(c.id) === String(firstCheckedId));
+            selectPrimaryCategory(firstCheckedId, cat ? cat.name : "");
         }
     }
 
@@ -1297,7 +1363,7 @@
         if (form.style.display === 'none') {
             form.style.display = 'block';
             document.getElementById('inline-cat-name').value = '';
-            document.getElementById('inline-cat-parent').value = '';
+            clearInlineParentCategory();
             document.getElementById('inline-cat-name').focus();
         } else {
             form.style.display = 'none';
@@ -1333,6 +1399,8 @@
                 const newId = data.new_category_id;
                 const categoriesList = data.categories;
                 
+                CATEGORIES = categoriesList;
+                
                 // 1. Update both selectors with the new list
                 updateDropdownSelectors(categoriesList, newId, parentId);
                 
@@ -1363,31 +1431,8 @@
     }
 
     function updateDropdownSelectors(categoriesList, newId, parentId) {
-        const selectPrimary = document.getElementById('primary-category-select');
-        const selectInlineParent = document.getElementById('inline-cat-parent');
-        
-        // Save current primary selected
-        const currentPrimarySelected = selectPrimary.value;
-
-        // Clear choices
-        selectPrimary.innerHTML = '<option value="">Sin categoría principal</option>';
-        selectInlineParent.innerHTML = '<option value="">Ninguna (Raíz)</option>';
-
-        categoriesList.forEach(cat => {
-            const opt1 = document.createElement('option');
-            opt1.value = cat.id;
-            opt1.innerText = cat.label;
-            
-            const opt2 = document.createElement('option');
-            opt2.value = cat.id;
-            opt2.innerText = cat.label;
-
-            selectPrimary.appendChild(opt1);
-            selectInlineParent.appendChild(opt2);
-        });
-
-        // Set values
-        selectPrimary.value = newId; // Select the newly created category as primary by default
+        const cat = CATEGORIES.find(c => String(c.id) === String(newId));
+        selectPrimaryCategory(newId, cat ? cat.name : "");
     }
 
     function rebuildCheckTree(categoriesList, newId) {
@@ -1494,6 +1539,359 @@
             btn.disabled = false;
             btn.innerHTML = originalText;
             input.value = '';
+        });
+    }
+
+    // --- Custom Primary & Parent Dropdown Search helpers ---
+    function escapeHtml(text) {
+        if (!text) return "";
+        return String(text)
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+    }
+
+    let primaryHighlightedIndex = -1;
+
+    function showPrimaryDropdown(e) {
+        if (e) e.stopPropagation();
+        const dropdown = document.getElementById("primary-dropdown");
+        if (dropdown) {
+            renderPrimaryOptions();
+        }
+    }
+
+    function renderPrimaryOptions() {
+        const dropdown = document.getElementById("primary-dropdown");
+        if (!dropdown) return;
+
+        const input = document.getElementById("primary-category-search-input");
+        const query = input.value.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        dropdown.innerHTML = "";
+        primaryHighlightedIndex = -1;
+
+        // 1. None Option (Sin categoría principal)
+        if (!query || "sin categoria principal".includes(query)) {
+            const noneOpt = document.createElement("div");
+            noneOpt.className = "autocomplete-option none-option";
+            noneOpt.textContent = "Sin categoría principal";
+            noneOpt.addEventListener("mousedown", function (e) {
+                e.preventDefault();
+                selectPrimaryCategory("", "Sin categoría principal");
+            });
+            dropdown.appendChild(noneOpt);
+        }
+
+        // 2. Filter and render category options
+        const filtered = CATEGORIES.filter(cat => {
+            const cleanLabel = cat.label.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+            return cleanLabel.includes(query);
+        });
+
+        filtered.forEach(cat => {
+            const opt = document.createElement("div");
+            opt.className = "autocomplete-option";
+            opt.style.paddingLeft = `${cat.depth * 16 + 10}px`;
+            
+            const prefix = cat.depth > 0 ? "↳ " : "";
+            opt.textContent = prefix + cat.name;
+
+            // Highlight search matching text
+            if (query) {
+                const index = cat.name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").indexOf(query);
+                if (index >= 0) {
+                    const before = cat.name.substring(0, index);
+                    const match = cat.name.substring(index, index + query.length);
+                    const after = cat.name.substring(index + query.length);
+                    opt.innerHTML = `${prefix}${escapeHtml(before)}<mark style="background: #ff6b35; color: white; border-radius: 2px; padding: 0 2px;">${escapeHtml(match)}</mark>${escapeHtml(after)}`;
+                }
+            }
+
+            opt.addEventListener("mousedown", function (e) {
+                e.preventDefault();
+                selectPrimaryCategory(cat.id, cat.name);
+            });
+
+            dropdown.appendChild(opt);
+        });
+
+        if (dropdown.children.length > 0) {
+            dropdown.style.display = "block";
+            document.getElementById("primary-arrow").style.transform = "translateY(-50%) rotate(180deg)";
+        } else {
+            dropdown.style.display = "none";
+            document.getElementById("primary-arrow").style.transform = "translateY(-50%)";
+        }
+    }
+
+    function selectPrimaryCategory(id, name) {
+        const hiddenInput = document.getElementById("primary-category-select");
+        const searchInput = document.getElementById("primary-category-search-input");
+        const clearBtn = document.getElementById("primary-clear");
+        const arrow = document.getElementById("primary-arrow");
+        const dropdown = document.getElementById("primary-dropdown");
+
+        hiddenInput.value = id;
+        
+        if (id !== "") {
+            const cat = CATEGORIES.find(c => String(c.id) === String(id));
+            searchInput.value = cat ? cat.name : name;
+            clearBtn.style.display = "block";
+        } else {
+            searchInput.value = "";
+            clearBtn.style.display = "none";
+        }
+        dropdown.style.display = "none";
+        arrow.style.transform = "translateY(-50%)";
+    }
+
+    function clearPrimaryCategory(e) {
+        if (e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+        selectPrimaryCategory("", "");
+    }
+
+    function setupPrimaryCategorySelect() {
+        const input = document.getElementById("primary-category-search-input");
+        const dropdown = document.getElementById("primary-dropdown");
+        const arrow = document.getElementById("primary-arrow");
+        if (!input || !dropdown) return;
+
+        input.addEventListener("input", function () {
+            renderPrimaryOptions();
+        });
+
+        input.addEventListener("blur", function () {
+            setTimeout(() => {
+                dropdown.style.display = "none";
+                arrow.style.transform = "translateY(-50%)";
+            }, 200);
+        });
+
+        input.addEventListener("keydown", function (e) {
+            const opts = dropdown.querySelectorAll(".autocomplete-option");
+            
+            if (e.key === "ArrowDown") {
+                e.preventDefault();
+                if (dropdown.style.display === "none") {
+                    renderPrimaryOptions();
+                }
+                let next = primaryHighlightedIndex + 1;
+                if (next >= opts.length) next = 0;
+                highlightPrimaryOption(next);
+            }
+            else if (e.key === "ArrowUp") {
+                e.preventDefault();
+                let prev = primaryHighlightedIndex - 1;
+                if (prev < 0) prev = opts.length - 1;
+                highlightPrimaryOption(prev);
+            }
+            else if (e.key === "Enter") {
+                e.preventDefault();
+                if (primaryHighlightedIndex >= 0 && primaryHighlightedIndex < opts.length) {
+                    opts[primaryHighlightedIndex].dispatchEvent(new MouseEvent("mousedown"));
+                } else if (opts.length > 0) {
+                    opts[0].dispatchEvent(new MouseEvent("mousedown"));
+                }
+            }
+            else if (e.key === "Escape") {
+                e.preventDefault();
+                dropdown.style.display = "none";
+                arrow.style.transform = "translateY(-50%)";
+            }
+        });
+
+        function highlightPrimaryOption(index) {
+            const opts = dropdown.querySelectorAll(".autocomplete-option");
+            opts.forEach(o => o.classList.remove("highlighted"));
+            
+            if (index >= 0 && index < opts.length) {
+                opts[index].classList.add("highlighted");
+                opts[index].scrollIntoView({ block: "nearest" });
+                primaryHighlightedIndex = index;
+            }
+        }
+
+        document.addEventListener("click", function (e) {
+            if (!input.contains(e.target) && !dropdown.contains(e.target)) {
+                dropdown.style.display = "none";
+                arrow.style.transform = "translateY(-50%)";
+            }
+        });
+    }
+
+    let inlineParentHighlightedIndex = -1;
+
+    function showInlineParentDropdown(e) {
+        if (e) e.stopPropagation();
+        const dropdown = document.getElementById("inline-parent-dropdown");
+        if (dropdown) {
+            renderInlineParentOptions();
+        }
+    }
+
+    function renderInlineParentOptions() {
+        const dropdown = document.getElementById("inline-parent-dropdown");
+        if (!dropdown) return;
+
+        const input = document.getElementById("inline-cat-parent-search-input");
+        const query = input.value.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        dropdown.innerHTML = "";
+        inlineParentHighlightedIndex = -1;
+
+        // 1. None Option (Ninguna (Raíz))
+        if (!query || "ninguna raiz".includes(query)) {
+            const noneOpt = document.createElement("div");
+            noneOpt.className = "autocomplete-option none-option";
+            noneOpt.textContent = "Ninguna (Raíz)";
+            noneOpt.addEventListener("mousedown", function (e) {
+                e.preventDefault();
+                selectInlineParentCategory("", "Ninguna (Raíz)");
+            });
+            dropdown.appendChild(noneOpt);
+        }
+
+        // 2. Filter and render category options
+        const filtered = CATEGORIES.filter(cat => {
+            const cleanLabel = cat.label.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+            return cleanLabel.includes(query);
+        });
+
+        filtered.forEach(cat => {
+            const opt = document.createElement("div");
+            opt.className = "autocomplete-option";
+            opt.style.paddingLeft = `${cat.depth * 16 + 10}px`;
+            
+            const prefix = cat.depth > 0 ? "↳ " : "";
+            opt.textContent = prefix + cat.name;
+
+            // Highlight search matching text
+            if (query) {
+                const index = cat.name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").indexOf(query);
+                if (index >= 0) {
+                    const before = cat.name.substring(0, index);
+                    const match = cat.name.substring(index, index + query.length);
+                    const after = cat.name.substring(index + query.length);
+                    opt.innerHTML = `${prefix}${escapeHtml(before)}<mark style="background: #ff6b35; color: white; border-radius: 2px; padding: 0 2px;">${escapeHtml(match)}</mark>${escapeHtml(after)}`;
+                }
+            }
+
+            opt.addEventListener("mousedown", function (e) {
+                e.preventDefault();
+                selectInlineParentCategory(cat.id, cat.name);
+            });
+
+            dropdown.appendChild(opt);
+        });
+
+        if (dropdown.children.length > 0) {
+            dropdown.style.display = "block";
+            document.getElementById("inline-parent-arrow").style.transform = "translateY(-50%) rotate(180deg)";
+        } else {
+            dropdown.style.display = "none";
+            document.getElementById("inline-parent-arrow").style.transform = "translateY(-50%)";
+        }
+    }
+
+    function selectInlineParentCategory(id, name) {
+        const hiddenInput = document.getElementById("inline-cat-parent");
+        const searchInput = document.getElementById("inline-cat-parent-search-input");
+        const clearBtn = document.getElementById("inline-parent-clear");
+        const arrow = document.getElementById("inline-parent-arrow");
+        const dropdown = document.getElementById("inline-parent-dropdown");
+
+        hiddenInput.value = id;
+        
+        if (id !== "") {
+            const cat = CATEGORIES.find(c => String(c.id) === String(id));
+            searchInput.value = cat ? cat.name : name;
+            clearBtn.style.display = "block";
+        } else {
+            searchInput.value = "";
+            clearBtn.style.display = "none";
+        }
+        dropdown.style.display = "none";
+        arrow.style.transform = "translateY(-50%)";
+    }
+
+    function clearInlineParentCategory(e) {
+        if (e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+        selectInlineParentCategory("", "");
+    }
+
+    function setupInlineParentCategorySelect() {
+        const input = document.getElementById("inline-cat-parent-search-input");
+        const dropdown = document.getElementById("inline-parent-dropdown");
+        const arrow = document.getElementById("inline-parent-arrow");
+        if (!input || !dropdown) return;
+
+        input.addEventListener("input", function () {
+            renderInlineParentOptions();
+        });
+
+        input.addEventListener("blur", function () {
+            setTimeout(() => {
+                dropdown.style.display = "none";
+                arrow.style.transform = "translateY(-50%)";
+            }, 200);
+        });
+
+        input.addEventListener("keydown", function (e) {
+            const opts = dropdown.querySelectorAll(".autocomplete-option");
+            
+            if (e.key === "ArrowDown") {
+                e.preventDefault();
+                if (dropdown.style.display === "none") {
+                    renderInlineParentOptions();
+                }
+                let next = inlineParentHighlightedIndex + 1;
+                if (next >= opts.length) next = 0;
+                highlightInlineParentOption(next);
+            }
+            else if (e.key === "ArrowUp") {
+                e.preventDefault();
+                let prev = inlineParentHighlightedIndex - 1;
+                if (prev < 0) prev = opts.length - 1;
+                highlightInlineParentOption(prev);
+            }
+            else if (e.key === "Enter") {
+                e.preventDefault();
+                if (inlineParentHighlightedIndex >= 0 && inlineParentHighlightedIndex < opts.length) {
+                    opts[inlineParentHighlightedIndex].dispatchEvent(new MouseEvent("mousedown"));
+                } else if (opts.length > 0) {
+                    opts[0].dispatchEvent(new MouseEvent("mousedown"));
+                }
+            }
+            else if (e.key === "Escape") {
+                e.preventDefault();
+                dropdown.style.display = "none";
+                arrow.style.transform = "translateY(-50%)";
+            }
+        });
+
+        function highlightInlineParentOption(index) {
+            const opts = dropdown.querySelectorAll(".autocomplete-option");
+            opts.forEach(o => o.classList.remove("highlighted"));
+            
+            if (index >= 0 && index < opts.length) {
+                opts[index].classList.add("highlighted");
+                opts[index].scrollIntoView({ block: "nearest" });
+                inlineParentHighlightedIndex = index;
+            }
+        }
+
+        document.addEventListener("click", function (e) {
+            if (!input.contains(e.target) && !dropdown.contains(e.target)) {
+                dropdown.style.display = "none";
+                arrow.style.transform = "translateY(-50%)";
+            }
         });
     }
 </script>
