@@ -153,8 +153,63 @@
             {% endif %}
         </div>
         {% endif %}
+</div>
+
+<!-- Categories Sidebar -->
+<div id="categoriesSidebar" class="categories-sidebar">
+    <div class="sidebar-header">
+        <h3 class="sidebar-title">📁 Categorías</h3>
+        <div style="display: flex; gap: 8px; align-items: center;">
+            <button type="button" class="btn btn-primary btn-sm" style="padding: 4px 8px; font-size: 11px; height: 26px; line-height: 1; background: rgba(255, 107, 53, 0.2); border-color: rgba(255, 107, 53, 0.4); color: #ff6b35; font-weight: 600;" onclick="toggleSidebarNewCatForm()">➕ Nueva</button>
+            <button class="sidebar-close-btn" onclick="toggleCategoriesSidebar(false)">✕</button>
+        </div>
+    </div>
+    
+    <!-- New Category Inline Form (initially hidden) -->
+    <div id="sidebarNewCatForm" style="display: none; padding: 16px 24px; border-bottom: 1px solid rgba(255, 107, 53, 0.15); background: rgba(255, 107, 53, 0.03); flex-shrink: 0;">
+        <h4 style="margin: 0 0 12px 0; font-size: 13px; color: #ff6b35; font-weight: 600;">➕ Crear Categoría o Subcategoría</h4>
+        
+        <div style="margin-bottom: 8px;">
+            <label style="display: block; font-size: 11px; color: #94a3b8; margin-bottom: 4px;">Nombre:</label>
+            <input type="text" id="sidebarNewCatName" placeholder="Ej: ABRAZADERA NEUMATICA" class="filter-input" style="width: 100%; height: 30px; font-size: 12px; padding: 0 8px; background: #0b0f19;">
+        </div>
+        
+        <div style="margin-bottom: 12px; position: relative;">
+            <label style="display: block; font-size: 11px; color: #94a3b8; margin-bottom: 4px;">Categoría Padre (Subcategoría de...):</label>
+            <input type="hidden" id="sidebarNewCatParent" value="">
+            
+            <div class="custom-select-wrapper" style="position: relative; width: 100%;">
+                <input type="text" id="sidebarNewCatParentSearchInput" placeholder="Ninguna (Raíz)..." class="filter-input" style="width: 100%; height: 30px; font-size: 12px; padding: 0 34px 0 10px; background: #0b0f19; border: 1px solid #374151; border-radius: 6px; color: #f1f5f9; cursor: pointer; box-sizing: border-box;" autocomplete="off" onfocus="showSidebarParentDropdown()" onclick="showSidebarParentDropdown(event)">
+                <span id="sidebarParentClear" style="position: absolute; right: 20px; top: 50%; transform: translateY(-50%); font-size: 11px; color: #f87171; cursor: pointer; display: none; user-select: none;" onclick="clearSidebarParentCategory(event)">✕</span>
+                <span id="sidebarParentArrow" style="position: absolute; right: 8px; top: 50%; transform: translateY(-50%); font-size: 8px; color: #9ca3af; pointer-events: none; user-select: none; transition: transform 0.2s;">▼</span>
+            </div>
+            
+            <div id="sidebarParentDropdown" class="autocomplete-dropdown" style="display: none; position: absolute; top: 100%; left: 0; width: 100%; max-height: 200px; overflow-y: auto; background: #0b0f19; border: 2px solid #ff6b35; border-radius: 6px; box-shadow: 0 10px 20px rgba(0, 0, 0, 0.5); z-index: 1060; margin-top: 4px; scrollbar-width: thin;">
+                <!-- Options rendered dynamically -->
+            </div>
+        </div>
+        
+        <div style="display: flex; justify-content: flex-end; gap: 8px;">
+            <button type="button" class="btn btn-outline-secondary btn-sm" style="height: 28px; font-size: 11px; line-height: 1;" onclick="toggleSidebarNewCatForm(false)">Cancelar</button>
+            <button type="button" class="btn btn-primary btn-sm" style="height: 28px; font-size: 11px; line-height: 1; background: #ff6b35; border-color: #ff6b35; color: white;" onclick="submitSidebarNewCat()">Crear</button>
+        </div>
+    </div>
+
+    <div class="sidebar-info-banner">
+        Selecciona uno o más productos en la planilla, luego haz clic en una categoría para asignarla.
+    </div>
+    <div class="sidebar-search-container">
+        <input type="text" id="sidebarSearch" placeholder="Buscar categoría..." class="filter-input" oninput="renderSidebarCategories()">
+    </div>
+    <div id="sidebarTreeWrapper" class="sidebar-tree-wrapper">
+        <!-- Rendered dynamically -->
     </div>
 </div>
+
+<!-- Floating Toggle Button -->
+<button type="button" id="sidebarToggleFloating" class="sidebar-toggle-floating" onclick="toggleCategoriesSidebar()">
+    📁 CATEGORÍAS
+</button>
 
 <!-- Modal de Categorización -->
 <div id="categorize-modal" class="modal-backdrop" style="display: none;">
@@ -744,6 +799,173 @@
         0% { border-color: rgba(34, 197, 94, 0.4); background: rgba(34, 197, 94, 0.05); }
         100% { border-color: rgba(34, 197, 94, 1); background: rgba(34, 197, 94, 0.2); }
     }
+
+    /* Filter input used in sidebar */
+    .filter-input {
+        width: 100%;
+        background: rgba(13, 19, 31, 0.8);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 6px;
+        color: #f1f5f9;
+        padding: 6px 10px;
+        font-size: 12px;
+        outline: none;
+        box-sizing: border-box;
+        transition: all 0.2s ease;
+    }
+    .filter-input:focus {
+        border-color: #ff6b35;
+        background: #0b0f19;
+        box-shadow: 0 0 0 2px rgba(255, 107, 53, 0.25);
+    }
+
+    /* Categories Sidebar Styles */
+    .categories-sidebar {
+        position: fixed;
+        top: 0;
+        right: -380px;
+        width: 380px;
+        height: 100vh;
+        background: #0f1524;
+        border-left: 1px solid rgba(255, 107, 53, 0.2);
+        box-shadow: -10px 0 35px rgba(0, 0, 0, 0.5);
+        z-index: 1050;
+        transition: right 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        display: flex;
+        flex-direction: column;
+        box-sizing: border-box;
+    }
+    .categories-sidebar.open {
+        right: 0;
+    }
+    .sidebar-header {
+        padding: 20px 24px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+    .sidebar-title {
+        margin: 0;
+        font-size: 16px;
+        font-weight: 600;
+        color: #f1f5f9;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .sidebar-close-btn {
+        background: none;
+        border: none;
+        color: #94a3b8;
+        font-size: 20px;
+        cursor: pointer;
+        padding: 4px;
+        border-radius: 4px;
+        line-height: 1;
+        transition: all 0.2s;
+    }
+    .sidebar-close-btn:hover {
+        color: #f87171;
+        background: rgba(239, 68, 68, 0.1);
+    }
+    .sidebar-search-container {
+        padding: 16px 24px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+    .sidebar-info-banner {
+        padding: 12px 24px;
+        background: rgba(255, 107, 53, 0.05);
+        border-bottom: 1px solid rgba(255, 107, 53, 0.1);
+        font-size: 11px;
+        color: #cbd5e1;
+        line-height: 1.4;
+    }
+    .sidebar-tree-wrapper {
+        flex: 1;
+        overflow-y: auto;
+        padding: 16px 24px;
+        scrollbar-width: thin;
+    }
+    .category-tree-node {
+        display: flex;
+        align-items: center;
+        padding: 6px 8px;
+        margin: 2px 0;
+        border-radius: 6px;
+        cursor: pointer;
+        user-select: none;
+        transition: all 0.15s ease;
+        font-size: 13px;
+        color: #cbd5e1;
+    }
+    .category-tree-node:hover {
+        background: rgba(255, 107, 53, 0.1);
+        color: #ff6b35;
+    }
+    .category-tree-node.selected-active {
+        background: rgba(255, 107, 53, 0.15);
+        color: #ff6b35;
+        font-weight: 500;
+    }
+    .category-tree-node .node-toggle {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 18px;
+        height: 18px;
+        margin-right: 6px;
+        color: #64748b;
+        border-radius: 4px;
+        transition: all 0.2s;
+    }
+    .category-tree-node:hover .node-toggle {
+        color: #ff6b35;
+    }
+    .category-tree-node .node-text {
+        flex: 1;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    /* Floating Sidebar Toggle Button */
+    .sidebar-toggle-floating {
+        position: fixed;
+        right: 0;
+        top: 50%;
+        transform: translateY(-50%);
+        background: #ff6b35;
+        color: white;
+        border: none;
+        border-radius: 8px 0 0 8px;
+        padding: 14px 10px;
+        cursor: pointer;
+        z-index: 1040;
+        writing-mode: vertical-rl;
+        text-orientation: mixed;
+        font-weight: 600;
+        font-size: 12px;
+        letter-spacing: 0.1em;
+        box-shadow: -4px 0 15px rgba(255, 107, 53, 0.3);
+        transition: all 0.2s ease;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .sidebar-toggle-floating:hover {
+        background: #ff8552;
+        box-shadow: -4px 0 20px rgba(255, 107, 53, 0.5);
+        padding-right: 14px;
+    }
+    .sidebar-toggle-floating.pulse {
+        animation: floating-pulse 2s infinite;
+    }
+    @keyframes floating-pulse {
+        0% { box-shadow: 0 0 0 0 rgba(255, 107, 53, 0.7); }
+        70% { box-shadow: 0 0 0 10px rgba(255, 107, 53, 0); }
+        100% { box-shadow: 0 0 0 0 rgba(255, 107, 53, 0); }
+    }
 </style>
 
 <script>
@@ -761,6 +983,7 @@
     ];
 
     const categoryExpanded = {};
+    const collapsedCategories = new Set();
 
     let lastChecked = null;
     let isDragging = false;
@@ -770,6 +993,10 @@
         setupCategoryTree();
         setupPrimaryCategorySelect();
         setupInlineParentCategorySelect();
+        
+        // Initialize Categories Sidebar
+        renderSidebarCategories();
+        setupSidebarParentCategorySelect();
 
         const tableBody = document.querySelector('#products-table tbody');
         if (tableBody) {
@@ -876,13 +1103,22 @@
         const selected = document.querySelectorAll('.product-checkbox:checked');
         const bar = document.getElementById('bulk-actions-bar');
         const badge = document.getElementById('bulk-count-badge');
+        const floatingBtn = document.getElementById('sidebarToggleFloating');
         
         if (selected.length > 0) {
             badge.innerText = selected.length;
             bar.style.display = 'flex';
+            if (floatingBtn) {
+                floatingBtn.classList.add('pulse');
+                floatingBtn.innerHTML = `📁 ASIGNAR (${selected.length})`;
+            }
         } else {
             bar.style.display = 'none';
             document.getElementById('select-all-checkbox').checked = false;
+            if (floatingBtn) {
+                floatingBtn.classList.remove('pulse');
+                floatingBtn.innerHTML = `📁 CATEGORÍAS`;
+            }
         }
     }
 
@@ -1892,6 +2128,411 @@
                 dropdown.style.display = "none";
                 arrow.style.transform = "translateY(-50%)";
             }
+        });
+    }
+
+    // --- Categories Sidebar Logic ---
+    function toggleCategoriesSidebar(open) {
+        const sidebar = document.getElementById("categoriesSidebar");
+        if (!sidebar) return;
+        
+        if (open === undefined) {
+            sidebar.classList.toggle("open");
+        } else if (open) {
+            sidebar.classList.add("open");
+        } else {
+            sidebar.classList.remove("open");
+        }
+    }
+
+    function renderSidebarCategories() {
+        const wrapper = document.getElementById("sidebarTreeWrapper");
+        if (!wrapper) return;
+        
+        const query = document.getElementById("sidebarSearch").value.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        wrapper.innerHTML = "";
+        
+        // 1. Calculate parent relationships and hasChildren flags
+        const parentsStack = [];
+        CATEGORIES.forEach(cat => {
+            while (parentsStack.length > 0 && parentsStack[parentsStack.length - 1].depth >= cat.depth) {
+                parentsStack.pop();
+            }
+            cat.parentId = parentsStack.length > 0 ? parentsStack[parentsStack.length - 1].id : null;
+            parentsStack.push({ depth: cat.depth, id: cat.id });
+        });
+        
+        for (let i = 0; i < CATEGORIES.length; i++) {
+            const cat = CATEGORIES[i];
+            cat.hasChildren = (i + 1 < CATEGORIES.length) && (CATEGORIES[i+1].depth > cat.depth);
+        }
+        
+        // 2. Helper to check if any ancestor is collapsed
+        function isAncestorCollapsed(cat) {
+            let currentParentId = cat.parentId;
+            while (currentParentId !== null) {
+                if (collapsedCategories.has(currentParentId)) {
+                    return true;
+                }
+                const parentCat = CATEGORIES.find(c => c.id === currentParentId);
+                currentParentId = parentCat ? parentCat.parentId : null;
+            }
+            return false;
+        }
+        
+        // 3. Render tree nodes
+        CATEGORIES.forEach(cat => {
+            const cleanName = cat.name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+            const matchesSearch = cleanName.includes(query);
+            
+            if (query) {
+                if (!matchesSearch) return; // Hide nodes that don't match the query
+            } else {
+                if (isAncestorCollapsed(cat)) return; // Hide nodes if an ancestor is collapsed
+            }
+            
+            const node = document.createElement("div");
+            node.className = "category-tree-node";
+            node.style.paddingLeft = `${cat.depth * 16 + 8}px`;
+            node.dataset.id = cat.id;
+            
+            const toggleSpan = document.createElement("span");
+            toggleSpan.className = "node-toggle";
+            
+            if (cat.hasChildren) {
+                const isCollapsed = collapsedCategories.has(cat.id);
+                toggleSpan.textContent = isCollapsed ? "▶" : "▼";
+                toggleSpan.style.cursor = "pointer";
+                toggleSpan.addEventListener("click", function (e) {
+                    e.stopPropagation();
+                    if (isCollapsed) {
+                        collapsedCategories.delete(cat.id);
+                    } else {
+                        collapsedCategories.add(cat.id);
+                    }
+                    renderSidebarCategories();
+                });
+            } else {
+                toggleSpan.innerHTML = "&#9675;"; // hollow bullet
+                toggleSpan.style.fontSize = "10px";
+            }
+            
+            const textSpan = document.createElement("span");
+            textSpan.className = "node-text";
+            textSpan.textContent = cat.name;
+            
+            if (query && matchesSearch) {
+                const index = cat.name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").indexOf(query);
+                if (index >= 0) {
+                    const originalText = cat.name;
+                    const matchLen = query.length;
+                    const before = originalText.substring(0, index);
+                    const match = originalText.substring(index, index + matchLen);
+                    const after = originalText.substring(index + matchLen);
+                    textSpan.innerHTML = `${escapeHtml(before)}<mark style="background: #ff6b35; color: white; border-radius: 2px; padding: 0 2px;">${escapeHtml(match)}</mark>${escapeHtml(after)}`;
+                }
+            }
+            
+            node.appendChild(toggleSpan);
+            node.appendChild(textSpan);
+            
+            node.addEventListener("click", function () {
+                applySidebarCategory(cat.id, cat.name);
+            });
+            
+            wrapper.appendChild(node);
+        });
+    }
+
+    function applySidebarCategory(catId, catName) {
+        const selected = document.querySelectorAll('.product-checkbox:checked');
+        const ids = Array.from(selected).map(cb => cb.value);
+        
+        if (ids.length === 0) {
+            alert("Por favor, selecciona al menos un producto en la planilla para asignarle la categoría.");
+            return;
+        }
+        
+        if (!confirm(`¿Deseas asignar la categoría "${catName}" a los ${ids.length} productos seleccionados?`)) {
+            return;
+        }
+
+        fetch('{% url "admin_products_uncategorized" %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken,
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: JSON.stringify({
+                action: 'categorize',
+                product_ids: ids,
+                category_id: catId,
+                categories: [catId]
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Fade out assigned product rows
+                ids.forEach(id => fadeOutRow(id));
+                // Close sidebar after assigning
+                toggleCategoriesSidebar(false);
+            } else {
+                alert('Error: ' + data.error);
+            }
+        })
+        .catch(err => {
+            console.error('Error al aplicar categoría desde barra lateral:', err);
+            alert('Ocurrió un error al guardar.');
+        });
+    }
+
+    // --- Inline Category Creation Helpers ---
+    function toggleSidebarNewCatForm(show) {
+        const form = document.getElementById("sidebarNewCatForm");
+        if (!form) return;
+        
+        if (show === undefined) {
+            const isHidden = form.style.display === "none";
+            form.style.display = isHidden ? "block" : "none";
+            if (isHidden) {
+                clearSidebarParentCategory();
+                document.getElementById("sidebarNewCatName").value = "";
+                document.getElementById("sidebarNewCatName").focus();
+            }
+        } else if (show) {
+            form.style.display = "block";
+            clearSidebarParentCategory();
+            document.getElementById("sidebarNewCatName").value = "";
+            document.getElementById("sidebarNewCatName").focus();
+        } else {
+            form.style.display = "none";
+        }
+    }
+
+    // --- Custom Sidebar Parent Category Dropdown Logic ---
+    let sidebarParentHighlightedIndex = -1;
+
+    function showSidebarParentDropdown(e) {
+        if (e) e.stopPropagation();
+        const dropdown = document.getElementById("sidebarParentDropdown");
+        if (dropdown) {
+            renderSidebarParentOptions();
+        }
+    }
+
+    function renderSidebarParentOptions() {
+        const dropdown = document.getElementById("sidebarParentDropdown");
+        if (!dropdown) return;
+
+        const input = document.getElementById("sidebarNewCatParentSearchInput");
+        const query = input.value.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        dropdown.innerHTML = "";
+        sidebarParentHighlightedIndex = -1;
+
+        // 1. None Option (Raíz)
+        if (!query || "ninguna raiz".includes(query)) {
+            const noneOpt = document.createElement("div");
+            noneOpt.className = "autocomplete-option none-option";
+            noneOpt.textContent = "Ninguna (Raíz)";
+            noneOpt.addEventListener("mousedown", function (e) {
+                e.preventDefault();
+                selectSidebarParentCategory("", "Ninguna (Raíz)");
+            });
+            dropdown.appendChild(noneOpt);
+        }
+
+        // 2. Filter and render category options
+        const filtered = CATEGORIES.filter(cat => {
+            const cleanLabel = cat.label.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+            return cleanLabel.includes(query);
+        });
+
+        filtered.forEach(cat => {
+            const opt = document.createElement("div");
+            opt.className = "autocomplete-option";
+            opt.style.paddingLeft = `${cat.depth * 16 + 10}px`;
+            
+            const prefix = cat.depth > 0 ? "↳ " : "";
+            opt.textContent = prefix + cat.name;
+
+            // Highlight search matching text
+            if (query) {
+                const index = cat.name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").indexOf(query);
+                if (index >= 0) {
+                    const before = cat.name.substring(0, index);
+                    const match = cat.name.substring(index, index + query.length);
+                    const after = cat.name.substring(index + query.length);
+                    opt.innerHTML = `${prefix}${escapeHtml(before)}<mark style="background: #ff6b35; color: white; border-radius: 2px; padding: 0 2px;">${escapeHtml(match)}</mark>${escapeHtml(after)}`;
+                }
+            }
+
+            opt.addEventListener("mousedown", function (e) {
+                e.preventDefault();
+                selectSidebarParentCategory(cat.id, cat.name);
+            });
+
+            dropdown.appendChild(opt);
+        });
+
+        if (dropdown.children.length > 0) {
+            dropdown.style.display = "block";
+            document.getElementById("sidebarParentArrow").style.transform = "translateY(-50%) rotate(180deg)";
+        } else {
+            dropdown.style.display = "none";
+            document.getElementById("sidebarParentArrow").style.transform = "translateY(-50%)";
+        }
+    }
+
+    function selectSidebarParentCategory(id, name) {
+        const hiddenInput = document.getElementById("sidebarNewCatParent");
+        const searchInput = document.getElementById("sidebarNewCatParentSearchInput");
+        const clearBtn = document.getElementById("sidebarParentClear");
+        const arrow = document.getElementById("sidebarParentArrow");
+        const dropdown = document.getElementById("sidebarParentDropdown");
+
+        hiddenInput.value = id;
+        searchInput.value = name;
+        
+        if (id !== "") {
+            clearBtn.style.display = "block";
+        } else {
+            clearBtn.style.display = "none";
+        }
+        dropdown.style.display = "none";
+        arrow.style.transform = "translateY(-50%)";
+    }
+
+    function clearSidebarParentCategory(e) {
+        if (e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+        const hiddenInput = document.getElementById("sidebarNewCatParent");
+        const searchInput = document.getElementById("sidebarNewCatParentSearchInput");
+        const clearBtn = document.getElementById("sidebarParentClear");
+        const dropdown = document.getElementById("sidebarParentDropdown");
+        const arrow = document.getElementById("sidebarParentArrow");
+
+        hiddenInput.value = "";
+        searchInput.value = "";
+        clearBtn.style.display = "none";
+        dropdown.style.display = "none";
+        arrow.style.transform = "translateY(-50%)";
+    }
+
+    function setupSidebarParentCategorySelect() {
+        const input = document.getElementById("sidebarNewCatParentSearchInput");
+        const dropdown = document.getElementById("sidebarParentDropdown");
+        const arrow = document.getElementById("sidebarParentArrow");
+        if (!input || !dropdown) return;
+
+        input.addEventListener("input", function () {
+            renderSidebarParentOptions();
+        });
+
+        input.addEventListener("blur", function () {
+            setTimeout(() => {
+                dropdown.style.display = "none";
+                arrow.style.transform = "translateY(-50%)";
+            }, 200);
+        });
+
+        input.addEventListener("keydown", function (e) {
+            const opts = dropdown.querySelectorAll(".autocomplete-option");
+            
+            if (e.key === "ArrowDown") {
+                e.preventDefault();
+                if (dropdown.style.display === "none") {
+                    renderSidebarParentOptions();
+                }
+                let next = sidebarParentHighlightedIndex + 1;
+                if (next >= opts.length) next = 0;
+                highlightParentOption(next);
+            }
+            else if (e.key === "ArrowUp") {
+                e.preventDefault();
+                let prev = sidebarParentHighlightedIndex - 1;
+                if (prev < 0) prev = opts.length - 1;
+                highlightParentOption(prev);
+            }
+            else if (e.key === "Enter") {
+                e.preventDefault();
+                if (sidebarParentHighlightedIndex >= 0 && sidebarParentHighlightedIndex < opts.length) {
+                    opts[sidebarParentHighlightedIndex].dispatchEvent(new MouseEvent("mousedown"));
+                } else if (opts.length > 0) {
+                    opts[0].dispatchEvent(new MouseEvent("mousedown"));
+                }
+            }
+            else if (e.key === "Escape") {
+                e.preventDefault();
+                dropdown.style.display = "none";
+                arrow.style.transform = "translateY(-50%)";
+            }
+        });
+
+        function highlightParentOption(index) {
+            const opts = dropdown.querySelectorAll(".autocomplete-option");
+            opts.forEach(o => o.classList.remove("highlighted"));
+            
+            if (index >= 0 && index < opts.length) {
+                opts[index].classList.add("highlighted");
+                opts[index].scrollIntoView({ block: "nearest" });
+                sidebarParentHighlightedIndex = index;
+            }
+        }
+
+        document.addEventListener("click", function (e) {
+            if (!input.contains(e.target) && !dropdown.contains(e.target)) {
+                dropdown.style.display = "none";
+                arrow.style.transform = "translateY(-50%)";
+            }
+        });
+    }
+
+    function submitSidebarNewCat() {
+        const nameInput = document.getElementById("sidebarNewCatName");
+        const parentSelect = document.getElementById("sidebarNewCatParent");
+        const name = nameInput.value.trim();
+        const parentId = parentSelect.value;
+        
+        if (!name) {
+            alert("El nombre de la categoría es obligatorio.");
+            return;
+        }
+        
+        const formData = new FormData();
+        formData.append("name", name);
+        if (parentId) {
+            formData.append("parent_id", parentId);
+        }
+        
+        fetch("{% url 'admin_category_create_ajax' %}", {
+            method: "POST",
+            headers: {
+                "X-CSRFToken": csrfToken,
+                "X-Requested-With": "XMLHttpRequest"
+            },
+            body: formData
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                CATEGORIES = data.categories;
+                renderSidebarCategories();
+                
+                // Rebuild the M2M check tree in the main modal as well
+                rebuildCheckTree(data.categories, data.new_category_id);
+                
+                toggleSidebarNewCatForm(false);
+                alert(`Categoría "${name}" creada con éxito.`);
+            } else {
+                throw new Error(data.error || "Error al crear la categoría");
+            }
+        })
+        .catch(err => {
+            alert("Error: " + err.message);
         });
     }
 </script>
