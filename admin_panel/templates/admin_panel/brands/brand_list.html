@@ -1,0 +1,339 @@
+{% extends 'admin_panel/base.html' %}
+
+{% block page_title %}Catálogo de Marcas{% endblock %}
+
+{% block extra_css %}
+<style>
+    .brand-container {
+        max-width: 1200px;
+    }
+    .brand-toolbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+        flex-wrap: wrap;
+        gap: 15px;
+    }
+    .brand-toolbar h2 {
+        margin: 0;
+    }
+    .brand-toolbar p {
+        margin: 5px 0 0 0;
+        color: var(--color-gray-light);
+        font-size: 0.9rem;
+    }
+    .brand-tree {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+    }
+    .brand-card {
+        background: rgba(255, 255, 255, 0.02);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 12px;
+        padding: 20px;
+        transition: transform 0.2s, border-color 0.2s;
+    }
+    .brand-card:hover {
+        border-color: rgba(255, 107, 53, 0.3);
+    }
+    .brand-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        padding-bottom: 15px;
+        margin-bottom: 15px;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+    .brand-identity {
+        display: flex;
+        align-items: center;
+        gap: 15px;
+    }
+    .brand-logo-preview {
+        width: 50px;
+        height: 50px;
+        object-fit: contain;
+        background: #fff;
+        border-radius: 8px;
+        padding: 5px;
+    }
+    .brand-logo-placeholder {
+        width: 50px;
+        height: 50px;
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.05);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+    }
+    .brand-name {
+        font-size: 1.3rem;
+        font-weight: 600;
+        margin: 0;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    .badge {
+        font-size: 0.75rem;
+        padding: 3px 8px;
+        border-radius: 20px;
+        font-weight: 500;
+    }
+    .badge-active {
+        background: rgba(40, 167, 69, 0.15);
+        color: #28a745;
+        border: 1px solid rgba(40, 167, 69, 0.3);
+    }
+    .badge-inactive {
+        background: rgba(220, 53, 69, 0.15);
+        color: #dc3545;
+        border: 1px solid rgba(220, 53, 69, 0.3);
+    }
+    .rubro-container {
+        margin-left: 20px;
+        display: flex;
+        flex-direction: column;
+        gap: 15px;
+        border-left: 2px solid rgba(255, 107, 53, 0.15);
+        padding-left: 20px;
+    }
+    .rubro-row {
+        background: rgba(255, 255, 255, 0.01);
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        border-radius: 8px;
+        padding: 12px 16px;
+    }
+    .rubro-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 10px;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+    .rubro-title {
+        font-weight: 600;
+        font-size: 1.05rem;
+        margin: 0;
+        color: #ff8c42;
+    }
+    .subrubro-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+        gap: 12px;
+        margin-top: 10px;
+    }
+    .subrubro-card {
+        background: rgba(255, 255, 255, 0.02);
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        border-radius: 6px;
+        padding: 12px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        transition: background-color 0.2s;
+    }
+    .subrubro-card:hover {
+        background: rgba(255, 255, 255, 0.04);
+    }
+    .subrubro-info h5 {
+        margin: 0 0 5px 0;
+        font-size: 0.95rem;
+        font-weight: 600;
+    }
+    .subrubro-info p {
+        margin: 0;
+        font-size: 0.8rem;
+        color: var(--color-gray-light);
+    }
+    .action-group {
+        display: flex;
+        gap: 6px;
+        align-items: center;
+    }
+    .btn-sm-icon {
+        padding: 5px 10px;
+        font-size: 0.85rem;
+        border-radius: 4px;
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+    }
+    .btn-trash {
+        background: rgba(220, 53, 69, 0.1);
+        color: #dc3545;
+        border: 1px solid rgba(220, 53, 69, 0.2);
+    }
+    .btn-trash:hover {
+        background: #dc3545;
+        color: #fff;
+    }
+    .btn-edit {
+        background: rgba(255, 255, 255, 0.05);
+        color: #fff;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    .btn-edit:hover {
+        background: rgba(255, 255, 255, 0.15);
+    }
+    .btn-primary-soft {
+        background: rgba(255, 107, 53, 0.1);
+        color: var(--color-primary);
+        border: 1px solid rgba(255, 107, 53, 0.2);
+    }
+    .btn-primary-soft:hover {
+        background: var(--color-primary);
+        color: #fff;
+    }
+    .filter-bar {
+        background: rgba(255, 255, 255, 0.02);
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        border-radius: 8px;
+        padding: 12px;
+        margin-bottom: 20px;
+    }
+    .filter-form {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+    .filter-form input[type="text"] {
+        flex: 1;
+        min-width: 200px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="brand-container">
+    <div class="brand-toolbar">
+        <div class="brand-toolbar-title">
+            <h2>Catálogo por Marcas</h2>
+            <p>Estructura alterna comercial: Marca -> Rubro -> Subrubro (ej. FORD -> BUJES -> BUJES ARMADOS)</p>
+        </div>
+        <div>
+            <a href="{% url 'admin_brand_create' %}" class="btn btn-primary">
+                + Nueva Marca
+            </a>
+        </div>
+    </div>
+
+    <!-- Filtro de Búsqueda -->
+    <div class="filter-bar">
+        <form method="GET" class="filter-form">
+            <input type="text" name="q" value="{{ search }}" class="form-input" placeholder="Buscar marcas...">
+            <select name="status" class="form-select" onchange="this.form.submit()">
+                <option value="all" {% if status == 'all' %}selected{% endif %}>Todos los estados</option>
+                <option value="active" {% if status == 'active' %}selected{% endif %}>Activas</option>
+                <option value="inactive" {% if status == 'inactive' %}selected{% endif %}>Inactivas</option>
+            </select>
+            <button type="submit" class="btn btn-primary">Buscar</button>
+            {% if search or status != 'all' %}
+                <a href="{% url 'admin_brand_list' %}" class="btn btn-secondary">Limpiar</a>
+            {% endif %}
+        </form>
+    </div>
+
+    <!-- Tree View Hierarchical -->
+    <div class="brand-tree">
+        {% for brand in brands %}
+            <div class="brand-card">
+                <!-- Marca Header -->
+                <div class="brand-header">
+                    <div class="brand-identity">
+                        {% if brand.logo %}
+                            <img src="{{ brand.logo.url }}" alt="{{ brand.name }}" class="brand-logo-preview">
+                        {% else %}
+                            <div class="brand-logo-placeholder">🏷️</div>
+                        {% endif %}
+                        <div>
+                            <h3 class="brand-name">
+                                {{ brand.name }}
+                                <span class="badge {% if brand.is_active %}badge-active{% else %}badge-inactive{% endif %}">
+                                    {% if brand.is_active %}Activa{% else %}Inactiva{% endif %}
+                                </span>
+                            </h3>
+                            <span style="font-size: 0.8rem; color: var(--color-gray-light)">Orden: {{ brand.order }} | Rubros: {{ brand.rubros.all.count }}</span>
+                        </div>
+                    </div>
+                    <div class="action-group">
+                        <a href="{% url 'admin_brand_rubro_create' %}?brand={{ brand.id }}" class="btn-sm-icon btn btn-primary-soft">
+                            + Agregar Rubro
+                        </a>
+                        <a href="{% url 'admin_brand_edit' brand.id %}" class="btn-sm-icon btn btn-edit">
+                            ✏️ Editar
+                        </a>
+                        <form action="{% url 'admin_brand_delete' brand.id %}" method="POST" style="display:inline;" onsubmit="return confirm('¿Seguro quieres eliminar esta marca y todos sus rubros/subrubros?')">
+                            {% csrf_token %}
+                            <button type="submit" class="btn-sm-icon btn btn-trash">🗑️</button>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Rubros List -->
+                <div class="rubro-container">
+                    {% for rubro in brand.rubros.all %}
+                        <div class="rubro-row">
+                            <div class="rubro-header">
+                                <h4 class="rubro-title">📂 {{ rubro.name }}</h4>
+                                <div class="action-group">
+                                    <a href="{% url 'admin_brand_subrubro_create' %}?rubro={{ rubro.id }}" class="btn-sm-icon btn btn-primary-soft" style="padding: 3px 8px; font-size:0.8rem;">
+                                        + Subrubro
+                                    </a>
+                                    <a href="{% url 'admin_brand_rubro_edit' rubro.id %}" class="btn-sm-icon btn btn-edit" style="padding: 3px 8px; font-size:0.8rem;">
+                                        ✏️
+                                    </a>
+                                    <form action="{% url 'admin_brand_rubro_delete' rubro.id %}" method="POST" style="display:inline;" onsubmit="return confirm('¿Seguro quieres eliminar este rubro y todos sus subrubros?')">
+                                        {% csrf_token %}
+                                        <button type="submit" class="btn-sm-icon btn btn-trash" style="padding: 3px 8px; font-size:0.8rem;">🗑️</button>
+                                    </form>
+                                </div>
+                            </div>
+
+                            <!-- Subrubros Grid -->
+                            <div class="subrubro-grid">
+                                {% for subrubro in rubro.subrubros.all %}
+                                    <div class="subrubro-card">
+                                        <div class="subrubro-info">
+                                            <h5>🔧 {{ subrubro.name }}</h5>
+                                            <p>Productos: {{ subrubro.products.all.count }} | Ayudantes: {{ subrubro.helper_categories.all.count }}</p>
+                                        </div>
+                                        <div class="action-group">
+                                            <a href="{% url 'admin_brand_subrubro_products' subrubro.id %}" class="btn btn-primary" style="padding: 4px 8px; font-size:0.8rem;">
+                                                📦 Productos
+                                            </a>
+                                            <a href="{% url 'admin_brand_subrubro_edit' subrubro.id %}" class="btn-sm-icon btn btn-edit" style="padding: 4px 8px; font-size:0.8rem;">
+                                                ✏️
+                                            </a>
+                                            <form action="{% url 'admin_brand_subrubro_delete' subrubro.id %}" method="POST" style="display:inline;" onsubmit="return confirm('¿Seguro quieres eliminar este subrubro?')">
+                                                {% csrf_token %}
+                                                <button type="submit" class="btn-sm-icon btn btn-trash" style="padding: 4px 8px; font-size:0.8rem;">🗑️</button>
+                                            </form>
+                                        </div>
+                                    </div>
+                                {% empty %}
+                                    <div style="font-size:0.85rem; color:var(--color-gray-light); grid-column: 1/-1;">No hay subrubros creados en este rubro.</div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    {% empty %}
+                        <div style="font-size:0.9rem; color:var(--color-gray-light);">No hay rubros creados para esta marca.</div>
+                    {% endfor %}
+                </div>
+            </div>
+        {% empty %}
+            <div class="brand-card" style="text-align: center; padding: 40px;">
+                <p style="font-size: 1.1rem; color: var(--color-gray-light); margin-bottom: 20px;">No se encontraron marcas configuradas.</p>
+                <a href="{% url 'admin_brand_create' %}" class="btn btn-primary">Crear Primera Marca</a>
+            </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

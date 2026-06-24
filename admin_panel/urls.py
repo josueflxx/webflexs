@@ -145,6 +145,25 @@ urlpatterns = [
     path('categorias/<int:category_id>/atributos/nuevo/', views.category_attribute_create, name='admin_category_attribute_create'),
     path('categorias/<int:category_id>/atributos/<int:attribute_id>/editar/', views.category_attribute_edit, name='admin_category_attribute_edit'),
     path('categorias/<int:category_id>/atributos/<int:attribute_id>/eliminar/', views.category_attribute_delete, name='admin_category_attribute_delete'),
+
+    # Brand Catalog
+    path('marcas/', views.brand_list, name='admin_brand_list'),
+    path('marcas/nueva/', views.brand_create, name='admin_brand_create'),
+    path('marcas/<int:pk>/editar/', views.brand_edit, name='admin_brand_edit'),
+    path('marcas/<int:pk>/eliminar/', views.brand_delete, name='admin_brand_delete'),
+    
+    path('marcas/rubros/nuevo/', views.brand_rubro_create, name='admin_brand_rubro_create'),
+    path('marcas/rubros/<int:pk>/editar/', views.brand_rubro_edit, name='admin_brand_rubro_edit'),
+    path('marcas/rubros/<int:pk>/eliminar/', views.brand_rubro_delete, name='admin_brand_rubro_delete'),
+    
+    path('marcas/subrubros/nuevo/', views.brand_subrubro_create, name='admin_brand_subrubro_create'),
+    path('marcas/subrubros/<int:pk>/editar/', views.brand_subrubro_edit, name='admin_brand_subrubro_edit'),
+    path('marcas/subrubros/<int:pk>/eliminar/', views.brand_subrubro_delete, name='admin_brand_subrubro_delete'),
+    path('marcas/subrubros/<int:pk>/productos/', views.brand_subrubro_products, name='admin_brand_subrubro_products'),
+    path('marcas/subrubros/<int:pk>/productos/agregar/', views.brand_subrubro_add_product, name='admin_brand_subrubro_add_product'),
+    path('marcas/subrubros/<int:pk>/productos/remover/', views.brand_subrubro_remove_product, name='admin_brand_subrubro_remove_product'),
+    path('marcas/subrubros/<int:pk>/productos/reordenar/', views.brand_subrubro_products_reorder, name='admin_brand_subrubro_products_reorder'),
+    path('marcas/subrubros/<int:pk>/sincronizar/', views.brand_subrubro_sync, name='admin_brand_subrubro_sync'),
     
     # Settings
     path('configuracion/', views.settings_view, name='admin_settings'),

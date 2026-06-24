@@ -1,0 +1,612 @@
+{% extends 'admin_panel/base.html' %}
+
+{% block page_title %}Productos de {{ subrubro.name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .subrubro-container {
+        max-width: 1200px;
+    }
+    .info-card {
+        background: rgba(255, 255, 255, 0.02);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 12px;
+        padding: 20px;
+        margin-bottom: 25px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 15px;
+    }
+    .info-card h2 {
+        margin: 0 0 5px 0;
+        font-size: 1.4rem;
+    }
+    .info-card p {
+        margin: 0;
+        color: var(--color-gray-light);
+        font-size: 0.9rem;
+    }
+    .sync-badge {
+        background: rgba(255, 107, 53, 0.1);
+        color: var(--color-primary);
+        padding: 4px 10px;
+        border-radius: 4px;
+        font-size: 0.8rem;
+        font-weight: 500;
+        border: 1px solid rgba(255, 107, 53, 0.2);
+    }
+    .grid-container {
+        display: grid;
+        grid-template-columns: 2fr 1fr;
+        gap: 20px;
+        align-items: start;
+    }
+    @media (max-width: 900px) {
+        .grid-container {
+            grid-template-columns: 1fr;
+        }
+    }
+    .panel-card {
+        background: rgba(255, 255, 255, 0.02);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 10px;
+        padding: 20px;
+    }
+    .panel-card h3 {
+        margin-top: 0;
+        margin-bottom: 15px;
+        font-size: 1.1rem;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+        padding-bottom: 10px;
+    }
+    /* Drag & Drop Table Styles */
+    .draggable-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+    .draggable-table th, .draggable-table td {
+        padding: 10px 12px;
+        text-align: left;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    }
+    .draggable-table th {
+        color: var(--color-gray-light);
+        font-size: 0.85rem;
+        font-weight: 600;
+    }
+    .product-row {
+        cursor: grab;
+    }
+    .product-row:active {
+        cursor: grabbing;
+    }
+    .product-row.drag-over {
+        border-top: 2px solid var(--color-primary);
+    }
+    .drag-handle {
+        color: var(--color-gray-light);
+        font-size: 1.1rem;
+        user-select: none;
+        cursor: grab;
+    }
+    .save-order-bar {
+        display: flex;
+        justify-content: flex-end;
+        gap: 15px;
+        margin-top: 15px;
+    }
+    .search-result-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 10px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+    .search-result-item:last-child {
+        border-bottom: none;
+    }
+    .search-result-info h5 {
+        margin: 0 0 3px 0;
+        font-size: 0.9rem;
+    }
+    .search-result-info p {
+        margin: 0;
+        font-size: 0.75rem;
+        color: var(--color-gray-light);
+    }
+    .btn-sync-spin {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .btn-sync-spin.loading svg {
+        animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+        100% { transform: rotate(360deg); }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="subrubro-container">
+    <div>
+        <a href="{% url 'admin_brand_list' %}" class="btn btn-secondary" style="margin-bottom: 15px;">
+            ← Volver a Marcas
+        </a>
+    </div>
+
+    <!-- Info Card -->
+    <div class="info-card">
+        <div>
+            <h2>{{ subrubro.brand_rubro.brand.name }} &gt; {{ subrubro.brand_rubro.name }} &gt; {{ subrubro.name }}</h2>
+            <p>Gestiona y ordena manualmente los productos de este subrubro. Puedes utilizar las categorías ayudantes configuradas para auto-poblarlo.</p>
+            {% if subrubro.helper_categories.all %}
+                <div style="margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+                    <span class="sync-badge">Categorías Ayudantes:</span>
+                    {% for cat in subrubro.helper_categories.all %}
+                        <span style="font-size: 0.8rem; background: rgba(255,255,255,0.05); padding: 2px 6px; border-radius: 4px;">{{ cat.name }}</span>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        </div>
+        <div>
+            <button id="btnSyncProducts" class="btn btn-primary btn-sync-spin">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+                Auto-Sincronizar
+            </button>
+        </div>
+    </div>
+
+    <div class="grid-container">
+        <!-- Products list / Drag & Drop -->
+        <div class="panel-card">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; border-bottom: 1px solid rgba(255, 255, 255, 0.06); padding-bottom: 10px;">
+                <h3 style="margin:0; border:none; padding:0;">Lista de Productos ({{ order_rows.count }})</h3>
+                <span id="orderStatus" style="font-size:0.85rem; color:var(--color-gray-light);">Arrastra las filas para reordenar</span>
+            </div>
+            <div id="tableContainer">
+            {% if order_rows %}
+                <form id="orderForm" method="POST">
+                    {% csrf_token %}
+                    <table class="draggable-table" id="productsTable">
+                        <thead>
+                            <tr>
+                                <th style="width: 40px;"></th>
+                                <th style="width: 60px;">Pos</th>
+                                <th style="width: 140px;">SKU</th>
+                                <th>Nombre</th>
+                                <th style="width: 80px; text-align: right;">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in order_rows %}
+                                <tr class="product-row" draggable="true" data-product-id="{{ row.product.id }}">
+                                    <td class="drag-handle">☰</td>
+                                    <td class="row-position">{{ forloop.counter }}</td>
+                                    <td><strong>{{ row.product.sku }}</strong></td>
+                                    <td>{{ row.product.name }}</td>
+                                    <td style="text-align: right;">
+                                        <button type="button" class="btn-sm-icon btn btn-trash btn-remove-product" data-product-id="{{ row.product.id }}">
+                                            🗑️
+                                        </button>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                    
+                    <div class="save-order-bar">
+                        <button type="button" id="btnSaveOrder" class="btn btn-primary" disabled>
+                            Guardar Orden
+                        </button>
+                    </div>
+                </form>
+            {% else %}
+                <div id="emptyPlaceholder" style="text-align: center; padding: 40px; color: var(--color-gray-light);">
+                    No hay productos en este subrubro. Haz clic en "Auto-Sincronizar" o búscaros a la derecha para agregarlos.
+                </div>
+            {% endif %}
+            </div>
+        </div>
+
+        <!-- Add products manually -->
+        <div class="panel-card">
+            <h3>Agregar Manualmente</h3>
+            <form id="searchForm" method="GET" style="display:flex; gap:8px; margin-bottom:15px;" onsubmit="return false;">
+                <input type="text" id="qInput" name="q" value="" class="form-input" placeholder="Buscar por SKU o Nombre...">
+                <button type="button" id="btnSearch" class="btn btn-primary">Buscar</button>
+            </form>
+
+            <div class="search-results" id="searchResults">
+                <div style="font-size:0.85rem; color:var(--color-gray-light); text-align:center; padding:15px;">Escribe en la barra de búsqueda superior para encontrar productos.</div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const tbody = document.querySelector('#productsTable tbody');
+        const saveBtn = document.getElementById('btnSaveOrder');
+        const orderStatus = document.getElementById('orderStatus');
+        const syncBtn = document.getElementById('btnSyncProducts');
+        const searchForm = document.getElementById('searchForm');
+        const qInput = document.getElementById('qInput');
+        const btnSearch = document.getElementById('btnSearch');
+        const searchResults = document.getElementById('searchResults');
+        
+        let dragSrcEl = null;
+
+        // Initialize drag events for rows
+        function initDragAndDrop() {
+            const rows = document.querySelectorAll('#productsTable .product-row');
+            rows.forEach(row => {
+                row.removeEventListener('dragstart', handleDragStart);
+                row.removeEventListener('dragenter', handleDragEnter);
+                row.removeEventListener('dragover', handleDragOver);
+                row.removeEventListener('dragleave', handleDragLeave);
+                row.removeEventListener('drop', handleDrop);
+                row.removeEventListener('dragend', handleDragEnd);
+
+                row.addEventListener('dragstart', handleDragStart, false);
+                row.addEventListener('dragenter', handleDragEnter, false);
+                row.addEventListener('dragover', handleDragOver, false);
+                row.addEventListener('dragleave', handleDragLeave, false);
+                row.addEventListener('drop', handleDrop, false);
+                row.addEventListener('dragend', handleDragEnd, false);
+            });
+        }
+
+        function handleDragStart(e) {
+            this.style.opacity = '0.4';
+            dragSrcEl = this;
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/html', this.innerHTML);
+            e.dataTransfer.setData('text/plain', this.dataset.productId);
+        }
+
+        function handleDragOver(e) {
+            if (e.preventDefault) {
+                e.preventDefault();
+            }
+            e.dataTransfer.dropEffect = 'move';
+            this.classList.add('drag-over');
+            return false;
+        }
+
+        function handleDragEnter(e) {
+            this.classList.add('drag-over');
+        }
+
+        function handleDragLeave(e) {
+            this.classList.remove('drag-over');
+        }
+
+        function handleDrop(e) {
+            if (e.stopPropagation) {
+                e.stopPropagation();
+            }
+
+            if (dragSrcEl !== this) {
+                this.classList.remove('drag-over');
+                
+                const srcHtml = dragSrcEl.innerHTML;
+                const srcId = dragSrcEl.dataset.productId;
+                
+                dragSrcEl.innerHTML = this.innerHTML;
+                dragSrcEl.dataset.productId = this.dataset.productId;
+                
+                this.innerHTML = srcHtml;
+                this.dataset.productId = srcId;
+                
+                refreshPositions();
+                
+                saveBtn.removeAttribute('disabled');
+                orderStatus.textContent = 'Orden modificado * (Presiona Guardar)';
+                orderStatus.style.color = '#ff6b35';
+                
+                bindRemoveButtons();
+            }
+            return false;
+        }
+
+        function handleDragEnd(e) {
+            this.style.opacity = '1.0';
+            const rows = document.querySelectorAll('#productsTable .product-row');
+            rows.forEach(row => {
+                row.classList.remove('drag-over');
+            });
+        }
+
+        function refreshPositions() {
+            const rows = document.querySelectorAll('#productsTable .product-row');
+            rows.forEach((row, idx) => {
+                const posEl = row.querySelector('.row-position');
+                if (posEl) posEl.textContent = String(idx + 1);
+            });
+            
+            // Update title count
+            const countHeader = document.querySelector('.panel-card h3');
+            if (countHeader) {
+                countHeader.textContent = `Lista de Productos (${rows.length})`;
+            }
+        }
+
+        // Save order via AJAX
+        if (saveBtn) {
+            saveBtn.addEventListener('click', async function() {
+                saveBtn.setAttribute('disabled', 'true');
+                saveBtn.textContent = 'Guardando...';
+                
+                const rows = Array.from(document.querySelectorAll('#productsTable .product-row'));
+                const orderedIds = rows.map(row => row.dataset.productId);
+                
+                try {
+                    const response = await fetch('{% url "admin_brand_subrubro_products_reorder" subrubro.id %}', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+                        },
+                        body: JSON.stringify({ ordered_ids: orderedIds })
+                    });
+                    
+                    const data = await response.json();
+                    if (data.success) {
+                        orderStatus.textContent = 'Orden guardado con éxito';
+                        orderStatus.style.color = '#28a745';
+                        setTimeout(() => {
+                            orderStatus.textContent = 'Arrastra las filas para reordenar';
+                            orderStatus.style.color = '';
+                        }, 3000);
+                    } else {
+                        alert('Error al guardar el orden: ' + (data.error || 'Error desconocido'));
+                        saveBtn.removeAttribute('disabled');
+                    }
+                } catch (err) {
+                    console.error(err);
+                    alert('Error de conexión al guardar el orden.');
+                    saveBtn.removeAttribute('disabled');
+                }
+                saveBtn.textContent = 'Guardar Orden';
+            });
+        }
+
+        // Auto-Sync via AJAX
+        if (syncBtn) {
+            syncBtn.addEventListener('click', async function() {
+                syncBtn.setAttribute('disabled', 'true');
+                const originalText = syncBtn.innerHTML;
+                syncBtn.innerHTML = 'Sincronizando...';
+                
+                try {
+                    const response = await fetch('{% url "admin_brand_subrubro_sync" subrubro.id %}', {
+                        method: 'POST',
+                        headers: {
+                            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+                        }
+                    });
+                    const data = await response.json();
+                    if (data.success) {
+                        alert('Sincronización exitosa. Se agregaron ' + data.added_count + ' productos.');
+                        window.location.reload();
+                    } else {
+                        alert('Error al sincronizar: ' + (data.error || 'Error desconocido'));
+                        syncBtn.removeAttribute('disabled');
+                        syncBtn.innerHTML = originalText;
+                    }
+                } catch (err) {
+                    console.error(err);
+                    alert('Error de conexión al sincronizar.');
+                    syncBtn.removeAttribute('disabled');
+                    syncBtn.innerHTML = originalText;
+                }
+            });
+        }
+
+        // AJAX search products
+        let searchTimeout = null;
+        if (qInput) {
+            qInput.addEventListener('input', function() {
+                clearTimeout(searchTimeout);
+                const query = qInput.value.trim();
+                if (query.length >= 2) {
+                    searchTimeout = setTimeout(() => performSearch(query), 300);
+                } else if (query.length === 0) {
+                    searchResults.innerHTML = '<div style="font-size:0.85rem; color:var(--color-gray-light); text-align:center; padding:15px;">Escribe en la barra de búsqueda superior para encontrar productos.</div>';
+                }
+            });
+            qInput.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    clearTimeout(searchTimeout);
+                    performSearch(qInput.value.trim());
+                }
+            });
+        }
+        if (btnSearch) {
+            btnSearch.addEventListener('click', function() {
+                performSearch(qInput.value.trim());
+            });
+        }
+
+        async function performSearch(query) {
+            if (!query) return;
+            searchResults.innerHTML = '<div style="font-size:0.85rem; color:var(--color-gray-light); text-align:center; padding:15px;">Buscando...</div>';
+            
+            try {
+                const response = await fetch(`{% url 'admin_brand_subrubro_products' subrubro.id %}?q=${encodeURIComponent(query)}&ajax=1`, {
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                });
+                const data = await response.json();
+                if (data.success) {
+                    renderSearchResults(data.results);
+                } else {
+                    searchResults.innerHTML = '<div style="font-size:0.85rem; color:#dc3545; text-align:center; padding:15px;">Error al buscar.</div>';
+                }
+            } catch (err) {
+                console.error(err);
+                searchResults.innerHTML = '<div style="font-size:0.85rem; color:#dc3545; text-align:center; padding:15px;">Error de conexión.</div>';
+            }
+        }
+
+        function renderSearchResults(results) {
+            if (!results || results.length === 0) {
+                searchResults.innerHTML = '<div style="font-size:0.85rem; color:var(--color-gray-light); text-align:center; padding:15px;">No se encontraron productos disponibles.</div>';
+                return;
+            }
+            
+            searchResults.innerHTML = '';
+            results.forEach(prod => {
+                const item = document.createElement('div');
+                item.className = 'search-result-item';
+                item.dataset.productId = prod.id;
+                item.innerHTML = `
+                    <div class="search-result-info">
+                        <h5>${prod.sku}</h5>
+                        <p>${prod.name}</p>
+                    </div>
+                    <button type="button" class="btn btn-primary btn-add-product" data-product-id="${prod.id}" style="padding: 4px 8px; font-size: 0.8rem;">
+                        + Agregar
+                    </button>
+                `;
+                searchResults.appendChild(item);
+            });
+            
+            searchResults.querySelectorAll('.btn-add-product').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    addProductAJAX(this.dataset.productId, this);
+                });
+            });
+        }
+
+        async function addProductAJAX(productId, buttonEl) {
+            buttonEl.setAttribute('disabled', 'true');
+            buttonEl.textContent = '...';
+            
+            const formData = new FormData();
+            formData.append('product_id', productId);
+            formData.append('ajax', '1');
+            
+            try {
+                const response = await fetch('{% url "admin_brand_subrubro_add_product" subrubro.id %}', {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    body: formData
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    const placeholder = document.getElementById('emptyPlaceholder');
+                    if (placeholder) {
+                        window.location.reload();
+                        return;
+                    }
+                    
+                    const tableBody = document.querySelector('#productsTable tbody');
+                    const newRow = document.createElement('tr');
+                    newRow.className = 'product-row';
+                    newRow.draggable = true;
+                    newRow.dataset.productId = data.product.id;
+                    newRow.style.opacity = '0';
+                    newRow.style.transition = 'opacity 0.4s ease';
+                    
+                    newRow.innerHTML = `
+                        <td class="drag-handle">☰</td>
+                        <td class="row-position"></td>
+                        <td><strong>${data.product.sku}</strong></td>
+                        <td>${data.product.name}</td>
+                        <td style="text-align: right;">
+                            <button type="button" class="btn-sm-icon btn btn-trash btn-remove-product" data-product-id="${data.product.id}">
+                                🗑️
+                            </button>
+                        </td>
+                    `;
+                    tableBody.appendChild(newRow);
+                    
+                    setTimeout(() => newRow.style.opacity = '1.0', 50);
+                    
+                    const searchItem = searchResults.querySelector(`.search-result-item[data-product-id="${productId}"]`);
+                    if (searchItem) {
+                        searchItem.style.opacity = '0';
+                        setTimeout(() => searchItem.remove(), 400);
+                    }
+                    
+                    refreshPositions();
+                    initDragAndDrop();
+                    bindRemoveButtons();
+                    
+                    if (saveBtn) saveBtn.removeAttribute('disabled');
+                } else {
+                    alert('Error: ' + (data.error || 'No se pudo agregar.'));
+                    buttonEl.removeAttribute('disabled');
+                    buttonEl.textContent = '+ Agregar';
+                }
+            } catch (err) {
+                console.error(err);
+                alert('Error de conexión.');
+                buttonEl.removeAttribute('disabled');
+                buttonEl.textContent = '+ Agregar';
+            }
+        }
+
+        function bindRemoveButtons() {
+            document.querySelectorAll('.btn-remove-product').forEach(btn => {
+                btn.removeEventListener('click', handleRemoveClick);
+                btn.addEventListener('click', handleRemoveClick);
+            });
+        }
+
+        async function handleRemoveClick() {
+            if (confirm('¿Seguro que deseas remover este producto del subrubro?')) {
+                const prodId = this.dataset.productId;
+                const row = this.closest('tr');
+                
+                const formData = new FormData();
+                formData.append('product_id', prodId);
+                formData.append('ajax', '1');
+                
+                try {
+                    const response = await fetch('{% url "admin_brand_subrubro_remove_product" subrubro.id %}', {
+                        method: 'POST',
+                        headers: {
+                            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+                            'X-Requested-With': 'XMLHttpRequest'
+                        },
+                        body: formData
+                    });
+                    const data = await response.json();
+                    if (data.success) {
+                        row.style.opacity = '0';
+                        setTimeout(() => {
+                            row.remove();
+                            refreshPositions();
+                            
+                            const rows = document.querySelectorAll('#productsTable .product-row');
+                            if (rows.length === 0) {
+                                window.location.reload();
+                            }
+                        }, 400);
+                    } else {
+                        alert('Error: ' + (data.error || 'No se pudo remover.'));
+                    }
+                } catch (err) {
+                    console.error(err);
+                    alert('Error de conexión.');
+                }
+            }
+        }
+
+        initDragAndDrop();
+        bindRemoveButtons();
+    });
+</script>
+{% endblock %}

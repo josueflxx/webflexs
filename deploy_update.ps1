@@ -19,6 +19,7 @@ $commands = @(
     "python manage.py migrate --settings=flexs_project.settings.production",
     "python manage.py check --settings=flexs_project.settings.production",
     "python manage.py collectstatic --noinput --settings=flexs_project.settings.production",
+    "python scratch/populate_brands_internet.py",
     "sudo systemctl restart gunicorn",
     "sudo systemctl reload nginx",
     "echo 'Despliegue completado correctamente.'"

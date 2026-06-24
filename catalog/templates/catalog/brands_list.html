@@ -1,0 +1,150 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load core_extras %}
+
+{% block title %}Nuestras Marcas | FLEXS{% endblock %}
+{% block meta_description %}Explora nuestro catálogo de productos organizado por marcas oficiales.{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'core/css/catalog.css' %}?v=20260602-lightmode">
+<style>
+    .brands-portal {
+        padding: 40px 0;
+        min-height: 80vh;
+    }
+    .brands-header {
+        text-align: center;
+        margin-bottom: 45px;
+    }
+    .brands-header h1 {
+        font-size: 2.2rem;
+        font-weight: 700;
+        margin: 0 0 10px 0;
+        background: linear-gradient(135deg, #fff 0%, var(--color-primary) 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+    }
+    .brands-header p {
+        color: var(--color-gray-light);
+        font-size: 1.1rem;
+        max-width: 600px;
+        margin: 0 auto;
+    }
+    .brands-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+        gap: 25px;
+    }
+    .brand-portal-card {
+        background: rgba(255, 255, 255, 0.02);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 16px;
+        padding: 24px;
+        text-align: center;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        text-decoration: none;
+        color: inherit;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        position: relative;
+        overflow: hidden;
+    }
+    .brand-portal-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: radial-gradient(circle at center, rgba(255, 107, 53, 0.06) 0%, transparent 70%);
+        opacity: 0;
+        transition: opacity 0.3s ease;
+    }
+    .brand-portal-card:hover {
+        transform: translateY(-5px);
+        border-color: rgba(255, 107, 53, 0.4);
+        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3);
+    }
+    .brand-portal-card:hover::before {
+        opacity: 1;
+    }
+    .brand-portal-logo {
+        width: 120px;
+        height: 120px;
+        object-fit: contain;
+        background: #fff;
+        border-radius: 12px;
+        padding: 12px;
+        margin-bottom: 20px;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+        position: relative;
+        z-index: 1;
+    }
+    .brand-portal-placeholder {
+        width: 120px;
+        height: 120px;
+        border-radius: 12px;
+        background: rgba(255, 255, 255, 0.04);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 3rem;
+        margin-bottom: 20px;
+        position: relative;
+        z-index: 1;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .brand-portal-name {
+        font-size: 1.4rem;
+        font-weight: 600;
+        margin: 0 0 8px 0;
+        position: relative;
+        z-index: 1;
+        color: #fff;
+    }
+    .brand-portal-meta {
+        font-size: 0.85rem;
+        color: var(--color-gray-light);
+        position: relative;
+        z-index: 1;
+    }
+    .brands-back {
+        margin-bottom: 25px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container brands-portal">
+    <div class="brands-back">
+        <a href="{% url 'catalog' %}" class="btn btn-outline" style="display:inline-flex; align-items:center; gap:8px;">
+            ← Volver al Catálogo
+        </a>
+    </div>
+
+    <div class="brands-header">
+        <h1>Catálogo por Marcas</h1>
+        <p>Buscá repuestos de forma rápida y visual ingresando directamente por la marca oficial de tu vehículo.</p>
+    </div>
+
+    <div class="brands-grid">
+        {% for brand in brands %}
+            <a href="{% url 'brand_detail' brand.slug %}" class="brand-portal-card">
+                {% if brand.logo %}
+                    <img src="{{ brand.logo.url }}" alt="{{ brand.name }}" class="brand-portal-logo">
+                {% else %}
+                    <div class="brand-portal-placeholder">🏷️</div>
+                {% endif %}
+                <h3 class="brand-portal-name">{{ brand.name }}</h3>
+                <span class="brand-portal-meta">Ver rubros y productos →</span>
+            </a>
+        {% empty %}
+            <div style="grid-column: 1/-1; text-align: center; padding: 60px; color: var(--color-gray-light);">
+                <p style="font-size: 1.2rem;">El portal de marcas se encuentra en preparación.</p>
+                <a href="{% url 'catalog' %}" class="btn btn-primary" style="margin-top: 15px;">Ir al Catálogo Principal</a>
+            </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

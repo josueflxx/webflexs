@@ -7,3 +7,4 @@ from .products import *
 from .catalog_export import *
 from .settings_views import *
 from .importers import *
+from .brands import *

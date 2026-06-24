@@ -141,6 +141,9 @@
                 <a href="{% url 'catalog' %}" class="btn btn-primary btn-lg">
                     Ver Cat&aacute;logo
                 </a>
+                <a href="{% url 'brands_list' %}" class="btn btn-outline btn-lg">
+                    Ver por Marcas
+                </a>
                 {% if not user.is_authenticated %}
                 <a href="{% url 'account_request' %}" class="btn btn-outline btn-lg">
                     Solicitar Cuenta

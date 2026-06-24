@@ -1,11 +1,15 @@
-from django.contrib import admin
-from .models import Category, CategoryAttribute, Product, ClampSpecs, Supplier, PriceList, PriceListItem
+from django.contrib import admin
+from .models import (
+    Category, CategoryAttribute, Product, ClampSpecs, Supplier, PriceList, PriceListItem,
+    Brand, BrandRubro, BrandSubrubro, BrandSubrubroProductOrder
+)
 from .services.clamp_parser import ClampParser
 
 class CategoryAttributeInline(admin.TabularInline):
     model = CategoryAttribute
     extra = 1
     prepopulated_fields = {'slug': ('name',)}
+
 
 class ClampSpecsInline(admin.StackedInline):
     model = ClampSpecs
@@ -91,3 +95,42 @@ class PriceListItemAdmin(admin.ModelAdmin):
     list_display = ("price_list", "product", "price", "updated_at")
     list_filter = ("price_list", "price_list__company")
     search_fields = ("price_list__name", "product__sku", "product__name")
+
+
+class BrandRubroInline(admin.TabularInline):
+    model = BrandRubro
+    extra = 1
+    prepopulated_fields = {'slug': ('name',)}
+
+
+class BrandSubrubroInline(admin.TabularInline):
+    model = BrandSubrubro
+    extra = 1
+    prepopulated_fields = {'slug': ('name',)}
+
+
+@admin.register(Brand)
+class BrandAdmin(admin.ModelAdmin):
+    list_display = ('name', 'is_active', 'order')
+    list_filter = ('is_active',)
+    search_fields = ('name',)
+    prepopulated_fields = {'slug': ('name',)}
+    inlines = [BrandRubroInline]
+
+
+@admin.register(BrandRubro)
+class BrandRubroAdmin(admin.ModelAdmin):
+    list_display = ('name', 'brand', 'is_active', 'order')
+    list_filter = ('is_active', 'brand')
+    search_fields = ('name', 'brand__name')
+    prepopulated_fields = {'slug': ('name',)}
+    inlines = [BrandSubrubroInline]
+
+
+@admin.register(BrandSubrubro)
+class BrandSubrubroAdmin(admin.ModelAdmin):
+    list_display = ('name', 'brand_rubro', 'is_active', 'order')
+    list_filter = ('is_active', 'brand_rubro__brand', 'brand_rubro')
+    search_fields = ('name', 'brand_rubro__name', 'brand_rubro__brand__name')
+    prepopulated_fields = {'slug': ('name',)}
+    autocomplete_fields = ('helper_categories',)

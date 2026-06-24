@@ -38,7 +38,10 @@ from catalog.services.clamp_quoter import (
     calculate_clamp_quote,
     get_allowed_diameter_options,
 )
-from .models import Category, CategoryAttribute, CategoryProductOrder, ClampMeasureRequest, Product
+from .models import (
+    Category, CategoryAttribute, CategoryProductOrder, ClampMeasureRequest, Product,
+    Brand, BrandRubro, BrandSubrubro, BrandSubrubroProductOrder
+)
 
 
 CLAMP_REQUEST_DEFAULT_DOLLAR_RATE = Decimal("1450")
@@ -1719,3 +1722,110 @@ def how_to_measure(request):
     Renders the U-bolt measurement guide page with interactive SVG diagrams, steps, and reference tables.
     """
     return render(request, "catalog/how_to_measure.html")
+
+
+def brands_list(request):
+    """
+    Public brands page listing all active brands with logos.
+    """
+    brands = Brand.objects.filter(is_active=True).order_by("order", "name")
+    settings = SiteSettings.get_settings()
+    return render(request, "catalog/brands_list.html", {
+        "brands": brands,
+        "show_prices": settings.show_public_prices or request.user.is_authenticated,
+    })
+
+
+def brand_detail(request, brand_slug):
+    """
+    Public brand detail page showing rubros, subrubros, and products in a selected subrubro.
+    """
+    brand = get_object_or_404(Brand, slug=brand_slug, is_active=True)
+    
+    rubros = BrandRubro.objects.filter(brand=brand, is_active=True).prefetch_related(
+        Prefetch(
+            "subrubros",
+            queryset=BrandSubrubro.objects.filter(is_active=True),
+            to_attr="active_subrubros"
+        )
+    ).order_by("order", "name")
+    
+    selected_subrubro = None
+    subrubro_slug = request.GET.get("subrubro", "").strip()
+    
+    if subrubro_slug:
+        selected_subrubro = BrandSubrubro.objects.filter(
+            brand_rubro__brand=brand,
+            slug=subrubro_slug,
+            is_active=True
+        ).first()
+        
+    if not selected_subrubro:
+        for rub in rubros:
+            if rub.active_subrubros:
+                selected_subrubro = rub.active_subrubros[0]
+                break
+                
+    products = []
+    if selected_subrubro:
+        order_rows = BrandSubrubroProductOrder.objects.filter(
+            brand_subrubro=selected_subrubro,
+            product__is_active=True
+        ).select_related("product").order_by("sort_order", "product__name")
+        products = [row.product for row in order_rows]
+        
+    settings = SiteSettings.get_settings()
+    show_prices = settings.show_public_prices or request.user.is_authenticated
+    
+    company = get_active_company(request)
+    discount_percentage = Decimal("0")
+    discount = Decimal("0")
+    pricing_context = None
+    price_list = None
+    favorite_product_ids = set()
+    
+    if request.user.is_authenticated and hasattr(request.user, "client_profile"):
+        pricing_context = resolve_pricing_context(request.user, company)
+        price_list = resolve_effective_price_list(
+            company=company,
+            client_company=pricing_context[1],
+            client_category=pricing_context[2],
+        )
+        discount_percentage = resolve_effective_discount_percentage(
+            client_profile=pricing_context[0],
+            company=company,
+            client_company=pricing_context[1],
+            client_category=pricing_context[2],
+        )
+        discount = discount_percentage / 100 if discount_percentage else Decimal("0")
+        favorite_product_ids = set(
+            ClientFavoriteProduct.objects.filter(user=request.user).values_list("product_id", flat=True)
+        )
+    else:
+        price_list = resolve_effective_price_list(company=company)
+
+    product_ids = [product.id for product in products]
+    price_item_map = build_price_list_item_map(price_list, product_ids)
+    for product in products:
+        product.is_favorite = product.id in favorite_product_ids
+        pricing = get_product_pricing(
+            product,
+            company=company,
+            price_list=price_list,
+            item_map=price_item_map,
+            context=pricing_context,
+        )
+        product.base_price = pricing.base_price
+        product.final_price = pricing.final_price
+
+    context = {
+        "brand": brand,
+        "rubros": rubros,
+        "selected_subrubro": selected_subrubro,
+        "products": products,
+        "show_prices": show_prices,
+        "discount": discount,
+        "price_message": settings.public_prices_message,
+    }
+    
+    return render(request, "catalog/brand_detail.html", context)

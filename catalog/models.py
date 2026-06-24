@@ -847,3 +847,142 @@ class ClampMeasureRequest(models.Model):
             except Exception:
                 pass
         super().save(*args, **kwargs)
+
+
+class Brand(models.Model):
+    """Primer Nivel: Marca (ej. FORD)"""
+    name = models.CharField(max_length=100, unique=True, verbose_name="Nombre de Marca")
+    slug = models.SlugField(max_length=120, unique=True, blank=True, verbose_name="Slug")
+    logo = models.ImageField(upload_to="brands/logos/", blank=True, null=True, verbose_name="Logo")
+    banner = models.ImageField(upload_to="brands/banners/", blank=True, null=True, verbose_name="Banner Comercial")
+    order = models.PositiveIntegerField(default=0, verbose_name="Orden Manual")
+    is_active = models.BooleanField(default=True, verbose_name="Activa")
+
+    class Meta:
+        ordering = ["order", "name"]
+        verbose_name = "Marca"
+        verbose_name_plural = "1. Marcas"
+
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            from django.utils.text import slugify
+            self.slug = slugify(self.name)
+            base_slug = self.slug
+            counter = 1
+            while Brand.objects.filter(slug=self.slug).exclude(pk=self.pk).exists():
+                self.slug = f"{base_slug}-{counter}"
+                counter += 1
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return self.name
+
+
+class BrandRubro(models.Model):
+    """Segundo Nivel: Rubros asociados a una Marca (ej. FORD -> BUJES)"""
+    brand = models.ForeignKey(Brand, on_delete=models.CASCADE, related_name="rubros", verbose_name="Marca")
+    name = models.CharField(max_length=100, verbose_name="Nombre de Rubro")
+    slug = models.SlugField(max_length=120, blank=True, verbose_name="Slug")
+    image = models.ImageField(upload_to="brands/rubros/", blank=True, null=True, verbose_name="Imagen Representativa")
+    order = models.PositiveIntegerField(default=0, verbose_name="Orden Manual")
+    is_active = models.BooleanField(default=True, verbose_name="Activo")
+
+    class Meta:
+        ordering = ["order", "name"]
+        unique_together = (("brand", "name"), ("brand", "slug"))
+        verbose_name = "Rubro de Marca"
+        verbose_name_plural = "2. Rubros de Marcas"
+
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            from django.utils.text import slugify
+            self.slug = slugify(self.name)
+            base_slug = self.slug
+            counter = 1
+            while BrandRubro.objects.filter(brand=self.brand, slug=self.slug).exclude(pk=self.pk).exists():
+                self.slug = f"{base_slug}-{counter}"
+                counter += 1
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.brand.name} > {self.name}"
+
+
+class BrandSubrubro(models.Model):
+    """Tercer Nivel: Subrubros asociados a un Rubro de Marca (ej. FORD -> BUJES -> BUJES ARMADOS)"""
+    brand_rubro = models.ForeignKey(BrandRubro, on_delete=models.CASCADE, related_name="subrubros", verbose_name="Rubro")
+    name = models.CharField(max_length=100, verbose_name="Nombre de Subrubro")
+    slug = models.SlugField(max_length=120, blank=True, verbose_name="Slug")
+    image = models.ImageField(upload_to="brands/subrubros/", blank=True, null=True, verbose_name="Imagen Representativa")
+    order = models.PositiveIntegerField(default=0, verbose_name="Orden Manual")
+    is_active = models.BooleanField(default=True, verbose_name="Activo")
+
+    # Ayudante: Categorías canónicas que sirven para poblar automáticamente este subrubro
+    helper_categories = models.ManyToManyField(
+        Category, 
+        blank=True, 
+        related_name="brand_subrubros_linked",
+        verbose_name="Categorías Ayudantes",
+        help_text="Los productos en estas categorías se utilizarán para alimentar automáticamente este subrubro."
+    )
+    
+    # Muchos a muchos con Producto a través de la tabla de ordenamiento
+    products = models.ManyToManyField(
+        Product,
+        through="BrandSubrubroProductOrder",
+        blank=True,
+        related_name="brand_subrubros",
+        verbose_name="Productos"
+    )
+
+    class Meta:
+        ordering = ["order", "name"]
+        unique_together = (("brand_rubro", "name"), ("brand_rubro", "slug"))
+        verbose_name = "Subrubro de Marca"
+        verbose_name_plural = "3. Subrubros de Marcas"
+
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            from django.utils.text import slugify
+            self.slug = slugify(self.name)
+            base_slug = self.slug
+            counter = 1
+            while BrandSubrubro.objects.filter(brand_rubro=self.brand_rubro, slug=self.slug).exclude(pk=self.pk).exists():
+                self.slug = f"{base_slug}-{counter}"
+                counter += 1
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.brand_rubro} > {self.name}"
+
+
+class BrandSubrubroProductOrder(models.Model):
+    """Manual product ordering scoped to one BrandSubrubro."""
+    brand_subrubro = models.ForeignKey(
+        BrandSubrubro,
+        on_delete=models.CASCADE,
+        related_name="product_order_rows",
+        verbose_name="Subrubro de Marca"
+    )
+    product = models.ForeignKey(
+        Product,
+        on_delete=models.CASCADE,
+        related_name="brand_subrubro_orders",
+        verbose_name="Producto"
+    )
+    sort_order = models.PositiveIntegerField(default=0, db_index=True, verbose_name="Orden")
+
+    class Meta:
+        verbose_name = "Orden de producto por Subrubro de Marca"
+        verbose_name_plural = "Orden de productos por Subrubro de Marca"
+        ordering = ["brand_subrubro_id", "sort_order", "product__name"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["brand_subrubro", "product"],
+                name="uniq_brand_subrubro_product_order"
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.brand_subrubro_id}:{self.product_id} #{self.sort_order}"
+

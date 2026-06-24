@@ -103,6 +103,11 @@
                     <span class="nav-icon" aria-hidden="true">&#128193;</span>
                     Categorias
                 </a>
+                <a href="{% url 'admin_brand_list' %}"
+                    class="nav-item {% if 'brand' in request.resolver_match.url_name %}active{% endif %}">
+                    <span class="nav-icon" aria-hidden="true">🏷️</span>
+                    Marcas
+                </a>
                 <a href="{% url 'admin_products_uncategorized' %}"
                     class="nav-item {% if 'uncategorized' in request.resolver_match.url_name %}active{% endif %}">
                     <span class="nav-icon" aria-hidden="true">&#128194;</span>
@@ -282,6 +287,9 @@
                             </a>
                             <a href="{% url 'admin_category_list' %}" class="top-nav-item {% if 'category' in request.resolver_match.url_name and 'uncategorized' not in request.resolver_match.url_name %}active{% endif %}">
                                 <span aria-hidden="true">&#128193;</span> Categorias
+                            </a>
+                            <a href="{% url 'admin_brand_list' %}" class="top-nav-item {% if 'brand' in request.resolver_match.url_name %}active{% endif %}">
+                                <span aria-hidden="true">🏷️</span> Marcas
                             </a>
                             <a href="{% url 'admin_products_uncategorized' %}" class="top-nav-item {% if 'uncategorized' in request.resolver_match.url_name %}active{% endif %}">
                                 <span aria-hidden="true">&#128194;</span> Sin Categoría
