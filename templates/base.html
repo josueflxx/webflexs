@@ -22,7 +22,7 @@
         rel="stylesheet">
 
     <!-- Base CSS -->
-    <link rel="stylesheet" href="{% static 'core/css/base.css' %}?v=20260602-lightmode">
+    <link rel="stylesheet" href="{% static 'core/css/base.css' %}?v=20260625-switchfix">
     <link rel="stylesheet" href="{% static 'core/css/search_suggestions.css' %}?v=5">
     <link rel="icon" type="image/x-icon" href="{% static 'core/img/favicon.ico' %}">
     <link rel="icon" type="image/png" sizes="32x32" href="{% static 'core/img/favicon-32.png' %}">
@@ -37,12 +37,19 @@
     <!-- Header -->
     <header class="header">
         <div class="header-top">
-            <div class="container">
-                <div class="header-contact">
+            <div class="container header-top-container">
+                <div class="header-contact" style="{% if user.is_authenticated and active_company %}margin-left: 0;{% else %}margin-left: auto;{% endif %}">
                     <a href="mailto:{{ site_settings.company_email }}">{{ site_settings.company_email }}</a>
                     <span class="separator">|</span>
                     <a href="tel:{{ site_settings.company_phone }}">{{ site_settings.company_phone }}</a>
                 </div>
+                {% if user.is_authenticated and active_company %}
+                <div class="header-company">
+                    <span class="company-name">Empresa: <strong>{{ active_company.name }}</strong></span>
+                    <span class="separator">|</span>
+                    <a href="{% url 'select_company' %}?next={{ request.get_full_path|urlencode }}" class="company-switch-btn">Cambiar</a>
+                </div>
+                {% endif %}
             </div>
         </div>
         <nav class="navbar">

@@ -209,9 +209,14 @@ img {
     border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
 
+.header-top-container {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
 .header-contact {
     display: flex;
-    justify-content: flex-end;
     align-items: center;
     gap: var(--spacing-md);
     font-size: var(--font-size-sm);
@@ -225,8 +230,37 @@ img {
     color: var(--color-primary);
 }
 
+.header-company {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: var(--font-size-sm);
+    color: var(--color-gray-light);
+}
+
+.header-company .company-name strong {
+    color: var(--color-white);
+}
+
+.header-company .company-switch-btn {
+    color: var(--color-primary);
+    font-weight: 600;
+    text-decoration: none;
+    transition: color var(--transition-normal);
+}
+
+.header-company .company-switch-btn:hover {
+    color: var(--color-white);
+}
+
 .separator {
     color: var(--color-gray);
+}
+
+@media (min-width: 901px) {
+    .nav-company-item {
+        display: none !important;
+    }
 }
 
 .navbar {
