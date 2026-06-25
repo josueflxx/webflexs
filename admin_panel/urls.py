@@ -166,12 +166,14 @@ urlpatterns = [
     path('marcas/subrubros/<int:pk>/productos/remover/', views.brand_subrubro_remove_product, name='admin_brand_subrubro_remove_product'),
     path('marcas/subrubros/<int:pk>/productos/reordenar/', views.brand_subrubro_products_reorder, name='admin_brand_subrubro_products_reorder'),
     path('marcas/subrubros/<int:pk>/sincronizar/', views.brand_subrubro_sync, name='admin_brand_subrubro_sync'),
+    path('marcas/subrubros/<int:pk>/productos/agregar-categoria-lote/', views.brand_subrubro_bulk_add_category, name='admin_brand_subrubro_bulk_add_category'),
     
     path('marcas/rubros/<int:pk>/productos/', views.brand_rubro_products, name='admin_brand_rubro_products'),
     path('marcas/rubros/<int:pk>/productos/agregar/', views.brand_rubro_add_product, name='admin_brand_rubro_add_product'),
     path('marcas/rubros/<int:pk>/productos/remover/', views.brand_rubro_remove_product, name='admin_brand_rubro_remove_product'),
     path('marcas/rubros/<int:pk>/productos/reordenar/', views.brand_rubro_products_reorder, name='admin_brand_rubro_products_reorder'),
     path('marcas/rubros/<int:pk>/sincronizar/', views.brand_rubro_sync, name='admin_brand_rubro_sync'),
+    path('marcas/rubros/<int:pk>/productos/agregar-categoria-lote/', views.brand_rubro_bulk_add_category, name='admin_brand_rubro_bulk_add_category'),
     
     # Settings
     path('configuracion/', views.settings_view, name='admin_settings'),

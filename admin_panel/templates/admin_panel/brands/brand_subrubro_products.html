@@ -215,13 +215,42 @@
         <!-- Add products manually -->
         <div class="panel-card">
             <h3>Agregar Manualmente</h3>
+            
+            <!-- Category Autocomplete Selector -->
+            <div style="margin-bottom: 12px; position: relative;">
+                <label style="display: block; font-size: 0.8rem; color: #9ca3af; margin-bottom: 4px; font-weight: 500;">Filtrar por Categoría (Catálogo General):</label>
+                <div class="autocomplete-container" style="position: relative;">
+                    <div class="autocomplete-input-wrapper" style="position: relative; display: flex; align-items: center;">
+                        <input type="text" id="categorySearchInput" class="form-input" placeholder="Buscar categoría..." autocomplete="off" style="width: 100%; padding-right: 30px;">
+                        <span id="clearCategoryBtn" style="position: absolute; right: 10px; cursor: pointer; color: #9ca3af; display: none; font-size: 0.9rem; font-weight: bold; padding: 2px;">✕</span>
+                    </div>
+                    <input type="hidden" id="selectedCategoryId" name="category_id" value="">
+                    
+                    <div id="categoryAutocompleteDropdown" class="autocomplete-dropdown-list" style="display: none; position: absolute; top: 100%; left: 0; right: 0; z-index: 100; max-height: 250px; overflow-y: auto; background: #0f1524; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.5);">
+                        {% for opt in category_options %}
+                            <div class="autocomplete-dropdown-item" data-id="{{ opt.id }}" data-text="{{ opt.text }}" style="padding: 8px 12px; cursor: pointer; font-size: 0.85rem; border-bottom: 1px solid rgba(255,255,255,0.03); color: #e5e7eb; transition: background 0.15s ease; {% if opt.depth > 0 %}padding-left: {{ opt.depth|add:opt.depth|add:opt.depth|add:opt.depth|add:12 }}px;{% endif %}">
+                                {% if opt.depth > 0 %}↳ {% endif %}{{ opt.name }}
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+            
             <form id="searchForm" method="GET" style="display:flex; gap:8px; margin-bottom:15px;" onsubmit="return false;">
                 <input type="text" id="qInput" name="q" value="" class="form-input" placeholder="Buscar por SKU o Nombre...">
                 <button type="button" id="btnSearch" class="btn btn-primary">Buscar</button>
             </form>
 
+            <!-- Bulk Category Association panel -->
+            <div id="bulkCategoryAddWrapper" style="display: none; margin-bottom: 15px; padding: 12px; background: rgba(255, 107, 53, 0.04); border: 1px dashed rgba(255, 107, 53, 0.25); border-radius: 8px; text-align: center;">
+                <p style="margin: 0 0 8px 0; font-size: 0.8rem; color: #cbd5e1;">Puedes agregar todos los productos de esta categoría:</p>
+                <button type="button" id="btnBulkAddCategory" class="btn btn-secondary btn-sm" style="width: 100%; padding: 6px 12px; font-size: 0.8rem;">
+                    ➕ Asociar categoría completa
+                </button>
+            </div>
+
             <div class="search-results" id="searchResults">
-                <div style="font-size:0.85rem; color:var(--color-gray-light); text-align:center; padding:15px;">Escribe en la barra de búsqueda superior para encontrar productos.</div>
+                <div style="font-size:0.85rem; color:var(--color-gray-light); text-align:center; padding:15px;">Escribe en la barra de búsqueda o selecciona una categoría para encontrar productos.</div>
             </div>
         </div>
     </div>
@@ -415,44 +444,156 @@
             qInput.addEventListener('input', function() {
                 clearTimeout(searchTimeout);
                 const query = qInput.value.trim();
-                if (query.length >= 2) {
-                    searchTimeout = setTimeout(() => performSearch(query), 300);
-                } else if (query.length === 0) {
-                    searchResults.innerHTML = '<div style="font-size:0.85rem; color:var(--color-gray-light); text-align:center; padding:15px;">Escribe en la barra de búsqueda superior para encontrar productos.</div>';
+                const categoryId = document.getElementById('selectedCategoryId').value;
+                if (query.length >= 2 || categoryId) {
+                    searchTimeout = setTimeout(() => performSearch(), 300);
+                } else if (query.length === 0 && !categoryId) {
+                    searchResults.innerHTML = '<div style="font-size:0.85rem; color:var(--color-gray-light); text-align:center; padding:15px;">Escribe en la barra de búsqueda o selecciona una categoría para encontrar productos.</div>';
+                    document.getElementById('bulkCategoryAddWrapper').style.display = 'none';
                 }
             });
             qInput.addEventListener('keydown', function(e) {
                 if (e.key === 'Enter') {
                     e.preventDefault();
                     clearTimeout(searchTimeout);
-                    performSearch(qInput.value.trim());
+                    performSearch();
                 }
             });
         }
         if (btnSearch) {
             btnSearch.addEventListener('click', function() {
-                performSearch(qInput.value.trim());
+                performSearch();
             });
         }
 
-        async function performSearch(query) {
-            if (!query) return;
+        async function performSearch() {
+            const query = qInput.value.trim();
+            const categoryId = document.getElementById('selectedCategoryId').value;
+            if (!query && !categoryId) {
+                searchResults.innerHTML = '<div style="font-size:0.85rem; color:var(--color-gray-light); text-align:center; padding:15px;">Escribe en la barra de búsqueda o selecciona una categoría para encontrar productos.</div>';
+                document.getElementById('bulkCategoryAddWrapper').style.display = 'none';
+                return;
+            }
             searchResults.innerHTML = '<div style="font-size:0.85rem; color:var(--color-gray-light); text-align:center; padding:15px;">Buscando...</div>';
             
             try {
-                const response = await fetch(`{% url 'admin_brand_subrubro_products' subrubro.id %}?q=${encodeURIComponent(query)}&ajax=1`, {
+                const response = await fetch(`{% url 'admin_brand_subrubro_products' subrubro.id %}?q=${encodeURIComponent(query)}&category_id=${categoryId}&ajax=1`, {
                     headers: { 'X-Requested-With': 'XMLHttpRequest' }
                 });
                 const data = await response.json();
                 if (data.success) {
                     renderSearchResults(data.results);
+                    if (categoryId && data.results && data.results.length > 0) {
+                        document.getElementById('bulkCategoryAddWrapper').style.display = 'block';
+                    } else {
+                        document.getElementById('bulkCategoryAddWrapper').style.display = 'none';
+                    }
                 } else {
                     searchResults.innerHTML = '<div style="font-size:0.85rem; color:#dc3545; text-align:center; padding:15px;">Error al buscar.</div>';
+                    document.getElementById('bulkCategoryAddWrapper').style.display = 'none';
                 }
             } catch (err) {
                 console.error(err);
                 searchResults.innerHTML = '<div style="font-size:0.85rem; color:#dc3545; text-align:center; padding:15px;">Error de conexión.</div>';
+                document.getElementById('bulkCategoryAddWrapper').style.display = 'none';
             }
+        }
+
+        // Category Autocomplete logic
+        const categorySearchInput = document.getElementById('categorySearchInput');
+        const clearCategoryBtn = document.getElementById('clearCategoryBtn');
+        const selectedCategoryId = document.getElementById('selectedCategoryId');
+        const categoryDropdown = document.getElementById('categoryAutocompleteDropdown');
+        const dropdownItems = categoryDropdown.querySelectorAll('.autocomplete-dropdown-item');
+
+        categorySearchInput.addEventListener('focus', function() {
+            categoryDropdown.style.display = 'block';
+        });
+
+        document.addEventListener('click', function(e) {
+            if (!e.target.closest('.autocomplete-container')) {
+                categoryDropdown.style.display = 'none';
+            }
+        });
+
+        categorySearchInput.addEventListener('input', function() {
+            const query = categorySearchInput.value.toLowerCase().trim();
+            dropdownItems.forEach(item => {
+                const text = item.dataset.text.toLowerCase();
+                if (text.includes(query)) {
+                    item.style.display = 'block';
+                } else {
+                    item.style.display = 'none';
+                }
+            });
+            categoryDropdown.style.display = 'block';
+        });
+
+        dropdownItems.forEach(item => {
+            item.addEventListener('click', function() {
+                const id = this.dataset.id;
+                const text = this.dataset.text;
+                
+                selectedCategoryId.value = id;
+                categorySearchInput.value = text;
+                clearCategoryBtn.style.display = 'inline';
+                categoryDropdown.style.display = 'none';
+                
+                performSearch();
+            });
+        });
+
+        clearCategoryBtn.addEventListener('click', function() {
+            selectedCategoryId.value = '';
+            categorySearchInput.value = '';
+            clearCategoryBtn.style.display = 'none';
+            dropdownItems.forEach(item => item.style.display = 'block');
+            
+            performSearch();
+        });
+
+        // Bulk Category Association Click Handler
+        const btnBulkAddCategory = document.getElementById('btnBulkAddCategory');
+        if (btnBulkAddCategory) {
+            btnBulkAddCategory.addEventListener('click', async function() {
+                const categoryId = selectedCategoryId.value;
+                const categoryName = categorySearchInput.value;
+                if (!categoryId) return;
+                
+                if (confirm(`¿Seguro que deseas asociar todos los productos activos de la categoría "${categoryName}" (y sus subcategorías) a este subrubro?`)) {
+                    btnBulkAddCategory.setAttribute('disabled', 'true');
+                    btnBulkAddCategory.textContent = 'Asociando...';
+                    
+                    const formData = new FormData();
+                    formData.append('category_id', categoryId);
+                    
+                    try {
+                        const response = await fetch('{% url "admin_brand_subrubro_bulk_add_category" subrubro.id %}', {
+                            method: 'POST',
+                            headers: {
+                                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+                                'X-Requested-With': 'XMLHttpRequest'
+                            },
+                            body: formData
+                        });
+                        
+                        const data = await response.json();
+                        if (data.success) {
+                            alert(`Se asociaron con éxito ${data.added_count} productos de la categoría.`);
+                            window.location.reload();
+                        } else {
+                            alert('Error: ' + (data.error || 'No se pudo asociar.'));
+                            btnBulkAddCategory.removeAttribute('disabled');
+                            btnBulkAddCategory.textContent = '➕ Asociar categoría completa';
+                        }
+                    } catch (err) {
+                        console.error(err);
+                        alert('Error de conexión.');
+                        btnBulkAddCategory.removeAttribute('disabled');
+                        btnBulkAddCategory.textContent = '➕ Asociar categoría completa';
+                    }
+                }
+            });
         }
 
         function renderSearchResults(results) {

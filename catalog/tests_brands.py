@@ -296,3 +296,101 @@ class ProductGridBrandAssocTestCase(TestCase):
         self.assertEqual(data['status'], 'success')
         self.assertEqual(self.rubro.products.count(), 1)
 
+
+class BrandCategoryAssociationTestCase(TestCase):
+    """Test case for manual category filtering and bulk category association in brand rubro/subrubro products views."""
+
+    def setUp(self):
+        self.brand = Brand.objects.create(name="Toyota")
+        self.rubro = BrandRubro.objects.create(brand=self.brand, name="Suspension")
+        self.subrubro = BrandSubrubro.objects.create(brand_rubro=self.rubro, name="Bujes")
+        
+        # Parent category
+        self.parent_cat = Category.objects.create(name="Bujes Suspension")
+        # Child category
+        self.child_cat = Category.objects.create(name="Bujes Delanteros", parent=self.parent_cat)
+        # Unrelated category
+        self.other_cat = Category.objects.create(name="Opticas")
+        
+        self.product1 = Product.objects.create(
+            sku="TOY-BUJ-01",
+            name="Buje Toyota Corolla",
+            price=Decimal("120.00"),
+            category=self.child_cat,
+            is_active=True
+        )
+        self.product2 = Product.objects.create(
+            sku="TOY-BUJ-02",
+            name="Buje Toyota Hilux",
+            price=Decimal("120.00"),
+            category=self.parent_cat,
+            is_active=True
+        )
+        self.product3 = Product.objects.create(
+            sku="TOY-OPT-01",
+            name="Optica Hilux",
+            price=Decimal("120.00"),
+            category=self.other_cat,
+            is_active=True
+        )
+        
+        self.client = Client()
+        self.user = User.objects.create_superuser('josueflexs', 'admin@toyota.com', 'adminpass')
+        self.client.login(username='josueflexs', password='adminpass')
+
+    def test_rubro_products_filter_by_category(self):
+        # Fetching brand rubro products filtering by parent_cat (should return product1 and product2, not product3)
+        url = reverse('admin_brand_rubro_products', args=[self.rubro.pk])
+        response = self.client.get(url, {'category_id': self.parent_cat.pk, 'ajax': '1'}, HTTP_X_REQUESTED_WITH='XMLHttpRequest')
+        
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertTrue(data['success'])
+        
+        # Extract product IDs from results
+        result_ids = [res['id'] for res in data['results']]
+        self.assertIn(self.product1.id, result_ids)
+        self.assertIn(self.product2.id, result_ids)
+        self.assertNotIn(self.product3.id, result_ids)
+
+    def test_subrubro_products_filter_by_category(self):
+        # Fetching brand subrubro products filtering by child_cat (should return product1 only)
+        url = reverse('admin_brand_subrubro_products', args=[self.subrubro.pk])
+        response = self.client.get(url, {'category_id': self.child_cat.pk, 'ajax': '1'}, HTTP_X_REQUESTED_WITH='XMLHttpRequest')
+        
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertTrue(data['success'])
+        
+        result_ids = [res['id'] for res in data['results']]
+        self.assertIn(self.product1.id, result_ids)
+        self.assertNotIn(self.product2.id, result_ids)
+        self.assertNotIn(self.product3.id, result_ids)
+
+    def test_bulk_add_category_to_rubro(self):
+        self.assertEqual(self.rubro.products.count(), 0)
+        
+        url = reverse('admin_brand_rubro_bulk_add_category', args=[self.rubro.pk])
+        response = self.client.post(url, {'category_id': self.parent_cat.pk}, HTTP_X_REQUESTED_WITH='XMLHttpRequest')
+        
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertTrue(data['success'])
+        self.assertEqual(data['added_count'], 2) # product1 and product2
+        self.assertEqual(self.rubro.products.count(), 2)
+
+    def test_bulk_add_category_to_subrubro(self):
+        self.assertEqual(self.subrubro.products.count(), 0)
+        self.assertEqual(self.rubro.products.count(), 0)
+        
+        url = reverse('admin_brand_subrubro_bulk_add_category', args=[self.subrubro.pk])
+        response = self.client.post(url, {'category_id': self.child_cat.pk}, HTTP_X_REQUESTED_WITH='XMLHttpRequest')
+        
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertTrue(data['success'])
+        self.assertEqual(data['added_count'], 1) # product1
+        self.assertEqual(self.subrubro.products.count(), 1)
+        # Check that it cascade associated it to the parent rubro too
+        self.assertEqual(self.rubro.products.count(), 1)
+
