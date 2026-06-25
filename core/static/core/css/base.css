@@ -318,7 +318,8 @@ img {
     list-style: none;
     min-width: 0;
     flex: 1 1 auto;
-    justify-content: flex-end;
+    justify-content: flex-start;
+    margin-left: auto;
     flex-wrap: nowrap;
     white-space: nowrap;
     overflow-x: auto;
@@ -518,7 +519,8 @@ img {
     }
 
     .nav-menu {
-        justify-content: center;
+        justify-content: flex-start;
+        margin-left: auto;
         flex-wrap: nowrap;
         white-space: nowrap;
         overflow-x: auto;
@@ -567,6 +569,7 @@ img {
 
     .nav-menu {
         position: fixed;
+        margin-left: 0;
         top: var(--header-offset);
         left: 0;
         right: 0;

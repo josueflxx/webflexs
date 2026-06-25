@@ -61,6 +61,11 @@ from catalog.models import (
     ClampMeasureRequest,
     Supplier,
     PriceList,
+    Brand,
+    BrandRubro,
+    BrandSubrubro,
+    BrandRubroProductOrder,
+    BrandSubrubroProductOrder,
 )
 from accounts.models import (
     AccountRequest,
@@ -3636,7 +3641,11 @@ def product_grid_editor(request):
     """
     Excel-like product grid editor view.
     """
-    products = Product.objects.select_related('category', 'supplier_ref').prefetch_related('categories').all()
+    products = Product.objects.select_related('category', 'supplier_ref').prefetch_related(
+        'categories',
+        'brand_rubro_orders__brand_rubro__brand',
+        'brand_subrubro_orders__brand_subrubro__brand_rubro__brand'
+    ).all()
     
     f_category = request.GET.get('f_category', '').strip()
     f_sku = request.GET.get('f_sku', '').strip()
@@ -3686,10 +3695,34 @@ def product_grid_editor(request):
     category_options = get_cached_category_options(only_active=True, include_inactive_suffix=False)
     suppliers = list(Supplier.objects.filter(is_active=True).order_by('name').values('id', 'name'))
     
+    # Load brand hierarchy data for autocompletes
+    brands_qs = Brand.objects.filter(is_active=True).prefetch_related(
+        Prefetch(
+            'rubros',
+            queryset=BrandRubro.objects.filter(is_active=True).prefetch_related(
+                Prefetch(
+                    'subrubros',
+                    queryset=BrandSubrubro.objects.filter(is_active=True)
+                )
+            )
+        )
+    ).order_by('name')
+
+    brands_data = []
+    for b in brands_qs:
+        rubros_list = []
+        for r in b.rubros.all():
+            subs_list = []
+            for s in r.subrubros.all():
+                subs_list.append({'id': s.id, 'name': s.name})
+            rubros_list.append({'id': r.id, 'name': r.name, 'subrubros': subs_list})
+        brands_data.append({'id': b.id, 'name': b.name, 'rubros': rubros_list})
+    
     context = {
         'page_obj': page_obj,
         'category_options': category_options,
         'suppliers_list': suppliers,
+        'brands_data_json': json.dumps(brands_data),
         'f_category': f_category,
         'f_sku': f_sku,
         'f_name': f_name,
@@ -3968,6 +4001,53 @@ def product_grid_bulk_update(request):
                     details={"count": updated_count}
                 )
 
+            elif action == 'brand_association':
+                rubro_id_str = data.get('rubro_id')
+                subrubro_id_str = data.get('subrubro_id')
+                
+                rubro_id = int(rubro_id_str) if rubro_id_str and str(rubro_id_str).isdigit() else None
+                subrubro_id = int(subrubro_id_str) if subrubro_id_str and str(subrubro_id_str).isdigit() else None
+                
+                if not rubro_id and not subrubro_id:
+                    return JsonResponse({'status': 'error', 'message': 'Debes seleccionar al menos un Rubro para asociar.'}, status=400)
+                
+                for prod in products_qs:
+                    if subrubro_id:
+                        subrubro = get_object_or_404(BrandSubrubro, pk=subrubro_id)
+                        rubro = subrubro.brand_rubro
+                        
+                        max_rub_order = BrandRubroProductOrder.objects.filter(brand_rubro=rubro).aggregate(Max("sort_order"))["sort_order__max"] or 0
+                        BrandRubroProductOrder.objects.get_or_create(
+                            brand_rubro=rubro,
+                            product=prod,
+                            defaults={"sort_order": max_rub_order + 10}
+                        )
+                        
+                        max_sub_order = BrandSubrubroProductOrder.objects.filter(brand_subrubro=subrubro).aggregate(Max("sort_order"))["sort_order__max"] or 0
+                        BrandSubrubroProductOrder.objects.get_or_create(
+                            brand_subrubro=subrubro,
+                            product=prod,
+                            defaults={"sort_order": max_sub_order + 10}
+                        )
+                    else:
+                        rubro = get_object_or_404(BrandRubro, pk=rubro_id)
+                        
+                        max_rub_order = BrandRubroProductOrder.objects.filter(brand_rubro=rubro).aggregate(Max("sort_order"))["sort_order__max"] or 0
+                        BrandRubroProductOrder.objects.get_or_create(
+                            brand_rubro=rubro,
+                            product=prod,
+                            defaults={"sort_order": max_rub_order + 10}
+                        )
+                    updated_count += 1
+                
+                log_admin_action(
+                    request,
+                    action="product_grid_bulk_brand_assoc",
+                    target_type="product_list",
+                    target_id=",".join(map(str, product_ids[:100])),
+                    details={"rubro_id": rubro_id, "subrubro_id": subrubro_id, "count": updated_count}
+                )
+
             else:
                 return JsonResponse({'status': 'error', 'message': f'Acción masiva "{action}" no soportada.'}, status=400)
 
@@ -3981,5 +4061,148 @@ def product_grid_bulk_update(request):
     })
 
 
-__all__ = ['product_list', 'product_create', 'product_edit', 'product_delete', 'product_toggle_active', 'product_bulk_category_update', 'product_bulk_status_update', 'product_bulk_image_update', 'supplier_list', 'supplier_detail', 'supplier_bulk_action', 'supplier_export', 'supplier_print', 'supplier_unassigned', 'supplier_toggle_active', 'category_list', 'category_reorder', 'category_sort_roots_alpha', 'category_bulk_status', 'category_create', 'category_create_ajax', 'category_edit', 'category_move', 'category_delete', 'category_attribute_create', 'category_attribute_edit', 'category_attribute_delete', 'category_manage_products', 'category_products_reorder', 'get_category_attributes', 'parse_product_description', 'parse_clamp_code_api', 'products_uncategorized', 'import_triler_excel', 'product_grid_editor', 'product_grid_update_cell', 'product_grid_bulk_update']
+@staff_member_required
+@superuser_required_for_modifications
+@csrf_protect
+@require_POST
+def product_grid_add_brand_association(request):
+    """
+    AJAX endpoint to associate a single product with a brand rubro/subrubro.
+    """
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({'status': 'error', 'message': 'JSON inválido.'}, status=400)
+
+    product_id = data.get('product_id')
+    rubro_id_str = data.get('rubro_id')
+    subrubro_id_str = data.get('subrubro_id')
+
+    if not product_id:
+        return JsonResponse({'status': 'error', 'message': 'Falta el ID del producto.'}, status=400)
+
+    product = get_object_or_404(Product, pk=product_id)
+    rubro_id = int(rubro_id_str) if rubro_id_str and str(rubro_id_str).isdigit() else None
+    subrubro_id = int(subrubro_id_str) if subrubro_id_str and str(subrubro_id_str).isdigit() else None
+
+    if not rubro_id and not subrubro_id:
+        return JsonResponse({'status': 'error', 'message': 'Debes seleccionar al menos un Rubro.'}, status=400)
+
+    try:
+        with transaction.atomic():
+            if subrubro_id:
+                subrubro = get_object_or_404(BrandSubrubro, pk=subrubro_id)
+                rubro = subrubro.brand_rubro
+                
+                max_rub_order = BrandRubroProductOrder.objects.filter(brand_rubro=rubro).aggregate(Max("sort_order"))["sort_order__max"] or 0
+                BrandRubroProductOrder.objects.get_or_create(
+                    brand_rubro=rubro,
+                    product=product,
+                    defaults={"sort_order": max_rub_order + 10}
+                )
+                
+                max_sub_order = BrandSubrubroProductOrder.objects.filter(brand_subrubro=subrubro).aggregate(Max("sort_order"))["sort_order__max"] or 0
+                BrandSubrubroProductOrder.objects.get_or_create(
+                    brand_subrubro=subrubro,
+                    product=product,
+                    defaults={"sort_order": max_sub_order + 10}
+                )
+            else:
+                rubro = get_object_or_404(BrandRubro, pk=rubro_id)
+                max_rub_order = BrandRubroProductOrder.objects.filter(brand_rubro=rubro).aggregate(Max("sort_order"))["sort_order__max"] or 0
+                BrandRubroProductOrder.objects.get_or_create(
+                    brand_rubro=rubro,
+                    product=product,
+                    defaults={"sort_order": max_rub_order + 10}
+                )
+
+            log_admin_action(
+                request,
+                action="product_grid_add_brand_assoc",
+                target_type="product",
+                target_id=product.pk,
+                details={"rubro_id": rubro_id, "subrubro_id": subrubro_id, "sku": product.sku}
+            )
+
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
+
+    rubro_assocs = []
+    for rorder in BrandRubroProductOrder.objects.filter(product=product).select_related('brand_rubro__brand'):
+        rubro_assocs.append({
+            'type': 'rubro',
+            'id': rorder.brand_rubro.id,
+            'label': f"{rorder.brand_rubro.brand.name} ➔ {rorder.brand_rubro.name}"
+        })
+    subrubro_assocs = []
+    for sorder in BrandSubrubroProductOrder.objects.filter(product=product).select_related('brand_subrubro__brand_rubro__brand'):
+        subrubro_assocs.append({
+            'type': 'subrubro',
+            'id': sorder.brand_subrubro.id,
+            'label': f"{sorder.brand_subrubro.brand_rubro.brand.name} ➔ {sorder.brand_subrubro.brand_rubro.name} ➔ {sorder.brand_subrubro.name}"
+        })
+
+    return JsonResponse({
+        'status': 'success',
+        'product_id': product.pk,
+        'associations': rubro_assocs + subrubro_assocs
+    })
+
+
+@staff_member_required
+@superuser_required_for_modifications
+@csrf_protect
+@require_POST
+def product_grid_remove_brand_association(request):
+    """
+    AJAX endpoint to remove a single product brand rubro/subrubro association.
+    """
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({'status': 'error', 'message': 'JSON inválido.'}, status=400)
+
+    product_id = data.get('product_id')
+    assoc_type = data.get('type')  # 'rubro' or 'subrubro'
+    assoc_id = data.get('id')
+
+    if not product_id or not assoc_type or not assoc_id:
+        return JsonResponse({'status': 'error', 'message': 'Faltan parámetros requeridos.'}, status=400)
+
+    product = get_object_or_404(Product, pk=product_id)
+
+    try:
+        with transaction.atomic():
+            if assoc_type == 'subrubro':
+                BrandSubrubroProductOrder.objects.filter(
+                    brand_subrubro_id=assoc_id,
+                    product=product
+                ).delete()
+            elif assoc_type == 'rubro':
+                BrandRubroProductOrder.objects.filter(
+                    brand_rubro_id=assoc_id,
+                    product=product
+                ).delete()
+            else:
+                return JsonResponse({'status': 'error', 'message': 'Tipo de asociación inválido.'}, status=400)
+
+            log_admin_action(
+                request,
+                action="product_grid_remove_brand_assoc",
+                target_type="product",
+                target_id=product.pk,
+                details={"type": assoc_type, "id": assoc_id, "sku": product.sku}
+            )
+
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
+
+    return JsonResponse({
+        'status': 'success',
+        'product_id': product.pk
+    })
+
+
+__all__ = ['product_list', 'product_create', 'product_edit', 'product_delete', 'product_toggle_active', 'product_bulk_category_update', 'product_bulk_status_update', 'product_bulk_image_update', 'supplier_list', 'supplier_detail', 'supplier_bulk_action', 'supplier_export', 'supplier_print', 'supplier_unassigned', 'supplier_toggle_active', 'category_list', 'category_reorder', 'category_sort_roots_alpha', 'category_bulk_status', 'category_create', 'category_create_ajax', 'category_edit', 'category_move', 'category_delete', 'category_attribute_create', 'category_attribute_edit', 'category_attribute_delete', 'category_manage_products', 'category_products_reorder', 'get_category_attributes', 'parse_product_description', 'parse_clamp_code_api', 'products_uncategorized', 'import_triler_excel', 'product_grid_editor', 'product_grid_update_cell', 'product_grid_bulk_update', 'product_grid_add_brand_association', 'product_grid_remove_brand_association']
+
 

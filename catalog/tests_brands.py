@@ -96,10 +96,203 @@ class BrandViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Peugeot")
 
-    def test_brand_detail_page(self):
+    def test_brand_detail_landing_page(self):
+        """Without parameters, the detail page should display the Rubros grid."""
         response = self.client.get(reverse('brand_detail', args=[self.brand.slug]))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Peugeot")
         self.assertContains(response, "Opticas")
+        # Subrubros and products shouldn't be loaded on the landing page
+        self.assertNotContains(response, "Opticas Delanteras")
+        self.assertNotContains(response, "OPT-PGT-01")
+
+    def test_brand_detail_page_with_rubro(self):
+        """Specifying rubro should load subrubros and products (via auto-select of first subrubro)."""
+        response = self.client.get(reverse('brand_detail', args=[self.brand.slug]), {'rubro': self.rubro.slug})
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Opticas")
         self.assertContains(response, "Opticas Delanteras")
         self.assertContains(response, "OPT-PGT-01")
+
+
+class BrandRubroAdminTestCase(TestCase):
+    """Test case for BrandRubro product association, sorting, and synchronization in the admin panel."""
+
+    def setUp(self):
+        self.brand = Brand.objects.create(name="Renault")
+        self.rubro = BrandRubro.objects.create(brand=self.brand, name="Frenos")
+        self.category = Category.objects.create(name="Pastillas de Freno")
+        
+        self.product1 = Product.objects.create(
+            sku="FRN-REN-01",
+            name="Pastillas Renault Clio",
+            price=Decimal("120.00"),
+            category=self.category,
+            is_active=True
+        )
+        self.product2 = Product.objects.create(
+            sku="FRN-REN-02",
+            name="Pastillas Renault Megane",
+            price=Decimal("180.00"),
+            category=self.category,
+            is_active=True
+        )
+        
+        self.client = Client()
+        self.user = User.objects.create_superuser('josueflexs', 'admin@test.com', 'adminpass')
+        self.client.login(username='josueflexs', password='adminpass')
+
+    def test_add_product_to_rubro(self):
+        self.assertEqual(self.rubro.products.count(), 0)
+        
+        url = reverse('admin_brand_rubro_add_product', args=[self.rubro.pk])
+        response = self.client.post(url, {'product_id': self.product1.id}, HTTP_X_REQUESTED_WITH='XMLHttpRequest')
+        
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self.rubro.products.count(), 1)
+        self.assertTrue(self.rubro.products.filter(id=self.product1.id).exists())
+
+    def test_remove_product_from_rubro(self):
+        # First add it
+        self.rubro.products.add(self.product1)
+        self.assertEqual(self.rubro.products.count(), 1)
+        
+        url = reverse('admin_brand_rubro_remove_product', args=[self.rubro.pk])
+        response = self.client.post(url, {'product_id': self.product1.id}, HTTP_X_REQUESTED_WITH='XMLHttpRequest')
+        
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self.rubro.products.count(), 0)
+
+    def test_reorder_rubro_products(self):
+        from catalog.models import BrandRubroProductOrder
+        
+        row1 = BrandRubroProductOrder.objects.create(brand_rubro=self.rubro, product=self.product1, sort_order=10)
+        row2 = BrandRubroProductOrder.objects.create(brand_rubro=self.rubro, product=self.product2, sort_order=20)
+        
+        url = reverse('admin_brand_rubro_products_reorder', args=[self.rubro.pk])
+        # Swap their positions
+        import json
+        payload = {"ordered_ids": [self.product2.id, self.product1.id]}
+        response = self.client.post(
+            url,
+            data=json.dumps(payload),
+            content_type="application/json",
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest'
+        )
+        
+        self.assertEqual(response.status_code, 200)
+        row1.refresh_from_db()
+        row2.refresh_from_db()
+        self.assertEqual(row2.sort_order, 10)
+        self.assertEqual(row1.sort_order, 20)
+
+    def test_sync_rubro_products(self):
+        # Create an active subrubro and assign our helper category
+        subrubro = BrandSubrubro.objects.create(brand_rubro=self.rubro, name="Pastillas")
+        subrubro.helper_categories.add(self.category)
+        
+        self.assertEqual(self.rubro.products.count(), 0)
+        
+        url = reverse('admin_brand_rubro_sync', args=[self.rubro.pk])
+        response = self.client.post(url)
+        
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertTrue(data['success'])
+        self.assertEqual(data['added_count'], 2)
+        self.assertEqual(self.rubro.products.count(), 2)
+
+
+class ProductGridBrandAssocTestCase(TestCase):
+    """Test case for AJAX single and bulk brand associations in the grid editor."""
+
+    def setUp(self):
+        self.brand = Brand.objects.create(name="Ford_Grid")
+        self.rubro = BrandRubro.objects.create(brand=self.brand, name="Accesorios")
+        self.subrubro = BrandSubrubro.objects.create(brand_rubro=self.rubro, name="Alfombras")
+        
+        self.product = Product.objects.create(
+            sku="ACC-FRD-01",
+            name="Alfombra de Goma Ford Fiesta",
+            price=Decimal("80.00"),
+            is_active=True
+        )
+        
+        self.client = Client()
+        self.user = User.objects.create_superuser('josueflexs', 'admin@test.com', 'adminpass')
+        self.client.login(username='josueflexs', password='adminpass')
+
+    def test_ajax_add_brand_association(self):
+        self.assertEqual(self.rubro.products.count(), 0)
+        self.assertEqual(self.subrubro.products.count(), 0)
+        
+        url = reverse('admin_product_grid_add_brand_association')
+        import json
+        payload = {
+            "product_id": self.product.id,
+            "rubro_id": self.rubro.id,
+            "subrubro_id": self.subrubro.id
+        }
+        response = self.client.post(
+            url,
+            data=json.dumps(payload),
+            content_type="application/json"
+        )
+        
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data['status'], 'success')
+        self.assertEqual(self.rubro.products.count(), 1)
+        self.assertEqual(self.subrubro.products.count(), 1)
+
+    def test_ajax_remove_brand_association(self):
+        # Associate first
+        from catalog.models import BrandRubroProductOrder, BrandSubrubroProductOrder
+        BrandRubroProductOrder.objects.create(brand_rubro=self.rubro, product=self.product, sort_order=10)
+        BrandSubrubroProductOrder.objects.create(brand_subrubro=self.subrubro, product=self.product, sort_order=10)
+        
+        self.assertEqual(self.rubro.products.count(), 1)
+        self.assertEqual(self.subrubro.products.count(), 1)
+        
+        # Remove subrubro association
+        url = reverse('admin_product_grid_remove_brand_association')
+        import json
+        payload = {
+            "product_id": self.product.id,
+            "type": "subrubro",
+            "id": self.subrubro.id
+        }
+        response = self.client.post(
+            url,
+            data=json.dumps(payload),
+            content_type="application/json"
+        )
+        
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self.subrubro.products.count(), 0)
+        # Parent rubro should still be linked
+        self.assertEqual(self.rubro.products.count(), 1)
+
+    def test_bulk_brand_association(self):
+        self.assertEqual(self.rubro.products.count(), 0)
+        
+        url = reverse('admin_product_grid_bulk_update')
+        import json
+        payload = {
+            "product_ids": [self.product.id],
+            "action": "brand_association",
+            "brand_id": self.brand.id,
+            "rubro_id": self.rubro.id,
+            "subrubro_id": self.subrubro.id
+        }
+        response = self.client.post(
+            url,
+            data=json.dumps(payload),
+            content_type="application/json"
+        )
+        
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data['status'], 'success')
+        self.assertEqual(self.rubro.products.count(), 1)
+

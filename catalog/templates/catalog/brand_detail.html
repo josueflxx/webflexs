@@ -9,6 +9,138 @@
 {% block extra_css %}
 <link rel="stylesheet" href="{% static 'core/css/catalog.css' %}?v=20260602-lightmode">
 <style>
+    /* Brand Rubros Grid Landing Page */
+    .brand-rubros-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+        gap: 24px;
+        margin-bottom: 50px;
+    }
+    .brand-rubro-card {
+        background: rgba(255, 255, 255, 0.02);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 16px;
+        padding: 40px 30px;
+        text-align: center;
+        text-decoration: none;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 15px;
+        transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        position: relative;
+        overflow: hidden;
+        cursor: pointer;
+    }
+    .brand-rubro-card::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(135deg, rgba(255, 107, 53, 0.08) 0%, transparent 100%);
+        opacity: 0;
+        transition: opacity 0.3s;
+    }
+    .brand-rubro-card:hover {
+        transform: translateY(-4px);
+        border-color: rgba(255, 107, 53, 0.35);
+        box-shadow: 0 12px 30px rgba(0, 0, 0, 0.3);
+    }
+    .brand-rubro-card:hover::before {
+        opacity: 1;
+    }
+    .brand-rubro-icon-wrapper {
+        font-size: 2.8rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 80px;
+        width: 80px;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        transition: transform 0.3s;
+        z-index: 2;
+    }
+    .brand-rubro-card:hover .brand-rubro-icon-wrapper {
+        transform: scale(1.1);
+        background: rgba(255, 107, 53, 0.1);
+        border-color: rgba(255, 107, 53, 0.2);
+    }
+    .brand-rubro-name {
+        font-size: 1.2rem;
+        font-weight: 700;
+        color: #fff;
+        margin: 0;
+        z-index: 2;
+    }
+    .brand-rubro-badge {
+        position: absolute;
+        bottom: 15px;
+        font-size: 0.75rem;
+        padding: 4px 10px;
+        border-radius: 12px;
+        font-weight: 600;
+        z-index: 2;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    .brand-rubro-badge.orange {
+        background: rgba(255, 107, 53, 0.15);
+        color: #ff8c5a;
+        border: 1px solid rgba(255, 107, 53, 0.3);
+    }
+    .brand-rubro-badge.blue {
+        background: rgba(0, 123, 255, 0.15);
+        color: #007bff;
+        border: 1px solid rgba(0, 123, 255, 0.3);
+    }
+    
+    /* Breadcrumb and back button */
+    .brand-header-navigation {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 25px;
+    }
+    
+    /* Subrubro Pill Filter Buttons */
+    .brand-pills-filter {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-bottom: 25px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        padding-bottom: 20px;
+    }
+    .brand-pill-btn {
+        padding: 8px 16px;
+        border-radius: 30px;
+        font-size: 0.88rem;
+        font-weight: 500;
+        text-decoration: none;
+        color: var(--color-gray-light);
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        transition: all 0.2s;
+    }
+    .brand-pill-btn:hover {
+        color: #fff;
+        background: rgba(255, 255, 255, 0.06);
+    }
+    .brand-pill-btn.active {
+        color: #fff;
+        background: rgba(255, 107, 53, 0.15);
+        border-color: rgba(255, 107, 53, 0.4);
+        font-weight: 600;
+        box-shadow: 0 4px 15px rgba(255, 107, 53, 0.15);
+    }
+
+    /* Full width catalog layout when sidebar is hidden */
+    .catalog-layout.full-width {
+        grid-template-columns: 1fr !important;
+    }
+
     .brand-detail-page {
         padding: 30px 0 60px;
     }
@@ -262,154 +394,179 @@
     </div>
 
     <!-- Layout Grid identical to standard catalog -->
-    <div class="catalog-layout">
-        <!-- Sidebar Navigation -->
-        <aside class="catalog-sidebar">
-            <h3 class="brand-sidebar-title">Rubros</h3>
-            <div class="brand-sidebar-menu">
-                {% for rubro in rubros %}
-                    <div class="brand-rubro-group">
-                        <button class="brand-rubro-btn" onclick="toggleRubroMenu(this)">
-                            <span>📂 {{ rubro.name }}</span>
-                            <span class="chevron">▼</span>
-                        </button>
-                        <div class="brand-subrubro-list">
-                            {% for subrubro in rubro.active_subrubros %}
-                                <a href="?subrubro={{ subrubro.slug }}" class="brand-subrubro-link {% if selected_subrubro.id == subrubro.id %}active{% endif %}">
-                                    🔧 {{ subrubro.name }}
-                                </a>
-                            {% empty %}
-                                <div style="font-size:0.8rem; color:var(--color-gray-light); padding: 8px;">No hay subrubros.</div>
-                            {% endfor %}
-                        </div>
-                    </div>
-                {% empty %}
-                    <div style="color:var(--color-gray-light); font-size:0.9rem;">No se configuraron rubros para esta marca.</div>
-                {% endfor %}
-            </div>
-        </aside>
-
-        <!-- Product Listing Grid -->
-        <main class="catalog-main">
-            <div class="catalog-header" style="margin-top: 0; padding-top: 0; margin-bottom: 20px;">
-                <div class="catalog-header-main">
-                    <h2>
-                        {% if selected_subrubro %}
-                            {{ selected_subrubro.name }}
+    {% if not selected_rubro %}
+        <!-- Rubros Grid (Landing View) -->
+        <div class="brand-rubros-grid">
+            {% for rubro in rubros %}
+                <a href="?rubro={{ rubro.slug }}" class="brand-rubro-card">
+                    <div class="brand-rubro-icon-wrapper">
+                        {% if rubro.image %}
+                            <img src="{{ rubro.image.url }}" alt="{{ rubro.name }}" style="max-height:50px; width:auto; object-fit:contain;">
                         {% else %}
-                            Productos
+                            {{ rubro.icon_emoji|default:"📂" }}
                         {% endif %}
-                    </h2>
-                    <p class="catalog-subtitle">
-                        {% if not show_prices %}
-                            <span class="price-notice">{{ price_message }}</span>
-                        {% elif discount %}
-                            <span class="discount-notice-premium">
-                                <span>Tenes un <strong class="discount-percent-highlight">{{ discount|multiply:100|floatformat:0 }}% de descuento</strong> aplicado</span>
-                            </span>
-                        {% endif %}
-                    </p>
+                    </div>
+                    <h4 class="brand-rubro-name">{{ rubro.name }}</h4>
+                    {% if rubro.badge_text %}
+                        <span class="brand-rubro-badge {{ rubro.badge_color|default:'orange' }}">{{ rubro.badge_text }}</span>
+                    {% endif %}
+                </a>
+            {% empty %}
+                <div class="product-list-empty" style="grid-column: 1 / -1;">
+                    <p>No se configuraron rubros para esta marca.</p>
                 </div>
-                <div class="catalog-header-stats">
-                    <span class="header-stat"><strong>{{ products|length }}</strong> productos encontrados</span>
-                </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <!-- Breadcrumb / Back Navigation -->
+        <div class="brand-header-navigation">
+            <a href="{% url 'brand_detail' brand.slug %}" class="btn btn-outline" style="display:inline-flex; align-items:center; gap:8px;">
+                ← Ver todos los rubros
+            </a>
+            <div style="font-size:1.1rem; font-weight:600; color:#fff;">
+                Rubro: <span style="color:var(--color-primary)">{{ selected_rubro.name }}</span>
+                {% if selected_subrubro and request.GET.subrubro %}
+                     ➔ <span style="color:var(--color-gray-light)">{{ selected_subrubro.name }}</span>
+                {% endif %}
             </div>
+        </div>
 
-            <div class="catalog-grid-wrapper">
-                <div class="catalog-grid view-grid">
-                    {% for product in products %}
-                        <article class="product-card animate-card-reveal" data-product-id="{{ product.id|unlocalize }}" style="animation-delay: {{ forloop.counter0|multiply:0.04 }}s;">
-                            <a class="product-image" href="{% url 'product_detail' product.sku %}">
-                                {% if product.image %}
-                                    <img src="{{ product.image.url }}" alt="{{ product.name }}">
-                                {% else %}
-                                    <div class="product-placeholder-premium">
-                                        <svg class="blueprint-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none">
-                                            <rect width="100%" height="100%" fill="rgba(255, 107, 53, 0.02)" />
-                                            <rect x="4" y="4" width="92" height="92" rx="8" stroke="rgba(255, 255, 255, 0.02)" stroke-width="1" />
-                                            <g transform="translate(32, 32)">
-                                                <rect x="0" y="0" width="36" height="36" rx="6" stroke="rgba(255, 255, 255, 0.12)" stroke-width="1.8" />
-                                                <circle cx="12" cy="12" r="3" stroke="rgba(255, 255, 255, 0.12)" stroke-width="1.8" />
-                                                <path d="M 3 29 L 14 17 L 22 25 L 28 19 L 33 25" stroke="rgba(255, 255, 255, 0.12)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none" />
-                                            </g>
-                                        </svg>
-                                    </div>
-                                {% endif %}
+        <div class="catalog-layout full-width">
+            <main class="catalog-main" style="width: 100%;">
+                {% if selected_rubro.active_subrubros %}
+                    <div class="brand-pills-filter">
+                        <a href="?rubro={{ selected_rubro.slug }}" class="brand-pill-btn {% if not request.GET.subrubro %}active{% endif %}">
+                            Todos
+                        </a>
+                        {% for sub in selected_rubro.active_subrubros %}
+                            <a href="?subrubro={{ sub.slug }}" class="brand-pill-btn {% if selected_subrubro.id == sub.id and request.GET.subrubro %}active{% endif %}">
+                                {{ sub.name }}
                             </a>
-                            
-                            <div class="product-info">
-                                <div class="product-head">
-                                    <span class="product-sku">{{ product.sku }}</span>
-                                    {% if product.stock > 0 %}
-                                        <span class="product-stock in-stock">
-                                            <span class="stock-pulse-dot"></span>
-                                            En stock
-                                        </span>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+
+                <!-- Product Listing Grid -->
+                <div class="catalog-header" style="margin-top: 0; padding-top: 0; margin-bottom: 20px;">
+                    <div class="catalog-header-main">
+                        <h2>
+                            {% if selected_subrubro and request.GET.subrubro %}
+                                {{ selected_subrubro.name }}
+                            {% else %}
+                                {{ selected_rubro.name }}
+                            {% endif %}
+                        </h2>
+                        <p class="catalog-subtitle">
+                            {% if not show_prices %}
+                                <span class="price-notice">{{ price_message }}</span>
+                            {% elif discount %}
+                                <span class="discount-notice-premium">
+                                    <span>Tenes un <strong class="discount-percent-highlight">{{ discount|multiply:100|floatformat:0 }}% de descuento</strong> aplicado</span>
+                                </span>
+                            {% endif %}
+                        </p>
+                    </div>
+                    <div class="catalog-header-stats">
+                        <span class="header-stat"><strong>{{ products|length }}</strong> productos encontrados</span>
+                    </div>
+                </div>
+
+                <div class="catalog-grid-wrapper">
+                    <div class="catalog-grid view-grid">
+                        {% for product in products %}
+                            <article class="product-card animate-card-reveal" data-product-id="{{ product.id|unlocalize }}" style="animation-delay: {{ forloop.counter0|multiply:0.04 }}s;">
+                                <a class="product-image" href="{% url 'product_detail' product.sku %}">
+                                    {% if product.image %}
+                                        <img src="{{ product.image.url }}" alt="{{ product.name }}">
                                     {% else %}
-                                        <span class="product-stock out-stock">Sin stock</span>
+                                        <div class="product-placeholder-premium">
+                                            <svg class="blueprint-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none">
+                                                <rect width="100%" height="100%" fill="rgba(255, 107, 53, 0.02)" />
+                                                <rect x="4" y="4" width="92" height="92" rx="8" stroke="rgba(255, 255, 255, 0.02)" stroke-width="1" />
+                                                <g transform="translate(32, 32)">
+                                                    <rect x="0" y="0" width="36" height="36" rx="6" stroke="rgba(255, 255, 255, 0.12)" stroke-width="1.8" />
+                                                    <circle cx="12" cy="12" r="3" stroke="rgba(255, 255, 255, 0.12)" stroke-width="1.8" />
+                                                    <path d="M 3 29 L 14 17 L 22 25 L 28 19 L 33 25" stroke="rgba(255, 255, 255, 0.12)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none" />
+                                                </g>
+                                            </svg>
+                                        </div>
+                                    {% endif %}
+                                </a>
+                                
+                                <div class="product-info">
+                                    <div class="product-head">
+                                        <span class="product-sku">{{ product.sku }}</span>
+                                        {% if product.stock > 0 %}
+                                            <span class="product-stock in-stock">
+                                                <span class="stock-pulse-dot"></span>
+                                                En stock
+                                            </span>
+                                        {% else %}
+                                            <span class="product-stock out-stock">Sin stock</span>
+                                        {% endif %}
+                                    </div>
+
+                                    <h3 class="product-name">
+                                        <a href="{% url 'product_detail' product.sku %}">{{ product.name }}</a>
+                                    </h3>
+
+                                    {% if show_prices %}
+                                        <div class="product-pricing-details">
+                                            {% if discount %}
+                                                <div class="price-row list-price">
+                                                    <span class="label">Precio lista</span>
+                                                    <span class="value">${{ product.base_price|default:product.price|floatformat:2 }}</span>
+                                                </div>
+                                                <div class="price-row discount-row">
+                                                    <span class="label">Descuento</span>
+                                                    <span class="value">{{ discount|multiply:100|floatformat:0 }}% OFF</span>
+                                                </div>
+                                                <div class="price-row final-price">
+                                                    <span class="label">Precio final</span>
+                                                    <span class="value">${{ product.final_price|floatformat:2 }}</span>
+                                                </div>
+                                            {% else %}
+                                                <div class="price-row final-price single-price">
+                                                    <span class="value">${{ product.base_price|default:product.price|floatformat:2 }}</span>
+                                                </div>
+                                            {% endif %}
+                                        </div>
                                     {% endif %}
                                 </div>
 
-                                <h3 class="product-name">
-                                    <a href="{% url 'product_detail' product.sku %}">{{ product.name }}</a>
-                                </h3>
-
-                                {% if show_prices %}
-                                    <div class="product-pricing-details">
-                                        {% if discount %}
-                                            <div class="price-row list-price">
-                                                <span class="label">Precio lista</span>
-                                                <span class="value">${{ product.base_price|default:product.price|floatformat:2 }}</span>
-                                            </div>
-                                            <div class="price-row discount-row">
-                                                <span class="label">Descuento</span>
-                                                <span class="value">{{ discount|multiply:100|floatformat:0 }}% OFF</span>
-                                            </div>
-                                            <div class="price-row final-price">
-                                                <span class="label">Precio final</span>
-                                                <span class="value">${{ product.final_price|floatformat:2 }}</span>
-                                            </div>
-                                        {% else %}
-                                            <div class="price-row final-price single-price">
-                                                <span class="value">${{ product.base_price|default:product.price|floatformat:2 }}</span>
-                                            </div>
-                                        {% endif %}
-                                    </div>
-                                {% endif %}
+                                <div class="catalog-list-actions">
+                                    <a href="{% url 'product_detail' product.sku %}" class="btn btn-outline product-detail-btn">
+                                        Detalle
+                                    </a>
+                                    {% if user.is_authenticated %}
+                                        <button
+                                            class="btn btn-outline"
+                                            onclick="toggleFavorite({{ product.id|unlocalize }}, this)"
+                                            data-favorite="{% if product.is_favorite %}1{% else %}0{% endif %}"
+                                        >
+                                            {% if product.is_favorite %}Favorito{% else %}Guardar{% endif %}
+                                        </button>
+                                        <button
+                                            class="btn btn-primary btn-add-cart btn-animate-shine"
+                                            onclick="addToCart({{ product.id|unlocalize }})"
+                                            {% if product.stock <= 0 %}disabled{% endif %}
+                                        >
+                                            Agregar
+                                        </button>
+                                    {% endif %}
+                                </div>
+                            </article>
+                        {% empty %}
+                            <div class="product-list-empty" style="grid-column: 1 / -1; width: 100%;">
+                                <p>No se encontraron productos en este rubro.</p>
+                                <a href="{% url 'catalog' %}" class="btn btn-outline">Ir al Catálogo General</a>
                             </div>
-
-                            <div class="catalog-list-actions">
-                                <a href="{% url 'product_detail' product.sku %}" class="btn btn-outline product-detail-btn">
-                                    Detalle
-                                </a>
-                                {% if user.is_authenticated %}
-                                    <button
-                                        class="btn btn-outline"
-                                        onclick="toggleFavorite({{ product.id|unlocalize }}, this)"
-                                        data-favorite="{% if product.is_favorite %}1{% else %}0{% endif %}"
-                                    >
-                                        {% if product.is_favorite %}Favorito{% else %}Guardar{% endif %}
-                                    </button>
-                                    <button
-                                        class="btn btn-primary btn-add-cart btn-animate-shine"
-                                        onclick="addToCart({{ product.id|unlocalize }})"
-                                        {% if product.stock <= 0 %}disabled{% endif %}
-                                    >
-                                        Agregar
-                                    </button>
-                                {% endif %}
-                            </div>
-                        </article>
-                    {% empty %}
-                        <div class="product-list-empty">
-                            <p>No se encontraron productos en este subrubro.</p>
-                            <a href="{% url 'catalog' %}" class="btn btn-outline">Ir al Catálogo General</a>
-                        </div>
-                    {% endfor %}
+                        {% endfor %}
+                    </div>
                 </div>
-            </div>
-        </main>
-    </div>
+            </main>
+        </div>
+    {% endif %}
 </div>
 {% endblock %}
 

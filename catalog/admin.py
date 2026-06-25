@@ -1,7 +1,7 @@
 from django.contrib import admin
 from .models import (
     Category, CategoryAttribute, Product, ClampSpecs, Supplier, PriceList, PriceListItem,
-    Brand, BrandRubro, BrandSubrubro, BrandSubrubroProductOrder
+    Brand, BrandRubro, BrandSubrubro, BrandSubrubroProductOrder, BrandRubroProductOrder
 )
 from .services.clamp_parser import ClampParser
 
@@ -134,3 +134,11 @@ class BrandSubrubroAdmin(admin.ModelAdmin):
     search_fields = ('name', 'brand_rubro__name', 'brand_rubro__brand__name')
     prepopulated_fields = {'slug': ('name',)}
     autocomplete_fields = ('helper_categories',)
+
+
+@admin.register(BrandRubroProductOrder)
+class BrandRubroProductOrderAdmin(admin.ModelAdmin):
+    list_display = ('brand_rubro', 'product', 'sort_order')
+    list_filter = ('brand_rubro__brand', 'brand_rubro')
+    search_fields = ('product__sku', 'product__name', 'brand_rubro__name')
+    autocomplete_fields = ('product',)

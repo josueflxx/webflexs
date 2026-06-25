@@ -21,6 +21,8 @@ urlpatterns = [
     path('productos/editor-masivo/', views.product_grid_editor, name='admin_product_grid_editor'),
     path('productos/editor-masivo/update-cell/', views.product_grid_update_cell, name='admin_product_grid_update_cell'),
     path('productos/editor-masivo/bulk-update/', views.product_grid_bulk_update, name='admin_product_grid_bulk_update'),
+    path('productos/editor-masivo/add-association/', views.product_grid_add_brand_association, name='admin_product_grid_add_brand_association'),
+    path('productos/editor-masivo/remove-association/', views.product_grid_remove_brand_association, name='admin_product_grid_remove_brand_association'),
     path('proveedores/', views.supplier_list, name='admin_supplier_list'),
     path('proveedores/sin-proveedor/', views.supplier_unassigned, name='admin_supplier_unassigned'),
     path('proveedores/<int:supplier_id>/', views.supplier_detail, name='admin_supplier_detail'),
@@ -164,6 +166,12 @@ urlpatterns = [
     path('marcas/subrubros/<int:pk>/productos/remover/', views.brand_subrubro_remove_product, name='admin_brand_subrubro_remove_product'),
     path('marcas/subrubros/<int:pk>/productos/reordenar/', views.brand_subrubro_products_reorder, name='admin_brand_subrubro_products_reorder'),
     path('marcas/subrubros/<int:pk>/sincronizar/', views.brand_subrubro_sync, name='admin_brand_subrubro_sync'),
+    
+    path('marcas/rubros/<int:pk>/productos/', views.brand_rubro_products, name='admin_brand_rubro_products'),
+    path('marcas/rubros/<int:pk>/productos/agregar/', views.brand_rubro_add_product, name='admin_brand_rubro_add_product'),
+    path('marcas/rubros/<int:pk>/productos/remover/', views.brand_rubro_remove_product, name='admin_brand_rubro_remove_product'),
+    path('marcas/rubros/<int:pk>/productos/reordenar/', views.brand_rubro_products_reorder, name='admin_brand_rubro_products_reorder'),
+    path('marcas/rubros/<int:pk>/sincronizar/', views.brand_rubro_sync, name='admin_brand_rubro_sync'),
     
     # Settings
     path('configuracion/', views.settings_view, name='admin_settings'),

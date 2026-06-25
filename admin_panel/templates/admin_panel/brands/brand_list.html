@@ -284,6 +284,9 @@
                             <div class="rubro-header">
                                 <h4 class="rubro-title">📂 {{ rubro.name }}</h4>
                                 <div class="action-group">
+                                    <a href="{% url 'admin_brand_rubro_products' rubro.id %}" class="btn btn-primary" style="padding: 3px 8px; font-size:0.8rem;">
+                                        📦 Productos ({{ rubro.products.all.count }})
+                                    </a>
                                     <a href="{% url 'admin_brand_subrubro_create' %}?rubro={{ rubro.id }}" class="btn-sm-icon btn btn-primary-soft" style="padding: 3px 8px; font-size:0.8rem;">
                                         + Subrubro
                                     </a>

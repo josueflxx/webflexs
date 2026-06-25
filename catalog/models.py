@@ -884,8 +884,19 @@ class BrandRubro(models.Model):
     name = models.CharField(max_length=100, verbose_name="Nombre de Rubro")
     slug = models.SlugField(max_length=120, blank=True, verbose_name="Slug")
     image = models.ImageField(upload_to="brands/rubros/", blank=True, null=True, verbose_name="Imagen Representativa")
+    icon_emoji = models.CharField(max_length=20, default="📂", verbose_name="Emoji/Ícono")
+    badge_text = models.CharField(max_length=50, blank=True, verbose_name="Texto del Badge")
+    badge_color = models.CharField(max_length=30, default="orange", verbose_name="Color del Badge")
     order = models.PositiveIntegerField(default=0, verbose_name="Orden Manual")
     is_active = models.BooleanField(default=True, verbose_name="Activo")
+
+    products = models.ManyToManyField(
+        Product,
+        through="BrandRubroProductOrder",
+        blank=True,
+        related_name="brand_rubros",
+        verbose_name="Productos"
+    )
 
     class Meta:
         ordering = ["order", "name"]
@@ -906,6 +917,37 @@ class BrandRubro(models.Model):
 
     def __str__(self):
         return f"{self.brand.name} > {self.name}"
+
+
+class BrandRubroProductOrder(models.Model):
+    """Manual product ordering scoped to one BrandRubro."""
+    brand_rubro = models.ForeignKey(
+        BrandRubro,
+        on_delete=models.CASCADE,
+        related_name="product_order_rows",
+        verbose_name="Rubro de Marca"
+    )
+    product = models.ForeignKey(
+        Product,
+        on_delete=models.CASCADE,
+        related_name="brand_rubro_orders",
+        verbose_name="Producto"
+    )
+    sort_order = models.PositiveIntegerField(default=0, db_index=True, verbose_name="Orden")
+
+    class Meta:
+        verbose_name = "Orden de producto por Rubro de Marca"
+        verbose_name_plural = "Orden de productos por Rubro de Marca"
+        ordering = ["brand_rubro_id", "sort_order", "product__name"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["brand_rubro", "product"],
+                name="uniq_brand_rubro_product_order"
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.brand_rubro_id}:{self.product_id} #{self.sort_order}"
 
 
 class BrandSubrubro(models.Model):

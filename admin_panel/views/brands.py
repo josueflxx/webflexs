@@ -7,7 +7,7 @@ from django.db.models import Q, Max
 from django.utils import timezone
 import json
 
-from catalog.models import Category, Brand, BrandRubro, BrandSubrubro, BrandSubrubroProductOrder, Product
+from catalog.models import Category, Brand, BrandRubro, BrandSubrubro, BrandSubrubroProductOrder, BrandRubroProductOrder, Product
 from admin_panel.forms.brand_forms import BrandForm, BrandRubroForm, BrandSubrubroForm
 from core.services.audit import log_admin_action
 from core.decorators import superuser_required_for_modifications
@@ -495,6 +495,238 @@ def brand_subrubro_sync(request, pk):
         action="brand_subrubro_sync",
         target_type="brand_subrubro",
         target_id=subrubro.id,
+        details={"brand": brand_name, "added_count": created_count}
+    )
+
+    return JsonResponse({"success": True, "added_count": created_count})
+
+
+@staff_member_required
+def brand_rubro_products(request, pk):
+    """View to manage and reorder products inside a brand rubro."""
+    rubro = get_object_or_404(BrandRubro, pk=pk)
+    
+    order_rows = BrandRubroProductOrder.objects.filter(
+        brand_rubro=rubro
+    ).select_related("product").order_by("sort_order", "product__name")
+    
+    q = sanitize_search_token(request.GET.get('q', ''))
+    search_results = []
+    if q:
+        search_results = Product.objects.filter(
+            Q(sku__icontains=q) | Q(name__icontains=q)
+        ).exclude(
+            id__in=order_rows.values_list("product_id", flat=True)
+        )[:30]
+        
+    if request.headers.get('x-requested-with') == 'XMLHttpRequest' or request.GET.get('ajax') == '1':
+        results = []
+        for prod in search_results:
+            results.append({
+                "id": prod.id,
+                "sku": prod.sku,
+                "name": prod.name,
+            })
+        return JsonResponse({"success": True, "results": results})
+        
+    return render(request, 'admin_panel/brands/brand_rubro_products.html', {
+        'rubro': rubro,
+        'order_rows': order_rows,
+        'search_results': search_results,
+        'q': q,
+    })
+
+
+@staff_member_required
+@require_POST
+@superuser_required_for_modifications
+def brand_rubro_add_product(request, pk):
+    """Manually add a product to a brand rubro."""
+    rubro = get_object_or_404(BrandRubro, pk=pk)
+    product_id = request.POST.get('product_id', '').strip()
+    is_ajax = request.headers.get('x-requested-with') == 'XMLHttpRequest' or request.POST.get('ajax') == '1'
+    
+    if product_id.isdigit():
+        product = get_object_or_404(Product, pk=int(product_id))
+        
+        max_order = BrandRubroProductOrder.objects.filter(
+            brand_rubro=rubro
+        ).aggregate(Max("sort_order"))["sort_order__max"] or 0
+        
+        row, created = BrandRubroProductOrder.objects.get_or_create(
+            brand_rubro=rubro,
+            product=product,
+            defaults={"sort_order": max_order + 10}
+        )
+        if is_ajax:
+            return JsonResponse({
+                "success": True,
+                "created": created,
+                "product": {
+                    "id": product.id,
+                    "sku": product.sku,
+                    "name": product.name
+                }
+            })
+            
+        if created:
+            messages.success(request, f'Producto "{product.name}" agregado.')
+        else:
+            messages.info(request, f'El producto "{product.name}" ya existe en este rubro.')
+            
+    elif is_ajax:
+        return JsonResponse({"success": False, "error": "ID de producto inválido."}, status=400)
+        
+    return redirect('admin_brand_rubro_products', pk=rubro.pk)
+
+
+@staff_member_required
+@require_POST
+@superuser_required_for_modifications
+def brand_rubro_remove_product(request, pk):
+    """Remove a product from a brand rubro."""
+    rubro = get_object_or_404(BrandRubro, pk=pk)
+    product_id = request.POST.get('product_id', '').strip()
+    is_ajax = request.headers.get('x-requested-with') == 'XMLHttpRequest' or request.POST.get('ajax') == '1'
+    
+    if product_id.isdigit():
+        product = get_object_or_404(Product, pk=int(product_id))
+        BrandRubroProductOrder.objects.filter(
+            brand_rubro=rubro,
+            product=product
+        ).delete()
+        
+        if is_ajax:
+            return JsonResponse({
+                "success": True,
+                "product_id": product.id
+            })
+            
+        messages.success(request, f'Producto "{product.name}" removido.')
+        
+    elif is_ajax:
+        return JsonResponse({"success": False, "error": "ID de producto inválido."}, status=400)
+        
+    return redirect('admin_brand_rubro_products', pk=rubro.pk)
+
+
+@staff_member_required
+@require_POST
+@superuser_required_for_modifications
+def brand_rubro_products_reorder(request, pk):
+    """AJAX endpoint to save manual product order in a brand rubro."""
+    rubro = get_object_or_404(BrandRubro, pk=pk)
+    try:
+        payload = json.loads(request.body.decode("utf-8"))
+    except json.JSONDecodeError:
+        return JsonResponse({"success": False, "error": "JSON invalido."}, status=400)
+
+    ordered_ids = payload.get("ordered_ids", [])
+    if not ordered_ids:
+        return JsonResponse({"success": False, "error": "No hay productos para ordenar."}, status=400)
+
+    ordered_ids = [int(x) for x in ordered_ids if str(x).isdigit()]
+
+    existing_rows = {
+        row.product_id: row
+        for row in BrandRubroProductOrder.objects.filter(
+            brand_rubro=rubro,
+            product_id__in=ordered_ids
+        )
+    }
+
+    updates = []
+    creates = []
+
+    for index, product_id in enumerate(ordered_ids, start=1):
+        sort_order = index * 10
+        row = existing_rows.get(product_id)
+        if row:
+            row.sort_order = sort_order
+            updates.append(row)
+        else:
+            creates.append(
+                BrandRubroProductOrder(
+                    brand_rubro=rubro,
+                    product_id=product_id,
+                    sort_order=sort_order
+                )
+            )
+
+    if creates:
+        BrandRubroProductOrder.objects.bulk_create(creates, ignore_conflicts=True)
+    if updates:
+        BrandRubroProductOrder.objects.bulk_update(updates, ["sort_order"])
+
+    log_admin_action(
+        request,
+        action="brand_rubro_products_reorder",
+        target_type="brand_rubro",
+        target_id=rubro.id,
+        details={"ordered_ids": ordered_ids[:100], "count": len(ordered_ids)}
+    )
+
+    return JsonResponse({"success": True, "count": len(ordered_ids)})
+
+
+@staff_member_required
+@require_POST
+@superuser_required_for_modifications
+def brand_rubro_sync(request, pk):
+    """AJAX endpoint to auto-populate brand rubro using helper categories of its subrubros and brand keyword."""
+    rubro = get_object_or_404(BrandRubro, pk=pk)
+    brand_name = rubro.brand.name.upper()
+    
+    # Collect all helper categories from all active subrubros
+    subrubros = rubro.subrubros.filter(is_active=True)
+    all_cat_ids = []
+    for sub in subrubros:
+        for cat in sub.helper_categories.all():
+            all_cat_ids.extend(cat.get_descendant_ids(include_self=True, only_active=True))
+            
+    all_cat_ids = list(set(all_cat_ids))
+    if not all_cat_ids:
+        return JsonResponse({"success": False, "error": "No hay categorías de subrubros configuradas para auto-poblar este rubro."})
+
+    # Query active products in these categories matching the brand name
+    products = Product.objects.filter(
+        is_active=True
+    ).filter(
+        Q(category_id__in=all_cat_ids) | Q(categories__id__in=all_cat_ids)
+    ).filter(
+        Q(name__icontains=brand_name) | Q(sku__icontains=brand_name)
+    ).distinct()
+
+    existing_product_ids = set(
+        rubro.product_order_rows.values_list("product_id", flat=True)
+    )
+
+    max_order = rubro.product_order_rows.aggregate(
+        Max("sort_order")
+    )["sort_order__max"] or 0
+
+    created_count = 0
+    creates = []
+    for prod in products:
+        if prod.id not in existing_product_ids:
+            max_order += 10
+            creates.append(
+                BrandRubroProductOrder(
+                    brand_rubro=rubro,
+                    product=prod,
+                    sort_order=max_order
+                )
+            )
+            created_count += 1
+
+    if creates:
+        BrandRubroProductOrder.objects.bulk_create(creates, ignore_conflicts=True)
+
+    log_admin_action(
+        request,
+        action="brand_rubro_sync",
+        target_type="brand_rubro",
+        target_id=rubro.id,
         details={"brand": brand_name, "added_count": created_count}
     )
 

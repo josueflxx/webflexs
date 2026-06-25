@@ -40,7 +40,7 @@ from catalog.services.clamp_quoter import (
 )
 from .models import (
     Category, CategoryAttribute, CategoryProductOrder, ClampMeasureRequest, Product,
-    Brand, BrandRubro, BrandSubrubro, BrandSubrubroProductOrder
+    Brand, BrandRubro, BrandSubrubro, BrandSubrubroProductOrder, BrandRubroProductOrder
 )
 
 
@@ -1738,7 +1738,7 @@ def brands_list(request):
 
 def brand_detail(request, brand_slug):
     """
-    Public brand detail page showing rubros, subrubros, and products in a selected subrubro.
+    Public brand detail page showing rubros (as cards/buttons by default), subrubros, and products.
     """
     brand = get_object_or_404(Brand, slug=brand_slug, is_active=True)
     
@@ -1750,26 +1750,40 @@ def brand_detail(request, brand_slug):
         )
     ).order_by("order", "name")
     
+    selected_rubro = None
     selected_subrubro = None
+    
+    rubro_slug = request.GET.get("rubro", "").strip()
     subrubro_slug = request.GET.get("subrubro", "").strip()
     
     if subrubro_slug:
-        selected_subrubro = BrandSubrubro.objects.filter(
-            brand_rubro__brand=brand,
-            slug=subrubro_slug,
-            is_active=True
-        ).first()
-        
-    if not selected_subrubro:
         for rub in rubros:
-            if rub.active_subrubros:
-                selected_subrubro = rub.active_subrubros[0]
+            for sub in rub.active_subrubros:
+                if sub.slug == subrubro_slug:
+                    selected_rubro = rub
+                    selected_subrubro = sub
+                    break
+            if selected_subrubro:
+                break
+            
+    elif rubro_slug:
+        for rub in rubros:
+            if rub.slug == rubro_slug:
+                selected_rubro = rub
+                if rub.active_subrubros:
+                    selected_subrubro = rub.active_subrubros[0]
                 break
                 
     products = []
     if selected_subrubro:
         order_rows = BrandSubrubroProductOrder.objects.filter(
             brand_subrubro=selected_subrubro,
+            product__is_active=True
+        ).select_related("product").order_by("sort_order", "product__name")
+        products = [row.product for row in order_rows]
+    elif selected_rubro:
+        order_rows = BrandRubroProductOrder.objects.filter(
+            brand_rubro=selected_rubro,
             product__is_active=True
         ).select_related("product").order_by("sort_order", "product__name")
         products = [row.product for row in order_rows]
@@ -1821,6 +1835,7 @@ def brand_detail(request, brand_slug):
     context = {
         "brand": brand,
         "rubros": rubros,
+        "selected_rubro": selected_rubro,
         "selected_subrubro": selected_subrubro,
         "products": products,
         "show_prices": show_prices,

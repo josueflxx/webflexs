@@ -115,6 +115,7 @@
     /* Column widths */
     .col-select { width: 45px; }
     .col-category { width: 220px; }
+    .col-brands { width: 280px; }
     .col-sku { width: 140px; }
     .col-name { width: 440px; }
     .col-ref { width: 140px; }
@@ -125,6 +126,56 @@
     .col-stock { width: 90px; }
     .col-active { width: 90px; }
     .col-actions { width: 70px; }
+
+    .product-brands-container {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+        align-items: center;
+        max-width: 100%;
+        overflow-x: hidden;
+    }
+    .brand-association-badge {
+        display: inline-flex;
+        align-items: center;
+        background: rgba(255, 107, 53, 0.1);
+        color: #ff8c5a;
+        border: 1px solid rgba(255, 107, 53, 0.25);
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-size: 11px;
+        font-weight: 500;
+        white-space: nowrap;
+        max-width: 250px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .brand-association-badge .remove-assoc {
+        margin-left: 6px;
+        color: #f87171;
+        cursor: pointer;
+        font-weight: bold;
+        transition: color 0.2s;
+    }
+    .brand-association-badge .remove-assoc:hover {
+        color: #ef4444;
+    }
+    .add-assoc-btn {
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px dashed rgba(255, 255, 255, 0.2);
+        color: #9ca3af;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-size: 11px;
+        cursor: pointer;
+        transition: all 0.2s;
+        white-space: nowrap;
+    }
+    .add-assoc-btn:hover {
+        background: rgba(255, 107, 53, 0.15);
+        border-color: #ff6b35;
+        color: #fff;
+    }
 
     .spreadsheet-table th, .spreadsheet-table td {
         border: 1px solid rgba(255, 255, 255, 0.06);
@@ -718,6 +769,22 @@
 
                 <div style="width: 1px; height: 20px; background: #374151;"></div>
 
+                <!-- Brand/Rubro Bulk Update -->
+                <div class="bulk-action-item">
+                    <select id="bulkBrandSelect" class="form-input" style="width: 110px; height: 30px; font-size: 11px; padding: 4px; background: #0b0f19; border-color: #374151; color: #fff;" onchange="onBulkBrandChange()">
+                        <option value="">-- Marca --</option>
+                    </select>
+                    <select id="bulkRubroSelect" class="form-input" style="width: 110px; height: 30px; font-size: 11px; padding: 4px; background: #0b0f19; border-color: #374151; color: #fff;" onchange="onBulkRubroChange()">
+                        <option value="">-- Rubro --</option>
+                    </select>
+                    <select id="bulkSubrubroSelect" class="form-input" style="width: 110px; height: 30px; font-size: 11px; padding: 4px; background: #0b0f19; border-color: #374151; color: #fff;">
+                        <option value="">-- Subrubro --</option>
+                    </select>
+                    <button type="button" class="btn btn-outline btn-sm" style="height: 30px; line-height: 1;" onclick="applyBulkAction('brand_association')">Asociar Marca</button>
+                </div>
+
+                <div style="width: 1px; height: 20px; background: #374151;"></div>
+
                 <!-- Active/Inactive/Delete -->
                 <div class="bulk-action-item">
                     <button type="button" class="btn btn-info btn-sm" style="height: 30px; line-height: 1;" onclick="applyBulkAction('status', true)">Activar</button>
@@ -756,6 +823,7 @@
                     <tr>
                         <th class="col-select text-center"><input type="checkbox" id="selectAllCheckbox" class="grid-checkbox" onclick="toggleSelectAllPage(this)"></th>
                         <th class="col-category">Subrubro (Categoría)</th>
+                        <th class="col-brands">Marcas/Rubros</th>
                         <th class="col-sku">Código</th>
                         <th class="col-name">Artículo</th>
                         <th class="col-ref">Referencia</th>
@@ -773,6 +841,9 @@
                         <td class="text-center">🔍</td>
                         <td>
                             <input type="text" name="f_category" value="{{ f_category }}" class="filter-input" placeholder="Filtrar Subrubro..." onkeydown="handleFilterKey(event)">
+                        </td>
+                        <td>
+                            <!-- Column Marcas/Rubros filter spacer -->
                         </td>
                         <td>
                             <input type="text" name="f_sku" value="{{ f_sku }}" class="filter-input" placeholder="Filtrar Código..." onkeydown="handleFilterKey(event)">
@@ -811,6 +882,25 @@
                         <!-- Category Cell -->
                         <td class="spreadsheet-cell" tabindex="0" data-field="category_id" data-val="{{ product.category_id|default:'' }}">
                             <span class="cell-display {% if not product.category_id %}category-empty{% endif %}">{{ product.category.name|default:'Sin categoría' }}</span>
+                        </td>
+                        
+                        <!-- Brand Associations Cell -->
+                        <td style="text-align: left; border: 1px solid rgba(255, 255, 255, 0.06); padding: 4px 8px; vertical-align: middle;">
+                            <div class="product-brands-container" id="product-brands-{{ product.id }}">
+                                {% for rorder in product.brand_rubro_orders.all %}
+                                    <span class="brand-association-badge" data-type="rubro" data-id="{{ rorder.brand_rubro.id }}" title="{{ rorder.brand_rubro.brand.name }} ➔ {{ rorder.brand_rubro.name }}">
+                                        {{ rorder.brand_rubro.brand.name }} ➔ {{ rorder.brand_rubro.name }}
+                                        <span class="remove-assoc" onclick="removeBrandAssociation({{ product.id }}, 'rubro', {{ rorder.brand_rubro.id }}, this, event)">✕</span>
+                                    </span>
+                                {% endfor %}
+                                {% for sorder in product.brand_subrubro_orders.all %}
+                                    <span class="brand-association-badge" data-type="subrubro" data-id="{{ sorder.brand_subrubro.id }}" title="{{ sorder.brand_subrubro.brand_rubro.brand.name }} ➔ {{ sorder.brand_subrubro.brand_rubro.name }} ➔ {{ sorder.brand_subrubro.name }}">
+                                        {{ sorder.brand_subrubro.brand_rubro.brand.name }} ➔ {{ sorder.brand_subrubro.brand_rubro.name }} ➔ {{ sorder.brand_subrubro.name }}
+                                        <span class="remove-assoc" onclick="removeBrandAssociation({{ product.id }}, 'subrubro', {{ sorder.brand_subrubro.id }}, this, event)">✕</span>
+                                    </span>
+                                {% endfor %}
+                                <button type="button" class="add-assoc-btn" onclick="openAddAssociationPopover({{ product.id }}, event)">+ Asociar</button>
+                            </div>
                         </td>
                         
                         <!-- SKU Cell -->
@@ -999,6 +1089,27 @@
     📁 CATEGORÍAS
 </button>
 
+<!-- Popover for adding brand association -->
+<div id="brandAssocPopover" class="brand-assoc-popover" style="display: none; position: absolute; z-index: 1000; background: #0f172a; border: 2px solid #ff6b35; border-radius: 8px; padding: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); width: 260px;">
+    <h5 style="margin: 0 0 8px 0; color: #fff; font-size: 12px; font-weight: 600;">Asociar Marca/Rubro</h5>
+    <div style="margin-bottom: 8px;">
+        <label style="display: block; font-size: 10px; color: #9ca3af; margin-bottom: 2px;">Marca</label>
+        <select id="popoverBrandSelect" class="form-input" style="width: 100%; height: 28px; font-size: 11px; padding: 2px 6px; background: #0b0f19; border-color: #374151; color: #fff;" onchange="onPopoverBrandChange()"></select>
+    </div>
+    <div style="margin-bottom: 8px;">
+        <label style="display: block; font-size: 10px; color: #9ca3af; margin-bottom: 2px;">Rubro</label>
+        <select id="popoverRubroSelect" class="form-input" style="width: 100%; height: 28px; font-size: 11px; padding: 2px 6px; background: #0b0f19; border-color: #374151; color: #fff;" onchange="onPopoverRubroChange()"></select>
+    </div>
+    <div style="margin-bottom: 12px;">
+        <label style="display: block; font-size: 10px; color: #9ca3af; margin-bottom: 2px;">Subrubro (Opcional)</label>
+        <select id="popoverSubrubroSelect" class="form-input" style="width: 100%; height: 28px; font-size: 11px; padding: 2px 6px; background: #0b0f19; border-color: #374151; color: #fff;"></select>
+    </div>
+    <div style="display: flex; justify-content: flex-end; gap: 8px;">
+        <button type="button" class="btn btn-outline btn-sm" style="height: 24px; line-height: 1; padding: 0 8px; font-size: 10px;" onclick="closeBrandAssocPopover()">Cancelar</button>
+        <button type="button" class="btn btn-primary btn-sm" style="height: 24px; line-height: 1; padding: 0 8px; font-size: 10px; background: #ff6b35; border-color: #ff6b35;" onclick="saveBrandAssociation()">Asociar</button>
+    </div>
+</div>
+
 <script>
     let CATEGORIES = [
         {% for cat in category_options %}
@@ -1050,6 +1161,9 @@
 
         // 8. Setup custom category parent dropdown in modal creation form
         setupModalParentCategorySelect();
+
+        // 9. Setup bulk brand dropdown
+        setupBulkBrandSelect();
     });
 
     // Helper functions for intelligent category suggestions
@@ -1983,6 +2097,19 @@
         } 
         else if (action === "status") {
             payload.is_active = targetFieldExtra;
+        }
+        else if (action === "brand_association") {
+            const brandId = document.getElementById("bulkBrandSelect").value;
+            const rubroId = document.getElementById("bulkRubroSelect").value;
+            const subrubroId = document.getElementById("bulkSubrubroSelect").value;
+            
+            if (!brandId || !rubroId) {
+                alert("Debes seleccionar una Marca y un Rubro para la asociación masiva.");
+                return;
+            }
+            payload.brand_id = brandId;
+            payload.rubro_id = rubroId;
+            payload.subrubro_id = subrubroId;
         }
         else if (action === "delete") {
             const count = selectAllDatabase ? "{{ total_count }}" : selectedProducts.size;
@@ -2975,6 +3102,233 @@
             setSyncState("error", err.message || "Error al crear la categoría");
             alert("Error: " + err.message);
         });
+    }
+
+    // --- Brand Association & Popover Logic ---
+    let currentPopoverProductId = null;
+    const BRANDS_DATA = JSON.parse('{{ brands_data_json|escapejs }}');
+
+    function openAddAssociationPopover(productId, event) {
+        event.stopPropagation();
+        currentPopoverProductId = productId;
+        
+        const popover = document.getElementById("brandAssocPopover");
+        const btn = event.currentTarget;
+        const rect = btn.getBoundingClientRect();
+        
+        popover.style.display = "block";
+        popover.style.top = (window.scrollY + rect.bottom + 5) + "px";
+        popover.style.left = (window.scrollX + rect.left) + "px";
+        
+        // Populate Brands Select
+        const brandSelect = document.getElementById("popoverBrandSelect");
+        brandSelect.innerHTML = '<option value="">-- Seleccionar --</option>';
+        BRANDS_DATA.forEach(b => {
+            const opt = document.createElement("option");
+            opt.value = b.id;
+            opt.textContent = b.name;
+            brandSelect.appendChild(opt);
+        });
+        
+        document.getElementById("popoverRubroSelect").innerHTML = '<option value="">-- Seleccionar Marca primero --</option>';
+        document.getElementById("popoverSubrubroSelect").innerHTML = '<option value="">-- Seleccionar Rubro primero --</option>';
+        
+        // Add click listener outside to close
+        document.addEventListener("click", closePopoverOnClickOutside);
+    }
+
+    function onPopoverBrandChange() {
+        const brandId = document.getElementById("popoverBrandSelect").value;
+        const rubroSelect = document.getElementById("popoverRubroSelect");
+        rubroSelect.innerHTML = '<option value="">-- Seleccionar --</option>';
+        
+        const subrubroSelect = document.getElementById("popoverSubrubroSelect");
+        subrubroSelect.innerHTML = '<option value="">-- Seleccionar Rubro primero --</option>';
+        
+        if (!brandId) return;
+        
+        const brand = BRANDS_DATA.find(b => String(b.id) === String(brandId));
+        if (brand && brand.rubros) {
+            brand.rubros.forEach(r => {
+                const opt = document.createElement("option");
+                opt.value = r.id;
+                opt.textContent = r.name;
+                rubroSelect.appendChild(opt);
+            });
+        }
+    }
+
+    function onPopoverRubroChange() {
+        const brandId = document.getElementById("popoverBrandSelect").value;
+        const rubroId = document.getElementById("popoverRubroSelect").value;
+        const subrubroSelect = document.getElementById("popoverSubrubroSelect");
+        subrubroSelect.innerHTML = '<option value="">-- Ninguno (Solo Rubro) --</option>';
+        
+        if (!brandId || !rubroId) return;
+        
+        const brand = BRANDS_DATA.find(b => String(b.id) === String(brandId));
+        if (brand) {
+            const rubro = brand.rubros.find(r => String(r.id) === String(rubroId));
+            if (rubro && rubro.subrubros) {
+                rubro.subrubros.forEach(s => {
+                    const opt = document.createElement("option");
+                    opt.value = s.id;
+                    opt.textContent = s.name;
+                    subrubroSelect.appendChild(opt);
+                });
+            }
+        }
+    }
+
+    function closeBrandAssocPopover() {
+        document.getElementById("brandAssocPopover").style.display = "none";
+        document.removeEventListener("click", closePopoverOnClickOutside);
+    }
+
+    function closePopoverOnClickOutside(e) {
+        const popover = document.getElementById("brandAssocPopover");
+        if (!popover.contains(e.target) && !e.target.classList.contains("add-assoc-btn")) {
+            closeBrandAssocPopover();
+        }
+    }
+
+    function saveBrandAssociation() {
+        const rubroId = document.getElementById("popoverRubroSelect").value;
+        const subrubroId = document.getElementById("popoverSubrubroSelect").value;
+        
+        if (!rubroId) {
+            alert("Debes seleccionar un Rubro.");
+            return;
+        }
+        
+        setSyncState("saving", "Guardando asociación...");
+        fetch("{% url 'admin_product_grid_add_brand_association' %}", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "X-CSRFToken": "{{ csrf_token }}"
+            },
+            body: JSON.stringify({
+                product_id: currentPopoverProductId,
+                rubro_id: rubroId,
+                subrubro_id: subrubroId
+            })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.status === "success") {
+                setSyncState("saved", "Asociación guardada");
+                // Re-render badges
+                const container = document.getElementById(`product-brands-${data.product_id}`);
+                let html = '';
+                data.associations.forEach(assoc => {
+                    html += `
+                        <span class="brand-association-badge" data-type="${assoc.type}" data-id="${assoc.id}" title="${assoc.label}">
+                            ${assoc.label}
+                            <span class="remove-assoc" onclick="removeBrandAssociation(${data.product_id}, '${assoc.type}', ${assoc.id}, this, event)">✕</span>
+                        </span>
+                    `;
+                });
+                html += `<button type="button" class="add-assoc-btn" onclick="openAddAssociationPopover(${data.product_id}, event)">+ Asociar</button>`;
+                container.innerHTML = html;
+                closeBrandAssocPopover();
+            } else {
+                setSyncState("error", data.message);
+                alert("Error: " + data.message);
+            }
+        })
+        .catch(err => {
+            console.error(err);
+            setSyncState("error", "Error al guardar");
+            alert("Error al guardar la asociación.");
+        });
+    }
+
+    function removeBrandAssociation(productId, type, id, spanElement, event) {
+        if (event) event.stopPropagation();
+        if (!confirm("¿Seguro que deseas eliminar esta asociación?")) return;
+        
+        setSyncState("saving", "Eliminando asociación...");
+        fetch("{% url 'admin_product_grid_remove_brand_association' %}", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "X-CSRFToken": "{{ csrf_token }}"
+            },
+            body: JSON.stringify({
+                product_id: productId,
+                type: type,
+                id: id
+            })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.status === "success") {
+                setSyncState("saved", "Asociación eliminada");
+                const badge = spanElement.closest('.brand-association-badge');
+                if (badge) badge.remove();
+            } else {
+                setSyncState("error", data.message);
+                alert("Error: " + data.message);
+            }
+        })
+        .catch(err => {
+            console.error(err);
+            setSyncState("error", "Error al eliminar");
+            alert("Error al eliminar la asociación.");
+        });
+    }
+
+    // --- Bulk Brand Dropdown Populators ---
+    function setupBulkBrandSelect() {
+        const brandSelect = document.getElementById("bulkBrandSelect");
+        if (!brandSelect) return;
+        BRANDS_DATA.forEach(b => {
+            const opt = document.createElement("option");
+            opt.value = b.id;
+            opt.textContent = b.name;
+            brandSelect.appendChild(opt);
+        });
+    }
+
+    function onBulkBrandChange() {
+        const brandId = document.getElementById("bulkBrandSelect").value;
+        const rubroSelect = document.getElementById("bulkRubroSelect");
+        rubroSelect.innerHTML = '<option value="">-- Rubro --</option>';
+        const subrubroSelect = document.getElementById("bulkSubrubroSelect");
+        subrubroSelect.innerHTML = '<option value="">-- Subrubro --</option>';
+        
+        if (!brandId) return;
+        const brand = BRANDS_DATA.find(b => String(b.id) === String(brandId));
+        if (brand && brand.rubros) {
+            brand.rubros.forEach(r => {
+                const opt = document.createElement("option");
+                opt.value = r.id;
+                opt.textContent = r.name;
+                rubroSelect.appendChild(opt);
+            });
+        }
+    }
+
+    function onBulkRubroChange() {
+        const brandId = document.getElementById("bulkBrandSelect").value;
+        const rubroId = document.getElementById("bulkRubroSelect").value;
+        const subrubroSelect = document.getElementById("bulkSubrubroSelect");
+        subrubroSelect.innerHTML = '<option value="">-- Subrubro (Opcional) --</option>';
+        
+        if (!brandId || !rubroId) return;
+        const brand = BRANDS_DATA.find(b => String(b.id) === String(brandId));
+        if (brand) {
+            const rubro = brand.rubros.find(r => String(r.id) === String(rubroId));
+            if (rubro && rubro.subrubros) {
+                rubro.subrubros.forEach(s => {
+                    const opt = document.createElement("option");
+                    opt.value = s.id;
+                    opt.textContent = s.name;
+                    subrubroSelect.appendChild(opt);
+                });
+            }
+        }
     }
 </script>
 {% endblock %}

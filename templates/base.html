@@ -22,7 +22,7 @@
         rel="stylesheet">
 
     <!-- Base CSS -->
-    <link rel="stylesheet" href="{% static 'core/css/base.css' %}?v=20260625-switchfix">
+    <link rel="stylesheet" href="{% static 'core/css/base.css' %}?v=20260625-switchfix2">
     <link rel="stylesheet" href="{% static 'core/css/search_suggestions.css' %}?v=5">
     <link rel="icon" type="image/x-icon" href="{% static 'core/img/favicon.ico' %}">
     <link rel="icon" type="image/png" sizes="32x32" href="{% static 'core/img/favicon-32.png' %}">
@@ -74,11 +74,15 @@
                     <span></span>
                 </button>
                 <ul class="nav-menu" id="navMenu">
+                    {% if user.is_authenticated %}
+                    <li><a href="{% url 'home' %}">Inicio</a></li>
+                    {% else %}
                     <li><a href="{% url 'home' %}#inicio">Inicio</a></li>
                     <li><a href="{% url 'home' %}#nosotros">Nosotros</a></li>
                     <li><a href="{% url 'home' %}#servicios">Servicios</a></li>
                     <li><a href="{% url 'home' %}#productos">Productos</a></li>
                     <li><a href="{% url 'home' %}#contacto">Contacto</a></li>
+                    {% endif %}
                     <li class="nav-divider"></li>
                     {% if user.is_authenticated %}
                     {% if active_company %}
