@@ -236,10 +236,28 @@
                     </div>
                     <input type="hidden" id="selectedCategoryId" name="category_id" value="">
                     
-                    <div id="categoryAutocompleteDropdown" class="autocomplete-dropdown-list" style="display: none; position: absolute; top: 100%; left: 0; right: 0; z-index: 100; max-height: 250px; overflow-y: auto; background: #0f1524; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.5);">
+                    <div id="categoryAutocompleteDropdown" class="autocomplete-dropdown-list" style="display: none; position: absolute; top: 100%; left: 0; right: 0; z-index: 100; max-height: 250px; overflow-y: auto; background: rgba(15, 21, 36, 0.95); backdrop-filter: blur(8px); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 6px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.7), 0 8px 10px -6px rgba(0,0,0,0.7);">
                         {% for opt in category_options %}
-                            <div class="autocomplete-dropdown-item" data-id="{{ opt.id }}" data-text="{{ opt.text }}" style="padding: 8px 12px; cursor: pointer; font-size: 0.85rem; border-bottom: 1px solid rgba(255,255,255,0.03); color: #e5e7eb; transition: background 0.15s ease; {% if opt.depth > 0 %}padding-left: {{ opt.depth|add:opt.depth|add:opt.depth|add:opt.depth|add:12 }}px;{% endif %}">
-                                {% if opt.depth > 0 %}↳ {% endif %}{{ opt.name }}
+                            <div class="autocomplete-dropdown-item" 
+                                 data-id="{{ opt.id }}" 
+                                 data-name="{{ opt.name }}" 
+                                 data-depth="{{ opt.depth }}"
+                                 data-path="{% for p in opt.full_path %}{% if not forloop.last %}{{ p }}{% if not forloop.revcounter0 == 1 %} ➔ {% endif %}{% endif %}{% endfor %}"
+                                 data-text="{{ opt.name }} {% for p in opt.full_path %}{{ p }} {% endfor %}"
+                                 style="padding: 10px 14px; cursor: pointer; border-bottom: 1px solid rgba(255,255,255,0.03); color: #e5e7eb; transition: all 0.15s ease; {% if opt.depth > 0 %}padding-left: {{ opt.depth|add:opt.depth|add:opt.depth|add:opt.depth|add:14 }}px;{% endif %}">
+                                <div style="font-weight: 500; display: flex; align-items: center; gap: 6px; font-size: 0.85rem;">
+                                    <span style="color: var(--color-primary); font-size: 0.85rem; opacity: 0.85;">📁</span>
+                                    <span class="category-item-name">{{ opt.name }}</span>
+                                </div>
+                                {% if opt.full_path|length > 1 %}
+                                    <div class="category-item-path" style="font-size: 0.7rem; color: #9ca3af; margin-left: 18px; margin-top: 2px; opacity: 0.7;">
+                                        {% for p in opt.full_path %}
+                                            {% if not forloop.last %}
+                                                {{ p }}{% if not forloop.revcounter0 == 1 %} ➔ {% endif %}
+                                            {% endif %}
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
                             </div>
                         {% endfor %}
                     </div>
@@ -623,9 +641,51 @@
             }
         }
 
+        // Helper function to highlight search matches
+        function highlightText(text, query) {
+            if (!query) return text;
+            const index = text.toLowerCase().indexOf(query.toLowerCase());
+            if (index === -1) return text;
+            const part1 = text.substring(0, index);
+            const part2 = text.substring(index, index + query.length);
+            const part3 = text.substring(index + query.length);
+            return `${part1}<span style="color: var(--color-primary); font-weight: bold;">${part2}</span>${part3}`;
+        }
+
+        let activeDropdownIndex = -1;
+
+        function getVisibleDropdownItems() {
+            return Array.from(categoryDropdown.querySelectorAll('.autocomplete-dropdown-item'))
+                .filter(item => item.style.display !== 'none');
+        }
+
+        function setActiveDropdownItem(index) {
+            const visibleItems = getVisibleDropdownItems();
+            visibleItems.forEach(item => {
+                item.style.background = '';
+                item.style.borderLeft = '';
+                item.style.paddingLeft = '';
+            });
+            
+            if (index >= 0 && index < visibleItems.length) {
+                const activeItem = visibleItems[index];
+                activeItem.style.background = 'rgba(255, 107, 53, 0.08)';
+                activeItem.style.borderLeft = '3px solid var(--color-primary)';
+                
+                // Adjust left padding to compensate for border-left width and indentation
+                const depth = parseInt(activeItem.dataset.depth || '0');
+                const basePadding = depth * 4 + 14;
+                activeItem.style.paddingLeft = `${basePadding - 3}px`;
+                
+                activeItem.scrollIntoView({ block: 'nearest' });
+            }
+            activeDropdownIndex = index;
+        }
+
         // Category Autocomplete logic
         categorySearchInput.addEventListener('focus', function() {
             categoryDropdown.style.display = 'block';
+            setActiveDropdownItem(-1);
         });
 
         document.addEventListener('click', function(e) {
@@ -638,22 +698,62 @@
             const query = categorySearchInput.value.toLowerCase().trim();
             dropdownItems.forEach(item => {
                 const text = item.dataset.text.toLowerCase();
+                const name = item.dataset.name;
+                const path = item.dataset.path || '';
+                
                 if (text.includes(query)) {
                     item.style.display = 'block';
+                    
+                    // Highlight matching parts
+                    const nameSpan = item.querySelector('.category-item-name');
+                    if (nameSpan) {
+                        nameSpan.innerHTML = highlightText(name, query);
+                    }
+                    const pathDiv = item.querySelector('.category-item-path');
+                    if (pathDiv) {
+                        pathDiv.innerHTML = highlightText(path, query);
+                    }
                 } else {
                     item.style.display = 'none';
                 }
             });
             categoryDropdown.style.display = 'block';
+            setActiveDropdownItem(-1);
+        });
+
+        categorySearchInput.addEventListener('keydown', function(e) {
+            const visibleItems = getVisibleDropdownItems();
+            
+            if (categoryDropdown.style.display === 'block' && visibleItems.length > 0) {
+                if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    let nextIndex = activeDropdownIndex + 1;
+                    if (nextIndex >= visibleItems.length) nextIndex = 0;
+                    setActiveDropdownItem(nextIndex);
+                } else if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    let prevIndex = activeDropdownIndex - 1;
+                    if (prevIndex < 0) prevIndex = visibleItems.length - 1;
+                    setActiveDropdownItem(prevIndex);
+                } else if (e.key === 'Enter') {
+                    e.preventDefault();
+                    if (activeDropdownIndex >= 0 && activeDropdownIndex < visibleItems.length) {
+                        visibleItems[activeDropdownIndex].click();
+                    }
+                } else if (e.key === 'Escape') {
+                    e.preventDefault();
+                    categoryDropdown.style.display = 'none';
+                }
+            }
         });
 
         dropdownItems.forEach(item => {
             item.addEventListener('click', function() {
                 const id = this.dataset.id;
-                const text = this.dataset.text;
+                const name = this.dataset.name;
                 
                 selectedCategoryId.value = id;
-                categorySearchInput.value = text;
+                categorySearchInput.value = name;
                 clearCategoryBtn.style.display = 'inline';
                 categoryDropdown.style.display = 'none';
                 
@@ -665,7 +765,13 @@
             selectedCategoryId.value = '';
             categorySearchInput.value = '';
             clearCategoryBtn.style.display = 'none';
-            dropdownItems.forEach(item => item.style.display = 'block');
+            dropdownItems.forEach(item => {
+                item.style.display = 'block';
+                const nameSpan = item.querySelector('.category-item-name');
+                if (nameSpan) nameSpan.textContent = item.dataset.name;
+                const pathDiv = item.querySelector('.category-item-path');
+                if (pathDiv) pathDiv.textContent = item.dataset.path;
+            });
             
             performSearch(false);
         });
