@@ -378,6 +378,13 @@ class BrandCategoryAssociationTestCase(TestCase):
         self.assertTrue(data['success'])
         self.assertEqual(data['added_count'], 2) # product1 and product2
         self.assertEqual(self.rubro.products.count(), 2)
+        
+        # Verify added_products structure
+        self.assertIn('added_products', data)
+        self.assertEqual(len(data['added_products']), 2)
+        added_ids = [p['id'] for p in data['added_products']]
+        self.assertIn(self.product1.id, added_ids)
+        self.assertIn(self.product2.id, added_ids)
 
     def test_bulk_add_category_to_subrubro(self):
         self.assertEqual(self.subrubro.products.count(), 0)
@@ -393,4 +400,101 @@ class BrandCategoryAssociationTestCase(TestCase):
         self.assertEqual(self.subrubro.products.count(), 1)
         # Check that it cascade associated it to the parent rubro too
         self.assertEqual(self.rubro.products.count(), 1)
+        
+        # Verify added_products structure
+        self.assertIn('added_products', data)
+        self.assertEqual(len(data['added_products']), 1)
+        self.assertEqual(data['added_products'][0]['id'], self.product1.id)
+
+
+class BrandPremiumSPAAndPaginationTestCase(TestCase):
+    """Test case for paginated search results, association flags, and preview stats in brand rubro/subrubro products screens."""
+
+    def setUp(self):
+        self.brand = Brand.objects.create(name="Honda")
+        self.rubro = BrandRubro.objects.create(brand=self.brand, name="Motor")
+        self.subrubro = BrandSubrubro.objects.create(brand_rubro=self.rubro, name="Pistones")
+        
+        self.category = Category.objects.create(name="Pistones Categoria")
+        
+        # Create 35 products to test pagination (30 products per page)
+        self.products = []
+        for i in range(35):
+            self.products.append(
+                Product.objects.create(
+                    sku=f"HON-PST-{i:02d}",
+                    name=f"Piston Honda {i}",
+                    price=Decimal("100.00"),
+                    category=self.category,
+                    is_active=True
+                )
+            )
+            
+        # Associate first 5 products to the subrubro (and rubro)
+        for prod in self.products[:5]:
+            self.rubro.products.add(prod)
+            self.subrubro.products.add(prod)
+            
+        self.client = Client()
+        self.user = User.objects.create_superuser('josueflexs', 'admin@honda.com', 'adminpass')
+        self.client.login(username='josueflexs', password='adminpass')
+
+    def test_rubro_paginated_search_results_with_association_flag(self):
+        url = reverse('admin_brand_rubro_products', args=[self.rubro.pk])
+        
+        # Page 1 (should return 30 products, has_more=True)
+        response = self.client.get(url, {'category_id': self.category.pk, 'page': '1', 'ajax': '1'}, HTTP_X_REQUESTED_WITH='XMLHttpRequest')
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertTrue(data['success'])
+        self.assertTrue(data['has_more'])
+        self.assertEqual(len(data['results']), 30)
+        
+        # The products in data['results'] should have the correct is_associated flag
+        associated_ids = {p.id for p in self.products[:5]}
+        for res_item in data['results']:
+            if res_item['id'] in associated_ids:
+                self.assertTrue(res_item['is_associated'])
+            else:
+                self.assertFalse(res_item['is_associated'])
+            
+        # Page 2 (should return 5 products, has_more=False)
+        response = self.client.get(url, {'category_id': self.category.pk, 'page': '2', 'ajax': '1'}, HTTP_X_REQUESTED_WITH='XMLHttpRequest')
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertTrue(data['success'])
+        self.assertFalse(data['has_more'])
+        self.assertEqual(len(data['results']), 5)
+
+    def test_subrubro_paginated_search_results_with_association_flag(self):
+        url = reverse('admin_brand_subrubro_products', args=[self.subrubro.pk])
+        
+        # Page 1 (should return 30 products, has_more=True)
+        response = self.client.get(url, {'category_id': self.category.pk, 'page': '1', 'ajax': '1'}, HTTP_X_REQUESTED_WITH='XMLHttpRequest')
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertTrue(data['success'])
+        self.assertTrue(data['has_more'])
+        self.assertEqual(len(data['results']), 30)
+
+    def test_rubro_bulk_add_preview_stats(self):
+        url = reverse('admin_brand_rubro_preview_category_bulk', args=[self.rubro.pk])
+        response = self.client.get(url, {'category_id': self.category.pk})
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertTrue(data['success'])
+        self.assertEqual(data['total_count'], 35)
+        self.assertEqual(data['associated_count'], 5)
+        self.assertEqual(data['new_count'], 30)
+
+    def test_subrubro_bulk_add_preview_stats(self):
+        url = reverse('admin_brand_subrubro_preview_category_bulk', args=[self.subrubro.pk])
+        response = self.client.get(url, {'category_id': self.category.pk})
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertTrue(data['success'])
+        self.assertEqual(data['total_count'], 35)
+        self.assertEqual(data['associated_count'], 5)
+        self.assertEqual(data['new_count'], 30)
+
 

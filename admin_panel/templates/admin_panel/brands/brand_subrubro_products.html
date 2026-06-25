@@ -132,6 +132,11 @@
 
 {% block content %}
 <div class="subrubro-container">
+    <!-- Screen Loading Overlay -->
+    <div id="loadingOverlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 21, 36, 0.85); z-index: 9999; align-items: center; justify-content: center; flex-direction: column;">
+        <div class="spinner" style="width: 50px; height: 50px; border: 4px solid rgba(255, 107, 53, 0.1); border-top: 4px solid var(--color-primary); border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 15px;"></div>
+        <p style="color: #cbd5e1; font-weight: 500; font-family: inherit;">Procesando asociación masiva...</p>
+    </div>
     <div>
         <a href="{% url 'admin_brand_list' %}" class="btn btn-secondary" style="margin-bottom: 15px;">
             ← Volver a Marcas
@@ -252,6 +257,7 @@
             <div class="search-results" id="searchResults">
                 <div style="font-size:0.85rem; color:var(--color-gray-light); text-align:center; padding:15px;">Escribe en la barra de búsqueda o selecciona una categoría para encontrar productos.</div>
             </div>
+            <button type="button" id="btnLoadMore" class="btn btn-secondary" style="display: none; width: 100%; margin-top: 15px; font-size: 0.85rem;">Cargar más</button>
         </div>
     </div>
 </div>
@@ -268,8 +274,19 @@
         const qInput = document.getElementById('qInput');
         const btnSearch = document.getElementById('btnSearch');
         const searchResults = document.getElementById('searchResults');
+        const btnLoadMore = document.getElementById('btnLoadMore');
+        const btnBulkAddCategory = document.getElementById('btnBulkAddCategory');
+        const selectedCategoryId = document.getElementById('selectedCategoryId');
+        const categorySearchInput = document.getElementById('categorySearchInput');
+        const clearCategoryBtn = document.getElementById('clearCategoryBtn');
+        const categoryDropdown = document.getElementById('categoryAutocompleteDropdown');
+        const dropdownItems = categoryDropdown.querySelectorAll('.autocomplete-dropdown-item');
+        const loadingOverlay = document.getElementById('loadingOverlay');
         
         let dragSrcEl = null;
+        let currentPage = 1;
+        let hasMoreResults = false;
+        let isSearching = false;
 
         // Initialize drag events for rows
         function initDragAndDrop() {
@@ -335,7 +352,9 @@
                 
                 refreshPositions();
                 
-                saveBtn.removeAttribute('disabled');
+                const currentSaveBtn = document.getElementById('btnSaveOrder');
+                if (currentSaveBtn) currentSaveBtn.removeAttribute('disabled');
+                
                 orderStatus.textContent = 'Orden modificado * (Presiona Guardar)';
                 orderStatus.style.color = '#ff6b35';
                 
@@ -366,44 +385,50 @@
             }
         }
 
-        // Save order via AJAX
-        if (saveBtn) {
-            saveBtn.addEventListener('click', async function() {
-                saveBtn.setAttribute('disabled', 'true');
-                saveBtn.textContent = 'Guardando...';
+        // Save order via AJAX handler
+        async function saveOrderHandler() {
+            const currentSaveBtn = document.getElementById('btnSaveOrder');
+            if (currentSaveBtn) {
+                currentSaveBtn.setAttribute('disabled', 'true');
+                currentSaveBtn.textContent = 'Guardando...';
+            }
+            
+            const rows = Array.from(document.querySelectorAll('#productsTable .product-row'));
+            const orderedIds = rows.map(row => row.dataset.productId);
+            
+            try {
+                const response = await fetch('{% url "admin_brand_subrubro_products_reorder" subrubro.id %}', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+                    },
+                    body: JSON.stringify({ ordered_ids: orderedIds })
+                });
                 
-                const rows = Array.from(document.querySelectorAll('#productsTable .product-row'));
-                const orderedIds = rows.map(row => row.dataset.productId);
-                
-                try {
-                    const response = await fetch('{% url "admin_brand_subrubro_products_reorder" subrubro.id %}', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
-                        },
-                        body: JSON.stringify({ ordered_ids: orderedIds })
-                    });
-                    
-                    const data = await response.json();
-                    if (data.success) {
-                        orderStatus.textContent = 'Orden guardado con éxito';
-                        orderStatus.style.color = '#28a745';
-                        setTimeout(() => {
-                            orderStatus.textContent = 'Arrastra las filas para reordenar';
-                            orderStatus.style.color = '';
-                        }, 3000);
-                    } else {
-                        alert('Error al guardar el orden: ' + (data.error || 'Error desconocido'));
-                        saveBtn.removeAttribute('disabled');
-                    }
-                } catch (err) {
-                    console.error(err);
-                    alert('Error de conexión al guardar el orden.');
-                    saveBtn.removeAttribute('disabled');
+                const data = await response.json();
+                if (data.success) {
+                    orderStatus.textContent = 'Orden guardado con éxito';
+                    orderStatus.style.color = '#28a745';
+                    setTimeout(() => {
+                        orderStatus.textContent = 'Arrastra las filas para reordenar';
+                        orderStatus.style.color = '';
+                    }, 3000);
+                } else {
+                    alert('Error al guardar el orden: ' + (data.error || 'Error desconocido'));
+                    if (currentSaveBtn) currentSaveBtn.removeAttribute('disabled');
                 }
-                saveBtn.textContent = 'Guardar Orden';
-            });
+            } catch (err) {
+                console.error(err);
+                alert('Error de conexión al guardar el orden.');
+                if (currentSaveBtn) currentSaveBtn.removeAttribute('disabled');
+            }
+            if (currentSaveBtn) currentSaveBtn.textContent = 'Guardar Orden';
+        }
+
+        // Bind Save Button initially
+        if (saveBtn) {
+            saveBtn.addEventListener('click', saveOrderHandler);
         }
 
         // Auto-Sync via AJAX
@@ -444,68 +469,156 @@
             qInput.addEventListener('input', function() {
                 clearTimeout(searchTimeout);
                 const query = qInput.value.trim();
-                const categoryId = document.getElementById('selectedCategoryId').value;
+                const categoryId = selectedCategoryId.value;
                 if (query.length >= 2 || categoryId) {
-                    searchTimeout = setTimeout(() => performSearch(), 300);
+                    searchTimeout = setTimeout(() => performSearch(false), 300);
                 } else if (query.length === 0 && !categoryId) {
                     searchResults.innerHTML = '<div style="font-size:0.85rem; color:var(--color-gray-light); text-align:center; padding:15px;">Escribe en la barra de búsqueda o selecciona una categoría para encontrar productos.</div>';
                     document.getElementById('bulkCategoryAddWrapper').style.display = 'none';
+                    if (btnLoadMore) btnLoadMore.style.display = 'none';
                 }
             });
             qInput.addEventListener('keydown', function(e) {
                 if (e.key === 'Enter') {
                     e.preventDefault();
                     clearTimeout(searchTimeout);
-                    performSearch();
+                    performSearch(false);
                 }
             });
         }
         if (btnSearch) {
             btnSearch.addEventListener('click', function() {
-                performSearch();
+                performSearch(false);
             });
         }
 
-        async function performSearch() {
+        if (btnLoadMore) {
+            btnLoadMore.addEventListener('click', function() {
+                currentPage++;
+                performSearch(true);
+            });
+        }
+
+        async function performSearch(appendMode = false) {
+            if (isSearching) return;
+            
             const query = qInput.value.trim();
-            const categoryId = document.getElementById('selectedCategoryId').value;
+            const categoryId = selectedCategoryId.value;
             if (!query && !categoryId) {
                 searchResults.innerHTML = '<div style="font-size:0.85rem; color:var(--color-gray-light); text-align:center; padding:15px;">Escribe en la barra de búsqueda o selecciona una categoría para encontrar productos.</div>';
                 document.getElementById('bulkCategoryAddWrapper').style.display = 'none';
+                if (btnLoadMore) btnLoadMore.style.display = 'none';
                 return;
             }
-            searchResults.innerHTML = '<div style="font-size:0.85rem; color:var(--color-gray-light); text-align:center; padding:15px;">Buscando...</div>';
+            
+            isSearching = true;
+            if (!appendMode) {
+                currentPage = 1;
+                searchResults.innerHTML = '<div style="font-size:0.85rem; color:var(--color-gray-light); text-align:center; padding:15px;">Buscando...</div>';
+            } else {
+                if (btnLoadMore) {
+                    btnLoadMore.setAttribute('disabled', 'true');
+                    btnLoadMore.textContent = 'Cargando más...';
+                }
+            }
             
             try {
-                const response = await fetch(`{% url 'admin_brand_subrubro_products' subrubro.id %}?q=${encodeURIComponent(query)}&category_id=${categoryId}&ajax=1`, {
+                const response = await fetch(`{% url 'admin_brand_subrubro_products' subrubro.id %}?q=${encodeURIComponent(query)}&category_id=${categoryId}&page=${currentPage}&ajax=1`, {
                     headers: { 'X-Requested-With': 'XMLHttpRequest' }
                 });
                 const data = await response.json();
                 if (data.success) {
-                    renderSearchResults(data.results);
-                    if (categoryId && data.results && data.results.length > 0) {
+                    renderSearchResults(data.results, appendMode);
+                    hasMoreResults = data.has_more;
+                    updateLoadMoreButton();
+                    
+                    if (categoryId) {
                         document.getElementById('bulkCategoryAddWrapper').style.display = 'block';
+                        loadPreviewStats(categoryId);
                     } else {
                         document.getElementById('bulkCategoryAddWrapper').style.display = 'none';
                     }
                 } else {
-                    searchResults.innerHTML = '<div style="font-size:0.85rem; color:#dc3545; text-align:center; padding:15px;">Error al buscar.</div>';
+                    if (!appendMode) {
+                        searchResults.innerHTML = '<div style="font-size:0.85rem; color:#dc3545; text-align:center; padding:15px;">Error al buscar.</div>';
+                    }
                     document.getElementById('bulkCategoryAddWrapper').style.display = 'none';
                 }
             } catch (err) {
                 console.error(err);
-                searchResults.innerHTML = '<div style="font-size:0.85rem; color:#dc3545; text-align:center; padding:15px;">Error de conexión.</div>';
+                if (!appendMode) {
+                    searchResults.innerHTML = '<div style="font-size:0.85rem; color:#dc3545; text-align:center; padding:15px;">Error de conexión.</div>';
+                }
                 document.getElementById('bulkCategoryAddWrapper').style.display = 'none';
+            } finally {
+                isSearching = false;
+            }
+        }
+
+        function updateLoadMoreButton() {
+            if (!btnLoadMore) return;
+            if (hasMoreResults) {
+                btnLoadMore.removeAttribute('disabled');
+                btnLoadMore.textContent = 'Cargar más';
+                btnLoadMore.style.display = 'block';
+            } else {
+                btnLoadMore.style.display = 'none';
+            }
+        }
+
+        async function loadPreviewStats(categoryId) {
+            const wrapper = document.getElementById('bulkCategoryAddWrapper');
+            let statsEl = document.getElementById('bulkAddPreviewStats');
+            if (!statsEl) {
+                statsEl = document.createElement('div');
+                statsEl.id = 'bulkAddPreviewStats';
+                statsEl.style.marginTop = '10px';
+                statsEl.style.fontSize = '0.85rem';
+                statsEl.style.color = '#cbd5e1';
+                statsEl.style.lineHeight = '1.4';
+                statsEl.style.textAlign = 'left';
+                statsEl.style.padding = '8px';
+                statsEl.style.background = 'rgba(255,255,255,0.02)';
+                statsEl.style.borderRadius = '6px';
+                statsEl.style.border = '1px solid rgba(255,255,255,0.04)';
+                wrapper.appendChild(statsEl);
+            }
+            statsEl.innerHTML = '<span style="color: var(--color-gray-light);">Cargando estadísticas de categoría...</span>';
+            btnBulkAddCategory.setAttribute('disabled', 'true');
+            
+            try {
+                const response = await fetch(`preview-categoria-lote/?category_id=${categoryId}`);
+                const data = await response.json();
+                if (data.success) {
+                    statsEl.innerHTML = `
+                        <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+                            <span>Productos activos:</span>
+                            <strong>${data.total_count}</strong>
+                        </div>
+                        <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+                            <span>Ya asociados:</span>
+                            <span style="color: #28a745; font-weight: bold;">${data.associated_count}</span>
+                        </div>
+                        <div style="display:flex; justify-content:space-between; border-top:1px solid rgba(255,255,255,0.06); padding-top:4px; margin-top:4px;">
+                            <span>Nuevos a agregar:</span>
+                            <span style="color: var(--color-primary); font-weight: bold;">${data.new_count}</span>
+                        </div>
+                    `;
+                    if (data.new_count > 0) {
+                        btnBulkAddCategory.removeAttribute('disabled');
+                    } else {
+                        btnBulkAddCategory.setAttribute('disabled', 'true');
+                    }
+                } else {
+                    statsEl.innerHTML = '<span style="color: #dc3545;">Error al cargar estadísticas.</span>';
+                }
+            } catch (err) {
+                console.error(err);
+                statsEl.innerHTML = '<span style="color: #dc3545;">Error de conexión.</span>';
             }
         }
 
         // Category Autocomplete logic
-        const categorySearchInput = document.getElementById('categorySearchInput');
-        const clearCategoryBtn = document.getElementById('clearCategoryBtn');
-        const selectedCategoryId = document.getElementById('selectedCategoryId');
-        const categoryDropdown = document.getElementById('categoryAutocompleteDropdown');
-        const dropdownItems = categoryDropdown.querySelectorAll('.autocomplete-dropdown-item');
-
         categorySearchInput.addEventListener('focus', function() {
             categoryDropdown.style.display = 'block';
         });
@@ -539,7 +652,7 @@
                 clearCategoryBtn.style.display = 'inline';
                 categoryDropdown.style.display = 'none';
                 
-                performSearch();
+                performSearch(false);
             });
         });
 
@@ -549,11 +662,10 @@
             clearCategoryBtn.style.display = 'none';
             dropdownItems.forEach(item => item.style.display = 'block');
             
-            performSearch();
+            performSearch(false);
         });
 
         // Bulk Category Association Click Handler
-        const btnBulkAddCategory = document.getElementById('btnBulkAddCategory');
         if (btnBulkAddCategory) {
             btnBulkAddCategory.addEventListener('click', async function() {
                 const categoryId = selectedCategoryId.value;
@@ -563,6 +675,10 @@
                 if (confirm(`¿Seguro que deseas asociar todos los productos activos de la categoría "${categoryName}" (y sus subcategorías) a este subrubro?`)) {
                     btnBulkAddCategory.setAttribute('disabled', 'true');
                     btnBulkAddCategory.textContent = 'Asociando...';
+                    
+                    if (loadingOverlay) {
+                        loadingOverlay.style.display = 'flex';
+                    }
                     
                     const formData = new FormData();
                     formData.append('category_id', categoryId);
@@ -579,15 +695,124 @@
                         
                         const data = await response.json();
                         if (data.success) {
+                            if (loadingOverlay) {
+                                loadingOverlay.style.display = 'none';
+                            }
+                            
+                            // Dynamically insert products into table container
+                            const emptyPlaceholder = document.getElementById('emptyPlaceholder');
+                            if (emptyPlaceholder) {
+                                const tableContainer = document.getElementById('tableContainer');
+                                tableContainer.innerHTML = `
+                                    <form id="orderForm" method="POST">
+                                        {% csrf_token %}
+                                        <table class="draggable-table" id="productsTable">
+                                            <thead>
+                                                <tr>
+                                                    <th style="width: 40px;"></th>
+                                                    <th style="width: 60px;">Pos</th>
+                                                    <th style="width: 140px;">SKU</th>
+                                                    <th>Nombre</th>
+                                                    <th style="width: 80px; text-align: right;">Acciones</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                            </tbody>
+                                        </table>
+                                        
+                                        <div class="save-order-bar">
+                                            <button type="button" id="btnSaveOrder" class="btn btn-primary" disabled>
+                                                Guardar Orden
+                                            </button>
+                                        </div>
+                                    </form>
+                                `;
+                                const newSaveBtn = document.getElementById('btnSaveOrder');
+                                if (newSaveBtn) {
+                                    newSaveBtn.addEventListener('click', saveOrderHandler);
+                                }
+                            }
+                            
+                            const tbody = document.querySelector('#productsTable tbody');
+                            
+                            data.added_products.forEach(prod => {
+                                // Skip if already there
+                                if (tbody.querySelector(`tr[data-product-id="${prod.id}"]`)) {
+                                    return;
+                                }
+                                
+                                const row = document.createElement('tr');
+                                row.className = 'product-row';
+                                row.draggable = true;
+                                row.dataset.productId = prod.id;
+                                
+                                // CSS SPA Animations
+                                row.style.opacity = '0';
+                                row.style.transform = 'translateY(-10px)';
+                                row.style.transition = 'opacity 0.5s cubic-bezier(0.4, 0, 0.2, 1), transform 0.5s cubic-bezier(0.4, 0, 0.2, 1)';
+                                
+                                row.innerHTML = `
+                                    <td class="drag-handle">☰</td>
+                                    <td class="row-position"></td>
+                                    <td><strong>${prod.sku}</strong></td>
+                                    <td>${prod.name}</td>
+                                    <td style="text-align: right;">
+                                        <button type="button" class="btn-sm-icon btn btn-trash btn-remove-product" data-product-id="${prod.id}">
+                                            🗑️
+                                        </button>
+                                    </td>
+                                `;
+                                tbody.appendChild(row);
+                                
+                                requestAnimationFrame(() => {
+                                    row.style.opacity = '1.0';
+                                    row.style.transform = 'translateY(0)';
+                                });
+                                
+                                // Update search results item state in UI if it is present
+                                const searchItem = searchResults.querySelector(`.search-result-item[data-product-id="${prod.id}"]`);
+                                if (searchItem) {
+                                    const actionContainer = searchItem.querySelector('.search-result-action') || searchItem;
+                                    const btnToReplace = searchItem.querySelector('.btn-add-product');
+                                    if (btnToReplace) {
+                                        const badge = document.createElement('span');
+                                        badge.className = 'badge';
+                                        badge.style.background = 'rgba(40, 167, 69, 0.1)';
+                                        badge.style.color = '#28a745';
+                                        badge.style.border = '1px solid rgba(40, 167, 69, 0.2)';
+                                        badge.style.padding = '4px 8px';
+                                        badge.style.fontSize = '0.8rem';
+                                        badge.style.borderRadius = '4px';
+                                        badge.style.fontWeight = '500';
+                                        badge.textContent = '✓ Asociado';
+                                        btnToReplace.replaceWith(badge);
+                                    }
+                                }
+                            });
+                            
+                            refreshPositions();
+                            initDragAndDrop();
+                            bindRemoveButtons();
+                            
+                            // Re-load stats preview to show zero new count
+                            loadPreviewStats(categoryId);
+                            
+                            const currentSaveBtn = document.getElementById('btnSaveOrder');
+                            if (currentSaveBtn) currentSaveBtn.removeAttribute('disabled');
+                            
+                            orderStatus.textContent = 'Orden modificado * (Presiona Guardar)';
+                            orderStatus.style.color = '#ff6b35';
+                            
                             alert(`Se asociaron con éxito ${data.added_count} productos de la categoría.`);
-                            window.location.reload();
                         } else {
+                            if (loadingOverlay) loadingOverlay.style.display = 'none';
                             alert('Error: ' + (data.error || 'No se pudo asociar.'));
                             btnBulkAddCategory.removeAttribute('disabled');
                             btnBulkAddCategory.textContent = '➕ Asociar categoría completa';
                         }
                     } catch (err) {
                         console.error(err);
+                        if (loadingOverlay) loadingOverlay.style.display = 'none';
                         alert('Error de conexión.');
                         btnBulkAddCategory.removeAttribute('disabled');
                         btnBulkAddCategory.textContent = '➕ Asociar categoría completa';
@@ -596,34 +821,57 @@
             });
         }
 
-        function renderSearchResults(results) {
-            if (!results || results.length === 0) {
+        function renderSearchResults(results, appendMode) {
+            if (!appendMode) {
+                searchResults.innerHTML = '';
+            }
+            if ((!results || results.length === 0) && !appendMode) {
                 searchResults.innerHTML = '<div style="font-size:0.85rem; color:var(--color-gray-light); text-align:center; padding:15px;">No se encontraron productos disponibles.</div>';
                 return;
             }
             
-            searchResults.innerHTML = '';
             results.forEach(prod => {
+                if (searchResults.querySelector(`.search-result-item[data-product-id="${prod.id}"]`)) {
+                    return;
+                }
+                
                 const item = document.createElement('div');
                 item.className = 'search-result-item';
                 item.dataset.productId = prod.id;
+                
+                let actionHtml = '';
+                if (prod.is_associated) {
+                    actionHtml = `
+                        <span class="badge" style="background: rgba(40, 167, 69, 0.1); color: #28a745; border: 1px solid rgba(40, 167, 69, 0.2); padding: 4px 8px; font-size: 0.8rem; border-radius: 4px; font-weight: 500;">✓ Asociado</span>
+                    `;
+                } else {
+                    actionHtml = `
+                        <button type="button" class="btn btn-primary btn-add-product" data-product-id="${prod.id}" style="padding: 4px 8px; font-size: 0.8rem;">
+                            + Agregar
+                        </button>
+                    `;
+                }
+                
                 item.innerHTML = `
                     <div class="search-result-info">
                         <h5>${prod.sku}</h5>
                         <p>${prod.name}</p>
                     </div>
-                    <button type="button" class="btn btn-primary btn-add-product" data-product-id="${prod.id}" style="padding: 4px 8px; font-size: 0.8rem;">
-                        + Agregar
-                    </button>
+                    <div class="search-result-action">
+                        ${actionHtml}
+                    </div>
                 `;
                 searchResults.appendChild(item);
             });
             
             searchResults.querySelectorAll('.btn-add-product').forEach(btn => {
-                btn.addEventListener('click', function() {
-                    addProductAJAX(this.dataset.productId, this);
-                });
+                btn.removeEventListener('click', handleAddProductClick);
+                btn.addEventListener('click', handleAddProductClick);
             });
+        }
+
+        function handleAddProductClick() {
+            addProductAJAX(this.dataset.productId, this);
         }
 
         async function addProductAJAX(productId, buttonEl) {
@@ -646,10 +894,37 @@
                 
                 const data = await response.json();
                 if (data.success) {
-                    const placeholder = document.getElementById('emptyPlaceholder');
-                    if (placeholder) {
-                        window.location.reload();
-                        return;
+                    const emptyPlaceholder = document.getElementById('emptyPlaceholder');
+                    if (emptyPlaceholder) {
+                        const tableContainer = document.getElementById('tableContainer');
+                        tableContainer.innerHTML = `
+                            <form id="orderForm" method="POST">
+                                {% csrf_token %}
+                                <table class="draggable-table" id="productsTable">
+                                    <thead>
+                                        <tr>
+                                            <th style="width: 40px;"></th>
+                                            <th style="width: 60px;">Pos</th>
+                                            <th style="width: 140px;">SKU</th>
+                                            <th>Nombre</th>
+                                            <th style="width: 80px; text-align: right;">Acciones</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                    </tbody>
+                                </table>
+                                
+                                <div class="save-order-bar">
+                                    <button type="button" id="btnSaveOrder" class="btn btn-primary" disabled>
+                                        Guardar Orden
+                                    </button>
+                                </div>
+                            </form>
+                        `;
+                        const newSaveBtn = document.getElementById('btnSaveOrder');
+                        if (newSaveBtn) {
+                            newSaveBtn.addEventListener('click', saveOrderHandler);
+                        }
                     }
                     
                     const tableBody = document.querySelector('#productsTable tbody');
@@ -657,8 +932,10 @@
                     newRow.className = 'product-row';
                     newRow.draggable = true;
                     newRow.dataset.productId = data.product.id;
+                    
                     newRow.style.opacity = '0';
-                    newRow.style.transition = 'opacity 0.4s ease';
+                    newRow.style.transform = 'translateY(-10px)';
+                    newRow.style.transition = 'opacity 0.5s cubic-bezier(0.4, 0, 0.2, 1), transform 0.5s cubic-bezier(0.4, 0, 0.2, 1)';
                     
                     newRow.innerHTML = `
                         <td class="drag-handle">☰</td>
@@ -673,19 +950,40 @@
                     `;
                     tableBody.appendChild(newRow);
                     
-                    setTimeout(() => newRow.style.opacity = '1.0', 50);
+                    requestAnimationFrame(() => {
+                        newRow.style.opacity = '1.0';
+                        newRow.style.transform = 'translateY(0)';
+                    });
                     
-                    const searchItem = searchResults.querySelector(`.search-result-item[data-product-id="${productId}"]`);
-                    if (searchItem) {
-                        searchItem.style.opacity = '0';
-                        setTimeout(() => searchItem.remove(), 400);
-                    }
+                    // Replace button with badge
+                    const parentContainer = buttonEl.parentNode;
+                    const badge = document.createElement('span');
+                    badge.className = 'badge';
+                    badge.style.background = 'rgba(40, 167, 69, 0.1)';
+                    badge.style.color = '#28a745';
+                    badge.style.border = '1px solid rgba(40, 167, 69, 0.2)';
+                    badge.style.padding = '4px 8px';
+                    badge.style.fontSize = '0.8rem';
+                    badge.style.borderRadius = '4px';
+                    badge.style.fontWeight = '500';
+                    badge.textContent = '✓ Asociado';
+                    buttonEl.replaceWith(badge);
                     
                     refreshPositions();
                     initDragAndDrop();
                     bindRemoveButtons();
                     
-                    if (saveBtn) saveBtn.removeAttribute('disabled');
+                    // Update stats preview if category selected
+                    const catId = selectedCategoryId.value;
+                    if (catId) {
+                        loadPreviewStats(catId);
+                    }
+                    
+                    const currentSaveBtn = document.getElementById('btnSaveOrder');
+                    if (currentSaveBtn) currentSaveBtn.removeAttribute('disabled');
+                    
+                    orderStatus.textContent = 'Orden modificado * (Presiona Guardar)';
+                    orderStatus.style.color = '#ff6b35';
                 } else {
                     alert('Error: ' + (data.error || 'No se pudo agregar.'));
                     buttonEl.removeAttribute('disabled');
@@ -727,9 +1025,31 @@
                     const data = await response.json();
                     if (data.success) {
                         row.style.opacity = '0';
+                        row.style.transform = 'translateY(-10px)';
                         setTimeout(() => {
                             row.remove();
                             refreshPositions();
+                            
+                            // Re-evaluate category preview if one is selected
+                            const catId = selectedCategoryId.value;
+                            if (catId) {
+                                loadPreviewStats(catId);
+                            }
+                            
+                            // If a removed product is in the current search results, change its badge back to a button
+                            const searchItem = searchResults.querySelector(`.search-result-item[data-product-id="${prodId}"]`);
+                            if (searchItem) {
+                                const actionContainer = searchItem.querySelector('.search-result-action');
+                                if (actionContainer) {
+                                    actionContainer.innerHTML = `
+                                        <button type="button" class="btn btn-primary btn-add-product" data-product-id="${prodId}" style="padding: 4px 8px; font-size: 0.8rem;">
+                                            + Agregar
+                                        </button>
+                                    `;
+                                    const btn = actionContainer.querySelector('.btn-add-product');
+                                    btn.addEventListener('click', handleAddProductClick);
+                                }
+                            }
                             
                             const rows = document.querySelectorAll('#productsTable .product-row');
                             if (rows.length === 0) {

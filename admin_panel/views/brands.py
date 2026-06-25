@@ -286,9 +286,13 @@ def brand_subrubro_products(request, pk):
     
     q = sanitize_search_token(request.GET.get('q', ''))
     search_results = []
+    has_more = False
+    
+    is_ajax = request.headers.get('x-requested-with') == 'XMLHttpRequest' or request.GET.get('ajax') == '1'
+    associated_ids = set(order_rows.values_list("product_id", flat=True))
     
     if q or category_id:
-        products_qs = Product.objects.all()
+        products_qs = Product.objects.all().order_by("name", "sku")
         if category_id:
             try:
                 cat = Category.objects.get(pk=category_id)
@@ -300,19 +304,30 @@ def brand_subrubro_products(request, pk):
             products_qs = products_qs.filter(
                 Q(sku__icontains=q) | Q(name__icontains=q)
             )
-        search_results = products_qs.exclude(
-            id__in=order_rows.values_list("product_id", flat=True)
-        ).distinct()[:50]
+            
+        if is_ajax:
+            page_str = request.GET.get('page', '1').strip()
+            page_num = int(page_str) if page_str.isdigit() else 1
+            page_size = 30
+            start = (page_num - 1) * page_size
+            end = page_num * page_size
+            
+            subset = list(products_qs.distinct()[start:end+1])
+            has_more = len(subset) > page_size
+            search_results = subset[:page_size]
+        else:
+            search_results = list(products_qs.exclude(id__in=associated_ids).distinct()[:50])
         
-    if request.headers.get('x-requested-with') == 'XMLHttpRequest' or request.GET.get('ajax') == '1':
+    if is_ajax:
         results = []
         for prod in search_results:
             results.append({
                 "id": prod.id,
                 "sku": prod.sku,
                 "name": prod.name,
+                "is_associated": prod.id in associated_ids
             })
-        return JsonResponse({"success": True, "results": results})
+        return JsonResponse({"success": True, "results": results, "has_more": has_more})
         
     category_options = get_cached_category_options(only_active=True, include_inactive_suffix=False)
     
@@ -534,9 +549,13 @@ def brand_rubro_products(request, pk):
     
     q = sanitize_search_token(request.GET.get('q', ''))
     search_results = []
+    has_more = False
+    
+    is_ajax = request.headers.get('x-requested-with') == 'XMLHttpRequest' or request.GET.get('ajax') == '1'
+    associated_ids = set(order_rows.values_list("product_id", flat=True))
     
     if q or category_id:
-        products_qs = Product.objects.all()
+        products_qs = Product.objects.all().order_by("name", "sku")
         if category_id:
             try:
                 cat = Category.objects.get(pk=category_id)
@@ -548,19 +567,30 @@ def brand_rubro_products(request, pk):
             products_qs = products_qs.filter(
                 Q(sku__icontains=q) | Q(name__icontains=q)
             )
-        search_results = products_qs.exclude(
-            id__in=order_rows.values_list("product_id", flat=True)
-        ).distinct()[:50]
+            
+        if is_ajax:
+            page_str = request.GET.get('page', '1').strip()
+            page_num = int(page_str) if page_str.isdigit() else 1
+            page_size = 30
+            start = (page_num - 1) * page_size
+            end = page_num * page_size
+            
+            subset = list(products_qs.distinct()[start:end+1])
+            has_more = len(subset) > page_size
+            search_results = subset[:page_size]
+        else:
+            search_results = list(products_qs.exclude(id__in=associated_ids).distinct()[:50])
         
-    if request.headers.get('x-requested-with') == 'XMLHttpRequest' or request.GET.get('ajax') == '1':
+    if is_ajax:
         results = []
         for prod in search_results:
             results.append({
                 "id": prod.id,
                 "sku": prod.sku,
                 "name": prod.name,
+                "is_associated": prod.id in associated_ids
             })
-        return JsonResponse({"success": True, "results": results})
+        return JsonResponse({"success": True, "results": results, "has_more": has_more})
         
     category_options = get_cached_category_options(only_active=True, include_inactive_suffix=False)
     
@@ -797,7 +827,7 @@ def brand_rubro_bulk_add_category(request, pk):
         category_id__in=descendant_ids
     ).exclude(
         id__in=existing_product_ids
-    ).distinct()
+    ).distinct().order_by("name", "sku")
     
     max_order = rubro.product_order_rows.aggregate(
         Max("sort_order")
@@ -805,6 +835,7 @@ def brand_rubro_bulk_add_category(request, pk):
     
     creates = []
     created_count = 0
+    added_list = []
     for prod in products:
         max_order += 10
         creates.append(
@@ -814,6 +845,11 @@ def brand_rubro_bulk_add_category(request, pk):
                 sort_order=max_order
             )
         )
+        added_list.append({
+            "id": prod.id,
+            "sku": prod.sku,
+            "name": prod.name
+        })
         created_count += 1
         
     if creates:
@@ -827,7 +863,11 @@ def brand_rubro_bulk_add_category(request, pk):
         details={"category_id": category_id, "category_name": category.name, "added_count": created_count}
     )
     
-    return JsonResponse({"success": True, "added_count": created_count})
+    return JsonResponse({
+        "success": True, 
+        "added_count": created_count,
+        "added_products": added_list
+    })
 
 
 @staff_member_required
@@ -857,7 +897,7 @@ def brand_subrubro_bulk_add_category(request, pk):
         category_id__in=descendant_ids
     ).exclude(
         id__in=existing_product_ids
-    ).distinct()
+    ).distinct().order_by("name", "sku")
     
     max_order = subrubro.product_order_rows.aggregate(
         Max("sort_order")
@@ -865,6 +905,7 @@ def brand_subrubro_bulk_add_category(request, pk):
     
     creates = []
     created_count = 0
+    added_list = []
     for prod in products:
         max_order += 10
         creates.append(
@@ -874,6 +915,11 @@ def brand_subrubro_bulk_add_category(request, pk):
                 sort_order=max_order
             )
         )
+        added_list.append({
+            "id": prod.id,
+            "sku": prod.sku,
+            "name": prod.name
+        })
         created_count += 1
         
     if creates:
@@ -908,4 +954,78 @@ def brand_subrubro_bulk_add_category(request, pk):
         details={"category_id": category_id, "category_name": category.name, "added_count": created_count}
     )
     
-    return JsonResponse({"success": True, "added_count": created_count})
+    return JsonResponse({
+        "success": True, 
+        "added_count": created_count,
+        "added_products": added_list
+    })
+
+
+@staff_member_required
+def brand_rubro_preview_category_bulk(request, pk):
+    """AJAX endpoint to preview stats before bulk associating products of a category to a BrandRubro."""
+    rubro = get_object_or_404(BrandRubro, pk=pk)
+    category_id_str = request.GET.get('category_id', '').strip()
+    
+    if not category_id_str.isdigit():
+        return JsonResponse({"success": False, "error": "ID de categoría inválido."}, status=400)
+        
+    category_id = int(category_id_str)
+    category = get_object_or_404(Category, pk=category_id)
+    
+    descendant_ids = category.get_descendant_ids(include_self=True, only_active=True)
+    
+    existing_product_ids = set(
+        rubro.product_order_rows.values_list("product_id", flat=True)
+    )
+    
+    total_products = Product.objects.filter(
+        is_active=True,
+        category_id__in=descendant_ids
+    ).distinct()
+    
+    total_count = total_products.count()
+    associated_count = total_products.filter(id__in=existing_product_ids).count()
+    new_count = total_count - associated_count
+    
+    return JsonResponse({
+        "success": True,
+        "total_count": total_count,
+        "associated_count": associated_count,
+        "new_count": new_count
+    })
+
+
+@staff_member_required
+def brand_subrubro_preview_category_bulk(request, pk):
+    """AJAX endpoint to preview stats before bulk associating products of a category to a BrandSubrubro."""
+    subrubro = get_object_or_404(BrandSubrubro, pk=pk)
+    category_id_str = request.GET.get('category_id', '').strip()
+    
+    if not category_id_str.isdigit():
+        return JsonResponse({"success": False, "error": "ID de categoría inválido."}, status=400)
+        
+    category_id = int(category_id_str)
+    category = get_object_or_404(Category, pk=category_id)
+    
+    descendant_ids = category.get_descendant_ids(include_self=True, only_active=True)
+    
+    existing_product_ids = set(
+        subrubro.product_order_rows.values_list("product_id", flat=True)
+    )
+    
+    total_products = Product.objects.filter(
+        is_active=True,
+        category_id__in=descendant_ids
+    ).distinct()
+    
+    total_count = total_products.count()
+    associated_count = total_products.filter(id__in=existing_product_ids).count()
+    new_count = total_count - associated_count
+    
+    return JsonResponse({
+        "success": True,
+        "total_count": total_count,
+        "associated_count": associated_count,
+        "new_count": new_count
+    })
