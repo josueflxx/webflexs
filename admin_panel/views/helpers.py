@@ -2018,11 +2018,15 @@ def build_category_options(categories, include_inactive_suffix=False):
         if include_inactive_suffix and not category.is_active:
             option_label = f"{option_label} [inactiva]"
 
+        path_list = [p.strip() for p in row['full_path'].split('>') if p.strip()]
+        parent_path_list = path_list[:-1]
+
         options.append({
             'id': category.id,
             'name': category.name,
             'depth': row['depth'],
             'full_path': row['full_path'],
+            'parent_path_list': parent_path_list,
             'label': option_label,
             'is_active': category.is_active,
         })

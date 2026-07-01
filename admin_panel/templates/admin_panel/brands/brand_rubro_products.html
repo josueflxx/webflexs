@@ -195,7 +195,9 @@
                             {% for row in order_rows %}
                                 <tr class="product-row" draggable="true" data-product-id="{{ row.product.id }}">
                                     <td class="drag-handle">☰</td>
-                                    <td class="row-position">{{ forloop.counter }}</td>
+                                    <td class="row-position">
+                                        <input type="number" class="pos-input" min="1" max="{{ order_rows|length }}" value="{{ forloop.counter }}" style="width: 55px; background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.15); color: #fff; text-align: center; border-radius: 4px; padding: 2px 4px; font-weight: 600;">
+                                    </td>
                                     <td><strong>{{ row.product.sku }}</strong></td>
                                     <td>{{ row.product.name }}</td>
                                     <td style="text-align: right;">
@@ -242,19 +244,17 @@
                                  data-id="{{ opt.id }}" 
                                  data-name="{{ opt.name }}" 
                                  data-depth="{{ opt.depth }}"
-                                 data-path="{% for p in opt.full_path %}{% if not forloop.last %}{{ p }}{% if not forloop.revcounter0 == 1 %} ➔ {% endif %}{% endif %}{% endfor %}"
-                                 data-text="{{ opt.name }} {% for p in opt.full_path %}{{ p }} {% endfor %}"
+                                 data-path="{% for p in opt.parent_path_list %}{{ p }}{% if not forloop.last %} ➔ {% endif %}{% endfor %}"
+                                 data-text="{{ opt.name }} {% for p in opt.parent_path_list %}{{ p }} {% endfor %}"
                                  style="padding: 10px 14px; cursor: pointer; border-bottom: 1px solid rgba(255,255,255,0.03); color: #e5e7eb; transition: all 0.15s ease; {% if opt.depth > 0 %}padding-left: {{ opt.depth|add:opt.depth|add:opt.depth|add:opt.depth|add:14 }}px;{% endif %}">
                                 <div style="font-weight: 500; display: flex; align-items: center; gap: 6px; font-size: 0.85rem;">
                                     <span style="color: var(--color-primary); font-size: 0.85rem; opacity: 0.85;">📁</span>
                                     <span class="category-item-name">{{ opt.name }}</span>
                                 </div>
-                                {% if opt.full_path|length > 1 %}
+                                {% if opt.parent_path_list %}
                                     <div class="category-item-path" style="font-size: 0.7rem; color: #9ca3af; margin-left: 18px; margin-top: 2px; opacity: 0.7;">
-                                        {% for p in opt.full_path %}
-                                            {% if not forloop.last %}
-                                                {{ p }}{% if not forloop.revcounter0 == 1 %} ➔ {% endif %}
-                                            {% endif %}
+                                        {% for p in opt.parent_path_list %}
+                                            {{ p }}{% if not forloop.last %} ➔ {% endif %}
                                         {% endfor %}
                                     </div>
                                 {% endif %}
@@ -397,8 +397,12 @@
         function refreshPositions() {
             const rows = document.querySelectorAll('#productsTable .product-row');
             rows.forEach((row, idx) => {
-                const posEl = row.querySelector('.row-position');
-                if (posEl) posEl.textContent = String(idx + 1);
+                const posInput = row.querySelector('.pos-input');
+                if (posInput) {
+                    posInput.value = idx + 1;
+                    posInput.setAttribute('data-old-val', idx + 1);
+                    posInput.setAttribute('max', rows.length);
+                }
             });
             
             // Update title count
@@ -406,6 +410,9 @@
             if (countHeader) {
                 countHeader.textContent = `Lista de Productos (${rows.length})`;
             }
+
+            // Bind events for inputs
+            bindPosInputs();
         }
 
         // Save order via AJAX handler
@@ -457,6 +464,7 @@
         // Auto-Sync via AJAX
         if (syncBtn) {
             syncBtn.addEventListener('click', async function() {
+                if (loadingOverlay) loadingOverlay.style.display = 'flex';
                 syncBtn.setAttribute('disabled', 'true');
                 const originalText = syncBtn.innerHTML;
                 syncBtn.innerHTML = 'Sincronizando...';
@@ -470,15 +478,124 @@
                     });
                     const data = await response.json();
                     if (data.success) {
-                        alert('Sincronización exitosa. Se agregaron ' + data.added_count + ' productos.');
-                        window.location.reload();
+                        if (loadingOverlay) loadingOverlay.style.display = 'none';
+                        syncBtn.removeAttribute('disabled');
+                        syncBtn.innerHTML = originalText;
+                        
+                        if (data.added_count === 0) {
+                            alert('No se encontraron nuevos productos para sincronizar.');
+                            return;
+                        }
+                        
+                        // If productsTable doesn't exist (rubro was empty), we create the form and table first
+                        const tableContainer = document.getElementById('tableContainer');
+                        if (tableContainer.querySelector('#emptyPlaceholder')) {
+                            tableContainer.innerHTML = `
+                                <form id="orderForm" method="POST">
+                                    <input type="hidden" name="csrfmiddlewaretoken" value="${document.querySelector('[name=csrfmiddlewaretoken]').value}">
+                                    <table class="draggable-table" id="productsTable">
+                                        <thead>
+                                            <tr>
+                                                <th style="width: 40px;"></th>
+                                                <th style="width: 60px;">Pos</th>
+                                                <th style="width: 140px;">SKU</th>
+                                                <th>Nombre</th>
+                                                <th style="width: 80px; text-align: right;">Acciones</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                        </tbody>
+                                    </table>
+                                    
+                                    <div class="save-order-bar">
+                                        <button type="button" id="btnSaveOrder" class="btn btn-primary" disabled>
+                                            Guardar Orden
+                                        </button>
+                                    </div>
+                                </form>
+                            `;
+                            const newSaveBtn = document.getElementById('btnSaveOrder');
+                            if (newSaveBtn) {
+                                newSaveBtn.addEventListener('click', saveOrderHandler);
+                            }
+                        }
+                        
+                        const tbody = document.querySelector('#productsTable tbody');
+                        
+                        data.added_products.forEach(prod => {
+                            if (tbody.querySelector(`tr[data-product-id="${prod.id}"]`)) {
+                                return;
+                            }
+                            
+                            const row = document.createElement('tr');
+                            row.className = 'product-row';
+                            row.draggable = true;
+                            row.dataset.productId = prod.id;
+                            
+                            row.style.opacity = '0';
+                            row.style.transform = 'translateY(-10px)';
+                            row.style.transition = 'opacity 0.5s cubic-bezier(0.4, 0, 0.2, 1), transform 0.5s cubic-bezier(0.4, 0, 0.2, 1)';
+                            
+                            row.innerHTML = `
+                                <td class="drag-handle">☰</td>
+                                <td class="row-position">
+                                    <input type="number" class="pos-input" min="1" value="" style="width: 55px; background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.15); color: #fff; text-align: center; border-radius: 4px; padding: 2px 4px; font-weight: 600;">
+                                </td>
+                                <td><strong>${prod.sku}</strong></td>
+                                <td>${prod.name}</td>
+                                <td style="text-align: right;">
+                                    <button type="button" class="btn-sm-icon btn btn-trash btn-remove-product" data-product-id="${prod.id}">
+                                        🗑️
+                                    </button>
+                                </td>
+                            `;
+                            tbody.appendChild(row);
+                            
+                            requestAnimationFrame(() => {
+                                row.style.opacity = '1.0';
+                                row.style.transform = 'translateY(0)';
+                            });
+                            
+                            // Update search results item state in UI if it is present
+                            const searchItem = searchResults.querySelector(`.search-result-item[data-product-id="${prod.id}"]`);
+                            if (searchItem) {
+                                const btnToReplace = searchItem.querySelector('.btn-add-product');
+                                if (btnToReplace) {
+                                    const badge = document.createElement('span');
+                                    badge.className = 'badge';
+                                    badge.style.background = 'rgba(40, 167, 69, 0.1)';
+                                    badge.style.color = '#28a745';
+                                    badge.style.border = '1px solid rgba(40, 167, 69, 0.2)';
+                                    badge.style.padding = '4px 8px';
+                                    badge.style.fontSize = '0.8rem';
+                                    badge.style.borderRadius = '4px';
+                                    badge.style.fontWeight = '500';
+                                    badge.textContent = '✓ Asociado';
+                                    btnToReplace.replaceWith(badge);
+                                }
+                            }
+                        });
+                        
+                        refreshPositions();
+                        initDragAndDrop();
+                        bindRemoveButtons();
+                        
+                        const currentSaveBtn = document.getElementById('btnSaveOrder');
+                        if (currentSaveBtn) currentSaveBtn.removeAttribute('disabled');
+                        
+                        orderStatus.textContent = 'Orden modificado * (Presiona Guardar)';
+                        orderStatus.style.color = '#ff6b35';
+                        
+                        alert(`Sincronización exitosa. Se agregaron ${data.added_count} productos.`);
                     } else {
+                        if (loadingOverlay) loadingOverlay.style.display = 'none';
                         alert('Error al sincronizar: ' + (data.error || 'Error desconocido'));
                         syncBtn.removeAttribute('disabled');
                         syncBtn.innerHTML = originalText;
                     }
                 } catch (err) {
                     console.error(err);
+                    if (loadingOverlay) loadingOverlay.style.display = 'none';
                     alert('Error de conexión al sincronizar.');
                     syncBtn.removeAttribute('disabled');
                     syncBtn.innerHTML = originalText;
@@ -864,7 +981,9 @@
                                 
                                 row.innerHTML = `
                                     <td class="drag-handle">☰</td>
-                                    <td class="row-position"></td>
+                                    <td class="row-position">
+                                        <input type="number" class="pos-input" min="1" value="" style="width: 55px; background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.15); color: #fff; text-align: center; border-radius: 4px; padding: 2px 4px; font-weight: 600;">
+                                    </td>
                                     <td><strong>${prod.sku}</strong></td>
                                     <td>${prod.name}</td>
                                     <td style="text-align: right;">
@@ -1050,7 +1169,9 @@
                     
                     newRow.innerHTML = `
                         <td class="drag-handle">☰</td>
-                        <td class="row-position"></td>
+                        <td class="row-position">
+                            <input type="number" class="pos-input" min="1" value="" style="width: 55px; background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.15); color: #fff; text-align: center; border-radius: 4px; padding: 2px 4px; font-weight: 600;">
+                        </td>
                         <td><strong>${data.product.sku}</strong></td>
                         <td>${data.product.name}</td>
                         <td style="text-align: right;">
@@ -1177,8 +1298,79 @@
             }
         }
 
+        // --- Numeric Position Reordering ---
+        function bindPosInputs() {
+            const inputs = document.querySelectorAll('#productsTable .pos-input');
+            inputs.forEach(input => {
+                input.removeEventListener('keydown', handlePosKeydown);
+                input.removeEventListener('blur', handlePosBlur);
+                input.addEventListener('keydown', handlePosKeydown);
+                input.addEventListener('blur', handlePosBlur);
+            });
+        }
+
+        function handlePosKeydown(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                processPosChange(this);
+                this.blur();
+            }
+        }
+
+        function handlePosBlur(e) {
+            processPosChange(this);
+        }
+
+        function processPosChange(input) {
+            const row = input.closest('.product-row');
+            const tbody = row.parentNode;
+            const rows = Array.from(tbody.querySelectorAll('.product-row'));
+            const totalRows = rows.length;
+            
+            let newPos = parseInt(input.value);
+            const oldPos = parseInt(input.getAttribute('data-old-val'));
+            
+            if (isNaN(newPos) || newPos < 1) {
+                input.value = oldPos;
+                return;
+            }
+            if (newPos > totalRows) {
+                newPos = totalRows;
+            }
+            
+            if (newPos === oldPos) {
+                return;
+            }
+            
+            const targetIndex = newPos - 1;
+            const currentIndex = rows.indexOf(row);
+            
+            if (currentIndex > -1) {
+                rows.splice(currentIndex, 1);
+                rows.splice(targetIndex, 0, row);
+                // Clear and re-append in new order
+                rows.forEach(r => tbody.appendChild(r));
+                
+                // Flash highlight effect
+                row.style.backgroundColor = 'rgba(255, 107, 53, 0.2)';
+                row.style.transition = 'background-color 1s ease';
+                setTimeout(() => {
+                    row.style.backgroundColor = '';
+                }, 1000);
+                
+                refreshPositions();
+                
+                const currentSaveBtn = document.getElementById('btnSaveOrder');
+                if (currentSaveBtn) currentSaveBtn.removeAttribute('disabled');
+                
+                orderStatus.textContent = 'Orden modificado * (Presiona Guardar)';
+                orderStatus.style.color = '#ff6b35';
+            }
+        }
+
         initDragAndDrop();
         bindRemoveButtons();
+        bindPosInputs();
     });
 </script>
 {% endblock %}

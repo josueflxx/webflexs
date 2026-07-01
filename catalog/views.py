@@ -1742,13 +1742,21 @@ def brand_detail(request, brand_slug):
     """
     brand = get_object_or_404(Brand, slug=brand_slug, is_active=True)
     
-    rubros = BrandRubro.objects.filter(brand=brand, is_active=True).prefetch_related(
+    subrubros_queryset = BrandSubrubro.objects.filter(
+        is_active=True,
+        products__is_active=True
+    ).distinct()
+    
+    rubros = BrandRubro.objects.filter(brand=brand, is_active=True).filter(
+        Q(products__is_active=True) |
+        Q(subrubros__is_active=True, subrubros__products__is_active=True)
+    ).prefetch_related(
         Prefetch(
             "subrubros",
-            queryset=BrandSubrubro.objects.filter(is_active=True),
+            queryset=subrubros_queryset,
             to_attr="active_subrubros"
         )
-    ).order_by("order", "name")
+    ).distinct().order_by("order", "name")
     
     selected_rubro = None
     selected_subrubro = None

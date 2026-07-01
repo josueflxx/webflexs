@@ -843,7 +843,18 @@
                             <input type="text" name="f_category" value="{{ f_category }}" class="filter-input" placeholder="Filtrar Subrubro..." onkeydown="handleFilterKey(event)">
                         </td>
                         <td>
-                            <!-- Column Marcas/Rubros filter spacer -->
+                            <!-- Column Marcas/Rubros filter selects -->
+                            <div style="display: flex; flex-direction: column; gap: 4px;">
+                                <select name="f_brand" id="filterBrandSelect" class="filter-select" style="width: 100%; font-size: 11px; background: #0b0f19; border: 1px solid #374151; color: #fff; padding: 2px 4px; border-radius: 4px;" onchange="onFilterBrandChange(); this.form.submit();">
+                                    <option value="">-- Marca --</option>
+                                </select>
+                                <select name="f_brand_rubro" id="filterRubroSelect" class="filter-select" style="width: 100%; font-size: 11px; background: #0b0f19; border: 1px solid #374151; color: #fff; padding: 2px 4px; border-radius: 4px; {% if not f_brand %}display:none;{% endif %}" onchange="onFilterRubroChange(); this.form.submit();">
+                                    <option value="">-- Rubro --</option>
+                                </select>
+                                <select name="f_brand_subrubro" id="filterSubrubroSelect" class="filter-select" style="width: 100%; font-size: 11px; background: #0b0f19; border: 1px solid #374151; color: #fff; padding: 2px 4px; border-radius: 4px; {% if not f_brand_rubro %}display:none;{% endif %}" onchange="this.form.submit();">
+                                    <option value="">-- Subrubro --</option>
+                                </select>
+                            </div>
                         </td>
                         <td>
                             <input type="text" name="f_sku" value="{{ f_sku }}" class="filter-input" placeholder="Filtrar Código..." onkeydown="handleFilterKey(event)">
@@ -973,8 +984,8 @@
         </div>
         <div class="pagination-btns">
             {% if page_obj.has_previous %}
-            <a href="?page=1{% if f_category %}&f_category={{ f_category }}{% endif %}{% if f_sku %}&f_sku={{ f_sku }}{% endif %}{% if f_name %}&f_name={{ f_name }}{% endif %}{% if f_ref %}&f_ref={{ f_ref }}{% endif %}{% if f_supplier %}&f_supplier={{ f_supplier }}{% endif %}{% if active_filter %}&active={{ active_filter }}{% endif %}{% if order_by %}&order={{ order_by }}{% endif %}" class="btn btn-outline btn-sm">« Primera</a>
-            <a href="?page={{ page_obj.previous_page_number }}{% if f_category %}&f_category={{ f_category }}{% endif %}{% if f_sku %}&f_sku={{ f_sku }}{% endif %}{% if f_name %}&f_name={{ f_name }}{% endif %}{% if f_ref %}&f_ref={{ f_ref }}{% endif %}{% if f_supplier %}&f_supplier={{ f_supplier }}{% endif %}{% if active_filter %}&active={{ active_filter }}{% endif %}{% if order_by %}&order={{ order_by }}{% endif %}" class="btn btn-outline btn-sm">‹ Anterior</a>
+            <a href="?page=1{% if f_category %}&f_category={{ f_category }}{% endif %}{% if f_sku %}&f_sku={{ f_sku }}{% endif %}{% if f_name %}&f_name={{ f_name }}{% endif %}{% if f_ref %}&f_ref={{ f_ref }}{% endif %}{% if f_supplier %}&f_supplier={{ f_supplier }}{% endif %}{% if active_filter %}&active={{ active_filter }}{% endif %}{% if order_by %}&order={{ order_by }}{% endif %}{% if f_brand %}&f_brand={{ f_brand }}{% endif %}{% if f_brand_rubro %}&f_brand_rubro={{ f_brand_rubro }}{% endif %}{% if f_brand_subrubro %}&f_brand_subrubro={{ f_brand_subrubro }}{% endif %}" class="btn btn-outline btn-sm">« Primera</a>
+            <a href="?page={{ page_obj.previous_page_number }}{% if f_category %}&f_category={{ f_category }}{% endif %}{% if f_sku %}&f_sku={{ f_sku }}{% endif %}{% if f_name %}&f_name={{ f_name }}{% endif %}{% if f_ref %}&f_ref={{ f_ref }}{% endif %}{% if f_supplier %}&f_supplier={{ f_supplier }}{% endif %}{% if active_filter %}&active={{ active_filter }}{% endif %}{% if order_by %}&order={{ order_by }}{% endif %}{% if f_brand %}&f_brand={{ f_brand }}{% endif %}{% if f_brand_rubro %}&f_brand_rubro={{ f_brand_rubro }}{% endif %}{% if f_brand_subrubro %}&f_brand_subrubro={{ f_brand_subrubro }}{% endif %}" class="btn btn-outline btn-sm">‹ Anterior</a>
             {% endif %}
 
             <span style="display: flex; align-items: center; padding: 0 10px; font-weight: 600; color: #ff6b35;">
@@ -982,8 +993,8 @@
             </span>
 
             {% if page_obj.has_next %}
-            <a href="?page={{ page_obj.next_page_number }}{% if f_category %}&f_category={{ f_category }}{% endif %}{% if f_sku %}&f_sku={{ f_sku }}{% endif %}{% if f_name %}&f_name={{ f_name }}{% endif %}{% if f_ref %}&f_ref={{ f_ref }}{% endif %}{% if f_supplier %}&f_supplier={{ f_supplier }}{% endif %}{% if active_filter %}&active={{ active_filter }}{% endif %}{% if order_by %}&order={{ order_by }}{% endif %}" class="btn btn-outline btn-sm">Siguiente ›</a>
-            <a href="?page={{ page_obj.paginator.num_pages }}{% if f_category %}&f_category={{ f_category }}{% endif %}{% if f_sku %}&f_sku={{ f_sku }}{% endif %}{% if f_name %}&f_name={{ f_name }}{% endif %}{% if f_ref %}&f_ref={{ f_ref }}{% endif %}{% if f_supplier %}&f_supplier={{ f_supplier }}{% endif %}{% if active_filter %}&active={{ active_filter }}{% endif %}{% if order_by %}&order={{ order_by }}{% endif %}" class="btn btn-outline btn-sm">Última »</a>
+            <a href="?page={{ page_obj.next_page_number }}{% if f_category %}&f_category={{ f_category }}{% endif %}{% if f_sku %}&f_sku={{ f_sku }}{% endif %}{% if f_name %}&f_name={{ f_name }}{% endif %}{% if f_ref %}&f_ref={{ f_ref }}{% endif %}{% if f_supplier %}&f_supplier={{ f_supplier }}{% endif %}{% if active_filter %}&active={{ active_filter }}{% endif %}{% if order_by %}&order={{ order_by }}{% endif %}{% if f_brand %}&f_brand={{ f_brand }}{% endif %}{% if f_brand_rubro %}&f_brand_rubro={{ f_brand_rubro }}{% endif %}{% if f_brand_subrubro %}&f_brand_subrubro={{ f_brand_subrubro }}{% endif %}" class="btn btn-outline btn-sm">Siguiente ›</a>
+            <a href="?page={{ page_obj.paginator.num_pages }}{% if f_category %}&f_category={{ f_category }}{% endif %}{% if f_sku %}&f_sku={{ f_sku }}{% endif %}{% if f_name %}&f_name={{ f_name }}{% endif %}{% if f_ref %}&f_ref={{ f_ref }}{% endif %}{% if f_supplier %}&f_supplier={{ f_supplier }}{% endif %}{% if active_filter %}&active={{ active_filter }}{% endif %}{% if order_by %}&order={{ order_by }}{% endif %}{% if f_brand %}&f_brand={{ f_brand }}{% endif %}{% if f_brand_rubro %}&f_brand_rubro={{ f_brand_rubro }}{% endif %}{% if f_brand_subrubro %}&f_brand_subrubro={{ f_brand_subrubro }}{% endif %}" class="btn btn-outline btn-sm">Última »</a>
             {% endif %}
         </div>
     </div>
@@ -1164,6 +1175,9 @@
 
         // 9. Setup bulk brand dropdown
         setupBulkBrandSelect();
+
+        // 10. Setup brand grid filters dropdowns
+        setupFilterBrandSelect();
     });
 
     // Helper functions for intelligent category suggestions
@@ -3277,6 +3291,121 @@
             setSyncState("error", "Error al eliminar");
             alert("Error al eliminar la asociación.");
         });
+    }
+
+    // --- Brand Grid Autofilters Cascade Logic ---
+    function setupFilterBrandSelect() {
+        const brandSelect = document.getElementById("filterBrandSelect");
+        if (!brandSelect) return;
+        
+        BRANDS_DATA.forEach(b => {
+            const opt = document.createElement("option");
+            opt.value = b.id;
+            opt.textContent = b.name;
+            if (String(b.id) === "{{ f_brand|default:'' }}") {
+                opt.selected = true;
+            }
+            brandSelect.appendChild(opt);
+        });
+        
+        const selectedBrandId = "{{ f_brand|default:'' }}";
+        if (selectedBrandId) {
+            const rubroSelect = document.getElementById("filterRubroSelect");
+            rubroSelect.style.display = "";
+            rubroSelect.innerHTML = '<option value="">-- Rubro --</option>';
+            
+            const brand = BRANDS_DATA.find(b => String(b.id) === String(selectedBrandId));
+            if (brand && brand.rubros) {
+                brand.rubros.forEach(r => {
+                    const opt = document.createElement("option");
+                    opt.value = r.id;
+                    opt.textContent = r.name;
+                    if (String(r.id) === "{{ f_brand_rubro|default:'' }}") {
+                        opt.selected = true;
+                    }
+                    rubroSelect.appendChild(opt);
+                });
+            }
+        }
+        
+        const selectedRubroId = "{{ f_brand_rubro|default:'' }}";
+        if (selectedBrandId && selectedRubroId) {
+            const subrubroSelect = document.getElementById("filterSubrubroSelect");
+            subrubroSelect.style.display = "";
+            subrubroSelect.innerHTML = '<option value="">-- Subrubro --</option>';
+            
+            const brand = BRANDS_DATA.find(b => String(b.id) === String(selectedBrandId));
+            if (brand) {
+                const rubro = brand.rubros.find(r => String(r.id) === String(selectedRubroId));
+                if (rubro && rubro.subrubros) {
+                    rubro.subrubros.forEach(s => {
+                        const opt = document.createElement("option");
+                        opt.value = s.id;
+                        opt.textContent = s.name;
+                        if (String(s.id) === "{{ f_brand_subrubro|default:'' }}") {
+                            opt.selected = true;
+                        }
+                        subrubroSelect.appendChild(opt);
+                    });
+                }
+            }
+        }
+    }
+
+    function onFilterBrandChange() {
+        const brandId = document.getElementById("filterBrandSelect").value;
+        const rubroSelect = document.getElementById("filterRubroSelect");
+        const subrubroSelect = document.getElementById("filterSubrubroSelect");
+        
+        rubroSelect.innerHTML = '<option value="">-- Rubro --</option>';
+        subrubroSelect.innerHTML = '<option value="">-- Subrubro --</option>';
+        
+        if (!brandId) {
+            rubroSelect.style.display = "none";
+            subrubroSelect.style.display = "none";
+            rubroSelect.value = "";
+            subrubroSelect.value = "";
+            return;
+        }
+        
+        rubroSelect.style.display = "";
+        const brand = BRANDS_DATA.find(b => String(b.id) === String(brandId));
+        if (brand && brand.rubros) {
+            brand.rubros.forEach(r => {
+                const opt = document.createElement("option");
+                opt.value = r.id;
+                opt.textContent = r.name;
+                rubroSelect.appendChild(opt);
+            });
+        }
+    }
+
+    function onFilterRubroChange() {
+        const brandId = document.getElementById("filterBrandSelect").value;
+        const rubroId = document.getElementById("filterRubroSelect").value;
+        const subrubroSelect = document.getElementById("filterSubrubroSelect");
+        
+        subrubroSelect.innerHTML = '<option value="">-- Subrubro --</option>';
+        
+        if (!brandId || !rubroId) {
+            subrubroSelect.style.display = "none";
+            subrubroSelect.value = "";
+            return;
+        }
+        
+        subrubroSelect.style.display = "";
+        const brand = BRANDS_DATA.find(b => String(b.id) === String(brandId));
+        if (brand) {
+            const rubro = brand.rubros.find(r => String(r.id) === String(rubroId));
+            if (rubro && rubro.subrubros) {
+                rubro.subrubros.forEach(s => {
+                    const opt = document.createElement("option");
+                    opt.value = s.id;
+                    opt.textContent = s.name;
+                    subrubroSelect.appendChild(opt);
+                });
+            }
+        }
     }
 
     // --- Bulk Brand Dropdown Populators ---

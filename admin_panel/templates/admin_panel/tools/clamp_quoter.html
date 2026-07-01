@@ -1364,6 +1364,58 @@
         document.getElementById('saveQuoteForm')?.submit();
     }
 
+    function saveEconomicVariables() {
+        const dollarMode = document.getElementById('dollar_mode_auto')?.checked ? 'auto' : 'manual';
+        const dollarRate = document.getElementById('dollar_rate')?.value || '';
+        const steelPriceUsd = document.getElementById('steel_price_usd')?.value || '';
+        const supplierDiscountPct = document.getElementById('supplier_discount_pct')?.value || '';
+        const generalIncreasePct = document.getElementById('general_increase_pct')?.value || '';
+        
+        localStorage.setItem('quoter_dollar_mode', dollarMode);
+        localStorage.setItem('quoter_dollar_rate', dollarRate);
+        localStorage.setItem('quoter_steel_price_usd', steelPriceUsd);
+        localStorage.setItem('quoter_supplier_discount_pct', supplierDiscountPct);
+        localStorage.setItem('quoter_general_increase_pct', generalIncreasePct);
+    }
+
+    function loadEconomicVariables() {
+        const dollarMode = localStorage.getItem('quoter_dollar_mode');
+        const dollarRate = localStorage.getItem('quoter_dollar_rate');
+        const steelPriceUsd = localStorage.getItem('quoter_steel_price_usd');
+        const supplierDiscountPct = localStorage.getItem('quoter_supplier_discount_pct');
+        const generalIncreasePct = localStorage.getItem('quoter_general_increase_pct');
+        
+        if (dollarMode !== null) {
+            if (dollarMode === 'auto') {
+                const autoRadio = document.getElementById('dollar_mode_auto');
+                if (autoRadio) autoRadio.checked = true;
+                const manualRadio = document.getElementById('dollar_mode_manual');
+                if (manualRadio) manualRadio.checked = false;
+            } else {
+                const manualRadio = document.getElementById('dollar_mode_manual');
+                if (manualRadio) manualRadio.checked = true;
+                const autoRadio = document.getElementById('dollar_mode_auto');
+                if (autoRadio) autoRadio.checked = false;
+            }
+        }
+        if (dollarRate !== null) {
+            const el = document.getElementById('dollar_rate');
+            if (el) el.value = dollarRate;
+        }
+        if (steelPriceUsd !== null) {
+            const el = document.getElementById('steel_price_usd');
+            if (el) el.value = steelPriceUsd;
+        }
+        if (supplierDiscountPct !== null) {
+            const el = document.getElementById('supplier_discount_pct');
+            if (el) el.value = supplierDiscountPct;
+        }
+        if (generalIncreasePct !== null) {
+            const el = document.getElementById('general_increase_pct');
+            if (el) el.value = generalIncreasePct;
+        }
+    }
+
     async function fetchDollarRate() {
         const input = document.getElementById('dollar_rate');
         if (!input) return;
@@ -1378,6 +1430,12 @@
                 throw new Error('Respuesta invalida de dolarapi.');
             }
             input.value = Number(payload.venta).toFixed(2);
+            saveEconomicVariables();
+            const width = (document.getElementById('width_mm')?.value || '').trim();
+            const length = (document.getElementById('length_mm')?.value || '').trim();
+            if (width && length) {
+                runClampCalculation();
+            }
         } catch (error) {
             showCalcError(error.message || 'No se pudo actualizar el dolar en automatico.');
         }
@@ -1394,19 +1452,41 @@
     }
 
     document.addEventListener('DOMContentLoaded', () => {
+        // Restore economic variables from localStorage
+        loadEconomicVariables();
+
         const manualRadio = document.getElementById('dollar_mode_manual');
         const autoRadio = document.getElementById('dollar_mode_auto');
         const initialAuto = !!autoRadio?.checked;
         setDollarMode(initialAuto ? 'auto' : 'manual', initialAuto && !(document.getElementById('dollar_rate')?.value || '').trim());
+        
+        const saveAndRefresh = () => {
+            saveEconomicVariables();
+            const width = (document.getElementById('width_mm')?.value || '').trim();
+            const length = (document.getElementById('length_mm')?.value || '').trim();
+            if (width && length) {
+                runClampCalculation();
+            }
+        };
+
         manualRadio?.addEventListener('change', () => {
             if (manualRadio.checked) {
                 setDollarMode('manual', false);
+                saveAndRefresh();
             }
         });
         autoRadio?.addEventListener('change', () => {
             if (autoRadio.checked) {
                 setDollarMode('auto', true);
+                saveAndRefresh();
             }
+        });
+
+        // Save and update on economic input changes
+        ['dollar_rate', 'steel_price_usd', 'supplier_discount_pct', 'general_increase_pct'].forEach((id) => {
+            const node = document.getElementById(id);
+            node?.addEventListener('input', saveAndRefresh);
+            node?.addEventListener('change', saveAndRefresh);
         });
         document.querySelectorAll('input[name="clamp_type_radio"]').forEach((radio) => {
             radio.addEventListener('change', () => {

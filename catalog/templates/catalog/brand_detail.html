@@ -104,6 +104,13 @@
         margin-bottom: 25px;
     }
     
+    .breadcrumb-nav a {
+        transition: color 0.2s;
+    }
+    .breadcrumb-nav a:hover {
+        color: var(--color-primary) !important;
+    }
+    
     /* Subrubro Pill Filter Buttons */
     .brand-pills-filter {
         display: flex;
@@ -356,12 +363,113 @@
 
 {% block content %}
 <div class="container brand-detail-page">
-    <!-- Back link -->
-    <div style="margin-bottom: 20px;">
-        <a href="{% url 'brands_list' %}" class="btn btn-outline" style="display:inline-flex; align-items:center; gap:8px;">
-            ← Volver a Marcas
-        </a>
-    </div>
+    <!-- Breadcrumbs Visuales -->
+    <nav class="breadcrumb-nav" style="margin-bottom: 20px; font-size: 0.9rem; color: var(--color-gray-light); display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+        <a href="/" style="color: var(--color-gray-light); text-decoration: none;">Inicio</a>
+        <span>➔</span>
+        <a href="{% url 'brands_list' %}" style="color: var(--color-gray-light); text-decoration: none;">Marcas</a>
+        <span>➔</span>
+        <a href="{% url 'brand_detail' brand.slug %}" style="color: {% if not selected_rubro %}#fff; font-weight:600;{% else %}var(--color-gray-light){% endif %}; text-decoration: none;">{{ brand.name }}</a>
+        {% if selected_rubro %}
+            <span>➔</span>
+            <a href="?rubro={{ selected_rubro.slug }}" style="color: {% if not selected_subrubro or not request.GET.subrubro %}#fff; font-weight:600;{% else %}var(--color-gray-light){% endif %}; text-decoration: none;">{{ selected_rubro.name }}</a>
+            {% if selected_subrubro and request.GET.subrubro %}
+                <span>➔</span>
+                <span style="color: #fff; font-weight: 600;">{{ selected_subrubro.name }}</span>
+            {% endif %}
+        {% endif %}
+    </nav>
+
+    <!-- Datos Estructurados JSON-LD (SEO) -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        {
+          "@type": "ListItem",
+          "position": 1,
+          "name": "Inicio",
+          "item": "{{ request.scheme }}://{{ request.get_host }}/"
+        },
+        {
+          "@type": "ListItem",
+          "position": 2,
+          "name": "Marcas",
+          "item": "{{ request.scheme }}://{{ request.get_host }}{% url 'brands_list' %}"
+        },
+        {
+          "@type": "ListItem",
+          "position": 3,
+          "name": "{{ brand.name }}",
+          "item": "{{ request.scheme }}://{{ request.get_host }}{% url 'brand_detail' brand.slug %}"
+        }
+        {% if selected_rubro %}
+        ,{
+          "@type": "ListItem",
+          "position": 4,
+          "name": "{{ selected_rubro.name }}",
+          "item": "{{ request.scheme }}://{{ request.get_host }}{% url 'brand_detail' brand.slug %}?rubro={{ selected_rubro.slug }}"
+        }
+        {% if selected_subrubro and request.GET.subrubro %}
+        ,{
+          "@type": "ListItem",
+          "position": 5,
+          "name": "{{ selected_subrubro.name }}",
+          "item": "{{ request.scheme }}://{{ request.get_host }}{% url 'brand_detail' brand.slug %}?subrubro={{ selected_subrubro.slug }}"
+        }
+        {% endif %}
+        {% endif %}
+      ]
+    }
+    </script>
+
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "Brand",
+      "name": "{{ brand.name }}",
+      "url": "{{ request.scheme }}://{{ request.get_host }}{% url 'brand_detail' brand.slug %}"
+      {% if brand.logo %}
+      ,"logo": "{{ request.scheme }}://{{ request.get_host }}{{ brand.logo.url }}"
+      {% endif %}
+    }
+    </script>
+
+    {% if products %}
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "ItemList",
+      "numberOfItems": {{ products|length }},
+      "itemListElement": [
+        {% for product in products %}
+        {
+          "@type": "ListItem",
+          "position": {{ forloop.counter }},
+          "item": {
+            "@type": "Product",
+            "name": "{{ product.name|escapejs }}",
+            "sku": "{{ product.sku|escapejs }}",
+            "url": "{{ request.scheme }}://{{ request.get_host }}{% url 'product_detail' product.sku %}"
+            {% if product.image %}
+            ,"image": "{{ request.scheme }}://{{ request.get_host }}{{ product.image.url }}"
+            {% endif %}
+            {% if show_prices and product.final_price %}
+            ,"offers": {
+              "@type": "Offer",
+              "priceCurrency": "ARS",
+              "price": "{{ product.final_price }}",
+              "availability": "https://schema.org/{% if product.stock > 0 %}InStock{% else %}OutOfStock{% endif %}"
+            }
+            {% endif %}
+          }
+        }{% if not forloop.last %},{% endif %}
+        {% endfor %}
+      ]
+    }
+    </script>
+    {% endif %}
 
     <!-- Banner Comercial -->
     <div class="brand-banner-container">
@@ -447,7 +555,7 @@
                 {% endif %}
 
                 <!-- Product Listing Grid -->
-                <div class="catalog-header" style="margin-top: 0; padding-top: 0; margin-bottom: 20px;">
+                <div class="catalog-header" style="margin-top: 0; padding-top: 0; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
                     <div class="catalog-header-main">
                         <h2>
                             {% if selected_subrubro and request.GET.subrubro %}
@@ -466,15 +574,22 @@
                             {% endif %}
                         </p>
                     </div>
-                    <div class="catalog-header-stats">
-                        <span class="header-stat"><strong>{{ products|length }}</strong> productos encontrados</span>
+                    
+                    <div style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap;">
+                        <div class="search-input-wrapper" style="position: relative; min-width: 250px;">
+                            <input type="text" id="brandProductSearch" placeholder="Buscar en esta marca..." class="form-input" style="width: 100%; height: 38px; padding-left: 35px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; color: #fff; box-sizing: border-box;">
+                            <span style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--color-gray-light); font-size: 0.95rem;">🔍</span>
+                        </div>
+                        <div class="catalog-header-stats" style="margin: 0;">
+                            <span class="header-stat"><strong id="brandProductCount">{{ products|length }}</strong> productos encontrados</span>
+                        </div>
                     </div>
                 </div>
 
                 <div class="catalog-grid-wrapper">
                     <div class="catalog-grid view-grid">
                         {% for product in products %}
-                            <article class="product-card animate-card-reveal" data-product-id="{{ product.id|unlocalize }}" style="animation-delay: {{ forloop.counter0|multiply:0.04 }}s;">
+                            <article class="product-card animate-card-reveal" data-product-id="{{ product.id|unlocalize }}" data-name="{{ product.name|lower }}" data-sku="{{ product.sku|lower }}" style="animation-delay: {{ forloop.counter0|multiply:0.04 }}s;">
                                 <a class="product-image" href="{% url 'product_detail' product.sku %}">
                                     {% if product.image %}
                                         <img src="{{ product.image.url }}" alt="{{ product.name }}">
@@ -584,5 +699,52 @@
             chevron.textContent = '▶';
         }
     }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        const searchInput = document.getElementById('brandProductSearch');
+        if (searchInput) {
+            const productCards = document.querySelectorAll('.product-card');
+            
+            // Create empty results message
+            const emptyMsg = document.createElement('div');
+            emptyMsg.className = 'product-list-empty';
+            emptyMsg.style.display = 'none';
+            emptyMsg.style.width = '100%';
+            emptyMsg.style.gridColumn = '1 / -1';
+            emptyMsg.innerHTML = '<p>No se encontraron productos que coincidan con la búsqueda.</p>';
+            
+            const grid = document.querySelector('.catalog-grid');
+            if (grid) {
+                grid.appendChild(emptyMsg);
+            }
+            
+            searchInput.addEventListener('input', function() {
+                const query = searchInput.value.toLowerCase().trim();
+                let visibleCount = 0;
+                
+                productCards.forEach(card => {
+                    const name = card.getAttribute('data-name') || '';
+                    const sku = card.getAttribute('data-sku') || '';
+                    if (name.includes(query) || sku.includes(query)) {
+                        card.style.display = '';
+                        visibleCount++;
+                    } else {
+                        card.style.display = 'none';
+                    }
+                });
+                
+                const countEl = document.getElementById('brandProductCount');
+                if (countEl) {
+                    countEl.textContent = visibleCount;
+                }
+                
+                if (visibleCount === 0 && query !== '') {
+                    emptyMsg.style.display = '';
+                } else {
+                    emptyMsg.style.display = 'none';
+                }
+            });
+        }
+    });
 </script>
 {% endblock %}

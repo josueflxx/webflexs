@@ -509,6 +509,7 @@ def brand_subrubro_sync(request, pk):
 
     created_count = 0
     creates = []
+    added_list = []
     for prod in products:
         if prod.id not in existing_product_ids:
             max_order += 10
@@ -519,6 +520,11 @@ def brand_subrubro_sync(request, pk):
                     sort_order=max_order
                 )
             )
+            added_list.append({
+                "id": prod.id,
+                "sku": prod.sku,
+                "name": prod.name
+            })
             created_count += 1
 
     if creates:
@@ -532,7 +538,11 @@ def brand_subrubro_sync(request, pk):
         details={"brand": brand_name, "added_count": created_count}
     )
 
-    return JsonResponse({"success": True, "added_count": created_count})
+    return JsonResponse({
+        "success": True,
+        "added_count": created_count,
+        "added_products": added_list
+    })
 
 
 @staff_member_required
@@ -774,6 +784,7 @@ def brand_rubro_sync(request, pk):
 
     created_count = 0
     creates = []
+    added_list = []
     for prod in products:
         if prod.id not in existing_product_ids:
             max_order += 10
@@ -784,6 +795,11 @@ def brand_rubro_sync(request, pk):
                     sort_order=max_order
                 )
             )
+            added_list.append({
+                "id": prod.id,
+                "sku": prod.sku,
+                "name": prod.name
+            })
             created_count += 1
 
     if creates:
@@ -797,7 +813,11 @@ def brand_rubro_sync(request, pk):
         details={"brand": brand_name, "added_count": created_count}
     )
 
-    return JsonResponse({"success": True, "added_count": created_count})
+    return JsonResponse({
+        "success": True,
+        "added_count": created_count,
+        "added_products": added_list
+    })
 
 
 @staff_member_required

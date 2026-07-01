@@ -3653,6 +3653,10 @@ def product_grid_editor(request):
     f_ref = request.GET.get('f_ref', '').strip()
     f_supplier = request.GET.get('f_supplier', '').strip()
     active_filter = request.GET.get('active', '').strip()
+    
+    f_brand = request.GET.get('f_brand', '').strip()
+    f_brand_rubro = request.GET.get('f_brand_rubro', '').strip()
+    f_brand_subrubro = request.GET.get('f_brand_subrubro', '').strip()
 
     if f_category:
         normalized_query = unicodedata.normalize("NFKD", f_category.lower())
@@ -3682,6 +3686,19 @@ def product_grid_editor(request):
         
     if active_filter:
         products = products.filter(is_active=(active_filter == '1'))
+        
+    if f_brand_subrubro:
+        products = products.filter(brand_subrubro_orders__brand_subrubro_id=f_brand_subrubro).distinct()
+    elif f_brand_rubro:
+        products = products.filter(
+            Q(brand_rubro_orders__brand_rubro_id=f_brand_rubro) |
+            Q(brand_subrubro_orders__brand_subrubro__brand_rubro_id=f_brand_rubro)
+        ).distinct()
+    elif f_brand:
+        products = products.filter(
+            Q(brand_rubro_orders__brand_rubro__brand_id=f_brand) |
+            Q(brand_subrubro_orders__brand_subrubro__brand_rubro__brand_id=f_brand)
+        ).distinct()
 
     order = _clean_product_list_order(request.GET.get('order', '-updated_at'))
     products = _apply_product_list_order(products, order)
@@ -3729,6 +3746,9 @@ def product_grid_editor(request):
         'f_ref': f_ref,
         'f_supplier': f_supplier,
         'active_filter': active_filter,
+        'f_brand': f_brand,
+        'f_brand_rubro': f_brand_rubro,
+        'f_brand_subrubro': f_brand_subrubro,
         'order_by': order,
         'total_count': products.count() if hasattr(products, 'count') else len(products),
     }

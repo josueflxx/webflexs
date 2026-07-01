@@ -497,4 +497,82 @@ class BrandPremiumSPAAndPaginationTestCase(TestCase):
         self.assertEqual(data['associated_count'], 5)
         self.assertEqual(data['new_count'], 30)
 
+    def test_rubro_auto_sync_returns_added_products(self):
+        self.subrubro.helper_categories.add(self.category)
+        url = reverse('admin_brand_rubro_sync', args=[self.rubro.pk])
+        response = self.client.post(url)
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertTrue(data['success'])
+        self.assertEqual(data['added_count'], 30)
+        self.assertIn('added_products', data)
+        self.assertEqual(len(data['added_products']), 30)
+        self.assertIn('id', data['added_products'][0])
+        self.assertIn('sku', data['added_products'][0])
+        self.assertIn('name', data['added_products'][0])
+
+    def test_subrubro_auto_sync_returns_added_products(self):
+        self.subrubro.helper_categories.add(self.category)
+        url = reverse('admin_brand_subrubro_sync', args=[self.subrubro.pk])
+        response = self.client.post(url)
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertTrue(data['success'])
+        self.assertEqual(data['added_count'], 30)
+        self.assertIn('added_products', data)
+        self.assertEqual(len(data['added_products']), 30)
+
+
+class BrandGridAutofiltersTestCase(TestCase):
+    """Test case for Brand/Rubro/Subrubro filters in the product grid editor."""
+
+    def setUp(self):
+        self.brand = Brand.objects.create(name="Ford_Filter")
+        self.rubro = BrandRubro.objects.create(brand=self.brand, name="Filtros")
+        self.subrubro = BrandSubrubro.objects.create(brand_rubro=self.rubro, name="Filtros Aire")
+        
+        self.product1 = Product.objects.create(
+            sku="FLT-FRD-01",
+            name="Filtro Aire Ford",
+            price=Decimal("150.00"),
+            is_active=True
+        )
+        self.product2 = Product.objects.create(
+            sku="FLT-OTH-02",
+            name="Filtro General",
+            price=Decimal("100.00"),
+            is_active=True
+        )
+        
+        self.rubro.products.add(self.product1)
+        self.subrubro.products.add(self.product1)
+        
+        self.client = Client()
+        self.user = User.objects.create_superuser('josueflexs', 'admin@filter.com', 'adminpass')
+        self.client.login(username='josueflexs', password='adminpass')
+
+    def test_filter_by_brand(self):
+        url = reverse('admin_product_grid_editor')
+        response = self.client.get(url, {'f_brand': self.brand.id})
+        self.assertEqual(response.status_code, 200)
+        products = list(response.context['page_obj'].object_list)
+        self.assertIn(self.product1, products)
+        self.assertNotIn(self.product2, products)
+
+    def test_filter_by_rubro(self):
+        url = reverse('admin_product_grid_editor')
+        response = self.client.get(url, {'f_brand_rubro': self.rubro.id})
+        self.assertEqual(response.status_code, 200)
+        products = list(response.context['page_obj'].object_list)
+        self.assertIn(self.product1, products)
+        self.assertNotIn(self.product2, products)
+
+    def test_filter_by_subrubro(self):
+        url = reverse('admin_product_grid_editor')
+        response = self.client.get(url, {'f_brand_subrubro': self.subrubro.id})
+        self.assertEqual(response.status_code, 200)
+        products = list(response.context['page_obj'].object_list)
+        self.assertIn(self.product1, products)
+        self.assertNotIn(self.product2, products)
+
 
