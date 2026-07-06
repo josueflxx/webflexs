@@ -1913,12 +1913,13 @@ def rollback_movigom_import(request):
     try:
         import json
         from django.utils import timezone
+        from core.models import ImportExecution
         data = json.loads(request.body)
         execution_id = data.get('execution_id')
         if not execution_id:
             return JsonResponse({'success': False, 'error': 'ID de ejecución no suministrado.'})
             
-        execution = get_or_create_execution = get_object_or_404(ImportExecution, pk=execution_id)
+        execution = get_object_or_404(ImportExecution, pk=execution_id)
         if execution.status == ImportExecution.STATUS_ROLLED_BACK:
             return JsonResponse({'success': False, 'error': 'Esta importación ya fue revertida.'})
             
@@ -4491,6 +4492,6 @@ def product_grid_remove_brand_association(request):
     })
 
 
-__all__ = ['product_list', 'product_create', 'product_edit', 'product_delete', 'product_toggle_active', 'product_bulk_category_update', 'product_bulk_status_update', 'product_bulk_image_update', 'supplier_list', 'supplier_detail', 'supplier_bulk_action', 'supplier_export', 'supplier_print', 'supplier_unassigned', 'supplier_toggle_active', 'category_list', 'category_reorder', 'category_sort_roots_alpha', 'category_bulk_status', 'category_create', 'category_create_ajax', 'category_edit', 'category_move', 'category_delete', 'category_attribute_create', 'category_attribute_edit', 'category_attribute_delete', 'category_manage_products', 'category_products_reorder', 'get_category_attributes', 'parse_product_description', 'parse_clamp_code_api', 'products_uncategorized', 'import_triler_excel', 'product_grid_editor', 'product_grid_update_cell', 'product_grid_bulk_update', 'product_grid_add_brand_association', 'product_grid_remove_brand_association']
+__all__ = ['product_list', 'product_create', 'product_edit', 'product_delete', 'product_toggle_active', 'product_bulk_category_update', 'product_bulk_status_update', 'product_bulk_image_update', 'supplier_list', 'supplier_detail', 'supplier_bulk_action', 'supplier_export', 'supplier_print', 'supplier_unassigned', 'supplier_toggle_active', 'category_list', 'category_reorder', 'category_sort_roots_alpha', 'category_bulk_status', 'category_create', 'category_create_ajax', 'category_edit', 'category_move', 'category_delete', 'category_attribute_create', 'category_attribute_edit', 'category_attribute_delete', 'category_manage_products', 'category_products_reorder', 'get_category_attributes', 'parse_product_description', 'parse_clamp_code_api', 'products_uncategorized', 'import_triler_excel', 'rollback_movigom_import', 'product_grid_editor', 'product_grid_update_cell', 'product_grid_bulk_update', 'product_grid_add_brand_association', 'product_grid_remove_brand_association']
 
 
