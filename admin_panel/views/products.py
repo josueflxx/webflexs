@@ -1732,6 +1732,8 @@ def import_triler_excel(request):
             # NEW MOVIGOM CATALOG & EMBEDDED PHOTOS IMPORT LOGIC
             # ----------------------------------------------------
             from django.core.files.base import ContentFile
+            from core.models import ImportExecution
+            from django.utils import timezone
             import openpyxl
             
             wb = openpyxl.load_workbook(excel_file)
@@ -1740,9 +1742,21 @@ def import_triler_excel(request):
             supplier_name = "MOVIGOM S.R.L."
             supplier_obj, _ = Supplier.objects.get_or_create(name=supplier_name)
             
-            total_created = 0
+            # Create ImportExecution log
+            company = get_active_company(request)
+            execution = ImportExecution.objects.create(
+                user=request.user,
+                company=company,
+                import_type="movigom_photos",
+                file_name=excel_file.name,
+                dry_run=False,
+                status=ImportExecution.STATUS_PROCESSING
+            )
+            
             total_updated = 0
+            total_skipped = 0
             total_images_saved = 0
+            updated_skus = []
             
             def get_or_create_category(name, parent=None):
                 name = name.strip()
@@ -1802,6 +1816,12 @@ def import_triler_excel(request):
                         if len(sku) > 50:
                             continue
                             
+                        # ONLY process if the product ALREADY exists in the database
+                        product = Product.objects.filter(sku=sku).first()
+                        if not product:
+                            total_skipped += 1
+                            continue
+                            
                         marca_seccion = sheet.cell(row=r, column=2).value or ""
                         descripcion = sheet.cell(row=r, column=3).value or ""
                         ref = sheet.cell(row=r, column=4).value or ""
@@ -1836,31 +1856,17 @@ def import_triler_excel(request):
                         parent_cat = get_or_create_category(parent_cat_name)
                         child_cat = get_or_create_category(child_cat_name, parent=parent_cat) if child_cat_name else parent_cat
                         
-                        product, created = Product.objects.get_or_create(sku=sku, defaults={
-                            "name": name,
-                            "price": price,
-                            "cost": Decimal("0.00"),
-                            "supplier": supplier_name,
-                            "supplier_ref": supplier_obj,
-                            "description": str(descripcion).strip(),
-                            "category": child_cat,
-                            "attributes": attrs,
-                        })
+                        # Update product fields
+                        product.name = name
+                        product.price = price
+                        product.supplier = supplier_name
+                        product.supplier_ref = supplier_obj
+                        product.description = str(descripcion).strip()
+                        product.category = child_cat
                         
-                        if not created:
-                            product.name = name
-                            product.price = price
-                            product.supplier = supplier_name
-                            product.supplier_ref = supplier_obj
-                            product.description = str(descripcion).strip()
-                            product.category = child_cat
-                            
-                            merged_attrs = {**(product.attributes or {}), **attrs}
-                            product.attributes = merged_attrs
-                            total_updated += 1
-                        else:
-                            total_created += 1
-                            
+                        merged_attrs = {**(product.attributes or {}), **attrs}
+                        product.attributes = merged_attrs
+                        
                         # Ensure categories are assigned
                         product.categories.add(child_cat)
                         if child_cat != parent_cat:
@@ -1879,11 +1885,91 @@ def import_triler_excel(request):
                                 pass
                                 
                         product.save()
-                        
+                        total_updated += 1
+                        updated_skus.append(sku)
+            
+            # Finish ImportExecution log
+            execution.status = ImportExecution.STATUS_COMPLETED
+            execution.updated_count = total_updated
+            execution.created_refs = updated_skus
+            execution.finished_at = timezone.now()
+            execution.save(update_fields=['status', 'updated_count', 'created_refs', 'finished_at'])
+            
             return JsonResponse({
                 'success': True,
-                'message': f'Importación de Movigom completada exitosamente. Se crearon {total_created} productos, se actualizaron {total_updated} y se guardaron {total_images_saved} fotos.'
+                'message': f'Importación de Movigom completada exitosamente. Se actualizaron {total_updated} productos existentes y se guardaron {total_images_saved} fotos. ({total_skipped} productos nuevos omitidos)',
+                'execution_id': execution.id
             })
+        
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': f'Error al procesar el archivo: {str(e)}'})
+
+
+@staff_member_required
+@require_POST
+@superuser_required_for_modifications
+def rollback_movigom_import(request):
+    """Rollback the Movigom Excel import by clearing images and categories for updated SKUs."""
+    try:
+        import json
+        from django.utils import timezone
+        data = json.loads(request.body)
+        execution_id = data.get('execution_id')
+        if not execution_id:
+            return JsonResponse({'success': False, 'error': 'ID de ejecución no suministrado.'})
+            
+        execution = get_or_create_execution = get_object_or_404(ImportExecution, pk=execution_id)
+        if execution.status == ImportExecution.STATUS_ROLLED_BACK:
+            return JsonResponse({'success': False, 'error': 'Esta importación ya fue revertida.'})
+            
+        skus_to_revert = execution.created_refs or []
+        if not skus_to_revert:
+            return JsonResponse({'success': False, 'error': 'No hay SKUs registrados para revertir.'})
+            
+        reverted_count = 0
+        with transaction.atomic():
+            for sku in skus_to_revert:
+                prod = Product.objects.filter(sku=sku).first()
+                if prod:
+                    # Remove the image file from storage if it exists
+                    if prod.image:
+                        try:
+                            image_path = prod.image.path
+                            if os.path.exists(image_path):
+                                os.remove(image_path)
+                        except Exception:
+                            pass
+                        prod.image = None
+                    
+                    # Clear category and M2M categories to return product to "uncategorized" status
+                    prod.category = None
+                    prod.categories.clear()
+                    
+                    prod.save()
+                    reverted_count += 1
+            
+            execution.status = ImportExecution.STATUS_ROLLED_BACK
+            execution.rollback_at = timezone.now()
+            execution.rollback_summary = {
+                'reverted_count': reverted_count,
+                'skus_total': len(skus_to_revert),
+            }
+            execution.save(update_fields=['status', 'rollback_at', 'rollback_summary'])
+            
+            log_admin_action(
+                request,
+                action="import_rollback",
+                target_type="import_execution",
+                target_id=execution.pk,
+                details={'import_type': 'movigom_photos', 'reverted_count': reverted_count},
+            )
+            
+        return JsonResponse({
+            'success': True,
+            'message': f'Se revirtieron los cambios con éxito. Se quitaron las imágenes y categorizaciones de {reverted_count} productos.'
+        })
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': f'Error al aplicar rollback: {str(e)}'})
         
     except Exception as e:
         return JsonResponse({'success': False, 'error': f'Error al procesar el archivo: {str(e)}'})

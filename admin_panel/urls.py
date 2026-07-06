@@ -131,6 +131,7 @@ urlpatterns = [
     path('categorias/', views.category_list, name='admin_category_list'),
     path('categorias/sin-categoria/', views.products_uncategorized, name='admin_products_uncategorized'),
     path('categorias/sin-categoria/importar-excel/', views.import_triler_excel, name='admin_products_uncategorized_import_excel'),
+    path('categorias/sin-categoria/importar-excel/rollback/', views.rollback_movigom_import, name='admin_products_uncategorized_import_rollback'),
     path('categorias/nueva/', views.category_create, name='admin_category_create'),
     path('categorias/crear-ajax/', views.category_create_ajax, name='admin_category_create_ajax'),
     path('categorias/<int:pk>/editar/', views.category_edit, name='admin_category_edit'),

@@ -5,6 +5,25 @@
 
 {% block content %}
 <div class="uncategorized-container">
+    <!-- Rollback Banner -->
+    <div id="movigom-rollback-banner" style="display: none; background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 8px; padding: 15px; margin-bottom: 20px; justify-content: space-between; align-items: center; gap: 15px; width: 100%; box-sizing: border-box;">
+        <div style="display: flex; align-items: center; gap: 10px; color: #f59e0b;">
+            <span style="font-size: 20px;">⚠️</span>
+            <div>
+                <strong style="display: block; font-size: 14px; margin-bottom: 2px;">Última Importación de Fotos Movigom</strong>
+                <span style="font-size: 13px; color: #cbd5e1;">Puedes deshacer los cambios realizados en el catálogo si fue un error. Se quitarán las fotos asociadas a los productos actualizados.</span>
+            </div>
+        </div>
+        <div style="display: flex; gap: 10px; align-items: center; flex-shrink: 0;">
+            <button id="btn-movigom-rollback" type="button" class="btn" style="background: #f59e0b; border: 1px solid #d97706; color: #0b0f19; font-weight: 600; padding: 8px 16px; border-radius: 6px; cursor: pointer;" onclick="triggerMovigomRollback()">
+                ⏪ Deshacer Cambios
+            </button>
+            <button type="button" style="background: transparent; border: none; color: #94a3b8; cursor: pointer; font-size: 18px; padding: 5px;" onclick="dismissMovigomRollback()">
+                ✕
+            </button>
+        </div>
+    </div>
+
     <!-- Header -->
     <div class="uncategorized-header">
         <div class="header-info">
@@ -1786,6 +1805,9 @@
             
             if (data.success) {
                 alert('¡Éxito! ' + data.message);
+                if (data.execution_id) {
+                    localStorage.setItem('last_movigom_import_id', data.execution_id);
+                }
                 location.reload();
             } else {
                 alert('Error al importar: ' + data.error);
@@ -1797,6 +1819,66 @@
             btn.disabled = false;
             btn.innerHTML = originalText;
             input.value = '';
+        });
+    }
+
+    document.addEventListener("DOMContentLoaded", function() {
+        const lastImportId = localStorage.getItem('last_movigom_import_id');
+        if (lastImportId) {
+            const banner = document.getElementById('movigom-rollback-banner');
+            if (banner) {
+                banner.style.display = 'flex';
+            }
+        }
+    });
+
+    function dismissMovigomRollback() {
+        localStorage.removeItem('last_movigom_import_id');
+        const banner = document.getElementById('movigom-rollback-banner');
+        if (banner) {
+            banner.style.display = 'none';
+        }
+    }
+
+    function triggerMovigomRollback() {
+        const lastImportId = localStorage.getItem('last_movigom_import_id');
+        if (!lastImportId) return;
+        
+        if (!confirm("¿Estás seguro de que deseas deshacer todos los cambios de esta última importación? Se eliminarán las fotos y categorías asignadas en este lote.")) {
+            return;
+        }
+        
+        const btn = document.getElementById('btn-movigom-rollback');
+        const originalText = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '⏳ Revirtiendo...';
+        
+        fetch('{% url "admin_products_uncategorized_import_rollback" %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken,
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: JSON.stringify({ execution_id: lastImportId })
+        })
+        .then(res => res.json())
+        .then(data => {
+            btn.disabled = false;
+            btn.innerHTML = originalText;
+            if (data.success) {
+                alert('¡Deshecho con éxito! ' + data.message);
+                localStorage.removeItem('last_movigom_import_id');
+                location.reload();
+            } else {
+                alert('Error al deshacer: ' + data.error);
+            }
+        })
+        .catch(err => {
+            console.error('Error al deshacer:', err);
+            alert('Ocurrió un error al intentar deshacer la importación.');
+            btn.disabled = false;
+            btn.innerHTML = originalText;
         });
     }
 

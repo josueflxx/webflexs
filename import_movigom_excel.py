@@ -107,6 +107,11 @@ def main():
         default=None, 
         help="Specify a single sheet to import (e.g. 'BUJES')."
     )
+    parser.add_argument(
+        "--create-new",
+        action="store_true",
+        help="Create new products if they do not exist (only updates existing ones by default)."
+    )
     args = parser.parse_args()
 
     excel_path = args.file
@@ -196,6 +201,13 @@ def main():
             # This is a product row!
             processed_in_sheet += 1
             
+            # Check if the product already exists
+            existing = Product.objects.filter(sku=sku).first()
+            if not existing and not args.create_new:
+                # Skip if product doesn't exist and we're not creating new ones
+                total_skipped += 1
+                continue
+            
             marca_seccion = sheet.cell(row=r, column=2).value or ""
             descripcion = sheet.cell(row=r, column=3).value or ""
             ref = sheet.cell(row=r, column=4).value or ""
@@ -233,7 +245,7 @@ def main():
             img_format = getattr(img, 'format', 'jpeg') if img else None
             
             # Print row detail
-            action_desc = "Updating" if Product.objects.filter(sku=sku).exists() else "Creating"
+            action_desc = "Updating" if existing else "Creating"
             has_img_str = f"with image ({img_format})" if img else "no image"
             print(f"  [{action_desc}] SKU: {sku} | Name: {name[:40]} | Category: {parent_cat_name} -> {child_cat_name} | Price: {price} | {has_img_str}")
 
@@ -244,18 +256,22 @@ def main():
                     child_cat = get_or_create_category(child_cat_name, parent=parent_cat) if child_cat_name else parent_cat
 
                     # 2. Product
-                    product, created = Product.objects.get_or_create(sku=sku, defaults={
-                        "name": name,
-                        "price": price,
-                        "cost": Decimal("0.00"),
-                        "supplier": supplier_name,
-                        "supplier_ref": supplier_obj,
-                        "description": str(descripcion).strip(),
-                        "category": child_cat,
-                        "attributes": attrs,
-                    })
-
-                    if not created:
+                    if not existing:
+                        product = Product.objects.create(
+                            sku=sku,
+                            name=name,
+                            price=price,
+                            cost=Decimal("0.00"),
+                            supplier=supplier_name,
+                            supplier_ref=supplier_obj,
+                            description=str(descripcion).strip(),
+                            category=child_cat,
+                            attributes=attrs,
+                        )
+                        created = True
+                        total_created += 1
+                    else:
+                        product = existing
                         product.name = name
                         product.price = price
                         product.supplier = supplier_name
@@ -266,9 +282,8 @@ def main():
                         # Merge attributes
                         merged_attrs = {**(product.attributes or {}), **attrs}
                         product.attributes = merged_attrs
+                        created = False
                         total_updated += 1
-                    else:
-                        total_created += 1
 
                     # Ensure child_cat is in categories M2M
                     product.categories.add(child_cat)
@@ -289,7 +304,7 @@ def main():
                     product.save()
             else:
                 # Dry run tallies
-                if Product.objects.filter(sku=sku).exists():
+                if existing:
                     total_updated += 1
                 else:
                     total_created += 1
