@@ -1535,10 +1535,10 @@ def products_uncategorized(request):
 
 
 @staff_member_required
-@superuser_required_for_modifications
 @require_POST
+@superuser_required_for_modifications
 def import_triler_excel(request):
-    """Import and categorize products from Triler excel file (supports .xlsx and .xls)."""
+    """Import and categorize products from Triler or Movigom Excel file (supports .xlsx and .xls)."""
     if 'excel_file' not in request.FILES:
         return JsonResponse({'success': False, 'error': 'No se subió ningún archivo.'})
         
@@ -1552,156 +1552,322 @@ def import_triler_excel(request):
         from django.utils.text import slugify
         from django.db import transaction
         
-        # Get or create parent category TRILER
-        parent_cat, _ = Category.objects.get_or_create(
-            name="TRILER",
-            defaults={
-                'slug': slugify('TRILER'),
-                'is_active': True,
-                'visible_in_catalog': True,
-            }
-        )
-        
-        matched_count = 0
-        created_subcats = {}
-        parsed_rows = [] # Contains (excel_sku, excel_cat) tuples
-        
-        if filename.endswith('.xlsx'):
-            import openpyxl
-            wb = openpyxl.load_workbook(excel_file, data_only=True)
+        # Helper to parse price
+        def parse_price(val):
+            if val is None:
+                return Decimal("0.00")
+            if isinstance(val, (int, float)):
+                return Decimal(str(val))
+            s = str(val).strip().replace("$", "").replace(" ", "")
+            if not s:
+                return Decimal("0.00")
+            if "," in s and "." in s:
+                if s.rfind(",") > s.rfind("."):
+                    s = s.replace(".", "").replace(",", ".")
+                else:
+                    s = s.replace(",", "")
+            elif "," in s:
+                parts = s.split(",")
+                if len(parts) == 2 and len(parts[1]) <= 2:
+                    s = s.replace(",", ".")
+                else:
+                    s = s.replace(",", "")
+            try:
+                return Decimal(s)
+            except Exception:
+                return Decimal("0.00")
+
+        if 'triler' in filename:
+            # ----------------------------------------------------
+            # HISTORICAL TRILER IMPORT LOGIC (for backward compatibility)
+            # ----------------------------------------------------
+            # Get or create parent category TRILER
+            parent_cat, _ = Category.objects.get_or_create(
+                name="TRILER",
+                defaults={
+                    'slug': slugify('TRILER'),
+                    'is_active': True,
+                    'visible_in_catalog': True,
+                }
+            )
             
-            # Find product data sheet
-            sheet = None
-            for name in ['Interno categorizado', 'Sheet1']:
-                if name in wb.sheetnames:
-                    sheet = wb[name]
-                    break
-            if not sheet:
-                sheet = wb.active
-                
-            rows = list(sheet.iter_rows(values_only=True))
-            if len(rows) < 2:
-                return JsonResponse({'success': False, 'error': 'El archivo Excel está vacío.'})
-                
-            header = rows[0]
-            sku_idx = -1
-            cat_idx = -1
+            matched_count = 0
+            created_subcats = {}
+            parsed_rows = [] # Contains (excel_sku, excel_cat) tuples
             
-            for idx, col in enumerate(header):
-                if not col:
-                    continue
-                col_str = str(col).strip().lower()
-                if col_str == 'sku' or 'codigo' in col_str or 'código' in col_str:
-                    sku_idx = idx
-                elif 'categoria' in col_str or 'categoría' in col_str or 'triler' in col_str:
-                    cat_idx = idx
+            if filename.endswith('.xlsx'):
+                import openpyxl
+                wb = openpyxl.load_workbook(excel_file, data_only=True)
+                
+                # Find product data sheet
+                sheet = None
+                for name in ['Interno categorizado', 'Sheet1']:
+                    if name in wb.sheetnames:
+                        sheet = wb[name]
+                        break
+                if not sheet:
+                    sheet = wb.active
                     
-            if sku_idx == -1 or cat_idx == -1:
-                # Fallback by names/positions
+                rows = list(sheet.iter_rows(values_only=True))
+                if len(rows) < 2:
+                    return JsonResponse({'success': False, 'error': 'El archivo Excel está vacío.'})
+                    
+                header = rows[0]
+                sku_idx = -1
+                cat_idx = -1
+                
                 for idx, col in enumerate(header):
                     if not col:
                         continue
                     col_str = str(col).strip().lower()
-                    if 'sku' in col_str:
+                    if col_str == 'sku' or 'codigo' in col_str or 'código' in col_str:
                         sku_idx = idx
-                if sku_idx == -1:
-                    sku_idx = 0
-                if cat_idx == -1:
-                    cat_idx = 2 if len(header) > 2 else 1
-            
-            for r in rows[1:]:
-                if len(r) <= max(sku_idx, cat_idx):
-                    continue
-                excel_sku = r[sku_idx]
-                excel_cat = r[cat_idx]
-                if excel_sku and excel_cat:
-                    parsed_rows.append((str(excel_sku).strip(), str(excel_cat).strip()))
-                    
-        else:  # .xls file
-            import xlrd
-            file_contents = excel_file.read()
-            book = xlrd.open_workbook(file_contents=file_contents)
-            
-            sheet = None
-            for name in ['Hoja1', 'Sheet1']:
-                if name in book.sheet_names():
-                    sheet = book.sheet_by_name(name)
-                    break
-            if not sheet:
-                sheet = book.sheet_by_index(0)
-                
-            current_category = None
-            for r_idx in range(60, sheet.nrows):
-                row_vals = sheet.row_values(r_idx)
-                if len(row_vals) < 2:
-                    continue
-                sku = str(row_vals[0]).strip() if row_vals[0] is not None else ""
-                name = str(row_vals[1]).strip() if row_vals[1] is not None else ""
-                
-                if not sku:
-                    if name and name not in ["$", "PRECIO", "PRODUCTO"]:
-                        current_category = name
-                else:
-                    if current_category:
-                        parsed_rows.append((sku, current_category))
+                    elif 'categoria' in col_str or 'categoría' in col_str or 'triler' in col_str:
+                        cat_idx = idx
                         
-        # Process database updates inside transaction
-        with transaction.atomic():
-            for excel_sku_str, excel_cat_str in parsed_rows:
-                if excel_cat_str == "NO ENCONTRADO EN TRILER" or not excel_cat_str:
-                    continue
-                    
-                db_sku = f"T-{excel_sku_str}"
-                prod = Product.objects.filter(sku=db_sku).first()
+                if sku_idx == -1 or cat_idx == -1:
+                    for idx, col in enumerate(header):
+                        if not col:
+                            continue
+                        col_str = str(col).strip().lower()
+                        if 'sku' in col_str:
+                            sku_idx = idx
+                    if sku_idx == -1:
+                        sku_idx = 0
+                    if cat_idx == -1:
+                        cat_idx = 2 if len(header) > 2 else 1
                 
-                if prod:
-                    # Enforce that the product is currently WITHOUT category
-                    if prod.category_id is not None or prod.categories.exists():
+                for r in rows[1:]:
+                    if len(r) <= max(sku_idx, cat_idx):
                         continue
+                    excel_sku = r[sku_idx]
+                    excel_cat = r[cat_idx]
+                    if excel_sku and excel_cat:
+                        parsed_rows.append((str(excel_sku).strip(), str(excel_cat).strip()))
                         
-                    # Enforce that the product belongs to 'ESTABLECIMIENTO MECANICO OCE S R L'
-                    supplier_name = 'ESTABLECIMIENTO MECANICO OCE S R L'
-                    is_supplier_match = False
-                    if prod.supplier and prod.supplier.strip().upper() == supplier_name:
-                        is_supplier_match = True
-                    elif prod.supplier_ref and prod.supplier_ref.name.strip().upper() == supplier_name:
-                        is_supplier_match = True
-                        
-                    if not is_supplier_match:
+            else:  # .xls file
+                import xlrd
+                file_contents = excel_file.read()
+                book = xlrd.open_workbook(file_contents=file_contents)
+                
+                sheet = None
+                for name in ['Hoja1', 'Sheet1']:
+                    if name in book.sheet_names():
+                        sheet = book.sheet_by_name(name)
+                        break
+                if not sheet:
+                    sheet = book.sheet_by_index(0)
+                    
+                current_category = None
+                for r_idx in range(60, sheet.nrows):
+                    row_vals = sheet.row_values(r_idx)
+                    if len(row_vals) < 2:
                         continue
-                    # Get or create subcategory
-                    if excel_cat_str not in created_subcats:
-                        subcat, _ = Category.objects.get_or_create(
-                            name=excel_cat_str,
-                            parent=parent_cat,
-                            defaults={
-                                'slug': slugify(f"triler-{excel_cat_str}"),
-                                'is_active': True,
-                                'visible_in_catalog': True,
-                            }
-                        )
-                        created_subcats[excel_cat_str] = subcat
+                    sku = str(row_vals[0]).strip() if row_vals[0] is not None else ""
+                    name = str(row_vals[1]).strip() if row_vals[1] is not None else ""
+                    
+                    if not sku:
+                        if name and name not in ["$", "PRECIO", "PRODUCTO"]:
+                            current_category = name
                     else:
-                        subcat = created_subcats[excel_cat_str]
+                        if current_category:
+                            parsed_rows.append((sku, current_category))
+                            
+            # Process database updates inside transaction
+            with transaction.atomic():
+                for excel_sku_str, excel_cat_str in parsed_rows:
+                    if excel_cat_str == "NO ENCONTRADO EN TRILER" or not excel_cat_str:
+                        continue
                         
-                    prod.category = subcat
-                    prod.categories.set([subcat])
-                    prod.save()
+                    db_sku = f"T-{excel_sku_str}"
+                    prod = Product.objects.filter(sku=db_sku).first()
                     
-                    log_admin_action(
-                        request,
-                        action="products_uncategorized_assign",
-                        target_type="product",
-                        target_id=prod.pk,
-                        details={'msg': f'Categorización automática vía Excel Triler. Subcategoría: {subcat.name}'},
-                    )
+                    if prod:
+                        if prod.category_id is not None or prod.categories.exists():
+                            continue
+                            
+                        supplier_name = 'ESTABLECIMIENTO MECANICO OCE S R L'
+                        is_supplier_match = False
+                        if prod.supplier and prod.supplier.strip().upper() == supplier_name:
+                            is_supplier_match = True
+                        elif prod.supplier_ref and prod.supplier_ref.name.strip().upper() == supplier_name:
+                            is_supplier_match = True
+                            
+                        if not is_supplier_match:
+                            continue
+                        if excel_cat_str not in created_subcats:
+                            subcat, _ = Category.objects.get_or_create(
+                                name=excel_cat_str,
+                                parent=parent_cat,
+                                defaults={
+                                    'slug': slugify(f"triler-{excel_cat_str}"),
+                                    'is_active': True,
+                                    'visible_in_catalog': True,
+                                }
+                            )
+                            created_subcats[excel_cat_str] = subcat
+                        else:
+                            subcat = created_subcats[excel_cat_str]
+                            
+                        prod.category = subcat
+                        prod.categories.set([subcat])
+                        prod.save()
+                        
+                        log_admin_action(
+                            request,
+                            action="products_uncategorized_assign",
+                            target_type="product",
+                            target_id=prod.pk,
+                            details={'msg': f'Categorización automática vía Excel Triler. Subcategoría: {subcat.name}'},
+                        )
+                        matched_count += 1
+                        
+            return JsonResponse({
+                'success': True, 
+                'message': f'Importación completada. Se procesaron {len(parsed_rows)} artículos y se categorizaron {matched_count} productos exitosamente en {len(created_subcats)} subcategorías de "TRILER".'
+            })
+
+        else:
+            # ----------------------------------------------------
+            # NEW MOVIGOM CATALOG & EMBEDDED PHOTOS IMPORT LOGIC
+            # ----------------------------------------------------
+            from django.core.files.base import ContentFile
+            import openpyxl
+            
+            wb = openpyxl.load_workbook(excel_file)
+            
+            # Ensure Supplier "MOVIGOM S.R.L." exists
+            supplier_name = "MOVIGOM S.R.L."
+            supplier_obj, _ = Supplier.objects.get_or_create(name=supplier_name)
+            
+            total_created = 0
+            total_updated = 0
+            total_images_saved = 0
+            
+            def get_or_create_category(name, parent=None):
+                name = name.strip()
+                if not name:
+                    return None
+                cat = Category.objects.filter(name=name, parent=parent).first()
+                if cat:
+                    return cat
+                base_slug = slugify(name)
+                if not base_slug:
+                    base_slug = "cat"
+                slug = base_slug
+                counter = 1
+                while Category.objects.filter(slug=slug).exists():
+                    slug = f"{base_slug}-{counter}"
+                    counter += 1
+                return Category.objects.create(name=name, parent=parent, slug=slug)
+
+            with transaction.atomic():
+                for sheet_name in wb.sheetnames:
+                    sheet = wb[sheet_name]
                     
-                    matched_count += 1
-                    
-        return JsonResponse({
-            'success': True, 
-            'message': f'Importación completada. Se procesaron {len(parsed_rows)} artículos y se categorizaron {matched_count} productos exitosamente en {len(created_subcats)} subcategorías de "TRILER".'
-        })
+                    # Build map of row -> image object (Column H is index 7)
+                    row_images = {}
+                    for img in getattr(sheet, '_images', []):
+                        if hasattr(img, 'anchor') and hasattr(img.anchor, '_from'):
+                            r = img.anchor._from.row + 1
+                            c = img.anchor._from.col
+                            if c == 7: # Column H
+                                row_images[r] = img
+                                
+                    active_subheader = ""
+                    for r in range(2, sheet.max_row + 1):
+                        val_a = sheet.cell(row=r, column=1).value
+                        
+                        if isinstance(val_a, str) and val_a.strip().startswith('▸'):
+                            active_subheader = val_a.strip().replace('▸', '').strip()
+                            continue
+                            
+                        sku = str(val_a).strip() if val_a is not None else ""
+                        if not sku:
+                            continue
+                            
+                        marca_seccion = sheet.cell(row=r, column=2).value or ""
+                        descripcion = sheet.cell(row=r, column=3).value or ""
+                        ref = sheet.cell(row=r, column=4).value or ""
+                        precio_raw = sheet.cell(row=r, column=5).value
+                        nombre_pdf = sheet.cell(row=r, column=6).value or ""
+                        pag_pdf = sheet.cell(row=r, column=7).value or ""
+                        
+                        # Determine product name
+                        clean_nombre_pdf = str(nombre_pdf).strip()
+                        if clean_nombre_pdf and clean_nombre_pdf != "— no figura en el PDF —":
+                            name = clean_nombre_pdf
+                        else:
+                            name = str(descripcion).strip()
+                        if not name:
+                            name = f"Producto {sku}"
+                            
+                        price = parse_price(precio_raw)
+                        
+                        # Categories
+                        parent_cat_name = sheet_name
+                        child_cat_name = str(marca_seccion).strip()
+                        if not child_cat_name:
+                            child_cat_name = active_subheader
+                            
+                        # Prepare attributes
+                        attrs = {}
+                        if ref:
+                            attrs["referencia_proveedor"] = str(ref).strip()
+                        if pag_pdf:
+                            attrs["pagina_pdf"] = str(pag_pdf).strip()
+                            
+                        parent_cat = get_or_create_category(parent_cat_name)
+                        child_cat = get_or_create_category(child_cat_name, parent=parent_cat) if child_cat_name else parent_cat
+                        
+                        product, created = Product.objects.get_or_create(sku=sku, defaults={
+                            "name": name,
+                            "price": price,
+                            "cost": Decimal("0.00"),
+                            "supplier": supplier_name,
+                            "supplier_ref": supplier_obj,
+                            "description": str(descripcion).strip(),
+                            "category": child_cat,
+                            "attributes": attrs,
+                        })
+                        
+                        if not created:
+                            product.name = name
+                            product.price = price
+                            product.supplier = supplier_name
+                            product.supplier_ref = supplier_obj
+                            product.description = str(descripcion).strip()
+                            product.category = child_cat
+                            
+                            merged_attrs = {**(product.attributes or {}), **attrs}
+                            product.attributes = merged_attrs
+                            total_updated += 1
+                        else:
+                            total_created += 1
+                            
+                        # Ensure categories are assigned
+                        product.categories.add(child_cat)
+                        if child_cat != parent_cat:
+                            product.categories.add(parent_cat)
+                            
+                        # Handle image
+                        img = row_images.get(r)
+                        if img:
+                            try:
+                                raw_bytes = img._data()
+                                img_format = getattr(img, 'format', 'jpeg')
+                                filename = f"{sku}.{img_format}"
+                                product.image.save(filename, ContentFile(raw_bytes), save=False)
+                                total_images_saved += 1
+                            except Exception:
+                                pass
+                                
+                        product.save()
+                        
+            return JsonResponse({
+                'success': True,
+                'message': f'Importación de Movigom completada exitosamente. Se crearon {total_created} productos, se actualizaron {total_updated} y se guardaron {total_images_saved} fotos.'
+            })
         
     except Exception as e:
         return JsonResponse({'success': False, 'error': f'Error al procesar el archivo: {str(e)}'})

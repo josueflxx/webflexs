@@ -14,7 +14,7 @@
         <div class="header-actions" style="display: flex; gap: 10px; align-items: center;">
             <input type="file" id="triler-file-input" accept=".xlsx, .xls" style="display: none;" onchange="handleTrilerExcelUpload(this)">
             <button type="button" class="btn btn-primary" onclick="document.getElementById('triler-file-input').click()">
-                📂 Importar Excel Triler (OCE SRL)
+                📂 Importar Catálogo y Fotos Movigom
             </button>
             <a href="{% url 'admin_category_list' %}" class="btn btn-secondary">
                 ← Volver a Categorías
@@ -1757,7 +1757,7 @@
         if (!input.files || input.files.length === 0) return;
         
         const file = input.files[0];
-        if (!confirm(`¿Deseas importar y categorizar automáticamente los productos usando el archivo "${file.name}"?`)) {
+        if (!confirm(`¿Deseas importar el catálogo y las fotos de Movigom usando el archivo "${file.name}"?`)) {
             input.value = '';
             return;
         }
