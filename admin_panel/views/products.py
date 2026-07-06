@@ -1778,12 +1778,28 @@ def import_triler_excel(request):
                     for r in range(2, sheet.max_row + 1):
                         val_a = sheet.cell(row=r, column=1).value
                         
-                        if isinstance(val_a, str) and val_a.strip().startswith('▸'):
-                            active_subheader = val_a.strip().replace('▸', '').strip()
+                        # Check if this is a subheader row
+                        is_subheader = False
+                        if isinstance(val_a, str):
+                            val_a_str = val_a.strip()
+                            if val_a_str.startswith(('▸', '▪', '•', '▫', '◦', '▪️', '-', '*')):
+                                is_subheader = True
+                            elif len(val_a_str) > 40 and not sheet.cell(row=r, column=3).value:
+                                is_subheader = True
+                        
+                        if is_subheader:
+                            clean_header = val_a.strip()
+                            for b in ('▸', '▪', '•', '▫', '◦', '▪️', '-', '*'):
+                                clean_header = clean_header.replace(b, '')
+                            active_subheader = clean_header.strip()
                             continue
                             
                         sku = str(val_a).strip() if val_a is not None else ""
                         if not sku:
+                            continue
+                            
+                        # Skip if SKU is too long to avoid database constraints
+                        if len(sku) > 50:
                             continue
                             
                         marca_seccion = sheet.cell(row=r, column=2).value or ""

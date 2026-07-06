@@ -167,15 +167,30 @@ def main():
 
             val_a = sheet.cell(row=r, column=1).value
             
-            # Check if this is a subheader row (starts with '▸')
-            if isinstance(val_a, str) and val_a.strip().startswith('▸'):
-                active_subheader = val_a.strip().replace('▸', '').strip()
-                # print(f"  Row {r}: Switched subheader to '{active_subheader}'")
+            # Check if this is a subheader row
+            is_subheader = False
+            if isinstance(val_a, str):
+                val_a_str = val_a.strip()
+                if val_a_str.startswith(('▸', '▪', '•', '▫', '◦', '▪️', '-', '*')):
+                    is_subheader = True
+                elif len(val_a_str) > 40 and not sheet.cell(row=r, column=3).value:
+                    is_subheader = True
+            
+            if is_subheader:
+                clean_header = val_a.strip()
+                for b in ('▸', '▪', '•', '▫', '◦', '▪️', '-', '*'):
+                    clean_header = clean_header.replace(b, '')
+                active_subheader = clean_header.strip()
                 continue
                 
             # If SKU is completely empty, skip the row
             sku = clean_sku(val_a)
             if not sku:
+                continue
+                
+            # Skip if SKU is too long (> 50 characters) to avoid database errors
+            if len(sku) > 50:
+                print(f"  Warning: Skipping row {r} because SKU '{sku[:20]}...' exceeds 50 chars.")
                 continue
 
             # This is a product row!
