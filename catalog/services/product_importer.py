@@ -295,12 +295,14 @@ class ProductImporter(BaseImporter):
         preserve_existing_categories=True,
         allow_category_creation=False,
         update_mode=None,
+        is_global_base=False,
     ):
         super().__init__(file)
         self.required_columns = ["sku"]
         self._seen_skus = {}
         self._seen_row_data = {}
         self.column_mapping_mode = "headers"
+        self.is_global_base = _truthy_option(is_global_base, default=False)
         self.update_mode = update_mode or self.UPDATE_MODE_COMMERCIAL
         if self.update_mode not in self.UPDATE_MODES:
             self.update_mode = self.UPDATE_MODE_COMMERCIAL
@@ -766,6 +768,46 @@ class ProductImporter(BaseImporter):
             result.action = "error"
 
         return result
+
+    def run(self, dry_run=True, progress_callback=None):
+        results = super().run(dry_run=dry_run, progress_callback=progress_callback)
+        
+        if self.is_global_base:
+            seen_skus = set(self._seen_skus.keys())
+            omitted_qs = Product.objects.filter(is_active=True).exclude(sku__in=seen_skus)
+            
+            deactivated_count = 0
+            deactivated_skus = []
+            
+            if not dry_run:
+                deactivated_skus = list(omitted_qs.values_list('sku', flat=True))
+                deactivated_count = len(deactivated_skus)
+                
+                archived_category, _ = Category.objects.get_or_create(
+                    name="Bajas por Importación",
+                    defaults={
+                        'slug': 'bajas-por-importacion',
+                        'is_active': False,
+                        'visible_in_catalog': False,
+                    }
+                )
+                
+                from django.db import transaction
+                with transaction.atomic():
+                    for product in omitted_qs:
+                        product.is_active = False
+                        product.categories.clear()
+                        product.category = archived_category
+                        product.categories.add(archived_category)
+                        product.save()
+            else:
+                deactivated_skus = list(omitted_qs.values_list('sku', flat=True))
+                deactivated_count = len(deactivated_skus)
+                
+            results.deactivated_count = deactivated_count
+            results.deactivated_skus = deactivated_skus
+            
+        return results
 
     def check_and_run_parser(self, product, dry_run=False):
         """

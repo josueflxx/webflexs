@@ -184,6 +184,18 @@
         </div>
         {% endif %}
 
+        {% if form.is_global_base %}
+        <div class="form-group">
+            <div class="flex items-center gap-2">
+                {{ form.is_global_base }}
+                <label for="{{ form.is_global_base.id_for_label }}" style="margin-bottom: 0; cursor: pointer;">{{ form.is_global_base.label }}</label>
+            </div>
+            <small class="text-muted" style="display: block; margin-top: 5px; margin-left: 1.5rem;">
+                {{ form.is_global_base.help_text }}
+            </small>
+        </div>
+        {% endif %}
+
         <div class="form-actions">
             <button type="button" id="btnPreview" class="btn btn-info">Vista previa</button>
             <button type="submit" id="btnSubmit" class="btn btn-primary">Subir y procesar</button>
@@ -466,11 +478,13 @@
             const duplicates = result.duplicate_count || 0;
             const categoryWarnings = result.category_warnings || [];
             const executionId = result.execution_id || '-';
+            const deactivated = result.deactivated_count || 0;
 
             document.getElementById('resultSummary').innerHTML = `
                 <strong>Ejecucion:</strong> ${executionId}<br>
                 <strong>Creados:</strong> ${created}<br>
                 <strong>Actualizados:</strong> ${updated}<br>
+                <strong>Desactivados (Bajas):</strong> ${deactivated}<br>
                 <strong>Errores:</strong> ${errors}<br>
                 <strong>Duplicados registrados:</strong> ${duplicates}<br>
                 <strong>Categorias no encontradas:</strong> ${categoryWarnings.length}

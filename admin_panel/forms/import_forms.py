@@ -141,6 +141,17 @@ class ProductImportForm(ImportForm):
         ),
     )
 
+    is_global_base = forms.BooleanField(
+        required=False,
+        initial=False,
+        label="Importar como Base Global (Bajas automáticas)",
+        help_text=(
+            "Si se activa, cualquier producto activo en la base de datos que NO "
+            "esté presente en el archivo Excel de importación será desactivado y archivado "
+            "bajo la categoría especial 'Bajas por Importación'."
+        ),
+    )
+
 
 class ClientImportForm(ImportForm):
     pass

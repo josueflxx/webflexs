@@ -354,11 +354,16 @@ def _import_options_from_data(data, import_type):
     )
     if category_mode in {"hidden", "create"} and not allow_category_creation:
         category_mode = "existing"
+    is_global_base = _truthy(
+        data.get("is_global_base"),
+        default=False,
+    )
     return {
         "update_mode": update_mode,
         "category_mode": category_mode,
         "preserve_existing_categories": preserve_existing_categories,
         "allow_category_creation": allow_category_creation,
+        "is_global_base": is_global_base,
     }
 
 

@@ -651,6 +651,49 @@ class ProductImportTests(TestCase):
         self.assertIn("Fila 3 contra fila 2", product.attributes["Detalle duplicados importacion"])
         self.assertIn("Producto alternativo", product.attributes["Detalle duplicados importacion"])
 
+    def test_product_import_global_base_mode(self):
+        # Create an existing active product that WILL NOT be in the Excel
+        omitted_product = Product.objects.create(
+            sku="OMITTED-SKU",
+            name="Omitted Active Product",
+            price=Decimal("150.00"),
+            is_active=True
+        )
+        
+        # Create an existing active product that WILL be in the Excel
+        matching_product = Product.objects.create(
+            sku="MATCHING-SKU",
+            name="Matching Product",
+            price=Decimal("200.00"),
+            is_active=True
+        )
+        
+        # Build the Excel file containing only MATCHING-SKU
+        file_obj = build_import_workbook(
+            ["SKU", "Nombre", "Precio", "Proveedor"],
+            [
+                ["MATCHING-SKU", "Matching Product Updated", 250.00, "Proveedor A"],
+            ],
+        )
+        
+        # Run with is_global_base=True
+        result = ProductImporter(file_obj, is_global_base=True).run(dry_run=False)
+        
+        self.assertEqual(result.errors, 0)
+        self.assertEqual(result.updated, 1)
+        self.assertEqual(result.deactivated_count, 1)
+        self.assertEqual(result.deactivated_skus, ["OMITTED-SKU"])
+        
+        # Omitted product must be deactivated
+        omitted_product.refresh_from_db()
+        self.assertFalse(omitted_product.is_active)
+        self.assertEqual(omitted_product.category.name, "Bajas por Importación")
+        
+        # Matching product must remain active and updated
+        matching_product.refresh_from_db()
+        self.assertTrue(matching_product.is_active)
+        self.assertEqual(matching_product.price, Decimal("250.00"))
+
     def test_abrazadera_import_accepts_product_style_headers(self):
         file_obj = build_import_workbook(
             ["sku", "nombre", "precio", "stock", "categoria"],

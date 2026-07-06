@@ -193,11 +193,16 @@ def run_import_execution(
             importer.company = execution.company
         result = importer.run(dry_run=dry_run, progress_callback=progress_callback)
 
+        deactivated_count = getattr(result, "deactivated_count", 0)
+        deactivated_skus = getattr(result, "deactivated_skus", [])
+
         created_refs = collect_created_refs(import_type, result.row_results) if not dry_run else []
         result_data = {
             "created": result.created,
             "updated": result.updated,
             "errors": result.errors,
+            "deactivated_count": deactivated_count,
+            "deactivated_skus": deactivated_skus,
             "has_errors": result.has_errors,
             "row_errors": _result_row_errors(result),
             "duplicate_count": _duplicate_count(result),
