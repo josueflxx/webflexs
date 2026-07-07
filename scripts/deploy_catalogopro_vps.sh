@@ -5,12 +5,12 @@ set -e
 echo "=== Iniciando despliegue de CatalogoPRO en VPS ==="
 
 # 1. Asegurar directorios de producción
-mkdir -p /var/www/catalogopro/api /var/www/catalogopro/frontend
-rm -rf /var/www/catalogopro/frontend/*
+mkdir -p /var/www/catalogopro/api /var/www/catalogopro/editor-masivo
+rm -rf /var/www/catalogopro/editor-masivo/*
 
 # 2. Copiar archivos precompilados a producción
 cp -r /var/www/webflexs/catalogopro_build/api/* /var/www/catalogopro/api/
-cp -r /var/www/webflexs/catalogopro_build/frontend/* /var/www/catalogopro/frontend/
+cp -r /var/www/webflexs/catalogopro_build/frontend/* /var/www/catalogopro/editor-masivo/
 
 # 3. Dar permisos de ejecución al binario
 chmod +x /var/www/catalogopro/api/CatalogoPro.WebAPI
@@ -108,7 +108,7 @@ if last_brace == -1:
 blocks = '''
     # Frontend de CatalogoPRO
     location /editor-masivo {
-        alias /var/www/catalogopro/frontend;
+        root /var/www/catalogopro;
         try_files \$uri \$uri/ /editor-masivo/index.html;
     }
 
