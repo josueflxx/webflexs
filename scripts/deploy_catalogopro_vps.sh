@@ -72,11 +72,11 @@ Environment=ASPNETCORE_ENVIRONMENT=Production
 WantedBy=multi-user.target
 EOF
 
-# 5.5 Asegurar que el runtime de .NET 8 esté instalado en el VPS
-if ! command -v dotnet &> /dev/null; then
-    echo "Instalando .NET 8 runtime en el VPS..."
+# 5.5 Asegurar que el runtime de ASP.NET Core 8 esté instalado en el VPS
+if ! dpkg -s aspnetcore-runtime-8.0 &> /dev/null; then
+    echo "Instalando ASP.NET Core 8 runtime en el VPS..."
     apt-get update
-    apt-get install -y dotnet-runtime-8.0
+    apt-get install -y aspnetcore-runtime-8.0
 fi
 
 # Recargar y reiniciar el servicio
