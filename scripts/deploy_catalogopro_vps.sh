@@ -4,7 +4,8 @@ set -e
 
 echo "=== Iniciando despliegue de CatalogoPRO en VPS ==="
 
-# 1. Asegurar directorios de producción
+# 1. Asegurar directorios de producción y detener el servicio para liberar el binario
+systemctl stop catalogopro || true
 mkdir -p /var/www/catalogopro/api /var/www/catalogopro/editor-masivo
 rm -rf /var/www/catalogopro/editor-masivo/*
 
