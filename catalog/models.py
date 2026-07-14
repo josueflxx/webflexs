@@ -733,7 +733,7 @@ class SupplierCostHistory(models.Model):
 
     product_supplier = models.ForeignKey(
         ProductSupplier,
-        on_delete=models.PROTECT,
+        on_delete=models.CASCADE,
         related_name="cost_history",
         verbose_name="Oferta de proveedor",
     )
