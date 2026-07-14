@@ -943,6 +943,24 @@
                 </div>
                 {% endif %}
 
+                <div class="order-movement-inline">
+                    <div class="order-movement-inline-head">
+                        <span class="order-movement-inline-label">Historial completo del pedido</span>
+                        <span class="order-movement-inline-state">{{ order_timeline|length }} eventos</span>
+                    </div>
+                    <div class="order-movement-inline-history-list" style="display:grid;gap:8px;margin-top:10px;">
+                        {% for event in order_timeline %}
+                        <div style="padding:10px;border-left:3px solid {% if event.state == 'danger' %}#ef4444{% elif event.state == 'success' %}#22c55e{% else %}#3b82f6{% endif %};background:rgba(255,255,255,.025);border-radius:8px;">
+                            <strong>{{ event.title }}</strong>
+                            <div class="text-muted">{{ event.occurred_at|date:"d/m/Y H:i" }} · {{ event.actor }}{% if event.amount is not None %} · ${{ event.amount|floatformat:2 }}{% endif %}</div>
+                            {% if event.summary %}<small>{{ event.summary }}</small>{% endif %}
+                        </div>
+                        {% empty %}
+                        <span class="text-muted">Todavia no hay eventos registrados.</span>
+                        {% endfor %}
+                    </div>
+                </div>
+
             </section>
         </div>
 </section>

@@ -75,6 +75,28 @@
         </div>
 
         <div class="form-group">
+            <label class="form-label">Permisos por accion</label>
+            <div class="admin-role-grid" {% if admin_user.is_superuser %}style="opacity:.7;"{% endif %}>
+                {% for value, label, description in capability_choices %}
+                <label class="admin-role-card {% if value in current_capabilities %}is-selected{% endif %}">
+                    <input
+                        type="checkbox"
+                        name="admin_capabilities"
+                        value="{{ value }}"
+                        {% if value in current_capabilities %}checked{% endif %}
+                        {% if admin_user.is_superuser %}disabled{% endif %}
+                    >
+                    <div class="admin-role-card-copy">
+                        <strong>{{ label }}</strong>
+                        <small>{{ description }}</small>
+                    </div>
+                </label>
+                {% endfor %}
+            </div>
+            <small class="text-muted">Estos permisos se aplican ademas del flujo permitido por los roles operativos.</small>
+        </div>
+
+        <div class="form-group">
             <label class="form-label">
                 <input type="checkbox" name="is_staff" {% if admin_user.is_staff %}checked{% endif %}>
                 Acceso al panel admin

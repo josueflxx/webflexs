@@ -172,3 +172,31 @@ def retry_stuck_fiscal_documents_task():
         "recovered_submitting_ids": recovered_ids,
         "details": results,
     }
+
+
+@shared_task(name="core.create_automatic_backup_task")
+def create_automatic_backup_task():
+    """Create the scheduled portable backup and enforce retention."""
+    from core.services.backups import create_system_backup
+
+    result = create_system_backup()
+    return {
+        "manifest": str(result["manifest"]),
+        "artifacts": [str(path) for path in result["artifacts"]],
+        "removed": result["removed"],
+    }
+
+
+@shared_task(name="core.deliver_webhook_task")
+def deliver_webhook_task(delivery_id):
+    from core.services.webhooks import deliver_webhook
+
+    return deliver_webhook(delivery_id)
+
+
+@shared_task(name="core.retry_pending_webhooks_task")
+def retry_pending_webhooks_task():
+    from core.services.webhooks import retry_pending_webhooks
+
+    ids = retry_pending_webhooks()
+    return {"queued": len(ids), "delivery_ids": ids}

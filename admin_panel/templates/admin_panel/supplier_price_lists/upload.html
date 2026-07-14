@@ -1,0 +1,22 @@
+{% extends 'admin_panel/base.html' %}
+{% block page_title %}Nueva lista de proveedor{% endblock %}
+{% block extra_css %}{% include 'admin_panel/supplier_price_lists/_styles.html' %}{% endblock %}
+{% block content %}
+<div class="spl-shell">
+    <div class="spl-head">
+        <div><h2>Nueva lista de proveedor</h2><p class="spl-muted">El archivo original queda guardado para auditoria. Esta carga todavia no modifica costos.</p></div>
+        <a class="btn btn-secondary" href="{% url 'admin_supplier_price_list_batches' %}">Volver al historial</a>
+    </div>
+    <div class="spl-card">
+        <form method="post" enctype="multipart/form-data" class="spl-form">
+            {% csrf_token %}
+            {{ form.as_p }}
+            <button class="btn btn-primary" type="submit">Guardar y mapear columnas</button>
+        </form>
+    </div>
+    <div class="spl-card spl-muted">
+        <strong>Reglas de seguridad</strong>
+        <p>Se aceptan XLSX y CSV. Debes mapear un costo y al menos un identificador. No se crean productos y los ausentes no se desactivan automaticamente.</p>
+    </div>
+</div>
+{% endblock %}

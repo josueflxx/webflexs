@@ -95,6 +95,10 @@ def get_user_companies(user):
         return Company.objects.none()
     if getattr(user, "is_staff", False):
         queryset = Company.objects.filter(is_active=True)
+        strict_scope = bool(
+            getattr(settings, "STRICT_COMPANY_ISOLATION", True)
+            or getattr(settings, "ADMIN_COMPANY_ACCESS_REQUIRE_EXPLICIT", True)
+        )
         if not getattr(user, "is_superuser", False) and admin_company_access_table_available():
             scoped_company_ids = list(
                 AdminCompanyAccess.objects.filter(
@@ -103,8 +107,10 @@ def get_user_companies(user):
                     company__is_active=True,
                 ).values_list("company_id", flat=True)
             )
-            if scoped_company_ids:
+            if scoped_company_ids or strict_scope:
                 queryset = queryset.filter(pk__in=scoped_company_ids)
+        elif not getattr(user, "is_superuser", False) and strict_scope:
+            return Company.objects.none()
         access_map = getattr(settings, "ADMIN_COMPANY_ACCESS", {}) or {}
         allowed_slugs = access_map.get(str(getattr(user, "username", "")).strip().lower())
         if allowed_slugs:
@@ -112,7 +118,7 @@ def get_user_companies(user):
             for slug in allowed_slugs:
                 query |= Q(slug__iexact=slug)
             queryset = queryset.filter(query)
-        elif getattr(settings, "ADMIN_COMPANY_ACCESS_REQUIRE_EXPLICIT", False) and not getattr(user, "is_superuser", False):
+        elif strict_scope and not getattr(user, "is_superuser", False) and not admin_company_access_table_available():
             return Company.objects.none()
         return queryset.order_by("name")
     profile = getattr(user, "client_profile", None)
@@ -164,15 +170,10 @@ def get_active_company(request):
             set_active_company(request, companies[0])
             return companies[0]
         if len(companies) > 1:
-            if not getattr(user, "is_staff", False):
-                preferred_company = get_preferred_client_company(companies)
-                if preferred_company:
-                    set_active_company(request, preferred_company)
-                    return preferred_company
             return None
         return None
 
-    if getattr(settings, "ADMIN_COMPANY_ACCESS_REQUIRE_EXPLICIT", False):
+    if getattr(settings, "STRICT_COMPANY_ISOLATION", True):
         return None
     return get_default_company()
 

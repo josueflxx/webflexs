@@ -11,7 +11,7 @@ from django.utils import timezone
 from django.utils.cache import patch_vary_headers
 from django.core.cache import cache
 from django.db import DatabaseError
-from django.http import JsonResponse
+from django.http import HttpResponseForbidden, JsonResponse
 from django.shortcuts import redirect
 from django.urls import reverse
 from core.models import UserActivity
@@ -159,6 +159,9 @@ class ActiveCompanyMiddleware:
         "/api/admin-presence-touch/",
         "/api/admin-alerts/",
         "/api/go-offline/",
+        # API v1 resolves tenant scope from company_id/company query params and
+        # applies fail-closed querysets when no authorized company is resolved.
+        "/api/v1/",
         "/static/",
         "/media/",
         "/django-admin/",
@@ -183,29 +186,24 @@ class ActiveCompanyMiddleware:
 
                 companies = list(get_user_companies(request.user))
                 active_company = get_active_company(request)
-                if companies and active_company is None:
-                    requires_explicit_company = (
-                        (path.startswith("/api/") or path == reverse("admin_dashboard"))
-                        and not getattr(request.user, "is_superuser", False)
-                    )
-                    if not requires_explicit_company:
-                        fallback_company = get_default_company()
-                        if fallback_company and any(company.pk == fallback_company.pk for company in companies):
-                            set_active_company(request, fallback_company)
-                            return self.get_response(request)
-                        if companies:
-                            set_active_company(request, companies[0])
-                            return self.get_response(request)
-
+                if active_company is None:
                     wants_json = "application/json" in request.headers.get("Accept", "")
                     if wants_json or path.startswith("/api/"):
                         return JsonResponse(
-                            {"detail": "Empresa activa requerida.", "requires_company": True},
-                            status=400,
+                            {
+                                "detail": "Empresa activa requerida."
+                                if companies
+                                else "No tienes empresas habilitadas.",
+                                "requires_company": bool(companies),
+                            },
+                            status=400 if companies else 403,
                         )
                     params = urlencode({"next": request.get_full_path()})
                     if hasattr(request, "_messages"):
-                        messages.info(request, "Selecciona una empresa para continuar.")
+                        if companies:
+                            messages.info(request, "Selecciona una empresa para continuar.")
+                        else:
+                            messages.error(request, "No tienes empresas habilitadas para operar.")
                     return redirect(f"{reverse('select_company')}?{params}")
         return self.get_response(request)
 
@@ -294,3 +292,100 @@ class AuthSessionIsolationMiddleware:
             response["Expires"] = "0"
 
         return response
+
+
+class StaffCapabilityMiddleware:
+    """Enforce action-level permissions on sensitive internal routes."""
+
+    EXACT_CAPABILITIES = {
+        "admin_dashboard": "view_dashboard",
+        "admin_global_search": "global_search",
+        "admin_order_create_from_panel": "sell",
+        "admin_order_request_convert": "sell",
+        "admin_client_quick_order": "sell",
+        "admin_order_invoice_open": "issue_documents",
+        "admin_order_request_generate_quote": "issue_documents",
+        "admin_order_request_generate_invoice": "issue_documents",
+        "admin_order_internal_document_create": "issue_documents",
+        "admin_order_fiscal_create_local": "issue_documents",
+        "admin_order_fiscal_register_external": "issue_documents",
+        "admin_order_export_saas": "export_data",
+        "admin_payment_export_saas": "export_data",
+        "admin_client_export": "export_data",
+        "admin_catalog_excel_template_download": "export_data",
+        "admin_export_products_diagnostic": "export_data",
+        "admin_backup_center": "manage_backups",
+        "admin_backup_run": "manage_backups",
+        "admin_webhook_center": "manage_integrations",
+    }
+    PREFIX_CAPABILITIES = {
+        "admin_import_": "run_imports",
+        "admin_user_": "manage_users",
+    }
+    FISCAL_MUTATIONS = {
+        "admin_fiscal_document_emit",
+        "admin_fiscal_document_close",
+        "admin_fiscal_document_reopen",
+        "admin_fiscal_document_void",
+        "admin_fiscal_document_delete",
+        "admin_fiscal_point_create",
+        "admin_fiscal_point_edit",
+        "admin_fiscal_point_toggle_active",
+        "admin_fiscal_point_set_default",
+    }
+    ORDER_MUTATIONS = {
+        "admin_order_item_add",
+        "admin_order_item_edit",
+        "admin_order_item_delete",
+        "admin_order_delete",
+        "admin_order_hard_delete",
+    }
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        return self.get_response(request)
+
+    def process_view(self, request, view_func, view_args, view_kwargs):
+        user = getattr(request, "user", None)
+        if not user or not user.is_authenticated or not user.is_staff or user.is_superuser:
+            return None
+        if not request.path.startswith("/admin-panel/"):
+            return None
+
+        match = getattr(request, "resolver_match", None)
+        view_name = getattr(match, "url_name", "") or ""
+        required = self.EXACT_CAPABILITIES.get(view_name)
+        if not required:
+            for prefix, capability in self.PREFIX_CAPABILITIES.items():
+                if view_name.startswith(prefix):
+                    required = capability
+                    break
+        if not required and view_name in self.FISCAL_MUTATIONS:
+            required = "issue_documents"
+        if not required and view_name in self.ORDER_MUTATIONS:
+            required = "manage_orders"
+        if (
+            not required
+            and view_name == "admin_order_detail"
+            and request.method == "POST"
+        ):
+            required = (
+                "cancel_orders"
+                if str(request.POST.get("status", "")).strip() == "cancelled"
+                else "manage_orders"
+            )
+        if not required:
+            return None
+
+        from core.services.authorization import has_capability
+
+        if has_capability(user, required):
+            return None
+        if "application/json" in request.headers.get("Accept", ""):
+            return JsonResponse(
+                {"detail": "No tienes permiso para realizar esta accion.", "capability": required},
+                status=403,
+            )
+        return HttpResponseForbidden("No tienes permiso para realizar esta accion.")

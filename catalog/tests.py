@@ -3,11 +3,11 @@ from io import BytesIO
 
 from django.contrib.auth.models import User
 from django.core.cache import cache
-from django.test import SimpleTestCase, TestCase
+from django.test import Client, SimpleTestCase, TestCase
 from django.urls import reverse
 from openpyxl import Workbook, load_workbook
 
-from accounts.models import ClientProfile
+from accounts.models import ClientCompany, ClientProfile
 from catalog.services.abrazadera_importer import AbrazaderaImporter
 from catalog.services.clamp_code import generarCodigo, parsearCodigo
 from catalog.services.clamp_measure_parser import parse_clamp_measure
@@ -15,6 +15,7 @@ from catalog.services.product_importer import ProductImporter
 from catalog.models import Category, CategoryProductOrder, ClampMeasureRequest, ClampSpecs, Product
 from core.models import CatalogExcelTemplate, CatalogExcelTemplateColumn, CatalogExcelTemplateSheet
 from core.services.catalog_excel_exporter import build_catalog_workbook
+from core.services.company_context import get_default_company
 from orders.models import CartItem
 
 
@@ -29,6 +30,29 @@ def build_import_workbook(headers, rows):
     workbook.save(output)
     output.seek(0)
     return output
+
+
+class CompanyLinkedCatalogTestClient(Client):
+    """Attach legacy client fixtures to the default company before login."""
+
+    def force_login(self, user, backend=None):
+        profile = getattr(user, "client_profile", None)
+        company = get_default_company() if profile else None
+        if profile and company and not profile.company_links.filter(is_active=True).exists():
+            ClientCompany.objects.create(
+                client_profile=profile,
+                company=company,
+                is_active=True,
+            )
+        super().force_login(user, backend=backend)
+        if company:
+            session = self.session
+            session["active_company_id"] = company.pk
+            session.save()
+
+
+class CatalogTestCase(TestCase):
+    client_class = CompanyLinkedCatalogTestClient
 
 
 class ClampCodeTests(SimpleTestCase):
@@ -128,7 +152,7 @@ class ClampCodeTests(SimpleTestCase):
             )
 
 
-class ProductImportTests(TestCase):
+class ProductImportTests(CatalogTestCase):
     def test_product_import_accepts_header_file_without_supplier(self):
         file_obj = build_import_workbook(
             ["SKU", "Nombre", "Precio", "Stock", "Categoria", "Atributos"],
@@ -726,7 +750,7 @@ class ProductImportTests(TestCase):
         self.assertFalse(Product.objects.filter(sku="BUJE-IMP").exists())
 
 
-class ClampMeasureRequestFlowTests(TestCase):
+class ClampMeasureRequestFlowTests(CatalogTestCase):
     def setUp(self):
         self.client_user = User.objects.create_user(username="cliente_medidas", password="secret123")
         ClientProfile.objects.create(
@@ -802,8 +826,8 @@ class ClampMeasureRequestFlowTests(TestCase):
 
         response = self.client.get(reverse("catalog_clamp_request"), follow=True)
 
-        self.assertRedirects(response, reverse("catalog"))
-        self.assertContains(response, "solo para clientes aprobados o administradores")
+        self.assertRedirects(response, reverse("home"))
+        self.assertContains(response, "No tenes empresas habilitadas")
 
     def test_authenticated_client_sees_confirmed_price_in_history(self):
         user = User.objects.create_user(username="cliente_medida", password="secret123")
@@ -930,7 +954,7 @@ class ClampMeasureRequestFlowTests(TestCase):
         self.assertFalse(CartItem.objects.filter(cart__user=user).exists())
 
 
-class CatalogAdvancedSearchTests(TestCase):
+class CatalogAdvancedSearchTests(CatalogTestCase):
     def setUp(self):
         self.category = Category.objects.create(name="Abrazaderas", slug="abrazaderas", is_active=True)
 
@@ -1038,7 +1062,7 @@ class CatalogAdvancedSearchTests(TestCase):
         self.assertIn("ABT3480220S", skus)
 
 
-class CatalogCategoryVisibilityTests(TestCase):
+class CatalogCategoryVisibilityTests(CatalogTestCase):
     def setUp(self):
         cache.clear()
 
@@ -1307,9 +1331,14 @@ class CatalogCategoryVisibilityTests(TestCase):
         self.assertContains(response, "Suspension &gt; Bujes")
 
 
-class ProductDetailTemplateTests(TestCase):
+class ProductDetailTemplateTests(CatalogTestCase):
     def setUp(self):
         self.user = User.objects.create_user(username="cliente_template", password="secret123")
+        ClientProfile.objects.create(
+            user=self.user,
+            company_name="Cliente Template",
+            is_approved=True,
+        )
         self.category = Category.objects.create(name="Plantillas", is_active=True)
         self.product = Product.objects.create(
             id=24950,
@@ -1349,7 +1378,7 @@ class ProductDetailTemplateTests(TestCase):
         self.assertEqual([product.sku for product in response.context["related_products"]], ["TPL-REL"])
 
 
-class CatalogClientExcelDownloadTests(TestCase):
+class CatalogClientExcelDownloadTests(CatalogTestCase):
     def setUp(self):
         self.category = Category.objects.create(name="Categoria XLSX", slug="categoria-xlsx", is_active=True)
         self.product = Product.objects.create(
@@ -1460,7 +1489,7 @@ class CatalogClientExcelDownloadTests(TestCase):
         self.assertContains(response, "No hay una plantilla de Excel publicada para clientes")
 
 
-class CatalogExcelGroupedExportTests(TestCase):
+class CatalogExcelGroupedExportTests(CatalogTestCase):
     def test_clamp_measure_parser_normalizes_name_variants(self):
         result = parse_clamp_measure(
             "ABT7880320S",
@@ -2300,7 +2329,7 @@ class CatalogExcelGroupedExportTests(TestCase):
         self.assertEqual(stats["rows_by_sheet"]["Catalogo"], 0)
 
 
-class CatalogHowToMeasureTests(TestCase):
+class CatalogHowToMeasureTests(CatalogTestCase):
     def test_how_to_measure_view_returns_ok_and_uses_correct_template(self):
         response = self.client.get(reverse("catalog_how_to_measure"))
         self.assertEqual(response.status_code, 200)

@@ -61,6 +61,9 @@
                 <button type="button" class="btn btn-outline btn-sm" onclick="loadProductFilters()">Cargar vista</button>
                 {% if user.is_superuser %}
                 <a href="{% url 'admin_product_create' %}" class="btn btn-primary">+ Nuevo producto</a>
+                {% if 'manage_products' in admin_capabilities %}
+                <a href="{% url 'admin_product_duplicate_reviews' %}" class="btn btn-outline">Revisar duplicados</a>
+                {% endif %}
                 {% endif %}
             </div>
         </div>

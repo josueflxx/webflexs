@@ -293,6 +293,7 @@ from core.services.operational_timeline import (
     build_sales_workspace,
     resolve_sales_workspace_active_keys,
 )
+from orders.services.timeline import build_order_timeline
 
 
 
@@ -3001,12 +3002,14 @@ def order_detail(request, pk):
         order_pending_amount=order.get_pending_amount(),
         client_profile_id=order_client_profile.pk if order_client_profile else None,
     )
+    order_timeline = build_order_timeline(order, include_internal=True, limit=100)
 
     return render(request, 'admin_panel/orders/detail.html', {
         'order': order,
         'order_items': order_items,
         'status_choices': Order.STATUS_CHOICES,
         'status_history': order.status_history.all()[:20],
+        'order_timeline': order_timeline,
         'order_paid_amount': order.get_paid_amount(),
         'order_pending_amount': order.get_pending_amount(),
         'order_is_paid': order.is_paid(),

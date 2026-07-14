@@ -1,6 +1,10 @@
 """
 Core app models - site-wide settings, analytics, and operation logs.
 """
+import secrets
+import uuid
+from urllib.parse import urlsplit
+
 from django.db import models, transaction
 from django.conf import settings
 from django.core.cache import cache
@@ -270,6 +274,36 @@ class AdminCompanyAccess(models.Model):
 
     def __str__(self):
         return f"{self.user.username} -> {self.company.name}"
+
+
+class AdminCapabilityProfile(models.Model):
+    """Explicit action-level permissions for one internal operator."""
+
+    user = models.OneToOneField(
+        "auth.User",
+        on_delete=models.CASCADE,
+        related_name="admin_capability_profile",
+        verbose_name="Operador",
+    )
+    capabilities = models.JSONField(default=list, blank=True, verbose_name="Capacidades")
+    is_configured = models.BooleanField(default=False, verbose_name="Configurado")
+    updated_by = models.ForeignKey(
+        "auth.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="admin_capability_profiles_updated",
+        verbose_name="Actualizado por",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Permisos granulares de operador"
+        verbose_name_plural = "Permisos granulares de operadores"
+
+    def __str__(self):
+        return f"Permisos de {self.user.username}"
 
 
 class Warehouse(models.Model):
@@ -1363,6 +1397,14 @@ class AdminAuditLog(models.Model):
         blank=True,
         related_name="admin_audit_logs",
     )
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="admin_audit_logs",
+        verbose_name="Empresa",
+    )
     action = models.CharField(max_length=120)
     target_type = models.CharField(max_length=80, blank=True)
     target_id = models.CharField(max_length=120, blank=True)
@@ -1379,6 +1421,135 @@ class AdminAuditLog(models.Model):
 
     def __str__(self):
         return f"{self.created_at:%Y-%m-%d %H:%M} {self.action}"
+
+
+def generate_webhook_secret():
+    return secrets.token_urlsafe(36)
+
+
+class WebhookEndpoint(models.Model):
+    """Company-scoped destination subscribed to signed business events."""
+
+    EVENT_ORDER_CREATED = "order.created"
+    EVENT_ORDER_STATUS_CHANGED = "order.status_changed"
+    EVENT_PAYMENT_RECORDED = "payment.recorded"
+    EVENT_FISCAL_UPDATED = "fiscal.updated"
+    EVENT_CHOICES = [
+        (EVENT_ORDER_CREATED, "Pedido creado"),
+        (EVENT_ORDER_STATUS_CHANGED, "Estado de pedido actualizado"),
+        (EVENT_PAYMENT_RECORDED, "Pago registrado"),
+        (EVENT_FISCAL_UPDATED, "Comprobante fiscal actualizado"),
+    ]
+
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name="webhook_endpoints",
+        verbose_name="Empresa",
+    )
+    name = models.CharField(max_length=100, verbose_name="Nombre")
+    target_url = models.URLField(max_length=500, verbose_name="URL destino")
+    secret = models.CharField(max_length=128, default=generate_webhook_secret, verbose_name="Secreto")
+    events = models.JSONField(default=list, blank=True, verbose_name="Eventos")
+    is_active = models.BooleanField(default=True, verbose_name="Activo")
+    created_by = models.ForeignKey(
+        "auth.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="webhook_endpoints_created",
+        verbose_name="Creado por",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Webhook"
+        verbose_name_plural = "Webhooks"
+        ordering = ["company_id", "name", "id"]
+        unique_together = [("company", "name")]
+        indexes = [
+            models.Index(fields=["company", "is_active"]),
+        ]
+
+    def clean(self):
+        parsed = urlsplit(str(self.target_url or ""))
+        allow_insecure = bool(getattr(settings, "WEBHOOK_ALLOW_INSECURE_URLS", settings.DEBUG))
+        if parsed.scheme not in ({"http", "https"} if allow_insecure else {"https"}):
+            raise ValidationError({"target_url": "La URL del webhook debe usar HTTPS."})
+        if parsed.username or parsed.password:
+            raise ValidationError({"target_url": "La URL no puede incluir credenciales."})
+        if not isinstance(self.events, (list, tuple, set)):
+            raise ValidationError({"events": "Los eventos deben enviarse como una lista."})
+        valid_events = {value for value, _label in self.EVENT_CHOICES}
+        invalid_events = set(self.events or []) - valid_events
+        if invalid_events:
+            raise ValidationError({"events": "Hay eventos de webhook no reconocidos."})
+
+    def save(self, *args, **kwargs):
+        if not kwargs.get("raw"):
+            self.events = sorted(set(self.events or []))
+            self.full_clean()
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.company.name} - {self.name}"
+
+
+class WebhookDelivery(models.Model):
+    """Durable delivery record with retry metadata."""
+
+    STATUS_PENDING = "pending"
+    STATUS_DELIVERED = "delivered"
+    STATUS_FAILED = "failed"
+    STATUS_CHOICES = [
+        (STATUS_PENDING, "Pendiente"),
+        (STATUS_DELIVERED, "Entregado"),
+        (STATUS_FAILED, "Fallido"),
+    ]
+
+    endpoint = models.ForeignKey(
+        WebhookEndpoint,
+        on_delete=models.CASCADE,
+        related_name="deliveries",
+        verbose_name="Webhook",
+    )
+    event_id = models.UUIDField(default=uuid.uuid4, editable=False, verbose_name="ID de evento")
+    event_type = models.CharField(max_length=60, db_index=True, verbose_name="Evento")
+    payload = models.JSONField(default=dict, verbose_name="Contenido")
+    status = models.CharField(
+        max_length=12,
+        choices=STATUS_CHOICES,
+        default=STATUS_PENDING,
+        db_index=True,
+        verbose_name="Estado",
+    )
+    attempts_count = models.PositiveIntegerField(default=0, verbose_name="Intentos")
+    response_status = models.PositiveIntegerField(null=True, blank=True, verbose_name="HTTP")
+    response_excerpt = models.CharField(max_length=500, blank=True, verbose_name="Respuesta")
+    last_error = models.CharField(max_length=500, blank=True, verbose_name="Ultimo error")
+    next_retry_at = models.DateTimeField(null=True, blank=True, db_index=True, verbose_name="Proximo intento")
+    delivered_at = models.DateTimeField(null=True, blank=True, verbose_name="Entregado el")
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Entrega de webhook"
+        verbose_name_plural = "Entregas de webhooks"
+        ordering = ["-created_at", "-id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["endpoint", "event_id"],
+                name="unique_webhook_event_per_endpoint",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["status", "next_retry_at"]),
+            models.Index(fields=["endpoint", "created_at"]),
+        ]
+
+    def __str__(self):
+        return f"{self.event_type} -> {self.endpoint.name} ({self.status})"
 
 
 class ImportExecution(models.Model):

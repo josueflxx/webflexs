@@ -60,6 +60,9 @@ from catalog.models import (
     CategoryProductOrder,
     ClampMeasureRequest,
     Supplier,
+    ProductSupplier,
+    ProductDuplicateReview,
+    SupplierCostHistory,
     PriceList,
     Brand,
     BrandRubro,
@@ -249,6 +252,18 @@ from core.services.pricing import resolve_effective_price_list
 import traceback
 import logging
 from core.decorators import superuser_required_for_modifications
+from core.services.authorization import (
+    CAP_CHANGE_PRICES,
+    CAP_MANAGE_PRODUCTS,
+    capability_required,
+    has_capability,
+)
+from catalog.services.product_suppliers import (
+    set_preferred_supplier_preserving_terms,
+    sync_preferred_supplier_cost,
+    upsert_product_supplier_offer,
+)
+from catalog.services.duplicate_detection import refresh_duplicate_reviews, review_duplicate
 
 logger = logging.getLogger(__name__)
 PRIMARY_SUPERADMIN_USERNAME = getattr(settings, "ADMIN_PRIMARY_SUPERADMIN_USERNAME", "josueflexs")
@@ -419,6 +434,7 @@ def product_create(request):
             name = request.POST.get('name', '').strip()
             supplier_name = clean_supplier_name(request.POST.get('supplier', ''))
             supplier_obj = ensure_supplier(supplier_name) if supplier_name else None
+            supplier_code = request.POST.get('supplier_code', '').strip()
             price = request.POST.get('price', '0')
             cost = request.POST.get('cost', '0')
             stock = request.POST.get('stock', '0')
@@ -493,6 +509,18 @@ def product_create(request):
                     attributes=attributes_data,
                     image=uploaded_image,
                 )
+                if supplier_obj:
+                    upsert_product_supplier_offer(
+                        product=product,
+                        supplier=supplier_obj,
+                        current_cost=cost_value,
+                        supplier_code=supplier_code,
+                        source="admin_product_form",
+                        changed_by=request.user,
+                        reason="Alta manual de producto.",
+                        is_preferred=True,
+                        match_method="manual",
+                    )
                 assign_categories_to_product(product, selected_category_ids, primary_category_id)
                 blocks_payload = request.POST.get('product_blocks_json', '{}')
                 try:
@@ -545,6 +573,23 @@ def product_edit(request, pk):
     }
     existing_blocks_json = json.dumps(existing_blocks)
     supplier_suggestions = list(Supplier.objects.order_by('name').values_list('name', flat=True)[:400])
+    preferred_supplier_offer = ProductSupplier.objects.filter(
+        product=product,
+        is_preferred=True,
+    ).first()
+    supplier_offers = list(
+        ProductSupplier.objects.filter(product=product)
+        .select_related('supplier')
+        .prefetch_related(
+            Prefetch(
+                'cost_history',
+                queryset=SupplierCostHistory.objects.select_related('changed_by').order_by('-created_at')[:5],
+                to_attr='recent_cost_history',
+            )
+        )
+        .order_by('-is_preferred', 'supplier__name')
+    )
+    supplier_options = Supplier.objects.filter(is_active=True).order_by('name')
     
     if request.method == 'POST':
         try:
@@ -552,6 +597,7 @@ def product_edit(request, pk):
             product.name = request.POST.get('name', '').strip()
             product.supplier = clean_supplier_name(request.POST.get('supplier', ''))
             product.supplier_ref = ensure_supplier(product.supplier) if product.supplier else None
+            supplier_code = request.POST.get('supplier_code', '').strip()
             product.cost = parse_admin_decimal_input(request.POST.get('cost', '0'), 'Costo', min_value='0')
             product.price = parse_admin_decimal_input(request.POST.get('price', '0'), 'Precio', min_value='0')
             product.stock = parse_int_value(request.POST.get('stock', '0'), 'Stock', min_value=0)
@@ -630,6 +676,21 @@ def product_edit(request, pk):
                 new_image_applied = True
             
             product.save()
+            if product.supplier_ref_id:
+                set_preferred_supplier_preserving_terms(
+                    product=product,
+                    supplier=product.supplier_ref,
+                    current_cost=product.cost,
+                    supplier_code=supplier_code,
+                    source="admin_product_form",
+                    changed_by=request.user,
+                    reason="Edicion manual de producto.",
+                    match_method="manual",
+                )
+            else:
+                ProductSupplier.objects.filter(product=product, is_preferred=True).update(
+                    is_preferred=False
+                )
             assign_categories_to_product(product, selected_category_ids, primary_category_id)
             blocks_payload = request.POST.get('product_blocks_json', '{}')
             try:
@@ -672,9 +733,194 @@ def product_edit(request, pk):
         'category_options': category_options,
         'selected_category_ids': selected_category_ids,
         'supplier_suggestions': supplier_suggestions,
+        'preferred_supplier_offer': preferred_supplier_offer,
+        'supplier_offers': supplier_offers,
+        'supplier_options': supplier_options,
         'action': 'Editar',
         'existing_blocks_json': existing_blocks_json,
     })
+
+
+@staff_member_required
+@capability_required(CAP_MANAGE_PRODUCTS)
+@require_POST
+def product_supplier_offer_save(request, pk):
+    product = get_object_or_404(Product, pk=pk)
+    supplier = get_object_or_404(Supplier, pk=request.POST.get("supplier_id"))
+    try:
+        cost = parse_admin_decimal_input(
+            request.POST.get("current_cost", "0"),
+            "Costo",
+            min_value="0",
+        )
+        discount = parse_admin_decimal_input(
+            request.POST.get("discount_percentage", "0"),
+            "Descuento",
+            min_value="0",
+            max_value="100",
+        )
+        bonus = parse_admin_decimal_input(
+            request.POST.get("bonus_percentage", "0"),
+            "Bonificacion",
+            min_value="0",
+            max_value="100",
+        )
+        tax = parse_admin_decimal_input(
+            request.POST.get("tax_percentage", "0"),
+            "Impuesto",
+            min_value="0",
+            max_value="100",
+        )
+        minimum_quantity = parse_int_value(
+            request.POST.get("minimum_purchase_quantity", "1"),
+            "Compra minima",
+            min_value=1,
+        )
+        lead_time_days = parse_int_value(
+            request.POST.get("lead_time_days", "0"),
+            "Demora",
+            min_value=0,
+        )
+        currency = request.POST.get("currency", ProductSupplier.CURRENCY_ARS).strip().upper()
+        status = request.POST.get("status", ProductSupplier.STATUS_ACTIVE).strip()
+        if status not in dict(ProductSupplier.STATUS_CHOICES):
+            raise ValueError("Estado de relacion invalido.")
+        price_list_date_raw = request.POST.get("price_list_date", "").strip()
+        price_list_date = parse_date(price_list_date_raw) if price_list_date_raw else None
+        if price_list_date_raw and price_list_date is None:
+            raise ValueError("Fecha de lista invalida.")
+
+        offer, history = upsert_product_supplier_offer(
+            product=product,
+            supplier=supplier,
+            current_cost=cost,
+            currency=currency,
+            supplier_code=request.POST.get("supplier_code", "").strip(),
+            supplier_description=request.POST.get("supplier_description", "").strip(),
+            discount_percentage=discount,
+            bonus_percentage=bonus,
+            tax_percentage=tax,
+            minimum_purchase_quantity=minimum_quantity,
+            is_available=request.POST.get("is_available") == "on",
+            lead_time_days=lead_time_days,
+            price_list_date=price_list_date,
+            source="admin_supplier_offer",
+            changed_by=request.user,
+            reason=request.POST.get("change_reason", "").strip() or "Edicion de relacion producto-proveedor.",
+            is_preferred=request.POST.get("is_preferred") == "on",
+            status=status,
+            match_confidence=100,
+            match_method="manual",
+            notes=request.POST.get("notes", "").strip(),
+        )
+    except Exception as exc:
+        messages.error(request, f"No se pudo guardar la relacion: {exc}")
+        return redirect("admin_product_edit", pk=product.pk)
+
+    log_admin_action(
+        request,
+        action="product_supplier_offer_update",
+        target_type="product_supplier",
+        target_id=offer.pk,
+        details={
+            "product_id": product.pk,
+            "supplier_id": supplier.pk,
+            "cost_history_id": history.pk if history else None,
+            "current_cost": str(offer.current_cost),
+            "currency": offer.currency,
+            "is_preferred": offer.is_preferred,
+        },
+    )
+    messages.success(
+        request,
+        "Relacion con proveedor guardada"
+        + (" y cambio de costo registrado." if history else ". No hubo cambio de costo."),
+    )
+    return redirect("admin_product_edit", pk=product.pk)
+
+
+@staff_member_required
+@capability_required(CAP_MANAGE_PRODUCTS)
+def product_duplicate_reviews(request):
+    """Review queue only; no action on this screen merges or edits products."""
+    if request.method == "POST":
+        result = refresh_duplicate_reviews(apply=True)
+        log_admin_action(
+            request,
+            action="product_duplicate_scan",
+            target_type="product_duplicate_review",
+            details={
+                "candidates": result["candidates"],
+                "created": result["created"],
+                "pending_refreshed": result["pending_refreshed"],
+                "reviewed_preserved": result["reviewed_preserved"],
+            },
+        )
+        messages.success(
+            request,
+            f"Analisis completado: {result['candidates']} pares detectados; "
+            f"{result['created']} revisiones nuevas. No se modificaron productos.",
+        )
+        return redirect("admin_product_duplicate_reviews")
+
+    status_filter = request.GET.get("status", ProductDuplicateReview.STATUS_PENDING).strip()
+    allowed_statuses = {value for value, _label in ProductDuplicateReview.STATUS_CHOICES}
+    reviews = ProductDuplicateReview.objects.select_related(
+        "primary_product",
+        "candidate_product",
+        "reviewed_by",
+    )
+    if status_filter in allowed_statuses:
+        reviews = reviews.filter(status=status_filter)
+    else:
+        status_filter = ""
+    paginator = Paginator(reviews, 50)
+    page_obj = paginator.get_page(request.GET.get("page"))
+    counts = ProductDuplicateReview.objects.aggregate(
+        pending=Count("id", filter=Q(status=ProductDuplicateReview.STATUS_PENDING)),
+        confirmed=Count("id", filter=Q(status=ProductDuplicateReview.STATUS_CONFIRMED)),
+        dismissed=Count("id", filter=Q(status=ProductDuplicateReview.STATUS_NOT_DUPLICATE)),
+    )
+    return render(
+        request,
+        "admin_panel/products/duplicate_reviews.html",
+        {
+            "page_obj": page_obj,
+            "status_filter": status_filter,
+            "status_choices": ProductDuplicateReview.STATUS_CHOICES,
+            "counts": counts,
+        },
+    )
+
+
+@staff_member_required
+@capability_required(CAP_MANAGE_PRODUCTS)
+@require_POST
+def product_duplicate_review_decision(request, pk):
+    review = get_object_or_404(ProductDuplicateReview, pk=pk)
+    try:
+        review_duplicate(
+            review,
+            status=request.POST.get("status", "").strip(),
+            user=request.user,
+            notes=request.POST.get("notes", "").strip(),
+        )
+    except ValueError as exc:
+        messages.error(request, str(exc))
+        return redirect("admin_product_duplicate_reviews")
+    log_admin_action(
+        request,
+        action="product_duplicate_review",
+        target_type="product_duplicate_review",
+        target_id=review.pk,
+        details={
+            "primary_product_id": review.primary_product_id,
+            "candidate_product_id": review.candidate_product_id,
+            "status": review.status,
+        },
+    )
+    messages.success(request, "Revision guardada. No se modifico ni fusiono ningun producto.")
+    return redirect("admin_product_duplicate_reviews")
 
 
 @staff_member_required
@@ -950,13 +1196,18 @@ def supplier_list(request):
         ["name", "normalized_name", "slug"],
     )
     suppliers_qs = suppliers_qs.annotate(
-        products_count=Count('products', distinct=True),
-        active_products_count=Count('products', filter=Q(products__is_active=True), distinct=True),
-        stock_total=Sum('products__stock'),
+        products_count=Count('product_offers__product', distinct=True),
+        active_products_count=Count(
+            'product_offers__product',
+            filter=Q(product_offers__product__is_active=True),
+            distinct=True,
+        ),
+        stock_total=Sum('product_offers__product__stock'),
     ).order_by('name')
 
     uncategorized_products_count = Product.objects.filter(
-        Q(supplier='') | Q(supplier__isnull=True) | Q(supplier_ref__isnull=True)
+        supplier_ref__isnull=True,
+        supplier_offers__isnull=True,
     ).count()
 
     paginator = Paginator(suppliers_qs, 40)
@@ -1174,13 +1425,17 @@ def supplier_unassigned(request):
     Products without supplier assigned.
     """
     products = Product.objects.select_related('category').prefetch_related('categories').filter(
-        Q(supplier='') | Q(supplier__isnull=True) | Q(supplier_ref__isnull=True)
+        supplier_ref__isnull=True,
+        supplier_offers__isnull=True,
     ).order_by('name')
 
     products, search = apply_admin_text_search(
         products,
         request.GET.get('q', ''),
-        ["sku", "name", "description", "supplier", "supplier_ref__name"],
+        [
+            "sku", "name", "description", "supplier", "supplier_ref__name",
+            "supplier_offers__supplier_code", "supplier_offers__supplier_description",
+        ],
     )
 
     paginator = Paginator(products, 40)
@@ -3368,8 +3623,14 @@ def category_manage_products(request, pk):
         qs, search = apply_admin_text_search(
             qs,
             req_data.get('q', ''),
-            ["sku", "name", "description", "supplier", "supplier_ref__name"],
+            [
+                "sku", "name", "description", "supplier", "supplier_ref__name",
+                "supplier_offers__supplier__name", "supplier_offers__supplier_code",
+                "supplier_offers__supplier_description",
+            ],
         )
+        if search:
+            qs = qs.distinct()
 
         status = req_data.get('status')
         if status == 'active':
@@ -3950,8 +4211,10 @@ def product_grid_editor(request):
     if f_supplier:
         products = products.filter(
             Q(supplier__icontains=f_supplier) | 
-            Q(supplier_ref__name__icontains=f_supplier)
-        )
+            Q(supplier_ref__name__icontains=f_supplier) |
+            Q(supplier_offers__supplier__name__icontains=f_supplier) |
+            Q(supplier_offers__supplier_code__icontains=f_supplier)
+        ).distinct()
         
     if active_filter:
         products = products.filter(is_active=(active_filter == '1'))
@@ -4025,7 +4288,6 @@ def product_grid_editor(request):
 
 
 @staff_member_required
-@superuser_required_for_modifications
 @csrf_protect
 @require_POST
 def product_grid_update_cell(request):
@@ -4040,6 +4302,18 @@ def product_grid_update_cell(request):
     product_id = data.get('product_id')
     field = data.get('field')
     value = data.get('value')
+
+    if not request.user.is_superuser:
+        if field not in {'cost', 'price'}:
+            return JsonResponse(
+                {'status': 'error', 'message': 'Esta operacion requiere acceso de superadministrador.'},
+                status=403,
+            )
+        if not has_capability(request.user, CAP_CHANGE_PRICES):
+            return JsonResponse(
+                {'status': 'error', 'message': 'No tienes permiso para modificar costos o precios.'},
+                status=403,
+            )
 
     if not product_id or not field:
         return JsonResponse({'status': 'error', 'message': 'Faltan parámetros requeridos.'}, status=400)
@@ -4072,6 +4346,13 @@ def product_grid_update_cell(request):
                 old_value_repr = str(product.cost)
                 product.cost = val_clean
                 product.save(update_fields=['cost', 'updated_at'])
+                sync_preferred_supplier_cost(
+                    product,
+                    val_clean,
+                    source="product_grid",
+                    changed_by=request.user,
+                    reason="Edicion de costo en grilla.",
+                )
 
             elif field == 'price':
                 val_clean = parse_admin_decimal_input(value, 'Precio', min_value='0')
@@ -4097,6 +4378,20 @@ def product_grid_update_cell(request):
                 product.supplier = val_clean
                 product.supplier_ref = ensure_supplier(val_clean) if val_clean else None
                 product.save(update_fields=['supplier', 'supplier_ref', 'updated_at'])
+                if product.supplier_ref_id:
+                    set_preferred_supplier_preserving_terms(
+                        product=product,
+                        supplier=product.supplier_ref,
+                        current_cost=product.cost,
+                        source="product_grid",
+                        changed_by=request.user,
+                        reason="Cambio de proveedor en grilla.",
+                        match_method="manual",
+                    )
+                else:
+                    ProductSupplier.objects.filter(product=product, is_preferred=True).update(
+                        is_preferred=False
+                    )
 
             elif field == 'category_id':
                 if value == '' or value is None:
@@ -4159,7 +4454,6 @@ def product_grid_update_cell(request):
 
 
 @staff_member_required
-@superuser_required_for_modifications
 @csrf_protect
 @require_POST
 def product_grid_bulk_update(request):
@@ -4173,6 +4467,19 @@ def product_grid_bulk_update(request):
 
     product_ids = data.get('product_ids', [])
     action = data.get('action')
+
+    if not request.user.is_superuser:
+        target_field = data.get('target_field')
+        if action != 'markup' or target_field not in {'cost', 'price'}:
+            return JsonResponse(
+                {'status': 'error', 'message': 'Esta operacion requiere acceso de superadministrador.'},
+                status=403,
+            )
+        if not has_capability(request.user, CAP_CHANGE_PRICES):
+            return JsonResponse(
+                {'status': 'error', 'message': 'No tienes permiso para modificar costos o precios.'},
+                status=403,
+            )
 
     if not product_ids or not action:
         return JsonResponse({'status': 'error', 'message': 'Faltan parámetros requeridos.'}, status=400)
@@ -4208,6 +4515,14 @@ def product_grid_bulk_update(request):
                         new_val = Decimal('0.00')
                     setattr(prod, target_field, new_val)
                     prod.save(update_fields=[target_field, 'updated_at'])
+                    if target_field == 'cost':
+                        sync_preferred_supplier_cost(
+                            prod,
+                            new_val,
+                            source="product_grid_bulk",
+                            changed_by=request.user,
+                            reason=f"Recargo masivo de costo: {pct}%.",
+                        )
                     updated_count += 1
 
                 log_admin_action(
@@ -4253,6 +4568,20 @@ def product_grid_bulk_update(request):
                     prod.supplier = supplier_name
                     prod.supplier_ref = supplier_obj
                     prod.save(update_fields=['supplier', 'supplier_ref', 'updated_at'])
+                    if supplier_obj:
+                        set_preferred_supplier_preserving_terms(
+                            product=prod,
+                            supplier=supplier_obj,
+                            current_cost=prod.cost,
+                            source="product_grid_bulk",
+                            changed_by=request.user,
+                            reason="Asignacion masiva de proveedor.",
+                            match_method="manual_bulk",
+                        )
+                    else:
+                        ProductSupplier.objects.filter(product=prod, is_preferred=True).update(
+                            is_preferred=False
+                        )
                     updated_count += 1
 
                 log_admin_action(
@@ -4492,6 +4821,6 @@ def product_grid_remove_brand_association(request):
     })
 
 
-__all__ = ['product_list', 'product_create', 'product_edit', 'product_delete', 'product_toggle_active', 'product_bulk_category_update', 'product_bulk_status_update', 'product_bulk_image_update', 'supplier_list', 'supplier_detail', 'supplier_bulk_action', 'supplier_export', 'supplier_print', 'supplier_unassigned', 'supplier_toggle_active', 'category_list', 'category_reorder', 'category_sort_roots_alpha', 'category_bulk_status', 'category_create', 'category_create_ajax', 'category_edit', 'category_move', 'category_delete', 'category_attribute_create', 'category_attribute_edit', 'category_attribute_delete', 'category_manage_products', 'category_products_reorder', 'get_category_attributes', 'parse_product_description', 'parse_clamp_code_api', 'products_uncategorized', 'import_triler_excel', 'rollback_movigom_import', 'product_grid_editor', 'product_grid_update_cell', 'product_grid_bulk_update', 'product_grid_add_brand_association', 'product_grid_remove_brand_association']
+__all__ = ['product_list', 'product_create', 'product_edit', 'product_supplier_offer_save', 'product_duplicate_reviews', 'product_duplicate_review_decision', 'product_delete', 'product_toggle_active', 'product_bulk_category_update', 'product_bulk_status_update', 'product_bulk_image_update', 'supplier_list', 'supplier_detail', 'supplier_bulk_action', 'supplier_export', 'supplier_print', 'supplier_unassigned', 'supplier_toggle_active', 'category_list', 'category_reorder', 'category_sort_roots_alpha', 'category_bulk_status', 'category_create', 'category_create_ajax', 'category_edit', 'category_move', 'category_delete', 'category_attribute_create', 'category_attribute_edit', 'category_attribute_delete', 'category_manage_products', 'category_products_reorder', 'get_category_attributes', 'parse_product_description', 'parse_clamp_code_api', 'products_uncategorized', 'import_triler_excel', 'rollback_movigom_import', 'product_grid_editor', 'product_grid_update_cell', 'product_grid_bulk_update', 'product_grid_add_brand_association', 'product_grid_remove_brand_association']
 
 

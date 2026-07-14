@@ -1,12 +1,15 @@
 """
 Catalog app models - products, categories, and clamp specs.
 """
+from django.conf import settings
 from django.db import models
 from django.core.exceptions import ValidationError
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db.models import Q
 from django.utils import timezone
 from django.utils.text import slugify
 import re
+import uuid
 
 from core.models import Company
 
@@ -513,9 +516,7 @@ class Product(models.Model):
         return self.categories.order_by("name").first()
 
     def get_linked_categories(self):
-        """
-        Return direct categories (many-to-many) with a safe fallback to legacy primary.
-        """
+        """Return direct categories with a safe fallback to the legacy primary."""
         linked_categories = list(self.categories.all())
         if self.category_id and all(cat.id != self.category_id for cat in linked_categories):
             linked_categories.append(self.category)
@@ -533,12 +534,7 @@ class Product(models.Model):
 
     @classmethod
     def catalog_visible(cls, queryset=None, include_uncategorized=False):
-        """
-        Products visible in public catalog:
-        - Product must be active
-        - At least one assigned category must be active and visible in catalog.
-          Uncategorized products stay hidden unless explicitly requested.
-        """
+        """Return active products linked to at least one visible category."""
         qs = queryset if queryset is not None else cls.objects.all()
         return qs.filter(is_active=True).filter(
             cls.catalog_visibility_q(include_uncategorized=include_uncategorized)
@@ -553,31 +549,614 @@ class Product(models.Model):
         return any(cat.is_active and cat.visible_in_catalog for cat in linked_categories)
 
     def extract_attributes_from_description(self):
-        """
-        Extract attributes from description based on category regex patterns.
-        """
+        """Extract attributes from the description using category regex patterns."""
         category = self.get_primary_category()
         if not category or not self.description:
             return {}
 
         extracted = {}
         attrs = category.attributes.exclude(regex_pattern__isnull=True).exclude(regex_pattern="")
-
         for attr in attrs:
             try:
                 match = re.search(attr.regex_pattern, self.description, re.IGNORECASE)
                 if match:
-                    val = match.group(1) if match.groups() else match.group(0)
-                    extracted[attr.slug] = val.strip()
+                    value = match.group(1) if match.groups() else match.group(0)
+                    extracted[attr.slug] = value.strip()
             except re.error:
                 continue
-
         if extracted:
             if self.attributes is None:
                 self.attributes = {}
             self.attributes.update(extracted)
-
         return extracted
+
+
+class ProductSupplier(models.Model):
+    """Commercial data for one product as offered by one supplier."""
+
+    STATUS_ACTIVE = "active"
+    STATUS_REVIEW = "review"
+    STATUS_INACTIVE = "inactive"
+    STATUS_CHOICES = [
+        (STATUS_ACTIVE, "Activo"),
+        (STATUS_REVIEW, "Revisar"),
+        (STATUS_INACTIVE, "Inactivo"),
+    ]
+    CURRENCY_ARS = "ARS"
+    CURRENCY_USD = "USD"
+    CURRENCY_EUR = "EUR"
+    CURRENCY_CHOICES = [
+        (CURRENCY_ARS, "Peso argentino"),
+        (CURRENCY_USD, "Dolar estadounidense"),
+        (CURRENCY_EUR, "Euro"),
+    ]
+
+    product = models.ForeignKey(
+        Product,
+        on_delete=models.CASCADE,
+        related_name="supplier_offers",
+        verbose_name="Producto",
+    )
+    supplier = models.ForeignKey(
+        Supplier,
+        on_delete=models.PROTECT,
+        related_name="product_offers",
+        verbose_name="Proveedor",
+    )
+    supplier_code = models.CharField(max_length=100, blank=True, verbose_name="Codigo proveedor")
+    normalized_supplier_code = models.CharField(max_length=100, blank=True, db_index=True)
+    supplier_description = models.CharField(
+        max_length=255,
+        blank=True,
+        verbose_name="Descripcion del proveedor",
+    )
+    current_cost = models.DecimalField(
+        max_digits=14,
+        decimal_places=4,
+        default=0,
+        validators=[MinValueValidator(0)],
+        verbose_name="Costo actual",
+    )
+    currency = models.CharField(
+        max_length=3,
+        choices=CURRENCY_CHOICES,
+        default=CURRENCY_ARS,
+        verbose_name="Moneda",
+    )
+    discount_percentage = models.DecimalField(
+        max_digits=7,
+        decimal_places=4,
+        default=0,
+        validators=[MinValueValidator(0), MaxValueValidator(100)],
+        verbose_name="Descuento %",
+    )
+    bonus_percentage = models.DecimalField(
+        max_digits=7,
+        decimal_places=4,
+        default=0,
+        validators=[MinValueValidator(0), MaxValueValidator(100)],
+        verbose_name="Bonificacion %",
+    )
+    tax_percentage = models.DecimalField(
+        max_digits=7,
+        decimal_places=4,
+        default=0,
+        validators=[MinValueValidator(0), MaxValueValidator(100)],
+        verbose_name="Impuesto %",
+    )
+    final_cost = models.DecimalField(
+        max_digits=14,
+        decimal_places=4,
+        default=0,
+        validators=[MinValueValidator(0)],
+        verbose_name="Costo final",
+    )
+    minimum_purchase_quantity = models.PositiveIntegerField(
+        default=1,
+        verbose_name="Compra minima",
+    )
+    is_available = models.BooleanField(default=True, verbose_name="Disponible")
+    lead_time_days = models.PositiveIntegerField(default=0, verbose_name="Demora en dias")
+    price_list_date = models.DateField(null=True, blank=True, verbose_name="Fecha de lista")
+    source_file = models.CharField(max_length=255, blank=True, verbose_name="Archivo origen")
+    source_row = models.PositiveIntegerField(null=True, blank=True, verbose_name="Fila origen")
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default=STATUS_ACTIVE,
+        db_index=True,
+        verbose_name="Estado",
+    )
+    is_preferred = models.BooleanField(default=False, db_index=True, verbose_name="Preferido")
+    match_confidence = models.PositiveSmallIntegerField(
+        default=100,
+        validators=[MaxValueValidator(100)],
+        verbose_name="Confianza de coincidencia",
+    )
+    match_method = models.CharField(max_length=50, blank=True, verbose_name="Metodo de coincidencia")
+    notes = models.TextField(blank=True, verbose_name="Notas")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Proveedor de producto"
+        verbose_name_plural = "Proveedores de productos"
+        ordering = ["product_id", "-is_preferred", "supplier__name"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["product", "supplier"],
+                name="uniq_product_supplier_offer",
+            ),
+            models.UniqueConstraint(
+                fields=["supplier", "normalized_supplier_code"],
+                condition=~Q(normalized_supplier_code=""),
+                name="uniq_supplier_external_product_code",
+            ),
+            models.UniqueConstraint(
+                fields=["product"],
+                condition=Q(is_preferred=True),
+                name="uniq_preferred_supplier_per_product",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["supplier", "status"]),
+            models.Index(fields=["product", "status"]),
+            models.Index(fields=["supplier_code"]),
+            models.Index(fields=["updated_at"]),
+        ]
+
+    @staticmethod
+    def normalize_supplier_code(value):
+        return re.sub(r"\s+", " ", str(value or "").strip()).upper()
+
+    def clean(self):
+        super().clean()
+        if self.is_preferred and self.status == self.STATUS_INACTIVE:
+            raise ValidationError("Una oferta inactiva no puede ser el proveedor preferido.")
+
+    def save(self, *args, **kwargs):
+        self.supplier_code = re.sub(r"\s+", " ", str(self.supplier_code or "").strip())
+        self.normalized_supplier_code = self.normalize_supplier_code(self.supplier_code)
+        if not kwargs.get("raw", False):
+            self.full_clean()
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.product.sku} | {self.supplier.name}"
+
+
+class SupplierCostHistory(models.Model):
+    """Immutable audit trail for supplier cost changes."""
+
+    product_supplier = models.ForeignKey(
+        ProductSupplier,
+        on_delete=models.PROTECT,
+        related_name="cost_history",
+        verbose_name="Oferta de proveedor",
+    )
+    previous_cost = models.DecimalField(
+        max_digits=14,
+        decimal_places=4,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(0)],
+        verbose_name="Costo anterior",
+    )
+    new_cost = models.DecimalField(
+        max_digits=14,
+        decimal_places=4,
+        validators=[MinValueValidator(0)],
+        verbose_name="Costo nuevo",
+    )
+    difference_amount = models.DecimalField(
+        max_digits=15,
+        decimal_places=4,
+        default=0,
+        verbose_name="Diferencia nominal",
+    )
+    difference_percentage = models.DecimalField(
+        max_digits=11,
+        decimal_places=4,
+        null=True,
+        blank=True,
+        verbose_name="Diferencia porcentual",
+    )
+    currency = models.CharField(max_length=3, default=ProductSupplier.CURRENCY_ARS)
+    source = models.CharField(max_length=50, default="manual", verbose_name="Origen")
+    source_file = models.CharField(max_length=255, blank=True, verbose_name="Archivo origen")
+    source_row = models.PositiveIntegerField(null=True, blank=True, verbose_name="Fila origen")
+    import_execution = models.ForeignKey(
+        "core.ImportExecution",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="supplier_cost_changes",
+    )
+    changed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="supplier_cost_changes",
+    )
+    reason = models.CharField(max_length=255, blank=True, verbose_name="Motivo")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Historial de costo de proveedor"
+        verbose_name_plural = "Historial de costos de proveedores"
+        ordering = ["-created_at", "-id"]
+        indexes = [
+            models.Index(fields=["product_supplier", "created_at"]),
+            models.Index(fields=["source", "created_at"]),
+        ]
+
+    def __str__(self):
+        return f"{self.product_supplier} | {self.previous_cost} -> {self.new_cost}"
+
+
+class ProductDuplicateReview(models.Model):
+    """Human review queue; it never merges or mutates products automatically."""
+
+    REASON_SKU = "normalized_sku"
+    REASON_NAME = "normalized_name"
+    REASON_SUPPLIER_CODE = "supplier_code"
+    REASON_CHOICES = [
+        (REASON_SKU, "SKU normalizado"),
+        (REASON_NAME, "Nombre normalizado"),
+        (REASON_SUPPLIER_CODE, "Codigo de proveedor"),
+    ]
+    STATUS_PENDING = "pending"
+    STATUS_NOT_DUPLICATE = "not_duplicate"
+    STATUS_CONFIRMED = "confirmed_duplicate"
+    STATUS_CHOICES = [
+        (STATUS_PENDING, "Pendiente"),
+        (STATUS_NOT_DUPLICATE, "No son duplicados"),
+        (STATUS_CONFIRMED, "Duplicado confirmado"),
+    ]
+
+    primary_product = models.ForeignKey(
+        Product,
+        on_delete=models.CASCADE,
+        related_name="duplicate_reviews_as_primary",
+    )
+    candidate_product = models.ForeignKey(
+        Product,
+        on_delete=models.CASCADE,
+        related_name="duplicate_reviews_as_candidate",
+    )
+    reason = models.CharField(max_length=30, choices=REASON_CHOICES)
+    confidence = models.PositiveSmallIntegerField(
+        default=0,
+        validators=[MaxValueValidator(100)],
+    )
+    evidence = models.JSONField(default=dict, blank=True)
+    status = models.CharField(
+        max_length=30,
+        choices=STATUS_CHOICES,
+        default=STATUS_PENDING,
+        db_index=True,
+    )
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="product_duplicate_reviews",
+    )
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    notes = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Revision de producto duplicado"
+        verbose_name_plural = "Revisiones de productos duplicados"
+        ordering = ["status", "-confidence", "created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["primary_product", "candidate_product", "reason"],
+                name="uniq_product_duplicate_review_reason",
+            ),
+            models.CheckConstraint(
+                condition=~Q(primary_product=models.F("candidate_product")),
+                name="duplicate_review_distinct_products",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["status", "confidence"]),
+            models.Index(fields=["primary_product", "candidate_product"]),
+        ]
+
+    def clean(self):
+        super().clean()
+        if self.primary_product_id and self.candidate_product_id:
+            if self.primary_product_id == self.candidate_product_id:
+                raise ValidationError("Un producto no puede compararse consigo mismo.")
+            if self.primary_product_id > self.candidate_product_id:
+                raise ValidationError("El producto principal debe tener el ID menor del par.")
+
+    def __str__(self):
+        return f"{self.primary_product.sku} / {self.candidate_product.sku} ({self.get_status_display()})"
+
+
+def supplier_price_list_upload_path(instance, filename):
+    safe_name = re.sub(r"[^A-Za-z0-9._-]+", "_", str(filename or "lista")).strip("._")
+    safe_name = (safe_name or "lista")[-180:]
+    stamp = timezone.now()
+    return f"supplier_price_lists/{stamp:%Y/%m}/{uuid.uuid4().hex}_{safe_name}"
+
+
+class SupplierImportProfile(models.Model):
+    """Reusable source-column mapping owned by one supplier."""
+
+    supplier = models.ForeignKey(
+        Supplier,
+        on_delete=models.CASCADE,
+        related_name="import_profiles",
+        verbose_name="Proveedor",
+    )
+    name = models.CharField(max_length=120, verbose_name="Nombre")
+    sheet_name = models.CharField(max_length=120, blank=True, verbose_name="Hoja")
+    header_row = models.PositiveIntegerField(default=1, verbose_name="Fila de encabezado")
+    column_mapping = models.JSONField(default=dict, verbose_name="Mapeo de columnas")
+    default_currency = models.CharField(
+        max_length=3,
+        choices=ProductSupplier.CURRENCY_CHOICES,
+        default=ProductSupplier.CURRENCY_ARS,
+        verbose_name="Moneda predeterminada",
+    )
+    is_active = models.BooleanField(default=True, db_index=True, verbose_name="Activo")
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_supplier_import_profiles",
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="updated_supplier_import_profiles",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Perfil de importacion de proveedor"
+        verbose_name_plural = "Perfiles de importacion de proveedores"
+        ordering = ["supplier__name", "name"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["supplier", "name"],
+                name="uniq_supplier_import_profile_name",
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.supplier.name} | {self.name}"
+
+
+class SupplierPriceListBatch(models.Model):
+    """One uploaded supplier list from mapping through confirmed application."""
+
+    STATUS_UPLOADED = "uploaded"
+    STATUS_PREVIEWED = "previewed"
+    STATUS_APPLIED = "applied"
+    STATUS_FAILED = "failed"
+    STATUS_CANCELLED = "cancelled"
+    STATUS_CHOICES = [
+        (STATUS_UPLOADED, "Subido"),
+        (STATUS_PREVIEWED, "Previsualizado"),
+        (STATUS_APPLIED, "Aplicado"),
+        (STATUS_FAILED, "Fallido"),
+        (STATUS_CANCELLED, "Cancelado"),
+    ]
+
+    supplier = models.ForeignKey(
+        Supplier,
+        on_delete=models.PROTECT,
+        related_name="price_list_batches",
+        verbose_name="Proveedor",
+    )
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.PROTECT,
+        related_name="supplier_price_list_batches",
+        verbose_name="Empresa de carga",
+    )
+    profile = models.ForeignKey(
+        SupplierImportProfile,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="batches",
+    )
+    import_execution = models.OneToOneField(
+        "core.ImportExecution",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="supplier_price_list_batch",
+    )
+    source_file = models.FileField(
+        upload_to=supplier_price_list_upload_path,
+        max_length=300,
+        verbose_name="Archivo original",
+    )
+    original_filename = models.CharField(max_length=255)
+    file_sha256 = models.CharField(max_length=64, db_index=True)
+    file_size = models.PositiveBigIntegerField(default=0)
+    sheet_name = models.CharField(max_length=120, blank=True)
+    header_row = models.PositiveIntegerField(default=1)
+    column_mapping = models.JSONField(default=dict, blank=True)
+    default_currency = models.CharField(
+        max_length=3,
+        choices=ProductSupplier.CURRENCY_CHOICES,
+        default=ProductSupplier.CURRENCY_ARS,
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default=STATUS_UPLOADED,
+        db_index=True,
+    )
+    preview_signature = models.CharField(max_length=64, blank=True)
+    summary = models.JSONField(default=dict, blank=True)
+    error_message = models.TextField(blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_supplier_price_list_batches",
+    )
+    applied_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="applied_supplier_price_list_batches",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    previewed_at = models.DateTimeField(null=True, blank=True)
+    applied_at = models.DateTimeField(null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Lista de precios de proveedor"
+        verbose_name_plural = "Listas de precios de proveedores"
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["supplier", "status", "created_at"]),
+            models.Index(fields=["company", "created_at"]),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["supplier", "file_sha256"],
+                condition=Q(status="applied"),
+                name="uniq_applied_supplier_file_hash",
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.supplier.name} | {self.original_filename} | {self.get_status_display()}"
+
+
+class SupplierPriceListRow(models.Model):
+    """Original, normalized, proposed and applied state for one source row."""
+
+    TYPE_SOURCE = "source"
+    TYPE_ABSENT = "absent"
+    TYPE_CHOICES = [(TYPE_SOURCE, "Fila de archivo"), (TYPE_ABSENT, "Ausente en lista")]
+    CHANGE_INVALID = "invalid"
+    CHANGE_UNMATCHED = "unmatched"
+    CHANGE_REVIEW = "review"
+    CHANGE_UNCHANGED = "unchanged"
+    CHANGE_INCREASE = "increase"
+    CHANGE_DECREASE = "decrease"
+    CHANGE_NEW_RELATION = "new_relation"
+    CHANGE_ABSENT = "absent"
+    CHANGE_CHOICES = [
+        (CHANGE_INVALID, "Invalido"),
+        (CHANGE_UNMATCHED, "Sin identificar"),
+        (CHANGE_REVIEW, "Requiere revision"),
+        (CHANGE_UNCHANGED, "Sin cambios"),
+        (CHANGE_INCREASE, "Aumento"),
+        (CHANGE_DECREASE, "Disminucion"),
+        (CHANGE_NEW_RELATION, "Nueva relacion"),
+        (CHANGE_ABSENT, "No aparece en lista"),
+    ]
+    DECISION_APPLY = "apply"
+    DECISION_SKIP = "skip"
+    DECISION_REVIEW = "review"
+    DECISION_CHOICES = [
+        (DECISION_APPLY, "Aplicar"),
+        (DECISION_SKIP, "Omitir"),
+        (DECISION_REVIEW, "Revisar"),
+    ]
+
+    batch = models.ForeignKey(
+        SupplierPriceListBatch,
+        on_delete=models.CASCADE,
+        related_name="rows",
+    )
+    row_number = models.PositiveIntegerField()
+    row_type = models.CharField(max_length=12, choices=TYPE_CHOICES, default=TYPE_SOURCE)
+    raw_data = models.JSONField(default=dict, blank=True)
+    normalized_data = models.JSONField(default=dict, blank=True)
+    supplier_code = models.CharField(max_length=100, blank=True, db_index=True)
+    supplier_description = models.CharField(max_length=255, blank=True)
+    matched_product = models.ForeignKey(
+        Product,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="supplier_price_list_rows",
+    )
+    product_supplier = models.ForeignKey(
+        ProductSupplier,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="price_list_rows",
+    )
+    match_method = models.CharField(max_length=50, blank=True)
+    match_confidence = models.PositiveSmallIntegerField(
+        default=0,
+        validators=[MaxValueValidator(100)],
+    )
+    change_type = models.CharField(max_length=20, choices=CHANGE_CHOICES, db_index=True)
+    previous_cost = models.DecimalField(max_digits=14, decimal_places=4, null=True, blank=True)
+    proposed_cost = models.DecimalField(max_digits=14, decimal_places=4, null=True, blank=True)
+    proposed_final_cost = models.DecimalField(max_digits=14, decimal_places=4, null=True, blank=True)
+    difference_amount = models.DecimalField(max_digits=15, decimal_places=4, null=True, blank=True)
+    difference_percentage = models.DecimalField(max_digits=11, decimal_places=4, null=True, blank=True)
+    currency = models.CharField(max_length=3, default=ProductSupplier.CURRENCY_ARS)
+    discount_percentage = models.DecimalField(max_digits=7, decimal_places=4, default=0)
+    bonus_percentage = models.DecimalField(max_digits=7, decimal_places=4, default=0)
+    tax_percentage = models.DecimalField(max_digits=7, decimal_places=4, default=0)
+    is_available = models.BooleanField(default=True)
+    lead_time_days = models.PositiveIntegerField(default=0)
+    price_list_date = models.DateField(null=True, blank=True)
+    warnings = models.JSONField(default=list, blank=True)
+    decision = models.CharField(
+        max_length=12,
+        choices=DECISION_CHOICES,
+        default=DECISION_SKIP,
+        db_index=True,
+    )
+    applied = models.BooleanField(default=False, db_index=True)
+    cost_history = models.ForeignKey(
+        SupplierCostHistory,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="supplier_price_list_rows",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Fila de lista de proveedor"
+        verbose_name_plural = "Filas de listas de proveedores"
+        ordering = ["row_number"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["batch", "row_number"],
+                name="uniq_supplier_batch_row_number",
+            )
+        ]
+        indexes = [
+            models.Index(fields=["batch", "change_type"]),
+            models.Index(fields=["batch", "decision"]),
+            models.Index(fields=["matched_product", "batch"]),
+        ]
+
+    def __str__(self):
+        return f"Lote {self.batch_id} fila {self.row_number}: {self.get_change_type_display()}"
 
 
 class CategoryProductOrder(models.Model):
@@ -1027,4 +1606,3 @@ class BrandSubrubroProductOrder(models.Model):
 
     def __str__(self):
         return f"{self.brand_subrubro_id}:{self.product_id} #{self.sort_order}"
-

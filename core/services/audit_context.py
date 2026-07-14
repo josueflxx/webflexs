@@ -8,11 +8,11 @@ _state = local()
 
 
 def set_request_context(request):
+    from core.services.client_ip import get_client_ip
+
     user = getattr(request, "user", None)
     _state.user = user if getattr(user, "is_authenticated", False) else None
-    _state.ip_address = request.META.get("HTTP_X_FORWARDED_FOR", "").split(",")[0].strip() or request.META.get(
-        "REMOTE_ADDR", ""
-    )
+    _state.ip_address = get_client_ip(request)
     _state.user_agent = request.META.get("HTTP_USER_AGENT", "")[:255]
 
 

@@ -72,9 +72,6 @@ def get_user_order_roles(user):
     if ordered_roles:
         return ordered_roles
 
-    # Backward compatibility: existing staff users without groups keep full control.
-    if user.is_staff:
-        return [ROLE_ADMIN]
     return []
 
 
@@ -138,6 +135,12 @@ def can_user_transition_order(user, order, new_status):
 
     if not order.can_transition_to(normalized_target):
         return False, "Transicion de estado no permitida por workflow."
+
+    if normalized_target == Order.STATUS_CANCELLED and getattr(user, "is_staff", False):
+        from core.services.authorization import CAP_CANCEL_ORDERS, has_capability
+
+        if not has_capability(user, CAP_CANCEL_ORDERS):
+            return False, "No tienes permiso para anular pedidos."
 
     if ROLE_ADMIN not in roles:
         transition_allowed = False

@@ -7,7 +7,7 @@ from unittest.mock import Mock, patch
 from django.contrib.auth.models import Group, User
 from django.core import mail
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import TestCase, override_settings
+from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 from django.db import connection
 from django.utils import timezone
@@ -35,7 +35,37 @@ from orders.models import ClampQuotation, Order, OrderItem, OrderRequest, OrderS
 from orders.services.workflow import ROLE_FACTURACION, ROLE_VENTAS
 
 
-class ClientOrderHistoryViewTests(TestCase):
+class AuthorizedAdminTestClient(Client):
+    """Give legacy panel fixtures an explicit role and company context at login."""
+
+    def force_login(self, user, backend=None):
+        if user.is_staff and not user.is_superuser:
+            recognized_roles = {"admin", "administracion", "ventas", "deposito", "facturacion"}
+            if not user.groups.filter(name__in=recognized_roles).exists():
+                admin_group, _created = Group.objects.get_or_create(name="admin")
+                user.groups.add(admin_group)
+            if not AdminCompanyAccess.objects.filter(user=user, is_active=True).exists():
+                for company in Company.objects.filter(is_active=True):
+                    AdminCompanyAccess.objects.update_or_create(
+                        user=user,
+                        company=company,
+                        defaults={"is_active": True},
+                    )
+
+        super().force_login(user, backend=backend)
+        if user.is_staff:
+            company = get_default_company()
+            if company:
+                session = self.session
+                session["active_company_id"] = company.pk
+                session.save()
+
+
+class AdminPanelTestCase(TestCase):
+    client_class = AuthorizedAdminTestClient
+
+
+class ClientOrderHistoryViewTests(AdminPanelTestCase):
     def setUp(self):
         self.staff = User.objects.create_user(
             username='staff_history',
@@ -842,7 +872,7 @@ class ClientOrderHistoryViewTests(TestCase):
         self.assertEqual(response.url, reverse('admin_fiscal_document_detail', args=[invoice_document.pk]))
 
 
-class DashboardHubRankingTests(TestCase):
+class DashboardHubRankingTests(AdminPanelTestCase):
     def setUp(self):
         self.staff = User.objects.create_user(
             username='staff_dashboard_rankings',
@@ -933,7 +963,7 @@ class DashboardHubRankingTests(TestCase):
         self.assertContains(response, reverse('admin_product_edit', args=[self.product.pk]))
 
 
-class ClientCorePermissionsTests(TestCase):
+class ClientCorePermissionsTests(AdminPanelTestCase):
     def setUp(self):
         self.staff = User.objects.create_user(
             username='staff_clients_ops',
@@ -1021,7 +1051,7 @@ class ClientCorePermissionsTests(TestCase):
         self.assertTrue(ClientProfile.objects.filter(pk=self.client_profile.pk).exists())
 
 
-class PaymentPanelTests(TestCase):
+class PaymentPanelTests(AdminPanelTestCase):
     def setUp(self):
         self.staff = User.objects.create_user(
             username='staff_payments_panel',
@@ -1229,7 +1259,7 @@ class PaymentPanelTests(TestCase):
         self.assertContains(response, 'Recibo expreso')
 
 
-class OrderAdminLookupTests(TestCase):
+class OrderAdminLookupTests(AdminPanelTestCase):
     def setUp(self):
         self.staff = User.objects.create_user(
             username='staff_order_lookup',
@@ -1357,7 +1387,7 @@ class OrderAdminLookupTests(TestCase):
         self.assertEqual(self.order.total, Decimal('355.50'))
 
 
-class ConfiguredSalesDocumentTypeFlowTests(TestCase):
+class ConfiguredSalesDocumentTypeFlowTests(AdminPanelTestCase):
     def setUp(self):
         self.staff = User.objects.create_user(
             username='staff_sales_doc_type',
@@ -1783,10 +1813,10 @@ class ConfiguredSalesDocumentTypeFlowTests(TestCase):
             follow=True,
         )
 
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, 403)
         fiscal_document.refresh_from_db()
         self.assertEqual(fiscal_document.status, 'ready_to_issue')
-        self.assertContains(response, 'Requiere rol Facturacion o Administracion')
+        self.assertContains(response, 'No tienes permiso', status_code=403)
 
     def test_facturacion_role_can_open_fiscal_report(self):
         billing_user = User.objects.create_user(
@@ -2004,7 +2034,7 @@ class ConfiguredSalesDocumentTypeFlowTests(TestCase):
         self.assertContains(response, 'Cotizacion manual test')
 
 
-class SalesDocumentTypeSettingsViewTests(TestCase):
+class SalesDocumentTypeSettingsViewTests(AdminPanelTestCase):
     def setUp(self):
         self.superadmin = User.objects.create_superuser(
             username='josueflexs',
@@ -2262,7 +2292,7 @@ class SalesDocumentTypeSettingsViewTests(TestCase):
         )
 
 
-class FiscalPrintTemplateTests(TestCase):
+class FiscalPrintTemplateTests(AdminPanelTestCase):
     def setUp(self):
         self.staff = User.objects.create_user(
             username='staff_fiscal_print',
@@ -2396,7 +2426,7 @@ class FiscalPrintTemplateTests(TestCase):
         self.assertNotContains(response, '00099-00000000')
 
 
-class ClampQuoterTests(TestCase):
+class ClampQuoterTests(AdminPanelTestCase):
     def setUp(self):
         self.staff = User.objects.create_user(
             username='staff_clamp_quoter',
@@ -2550,7 +2580,7 @@ class ClampQuoterTests(TestCase):
         self.assertEqual(payload['result']['codigo'], 'ABT3480220S')
 
 
-class ClampMeasureRequestAdminTests(TestCase):
+class ClampMeasureRequestAdminTests(AdminPanelTestCase):
     def setUp(self):
         self.staff = User.objects.create_user(
             username='staff_clamp_requests',
@@ -2707,7 +2737,7 @@ class ClampMeasureRequestAdminTests(TestCase):
         self.assertEqual(self.clamp_request.estimated_final_price, price_map['lista_2'])
 
 
-class OrderClampPublishTests(TestCase):
+class OrderClampPublishTests(AdminPanelTestCase):
     def setUp(self):
         self.staff = User.objects.create_user(
             username='staff_publish_clamp',
@@ -2837,7 +2867,7 @@ class OrderClampPublishTests(TestCase):
         self.assertEqual(self.product.price, Decimal('2278.54'))
 
 
-class OrderDeleteTests(TestCase):
+class OrderDeleteTests(AdminPanelTestCase):
     def setUp(self):
         self.staff = User.objects.create_user(
             username='staff_order_delete',
@@ -3021,7 +3051,7 @@ class OrderDeleteTests(TestCase):
         self.assertIsNone(source_request.converted_at)
 
 
-class CategoryManageProductsTests(TestCase):
+class CategoryManageProductsTests(AdminPanelTestCase):
     def setUp(self):
         self.superadmin = User.objects.create_superuser(
             username='josueflexs',
@@ -3573,7 +3603,7 @@ class CategoryManageProductsTests(TestCase):
         self.assertIn('rolled_back_at', conversion_log.details['rollback'])
 
 
-class CategoryBulkActionTests(TestCase):
+class CategoryBulkActionTests(AdminPanelTestCase):
     def setUp(self):
         self.superadmin = User.objects.create_superuser(
             username='josueflexs',
@@ -3722,7 +3752,7 @@ class CategoryBulkActionTests(TestCase):
         self.assertEqual(child.public_order, 5)
 
 
-class ProductBulkCategoryFallbackTests(TestCase):
+class ProductBulkCategoryFallbackTests(AdminPanelTestCase):
     def setUp(self):
         self.superadmin = User.objects.create_superuser(
             username='josueflexs',
@@ -3772,7 +3802,7 @@ class ProductBulkCategoryFallbackTests(TestCase):
         self.assertTrue(self.product.categories.filter(pk=self.category.pk).exists())
 
 
-class ProductBulkSearchSelectionTests(TestCase):
+class ProductBulkSearchSelectionTests(AdminPanelTestCase):
     def setUp(self):
         self.superadmin = User.objects.create_superuser(
             username='josueflexs',
@@ -3882,7 +3912,7 @@ class ProductBulkSearchSelectionTests(TestCase):
         self.assertTrue(other_product.is_active)
 
 
-class AdminInputValidationTests(TestCase):
+class AdminInputValidationTests(AdminPanelTestCase):
     def setUp(self):
         self.staff = User.objects.create_user(
             username='staff_validation',
@@ -3974,7 +4004,7 @@ class AdminInputValidationTests(TestCase):
         self.assertEqual(request_row.status, 'approved')
 
 
-class ClientManagementViewTests(TestCase):
+class ClientManagementViewTests(AdminPanelTestCase):
     def setUp(self):
         self.staff = User.objects.create_user(
             username='staff_client_management',
@@ -4236,7 +4266,7 @@ class ClientManagementViewTests(TestCase):
         self.assertContains(response, "Se envio mail de recuperacion")
 
 
-class AdminUserPermissionsViewTests(TestCase):
+class AdminUserPermissionsViewTests(AdminPanelTestCase):
     def setUp(self):
         self.primary_superadmin = User.objects.create_superuser(
             username='josueflexs',
@@ -4266,6 +4296,7 @@ class AdminUserPermissionsViewTests(TestCase):
                 'is_active': 'on',
                 'is_staff': 'on',
                 'admin_roles': ['ventas', 'deposito'],
+                'admin_capabilities': ['view_dashboard', 'sell', 'manage_orders'],
                 'company_scope_mode': 'limited',
                 'allowed_company_ids': [str(self.company_b.pk)],
             },
@@ -4409,7 +4440,7 @@ class AdminUserPermissionsViewTests(TestCase):
         self.assertEqual(mail.outbox[0].to, [self.target_admin.email])
         self.assertContains(response, "Se envio mail de recuperacion")
 
-class CatalogExcelTemplateExportTests(TestCase):
+class CatalogExcelTemplateExportTests(AdminPanelTestCase):
     def setUp(self):
         self.primary_superadmin = User.objects.create_superuser(
             username='josueflexs',
@@ -4611,7 +4642,7 @@ class CatalogExcelTemplateExportTests(TestCase):
         self.assertTrue(second_template.is_client_download_enabled)
 
 
-class ClientReportsViewTests(TestCase):
+class ClientReportsViewTests(AdminPanelTestCase):
     def setUp(self):
         self.staff = User.objects.create_user(
             username='staff_reports',
@@ -4862,7 +4893,7 @@ class ClientReportsViewTests(TestCase):
     FEATURE_BACKGROUND_JOBS_ENABLED=False,
     DEFAULT_CLIENT_IMPORT_COMPANY_SLUGS=["flexs", "ubolt"],
 )
-class ClientImportProcessTests(TestCase):
+class ClientImportProcessTests(AdminPanelTestCase):
     def setUp(self):
         self.primary_superadmin = User.objects.create_superuser(
             username="josueflexs",
@@ -4938,7 +4969,7 @@ class ClientImportProcessTests(TestCase):
         self.assertIn("execution_id", payload)
 
 
-class ImportFormSecurityTests(TestCase):
+class ImportFormSecurityTests(AdminPanelTestCase):
     def _build_xlsx_payload(self):
         workbook = Workbook()
         sheet = workbook.active
@@ -4987,7 +5018,7 @@ class ImportFormSecurityTests(TestCase):
         self.assertTrue(form.is_valid(), form.errors)
 
 
-class ExportProductsDiagnosticTests(TestCase):
+class ExportProductsDiagnosticTests(AdminPanelTestCase):
     def setUp(self):
         self.primary_superadmin = User.objects.create_superuser(
             username='josueflexs',
@@ -5175,7 +5206,7 @@ class ExportProductsDiagnosticTests(TestCase):
         self.assertEqual(total_products_val, 11)
 
 
-class CategoryAjaxCreationTests(TestCase):
+class CategoryAjaxCreationTests(AdminPanelTestCase):
     def setUp(self):
         self.primary_superadmin = User.objects.create_superuser(
             username='josueflexs',
@@ -5259,7 +5290,7 @@ class CategoryAjaxCreationTests(TestCase):
         self.assertIn('error', data)
 
 
-class ProductsUncategorizedViewTests(TestCase):
+class ProductsUncategorizedViewTests(AdminPanelTestCase):
     def setUp(self):
         self.primary_superadmin = User.objects.create_superuser(
             username='josueflexs',
@@ -5556,7 +5587,7 @@ class ProductsUncategorizedViewTests(TestCase):
         self.assertEqual(prod.category.name, 'VALVULAS')
 
 
-class ProductGridEditorViewTests(TestCase):
+class ProductGridEditorViewTests(AdminPanelTestCase):
     def setUp(self):
         from django.contrib.auth.models import User
         from catalog.models import Product, Category, Supplier

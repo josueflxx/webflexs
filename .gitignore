@@ -45,6 +45,8 @@ flexs_project/settings/local_preview.py
 
 # Local/runtime artifacts
 tmp/
+backups/automatic/
+backups/integrity_audit/
 *.bak
 
 # Data files

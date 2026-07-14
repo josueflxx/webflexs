@@ -1,16 +1,24 @@
-"""API v1 read-only endpoints."""
+"""Company-scoped API v1 endpoints."""
 
+from django.contrib.auth.decorators import login_required
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.db import connection
 from django.db.models import Q
+from django.shortcuts import render
 from rest_framework import generics, permissions
+from rest_framework.authtoken.views import ObtainAuthToken
 from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
 from accounts.models import ClientProfile
 from catalog.models import Category, Product
-from core.api_v1.permissions import IsStaffUser
+from core.api_v1.permissions import (
+    HasAdminCapability,
+    HasRequiredCapabilityWhenStaff,
+    IsStaffUser,
+)
 from core.api_v1.serializers import (
     CategorySerializer,
     ClientProfileSerializer,
@@ -19,6 +27,15 @@ from core.api_v1.serializers import (
     ProductStaffSerializer,
 )
 from orders.models import Order
+from core.models import WebhookDelivery, WebhookEndpoint
+from core.services.authorization import (
+    CAP_CHANGE_PRICES,
+    CAP_GLOBAL_SEARCH,
+    CAP_MANAGE_INTEGRATIONS,
+    CAP_MANAGE_ORDERS,
+    capability_required,
+    has_capability,
+)
 from orders.services.workflow import (
     get_allowed_next_statuses_for_user,
     get_order_queue_queryset_for_user,
@@ -26,7 +43,7 @@ from orders.services.workflow import (
     get_user_order_roles,
     resolve_user_order_role,
 )
-from core.services.company_context import get_active_company, get_user_companies, user_has_company_access
+from core.services.company_context import get_active_company, user_has_company_access
 
 
 def _parse_bool_param(raw_value):
@@ -41,20 +58,28 @@ def _parse_bool_param(raw_value):
 
 
 def _resolve_request_company(request):
-    company = get_active_company(request)
     user = getattr(request, "user", None)
-    if not user or not getattr(user, "is_authenticated", False):
-        return company
-
-    requested_company_id = (request.query_params.get("company_id") or "").strip()
-    if requested_company_id.isdigit():
+    requested_company_id = str(
+        request.query_params.get("company_id")
+        or request.query_params.get("company")
+        or ""
+    ).strip()
+    if requested_company_id:
+        if not requested_company_id.isdigit():
+            return None
         from core.models import Company
 
         requested_company = Company.objects.filter(pk=int(requested_company_id), is_active=True).first()
-        if requested_company and user_has_company_access(user, requested_company):
+        if (
+            user
+            and getattr(user, "is_authenticated", False)
+            and requested_company
+            and user_has_company_access(user, requested_company)
+        ):
             return requested_company
+        return None
 
-    return company
+    return get_active_company(request)
 
 
 class ApiV1BaseListView(generics.ListAPIView):
@@ -83,11 +108,12 @@ class ApiHealthView(APIView):
 
         return Response(
             {
-                "ok": True,
+                "ok": db_ok,
                 "api_version": "v1",
                 "feature_api_v1_enabled": bool(getattr(settings, "FEATURE_API_V1_ENABLED", False)),
                 "db_ok": db_ok,
-            }
+            },
+            status=200 if db_ok else 503,
         )
 
 
@@ -99,7 +125,7 @@ class ApiCategoryListView(ApiV1BaseListView):
         queryset = Category.objects.select_related("parent").order_by("order", "name")
 
         user = self.request.user
-        if not user.is_staff:
+        if not user.is_staff or not has_capability(user, CAP_GLOBAL_SEARCH):
             queryset = queryset.filter(is_active=True)
 
         q = (self.request.query_params.get("q") or "").strip()
@@ -131,7 +157,7 @@ class ApiProductListView(ApiV1BaseListView):
         queryset = Product.objects.select_related("category", "supplier_ref").prefetch_related("categories").order_by("name")
 
         user = self.request.user
-        if user.is_staff:
+        if user.is_staff and has_capability(user, CAP_GLOBAL_SEARCH):
             active_param = _parse_bool_param(self.request.query_params.get("active"))
             if active_param is not None:
                 queryset = queryset.filter(is_active=active_param)
@@ -145,19 +171,23 @@ class ApiProductListView(ApiV1BaseListView):
                 | Q(name__icontains=q)
                 | Q(supplier__icontains=q)
                 | Q(supplier_ref__name__icontains=q)
+                | Q(supplier_offers__supplier__name__icontains=q)
+                | Q(supplier_offers__supplier_code__icontains=q)
+                | Q(supplier_offers__supplier_description__icontains=q)
                 | Q(filter_1__icontains=q)
                 | Q(filter_2__icontains=q)
                 | Q(filter_3__icontains=q)
                 | Q(filter_4__icontains=q)
                 | Q(filter_5__icontains=q)
-            )
+            ).distinct()
 
         supplier = (self.request.query_params.get("supplier") or "").strip()
         if supplier:
             queryset = queryset.filter(
                 Q(supplier__icontains=supplier)
                 | Q(supplier_ref__name__icontains=supplier)
-            )
+                | Q(supplier_offers__supplier__name__icontains=supplier)
+            ).distinct()
 
         category = (self.request.query_params.get("category") or "").strip()
         if category:
@@ -176,28 +206,29 @@ class ApiProductListView(ApiV1BaseListView):
         return queryset
 
     def get_serializer_class(self):
-        if self.request.user.is_staff:
+        if self.request.user.is_staff and has_capability(
+            self.request.user,
+            CAP_CHANGE_PRICES,
+        ):
             return ProductStaffSerializer
         return ProductClientSerializer
 
 
 class ApiClientListView(ApiV1BaseListView):
-    permission_classes = [IsStaffUser]
+    permission_classes = [IsStaffUser, HasAdminCapability]
+    required_capability = CAP_GLOBAL_SEARCH
     serializer_class = ClientProfileSerializer
     throttle_scope = "api_v1_admin"
 
     def get_queryset(self):
         queryset = ClientProfile.objects.select_related("user").order_by("company_name")
         company = _resolve_request_company(self.request)
-        if self.request.user.is_staff:
-            allowed_companies = list(get_user_companies(self.request.user))
-            if allowed_companies and company is None and len(allowed_companies) > 1:
-                return queryset.none()
-            if company is not None:
-                queryset = queryset.filter(
-                    company_links__company=company,
-                    company_links__is_active=True,
-                ).distinct()
+        if company is None:
+            return queryset.none()
+        queryset = queryset.filter(
+            company_links__company=company,
+            company_links__is_active=True,
+        ).distinct()
 
         q = (self.request.query_params.get("q") or "").strip()
         if q:
@@ -233,24 +264,21 @@ class ApiMyClientProfileView(APIView):
 
 
 class ApiOrderListView(ApiV1BaseListView):
+    permission_classes = [permissions.IsAuthenticated, HasRequiredCapabilityWhenStaff]
+    required_staff_capability = CAP_MANAGE_ORDERS
     serializer_class = OrderListSerializer
     throttle_scope = "api_v1_default"
 
     def get_queryset(self):
         user = self.request.user
-        queryset = Order.objects.select_related("user").prefetch_related("items").order_by("-created_at")
+        queryset = Order.objects.select_related("user", "company").prefetch_related("items").order_by("-created_at")
         company = _resolve_request_company(self.request)
+        if company is None:
+            return queryset.none()
+        queryset = queryset.filter(company=company)
 
         if not user.is_staff:
             queryset = queryset.filter(user=user)
-            if company is not None:
-                queryset = queryset.filter(company=company)
-        else:
-            allowed_companies = list(get_user_companies(user))
-            if allowed_companies and company is None and len(allowed_companies) > 1:
-                return queryset.none()
-            if company is not None:
-                queryset = queryset.filter(company=company)
 
         status = (self.request.query_params.get("status") or "").strip().lower()
         if status:
@@ -265,18 +293,17 @@ class ApiOrderListView(ApiV1BaseListView):
 
 
 class ApiOrderQueueView(ApiV1BaseListView):
-    permission_classes = [IsStaffUser]
+    permission_classes = [IsStaffUser, HasAdminCapability]
+    required_capability = CAP_MANAGE_ORDERS
     serializer_class = OrderListSerializer
     throttle_scope = "api_v1_admin"
 
     def get_queryset(self):
-        queryset = Order.objects.select_related("user").prefetch_related("items").order_by("-updated_at")
+        queryset = Order.objects.select_related("user", "company").prefetch_related("items").order_by("-updated_at")
         company = _resolve_request_company(self.request)
-        allowed_companies = list(get_user_companies(self.request.user))
-        if allowed_companies and company is None and len(allowed_companies) > 1:
+        if company is None:
             return queryset.none()
-        if company is not None:
-            queryset = queryset.filter(company=company)
+        queryset = queryset.filter(company=company)
         filtered_qs, role = get_order_queue_queryset_for_user(queryset, self.request.user)
         self._resolved_role = role
 
@@ -317,12 +344,21 @@ class ApiOrderQueueView(ApiV1BaseListView):
 
 
 class ApiOrderWorkflowView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, HasRequiredCapabilityWhenStaff]
+    required_staff_capability = CAP_MANAGE_ORDERS
     throttle_classes = [ScopedRateThrottle]
     throttle_scope = "api_v1_default"
 
     def get(self, request, order_id):
-        order = Order.objects.filter(pk=order_id).first()
+        company = _resolve_request_company(request)
+        order_qs = Order.objects.filter(pk=order_id)
+        if company is None:
+            order_qs = order_qs.none()
+        else:
+            order_qs = order_qs.filter(company=company)
+        if not request.user.is_staff:
+            order_qs = order_qs.filter(user=request.user)
+        order = order_qs.first()
         if not order:
             return Response({"detail": "Pedido no encontrado."}, status=404)
 
@@ -337,5 +373,200 @@ class ApiOrderWorkflowView(APIView):
                 "allowed_next_statuses": allowed_statuses,
                 "resolved_role": resolve_user_order_role(request.user),
                 "resolved_roles": get_user_order_roles(request.user),
-            }
+            },
         )
+
+
+class RateLimitedObtainAuthToken(ObtainAuthToken):
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "api_v1_admin"
+
+
+class ApiWebhookEndpointListCreateView(APIView):
+    permission_classes = [IsStaffUser, HasAdminCapability]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "api_v1_admin"
+    required_capability = CAP_MANAGE_INTEGRATIONS
+
+    def get(self, request):
+        company = _resolve_request_company(request)
+        if not company:
+            return Response({"detail": "Empresa activa o company_id requerido."}, status=400)
+        rows = WebhookEndpoint.objects.filter(company=company).order_by("name", "id")
+        return Response({
+            "results": [
+                {
+                    "id": row.pk,
+                    "name": row.name,
+                    "target_url": row.target_url,
+                    "events": row.events,
+                    "is_active": row.is_active,
+                    "created_at": row.created_at,
+                }
+                for row in rows
+            ]
+        })
+
+    def post(self, request):
+        company = _resolve_request_company(request)
+        if not company:
+            return Response({"detail": "Empresa activa o company_id requerido."}, status=400)
+        endpoint = WebhookEndpoint(
+            company=company,
+            name=str(request.data.get("name", "")).strip(),
+            target_url=str(request.data.get("target_url", "")).strip(),
+            events=request.data.get("events") or [],
+            is_active=(
+                _parse_bool_param(request.data.get("is_active"))
+                if _parse_bool_param(request.data.get("is_active")) is not None
+                else True
+            ),
+            created_by=request.user,
+        )
+        supplied_secret = str(request.data.get("secret", "") or "").strip()
+        if supplied_secret:
+            endpoint.secret = supplied_secret
+        try:
+            endpoint.save()
+        except ValidationError as exc:
+            details = exc.message_dict if hasattr(exc, "message_dict") else exc.messages
+            return Response({"detail": details}, status=400)
+        return Response(
+            {
+                "id": endpoint.pk,
+                "name": endpoint.name,
+                "target_url": endpoint.target_url,
+                "events": endpoint.events,
+                "is_active": endpoint.is_active,
+                "secret": endpoint.secret,
+                "secret_notice": "Guarda este secreto ahora; no vuelve a mostrarse en listados.",
+            },
+            status=201,
+        )
+
+
+class ApiWebhookEndpointDetailView(APIView):
+    permission_classes = [IsStaffUser, HasAdminCapability]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "api_v1_admin"
+    required_capability = CAP_MANAGE_INTEGRATIONS
+
+    def _get_endpoint(self, request, endpoint_id):
+        company = _resolve_request_company(request)
+        if not company:
+            return None
+        return WebhookEndpoint.objects.filter(company=company, pk=endpoint_id).first()
+
+    def patch(self, request, endpoint_id):
+        endpoint = self._get_endpoint(request, endpoint_id)
+        if not endpoint:
+            return Response({"detail": "Webhook no encontrado."}, status=404)
+        for field in ("name", "target_url", "events", "is_active"):
+            if field in request.data:
+                value = request.data[field]
+                if field == "is_active":
+                    parsed_value = _parse_bool_param(value)
+                    if parsed_value is None:
+                        return Response({"detail": {"is_active": "Valor booleano invalido."}}, status=400)
+                    value = parsed_value
+                setattr(endpoint, field, value)
+        if request.data.get("rotate_secret"):
+            from core.models import generate_webhook_secret
+
+            endpoint.secret = generate_webhook_secret()
+        try:
+            endpoint.save()
+        except ValidationError as exc:
+            details = exc.message_dict if hasattr(exc, "message_dict") else exc.messages
+            return Response({"detail": details}, status=400)
+        payload = {
+            "id": endpoint.pk,
+            "name": endpoint.name,
+            "target_url": endpoint.target_url,
+            "events": endpoint.events,
+            "is_active": endpoint.is_active,
+        }
+        if request.data.get("rotate_secret"):
+            payload["secret"] = endpoint.secret
+        return Response(payload)
+
+    def delete(self, request, endpoint_id):
+        endpoint = self._get_endpoint(request, endpoint_id)
+        if not endpoint:
+            return Response({"detail": "Webhook no encontrado."}, status=404)
+        endpoint.delete()
+        return Response(status=204)
+
+
+class ApiWebhookDeliveryListView(APIView):
+    permission_classes = [IsStaffUser, HasAdminCapability]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "api_v1_admin"
+    required_capability = CAP_MANAGE_INTEGRATIONS
+
+    def get(self, request, endpoint_id):
+        company = _resolve_request_company(request)
+        endpoint = WebhookEndpoint.objects.filter(company=company, pk=endpoint_id).first() if company else None
+        if not endpoint:
+            return Response({"detail": "Webhook no encontrado."}, status=404)
+        rows = WebhookDelivery.objects.filter(endpoint=endpoint).order_by("-created_at")[:100]
+        return Response({
+            "results": [
+                {
+                    "id": row.pk,
+                    "event_id": row.event_id,
+                    "event_type": row.event_type,
+                    "status": row.status,
+                    "attempts_count": row.attempts_count,
+                    "response_status": row.response_status,
+                    "last_error": row.last_error,
+                    "next_retry_at": row.next_retry_at,
+                    "created_at": row.created_at,
+                }
+                for row in rows
+            ]
+        })
+
+
+class ApiSchemaView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        base = request.build_absolute_uri("/api/v1/")
+        return Response({
+            "openapi": "3.0.3",
+            "info": {"title": "FLEXS API", "version": "1.0.0"},
+            "servers": [{"url": base}],
+            "authentication": {"header": "Authorization: Token <token>"},
+            "tenant_scope": (
+                "Enviar company_id (o company) cuando el usuario tenga varias empresas. "
+                "Sin una empresa autorizada, los recursos empresariales no devuelven datos."
+            ),
+            "staff_capabilities": {
+                "clients": CAP_GLOBAL_SEARCH,
+                "orders": CAP_MANAGE_ORDERS,
+                "orders_queue": CAP_MANAGE_ORDERS,
+                "order_workflow": CAP_MANAGE_ORDERS,
+                "webhooks": CAP_MANAGE_INTEGRATIONS,
+                "product_cost": CAP_CHANGE_PRICES,
+            },
+            "paths": {
+                "/health/": {"get": {"summary": "Estado de API y base"}},
+                "/catalog/products/": {"get": {"summary": "Listado y busqueda de productos"}},
+                "/catalog/categories/": {"get": {"summary": "Categorias"}},
+                "/clients/": {"get": {"summary": "Clientes de la empresa"}},
+                "/orders/": {"get": {"summary": "Pedidos de la empresa"}},
+                "/orders/queue/": {"get": {"summary": "Cola por rol"}},
+                "/webhooks/": {"get": {"summary": "Listar webhooks"}, "post": {"summary": "Crear webhook"}},
+                "/webhooks/{id}/": {"patch": {"summary": "Editar o rotar secreto"}, "delete": {"summary": "Eliminar webhook"}},
+                "/webhooks/{id}/deliveries/": {"get": {"summary": "Ultimas entregas"}},
+            },
+            "webhook_signature": "HMAC-SHA256 de '<timestamp>.<raw_body>' con el secreto; header X-FLEXS-Signature.",
+            "webhook_events": [value for value, _label in WebhookEndpoint.EVENT_CHOICES],
+        })
+
+
+@login_required
+@capability_required(CAP_MANAGE_INTEGRATIONS)
+def api_docs(request):
+    return render(request, "core/api_docs.html")

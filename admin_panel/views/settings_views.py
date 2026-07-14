@@ -95,6 +95,7 @@ from orders.services.request_workflow import (
     reject_order_request,
 )
 from core.models import (
+    AdminCapabilityProfile,
     AdminCompanyAccess,
     Company,
     DocumentSeries,
@@ -137,6 +138,13 @@ from core.models import (
     CatalogExcelTemplateColumn,
     StockMovement,
     Warehouse,
+)
+from core.services.authorization import (
+    CAPABILITY_CHOICES,
+    CAP_MANAGE_USERS,
+    capability_required,
+    get_user_capabilities,
+    normalize_capabilities,
 )
 from core.services.company_context import (
     admin_company_access_table_available,
@@ -893,10 +901,11 @@ def _sync_company_default_pos(company, point_of_sale):
         company.save(update_fields=["point_of_sale_default", "updated_at"])
 
 
-@user_passes_test(is_primary_superadmin)
+@staff_member_required
+@capability_required(CAP_MANAGE_USERS)
 def admin_user_list(request):
     """
-    Superadmin-only list to manage admin accounts and permissions.
+    List available to operators with the explicit user-management capability.
     """
     search = sanitize_search_token(request.GET.get('q', ''))
     admins = get_managed_admin_users_queryset()
@@ -937,10 +946,11 @@ def admin_user_list(request):
     )
 
 
-@user_passes_test(is_primary_superadmin)
+@staff_member_required
+@capability_required(CAP_MANAGE_USERS)
 def admin_user_edit(request, user_id):
     """
-    Superadmin-only edit for admin identity fields.
+    Edit identity fields for managed internal users.
     """
     admin_user = get_object_or_404(get_managed_admin_users_queryset(), pk=user_id)
     is_primary_account = admin_user.username.lower() == PRIMARY_SUPERADMIN_USERNAME
@@ -1005,10 +1015,11 @@ def admin_user_edit(request, user_id):
     )
 
 
-@user_passes_test(is_primary_superadmin)
+@staff_member_required
+@capability_required(CAP_MANAGE_USERS)
 def admin_user_password_change(request, user_id):
     """
-    Superadmin-only password reset for operator/admin accounts.
+    Direct password reset for operator/admin accounts.
     """
     admin_user = get_object_or_404(get_managed_admin_users_queryset(), pk=user_id)
 
@@ -1041,7 +1052,8 @@ def admin_user_password_change(request, user_id):
     )
 
 
-@user_passes_test(is_primary_superadmin)
+@staff_member_required
+@capability_required(CAP_MANAGE_USERS)
 @require_POST
 def admin_user_send_password_reset_email(request, user_id):
     """Send password reset email to an admin/operator user."""
@@ -1067,7 +1079,8 @@ def admin_user_send_password_reset_email(request, user_id):
     return redirect(redirect_url)
 
 
-@user_passes_test(is_primary_superadmin)
+@staff_member_required
+@capability_required(CAP_MANAGE_USERS)
 def admin_user_delete(request, user_id):
     """
     Safe delete/deactivate for operator accounts while preserving audit trail.
@@ -1130,10 +1143,11 @@ def admin_user_delete(request, user_id):
     )
 
 
-@user_passes_test(is_primary_superadmin)
+@staff_member_required
+@capability_required(CAP_MANAGE_USERS)
 def admin_user_permissions(request, user_id):
     """
-    Superadmin-only edit for core admin flags.
+    Edit roles, company scope and action capabilities for an operator.
     """
     admin_user = get_object_or_404(get_managed_admin_users_queryset(), pk=user_id)
     ensure_admin_role_groups()
@@ -1149,6 +1163,7 @@ def admin_user_permissions(request, user_id):
         )
     current_scope_ids = {link.company_id for link in current_scope_links}
     current_roles = get_admin_role_values(admin_user) or [ROLE_ADMIN]
+    current_capabilities = sorted(get_user_capabilities(admin_user))
     current_scope_mode = get_admin_company_scope_mode(admin_user)
     visible_companies = list(get_user_companies(admin_user))
 
@@ -1164,6 +1179,7 @@ def admin_user_permissions(request, user_id):
             if normalized_role in valid_roles and normalized_role not in seen_roles:
                 selected_roles.append(normalized_role)
                 seen_roles.add(normalized_role)
+        selected_capabilities = normalize_capabilities(request.POST.getlist("admin_capabilities"))
         selected_scope_mode = str(request.POST.get("company_scope_mode", current_scope_mode or "all")).strip().lower()
         selected_company_ids = []
         seen_company_ids = set()
@@ -1177,8 +1193,6 @@ def admin_user_permissions(request, user_id):
             if any(company.pk == company_id for company in available_companies):
                 selected_company_ids.append(company_id)
                 seen_company_ids.add(company_id)
-
-        # Any superuser can theoretically make others superusers now, but the views check superuser_required_for_modifications
 
         if admin_user.username.lower() == PRIMARY_SUPERADMIN_USERNAME:
             if not new_is_superuser or not new_is_staff or not new_is_active:
@@ -1211,10 +1225,14 @@ def admin_user_permissions(request, user_id):
             if selected_scope_mode == "limited" and not selected_company_ids:
                 messages.error(request, "Selecciona al menos una empresa para acceso limitado.")
                 return redirect('admin_user_permissions', user_id=admin_user.pk)
+            if not selected_capabilities:
+                messages.error(request, "Selecciona al menos un permiso granular.")
+                return redirect('admin_user_permissions', user_id=admin_user.pk)
         else:
             selected_roles = []
             selected_scope_mode = "all"
             selected_company_ids = []
+            selected_capabilities = []
 
         before = build_admin_user_snapshot(admin_user)
 
@@ -1227,7 +1245,9 @@ def admin_user_permissions(request, user_id):
             set_admin_roles_for_user(admin_user, selected_roles)
             if admin_company_access_table_available():
                 AdminCompanyAccess.objects.filter(user=admin_user).update(is_active=False)
-            if selected_scope_mode == "limited" and admin_company_access_table_available():
+            if selected_scope_mode == "all":
+                selected_company_ids = [company.pk for company in available_companies]
+            if admin_company_access_table_available():
                 for company in available_companies:
                     if company.pk not in selected_company_ids:
                         continue
@@ -1236,10 +1256,26 @@ def admin_user_permissions(request, user_id):
                         company=company,
                         defaults={"is_active": True},
                     )
+            AdminCapabilityProfile.objects.update_or_create(
+                user=admin_user,
+                defaults={
+                    "capabilities": selected_capabilities,
+                    "is_configured": True,
+                    "updated_by": request.user,
+                },
+            )
         else:
             if admin_company_access_table_available():
                 AdminCompanyAccess.objects.filter(user=admin_user).update(is_active=False)
             set_admin_roles_for_user(admin_user, [])
+            AdminCapabilityProfile.objects.update_or_create(
+                user=admin_user,
+                defaults={
+                    "capabilities": [],
+                    "is_configured": False,
+                    "updated_by": request.user,
+                },
+            )
 
         after = build_admin_user_snapshot(admin_user)
 
@@ -1266,6 +1302,8 @@ def admin_user_permissions(request, user_id):
             'admin_user': admin_user,
             'role_choices': ADMIN_ROLE_CHOICES,
             'current_roles': current_roles,
+            'capability_choices': CAPABILITY_CHOICES,
+            'current_capabilities': current_capabilities,
             'current_scope_mode': current_scope_mode,
             'available_companies': available_companies,
             'current_scope_ids': current_scope_ids,

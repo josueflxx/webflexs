@@ -6,7 +6,7 @@ from decimal import Decimal
 from django.apps import apps
 from django.contrib.auth.models import User
 from django.db import models
-from django.db.models import Sum
+from django.db.models import Q, Sum
 from django.core.exceptions import ValidationError
 from django.utils import timezone
 
@@ -368,6 +368,13 @@ class Order(models.Model):
             models.Index(fields=["sync_status", "created_at"]),
             models.Index(fields=["external_system", "external_id"]),
         ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["source_request"],
+                condition=Q(source_request__isnull=False),
+                name="unique_order_per_source_request",
+            ),
+        ]
 
     def __str__(self):
         return f"Pedido #{self.pk} - {self.user.username if self.user else 'N/A'}"
@@ -646,6 +653,12 @@ class OrderRequest(models.Model):
     client_note = models.TextField(blank=True, verbose_name="Nota del cliente")
     admin_note = models.TextField(blank=True, verbose_name="Nota interna")
     rejection_reason = models.CharField(max_length=255, blank=True, verbose_name="Motivo rechazo")
+    idempotency_key = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        verbose_name="Clave de idempotencia",
+    )
     requested_subtotal = models.DecimalField(max_digits=12, decimal_places=2, default=0, verbose_name="Subtotal")
     requested_discount_percentage = models.DecimalField(
         max_digits=5,
@@ -675,6 +688,13 @@ class OrderRequest(models.Model):
             models.Index(fields=["company", "status", "created_at"]),
             models.Index(fields=["user", "status", "created_at"]),
             models.Index(fields=["origin_channel", "created_at"]),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["company", "user", "idempotency_key"],
+                condition=Q(idempotency_key__gt=""),
+                name="unique_order_request_idempotency_key",
+            ),
         ]
 
     def __str__(self):

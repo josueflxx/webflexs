@@ -7,6 +7,7 @@ from .models import CatalogExcelTemplate, SiteSettings
 from core.services.presence import build_admin_presence_payload, get_presence_config
 from core.services.company_context import get_active_company, get_user_companies
 from core.services.catalog_excel_status import latest_catalog_excel_source_change
+from core.services.authorization import get_user_capabilities
 
 
 def _can_use_clamp_measure_feature(request):
@@ -77,6 +78,7 @@ def site_settings(request):
         'client_catalog_excel_last_generated_at': client_catalog_excel_last_generated_at,
         'client_catalog_excel_last_source_change': client_catalog_excel_last_source_change,
         'client_catalog_excel_has_pending_changes': client_catalog_excel_has_pending_changes,
+        'admin_capabilities': sorted(get_user_capabilities(user)) if user and user.is_authenticated else [],
     }
 
 

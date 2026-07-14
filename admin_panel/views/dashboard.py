@@ -299,6 +299,18 @@ from .helpers import *
 def dashboard(request):
     """Admin dashboard hub with queue metrics, recent activity and commercial rankings."""
     active_company = get_active_company(request)
+    if not active_company:
+        messages.error(request, "Selecciona una empresa activa para abrir el dashboard.")
+        return redirect("select_company")
+    now = timezone.localtime()
+    today_start = timezone.make_aware(
+        datetime.combine(timezone.localdate(), time.min),
+        timezone.get_current_timezone(),
+    )
+    month_start = timezone.make_aware(
+        datetime.combine(timezone.localdate().replace(day=1), time.min),
+        timezone.get_current_timezone(),
+    )
     last_30_days = timezone.now() - timedelta(days=30)
 
     billable_documents_qs = FiscalDocument.objects.filter(
@@ -308,6 +320,52 @@ def dashboard(request):
     )
     if active_company:
         billable_documents_qs = billable_documents_qs.filter(company=active_company)
+
+    authorized_documents = FiscalDocument.objects.filter(
+        company=active_company,
+        doc_type__in=BILLABLE_FISCAL_DOC_TYPES,
+        status__in=[FISCAL_STATUS_AUTHORIZED, FISCAL_STATUS_EXTERNAL_RECORDED],
+    )
+    today_sales = authorized_documents.filter(issued_at__gte=today_start).aggregate(
+        sales_total=Coalesce(Sum("total"), Decimal("0.00")),
+        documents_count=Count("id"),
+    )
+    month_sales = authorized_documents.filter(issued_at__gte=month_start).aggregate(
+        sales_total=Coalesce(Sum("total"), Decimal("0.00")),
+        documents_count=Count("id"),
+        average_ticket=Coalesce(Avg("total"), Decimal("0.00")),
+    )
+    month_order_items = OrderItem.objects.filter(
+        order__company=active_company,
+        order__created_at__gte=month_start,
+    ).exclude(order__status=Order.STATUS_CANCELLED).select_related("product")
+    estimated_margin = sum(
+        (
+            Decimal(item.subtotal or 0)
+            - (Decimal(getattr(item.product, "cost", 0) or 0) * item.quantity)
+            for item in month_order_items
+        ),
+        Decimal("0.00"),
+    )
+    pending_orders_count = Order.objects.filter(
+        company=active_company,
+        status__in=[
+            Order.STATUS_DRAFT,
+            Order.STATUS_CONFIRMED,
+            Order.STATUS_PREPARING,
+            Order.STATUS_SHIPPED,
+        ],
+    ).count()
+    critical_stock_threshold = int(getattr(settings, "DASHBOARD_CRITICAL_STOCK_THRESHOLD", 5))
+    critical_stock_count = Product.objects.filter(
+        is_active=True,
+        stock__lte=critical_stock_threshold,
+    ).count()
+    new_clients_month = ClientCompany.objects.filter(
+        company=active_company,
+        is_active=True,
+        created_at__gte=month_start,
+    ).count()
 
     top_clients_raw = (
         billable_documents_qs
@@ -412,6 +470,14 @@ def dashboard(request):
         'top_clients_rank': top_clients_rank,
         'top_products_rank': top_products_rank,
         'top_debtors_rank': top_debtors_rank,
+        'today_sales': today_sales,
+        'month_sales': month_sales,
+        'estimated_margin': estimated_margin,
+        'pending_orders_count': pending_orders_count,
+        'critical_stock_count': critical_stock_count,
+        'critical_stock_threshold': critical_stock_threshold,
+        'new_clients_month': new_clients_month,
+        'dashboard_generated_at': now,
     }
     return render(request, 'admin_panel/dashboard.html', context)
 

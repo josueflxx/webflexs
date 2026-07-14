@@ -24,20 +24,40 @@ from core.services.company_context import (
     set_active_company,
     user_has_company_access,
 )
+from core.services.client_ip import get_client_ip
 
 
 def _get_client_ip(request):
-    forwarded = request.META.get("HTTP_X_FORWARDED_FOR", "")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
-    return request.META.get("REMOTE_ADDR", "") or "unknown"
+    """Backward-compatible wrapper around the trusted-proxy resolver."""
+    return get_client_ip(request)
 
 
 def _build_login_keys(request, username):
     normalized_username = (username or "").strip().lower() or "_"
     ip = _get_client_ip(request)
-    key_base = f"auth-login:{normalized_username}:{ip}"
-    return f"{key_base}:attempts", f"{key_base}:lock"
+    identity_hash = hashlib.sha256(normalized_username.encode("utf-8")).hexdigest()[:24]
+    combo_base = f"auth-login:combo:{identity_hash}:{ip}"
+    ip_base = f"auth-login:ip:{ip}"
+    account_base = f"auth-login:account:{identity_hash}"
+    return {
+        "combo_attempts": f"{combo_base}:attempts",
+        "combo_lock": f"{combo_base}:lock",
+        "ip_attempts": f"{ip_base}:attempts",
+        "ip_lock": f"{ip_base}:lock",
+        "account_attempts": f"{account_base}:attempts",
+        "account_lock": f"{account_base}:lock",
+    }
+
+
+def _increment_cache_counter(key, timeout):
+    if cache.add(key, 1, timeout=timeout):
+        return 1
+    try:
+        return int(cache.incr(key))
+    except (ValueError, TypeError, NotImplementedError):
+        value = int(cache.get(key, 0) or 0) + 1
+        cache.set(key, value, timeout=timeout)
+        return value
 
 
 def _get_lock_remaining_seconds(lock_payload):
@@ -87,8 +107,8 @@ class SafePasswordResetView(PasswordResetView):
             )
             return redirect(self.get_success_url())
 
-        cache.set(ip_key, ip_count + 1, timeout=window_seconds)
-        cache.set(email_key, email_count + 1, timeout=window_seconds)
+        _increment_cache_counter(ip_key, window_seconds)
+        _increment_cache_counter(email_key, window_seconds)
         return super().form_valid(form)
 
 
@@ -105,32 +125,49 @@ def login_view(request):
         password = request.POST.get("password", "")
         remember_me_checked = request.POST.get("remember_me", "").strip().lower() in {"1", "true", "on", "yes"}
         username_prefill = username
-        attempts_key, lock_key = _build_login_keys(request, username)
+        login_keys = _build_login_keys(request, username)
 
-        lock_payload = cache.get(lock_key)
-        if lock_payload:
-            remaining_seconds = _get_lock_remaining_seconds(lock_payload)
-            if remaining_seconds > 0:
-                remaining_minutes = max(math.ceil(remaining_seconds / 60), 1)
-                messages.error(
-                    request,
-                    f"Demasiados intentos fallidos. Espera {remaining_minutes} minuto(s) antes de reintentar.",
-                )
-                return render(
-                    request,
-                    "accounts/login.html",
-                    {
-                        "username_prefill": username_prefill,
-                        "remember_me_checked": remember_me_checked,
-                    },
-                )
-            cache.delete(lock_key)
+        lock_payloads = [
+            cache.get(login_keys["combo_lock"]),
+            cache.get(login_keys["ip_lock"]),
+            cache.get(login_keys["account_lock"]),
+        ]
+        remaining_seconds = max(
+            (_get_lock_remaining_seconds(payload) for payload in lock_payloads if payload),
+            default=0,
+        )
+        if remaining_seconds > 0:
+            remaining_minutes = max(math.ceil(remaining_seconds / 60), 1)
+            messages.error(
+                request,
+                f"Demasiados intentos fallidos. Espera {remaining_minutes} minuto(s) antes de reintentar.",
+            )
+            return render(
+                request,
+                "accounts/login.html",
+                {
+                    "username_prefill": username_prefill,
+                    "remember_me_checked": remember_me_checked,
+                },
+            )
+        for key_name in ("combo_lock", "ip_lock", "account_lock"):
+            lock_payload = cache.get(login_keys[key_name])
+            if lock_payload:
+                remaining_seconds = _get_lock_remaining_seconds(lock_payload)
+                if remaining_seconds <= 0:
+                    cache.delete(login_keys[key_name])
 
         user = authenticate(request, username=username, password=password)
 
         if user is not None:
-            cache.delete(attempts_key)
-            cache.delete(lock_key)
+            cache.delete_many(
+                [
+                    login_keys["combo_attempts"],
+                    login_keys["combo_lock"],
+                    login_keys["account_attempts"],
+                    login_keys["account_lock"],
+                ]
+            )
             login(request, user)
             if remember_me_checked:
                 remember_age = max(int(getattr(settings, "REMEMBER_ME_SESSION_AGE", 60 * 60 * 24 * 30)), 300)
@@ -153,17 +190,27 @@ def login_view(request):
             return redirect("login_redirect")
 
         max_attempts = int(getattr(settings, "LOGIN_MAX_FAILED_ATTEMPTS", 5))
+        max_attempts_per_ip = int(getattr(settings, "LOGIN_MAX_FAILED_ATTEMPTS_PER_IP", 20))
+        max_attempts_per_account = int(getattr(settings, "LOGIN_MAX_FAILED_ATTEMPTS_PER_ACCOUNT", 10))
         lock_seconds = int(getattr(settings, "LOGIN_LOCKOUT_SECONDS", 900))
         attempt_window_seconds = int(getattr(settings, "LOGIN_ATTEMPT_WINDOW_SECONDS", 900))
-        attempts = int(cache.get(attempts_key, 0)) + 1
-        cache.set(attempts_key, attempts, timeout=attempt_window_seconds)
+        attempts = _increment_cache_counter(login_keys["combo_attempts"], attempt_window_seconds)
+        ip_attempts = _increment_cache_counter(login_keys["ip_attempts"], attempt_window_seconds)
+        account_attempts = _increment_cache_counter(login_keys["account_attempts"], attempt_window_seconds)
 
+        lock_until = {"until_ts": int(timezone.now().timestamp()) + lock_seconds}
         if attempts >= max_attempts:
-            cache.set(
-                lock_key,
-                {"until_ts": int(timezone.now().timestamp()) + lock_seconds},
-                timeout=lock_seconds,
-            )
+            cache.set(login_keys["combo_lock"], lock_until, timeout=lock_seconds)
+        if ip_attempts >= max_attempts_per_ip:
+            cache.set(login_keys["ip_lock"], lock_until, timeout=lock_seconds)
+        if account_attempts >= max_attempts_per_account:
+            cache.set(login_keys["account_lock"], lock_until, timeout=lock_seconds)
+
+        if (
+            attempts >= max_attempts
+            or ip_attempts >= max_attempts_per_ip
+            or account_attempts >= max_attempts_per_account
+        ):
             messages.error(
                 request,
                 f"Demasiados intentos fallidos. Intenta nuevamente en {max(math.ceil(lock_seconds / 60), 1)} minuto(s).",
@@ -193,17 +240,13 @@ def login_redirect(request):
     """
     companies = list(get_user_companies(request.user))
     active_company = get_active_company(request)
-    if request.user.is_staff and len(companies) > 1 and not active_company:
+    if len(companies) > 1 and not active_company:
         target = reverse("admin_dashboard") if request.user.is_staff else reverse("catalog")
         return redirect(f"{reverse('select_company')}?next={target}")
     if request.user.is_staff:
         return render(request, "accounts/admin_redirect.html")
-    if not active_company and companies:
-        preferred_company = get_default_client_origin_company()
-        if preferred_company and any(company.pk == preferred_company.pk for company in companies):
-            set_active_company(request, preferred_company)
-        else:
-            set_active_company(request, companies[0])
+    if not active_company and len(companies) == 1:
+        set_active_company(request, companies[0])
     return redirect("catalog")
 
 

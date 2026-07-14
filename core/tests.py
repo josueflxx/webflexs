@@ -2,7 +2,7 @@ from decimal import Decimal
 from datetime import timedelta
 from unittest.mock import patch
 
-from django.contrib.auth.models import User
+from django.contrib.auth.models import Group, User
 from django.template import Context, Template
 from django.test import TestCase
 from django.test import override_settings
@@ -51,6 +51,10 @@ class GlobalNumberFormatTests(TestCase):
 
 
 class SearchSuggestionsTests(TestCase):
+    def _grant_company_access(self, user):
+        company = get_default_company()
+        AdminCompanyAccess.objects.get_or_create(user=user, company=company)
+
     def _activate_company(self):
         company = get_default_company()
         session = self.client.session
@@ -98,6 +102,7 @@ class SearchSuggestionsTests(TestCase):
             is_active=True,
         )
         staff = User.objects.create_user("admin_tester", password="secret123", is_staff=True)
+        self._grant_company_access(staff)
         self.client.force_login(staff)
         self._activate_company()
 
@@ -121,6 +126,7 @@ class SearchSuggestionsTests(TestCase):
             is_active=True,
         )
         staff = User.objects.create_user("admin_compact_tester", password="secret123", is_staff=True)
+        self._grant_company_access(staff)
         self.client.force_login(staff)
         self._activate_company()
 
@@ -144,6 +150,7 @@ class SearchSuggestionsTests(TestCase):
             is_active=True,
         )
         staff = User.objects.create_user("admin_label_tester", password="secret123", is_staff=True)
+        self._grant_company_access(staff)
         self.client.force_login(staff)
         self._activate_company()
 
@@ -308,6 +315,8 @@ class StaffCompanyAccessConfigTests(TestCase):
             password="secret123",
             is_staff=True,
         )
+        AdminCompanyAccess.objects.create(user=staff, company=company_flexs, is_active=True)
+        AdminCompanyAccess.objects.create(user=staff, company=company_ubolt, is_active=True)
 
         companies = list(get_user_companies(staff))
 
@@ -335,8 +344,8 @@ class StaffCompanyAccessModelTests(TestCase):
         self.assertNotIn(company_flexs.pk, [company.pk for company in companies])
 
     @patch("core.services.company_context.admin_company_access_table_available", return_value=False)
-    def test_staff_company_scope_falls_back_gracefully_when_scope_table_is_missing(self, _mock_scope_table):
-        company_flexs = Company.objects.filter(slug__iexact="flexs").first() or get_default_company()
+    def test_staff_company_scope_fails_closed_when_scope_table_is_missing(self, _mock_scope_table):
+        Company.objects.filter(slug__iexact="flexs").first() or get_default_company()
         company_ubolt = Company.objects.filter(slug__iexact="ubolt").first()
         if not company_ubolt:
             company_ubolt = Company.objects.create(name="Ubolt Missing Table", slug="ubolt", is_active=True)
@@ -348,10 +357,7 @@ class StaffCompanyAccessModelTests(TestCase):
 
         companies = list(get_user_companies(staff))
 
-        self.assertEqual(
-            {company.pk for company in companies},
-            {company_flexs.pk, company_ubolt.pk},
-        )
+        self.assertEqual(companies, [])
 
 
 class ApiCompanyScopeTests(TestCase):
@@ -362,6 +368,10 @@ class ApiCompanyScopeTests(TestCase):
             self.company_b = Company.objects.create(name="Ubolt API", slug="ubolt", is_active=True)
 
         self.staff = User.objects.create_user("staff_api_scope", password="secret123", is_staff=True)
+        role, _created = Group.objects.get_or_create(name="ventas")
+        self.staff.groups.add(role)
+        AdminCompanyAccess.objects.create(user=self.staff, company=self.company_a, is_active=True)
+        AdminCompanyAccess.objects.create(user=self.staff, company=self.company_b, is_active=True)
         self.client.force_login(self.staff)
 
         self.client_user_a = User.objects.create_user("cliente_api_a", password="secret123")
@@ -414,16 +424,17 @@ class ApiCompanyScopeTests(TestCase):
         self.assertEqual(payload["count"], 1)
         self.assertEqual(payload["results"][0]["company_name"], "Cliente API A")
 
-    def test_staff_order_api_requires_active_company_when_multiple_companies(self):
+    def test_staff_order_api_returns_empty_without_selected_company(self):
         session = self.client.session
         session.pop("active_company_id", None)
         session.save()
 
         response = self.client.get(reverse("api_v1:orders"))
 
-        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.status_code, 200)
         payload = response.json()
-        self.assertTrue(payload["requires_company"])
+        self.assertEqual(payload["count"], 0)
+        self.assertEqual(payload["results"], [])
 
 
 class SalesDocumentTypeSeedTests(TestCase):

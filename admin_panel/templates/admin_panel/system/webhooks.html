@@ -1,0 +1,33 @@
+{% extends 'admin_panel/base.html' %}
+{% block page_title %}Webhooks{% endblock %}
+{% block content %}
+{% if new_webhook_secret %}<div class="alert alert-warning"><strong>Guarda este secreto ahora ({{ new_webhook_secret.name }}):</strong><br><code>{{ new_webhook_secret.secret }}</code></div>{% endif %}
+<div style="display:grid;grid-template-columns:minmax(300px,.8fr) minmax(420px,1.2fr);gap:16px;">
+    <section class="card" style="padding:18px;">
+        <h2>Nuevo webhook</h2>
+        <form method="post" style="display:grid;gap:12px;">{% csrf_token %}
+            <input type="hidden" name="action" value="create">
+            <label>Nombre<input class="form-input" name="name" required maxlength="100"></label>
+            <label>URL destino<input class="form-input" type="url" name="target_url" required placeholder="https://integracion.ejemplo.com/webhooks/flexs"></label>
+            <div><strong>Eventos</strong>{% for value, label in event_choices %}<label style="display:block;margin-top:7px;"><input type="checkbox" name="events" value="{{ value }}"> {{ label }} <small class="text-muted">{{ value }}</small></label>{% endfor %}</div>
+            <button class="btn btn-primary" type="submit">Crear webhook</button>
+        </form>
+        <p style="margin-top:16px;"><a href="/api/v1/docs/">Ver documentacion de API y firma</a></p>
+    </section>
+    <section class="card" style="padding:18px;">
+        <h2>Destinos de {{ active_company.name }}</h2>
+        {% for endpoint in endpoints %}
+        <div style="padding:12px;border:1px solid rgba(255,255,255,.08);border-radius:10px;margin-bottom:10px;">
+            <strong>{{ endpoint.name }}</strong> <span class="client-inline-badge">{{ endpoint.is_active|yesno:"Activo,Inactivo" }}</span>
+            <div class="text-muted">{{ endpoint.target_url }}</div><small>{{ endpoint.events|join:", " }}</small>
+            <div style="display:flex;gap:6px;margin-top:9px;">
+                <form method="post">{% csrf_token %}<input type="hidden" name="endpoint_id" value="{{ endpoint.pk }}"><input type="hidden" name="action" value="toggle"><button class="btn btn-outline btn-sm">Activar/desactivar</button></form>
+                <form method="post">{% csrf_token %}<input type="hidden" name="endpoint_id" value="{{ endpoint.pk }}"><input type="hidden" name="action" value="rotate"><button class="btn btn-outline btn-sm">Rotar secreto</button></form>
+                <form method="post" onsubmit="return confirm('Eliminar webhook y su historial?');">{% csrf_token %}<input type="hidden" name="endpoint_id" value="{{ endpoint.pk }}"><input type="hidden" name="action" value="delete"><button class="btn btn-danger btn-sm">Eliminar</button></form>
+            </div>
+        </div>
+        {% empty %}<p class="text-muted">No hay webhooks configurados.</p>{% endfor %}
+    </section>
+</div>
+<section class="card" style="padding:18px;margin-top:16px;"><h2>Ultimas entregas</h2><table class="table"><thead><tr><th>Fecha</th><th>Webhook</th><th>Evento</th><th>Estado</th><th>Intentos</th><th>HTTP / error</th></tr></thead><tbody>{% for row in latest_deliveries %}<tr><td>{{ row.created_at|date:"d/m/Y H:i" }}</td><td>{{ row.endpoint.name }}</td><td>{{ row.event_type }}</td><td>{{ row.get_status_display }}</td><td>{{ row.attempts_count }}</td><td>{{ row.response_status|default:"-" }} {{ row.last_error }}</td></tr>{% empty %}<tr><td colspan="6">Sin entregas.</td></tr>{% endfor %}</tbody></table></section>
+{% endblock %}

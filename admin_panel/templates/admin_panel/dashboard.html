@@ -255,6 +255,29 @@
         gap: 12px;
         margin-bottom: 12px;
     }
+
+    .dashboard-manager-grid {
+        display: grid;
+        grid-template-columns: repeat(6, minmax(0, 1fr));
+        gap: 10px;
+        margin-bottom: 12px;
+    }
+
+    .dashboard-manager-card {
+        display: grid;
+        gap: 5px;
+        padding: 14px;
+        border-radius: 14px;
+        border: 1px solid rgba(255, 255, 255, 0.07);
+        background: rgba(10, 17, 29, 0.72);
+        color: inherit;
+        text-decoration: none;
+    }
+
+    .dashboard-manager-card span,
+    .dashboard-manager-card small { color: rgba(210, 217, 226, 0.68); font-size: .69rem; }
+    .dashboard-manager-card strong { color: #fff; font-size: 1.12rem; }
+    .dashboard-manager-card:hover { border-color: rgba(255, 107, 53, .32); }
     
     .dashboard-priority-grid {
         display: grid;
@@ -595,6 +618,7 @@
     
     /* Responsive Media Queries */
     @media (max-width: 1250px) {
+        .dashboard-manager-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
         .dashboard-control-grid,
         .dashboard-command-header {
             grid-template-columns: 1fr;
@@ -610,6 +634,7 @@
         }
     }
     @media (max-width: 780px) {
+        .dashboard-manager-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         .dashboard-priority-grid,
         .dashboard-function-grid {
             grid-template-columns: 1fr;
@@ -639,6 +664,39 @@
             <a href="{% url 'admin_payment_list' %}" class="btn btn-outline">Cobros</a>
             <a href="{% url 'select_company' %}?next={{ request.get_full_path|urlencode }}" class="btn btn-outline">Cambiar empresa</a>
         </div>
+    </section>
+
+    <section class="dashboard-manager-grid" aria-label="Indicadores gerenciales">
+        <a href="{% url 'admin_fiscal_document_list' %}" class="dashboard-manager-card">
+            <span>Facturado hoy</span>
+            <strong>${{ today_sales.sales_total|floatformat:2 }}</strong>
+            <small>{{ today_sales.documents_count }} comprobantes</small>
+        </a>
+        <a href="{% url 'admin_fiscal_report' %}" class="dashboard-manager-card">
+            <span>Facturado este mes</span>
+            <strong>${{ month_sales.sales_total|floatformat:2 }}</strong>
+            <small>{{ month_sales.documents_count }} comprobantes</small>
+        </a>
+        <a href="{% url 'admin_fiscal_report' %}" class="dashboard-manager-card">
+            <span>Ticket promedio</span>
+            <strong>${{ month_sales.average_ticket|floatformat:2 }}</strong>
+            <small>Mes actual</small>
+        </a>
+        <a href="{% url 'admin_order_list' %}" class="dashboard-manager-card">
+            <span>Margen estimado</span>
+            <strong>${{ estimated_margin|floatformat:2 }}</strong>
+            <small>Pedidos del mes a costo actual</small>
+        </a>
+        <a href="{% url 'admin_order_list' %}" class="dashboard-manager-card">
+            <span>Pedidos pendientes</span>
+            <strong>{{ pending_orders_count }}</strong>
+            <small>Hasta entrega</small>
+        </a>
+        <a href="{% url 'admin_product_list' %}?stock=low" class="dashboard-manager-card">
+            <span>Stock critico</span>
+            <strong>{{ critical_stock_count }}</strong>
+            <small>Stock menor o igual a {{ critical_stock_threshold }} · {{ new_clients_month }} clientes nuevos</small>
+        </a>
     </section>
 
     <section class="dashboard-control-grid">

@@ -66,6 +66,17 @@
         </div>
 
         <div class="form-group">
+            <label for="supplier_code" class="form-label">Codigo del proveedor</label>
+            <input type="text"
+                   name="supplier_code"
+                   id="supplier_code"
+                   class="form-input"
+                   value="{{ preferred_supplier_offer.supplier_code|default:'' }}"
+                   {% if not user.is_superuser %}disabled{% endif %}>
+            <small class="text-muted">Codigo con el que este proveedor identifica el producto.</small>
+        </div>
+
+        <div class="form-group">
             <label for="image" class="form-label">Imagen</label>
             {% if product and product.image %}
             <div class="product-image-preview">
@@ -261,10 +272,146 @@
     </form>
 </div>
 
+{% if product and 'manage_products' in admin_capabilities %}
+<section class="admin-form-container" id="supplier-offers" style="margin-top:20px;">
+    <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start; flex-wrap:wrap;">
+        <div>
+            <h2 style="margin-bottom:6px;">Proveedores y costos</h2>
+            <p class="text-muted" style="margin-top:0;">Cada proveedor conserva su codigo, condiciones y su propio historial. La identidad interna del producto no se reemplaza.</p>
+        </div>
+        <span class="badge badge-secondary">{{ supplier_offers|length }} relaciones</span>
+    </div>
+
+    {% for offer in supplier_offers %}
+    <details class="supplier-offer-card" {% if offer.is_preferred %}open{% endif %}>
+        <summary>
+            <strong>{{ offer.supplier.name }}</strong>
+            {% if offer.is_preferred %}<span class="badge badge-success">Preferido</span>{% endif %}
+            <span>{{ offer.currency }} {{ offer.final_cost|floatformat:2 }}</span>
+            <small>{{ offer.get_status_display }}</small>
+        </summary>
+        <form method="post" action="{% url 'admin_product_supplier_offer_save' product.pk %}" class="supplier-offer-form">
+            {% csrf_token %}
+            <input type="hidden" name="supplier_id" value="{{ offer.supplier_id }}">
+            <div class="supplier-offer-grid">
+                <label>Codigo proveedor<input class="form-input" name="supplier_code" value="{{ offer.supplier_code }}"></label>
+                <label>Descripcion proveedor<input class="form-input" name="supplier_description" value="{{ offer.supplier_description }}"></label>
+                <label>Costo<input class="form-input" type="number" step="0.0001" min="0" name="current_cost" value="{{ offer.current_cost|unlocalize }}" required></label>
+                <label>Moneda
+                    <select class="form-select" name="currency">
+                        <option value="ARS" {% if offer.currency == 'ARS' %}selected{% endif %}>ARS</option>
+                        <option value="USD" {% if offer.currency == 'USD' %}selected{% endif %}>USD</option>
+                        <option value="EUR" {% if offer.currency == 'EUR' %}selected{% endif %}>EUR</option>
+                    </select>
+                </label>
+                <label>Descuento %<input class="form-input" type="number" step="0.0001" min="0" max="100" name="discount_percentage" value="{{ offer.discount_percentage|unlocalize }}"></label>
+                <label>Bonificacion %<input class="form-input" type="number" step="0.0001" min="0" max="100" name="bonus_percentage" value="{{ offer.bonus_percentage|unlocalize }}"></label>
+                <label>Impuesto %<input class="form-input" type="number" step="0.0001" min="0" max="100" name="tax_percentage" value="{{ offer.tax_percentage|unlocalize }}"></label>
+                <label>Compra minima<input class="form-input" type="number" min="1" name="minimum_purchase_quantity" value="{{ offer.minimum_purchase_quantity }}"></label>
+                <label>Demora (dias)<input class="form-input" type="number" min="0" name="lead_time_days" value="{{ offer.lead_time_days }}"></label>
+                <label>Fecha de lista<input class="form-input" type="date" name="price_list_date" value="{{ offer.price_list_date|date:'Y-m-d' }}"></label>
+                <label>Estado
+                    <select class="form-select" name="status">
+                        <option value="active" {% if offer.status == 'active' %}selected{% endif %}>Activo</option>
+                        <option value="review" {% if offer.status == 'review' %}selected{% endif %}>Revisar</option>
+                        <option value="inactive" {% if offer.status == 'inactive' %}selected{% endif %}>Inactivo</option>
+                    </select>
+                </label>
+                <label>Motivo del cambio<input class="form-input" name="change_reason" placeholder="Ej.: lista julio 2026"></label>
+            </div>
+            <label>Observaciones<textarea class="form-input" name="notes" rows="2">{{ offer.notes }}</textarea></label>
+            <div style="display:flex; gap:16px; margin:12px 0; flex-wrap:wrap;">
+                <label><input type="checkbox" name="is_available" {% if offer.is_available %}checked{% endif %}> Disponible</label>
+                <label><input type="checkbox" name="is_preferred" {% if offer.is_preferred %}checked{% endif %}> Proveedor preferido</label>
+                <strong>Costo final calculado: {{ offer.currency }} {{ offer.final_cost|floatformat:4 }}</strong>
+            </div>
+            <button class="btn btn-primary btn-sm" type="submit">Guardar relacion</button>
+        </form>
+
+        {% if offer.recent_cost_history %}
+        <div class="table-responsive" style="margin-top:14px;">
+            <table class="admin-table">
+                <thead><tr><th>Fecha</th><th>Anterior</th><th>Nuevo</th><th>Diferencia</th><th>Origen</th></tr></thead>
+                <tbody>
+                    {% for change in offer.recent_cost_history %}
+                    <tr>
+                        <td>{{ change.created_at|date:"d/m/Y H:i" }}</td>
+                        <td>{% if change.previous_cost is None %}-{% else %}{{ change.currency }} {{ change.previous_cost|floatformat:4 }}{% endif %}</td>
+                        <td>{{ change.currency }} {{ change.new_cost|floatformat:4 }}</td>
+                        <td>{{ change.difference_amount|floatformat:4 }}{% if change.difference_percentage is not None %} ({{ change.difference_percentage|floatformat:2 }}%){% endif %}</td>
+                        <td>{{ change.source }}{% if change.changed_by %} · {{ change.changed_by.username }}{% endif %}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+    </details>
+    {% empty %}
+    <p class="text-muted">Este producto todavia no tiene relaciones normalizadas con proveedores.</p>
+    {% endfor %}
+
+    <details class="supplier-offer-card" style="margin-top:14px;">
+        <summary><strong>Agregar otro proveedor</strong></summary>
+        <form method="post" action="{% url 'admin_product_supplier_offer_save' product.pk %}" class="supplier-offer-form">
+            {% csrf_token %}
+            <div class="supplier-offer-grid">
+                <label>Proveedor
+                    <select class="form-select" name="supplier_id" required>
+                        <option value="">Seleccionar...</option>
+                        {% for supplier_option in supplier_options %}
+                        <option value="{{ supplier_option.pk }}">{{ supplier_option.name }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+                <label>Codigo proveedor<input class="form-input" name="supplier_code"></label>
+                <label>Descripcion proveedor<input class="form-input" name="supplier_description"></label>
+                <label>Costo<input class="form-input" type="number" step="0.0001" min="0" name="current_cost" value="{{ product.cost|unlocalize }}" required></label>
+                <label>Moneda<select class="form-select" name="currency"><option>ARS</option><option>USD</option><option>EUR</option></select></label>
+                <label>Descuento %<input class="form-input" type="number" step="0.0001" min="0" max="100" name="discount_percentage" value="0"></label>
+                <label>Bonificacion %<input class="form-input" type="number" step="0.0001" min="0" max="100" name="bonus_percentage" value="0"></label>
+                <label>Impuesto %<input class="form-input" type="number" step="0.0001" min="0" max="100" name="tax_percentage" value="0"></label>
+                <label>Compra minima<input class="form-input" type="number" min="1" name="minimum_purchase_quantity" value="1"></label>
+                <label>Demora (dias)<input class="form-input" type="number" min="0" name="lead_time_days" value="0"></label>
+                <label>Fecha de lista<input class="form-input" type="date" name="price_list_date"></label>
+                <label>Estado<select class="form-select" name="status"><option value="active">Activo</option><option value="review">Revisar</option><option value="inactive">Inactivo</option></select></label>
+                <label>Motivo del alta<input class="form-input" name="change_reason" value="Alta manual de proveedor alternativo."></label>
+            </div>
+            <label>Observaciones<textarea class="form-input" name="notes" rows="2"></textarea></label>
+            <div style="display:flex; gap:16px; margin:12px 0;">
+                <label><input type="checkbox" name="is_available" checked> Disponible</label>
+                <label><input type="checkbox" name="is_preferred"> Proveedor preferido</label>
+            </div>
+            <button class="btn btn-primary btn-sm" type="submit">Agregar proveedor</button>
+        </form>
+    </details>
+</section>
+{% endif %}
+
 {{ product.attributes|json_script:"attributes-data" }}
 {{ existing_blocks_json|json_script:"existing-blocks-data" }}
 
 <style>
+    .supplier-offer-card {
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 8px;
+        padding: 12px;
+        margin-top: 12px;
+    }
+    .supplier-offer-card summary {
+        cursor: pointer;
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+    .supplier-offer-form { margin-top: 14px; }
+    .supplier-offer-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+        gap: 12px;
+    }
+    .supplier-offer-grid label { display: grid; gap: 5px; }
     #categoryCheckGrid {
         margin-top: 10px;
         max-height: 380px;

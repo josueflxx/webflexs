@@ -11,6 +11,7 @@ from accounts.models import AccountRequest, ClientCategory, ClientCompany, Clien
 from accounts.services.client_importer import ClientImporter
 from accounts.services.ledger import sync_order_charge_transaction
 from core.models import (
+    AdminCompanyAccess,
     Company,
     DocumentSeries,
     FISCAL_DOC_TYPE_FB,
@@ -116,7 +117,7 @@ class LoginRedirectCompanySelectionTests(TestCase):
             is_active=True,
         )
 
-    def test_client_with_multiple_companies_goes_to_catalog_without_selector(self):
+    def test_client_with_multiple_companies_goes_to_company_selector(self):
         user = User.objects.create_user(username="cliente_multi_redirect", password="secret123")
         profile = ClientProfile.objects.create(user=user, company_name="Cliente Multi Redirect")
         primary_link_company = self.default_client_company or self.default_company
@@ -140,11 +141,8 @@ class LoginRedirectCompanySelectionTests(TestCase):
         response = self.client.get(reverse("login_redirect"))
 
         self.assertEqual(response.status_code, 302)
-        self.assertEqual(response.url, reverse("catalog"))
-        self.assertEqual(
-            self.client.session.get("active_company_id"),
-            primary_link_company.pk,
-        )
+        self.assertIn(reverse("select_company"), response.url)
+        self.assertNotIn("active_company_id", self.client.session)
 
     def test_staff_with_multiple_companies_still_goes_to_company_selector(self):
         staff = User.objects.create_user(
@@ -152,6 +150,8 @@ class LoginRedirectCompanySelectionTests(TestCase):
             password="secret123",
             is_staff=True,
         )
+        for company in Company.objects.filter(is_active=True):
+            AdminCompanyAccess.objects.create(user=staff, company=company, is_active=True)
         self.client.force_login(staff)
 
         response = self.client.get(reverse("login_redirect"))

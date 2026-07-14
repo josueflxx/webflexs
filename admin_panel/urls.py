@@ -7,11 +7,15 @@ from . import views
 urlpatterns = [
     # Dashboard
     path('', views.dashboard, name='admin_dashboard'),
+    path('buscar/', views.global_search, name='admin_global_search'),
     
     # Products
     path('productos/', views.product_list, name='admin_product_list'),
     path('productos/nuevo/', views.product_create, name='admin_product_create'),
+    path('productos/duplicados/', views.product_duplicate_reviews, name='admin_product_duplicate_reviews'),
+    path('productos/duplicados/<int:pk>/revisar/', views.product_duplicate_review_decision, name='admin_product_duplicate_review_decision'),
     path('productos/<int:pk>/editar/', views.product_edit, name='admin_product_edit'),
+    path('productos/<int:pk>/proveedores/guardar/', views.product_supplier_offer_save, name='admin_product_supplier_offer_save'),
     path('productos/toggle-active/', views.product_toggle_active, name='admin_product_toggle'),
     path('productos/<int:pk>/eliminar/', views.product_delete, name='admin_product_delete'),
     path('productos/eliminar-todos/', views.product_delete_all, name='admin_product_delete_all'),
@@ -180,6 +184,9 @@ urlpatterns = [
     
     # Settings
     path('configuracion/', views.settings_view, name='admin_settings'),
+    path('configuracion/backups/', views.backup_center, name='admin_backup_center'),
+    path('configuracion/backups/ejecutar/', views.backup_run, name='admin_backup_run'),
+    path('configuracion/webhooks/', views.webhook_center, name='admin_webhook_center'),
     path('configuracion/exportar-productos-diagnostico/', views.export_products_diagnostic, name='admin_export_products_diagnostic'),
     path('configuracion/tipos-documento/', views.sales_document_type_list, name='admin_sales_document_type_list'),
     path('configuracion/tipos-venta/', views.sales_document_type_list, name='admin_sales_type_list'),
@@ -217,6 +224,12 @@ urlpatterns = [
     
     # Importers
     path('importar/', views.import_dashboard, name='admin_import_dashboard'),
+    path('importar/listas-proveedor/', views.supplier_price_list_batches, name='admin_supplier_price_list_batches'),
+    path('importar/listas-proveedor/nueva/', views.supplier_price_list_upload, name='admin_supplier_price_list_upload'),
+    path('importar/listas-proveedor/<int:batch_id>/mapear/', views.supplier_price_list_mapping, name='admin_supplier_price_list_mapping'),
+    path('importar/listas-proveedor/<int:batch_id>/preview/', views.supplier_price_list_preview, name='admin_supplier_price_list_preview'),
+    path('importar/listas-proveedor/<int:batch_id>/aplicar/', views.supplier_price_list_apply, name='admin_supplier_price_list_apply'),
+    path('importar/listas-proveedor/<int:batch_id>/reporte.csv', views.supplier_price_list_report, name='admin_supplier_price_list_report'),
     path('importar/status/<str:task_id>/', views.import_status, name='admin_import_status'),
     path('importar/<str:import_type>/plantilla/', views.import_template_download, name='admin_import_template_download'),
     path('importar/<str:import_type>/diagnostico/', views.import_diagnostic_download, name='admin_import_diagnostic_download'),

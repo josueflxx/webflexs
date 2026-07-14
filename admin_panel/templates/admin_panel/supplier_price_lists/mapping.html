@@ -1,0 +1,28 @@
+{% extends 'admin_panel/base.html' %}
+{% block page_title %}Mapear lista de proveedor{% endblock %}
+{% block extra_css %}{% include 'admin_panel/supplier_price_lists/_styles.html' %}{% endblock %}
+{% block content %}
+<div class="spl-shell">
+    <div class="spl-head">
+        <div><h2>Mapear columnas</h2><p class="spl-muted">{{ batch.supplier.name }} · {{ batch.original_filename }} · lote #{{ batch.pk }}</p></div>
+        <a class="btn btn-secondary" href="{% url 'admin_supplier_price_list_batches' %}">Volver</a>
+    </div>
+    <div class="spl-card">
+        <form method="post" class="spl-form">
+            {% csrf_token %}
+            {{ form.as_p }}
+            <div class="spl-actions">
+                <button class="btn btn-secondary" type="submit" name="action" value="inspect">Volver a detectar columnas</button>
+                <button class="btn btn-primary" type="submit" name="action" value="preview">Generar previsualizacion segura</button>
+            </div>
+        </form>
+    </div>
+    <div class="spl-card spl-table-wrap">
+        <h3>Muestra del archivo</h3>
+        <table class="spl-table">
+            <thead><tr>{% for header in inspection.headers %}<th>{{ header }}</th>{% endfor %}</tr></thead>
+            <tbody>{% for sample in inspection.samples %}<tr>{% for key, value in sample.items %}<td>{{ value|default_if_none:'' }}</td>{% endfor %}</tr>{% empty %}<tr><td class="spl-muted">No hay filas de muestra.</td></tr>{% endfor %}</tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

@@ -86,6 +86,13 @@
                     <span class="nav-icon" aria-hidden="true">&#128202;</span>
                     Dashboard
                 </a>
+                {% if 'global_search' in admin_capabilities %}
+                <a href="{% url 'admin_global_search' %}"
+                    class="nav-item {% if request.resolver_match.url_name == 'admin_global_search' %}active{% endif %}">
+                    <span class="nav-icon" aria-hidden="true">&#128269;</span>
+                    Buscador global
+                </a>
+                {% endif %}
 
                 <div class="nav-section">Catalogo</div>
                 <a href="{% url 'admin_product_list' %}"
@@ -187,6 +194,13 @@
                     <span class="nav-icon" aria-hidden="true">&#128208;</span>
                     Cotizador
                 </a>
+                {% if 'run_imports' in admin_capabilities and 'manage_products' in admin_capabilities %}
+                <a href="{% url 'admin_supplier_price_list_batches' %}"
+                    class="nav-item {% if 'supplier_price_list' in request.resolver_match.url_name %}active{% endif %}">
+                    <span class="nav-icon" aria-hidden="true">&#128200;</span>
+                    Listas de proveedor
+                </a>
+                {% endif %}
 
                 {% if user.is_superuser %}
                 <div class="nav-section">Configuracion</div>
@@ -195,6 +209,12 @@
                     <span class="nav-icon" aria-hidden="true">&#9881;</span>
                     Configuracion
                 </a>
+                {% endif %}
+                {% if 'manage_backups' in admin_capabilities %}
+                <a href="{% url 'admin_backup_center' %}" class="nav-item {% if request.resolver_match.url_name == 'admin_backup_center' %}active{% endif %}"><span class="nav-icon">&#128190;</span> Backups</a>
+                {% endif %}
+                {% if 'manage_integrations' in admin_capabilities %}
+                <a href="{% url 'admin_webhook_center' %}" class="nav-item {% if request.resolver_match.url_name == 'admin_webhook_center' %}active{% endif %}"><span class="nav-icon">&#128279;</span> API y webhooks</a>
                 {% endif %}
                 <a
                     href="{% url 'select_company' %}?next={{ request.get_full_path|urlencode }}"
@@ -227,6 +247,12 @@
                     <h1>{% block page_title %}Dashboard{% endblock %}</h1>
                 </div>
                 <div class="header-user">
+                    {% if 'global_search' in admin_capabilities %}
+                    <form method="get" action="{% url 'admin_global_search' %}" style="display:flex;gap:6px;min-width:min(360px,32vw);">
+                        <input type="search" name="q" class="form-input" placeholder="Buscar en todo..." aria-label="Buscador global">
+                        <button type="submit" class="btn btn-ghost" aria-label="Buscar">&#128269;</button>
+                    </form>
+                    {% endif %}
                     <div class="header-user-actions">
                         <button class="theme-toggle-btn" id="themeToggle" type="button" aria-label="Cambiar tema">
                             <svg viewBox="0 0 24 24" id="themeIcon">
@@ -297,6 +323,11 @@
                             <a href="{% url 'admin_supplier_list' %}" class="top-nav-item {% if 'supplier' in request.resolver_match.url_name %}active{% endif %}">
                                 <span aria-hidden="true">&#127981;</span> Proveedores
                             </a>
+                            {% if 'run_imports' in admin_capabilities and 'manage_products' in admin_capabilities %}
+                            <a href="{% url 'admin_supplier_price_list_batches' %}" class="top-nav-item {% if 'supplier_price_list' in request.resolver_match.url_name %}active{% endif %}">
+                                <span aria-hidden="true">&#128200;</span> Listas proveedor
+                            </a>
+                            {% endif %}
                             <a href="{% url 'admin_clamp_request_list' %}" class="top-nav-item {% if 'clamp_request' in request.resolver_match.url_name %}active{% endif %}">
                                 <span aria-hidden="true">&#128203;</span> Solicitudes Medida
                             </a>

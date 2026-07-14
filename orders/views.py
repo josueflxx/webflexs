@@ -3,12 +3,14 @@ Orders app views - Cart, orders, and client portal.
 """
 import json
 import logging
+import uuid
 from decimal import Decimal
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.apps import apps
 from django.core.exceptions import ValidationError
+from django.core import signing
 from django.db import transaction
 from django.db.models import Prefetch
 from django.http import JsonResponse, HttpResponse
@@ -534,6 +536,26 @@ def checkout(request):
     discount = pricing["discount_percentage"] / Decimal("100") if pricing["discount_percentage"] else Decimal("0")
     if request.method == "POST":
         notes = request.POST.get("notes", "").strip()
+        checkout_token = str(request.POST.get("checkout_token", "") or "").strip()
+        idempotency_key = uuid.uuid4().hex
+        if checkout_token:
+            try:
+                token_payload = signing.loads(
+                    checkout_token,
+                    salt="orders.checkout",
+                    max_age=60 * 60 * 2,
+                )
+            except signing.BadSignature:
+                messages.error(request, "La confirmacion vencio. Revisa el carrito e intenta nuevamente.")
+                return redirect("checkout")
+            if (
+                token_payload.get("user_id") != request.user.pk
+                or token_payload.get("company_id") != company.pk
+                or token_payload.get("cart_id") != cart.pk
+            ):
+                messages.error(request, "La confirmacion no corresponde al carrito activo.")
+                return redirect("checkout")
+            idempotency_key = str(token_payload.get("nonce") or idempotency_key)[:64]
         with transaction.atomic():
             cart = Cart.objects.select_for_update().get(pk=cart.pk)
             try:
@@ -543,6 +565,7 @@ def checkout(request):
                     company=company,
                     client_note=notes,
                     origin_channel=Order.ORIGIN_CATALOG,
+                    idempotency_key=idempotency_key,
                 )
             except ValidationError as exc:
                 messages.error(request, str(exc))
@@ -565,6 +588,15 @@ def checkout(request):
         "subtotal": pricing["subtotal"],
         "discount_amount": pricing["discount_amount"],
         "total": pricing["total"],
+        "checkout_token": signing.dumps(
+            {
+                "user_id": request.user.pk,
+                "company_id": company.pk,
+                "cart_id": cart.pk,
+                "nonce": uuid.uuid4().hex,
+            },
+            salt="orders.checkout",
+        ),
     }
     return render(request, "orders/checkout.html", context)
 

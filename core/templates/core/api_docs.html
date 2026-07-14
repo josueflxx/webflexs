@@ -1,0 +1,31 @@
+{% extends 'admin_panel/base.html' %}
+
+{% block page_title %}API y webhooks{% endblock %}
+
+{% block content %}
+<section class="card" style="padding:22px;max-width:1050px;">
+    <h2>FLEXS API v1</h2>
+    <p>La API usa el encabezado <code>Authorization: Token &lt;token&gt;</code>. En cuentas con varias empresas agrega <code>?company_id=ID</code> en cada solicitud.</p>
+    <div class="alert alert-info">Los tokens heredan empresas, roles y permisos del usuario. Desactivar la cuenta revoca su acceso.</div>
+
+    <h3>Recursos</h3>
+    <table class="table">
+        <thead><tr><th>Metodo</th><th>Ruta</th><th>Uso</th></tr></thead>
+        <tbody>
+            <tr><td>POST</td><td><code>/api/v1/auth/token/</code></td><td>Obtiene token con usuario y contraseña.</td></tr>
+            <tr><td>GET</td><td><code>/api/v1/catalog/products/</code></td><td>Productos; admite q, category, supplier e in_stock.</td></tr>
+            <tr><td>GET</td><td><code>/api/v1/clients/</code></td><td>Clientes de la empresa activa.</td></tr>
+            <tr><td>GET</td><td><code>/api/v1/orders/</code></td><td>Pedidos, estado y totales.</td></tr>
+            <tr><td>GET/POST</td><td><code>/api/v1/webhooks/</code></td><td>Lista o crea destinos de webhook.</td></tr>
+            <tr><td>PATCH/DELETE</td><td><code>/api/v1/webhooks/{id}/</code></td><td>Edita, rota el secreto o elimina.</td></tr>
+            <tr><td>GET</td><td><code>/api/v1/schema/</code></td><td>Esquema legible por herramientas.</td></tr>
+        </tbody>
+    </table>
+
+    <h3>Firma de webhooks</h3>
+    <p>Se envian <code>X-FLEXS-Event</code>, <code>X-FLEXS-Event-ID</code>, <code>X-FLEXS-Timestamp</code> y <code>X-FLEXS-Signature</code>. Verifica la firma calculando HMAC-SHA256 sobre <code>&lt;timestamp&gt;.&lt;raw_body&gt;</code> con el secreto del endpoint.</p>
+    <pre style="white-space:pre-wrap;padding:14px;border-radius:10px;background:#090f1b;">signature = HMAC_SHA256(secret, timestamp + "." + raw_request_body)
+expected_header = "sha256=" + signature</pre>
+    <p>Eventos disponibles: <code>order.created</code>, <code>order.status_changed</code>, <code>payment.recorded</code> y <code>fiscal.updated</code>. Las entregas fallidas se reintentan con espera progresiva.</p>
+</section>
+{% endblock %}

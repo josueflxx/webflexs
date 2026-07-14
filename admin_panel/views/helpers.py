@@ -95,6 +95,7 @@ from orders.services.request_workflow import (
     reject_order_request,
 )
 from core.models import (
+    AdminCapabilityProfile,
     AdminCompanyAccess,
     Company,
     DocumentSeries,
@@ -138,6 +139,7 @@ from core.models import (
     StockMovement,
     Warehouse,
 )
+from core.services.authorization import CAP_ISSUE_DOCUMENTS, get_user_capabilities, has_capability
 from core.services.company_context import (
     admin_company_access_table_available,
     get_active_company,
@@ -359,12 +361,15 @@ def get_admin_company_scope_mode(user):
         return "all"
     if not admin_company_access_table_available():
         return "all"
-    has_db_scope = AdminCompanyAccess.objects.filter(
+    scoped_ids = set(AdminCompanyAccess.objects.filter(
         user=user,
         is_active=True,
         company__is_active=True,
-    ).exists()
-    return "limited" if has_db_scope else "all"
+    ).values_list("company_id", flat=True))
+    active_ids = set(Company.objects.filter(is_active=True).values_list("id", flat=True))
+    if scoped_ids and scoped_ids == active_ids:
+        return "all"
+    return "limited"
 
 
 def get_admin_user_scope_ids(user):
@@ -392,6 +397,7 @@ def build_admin_user_snapshot(user):
         "roles": get_admin_role_values(user),
         "company_scope_mode": get_admin_company_scope_mode(user),
         "company_ids": sorted(get_admin_user_scope_ids(user)),
+        "capabilities": sorted(get_user_capabilities(user)),
     }
 
 
@@ -961,6 +967,9 @@ ORDER_PRODUCT_SEARCH_FIELDS = [
     "name",
     "supplier",
     "supplier_ref__name",
+    "supplier_offers__supplier__name",
+    "supplier_offers__supplier_code",
+    "supplier_offers__supplier_description",
     "description",
 ]
 
@@ -1423,10 +1432,7 @@ def can_manage_fiscal_operations(user):
     """
     if not getattr(user, "is_authenticated", False):
         return False
-    if getattr(user, "is_superuser", False):
-        return True
-    role_values = set(get_admin_role_values(user))
-    return bool(ROLE_ADMIN in role_values or ROLE_FACTURACION in role_values)
+    return has_capability(user, CAP_ISSUE_DOCUMENTS)
 
 
 def _deny_fiscal_operation_if_needed(request, *, redirect_url, action_label):
@@ -1434,7 +1440,7 @@ def _deny_fiscal_operation_if_needed(request, *, redirect_url, action_label):
         return None
     messages.error(
         request,
-        f"No tenes permisos para {action_label}. Requiere rol Facturacion o Administracion.",
+        f"No tenes permisos para {action_label}. Requiere el permiso Emitir comprobantes.",
     )
     if hasattr(redirect_url, "status_code"):
         return redirect_url
@@ -2291,14 +2297,22 @@ def build_product_filter_chips(query_params, category_options):
 
 def get_product_queryset(data):
     """Resusable filter logic for products."""
-    products = Product.objects.select_related('category', 'supplier_ref').prefetch_related('categories').all()
+    products = Product.objects.select_related('category', 'supplier_ref').prefetch_related(
+        'categories', 'supplier_offers'
+    ).all()
     
     # Search
     products, search = apply_admin_text_search(
         products,
         data.get('q', ''),
-        ["sku", "name", "supplier", "supplier_ref__name", "description", "filter_1", "filter_2", "filter_3"],
+        [
+            "sku", "name", "supplier", "supplier_ref__name", "description",
+            "filter_1", "filter_2", "filter_3", "supplier_offers__supplier__name",
+            "supplier_offers__supplier_code", "supplier_offers__supplier_description",
+        ],
     )
+    if search:
+        products = products.distinct()
     
     # Category filter
     category_id = (data.get('category', '') or '').strip()
@@ -2477,14 +2491,24 @@ def build_supplier_products_queryset(supplier, req_get):
     """
     Shared filter logic for supplier detail/export/actions.
     """
-    products = Product.objects.select_related('category', 'supplier_ref').prefetch_related('categories').filter(
-        supplier_ref=supplier
+    products = (
+        Product.objects.select_related('category', 'supplier_ref')
+        .prefetch_related('categories', 'supplier_offers')
+        .filter(Q(supplier_ref=supplier) | Q(supplier_offers__supplier=supplier))
+        .distinct()
     )
 
     products, search = apply_admin_text_search(
         products,
         req_get.get('q', ''),
-        ["sku", "name", "description", "supplier", "supplier_ref__name"],
+        [
+            "sku",
+            "name",
+            "description",
+            "supplier",
+            "supplier_ref__name",
+            "supplier_offers__supplier_code",
+        ],
     )
 
     active_filter = req_get.get('active', '').strip()

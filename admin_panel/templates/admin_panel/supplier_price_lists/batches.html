@@ -1,0 +1,40 @@
+{% extends 'admin_panel/base.html' %}
+{% block page_title %}Listas de proveedor{% endblock %}
+{% block extra_css %}{% include 'admin_panel/supplier_price_lists/_styles.html' %}{% endblock %}
+{% block content %}
+<div class="spl-shell">
+    <div class="spl-head">
+        <div><h2>Listas de proveedor</h2><p class="spl-muted">Empresa: {{ active_company.name }}</p></div>
+        <div class="spl-actions">
+            <a class="btn btn-secondary" href="{% url 'admin_dashboard' %}">Panel principal</a>
+            <a class="btn btn-primary" href="{% url 'admin_supplier_price_list_upload' %}">Cargar nueva lista</a>
+        </div>
+    </div>
+    <div class="spl-card spl-table-wrap">
+        <table class="spl-table">
+            <thead><tr><th>Fecha</th><th>Proveedor</th><th>Archivo</th><th>Estado</th><th>Filas</th><th>Usuario</th><th>Acciones</th></tr></thead>
+            <tbody>
+            {% for batch in page_obj %}
+                <tr>
+                    <td>{{ batch.created_at|date:'d/m/Y H:i' }}</td>
+                    <td>{{ batch.supplier.name }}</td>
+                    <td>{{ batch.original_filename }}<br><span class="spl-muted">{{ batch.file_size|filesizeformat }}</span></td>
+                    <td>{{ batch.get_status_display }}{% if batch.error_message %}<br><span class="spl-danger">{{ batch.error_message|truncatechars:100 }}</span>{% endif %}</td>
+                    <td>{{ batch.summary.total_rows|default:'-' }}</td>
+                    <td>{{ batch.created_by.username|default:'-' }}</td>
+                    <td class="spl-actions">
+                        {% if batch.status == 'uploaded' %}<a class="btn btn-sm btn-primary" href="{% url 'admin_supplier_price_list_mapping' batch.pk %}">Mapear</a>{% else %}<a class="btn btn-sm btn-info" href="{% url 'admin_supplier_price_list_preview' batch.pk %}">Ver comparacion</a>{% endif %}
+                        <a class="btn btn-sm btn-secondary" href="{% url 'admin_supplier_price_list_report' batch.pk %}">CSV</a>
+                    </td>
+                </tr>
+            {% empty %}<tr><td colspan="7" class="spl-muted">Todavia no hay listas cargadas.</td></tr>{% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <div class="spl-pagination">
+        {% if page_obj.has_previous %}<a href="?page={{ page_obj.previous_page_number }}">Anterior</a>{% endif %}
+        <span>Pagina {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
+        {% if page_obj.has_next %}<a href="?page={{ page_obj.next_page_number }}">Siguiente</a>{% endif %}
+    </div>
+</div>
+{% endblock %}

@@ -9,6 +9,7 @@
 
         <form method="post" class="checkout-layout">
             {% csrf_token %}
+            <input type="hidden" name="checkout_token" value="{{ checkout_token }}">
 
             <div class="checkout-items">
                 <h3>Productos ({{ cart.get_item_count }})</h3>

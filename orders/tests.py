@@ -19,6 +19,7 @@ from orders.services.request_workflow import (
 )
 from orders.services.workflow import can_user_transition_order, get_order_queue_queryset_for_user
 from core.models import (
+    AdminCompanyAccess,
     DocumentSeries,
     FISCAL_DOC_TYPE_FB,
     FiscalDocument,
@@ -32,6 +33,16 @@ from core.models import (
 )
 from core.services.company_context import get_default_company
 from core.services.fiscal_documents import close_fiscal_document
+
+
+def grant_test_staff_access(user, company):
+    group, _created = Group.objects.get_or_create(name="admin")
+    user.groups.add(group)
+    AdminCompanyAccess.objects.update_or_create(
+        user=user,
+        company=company,
+        defaults={"is_active": True},
+    )
 
 
 class OrderPaymentWorkflowTests(TestCase):
@@ -540,6 +551,7 @@ class OrderRequestPortalViewTests(TestCase):
             is_approved=True,
         )
         self.company = get_default_company()
+        grant_test_staff_access(self.staff_user, self.company)
         self.client_company = ClientCompany.objects.create(
             client_profile=self.client_profile,
             company=self.company,
@@ -602,6 +614,7 @@ class OrderRequestReviewActionsTests(TestCase):
             is_approved=True,
         )
         self.company = get_default_company()
+        grant_test_staff_access(self.staff_user, self.company)
         self.client_company = ClientCompany.objects.create(
             client_profile=self.client_profile,
             company=self.company,

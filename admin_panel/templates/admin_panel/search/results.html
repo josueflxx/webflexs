@@ -1,0 +1,41 @@
+{% extends 'admin_panel/base.html' %}
+
+{% block page_title %}Buscador global{% endblock %}
+
+{% block content %}
+<section class="card" style="padding:20px;">
+    <form method="get" class="toolbar" style="display:grid;grid-template-columns:minmax(240px,1fr) 190px auto;gap:10px;">
+        <input type="search" name="q" value="{{ query }}" class="form-input" placeholder="Producto, cliente, pedido, CUIT o comprobante" autofocus>
+        <select name="type" class="form-select">
+            <option value="all" {% if selected_type == 'all' %}selected{% endif %}>Todo</option>
+            <option value="products" {% if selected_type == 'products' %}selected{% endif %}>Productos</option>
+            <option value="clients" {% if selected_type == 'clients' %}selected{% endif %}>Clientes</option>
+            <option value="orders" {% if selected_type == 'orders' %}selected{% endif %}>Pedidos</option>
+            <option value="requests" {% if selected_type == 'requests' %}selected{% endif %}>Solicitudes web</option>
+            <option value="documents" {% if selected_type == 'documents' %}selected{% endif %}>Comprobantes</option>
+        </select>
+        <button class="btn btn-primary" type="submit">Buscar</button>
+    </form>
+</section>
+
+{% if query %}
+<p class="text-muted" style="margin:14px 0;">{{ total_results }} resultados para “{{ query }}” en {{ active_company.name }}.</p>
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px;">
+    {% for section in sections %}
+    <section class="card" style="padding:16px;">
+        <h3 style="margin:0 0 12px;">{{ section.label }} <small class="text-muted">({{ section.rows|length }})</small></h3>
+        <div style="display:grid;gap:8px;">
+            {% for row in section.rows %}
+            <a href="{{ row.url }}" style="display:block;padding:11px;border:1px solid rgba(255,255,255,.08);border-radius:10px;text-decoration:none;color:inherit;">
+                <strong style="display:block;">{{ row.title }}</strong>
+                <small class="text-muted">{{ row.summary }}</small>
+            </a>
+            {% empty %}
+            <span class="text-muted">Sin coincidencias.</span>
+            {% endfor %}
+        </div>
+    </section>
+    {% endfor %}
+</div>
+{% endif %}
+{% endblock %}

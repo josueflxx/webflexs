@@ -1,0 +1,86 @@
+{% extends 'admin_panel/base.html' %}
+{% block page_title %}Comparar lista de proveedor{% endblock %}
+{% block extra_css %}{% include 'admin_panel/supplier_price_lists/_styles.html' %}{% endblock %}
+{% block content %}
+<div class="spl-shell">
+    <div class="spl-head">
+        <div><h2>Comparacion de lista</h2><p class="spl-muted">{{ batch.supplier.name }} · {{ batch.original_filename }} · lote #{{ batch.pk }} · {{ batch.get_status_display }}</p></div>
+        <div class="spl-actions">
+            <a class="btn btn-secondary" href="{% url 'admin_supplier_price_list_batches' %}">Historial</a>
+            {% if batch.status != 'applied' %}<a class="btn btn-secondary" href="{% url 'admin_supplier_price_list_mapping' batch.pk %}">Regenerar mapeo</a>{% endif %}
+            <a class="btn btn-info" href="{% url 'admin_supplier_price_list_report' batch.pk %}">Descargar reporte CSV</a>
+        </div>
+    </div>
+
+    <div class="spl-card spl-stats">
+        <div class="spl-stat"><span>Total</span><strong>{{ batch.summary.total_rows|default:0 }}</strong></div>
+        <div class="spl-stat"><span>Aumentos</span><strong>{{ batch.summary.changes.increase|default:0 }}</strong></div>
+        <div class="spl-stat"><span>Disminuciones</span><strong>{{ batch.summary.changes.decrease|default:0 }}</strong></div>
+        <div class="spl-stat"><span>Sin cambios</span><strong>{{ batch.summary.changes.unchanged|default:0 }}</strong></div>
+        <div class="spl-stat"><span>Nuevas relaciones</span><strong>{{ batch.summary.changes.new_relation|default:0 }}</strong></div>
+        <div class="spl-stat"><span>Sin identificar</span><strong>{{ batch.summary.changes.unmatched|default:0 }}</strong></div>
+        <div class="spl-stat"><span>Ausentes</span><strong>{{ batch.summary.absent_rows|default:0 }}</strong></div>
+        <div class="spl-stat"><span>En revision</span><strong>{{ batch.summary.decisions.review|default:0 }}</strong></div>
+    </div>
+
+    {% if batch.error_message %}<div class="spl-card spl-danger"><strong>Ultimo error:</strong> {{ batch.error_message }}</div>{% endif %}
+
+    <div class="spl-card">
+        <form method="get" class="spl-filters">
+            <label>Cambio<select name="change"><option value="">Todos</option>{% for value, label in change_choices %}<option value="{{ value }}" {% if change_filter == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+            <label>Decision<select name="decision"><option value="">Todas</option>{% for value, label in decision_choices %}<option value="{{ value }}" {% if decision_filter == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+            <button class="btn btn-secondary" type="submit">Filtrar</button>
+        </form>
+    </div>
+
+    <form method="post">
+        {% csrf_token %}
+        <div class="spl-card spl-table-wrap">
+            <table class="spl-table">
+                <thead><tr><th>Fila</th><th>Codigo / descripcion</th><th>Producto identificado</th><th>Coincidencia</th><th>Cambio</th><th>Costos</th><th>Advertencias</th><th>Decision</th></tr></thead>
+                <tbody>
+                {% for row in page_obj %}
+                    <tr>
+                        <td>{{ row.row_number }}{% if row.row_type == 'absent' %}<br><span class="spl-warning">Ausente</span>{% endif %}</td>
+                        <td><strong>{{ row.supplier_code|default:'-' }}</strong><br><span class="spl-muted">{{ row.supplier_description|default:'-' }}</span></td>
+                        <td>{% if row.matched_product %}<strong>{{ row.matched_product.sku }}</strong><br>{{ row.matched_product.name }}{% else %}<span class="spl-danger">Sin identificar</span>{% endif %}</td>
+                        <td>{{ row.match_method|default:'-' }}<br><span class="spl-muted">{{ row.match_confidence }}%</span></td>
+                        <td>{{ row.get_change_type_display }}{% if row.difference_percentage != None %}<br><span class="{% if row.difference_amount > 0 %}spl-danger{% else %}spl-success{% endif %}">{{ row.difference_percentage }}%</span>{% endif %}</td>
+                        <td>Antes: {{ row.previous_cost|default_if_none:'-' }}<br>Nuevo: {{ row.proposed_cost|default_if_none:'-' }} {{ row.currency }}<br><span class="spl-muted">Final: {{ row.proposed_final_cost|default_if_none:'-' }}</span></td>
+                        <td>{% for warning in row.warnings %}<div class="spl-warning">{{ warning }}</div>{% empty %}<span class="spl-muted">-</span>{% endfor %}</td>
+                        <td>
+                            {% if batch.status == 'previewed' %}
+                            <select name="decision_{{ row.pk }}">
+                                <option value="apply" {% if row.decision == 'apply' %}selected{% endif %} {% if not row.matched_product or row.row_type == 'absent' or row.change_type == 'invalid' or row.change_type == 'unmatched' or row.match_method == 'duplicate_source_code' or row.match_method == 'duplicate_source_product' %}disabled{% endif %}>Aplicar</option>
+                                <option value="skip" {% if row.decision == 'skip' %}selected{% endif %}>Omitir</option>
+                                <option value="review" {% if row.decision == 'review' %}selected{% endif %}>Revisar</option>
+                            </select>
+                            {% else %}{{ row.get_decision_display }}{% if row.applied %}<br><span class="spl-success">Aplicado</span>{% endif %}{% endif %}
+                        </td>
+                    </tr>
+                {% empty %}<tr><td colspan="8" class="spl-muted">No hay filas para este filtro.</td></tr>{% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% if batch.status == 'previewed' %}<button class="btn btn-primary" type="submit">Guardar decisiones de esta pagina</button>{% endif %}
+    </form>
+
+    <div class="spl-pagination">
+        {% if page_obj.has_previous %}<a href="?page={{ page_obj.previous_page_number }}&change={{ change_filter }}&decision={{ decision_filter }}">Anterior</a>{% endif %}
+        <span>Pagina {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
+        {% if page_obj.has_next %}<a href="?page={{ page_obj.next_page_number }}&change={{ change_filter }}&decision={{ decision_filter }}">Siguiente</a>{% endif %}
+    </div>
+
+    {% if batch.status == 'previewed' %}
+    <div class="spl-card">
+        <h3>Aplicacion real</h3>
+        <p>Debe haber cero filas en revision. La aplicacion es transaccional y no crea productos.</p>
+        <form method="post" action="{% url 'admin_supplier_price_list_apply' batch.pk %}" class="spl-form">
+            {% csrf_token %}
+            <p><label for="id_confirmation">Escribe <strong>APLICAR LISTA {{ batch.pk }}</strong></label><input id="id_confirmation" name="confirmation" autocomplete="off" required></p>
+            <button class="btn btn-danger" type="submit">Aplicar filas confirmadas</button>
+        </form>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

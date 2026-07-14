@@ -4,6 +4,21 @@ from django.contrib.auth.models import User
 from decimal import Decimal
 
 from catalog.models import Category, Product, Brand, BrandRubro, BrandSubrubro, BrandSubrubroProductOrder
+from core.services.company_context import get_default_company
+
+
+class CompanyScopedBrandClient(Client):
+    """Select the default company for authenticated admin brand fixtures."""
+
+    def login(self, **credentials):
+        authenticated = super().login(**credentials)
+        if authenticated:
+            company = get_default_company()
+            if company:
+                session = self.session
+                session["active_company_id"] = company.pk
+                session.save()
+        return authenticated
 
 
 class BrandModelTestCase(TestCase):
@@ -53,7 +68,7 @@ class BrandSyncTestCase(TestCase):
     def test_autosync_links_only_matching_products(self):
         self.assertEqual(self.subrubro.products.count(), 0)
         
-        client = Client()
+        client = CompanyScopedBrandClient()
         # Create a superuser named 'josueflexs' to pass the superuser_required_for_modifications decorator check
         user = User.objects.create_superuser('josueflexs', 'admin@test.com', 'adminpass')
         client.login(username='josueflexs', password='adminpass')
@@ -89,7 +104,7 @@ class BrandViewsTestCase(TestCase):
             product=self.product,
             sort_order=10
         )
-        self.client = Client()
+        self.client = CompanyScopedBrandClient()
 
     def test_brands_list_page(self):
         response = self.client.get(reverse('brands_list'))
@@ -138,7 +153,7 @@ class BrandRubroAdminTestCase(TestCase):
             is_active=True
         )
         
-        self.client = Client()
+        self.client = CompanyScopedBrandClient()
         self.user = User.objects.create_superuser('josueflexs', 'admin@test.com', 'adminpass')
         self.client.login(username='josueflexs', password='adminpass')
 
@@ -218,7 +233,7 @@ class ProductGridBrandAssocTestCase(TestCase):
             is_active=True
         )
         
-        self.client = Client()
+        self.client = CompanyScopedBrandClient()
         self.user = User.objects.create_superuser('josueflexs', 'admin@test.com', 'adminpass')
         self.client.login(username='josueflexs', password='adminpass')
 
@@ -334,7 +349,7 @@ class BrandCategoryAssociationTestCase(TestCase):
             is_active=True
         )
         
-        self.client = Client()
+        self.client = CompanyScopedBrandClient()
         self.user = User.objects.create_superuser('josueflexs', 'admin@toyota.com', 'adminpass')
         self.client.login(username='josueflexs', password='adminpass')
 
@@ -435,7 +450,7 @@ class BrandPremiumSPAAndPaginationTestCase(TestCase):
             self.rubro.products.add(prod)
             self.subrubro.products.add(prod)
             
-        self.client = Client()
+        self.client = CompanyScopedBrandClient()
         self.user = User.objects.create_superuser('josueflexs', 'admin@honda.com', 'adminpass')
         self.client.login(username='josueflexs', password='adminpass')
 
@@ -547,7 +562,7 @@ class BrandGridAutofiltersTestCase(TestCase):
         self.rubro.products.add(self.product1)
         self.subrubro.products.add(self.product1)
         
-        self.client = Client()
+        self.client = CompanyScopedBrandClient()
         self.user = User.objects.create_superuser('josueflexs', 'admin@filter.com', 'adminpass')
         self.client.login(username='josueflexs', password='adminpass')
 
@@ -574,5 +589,4 @@ class BrandGridAutofiltersTestCase(TestCase):
         products = list(response.context['page_obj'].object_list)
         self.assertIn(self.product1, products)
         self.assertNotIn(self.product2, products)
-
 

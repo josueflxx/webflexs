@@ -152,7 +152,15 @@ def _summarize_snapshot_payloads(item_payloads):
     }
 
 
-def build_order_request_from_cart(*, cart, user, company, client_note="", origin_channel=Order.ORIGIN_CATALOG):
+def build_order_request_from_cart(
+    *,
+    cart,
+    user,
+    company,
+    client_note="",
+    origin_channel=Order.ORIGIN_CATALOG,
+    idempotency_key="",
+):
     """Create a request snapshot from the current cart without impacting ledger or documents."""
     if not cart or not isinstance(cart, Cart):
         raise ValidationError("Carrito invalido.")
@@ -162,6 +170,16 @@ def build_order_request_from_cart(*, cart, user, company, client_note="", origin
         raise ValidationError("Empresa activa requerida.")
     if cart.company_id != company.id:
         raise ValidationError("El carrito no pertenece a la empresa activa.")
+
+    idempotency_key = str(idempotency_key or "").strip()[:64]
+    if idempotency_key:
+        existing_request = OrderRequest.objects.filter(
+            company=company,
+            user=user,
+            idempotency_key=idempotency_key,
+        ).first()
+        if existing_request:
+            return existing_request
 
     client_profile = getattr(user, "client_profile", None)
     if not client_profile or not client_profile.can_operate_in_company(company):
@@ -186,6 +204,7 @@ def build_order_request_from_cart(*, cart, user, company, client_note="", origin
             client_company_ref=client_company_ref,
             status=OrderRequest.STATUS_SUBMITTED,
             origin_channel=origin_channel,
+            idempotency_key=idempotency_key,
             client_note=(client_note or "").strip(),
             requested_subtotal=_quantize_money(pricing["subtotal"]),
             requested_discount_percentage=Decimal(pricing["discount_percentage"] or 0).quantize(
@@ -495,10 +514,10 @@ def convert_request_to_order(*, order_request, actor=None, source_proposal=None,
     """Create one operational order from the final approved request snapshot."""
     if not order_request:
         raise ValidationError("Solicitud invalida.")
-    if order_request.status != OrderRequest.STATUS_CONFIRMED:
-        raise ValidationError("Solo pueden convertirse solicitudes confirmadas.")
     if order_request.converted_order:
         return order_request.converted_order, False
+    if order_request.status != OrderRequest.STATUS_CONFIRMED:
+        raise ValidationError("Solo pueden convertirse solicitudes confirmadas.")
 
     if source_proposal is None:
         source_proposal = (
@@ -529,6 +548,17 @@ def convert_request_to_order(*, order_request, actor=None, source_proposal=None,
     normalized_items = _normalize_snapshot_payloads(item_payloads)
 
     with transaction.atomic():
+        locked_request = (
+            OrderRequest.objects.select_for_update()
+            .select_related("user", "company", "client_company_ref__client_profile")
+            .get(pk=order_request.pk)
+        )
+        existing_order = Order.objects.filter(source_request=locked_request).order_by("id").first()
+        if existing_order:
+            return existing_order, False
+        if locked_request.status != OrderRequest.STATUS_CONFIRMED:
+            raise ValidationError("Solo pueden convertirse solicitudes confirmadas.")
+        order_request = locked_request
         order = Order.objects.create(
             user=order_request.user,
             company=order_request.company,

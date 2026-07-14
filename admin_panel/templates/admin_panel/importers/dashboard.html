@@ -85,6 +85,12 @@
             <p>Importador especializado para parseo tecnico de abrazaderas.</p>
             <a href="{% url 'admin_import_process' 'abrazaderas' %}" class="btn" style="background: #5d3fd3; color: #fff;">Importar abrazaderas</a>
         </div>
+
+        <div class="import-card">
+            <h3>Listas de proveedor</h3>
+            <p>Compara costos XLSX/CSV, revisa coincidencias y aplica solo filas confirmadas.</p>
+            <a href="{% url 'admin_supplier_price_list_batches' %}" class="btn btn-success">Gestionar listas</a>
+        </div>
     </div>
 
     <div class="execution-shell admin-table-container">

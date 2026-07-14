@@ -8,6 +8,7 @@ from django.db.models import Model
 
 from core.models import AdminAuditLog
 from core.services.audit_context import get_audit_meta
+from core.services.company_context import get_active_company
 
 
 def _serialize_value(value):
@@ -64,6 +65,7 @@ def log_admin_action(request, action, target_type="", target_id="", details=None
         user = getattr(request, "user", None)
         if user and not user.is_authenticated:
             user = None
+        company = get_active_company(request) if request is not None else None
 
         meta = get_audit_meta()
         payload = details or {}
@@ -78,6 +80,7 @@ def log_admin_action(request, action, target_type="", target_id="", details=None
 
         AdminAuditLog.objects.create(
             user=user,
+            company=company,
             action=str(action or "")[:120],
             target_type=str(target_type or "")[:80],
             target_id=str(target_id or "")[:120],

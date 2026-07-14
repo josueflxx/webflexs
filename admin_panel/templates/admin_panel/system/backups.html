@@ -1,0 +1,18 @@
+{% extends 'admin_panel/base.html' %}
+{% block page_title %}Copias de seguridad{% endblock %}
+{% block content %}
+<section class="card" style="padding:20px;">
+    <div class="toolbar" style="display:flex;justify-content:space-between;gap:12px;align-items:center;">
+        <div><h2 style="margin:0;">Backups automaticos</h2><p class="text-muted">Base portable, archivos media, checksums SHA-256 y retencion configurada.</p></div>
+        <form method="post" action="{% url 'admin_backup_run' %}">{% csrf_token %}<button class="btn btn-primary" type="submit">Crear backup ahora</button></form>
+    </div>
+    <table class="table">
+        <thead><tr><th>Fecha UTC</th><th>Base</th><th>Media</th><th>Archivos</th></tr></thead>
+        <tbody>
+        {% for row in backup_sets %}
+            <tr><td>{{ row.created_at }}</td><td>{{ row.database_vendor }}</td><td>{{ row.include_media|yesno:"Si,No" }}</td><td>{% for file in row.artifacts %}<div>{{ file.name }} · {{ file.size|filesizeformat }}</div>{% endfor %}</td></tr>
+        {% empty %}<tr><td colspan="4">Todavia no hay backups automaticos registrados.</td></tr>{% endfor %}
+        </tbody>
+    </table>
+</section>
+{% endblock %}

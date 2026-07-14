@@ -8,9 +8,9 @@ from django.db.models.fields.files import FieldFile
 from django.db.models.signals import post_delete, post_save, pre_save
 from django.dispatch import receiver
 
-from accounts.models import ClientProfile
+from accounts.models import ClientPayment, ClientProfile
 from catalog.models import Category, Product, Supplier
-from core.models import AdminAuditLog
+from core.models import AdminAuditLog, FiscalDocument, WebhookEndpoint
 from core.services.audit_context import get_audit_actor, get_audit_meta
 from orders.models import Order
 
@@ -90,6 +90,7 @@ def audit_post_save(sender, instance, created, **kwargs):
 
     AdminAuditLog.objects.create(
         user=user,
+        company_id=getattr(instance, "company_id", None),
         action=action,
         target_type=sender._meta.label_lower,
         target_id=str(instance.pk),
@@ -105,8 +106,50 @@ def audit_post_delete(sender, instance, **kwargs):
     meta = get_audit_meta()
     AdminAuditLog.objects.create(
         user=user,
+        company_id=getattr(instance, "company_id", None),
         action="entity_delete",
         target_type=sender._meta.label_lower,
         target_id=str(instance.pk),
         details={"before": _serialize_instance(instance), **meta},
+    )
+
+
+@receiver(post_save, sender=ClientPayment)
+def payment_webhook(sender, instance, created, **kwargs):
+    if not created or kwargs.get("raw") or not instance.company_id:
+        return
+    from core.services.webhooks import enqueue_webhook_event
+
+    enqueue_webhook_event(
+        company=instance.company,
+        event_type=WebhookEndpoint.EVENT_PAYMENT_RECORDED,
+        data={
+            "payment_id": instance.pk,
+            "order_id": instance.order_id,
+            "client_profile_id": instance.client_profile_id,
+            "amount": str(instance.amount),
+            "method": instance.method,
+            "paid_at": instance.paid_at.isoformat(),
+        },
+    )
+
+
+@receiver(post_save, sender=FiscalDocument)
+def fiscal_document_webhook(sender, instance, created, **kwargs):
+    if kwargs.get("raw"):
+        return
+    from core.services.webhooks import enqueue_webhook_event
+
+    enqueue_webhook_event(
+        company=instance.company,
+        event_type=WebhookEndpoint.EVENT_FISCAL_UPDATED,
+        data={
+            "fiscal_document_id": instance.pk,
+            "order_id": instance.order_id,
+            "doc_type": instance.doc_type,
+            "number": instance.number,
+            "status": instance.status,
+            "total": str(instance.total),
+            "created": created,
+        },
     )

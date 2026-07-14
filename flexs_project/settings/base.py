@@ -73,8 +73,10 @@ ADMIN_COMPANY_ACCESS = {
 }
 ADMIN_COMPANY_ACCESS_REQUIRE_EXPLICIT = os.getenv(
     "ADMIN_COMPANY_ACCESS_REQUIRE_EXPLICIT",
-    "False",
+    "True",
 ).lower() == "true"
+STRICT_COMPANY_ISOLATION = os.getenv("STRICT_COMPANY_ISOLATION", "True").lower() == "true"
+TRUSTED_PROXY_IPS = tuple(_env_csv("TRUSTED_PROXY_IPS", "127.0.0.1,::1"))
 
 # Application definition
 INSTALLED_APPS = [
@@ -87,6 +89,7 @@ INSTALLED_APPS = [
 
     # Third-party apps
     'rest_framework',
+    'rest_framework.authtoken',
     
     # Local apps
     'core',
@@ -111,6 +114,7 @@ MIDDLEWARE = [
     'core.middleware.AuditRequestContextMiddleware',
     'core.middleware.AuthSessionIsolationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
+    'core.middleware.StaffCapabilityMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'core.middleware.UserActivityMiddleware',
 ]
@@ -316,6 +320,7 @@ REST_FRAMEWORK = {
     'PAGE_SIZE': 20,
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'rest_framework.authentication.SessionAuthentication',
+        'rest_framework.authentication.TokenAuthentication',
     ],
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',
@@ -409,7 +414,26 @@ CELERY_BEAT_SCHEDULE = {
         "task": "core.retry_stuck_fiscal_documents_task",
         "schedule": crontab(minute="*/10"),
     },
+    "automatic_system_backup": {
+        "task": "core.create_automatic_backup_task",
+        "schedule": crontab(
+            hour=max(min(_env_int("BACKUP_SCHEDULE_HOUR", 2), 23), 0),
+            minute=max(min(_env_int("BACKUP_SCHEDULE_MINUTE", 30), 59), 0),
+        ),
+    },
+    "retry_pending_webhooks": {
+        "task": "core.retry_pending_webhooks_task",
+        "schedule": crontab(minute="*/5"),
+    },
 }
+
+BACKUP_ROOT = Path(os.getenv("BACKUP_ROOT", str(BASE_DIR / "backups" / "automatic")))
+BACKUP_RETENTION_DAYS = max(_env_int("BACKUP_RETENTION_DAYS", 30), 1)
+BACKUP_INCLUDE_MEDIA = os.getenv("BACKUP_INCLUDE_MEDIA", "True").lower() == "true"
+WEBHOOK_ALLOW_INSECURE_URLS = os.getenv("WEBHOOK_ALLOW_INSECURE_URLS", str(DEBUG)).lower() == "true"
+WEBHOOK_ALLOW_PRIVATE_TARGETS = os.getenv("WEBHOOK_ALLOW_PRIVATE_TARGETS", "False").lower() == "true"
+WEBHOOK_MAX_ATTEMPTS = max(_env_int("WEBHOOK_MAX_ATTEMPTS", 6), 1)
+WEBHOOK_TIMEOUT_SECONDS = max(_env_int("WEBHOOK_TIMEOUT_SECONDS", 10), 1)
 
 # Logging / observability (Phase 5)
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()

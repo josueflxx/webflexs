@@ -4,7 +4,7 @@ from rest_framework import serializers
 
 from accounts.models import ClientProfile
 from core.models import Company
-from core.services.company_context import get_active_company
+from core.services.company_context import get_active_company, user_has_company_access
 from catalog.models import Category, Product
 from orders.models import Order
 
@@ -117,7 +117,9 @@ class ClientProfileSerializer(serializers.ModelSerializer):
         if request:
             raw_company = request.query_params.get("company_id") or request.query_params.get("company")
             if raw_company and str(raw_company).isdigit():
-                company = Company.objects.filter(pk=int(raw_company), is_active=True).first()
+                requested_company = Company.objects.filter(pk=int(raw_company), is_active=True).first()
+                if requested_company and user_has_company_access(request.user, requested_company):
+                    company = requested_company
             if not company:
                 company = get_active_company(request)
         return obj.get_current_balance(company=company)
@@ -126,11 +128,13 @@ class ClientProfileSerializer(serializers.ModelSerializer):
 class OrderListSerializer(serializers.ModelSerializer):
     item_count = serializers.SerializerMethodField()
     client = serializers.SerializerMethodField()
+    company = serializers.SerializerMethodField()
 
     class Meta:
         model = Order
         fields = [
             "id",
+            "company",
             "status",
             "priority",
             "subtotal",
@@ -156,3 +160,9 @@ class OrderListSerializer(serializers.ModelSerializer):
             "username": user.username,
             "email": user.email,
         }
+
+    def get_company(self, obj):
+        company = getattr(obj, "company", None)
+        if not company:
+            return None
+        return {"id": company.pk, "slug": company.slug, "name": company.name}

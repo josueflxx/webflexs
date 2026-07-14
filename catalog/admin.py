@@ -1,6 +1,8 @@
 from django.contrib import admin
 from .models import (
     Category, CategoryAttribute, Product, ClampSpecs, Supplier, PriceList, PriceListItem,
+    ProductSupplier, SupplierCostHistory, ProductDuplicateReview,
+    SupplierImportProfile, SupplierPriceListBatch, SupplierPriceListRow,
     Brand, BrandRubro, BrandSubrubro, BrandSubrubroProductOrder, BrandRubroProductOrder
 )
 from .services.clamp_parser import ClampParser
@@ -21,6 +23,20 @@ class PriceListItemInline(admin.TabularInline):
     model = PriceListItem
     extra = 0
     autocomplete_fields = ("product",)
+
+
+class ProductSupplierInline(admin.TabularInline):
+    model = ProductSupplier
+    extra = 0
+    autocomplete_fields = ("supplier",)
+    fields = (
+        "supplier",
+        "supplier_code",
+        "current_cost",
+        "currency",
+        "is_preferred",
+        "status",
+    )
 
 @admin.action(description='Reparsear especificaciones de Abrazaderas')
 def reparse_abrazaderas(modeladmin, request, queryset):
@@ -65,7 +81,7 @@ class ProductAdmin(admin.ModelAdmin):
     list_filter = ('supplier_ref', 'category', 'categories', 'is_active')
     search_fields = ('sku', 'name', 'supplier', 'description')
     readonly_fields = ('created_at', 'updated_at')
-    inlines = [ClampSpecsInline]
+    inlines = [ClampSpecsInline, ProductSupplierInline]
     actions = [reparse_abrazaderas]
 
     def categories_display(self, obj):
@@ -79,6 +95,133 @@ class SupplierAdmin(admin.ModelAdmin):
     list_display = ('name', 'is_active', 'updated_at')
     list_filter = ('is_active',)
     search_fields = ('name', 'normalized_name')
+
+
+@admin.register(ProductSupplier)
+class ProductSupplierAdmin(admin.ModelAdmin):
+    list_display = (
+        "product",
+        "supplier",
+        "supplier_code",
+        "current_cost",
+        "currency",
+        "is_preferred",
+        "status",
+        "updated_at",
+    )
+    list_filter = ("status", "is_preferred", "currency", "supplier")
+    search_fields = ("product__sku", "product__name", "supplier__name", "supplier_code")
+    autocomplete_fields = ("product", "supplier")
+
+
+@admin.register(SupplierCostHistory)
+class SupplierCostHistoryAdmin(admin.ModelAdmin):
+    list_display = (
+        "product_supplier",
+        "previous_cost",
+        "new_cost",
+        "difference_amount",
+        "difference_percentage",
+        "currency",
+        "source",
+        "changed_by",
+        "created_at",
+    )
+    list_filter = ("source", "currency", "created_at")
+    search_fields = ("product_supplier__product__sku", "product_supplier__supplier__name")
+    readonly_fields = (
+        "product_supplier",
+        "previous_cost",
+        "new_cost",
+        "difference_amount",
+        "difference_percentage",
+        "currency",
+        "source",
+        "source_file",
+        "source_row",
+        "import_execution",
+        "changed_by",
+        "reason",
+        "created_at",
+    )
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(ProductDuplicateReview)
+class ProductDuplicateReviewAdmin(admin.ModelAdmin):
+    list_display = (
+        "primary_product",
+        "candidate_product",
+        "reason",
+        "confidence",
+        "status",
+        "reviewed_by",
+        "updated_at",
+    )
+    list_filter = ("status", "reason", "confidence")
+    search_fields = (
+        "primary_product__sku",
+        "primary_product__name",
+        "candidate_product__sku",
+        "candidate_product__name",
+    )
+    autocomplete_fields = ("primary_product", "candidate_product", "reviewed_by")
+
+
+@admin.register(SupplierImportProfile)
+class SupplierImportProfileAdmin(admin.ModelAdmin):
+    list_display = ("name", "supplier", "sheet_name", "header_row", "default_currency", "is_active", "updated_at")
+    list_filter = ("is_active", "default_currency", "supplier")
+    search_fields = ("name", "supplier__name")
+    readonly_fields = ("created_at", "updated_at")
+
+
+@admin.register(SupplierPriceListBatch)
+class SupplierPriceListBatchAdmin(admin.ModelAdmin):
+    list_display = ("id", "supplier", "company", "original_filename", "status", "created_by", "created_at", "applied_at")
+    list_filter = ("status", "supplier", "company", "created_at")
+    search_fields = ("original_filename", "file_sha256", "supplier__name")
+    readonly_fields = (
+        "supplier", "company", "profile", "import_execution", "source_file",
+        "original_filename", "file_sha256", "file_size", "sheet_name", "header_row",
+        "column_mapping", "default_currency", "status", "preview_signature", "summary",
+        "error_message", "created_by", "applied_by", "created_at", "previewed_at",
+        "applied_at", "updated_at",
+    )
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(SupplierPriceListRow)
+class SupplierPriceListRowAdmin(admin.ModelAdmin):
+    list_display = ("batch", "row_number", "supplier_code", "matched_product", "change_type", "decision", "applied")
+    list_filter = ("change_type", "decision", "applied", "row_type")
+    search_fields = ("supplier_code", "supplier_description", "matched_product__sku", "matched_product__name")
+    readonly_fields = tuple(field.name for field in SupplierPriceListRow._meta.fields)
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(PriceList)

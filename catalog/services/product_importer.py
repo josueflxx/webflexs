@@ -1,8 +1,10 @@
 from decimal import Decimal
 import json
 
+from django.db import transaction
+
 from core.services.importer import BaseImporter, ImportRowResult
-from catalog.models import Category, Product, ClampSpecs
+from catalog.models import Category, Product, ClampSpecs, ProductSupplier
 from catalog.services.clamp_parser import ClampParser
 from catalog.services.import_utils import (
     is_blank,
@@ -17,6 +19,7 @@ from catalog.services.import_utils import (
     unique_slug_for_model,
 )
 from catalog.services.supplier_sync import ensure_supplier, clean_supplier_name
+from catalog.services.product_suppliers import upsert_product_supplier_offer
 
 
 def _truthy_option(value, default=False):
@@ -583,6 +586,15 @@ class ProductImporter(BaseImporter):
         product.save(update_fields=["attributes", "updated_at"])
 
     def process_row(self, row, dry_run=True):
+        if dry_run:
+            return self._process_row(row, dry_run=True)
+        with transaction.atomic():
+            result = self._process_row(row, dry_run=False)
+            if not result.success:
+                transaction.set_rollback(True)
+            return result
+
+    def _process_row(self, row, dry_run=True):
         source_row_number = row.get("__row_number")
         public_row_data = {key: value for key, value in dict(row).items() if key != "__row_number"}
         result = ImportRowResult(row_number=0, data=public_row_data)
@@ -625,6 +637,7 @@ class ProductImporter(BaseImporter):
         stock = self._parse_stock(row, existing, errors)
         attributes = self._parse_attributes(row, errors)
         supplier = "" if is_blank(row.get("proveedor")) else clean_supplier_name(row.get("proveedor"))
+        supplier_code = self._text(row.get("codigo_proveedor"))
         active = parse_bool(row.get("activo"), default=None)
         if self._field_present(row, "activo") and not is_blank(row.get("activo")) and active is None:
             errors.append("Activo invalido: usa SI/NO, ACTIVO/INACTIVO, X o BAJA")
@@ -639,6 +652,7 @@ class ProductImporter(BaseImporter):
             "sku": sku,
             "nombre": name,
             "proveedor": supplier,
+            "codigo_proveedor": supplier_code,
             "precio": str(price) if price is not None else "",
             "costo": str(cost) if cost is not None else "",
             "stock": stock if stock is not None else "",
@@ -759,6 +773,36 @@ class ProductImporter(BaseImporter):
                 result.data["categorias_preservadas"] = True
             if self.update_mode != self.UPDATE_MODE_PRICES:
                 self.check_and_run_parser(product, dry_run=dry_run)
+
+            if product.supplier_ref_id:
+                source_file = str(getattr(self.file, "name", "") or "")
+                existing_offer = ProductSupplier.objects.filter(
+                    product=product,
+                    supplier_id=product.supplier_ref_id,
+                ).first()
+                upsert_product_supplier_offer(
+                    product=product,
+                    supplier=product.supplier_ref,
+                    current_cost=product.cost,
+                    currency=existing_offer.currency if existing_offer else ProductSupplier.CURRENCY_ARS,
+                    supplier_code=supplier_code or (existing_offer.supplier_code if existing_offer else ""),
+                    supplier_description=(existing_offer.supplier_description if existing_offer else ""),
+                    discount_percentage=(existing_offer.discount_percentage if existing_offer else 0),
+                    bonus_percentage=(existing_offer.bonus_percentage if existing_offer else 0),
+                    tax_percentage=(existing_offer.tax_percentage if existing_offer else 0),
+                    minimum_purchase_quantity=(
+                        existing_offer.minimum_purchase_quantity if existing_offer else 1
+                    ),
+                    is_available=existing_offer.is_available if existing_offer else True,
+                    lead_time_days=existing_offer.lead_time_days if existing_offer else 0,
+                    price_list_date=existing_offer.price_list_date if existing_offer else None,
+                    source="product_import",
+                    source_file=source_file,
+                    source_row=int(source_row_number) if source_row_number is not None else None,
+                    reason="Costo informado por importacion de productos.",
+                    is_preferred=True,
+                    match_method="supplier_name_and_product_sku",
+                )
 
             result.success = True
             result.action = "created" if created else "updated"

@@ -1,0 +1,84 @@
+{% extends 'admin_panel/base.html' %}
+
+{% block page_title %}Revision de duplicados{% endblock %}
+
+{% block content %}
+<div class="admin-table-container">
+    <div class="admin-toolbar" style="display:flex; gap:12px; align-items:center; justify-content:space-between; flex-wrap:wrap;">
+        <div>
+            <h1 style="margin:0;">Revision de productos duplicados</h1>
+            <p class="text-muted" style="margin:6px 0 0;">Esta cola solo registra decisiones. Nunca fusiona ni actualiza productos.</p>
+        </div>
+        <form method="post">
+            {% csrf_token %}
+            <button class="btn btn-primary" type="submit">Analizar productos</button>
+        </form>
+    </div>
+
+    <div style="display:flex; gap:10px; margin:16px 0; flex-wrap:wrap;">
+        <span class="badge badge-warning">Pendientes: {{ counts.pending }}</span>
+        <span class="badge badge-success">Confirmados: {{ counts.confirmed }}</span>
+        <span class="badge badge-secondary">Descartados: {{ counts.dismissed }}</span>
+    </div>
+
+    <form method="get" style="margin-bottom:16px; max-width:320px;">
+        <label for="status" class="form-label">Estado</label>
+        <select id="status" name="status" class="form-select" onchange="this.form.submit()">
+            <option value="" {% if not status_filter %}selected{% endif %}>Todos</option>
+            {% for value, label in status_choices %}
+            <option value="{{ value }}" {% if status_filter == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+        </select>
+    </form>
+
+    <div class="table-responsive">
+        <table class="admin-table">
+            <thead>
+                <tr>
+                    <th>Producto principal</th>
+                    <th>Candidato</th>
+                    <th>Motivo</th>
+                    <th>Confianza</th>
+                    <th>Estado / decision</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for review in page_obj %}
+                <tr>
+                    <td><strong>{{ review.primary_product.sku }}</strong><br>{{ review.primary_product.name }}</td>
+                    <td><strong>{{ review.candidate_product.sku }}</strong><br>{{ review.candidate_product.name }}</td>
+                    <td>{{ review.get_reason_display }}</td>
+                    <td>{{ review.confidence }}%</td>
+                    <td>
+                        {% if review.status == 'pending' %}
+                        <form method="post" action="{% url 'admin_product_duplicate_review_decision' review.pk %}" style="display:grid; gap:8px; min-width:250px;">
+                            {% csrf_token %}
+                            <input class="form-input" type="text" name="notes" placeholder="Nota opcional">
+                            <div style="display:flex; gap:8px;">
+                                <button class="btn btn-outline btn-sm" name="status" value="not_duplicate" type="submit">No duplicado</button>
+                                <button class="btn btn-primary btn-sm" name="status" value="confirmed_duplicate" type="submit">Confirmar duplicado</button>
+                            </div>
+                        </form>
+                        {% else %}
+                        <strong>{{ review.get_status_display }}</strong>
+                        {% if review.reviewed_by %}<br><small>{{ review.reviewed_by.username }} · {{ review.reviewed_at|date:"d/m/Y H:i" }}</small>{% endif %}
+                        {% if review.notes %}<br><small>{{ review.notes }}</small>{% endif %}
+                        {% endif %}
+                    </td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="5">No hay revisiones para este filtro.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    {% if page_obj.has_other_pages %}
+    <div class="pagination" style="margin-top:16px;">
+        {% if page_obj.has_previous %}<a class="btn btn-outline btn-sm" href="?status={{ status_filter }}&page={{ page_obj.previous_page_number }}">Anterior</a>{% endif %}
+        <span>Pagina {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
+        {% if page_obj.has_next %}<a class="btn btn-outline btn-sm" href="?status={{ status_filter }}&page={{ page_obj.next_page_number }}">Siguiente</a>{% endif %}
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
