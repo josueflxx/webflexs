@@ -92,6 +92,19 @@ class Category(models.Model):
                 raise ValidationError("No puedes mover esta categoria dentro de una de sus subcategorias.")
 
     def save(self, *args, **kwargs):
+        import re
+        if not self.slug or not re.match(r'^[-a-zA-Z0-9_]+$', self.slug):
+            from django.utils.text import slugify
+            self.slug = slugify(self.slug or self.name)
+            if not self.slug:
+                self.slug = slugify(self.name) or "categoria-sin-nombre"
+
+            original_slug = self.slug
+            counter = 1
+            while Category.objects.filter(slug=self.slug).exclude(pk=self.pk).exists():
+                self.slug = f"{original_slug}-{counter}"
+                counter += 1
+
         if not kwargs.get("raw", False):
             self.full_clean()
         previous_is_active = None
@@ -117,18 +130,6 @@ class Category(models.Model):
             if parent_state and parent_state.get("visible_in_catalog") is False:
                 self.visible_in_catalog = False
 
-        import re
-        if not self.slug or not re.match(r'^[-a-zA-Z0-9_]+$', self.slug):
-            from django.utils.text import slugify
-            self.slug = slugify(self.slug or self.name)
-            if not self.slug:
-                self.slug = slugify(self.name) or "categoria-sin-nombre"
-
-            original_slug = self.slug
-            counter = 1
-            while Category.objects.filter(slug=self.slug).exclude(pk=self.pk).exists():
-                self.slug = f"{original_slug}-{counter}"
-                counter += 1
         super().save(*args, **kwargs)
 
         # If a parent category is deactivated, cascade deactivation to descendants.
