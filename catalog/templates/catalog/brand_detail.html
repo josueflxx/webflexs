@@ -318,6 +318,12 @@
     .product-card .product-name a {
         color: #fff !important;
     }
+    html[data-theme="light"] .product-card .product-name a {
+        color: var(--theme-text) !important;
+    }
+    html[data-theme="light"] .product-card .product-name a:hover {
+        color: var(--color-primary-dark) !important;
+    }
     .product-card .product-sku {
         font-size: 0.75rem !important;
     }
