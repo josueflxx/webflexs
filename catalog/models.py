@@ -117,10 +117,13 @@ class Category(models.Model):
             if parent_state and parent_state.get("visible_in_catalog") is False:
                 self.visible_in_catalog = False
 
-        if not self.slug:
+        import re
+        if not self.slug or not re.match(r'^[-a-zA-Z0-9_]+$', self.slug):
             from django.utils.text import slugify
+            self.slug = slugify(self.slug or self.name)
+            if not self.slug:
+                self.slug = slugify(self.name) or "categoria-sin-nombre"
 
-            self.slug = slugify(self.name)
             original_slug = self.slug
             counter = 1
             while Category.objects.filter(slug=self.slug).exclude(pk=self.pk).exists():
