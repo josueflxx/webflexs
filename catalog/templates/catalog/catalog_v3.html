@@ -561,7 +561,7 @@
                     <article class="catalog-list-item animate-card-reveal" data-product-id="{{ product.id|unlocalize }}" style="animation-delay: {{ forloop.counter0|multiply:0.04 }}s;">
                         {% if request.user.is_superuser %}
                         <button class="quick-edit-badge-btn" 
-                                onclick="openQuickEditModal('{{ product.id|unlocalize }}', '{{ product.sku|escapejs }}', '{{ product.name|escapejs }}', '{{ product.base_price|default:product.price|floatformat:2 }}', '{{ product.stock|unlocalize }}', {% if product.is_active %}true{% else %}false{% endif %})" 
+                                onclick="openQuickEditModal('{{ product.id|unlocalize }}', '{{ product.sku|escapejs }}', '{{ product.name|escapejs }}', '{{ product.base_price|default:product.price|unlocalize }}', '{{ product.stock|unlocalize }}', {% if product.is_active %}true{% else %}false{% endif %})" 
                                 title="Editar producto">
                             ✏️
                         </button>
@@ -660,7 +660,7 @@
                     <article class="{% if view_mode == 'list' %}product-list-row{% else %}product-card{% endif %} animate-card-reveal" data-product-id="{{ product.id|unlocalize }}" style="animation-delay: {{ forloop.counter0|multiply:0.04 }}s;">
                         {% if request.user.is_superuser %}
                         <button class="quick-edit-badge-btn" 
-                                onclick="openQuickEditModal('{{ product.id|unlocalize }}', '{{ product.sku|escapejs }}', '{{ product.name|escapejs }}', '{{ product.base_price|default:product.price|floatformat:2 }}', '{{ product.stock|unlocalize }}', {% if product.is_active %}true{% else %}false{% endif %})" 
+                                onclick="openQuickEditModal('{{ product.id|unlocalize }}', '{{ product.sku|escapejs }}', '{{ product.name|escapejs }}', '{{ product.base_price|default:product.price|unlocalize }}', '{{ product.stock|unlocalize }}', {% if product.is_active %}true{% else %}false{% endif %})" 
                                 title="Editar producto">
                             ✏️
                         </button>
@@ -1154,7 +1154,7 @@ function openQuickEditModal(productId, sku, name, price, stock, isActive) {
     document.getElementById('quickEditProductId').value = productId;
     document.getElementById('quickEditSku').value = sku;
     document.getElementById('quickEditName').value = name;
-    document.getElementById('quickEditPrice').value = parseFloat(price.replace(/[^0-9.-]+/g,"")).toFixed(2);
+    document.getElementById('quickEditPrice').value = parseFloat(price).toFixed(2);
     document.getElementById('quickEditStock').value = stock;
     document.getElementById('quickEditActive').checked = isActive;
     
