@@ -14,6 +14,7 @@ urlpatterns = [
         views.clamp_request_add_to_cart,
         name='catalog_clamp_request_add_to_cart',
     ),
+    path('producto/<int:pk>/quick-edit/', views.product_quick_edit, name='product_quick_edit'),
     path('producto/<path:sku>/', views.product_detail, name='product_detail'),
     path('marcas/', views.brands_list, name='brands_list'),
     path('marcas/<slug:brand_slug>/', views.brand_detail, name='brand_detail'),

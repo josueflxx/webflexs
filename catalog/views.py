@@ -8,16 +8,18 @@ from decimal import Decimal
 from functools import lru_cache
 
 from django.contrib import messages
-from django.contrib.auth.decorators import login_required
+from django.contrib.auth.decorators import login_required, user_passes_test
 from django.core.cache import cache
 from django.core.paginator import Paginator
 from django.db.models import Case, Count, IntegerField, Max, OuterRef, Prefetch, Q, Subquery, Value, When
 from django.db.models.functions import Coalesce
-from django.http import HttpResponse
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
+from django.views.decorators.csrf import csrf_protect
+from django.core.exceptions import ValidationError
 
 from core.models import CatalogAnalyticsEvent, CatalogExcelTemplate, SiteSettings
 from core.services.advanced_search import apply_text_search, build_text_query
@@ -1852,3 +1854,66 @@ def brand_detail(request, brand_slug):
     }
     
     return render(request, "catalog/brand_detail.html", context)
+
+
+@user_passes_test(lambda u: u.is_superuser)
+@require_POST
+@csrf_protect
+def product_quick_edit(request, pk):
+    """
+    AJAX view for superadmins to quickly edit basic product details from the catalog.
+    """
+    product = get_object_or_404(Product, pk=pk)
+    
+    sku = request.POST.get("sku", "").strip()
+    name = request.POST.get("name", "").strip()
+    price_raw = request.POST.get("price", "").strip()
+    stock_raw = request.POST.get("stock", "").strip()
+    is_active = request.POST.get("is_active") == "on" or request.POST.get("is_active") == "true"
+    
+    if not sku or not name:
+        return JsonResponse({"success": False, "error": "El SKU y el Nombre son obligatorios."}, status=400)
+    
+    # Check SKU uniqueness (excluding current product)
+    if Product.objects.filter(sku__iexact=sku).exclude(pk=pk).exists():
+        return JsonResponse({"success": False, "error": f"Ya existe un producto con el SKU '{sku}'."}, status=400)
+        
+    try:
+        price = Decimal(price_raw)
+        if price < 0:
+            raise ValueError
+    except Exception:
+        return JsonResponse({"success": False, "error": "El precio debe ser un número decimal válido mayor o igual a 0."}, status=400)
+        
+    try:
+        stock = int(stock_raw)
+    except (ValueError, TypeError):
+        return JsonResponse({"success": False, "error": "El stock debe ser un número entero válido."}, status=400)
+        
+    # Update product
+    product.sku = sku
+    product.name = name
+    product.price = price
+    product.stock = stock
+    product.is_active = is_active
+    
+    try:
+        product.full_clean()
+        product.save()
+    except ValidationError as e:
+        errors = "; ".join([f"{k}: {', '.join(v)}" for k, v in e.message_dict.items()])
+        return JsonResponse({"success": False, "error": f"Error de validación: {errors}"}, status=400)
+    except Exception as e:
+        return JsonResponse({"success": False, "error": f"Error al guardar: {str(e)}"}, status=500)
+        
+    return JsonResponse({
+        "success": True,
+        "product": {
+            "id": product.id,
+            "sku": product.sku,
+            "name": product.name,
+            "price": float(product.price),
+            "stock": product.stock,
+            "is_active": product.is_active
+        }
+    })

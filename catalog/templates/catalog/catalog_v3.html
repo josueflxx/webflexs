@@ -21,6 +21,183 @@
         pointer-events: none;
         cursor: not-allowed;
     }
+    
+    {% if request.user.is_superuser %}
+    .quick-edit-badge-btn {
+        position: absolute;
+        top: 12px;
+        right: 12px;
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        background: rgba(15, 23, 42, 0.75);
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        color: #fff;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        z-index: 10;
+        transition: all 0.2s ease-in-out;
+        font-size: 0.9rem;
+    }
+    .quick-edit-badge-btn:hover {
+        background: var(--color-primary, #ff6b35);
+        border-color: var(--color-primary, #ff6b35);
+        transform: scale(1.1);
+    }
+    .product-card, .catalog-list-item {
+        position: relative;
+    }
+
+    /* Modal styles */
+    .quick-edit-modal {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        z-index: 2000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .quick-edit-modal-backdrop {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.6);
+        backdrop-filter: blur(4px);
+    }
+    .quick-edit-modal-content {
+        position: relative;
+        width: 500px;
+        max-width: 90%;
+        background: #1e293b;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 16px;
+        padding: 24px;
+        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+        color: #f8fafc;
+        z-index: 2001;
+        animation: modalFadeIn 0.3s ease-out;
+    }
+    html[data-theme="light"] .quick-edit-modal-content {
+        background: #ffffff;
+        border-color: #e2e8f0;
+        color: #0f172a;
+        box-shadow: 0 25px 50px -12px rgba(15, 23, 42, 0.1);
+    }
+    @keyframes modalFadeIn {
+        from { opacity: 0; transform: translateY(-20px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    .quick-edit-modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        padding-bottom: 12px;
+        margin-bottom: 20px;
+    }
+    html[data-theme="light"] .quick-edit-modal-header {
+        border-bottom-color: #f1f5f9;
+    }
+    .quick-edit-modal-header h3 {
+        margin: 0;
+        font-size: 1.25rem;
+        font-weight: 600;
+        color: inherit !important;
+    }
+    .quick-edit-modal-close {
+        background: none;
+        border: none;
+        color: inherit;
+        font-size: 1.5rem;
+        cursor: pointer;
+        padding: 0;
+        line-height: 1;
+        opacity: 0.7;
+        transition: opacity 0.2s;
+    }
+    .quick-edit-modal-close:hover {
+        opacity: 1;
+    }
+    .quick-edit-modal .form-group {
+        margin-bottom: 16px;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        width: 100%;
+    }
+    .quick-edit-modal .form-group label {
+        display: block;
+        font-size: 0.875rem;
+        font-weight: 500;
+        margin-bottom: 6px;
+        opacity: 0.9;
+        color: inherit !important;
+    }
+    .quick-edit-modal .form-control {
+        width: 100%;
+        padding: 10px 12px;
+        background: #0f172a;
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        border-radius: 8px;
+        color: inherit;
+        font-size: 0.95rem;
+        transition: border-color 0.2s;
+    }
+    html[data-theme="light"] .quick-edit-modal .form-control {
+        background: #f8fafc;
+        border-color: #cbd5e1;
+        color: #0f172a !important;
+    }
+    .quick-edit-modal .form-control:focus {
+        border-color: var(--color-primary, #ff6b35);
+        outline: none;
+    }
+    .quick-edit-modal .form-group-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+        width: 100%;
+    }
+    .quick-edit-modal .checkbox-group {
+        display: flex;
+        align-items: center;
+        justify-content: flex-start;
+    }
+    .quick-edit-modal .checkbox-group label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        cursor: pointer;
+        margin: 0;
+    }
+    .quick-edit-modal .checkbox-group input {
+        width: 18px;
+        height: 18px;
+        cursor: pointer;
+        margin: 0;
+    }
+    .quick-edit-modal-footer {
+        display: flex;
+        justify-content: flex-end;
+        gap: 12px;
+        border-top: 1px solid rgba(255, 255, 255, 0.1);
+        padding-top: 16px;
+        margin-top: 24px;
+        width: 100%;
+    }
+    html[data-theme="light"] .quick-edit-modal-footer {
+        border-top-color: #f1f5f9;
+    }
+    {% endif %}
 </style>
 {% endblock %}
 
@@ -382,6 +559,13 @@
                     {% for product in page_obj %}
                     {% if view_mode == 'list' %}
                     <article class="catalog-list-item animate-card-reveal" data-product-id="{{ product.id|unlocalize }}" style="animation-delay: {{ forloop.counter0|multiply:0.04 }}s;">
+                        {% if request.user.is_superuser %}
+                        <button class="quick-edit-badge-btn" 
+                                onclick="openQuickEditModal('{{ product.id|unlocalize }}', '{{ product.sku|escapejs }}', '{{ product.name|escapejs }}', '{{ product.base_price|default:product.price|floatformat:2 }}', '{{ product.stock|unlocalize }}', {% if product.is_active %}true{% else %}false{% endif %})" 
+                                title="Editar producto">
+                            ✏️
+                        </button>
+                        {% endif %}
                         <a class="catalog-list-thumb" href="{% url 'product_detail' product.sku %}">
                             {% if product.image %}
                             <img src="{{ product.image.url }}" alt="{{ product.name }}">
@@ -474,6 +658,13 @@
                     </article>
                     {% else %}
                     <article class="{% if view_mode == 'list' %}product-list-row{% else %}product-card{% endif %} animate-card-reveal" data-product-id="{{ product.id|unlocalize }}" style="animation-delay: {{ forloop.counter0|multiply:0.04 }}s;">
+                        {% if request.user.is_superuser %}
+                        <button class="quick-edit-badge-btn" 
+                                onclick="openQuickEditModal('{{ product.id|unlocalize }}', '{{ product.sku|escapejs }}', '{{ product.name|escapejs }}', '{{ product.base_price|default:product.price|floatformat:2 }}', '{{ product.stock|unlocalize }}', {% if product.is_active %}true{% else %}false{% endif %})" 
+                                title="Editar producto">
+                            ✏️
+                        </button>
+                        {% endif %}
                         <a class="product-image" href="{% url 'product_detail' product.sku %}">
                             {% if product.image %}
                             <img src="{{ product.image.url }}" alt="{{ product.name }}">
@@ -907,4 +1098,172 @@
         });
     });
 </script>
+
+{% if request.user.is_superuser %}
+<!-- Quick Edit Modal -->
+<div id="quickEditModal" class="quick-edit-modal" style="display: none;">
+    <div class="quick-edit-modal-backdrop" onclick="closeQuickEditModal()"></div>
+    <div class="quick-edit-modal-content">
+        <div class="quick-edit-modal-header">
+            <h3>Editar Producto (Quick Edit)</h3>
+            <button class="quick-edit-modal-close" onclick="closeQuickEditModal()">&times;</button>
+        </div>
+        <form id="quickEditForm" onsubmit="submitQuickEdit(event)">
+            {% csrf_token %}
+            <input type="hidden" id="quickEditProductId" name="product_id">
+            
+            <div class="form-group">
+                <label for="quickEditName">Nombre</label>
+                <input type="text" id="quickEditName" name="name" required class="form-control">
+            </div>
+            
+            <div class="form-group-row">
+                <div class="form-group">
+                    <label for="quickEditSku">SKU</label>
+                    <input type="text" id="quickEditSku" name="sku" required class="form-control">
+                </div>
+                <div class="form-group">
+                    <label for="quickEditStock">Stock</label>
+                    <input type="number" id="quickEditStock" name="stock" required class="form-control">
+                </div>
+            </div>
+            
+            <div class="form-group-row">
+                <div class="form-group">
+                    <label for="quickEditPrice">Precio de Lista</label>
+                    <input type="number" id="quickEditPrice" name="price" step="0.01" required class="form-control">
+                </div>
+                <div class="form-group checkbox-group">
+                    <label for="quickEditActive">
+                        <input type="checkbox" id="quickEditActive" name="is_active">
+                        <span>Activo en catálogo</span>
+                    </label>
+                </div>
+            </div>
+            
+            <div class="quick-edit-modal-footer">
+                <button type="button" class="btn btn-outline" onclick="closeQuickEditModal()">Cancelar</button>
+                <button type="submit" class="btn btn-primary">Guardar cambios</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+function openQuickEditModal(productId, sku, name, price, stock, isActive) {
+    document.getElementById('quickEditProductId').value = productId;
+    document.getElementById('quickEditSku').value = sku;
+    document.getElementById('quickEditName').value = name;
+    document.getElementById('quickEditPrice').value = parseFloat(price.replace(/[^0-9.-]+/g,"")).toFixed(2);
+    document.getElementById('quickEditStock').value = stock;
+    document.getElementById('quickEditActive').checked = isActive;
+    
+    document.getElementById('quickEditModal').style.display = 'flex';
+}
+
+function closeQuickEditModal() {
+    document.getElementById('quickEditModal').style.display = 'none';
+}
+
+function submitQuickEdit(event) {
+    event.preventDefault();
+    
+    const form = document.getElementById('quickEditForm');
+    const formData = new FormData(form);
+    const productId = formData.get('product_id');
+    
+    const submitBtn = form.querySelector('button[type="submit"]');
+    const originalBtnText = submitBtn.textContent;
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Guardando...';
+    
+    fetch(`/catalogo/producto/${productId}/quick-edit/`, {
+        method: 'POST',
+        body: formData,
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(response => {
+        if (!response.ok) {
+            return response.json().then(err => { throw err; });
+        }
+        return response.json();
+    })
+    .then(data => {
+        submitBtn.disabled = false;
+        submitBtn.textContent = originalBtnText;
+        
+        if (data.success) {
+            closeQuickEditModal();
+            if (window.showFLEXSToast) {
+                window.showFLEXSToast('Éxito', 'Producto actualizado correctamente', 'success');
+            } else {
+                alert('Producto actualizado correctamente');
+            }
+            updateProductCardOnPage(productId, data.product);
+        } else {
+            if (window.showFLEXSToast) {
+                window.showFLEXSToast('Error', data.error || 'Error al guardar el producto', 'error');
+            } else {
+                alert(data.error || 'Error al guardar el producto');
+            }
+        }
+    })
+    .catch(error => {
+        submitBtn.disabled = false;
+        submitBtn.textContent = originalBtnText;
+        console.error('Error:', error);
+        const errMsg = error.error || 'Error de red o del servidor';
+        if (window.showFLEXSToast) {
+            window.showFLEXSToast('Error', errMsg, 'error');
+        } else {
+            alert(errMsg);
+        }
+    });
+}
+
+function updateProductCardOnPage(productId, productData) {
+    const cards = document.querySelectorAll(`[data-product-id="${productId}"]`);
+    cards.forEach(card => {
+        // Update name link
+        const nameLink = card.querySelector('.product-name a, .catalog-list-title a');
+        if (nameLink) {
+            nameLink.textContent = productData.name;
+        }
+        
+        // Update sku
+        const skuSpan = card.querySelector('.product-sku, .catalog-list-sku');
+        if (skuSpan) {
+            skuSpan.textContent = productData.sku;
+        }
+        
+        // Update stock
+        const stockBadge = card.querySelector('.product-stock');
+        if (stockBadge) {
+            if (productData.stock > 0) {
+                stockBadge.className = 'product-stock in-stock';
+                stockBadge.innerHTML = '<span class="stock-pulse-dot"></span> ' + (card.classList.contains('catalog-list-item') ? 'Stock ' : 'En stock');
+            } else {
+                stockBadge.className = 'product-stock out-stock';
+                stockBadge.textContent = 'Sin stock';
+            }
+        }
+        
+        // Update price
+        const priceFinal = card.querySelector('.price-final .value, .catalog-list-pricebox strong');
+        if (priceFinal) {
+            const formattedPrice = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(productData.price);
+            priceFinal.textContent = formattedPrice;
+        }
+        
+        if (!productData.is_active) {
+            card.style.opacity = '0.5';
+        } else {
+            card.style.opacity = '1';
+        }
+    });
+}
+</script>
+{% endif %}
 {% endblock %}
