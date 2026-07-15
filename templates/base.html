@@ -43,13 +43,11 @@
                     <span class="separator">|</span>
                     <a href="tel:{{ site_settings.company_phone }}">{{ site_settings.company_phone }}</a>
                 </div>
-                {% if user.is_authenticated and active_company %}
+                {% if user.is_authenticated and user.is_staff and active_company %}
                 <div class="header-company">
                     <span class="company-name">Empresa: <strong>{{ active_company.name }}</strong></span>
-                    {% if user.is_staff %}
                     <span class="separator">|</span>
                     <a href="{% url 'select_company' %}?next={{ request.get_full_path|urlencode }}" class="company-switch-btn">Cambiar</a>
-                    {% endif %}
                 </div>
                 {% endif %}
             </div>
@@ -87,12 +85,10 @@
                     {% endif %}
                     <li class="nav-divider"></li>
                     {% if user.is_authenticated %}
-                    {% if active_company %}
+                    {% if user.is_staff and active_company %}
                     <li class="nav-company-item">
                         <span class="nav-company-label">Empresa: {{ active_company.name }}</span>
-                        {% if user.is_staff %}
                         <a href="{% url 'select_company' %}?next={{ request.get_full_path|urlencode }}" class="btn btn-ghost nav-company-switch">Cambiar</a>
-                        {% endif %}
                     </li>
                     {% endif %}
 
