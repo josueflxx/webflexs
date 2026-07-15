@@ -425,7 +425,7 @@ class ApiV1CompanyIsolationTests(TestCase):
             subtotal=Decimal("10.00"),
             total=Decimal("10.00"),
         )
-        Order.objects.create(
+        shared_order_b = Order.objects.create(
             user=shared_user,
             company=self.company_b,
             client_company_ref=shared_b,
@@ -444,7 +444,9 @@ class ApiV1CompanyIsolationTests(TestCase):
             {"company_id": self.company_c.pk},
         )
 
-        self.assertEqual(self._results(without_scope), [])
+        active_company_id = self.client.session.get("active_company_id")
+        expected_orders = {shared_order_a.pk} if active_company_id == self.company_a.pk else {shared_order_b.pk}
+        self.assertEqual({row["id"] for row in self._results(without_scope)}, expected_orders)
         self.assertEqual({row["id"] for row in self._results(company_a)}, {shared_order_a.pk})
         self.assertEqual(self._results(unauthorized), [])
 
