@@ -10,6 +10,155 @@
 
 {% block extra_css %}
 <link rel="stylesheet" href="{% static 'core/css/catalog.css' %}?v=20260714-lightmode-v3">
+<style>
+    {% if request.user.is_superuser %}
+    /* Modal styles */
+    .quick-edit-modal {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        z-index: 2000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .quick-edit-modal-backdrop {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.6);
+        backdrop-filter: blur(4px);
+    }
+    .quick-edit-modal-content {
+        position: relative;
+        width: 500px;
+        max-width: 90%;
+        background: #1e293b;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 16px;
+        padding: 24px;
+        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+        color: #f8fafc;
+        z-index: 2001;
+        animation: modalFadeIn 0.3s ease-out;
+    }
+    html[data-theme="light"] .quick-edit-modal-content {
+        background: #ffffff;
+        border-color: #e2e8f0;
+        color: #0f172a;
+        box-shadow: 0 25px 50px -12px rgba(15, 23, 42, 0.1);
+    }
+    @keyframes modalFadeIn {
+        from { opacity: 0; transform: translateY(-20px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    .quick-edit-modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        padding-bottom: 12px;
+        margin-bottom: 20px;
+    }
+    html[data-theme="light"] .quick-edit-modal-header {
+        border-bottom-color: #f1f5f9;
+    }
+    .quick-edit-modal-header h3 {
+        margin: 0;
+        font-size: 1.25rem;
+        font-weight: 600;
+        color: inherit !important;
+    }
+    .quick-edit-modal-close {
+        background: none;
+        border: none;
+        color: inherit;
+        font-size: 1.5rem;
+        cursor: pointer;
+        padding: 0;
+        line-height: 1;
+        opacity: 0.7;
+        transition: opacity 0.2s;
+    }
+    .quick-edit-modal-close:hover {
+        opacity: 1;
+    }
+    .quick-edit-modal .form-group {
+        margin-bottom: 16px;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        width: 100%;
+    }
+    .quick-edit-modal .form-group label {
+        display: block;
+        font-size: 0.875rem;
+        font-weight: 500;
+        margin-bottom: 6px;
+        opacity: 0.9;
+        color: inherit !important;
+    }
+    .quick-edit-modal .form-control {
+        width: 100%;
+        padding: 10px 12px;
+        background: #0f172a;
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        border-radius: 8px;
+        color: inherit;
+        font-size: 0.95rem;
+        transition: border-color 0.2s;
+    }
+    html[data-theme="light"] .quick-edit-modal .form-control {
+        background: #f8fafc;
+        border-color: #cbd5e1;
+        color: #0f172a !important;
+    }
+    .quick-edit-modal .form-control:focus {
+        border-color: var(--color-primary, #ff6b35);
+        outline: none;
+    }
+    .quick-edit-modal .form-group-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+        width: 100%;
+    }
+    .quick-edit-modal .checkbox-group {
+        display: flex;
+        align-items: center;
+        justify-content: flex-start;
+    }
+    .quick-edit-modal .checkbox-group label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        cursor: pointer;
+        margin: 0;
+    }
+    .quick-edit-modal .checkbox-group input {
+        width: 18px;
+        height: 18px;
+        cursor: pointer;
+        margin: 0;
+    }
+    .quick-edit-modal-footer {
+        display: flex;
+        justify-content: flex-end;
+        gap: 12px;
+        border-top: 1px solid rgba(255, 255, 255, 0.1);
+        padding-top: 16px;
+        margin-top: 24px;
+        width: 100%;
+    }
+    html[data-theme="light"] .quick-edit-modal-footer {
+        border-top-color: #f1f5f9;
+    }
+    {% endif %}
+</style>
 {% endblock %}
 
 {% block content %}
@@ -39,8 +188,19 @@
             </div>
 
             <div class="product-data">
-                <p class="sku">SKU: {{ product.sku }}</p>
-                <h1>{{ product.name }}</h1>
+                <p class="sku" id="productDetailSku">SKU: {{ product.sku }}</p>
+                <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 12px;">
+                    <h1 id="productDetailTitle" style="margin: 0;">{{ product.name }}</h1>
+                    {% if request.user.is_superuser %}
+                    <button class="btn btn-outline" 
+                            id="quickEditDetailBtn"
+                            onclick="openQuickEditModal('{{ product.id|unlocalize }}', '{{ product.sku|escapejs }}', '{{ product.name|escapejs }}', '{{ base_price|default:product.price|unlocalize }}', '{{ product.stock|unlocalize }}', {% if product.is_active %}true{% else %}false{% endif %})" 
+                            title="Editar producto"
+                            style="padding: 6px 12px; font-size: 0.85rem; min-height: auto; display: inline-flex; align-items: center; gap: 4px;">
+                        ✏️ Editar
+                    </button>
+                    {% endif %}
+                </div>
 
                 {% if primary_category_chip %}
                 <div class="detail-route-panel">
@@ -58,13 +218,13 @@
                 {% endif %}
 
                 {% if show_prices %}
-                <div class="price-box">
+                <div class="price-box" id="productDetailPriceBox">
                     {% if discount %}
-                    <p class="detail-list-price">Precio de lista: ${{ base_price|default:product.price|floatformat:2 }}</p>
+                    <p class="detail-list-price">Precio de lista: $<span id="valBasePrice">{{ base_price|default:product.price|floatformat:2 }}</span></p>
                     <p class="detail-discount">Descuento: {{ discount_percentage|floatformat:0 }}%</p>
-                    <p class="price-final">Precio final: ${{ final_price|floatformat:2 }}</p>
+                    <p class="price-final">Precio final: $<span id="valFinalPrice">{{ final_price|floatformat:2 }}</span></p>
                     {% else %}
-                    <p class="price-final">${{ base_price|default:product.price|floatformat:2 }}</p>
+                    <p class="price-final">$<span id="valFinalPrice">{{ base_price|default:product.price|floatformat:2 }}</span></p>
                     {% endif %}
                 </div>
                 {% else %}
@@ -80,7 +240,7 @@
 
                 {% if user.is_authenticated %}
                 <div style="display:flex;gap:10px;flex-wrap:wrap;">
-                    <button class="btn btn-primary" onclick="addToCart({{ product.id|unlocalize }})" {% if product.stock <= 0 %}disabled{% endif %}>
+                    <button class="btn btn-primary" id="addToCartBtn" onclick="addToCart({{ product.id|unlocalize }})" {% if product.stock <= 0 %}disabled{% endif %}>
                         Agregar al carrito
                     </button>
                     <button
@@ -138,6 +298,57 @@
         {% endif %}
     </div>
 </div>
+
+{% if request.user.is_superuser %}
+<!-- Quick Edit Modal -->
+<div id="quickEditModal" class="quick-edit-modal" style="display: none;">
+    <div class="quick-edit-modal-backdrop" onclick="closeQuickEditModal()"></div>
+    <div class="quick-edit-modal-content">
+        <div class="quick-edit-modal-header">
+            <h3>Editar Producto (Quick Edit)</h3>
+            <button class="quick-edit-modal-close" onclick="closeQuickEditModal()">&times;</button>
+        </div>
+        <form id="quickEditForm" onsubmit="submitQuickEdit(event)">
+            {% csrf_token %}
+            <input type="hidden" id="quickEditProductId" name="product_id">
+            
+            <div class="form-group">
+                <label for="quickEditName">Nombre</label>
+                <input type="text" id="quickEditName" name="name" required class="form-control">
+            </div>
+            
+            <div class="form-group-row">
+                <div class="form-group">
+                    <label for="quickEditSku">SKU</label>
+                    <input type="text" id="quickEditSku" name="sku" required class="form-control">
+                </div>
+                <div class="form-group">
+                    <label for="quickEditStock">Stock</label>
+                    <input type="number" id="quickEditStock" name="stock" required class="form-control">
+                </div>
+            </div>
+            
+            <div class="form-group-row">
+                <div class="form-group">
+                    <label for="quickEditPrice">Precio de Lista</label>
+                    <input type="number" id="quickEditPrice" name="price" step="0.01" required class="form-control">
+                </div>
+                <div class="form-group checkbox-group">
+                    <label for="quickEditActive">
+                        <input type="checkbox" id="quickEditActive" name="is_active">
+                        <span>Activo en catálogo</span>
+                    </label>
+                </div>
+            </div>
+            
+            <div class="quick-edit-modal-footer">
+                <button type="button" class="btn btn-outline" onclick="closeQuickEditModal()">Cancelar</button>
+                <button type="submit" class="btn btn-primary">Guardar cambios</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endif %}
 {% endblock %}
 
 {% block extra_js %}
@@ -179,5 +390,124 @@
             console.error('Error toggling favorite', error);
         }
     }
+
+    {% if request.user.is_superuser %}
+    function openQuickEditModal(productId, sku, name, price, stock, isActive) {
+        document.getElementById('quickEditProductId').value = productId;
+        document.getElementById('quickEditSku').value = sku;
+        document.getElementById('quickEditName').value = name;
+        document.getElementById('quickEditPrice').value = parseFloat(price).toFixed(2);
+        document.getElementById('quickEditStock').value = stock;
+        document.getElementById('quickEditActive').checked = isActive;
+        
+        document.getElementById('quickEditModal').style.display = 'flex';
+    }
+
+    function closeQuickEditModal() {
+        document.getElementById('quickEditModal').style.display = 'none';
+    }
+
+    function submitQuickEdit(event) {
+        event.preventDefault();
+        
+        const form = document.getElementById('quickEditForm');
+        const formData = new FormData(form);
+        const productId = formData.get('product_id');
+        
+        const submitBtn = form.querySelector('button[type="submit"]');
+        const originalBtnText = submitBtn.textContent;
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Guardando...';
+        
+        fetch(`/catalogo/producto/${productId}/quick-edit/`, {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+        .then(response => {
+            if (!response.ok) {
+                return response.json().then(err => { throw err; });
+            }
+            return response.json();
+        })
+        .then(data => {
+            submitBtn.disabled = false;
+            submitBtn.textContent = originalBtnText;
+            
+            if (data.success) {
+                closeQuickEditModal();
+                if (window.showFLEXSToast) {
+                    window.showFLEXSToast('Éxito', 'Producto actualizado correctamente', 'success');
+                } else {
+                    alert('Producto actualizado correctamente');
+                }
+                updateProductDetailsOnPage(data.product);
+            } else {
+                if (window.showFLEXSToast) {
+                    window.showFLEXSToast('Error', data.error || 'Error al guardar el producto', 'error');
+                } else {
+                    alert(data.error || 'Error al guardar el producto');
+                }
+            }
+        })
+        .catch(error => {
+            submitBtn.disabled = false;
+            submitBtn.textContent = originalBtnText;
+            console.error('Error:', error);
+            const errMsg = error.error || 'Error de red o del servidor';
+            if (window.showFLEXSToast) {
+                window.showFLEXSToast('Error', errMsg, 'error');
+            } else {
+                alert(errMsg);
+            }
+        });
+    }
+
+    function updateProductDetailsOnPage(productData) {
+        // Update Title
+        const titleEl = document.getElementById('productDetailTitle');
+        if (titleEl) titleEl.textContent = productData.name;
+        
+        // Update SKU
+        const skuEl = document.getElementById('productDetailSku');
+        if (skuEl) skuEl.textContent = 'SKU: ' + productData.sku;
+        
+        // Update Add To Cart state based on stock
+        const addToCartBtn = document.getElementById('addToCartBtn');
+        if (addToCartBtn) {
+            if (productData.stock > 0) {
+                addToCartBtn.removeAttribute('disabled');
+            } else {
+                addToCartBtn.setAttribute('disabled', 'true');
+            }
+        }
+        
+        // Update price display
+        const valBasePrice = document.getElementById('valBasePrice');
+        const valFinalPrice = document.getElementById('valFinalPrice');
+        
+        const formatter = new Intl.NumberFormat('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        
+        if (valBasePrice) {
+            valBasePrice.textContent = formatter.format(productData.price);
+            
+            const discountPercent = parseFloat("{{ discount_percentage|default:0|unlocalize }}");
+            const finalPrice = productData.price * (1 - discountPercent / 100);
+            if (valFinalPrice) {
+                valFinalPrice.textContent = formatter.format(finalPrice);
+            }
+        } else if (valFinalPrice) {
+            valFinalPrice.textContent = formatter.format(productData.price);
+        }
+        
+        // Update the edit button data attributes for next clicks!
+        const editBtn = document.getElementById('quickEditDetailBtn');
+        if (editBtn) {
+            editBtn.setAttribute('onclick', `openQuickEditModal('${productData.id}', '${productData.sku.replace(/'/g, "\\'")}', '${productData.name.replace(/'/g, "\\'")}', '${productData.price}', '${productData.stock}', ${productData.is_active})`);
+        }
+    }
+    {% endif %}
 </script>
 {% endblock %}
