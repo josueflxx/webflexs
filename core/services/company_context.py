@@ -166,6 +166,11 @@ def get_active_company(request):
     user = getattr(request, "user", None)
     if user and getattr(user, "is_authenticated", False):
         companies = list(get_user_companies(user))
+        if not getattr(user, "is_staff", False) and companies:
+            preferred = get_preferred_client_company(companies) or companies[0]
+            set_active_company(request, preferred)
+            return preferred
+
         if len(companies) == 1:
             set_active_company(request, companies[0])
             return companies[0]

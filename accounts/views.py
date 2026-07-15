@@ -1,4 +1,4 @@
-﻿"""
+"""
 Accounts app views - Login, logout, and account requests.
 """
 import hashlib
@@ -279,6 +279,13 @@ def select_company(request):
         require_https=request.is_secure(),
     ):
         next_url = ""
+
+    if not request.user.is_staff:
+        preferred = get_preferred_client_company(companies) or companies[0]
+        set_active_company(request, preferred)
+        default_next = "catalog"
+        redirect_target = next_url or reverse(default_next)
+        return redirect(redirect_target)
 
     default_next = "admin_dashboard" if request.user.is_staff else "catalog"
     redirect_target = next_url or reverse(default_next)
