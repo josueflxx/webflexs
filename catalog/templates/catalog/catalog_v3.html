@@ -10,7 +10,7 @@
 {% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="{% static 'core/css/catalog.css' %}?v=20260716-dropdown-zindex">
+<link rel="stylesheet" href="{% static 'core/css/catalog.css' %}?v=20260716-dropdown-stacking">
 <style>
     @keyframes spin {
         0% { transform: rotate(0deg); }
@@ -368,7 +368,7 @@
 
                             {% for row in category_tree_rows %}
                             <div
-                                class="category-tree-row {% if row.has_children %}has-children{% endif %}{% if row.category.id in expanded_category_ids %} expanded{% endif %}"
+                                class="category-tree-row {% if row.has_children %}has-children{% endif %}{% if row.category.id in expanded_category_ids %} expanded{% endif %} {% if row.category.slug == category_slug %}active-filter-row{% endif %}"
                                 data-category-id="{{ row.category.id }}"
                                 data-parent-id="{{ row.category.parent_id|default:'' }}"
                                 data-depth="{{ row.depth }}"

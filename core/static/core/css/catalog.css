@@ -220,6 +220,10 @@
     --tree-indent: calc(var(--depth, 0) * 16px);
 }
 
+.category-tree-row.active-filter-row {
+    z-index: 100 !important;
+}
+
 .category-tree-row[data-depth]:not([data-depth="0"]) {
     display: none;
 }
