@@ -914,9 +914,16 @@ def catalog(request):
     if order_by not in valid_orders:
         order_by = order_by_default
 
-    view_mode = request.GET.get("view", "grid").strip().lower()
-    if view_mode not in {"grid", "list"}:
-        view_mode = "grid"
+    # Session-persistent view mode preference (defaults to 'grid' / cards view)
+    view_mode = request.GET.get("view")
+    if view_mode:
+        view_mode = view_mode.strip().lower()
+        if view_mode in {"grid", "list"}:
+            request.session["catalog_view_mode"] = view_mode
+        else:
+            view_mode = "grid"
+    else:
+        view_mode = request.session.get("catalog_view_mode", "grid")
 
     if search_query:
         products = annotate_catalog_search_rank(products, parsed_search)
