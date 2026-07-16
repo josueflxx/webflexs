@@ -1024,7 +1024,7 @@
     ];
 
     const categoryExpanded = {};
-    const collapsedCategories = new Set();
+    const collapsedCategories = new Set(CATEGORIES.map(cat => cat.id));
 
     let lastChecked = null;
     let isDragging = false;
