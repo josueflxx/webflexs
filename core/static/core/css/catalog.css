@@ -3091,6 +3091,10 @@
     animation: selectSlide 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
+.custom-select-wrapper.open {
+    z-index: 2000 !important;
+}
+
 .custom-select-wrapper.open .custom-options {
     display: block;
 }
