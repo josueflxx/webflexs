@@ -97,6 +97,7 @@ EnvironmentFile=/var/www/$PROJECT_NAME/.env
 ExecStart=/var/www/$PROJECT_NAME/venv/bin/gunicorn \
           --access-logfile - \
           --workers 3 \
+          --timeout 120 \
           --bind unix:/run/gunicorn.sock \
           flexs_project.wsgi:application
 Restart=always
