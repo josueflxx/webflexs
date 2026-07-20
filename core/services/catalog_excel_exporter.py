@@ -283,11 +283,48 @@ def _is_public_category(category, category_lookup=None):
 
 
 def _selected_category_ids(sheet):
-    return set(sheet.categories.values_list("id", flat=True))
+    cached_ids = getattr(sheet, "_catalog_selected_category_ids", None)
+    if cached_ids is not None:
+        return cached_ids
+
+    prefetched = getattr(sheet, "_prefetched_objects_cache", {}).get("categories")
+    if prefetched is not None:
+        cached_ids = {category.id for category in prefetched}
+    else:
+        cached_ids = set(sheet.categories.values_list("id", flat=True))
+    sheet._catalog_selected_category_ids = cached_ids
+    return cached_ids
 
 
 def _selected_supplier_ids(sheet):
-    return set(sheet.suppliers.values_list("id", flat=True))
+    cached_ids = getattr(sheet, "_catalog_selected_supplier_ids", None)
+    if cached_ids is not None:
+        return cached_ids
+
+    prefetched = getattr(sheet, "_prefetched_objects_cache", {}).get("suppliers")
+    if prefetched is not None:
+        cached_ids = {supplier.id for supplier in prefetched}
+    else:
+        cached_ids = set(sheet.suppliers.values_list("id", flat=True))
+    sheet._catalog_selected_supplier_ids = cached_ids
+    return cached_ids
+
+
+def _active_sheet_columns(sheet):
+    cached_columns = getattr(sheet, "_catalog_active_columns", None)
+    if cached_columns is not None:
+        return cached_columns
+
+    prefetched = getattr(sheet, "_prefetched_objects_cache", {}).get("columns")
+    if prefetched is not None:
+        cached_columns = sorted(
+            (column for column in prefetched if column.is_active),
+            key=lambda column: (column.order, column.id),
+        )
+    else:
+        cached_columns = list(sheet.columns.filter(is_active=True).order_by("order", "id"))
+    sheet._catalog_active_columns = cached_columns
+    return cached_columns
 
 
 def _sheet_search_query(sheet):
@@ -323,8 +360,8 @@ def _sheet_should_export(sheet):
     return True
 
 
-def _public_category_ids_with_products():
-    all_categories = {
+def _public_category_ids_with_products(category_lookup=None):
+    all_categories = category_lookup or {
         category.id: category
         for category in Category.objects.select_related("parent")
     }
@@ -453,22 +490,29 @@ def _build_synthetic_category_sheet(template, category, columns, order, name=Non
     )
 
 
-def _complete_public_catalog_sheets(template, sheets):
+def _complete_public_catalog_sheets(template, sheets, category_lookup=None):
     if not template.is_client_download_enabled:
         return sheets
 
-    public_ids = _public_category_ids_with_products()
+    public_ids = _public_category_ids_with_products(category_lookup=category_lookup)
     if not public_ids:
         return sheets
 
-    public_categories = {
-        category.id: category
-        for category in Category.objects.filter(
-            id__in=public_ids,
-            is_active=True,
-            visible_in_catalog=True,
-        ).select_related("parent")
-    }
+    if category_lookup is None:
+        public_categories = {
+            category.id: category
+            for category in Category.objects.filter(
+                id__in=public_ids,
+                is_active=True,
+                visible_in_catalog=True,
+            ).select_related("parent")
+        }
+    else:
+        public_categories = {
+            category_id: category
+            for category_id, category in category_lookup.items()
+            if category_id in public_ids and category.is_active and category.visible_in_catalog
+        }
     public_roots = [
         category
         for category in public_categories.values()
@@ -502,7 +546,7 @@ def _complete_public_catalog_sheets(template, sheets):
 
     base_columns = []
     for sheet in sheets:
-        base_columns = list(sheet.columns.filter(is_active=True).order_by("order", "id"))
+        base_columns = _active_sheet_columns(sheet)
         if base_columns:
             break
 
@@ -565,10 +609,18 @@ def _complete_public_catalog_sheets(template, sheets):
     return deduped_sheets
 
 
-def _filter_public_category_ids(category_ids):
+def _category_lookup_for_sheet(sheet):
+    category_lookup = getattr(sheet, "_catalog_category_lookup", None)
+    if category_lookup is None:
+        category_lookup = Category.objects.select_related("parent").in_bulk()
+        sheet._catalog_category_lookup = category_lookup
+    return category_lookup
+
+
+def _filter_public_category_ids(category_ids, category_lookup=None):
     if not category_ids:
         return set()
-    category_lookup = Category.objects.all().in_bulk()
+    category_lookup = category_lookup or Category.objects.select_related("parent").in_bulk()
     return {
         category_id
         for category_id in category_ids
@@ -582,16 +634,37 @@ def _resolve_category_ids(sheet, selected_ids=None):
     if not category_ids:
         return set()
 
+    cache_key = (
+        tuple(sorted(category_ids)),
+        bool(sheet.include_descendant_categories),
+        bool(_sheet_requires_public_catalog(sheet)),
+    )
+    resolved_cache = getattr(sheet, "_catalog_resolved_category_ids", {})
+    if cache_key in resolved_cache:
+        return resolved_cache[cache_key]
+
+    category_lookup = _category_lookup_for_sheet(sheet)
+
     if not sheet.include_descendant_categories:
-        resolved_ids = category_ids
+        resolved_ids = set(category_ids)
     else:
-        categories = Category.objects.filter(id__in=category_ids)
-        resolved_ids = set()
-        for category in categories:
-            resolved_ids.update(category.get_descendant_ids(include_self=True))
+        resolved_ids = {
+            category.id
+            for category in category_lookup.values()
+            if any(
+                _is_descendant_of(category, selected_id, category_lookup)
+                for selected_id in category_ids
+            )
+        }
 
     if _sheet_requires_public_catalog(sheet):
-        return _filter_public_category_ids(resolved_ids)
+        resolved_ids = _filter_public_category_ids(
+            resolved_ids,
+            category_lookup=category_lookup,
+        )
+
+    resolved_cache[cache_key] = resolved_ids
+    sheet._catalog_resolved_category_ids = resolved_cache
     return resolved_ids
 
 
@@ -613,7 +686,7 @@ def _apply_sheet_filters(sheet):
             Q(category_id__in=category_ids) | Q(categories__id__in=category_ids)
         ).distinct()
 
-    supplier_ids = list(sheet.suppliers.values_list("id", flat=True))
+    supplier_ids = _selected_supplier_ids(sheet)
     if supplier_ids:
         queryset = queryset.filter(supplier_ref_id__in=supplier_ids)
 
@@ -1101,7 +1174,7 @@ def _iter_sheet_products(sheet, price_map=None, discount_percentage=None):
     requires_public_catalog = _sheet_requires_public_catalog(sheet)
     requires_public_price = _sheet_requires_public_price(sheet)
     if not _client_export_uses_canonical_categories(sheet):
-        category_lookup = Category.objects.select_related("parent").in_bulk() if requires_public_catalog else None
+        category_lookup = _category_lookup_for_sheet(sheet) if requires_public_catalog else None
         for product in queryset.iterator(chunk_size=500):
             if requires_public_catalog and not _product_has_public_category(product, category_lookup):
                 continue
@@ -1115,7 +1188,7 @@ def _iter_sheet_products(sheet, price_map=None, discount_percentage=None):
         return
 
     resolved_ids = _resolve_category_ids(sheet, selected_ids=_selected_category_ids(sheet))
-    category_lookup = Category.objects.select_related("parent").in_bulk()
+    category_lookup = _category_lookup_for_sheet(sheet)
     matched_products = []
     matched_product_ids = []
     matched_category_ids = []
@@ -1161,7 +1234,7 @@ def _iter_sheet_products(sheet, price_map=None, discount_percentage=None):
 def _build_grouping_context(sheet):
     selected_ids = _selected_category_ids(sheet)
     resolved_ids = _resolve_category_ids(sheet, selected_ids=selected_ids)
-    category_lookup = Category.objects.all().in_bulk()
+    category_lookup = _category_lookup_for_sheet(sheet)
 
     selected_categories = [
         category_lookup[category_id]
@@ -1630,7 +1703,14 @@ def build_catalog_workbook(template, price_list=None, discount_percentage=None):
     sheets = list(
         template.sheets.prefetch_related("columns", "categories", "suppliers").order_by("order", "id")
     )
-    sheets = _complete_public_catalog_sheets(template, sheets)
+    category_lookup = Category.objects.select_related("parent").in_bulk()
+    sheets = _complete_public_catalog_sheets(
+        template,
+        sheets,
+        category_lookup=category_lookup,
+    )
+    for sheet in sheets:
+        sheet._catalog_category_lookup = category_lookup
     if not sheets:
         default_sheet = workbook.create_sheet("Catalogo")
         _prepare_worksheet(default_sheet, "94A3B8")
@@ -1661,9 +1741,7 @@ def build_catalog_workbook(template, price_list=None, discount_percentage=None):
         sheet_name = getattr(sheet_config, "_export_name", None) or sheet_config.name
         worksheet = workbook.create_sheet(sheet_name[:31] or "Hoja")
         _prepare_worksheet(worksheet, "1F2937")
-        columns = list(
-            sheet_config.columns.filter(is_active=True).order_by("order", "id")
-        )
+        columns = _active_sheet_columns(sheet_config)
         if not columns:
             fallback_columns = [
                 ("sku", "SKU"),
@@ -1769,22 +1847,22 @@ def build_catalog_workbook(template, price_list=None, discount_percentage=None):
     }
     _append_index_sheet(workbook, template, stats, generated_at)
 
-    # Apply deep dark mode background to all empty/unused cells in all sheets of the workbook!
+    # Keep the dark canvas without materializing hundreds of thousands of empty
+    # cells. Column/row dimension styles are serialized once and inherited by
+    # empty cells in Excel, which preserves the design and keeps client exports
+    # comfortably below the web worker timeout.
     for sheet in workbook.worksheets:
         sheet.sheet_view.showGridLines = False
-        
-        # Determine how far to paint (up to column Z [26 columns] and 40 rows below the table)
-        max_r = max(100, sheet.max_row + 40)
-        max_c = 26  # Column Z
-        
-        # Color empty cells dark slate
-        for r in range(1, max_r + 1):
-            if r > sheet.max_row:
-                sheet.row_dimensions[r].height = 20
-            for c in range(1, max_c + 1):
-                cell = sheet.cell(row=r, column=c)
-                if cell.fill is None or cell.fill.fill_type is None:
-                    cell.fill = INDEX_BG_FILL
+
+        used_max_row = sheet.max_row
+        used_max_column = sheet.max_column
+        for column_index in range(used_max_column + 1, 27):
+            sheet.column_dimensions[get_column_letter(column_index)].fill = INDEX_BG_FILL
+
+        for row_index in range(used_max_row + 1, max(100, used_max_row + 40) + 1):
+            row_dimension = sheet.row_dimensions[row_index]
+            row_dimension.height = 20
+            row_dimension.fill = INDEX_BG_FILL
 
     return workbook, stats
 

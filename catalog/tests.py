@@ -1446,6 +1446,14 @@ class CatalogClientExcelDownloadTests(CatalogTestCase):
         worksheet = workbook["Categoria XLSX"]
         self.assertEqual(worksheet["A1"].value, "SKU")
         self.assertEqual(worksheet["B2"].value, "Producto XLSX")
+        self.assertLess(worksheet.max_column, 26)
+        self.assertLess(worksheet.max_row, 100)
+        self.assertTrue(
+            str(worksheet.column_dimensions["D"].fill.fgColor.rgb).endswith("0B0F19")
+        )
+        self.assertTrue(
+            str(worksheet.row_dimensions[100].fill.fgColor.rgb).endswith("0B0F19")
+        )
 
     def test_client_catalog_excel_skips_visible_products_without_price(self):
         zero_price = Product.objects.create(
