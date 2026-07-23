@@ -57,6 +57,9 @@
             {% if can_manage_client_categories %}
             <a href="{% url 'admin_client_category_list' %}" class="btn btn-outline">Tipos de cliente</a>
             {% endif %}
+            <a href="{% url 'admin_client_fiscal_review_list' %}" class="btn btn-outline">
+                Revisiones CUIT ({{ pending_fiscal_review_total }})
+            </a>
             <a href="{% url 'admin_client_list' %}?missing_email=1" class="btn btn-outline {% if missing_email_only %}is-active{% endif %}" title="Filtrar clientes sin email para corregirlos rapido">
                 Sin email ({{ missing_email_total }})
             </a>

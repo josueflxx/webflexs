@@ -775,8 +775,6 @@ class ArcaWsfeClient:
             "payload": {
                 "auth": {
                     "cuit": wsfe_payload["auth"]["cuit"],
-                    "token_preview": f"{str(token)[:12]}...",
-                    "sign_preview": f"{str(sign)[:12]}...",
                 },
                 "cabecera": wsfe_payload["cabecera"],
                 "detalle": {

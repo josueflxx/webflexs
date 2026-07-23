@@ -148,6 +148,7 @@ from core.services.company_context import (
     set_active_company,
     user_has_company_access,
 )
+from core.services.access_scope import clients_visible_to, orders_visible_to
 from django.contrib.auth.models import Group, User
 from admin_panel.forms.import_forms import ProductImportForm, ClientImportForm, CategoryImportForm
 from admin_panel.forms.category_forms import CategoryForm
@@ -416,8 +417,9 @@ def _parse_paid_at(raw_paid_at):
 @staff_member_required
 def payment_list(request):
     """Payments control panel with search and order assignment."""
-    companies = Company.objects.filter(is_active=True).order_by("name")
+    companies = get_user_companies(request.user).filter(is_active=True).order_by("name")
     active_company = get_admin_company_filter(request)
+    company_scope = companies.filter(pk=active_company.pk) if active_company else companies
     selected_company_id = "all" if active_company is None else str(active_company.pk)
     if request.method == 'POST':
         action = request.POST.get('action', 'create').strip()
@@ -425,7 +427,7 @@ def payment_list(request):
         sales_document_type_id_raw = request.POST.get("sales_document_type_id", "").strip()
         company_for_action = None
         if company_id_raw and company_id_raw.isdigit():
-            company_for_action = Company.objects.filter(pk=int(company_id_raw), is_active=True).first()
+            company_for_action = companies.filter(pk=int(company_id_raw), is_active=True).first()
         if not company_for_action and active_company:
             company_for_action = active_company
         selected_sales_document_type = None
@@ -442,7 +444,9 @@ def payment_list(request):
             cancel_reason = request.POST.get('cancel_reason', '').strip()
             with transaction.atomic():
                 payment = get_object_or_404(
-                    ClientPayment.objects.select_related('order', 'client_profile').select_for_update(),
+                    ClientPayment.objects.select_related(
+                        'order', 'client_profile'
+                    ).filter(company__in=company_scope).select_for_update(),
                     pk=payment_id,
                 )
                 if payment.is_cancelled:
@@ -484,7 +488,10 @@ def payment_list(request):
 
             client_profile = None
             if client_id.isdigit():
-                client_profile = ClientProfile.objects.select_related('user').filter(pk=int(client_id)).first()
+                client_profile = clients_visible_to(
+                    request.user,
+                    company=company_for_action,
+                ).select_related('user').filter(pk=int(client_id)).first()
             if not client_profile:
                 messages.error(request, 'Selecciona un cliente valido para registrar ajuste.')
                 return redirect('admin_payment_list')
@@ -542,7 +549,10 @@ def payment_list(request):
             if not order_id.isdigit():
                 messages.error(request, 'Pedido invalido.')
                 return redirect('admin_payment_list')
-            order = Order.objects.select_related('user').filter(pk=order_id).first()
+            order = orders_visible_to(
+                request.user,
+                company=company_for_action,
+            ).select_related('user').filter(pk=order_id).first()
             if not order:
                 messages.error(request, 'El pedido indicado no existe.')
                 return redirect('admin_payment_list')
@@ -552,9 +562,15 @@ def payment_list(request):
 
         client_profile = None
         if client_id.isdigit():
-            client_profile = ClientProfile.objects.select_related('user').filter(pk=int(client_id)).first()
+            client_profile = clients_visible_to(
+                request.user,
+                company=company_for_action,
+            ).select_related('user').filter(pk=int(client_id)).first()
         if not client_profile and order and order.user_id:
-            client_profile = ClientProfile.objects.select_related('user').filter(user_id=order.user_id).first()
+            client_profile = clients_visible_to(
+                request.user,
+                company=order.company,
+            ).select_related('user').filter(user_id=order.user_id).first()
 
         if not client_profile:
             messages.error(request, 'Selecciona un cliente valido o un pedido asociado a un cliente.')
@@ -579,7 +595,10 @@ def payment_list(request):
         with transaction.atomic():
             locked_order = None
             if order:
-                locked_order = Order.objects.select_for_update().select_related('user').get(pk=order.pk)
+                locked_order = orders_visible_to(
+                    request.user,
+                    company=order.company,
+                ).select_for_update().select_related('user').get(pk=order.pk)
                 order = locked_order
                 company_for_action = order.company
             if not order and not company_for_action:
@@ -660,12 +679,16 @@ def payment_list(request):
     selected_sales_document_type_id = request.GET.get('sales_document_type_id', '').strip()
 
     if order_id.isdigit() and not client_id:
-        order_for_prefill = Order.objects.select_related('user').filter(pk=order_id)
-        if active_company:
-            order_for_prefill = order_for_prefill.filter(company=active_company)
+        order_for_prefill = orders_visible_to(
+            request.user,
+            company=active_company,
+        ).select_related('user').filter(pk=order_id)
         order_for_prefill = order_for_prefill.first()
         if order_for_prefill and order_for_prefill.user_id:
-            profile = ClientProfile.objects.filter(user_id=order_for_prefill.user_id).first()
+            profile = clients_visible_to(
+                request.user,
+                company=order_for_prefill.company,
+            ).filter(user_id=order_for_prefill.user_id).first()
             if profile:
                 client_id = str(profile.pk)
 
@@ -674,9 +697,7 @@ def payment_list(request):
         'client_profile__user',
         'order',
         'created_by',
-    ).all()
-    if active_company:
-        payments = payments.filter(company=active_company)
+    ).filter(company__in=company_scope)
 
     if client_id.isdigit():
         payments = payments.filter(client_profile_id=int(client_id))
@@ -733,28 +754,32 @@ def payment_list(request):
     for payment in page_obj:
         payment.internal_documents = payment_docs.get(payment.pk, [])
 
-    clients = ClientProfile.objects.select_related('user').order_by('company_name')
-    if active_company:
-        clients = clients.filter(
-            company_links__company=active_company,
-            company_links__is_active=True,
-        ).distinct()
+    clients = clients_visible_to(request.user, company=active_company).select_related(
+        'user'
+    ).order_by('company_name')
     selected_order = None
     if order_id.isdigit():
-        selected_order_qs = Order.objects.select_related('user').filter(pk=order_id)
-        if active_company:
-            selected_order_qs = selected_order_qs.filter(company=active_company)
+        selected_order_qs = orders_visible_to(
+            request.user,
+            company=active_company,
+        ).select_related('user').filter(pk=order_id)
         selected_order = selected_order_qs.first()
     selected_client = (
-        ClientProfile.objects.select_related('user').filter(pk=client_id).first()
+        clients_visible_to(request.user, company=active_company)
+        .select_related('user')
+        .filter(pk=client_id)
+        .first()
         if client_id.isdigit()
         else None
     )
     if not selected_client and selected_order and selected_order.user_id:
-        selected_client = ClientProfile.objects.select_related('user').filter(user_id=selected_order.user_id).first()
+        selected_client = clients_visible_to(
+            request.user,
+            company=selected_order.company,
+        ).select_related('user').filter(user_id=selected_order.user_id).first()
     selected_client_id = str(selected_client.pk) if selected_client else client_id
     selected_client_metrics = None
-    if selected_client:
+    if selected_client and active_company:
         orders_total = selected_client.get_total_orders_for_balance(company=active_company)
         total_paid = selected_client.get_total_paid(company=active_company)
         ledger_balance = selected_client.get_current_balance(company=active_company)
@@ -1709,8 +1734,8 @@ def clamp_request_detail(request, pk):
 
 # ===================== ORDERS =====================
 
-def _get_order_request_admin_queryset():
-    return OrderRequest.objects.select_related(
+def _get_order_request_admin_queryset(user=None, company=None):
+    queryset = OrderRequest.objects.select_related(
         'user',
         'company',
         'client_company_ref',
@@ -1737,14 +1762,20 @@ def _get_order_request_admin_queryset():
         ),
         'generated_orders',
     )
+    if user is not None:
+        companies = get_user_companies(user)
+        if company is not None:
+            companies = companies.filter(pk=company.pk)
+        queryset = queryset.filter(company__in=companies)
+    return queryset
 
 
 def _get_order_request_for_admin(request, pk):
     active_company = get_active_company(request)
-    order_request = get_object_or_404(_get_order_request_admin_queryset(), pk=pk)
-    if active_company and order_request.company_id != active_company.id:
-        raise ValidationError('La solicitud no pertenece a la empresa activa.')
-    return order_request
+    return get_object_or_404(
+        _get_order_request_admin_queryset(request.user, company=active_company),
+        pk=pk,
+    )
 
 
 def _parse_order_request_money(raw_value, field_label):
@@ -1992,15 +2023,17 @@ def _build_order_request_proposal_payloads(source_rows, post_data):
 @staff_member_required
 def sales_workspace(request):
     """Cross-flow sales view joining requests and operational orders."""
-    companies = Company.objects.filter(is_active=True).order_by("name")
+    companies = get_user_companies(request.user).filter(is_active=True).order_by("name")
     company_map = {company.pk: company for company in companies}
     active_company = get_admin_company_filter(request)
+    company_scope = companies.filter(pk=active_company.pk) if active_company else companies
     selected_company_id = "all" if active_company is None else str(active_company.pk)
     stage = request.GET.get("stage", "").strip().lower()
     client = request.GET.get("client", "").strip()
 
     rows = build_sales_pipeline_rows(
         company=active_company,
+        companies=company_scope,
         stage=stage,
         client_query=client,
     )
@@ -2054,6 +2087,7 @@ def sales_workspace(request):
         "selected_company_id": selected_company_id,
         "sales_workspace_cards": build_sales_workspace(
             company=active_company,
+            companies=company_scope,
             hub_url_name="admin_sales_workspace",
         ),
         "sales_workspace_active_keys": resolve_sales_workspace_active_keys(stage),
@@ -2063,12 +2097,11 @@ def sales_workspace(request):
 @staff_member_required
 def order_request_list(request):
     """Commercial requests submitted from the catalog before operational confirmation."""
-    order_requests = _get_order_request_admin_queryset()
-    companies = Company.objects.filter(is_active=True).order_by("name")
+    companies = get_user_companies(request.user).filter(is_active=True).order_by("name")
     active_company = get_admin_company_filter(request)
+    company_scope = companies.filter(pk=active_company.pk) if active_company else companies
+    order_requests = _get_order_request_admin_queryset(request.user, company=active_company)
     selected_company_id = "all" if active_company is None else str(active_company.pk)
-    if active_company:
-        order_requests = order_requests.filter(company=active_company)
 
     status = request.GET.get('status', '').strip()
     stage = request.GET.get('stage', '').strip().lower()
@@ -2106,7 +2139,10 @@ def order_request_list(request):
         'status_choices': OrderRequest.STATUS_CHOICES,
         'companies': companies,
         'selected_company_id': selected_company_id,
-        'sales_workspace_cards': build_sales_workspace(company=active_company),
+        'sales_workspace_cards': build_sales_workspace(
+            company=active_company,
+            companies=company_scope,
+        ),
         'sales_workspace_active_keys': resolve_sales_workspace_active_keys(stage),
     })
 
@@ -2511,18 +2547,19 @@ def order_request_delete_view(request, pk):
 @staff_member_required
 def order_list(request):
     """Order list with filters."""
-    orders = Order.objects.select_related('user', 'company').all()
-    companies = Company.objects.filter(is_active=True).order_by("name")
+    companies = get_user_companies(request.user).filter(is_active=True).order_by("name")
     active_company = get_admin_company_filter(request)
+    company_scope = companies.filter(pk=active_company.pk) if active_company else companies
+    orders = orders_visible_to(request.user, company=active_company).select_related('user', 'company')
     selected_company_id = "all" if active_company is None else str(active_company.pk)
-    if active_company:
-        orders = orders.filter(company=active_company)
     stage = request.GET.get('stage', '').strip().lower()
-    invoice_order_ids = FiscalDocument.objects.exclude(status=FISCAL_STATUS_VOIDED)
-    remito_order_ids = InternalDocument.objects.filter(doc_type=DocumentSeries.DOC_REM)
-    if active_company:
-        invoice_order_ids = invoice_order_ids.filter(company=active_company)
-        remito_order_ids = remito_order_ids.filter(company=active_company)
+    invoice_order_ids = FiscalDocument.objects.filter(
+        company__in=company_scope,
+    ).exclude(status=FISCAL_STATUS_VOIDED)
+    remito_order_ids = InternalDocument.objects.filter(
+        company__in=company_scope,
+        doc_type=DocumentSeries.DOC_REM,
+    )
     invoice_order_ids = invoice_order_ids.filter(doc_type__in=INVOICE_FISCAL_DOC_TYPES).values_list('order_id', flat=True)
     remito_order_ids = remito_order_ids.values_list('order_id', flat=True)
 
@@ -2624,7 +2661,10 @@ def order_list(request):
         'origin_channel_choices': Order.ORIGIN_CHOICES,
         'companies': companies,
         'selected_company_id': selected_company_id,
-        'sales_workspace_cards': build_sales_workspace(company=active_company),
+        'sales_workspace_cards': build_sales_workspace(
+            company=active_company,
+            companies=company_scope,
+        ),
         'sales_workspace_active_keys': resolve_sales_workspace_active_keys(stage),
     })
 
@@ -2639,7 +2679,7 @@ def order_create_from_panel(request):
         return redirect("admin_order_list")
 
     client = get_object_or_404(
-        ClientProfile.objects.select_related("user"),
+        clients_visible_to(request.user).select_related("user"),
         pk=int(raw_client_id),
     )
     if not getattr(client, "user_id", None):
@@ -2697,9 +2737,9 @@ def order_export_saas(request):
     status = request.GET.get('status', '').strip()
     sync_status = request.GET.get('sync_status', '').strip()
     orders = (
-        Order.objects.select_related('user', 'company', 'client_company_ref')
+        orders_visible_to(request.user, company=company)
+        .select_related('user', 'company', 'client_company_ref')
         .prefetch_related('items')
-        .filter(company=company)
     )
     if status:
         orders = orders.filter(status=status)
@@ -2813,22 +2853,53 @@ def order_detail(request, pk):
     """Order detail and status management."""
     active_company = get_active_company(request)
     order = get_object_or_404(
-        Order.objects.select_related(
+        orders_visible_to(request.user, company=active_company).select_related(
             "company",
             "client_company_ref",
             "client_company_ref__client_profile",
+            "assigned_to",
         ).prefetch_related("status_history__changed_by"),
         pk=pk,
     )
-    if active_company and order.company_id != active_company.id:
-        messages.error(request, "El pedido no pertenece a la empresa activa.")
-        return redirect('admin_order_list')
     try:
         from core.services.fiscal import is_invoice_ready
 
         invoice_ready, invoice_errors = is_invoice_ready(order)
     except Exception:
         invoice_ready, invoice_errors = False, ["No se pudo validar estado fiscal."]
+
+    if request.method == "POST" and request.POST.get("action") == "assign_seller":
+        seller_id = str(request.POST.get("assigned_to", "")).strip()
+        seller = None
+        if seller_id:
+            seller = User.objects.filter(
+                pk=seller_id,
+                is_active=True,
+                is_staff=True,
+            ).first()
+            if not seller:
+                messages.error(request, "Selecciona un vendedor activo valido.")
+                return redirect("admin_order_detail", pk=order.pk)
+        with transaction.atomic():
+            locked_order = orders_visible_to(
+                request.user,
+                company=active_company,
+            ).select_for_update().get(pk=order.pk)
+            before = model_snapshot(locked_order, ["assigned_to"])
+            locked_order.assigned_to = seller
+            locked_order.save(update_fields=["assigned_to", "updated_at"])
+            after = model_snapshot(locked_order, ["assigned_to"])
+        log_admin_change(
+            request,
+            action="order_seller_change",
+            target_type="order",
+            target_id=order.pk,
+            before=before,
+            after=after,
+        )
+        messages.success(request, "Vendedor actualizado.")
+        return redirect("admin_order_detail", pk=order.pk)
+
     order_items = _build_order_detail_items(order)
 
     order_client_profile = (
@@ -2876,7 +2947,10 @@ def order_detail(request, pk):
             admin_notes_input = request.POST.get('admin_notes', None)
             try:
                 with transaction.atomic():
-                    locked_order = Order.objects.select_for_update().get(pk=order.pk)
+                    locked_order = orders_visible_to(
+                        request.user,
+                        company=active_company,
+                    ).select_for_update().get(pk=order.pk)
                     before = model_snapshot(locked_order, ['status', 'admin_notes', 'status_updated_at'])
                     if admin_notes_input is not None:
                         locked_order.admin_notes = admin_notes_input
@@ -3003,6 +3077,11 @@ def order_detail(request, pk):
         client_profile_id=order_client_profile.pk if order_client_profile else None,
     )
     order_timeline = build_order_timeline(order, include_internal=True, limit=100)
+    seller_options = User.objects.filter(is_active=True, is_staff=True).order_by(
+        "first_name",
+        "last_name",
+        "username",
+    )
 
     return render(request, 'admin_panel/orders/detail.html', {
         'order': order,
@@ -3047,6 +3126,7 @@ def order_detail(request, pk):
         'related_sales_document_actions': related_sales_document_actions,
         'order_related_source_tx_id': order_movement_transaction.pk if order_movement_transaction else '',
         'order_related_source_order_id': order.pk,
+        'seller_options': seller_options,
     })
 
 
@@ -3059,12 +3139,11 @@ def order_invoice_open(request, pk):
         return redirect("select_company")
 
     order = get_object_or_404(
-        Order.objects.select_related("company", "client_company_ref", "client_company_ref__client_profile"),
+        orders_visible_to(request.user, company=active_company).select_related(
+            "company", "client_company_ref", "client_company_ref__client_profile"
+        ),
         pk=pk,
     )
-    if order.company_id != active_company.id:
-        messages.error(request, "No podes facturar pedidos de otra empresa.")
-        return redirect("admin_order_list")
     denied_response = _deny_fiscal_operation_if_needed(
         request,
         redirect_url=reverse("admin_order_detail", args=[order.pk]),
@@ -3138,12 +3217,11 @@ def order_internal_document_create(request, pk):
         return redirect("select_company")
 
     order = get_object_or_404(
-        Order.objects.select_related("company", "client_company_ref", "client_company_ref__client_profile"),
+        orders_visible_to(request.user, company=active_company).select_related(
+            "company", "client_company_ref", "client_company_ref__client_profile"
+        ),
         pk=pk,
     )
-    if order.company_id != active_company.id:
-        messages.error(request, "No podes generar documentos de otra empresa.")
-        return redirect("admin_order_list")
 
     sales_document_type = None
     sales_document_type_id = str(request.POST.get("sales_document_type_id", "")).strip()
@@ -3191,12 +3269,11 @@ def order_fiscal_create_local(request, pk):
         return redirect("select_company")
 
     order = get_object_or_404(
-        Order.objects.select_related("company", "client_company_ref", "client_company_ref__client_profile"),
+        orders_visible_to(request.user, company=active_company).select_related(
+            "company", "client_company_ref", "client_company_ref__client_profile"
+        ),
         pk=pk,
     )
-    if order.company_id != active_company.id:
-        messages.error(request, "No podes crear comprobantes de otra empresa.")
-        return redirect("admin_order_list")
     denied_response = _deny_fiscal_operation_if_needed(
         request,
         redirect_url=reverse("admin_order_detail", args=[order.pk]),
@@ -3262,12 +3339,11 @@ def order_fiscal_register_external(request, pk):
         return redirect("select_company")
 
     order = get_object_or_404(
-        Order.objects.select_related("company", "client_company_ref", "client_company_ref__client_profile"),
+        orders_visible_to(request.user, company=active_company).select_related(
+            "company", "client_company_ref", "client_company_ref__client_profile"
+        ),
         pk=pk,
     )
-    if order.company_id != active_company.id:
-        messages.error(request, "No podes registrar comprobantes externos de otra empresa.")
-        return redirect("admin_order_list")
     denied_response = _deny_fiscal_operation_if_needed(
         request,
         redirect_url=reverse("admin_order_detail", args=[order.pk]),
@@ -3334,7 +3410,11 @@ def order_fiscal_register_external(request, pk):
 @staff_member_required
 @require_POST
 def order_item_add(request, pk):
-    order = get_object_or_404(Order.objects.select_related('company', 'user'), pk=pk)
+    active_company = get_active_company(request)
+    order = get_object_or_404(
+        orders_visible_to(request.user, company=active_company).select_related('company', 'user'),
+        pk=pk,
+    )
     detail_anchor_url = f"{reverse('admin_order_detail', args=[order.pk])}#order-item-add-form"
     is_ajax = _is_ajax_request(request)
 
@@ -3408,19 +3488,23 @@ def order_item_add(request, pk):
         return _error_response("Producto no encontrado.")
 
     price_raw = request.POST.get("price", "").strip()
+    price_override_note = request.POST.get("price_override_note", "").strip()
     manual_price = _parse_order_item_manual_price(price_raw)
     if price_raw and manual_price is None:
         return _error_response("Precio invalido.")
 
     unit_price_base, auto_final_price, discount_used, price_list = _resolve_order_item_pricing(order, product)
+    is_manual_override = manual_price is not None and manual_price != auto_final_price
     final_price = manual_price if manual_price is not None else auto_final_price
-    if manual_price is not None:
+    if final_price < Decimal(product.cost or 0) and not price_override_note:
+        return _error_response(
+            "Debes ingresar una observacion para vender por debajo del costo.",
+        )
+    if is_manual_override:
         unit_price_base = manual_price
+        discount_used = Decimal("0.00")
 
-    # If manual price is used, we might want to recalculate the discount or just use it as is.
-    # For now, we use the manual price as the final price at purchase.
-    
-    OrderItem.objects.create(
+    created_item = OrderItem.objects.create(
         order=order,
         product=product,
         clamp_request=None,
@@ -3431,6 +3515,23 @@ def order_item_add(request, pk):
         unit_price_base=unit_price_base,
         discount_percentage_used=discount_used,
         price_list=price_list,
+        cost_at_purchase=product.cost or Decimal("0.00"),
+        iva_rate_snapshot=product.iva_rate,
+        price_override_note=price_override_note,
+    )
+
+    log_admin_action(
+        request,
+        action="order_item_add",
+        target_type="order_item",
+        target_id=created_item.pk,
+        details={
+            "order_id": order.pk,
+            "product_id": product.pk,
+            "price": str(final_price),
+            "cost_snapshot": str(created_item.cost_at_purchase),
+            "price_observation": price_override_note,
+        },
     )
 
     _recalculate_order_totals_from_items(order, discount_percentage=discount_used)
@@ -3439,7 +3540,11 @@ def order_item_add(request, pk):
 
 @staff_member_required
 def order_item_edit(request, pk, item_id):
-    order = get_object_or_404(Order.objects.select_related('company', 'user'), pk=pk)
+    active_company = get_active_company(request)
+    order = get_object_or_404(
+        orders_visible_to(request.user, company=active_company).select_related('company', 'user'),
+        pk=pk,
+    )
     if not order.is_mutable_for_items():
         messages.error(request, "Solo podes editar items en pedidos borrador.")
         return redirect("admin_order_detail", pk=order.pk)
@@ -3453,6 +3558,10 @@ def order_item_edit(request, pk, item_id):
     form_product_id = request.POST.get("product_id", str(order_item.product_id or "")).strip() if request.method == "POST" else str(order_item.product_id or "")
     form_quantity = request.POST.get("quantity", str(order_item.quantity)).strip() if request.method == "POST" else str(order_item.quantity)
     form_price = request.POST.get("price", f"{order_item.price_at_purchase:.2f}").strip() if request.method == "POST" else f"{order_item.price_at_purchase:.2f}"
+    form_price_override_note = request.POST.get(
+        "price_override_note",
+        order_item.price_override_note,
+    ).strip() if request.method == "POST" else order_item.price_override_note
 
     if request.method == "POST":
         try:
@@ -3471,6 +3580,7 @@ def order_item_edit(request, pk, item_id):
                     "form_product_id": form_product_id,
                     "form_quantity": form_quantity,
                     "form_price": form_price,
+                    "form_price_override_note": form_price_override_note,
                 },
             )
 
@@ -3497,6 +3607,7 @@ def order_item_edit(request, pk, item_id):
                         "form_product_id": form_product_id,
                         "form_quantity": form_quantity,
                         "form_price": form_price,
+                        "form_price_override_note": form_price_override_note,
                     },
                 )
 
@@ -3514,6 +3625,7 @@ def order_item_edit(request, pk, item_id):
                     "form_product_id": form_product_id,
                     "form_quantity": form_quantity,
                     "form_price": form_price,
+                    "form_price_override_note": form_price_override_note,
                 },
             )
 
@@ -3530,23 +3642,92 @@ def order_item_edit(request, pk, item_id):
                     "form_product_id": form_product_id,
                     "form_quantity": form_quantity,
                     "form_price": form_price,
+                    "form_price_override_note": form_price_override_note,
                 },
             )
 
-        _, _, _, price_list = _resolve_order_item_pricing(order, selected_product)
+        auto_base_price, auto_final_price, auto_discount, price_list = _resolve_order_item_pricing(
+            order,
+            selected_product,
+        )
 
         previous_product_id = order_item.product_id
+        before_item = model_snapshot(
+            order_item,
+            [
+                "product",
+                "quantity",
+                "unit_price_base",
+                "discount_percentage_used",
+                "price_at_purchase",
+                "cost_at_purchase",
+                "iva_rate_snapshot",
+                "price_override_note",
+            ],
+        )
+        product_changed = previous_product_id != selected_product.pk
+        expected_price = auto_final_price if product_changed else order_item.price_at_purchase
+        is_manual_override = manual_price != expected_price
+        if manual_price < Decimal(selected_product.cost or 0) and not form_price_override_note:
+            messages.error(
+                request,
+                "Debes ingresar una observacion para vender por debajo del costo.",
+            )
+            return render(
+                request,
+                "admin_panel/orders/item_edit.html",
+                {
+                    "order": order,
+                    "order_item": order_item,
+                    "form_sku": form_sku,
+                    "form_product_id": form_product_id,
+                    "form_quantity": form_quantity,
+                    "form_price": form_price,
+                    "form_price_override_note": form_price_override_note,
+                },
+                status=400,
+            )
+
         order_item.product = selected_product
-        if previous_product_id != selected_product.pk:
+        if product_changed:
             order_item.clamp_request = None
         order_item.product_sku = selected_product.sku
         order_item.product_name = selected_product.name
         order_item.quantity = quantity
-        order_item.unit_price_base = manual_price
-        order_item.discount_percentage_used = Decimal("0.00")
+        if product_changed and not is_manual_override:
+            order_item.unit_price_base = auto_base_price
+            order_item.discount_percentage_used = auto_discount
+        elif is_manual_override:
+            order_item.unit_price_base = manual_price
+            order_item.discount_percentage_used = Decimal("0.00")
         order_item.price_list = price_list
         order_item.price_at_purchase = manual_price
+        order_item.cost_at_purchase = selected_product.cost or Decimal("0.00")
+        order_item.iva_rate_snapshot = selected_product.iva_rate
+        order_item.price_override_note = form_price_override_note
         order_item.save()
+
+        log_admin_change(
+            request,
+            action="order_item_edit",
+            target_type="order_item",
+            target_id=order_item.pk,
+            before=before_item,
+            after=model_snapshot(
+                order_item,
+                [
+                    "product",
+                    "quantity",
+                    "unit_price_base",
+                    "discount_percentage_used",
+                    "price_at_purchase",
+                    "cost_at_purchase",
+                    "iva_rate_snapshot",
+                    "price_override_note",
+                ],
+            ),
+            extra={"order_id": order.pk},
+        )
 
         _recalculate_order_totals_from_items(order)
 
@@ -3563,6 +3744,7 @@ def order_item_edit(request, pk, item_id):
             "form_product_id": form_product_id,
             "form_quantity": form_quantity,
             "form_price": form_price,
+            "form_price_override_note": form_price_override_note,
         },
     )
 
@@ -3570,7 +3752,11 @@ def order_item_edit(request, pk, item_id):
 @staff_member_required
 @require_POST
 def order_item_delete(request, pk, item_id):
-    order = get_object_or_404(Order.objects.select_related('company', 'user'), pk=pk)
+    active_company = get_active_company(request)
+    order = get_object_or_404(
+        orders_visible_to(request.user, company=active_company).select_related('company', 'user'),
+        pk=pk,
+    )
     if not order.is_mutable_for_items():
         messages.error(request, "Solo podes eliminar items en pedidos borrador.")
         return redirect("admin_order_detail", pk=order.pk)
@@ -3594,14 +3780,13 @@ def order_item_delete(request, pk, item_id):
 @staff_member_required
 def order_hard_delete(request, pk):
     """Safely hard delete one order only when no downstream business artifacts remain."""
+    active_company = get_active_company(request)
     order = get_object_or_404(
-        Order.objects.select_related("company", "source_request", "source_proposal"),
+        orders_visible_to(request.user, company=active_company).select_related(
+            "company", "source_request", "source_proposal"
+        ),
         pk=pk,
     )
-    active_company = get_active_company(request)
-    if active_company and order.company_id != active_company.id:
-        messages.error(request, "No podes eliminar pedidos de otra empresa.")
-        return redirect('admin_order_list')
 
     blockers = _get_order_hard_delete_blockers(order)
     if blockers:
@@ -3730,14 +3915,18 @@ def internal_document_print(request, doc_id):
 @staff_member_required
 def internal_document_delete(request, doc_id):
     """Safely delete one internal document that has no fiscal/account/stock impact."""
+    active_company = get_active_company(request)
+    company_scope = (
+        get_user_companies(request.user).filter(pk=active_company.pk)
+        if active_company
+        else get_user_companies(request.user)
+    )
     document = get_object_or_404(
-        InternalDocument.objects.select_related("company", "order", "payment", "transaction", "sales_document_type"),
+        InternalDocument.objects.select_related(
+            "company", "order", "payment", "transaction", "sales_document_type"
+        ).filter(company__in=company_scope),
         pk=doc_id,
     )
-    active_company = get_active_company(request)
-    if active_company and document.company_id != active_company.id:
-        messages.error(request, "No podes eliminar documentos de otra empresa.")
-        return redirect('admin_order_list')
 
     blockers = _get_internal_document_delete_blockers(document)
     if blockers:
@@ -3752,7 +3941,7 @@ def internal_document_delete(request, doc_id):
         document.delete()
         if order_id:
             try:
-                linked_order = Order.objects.filter(pk=order_id).first()
+                linked_order = orders_visible_to(request.user).filter(pk=order_id).first()
                 if linked_order:
                     sync_order_charge_transaction(order=linked_order, actor=request.user)
             except Exception:
@@ -3776,7 +3965,11 @@ def internal_document_delete(request, doc_id):
 @require_POST
 def order_item_publish_clamp(request, pk, item_id):
     """Publish a clamp measure item from order detail into catalog products."""
-    order = get_object_or_404(Order, pk=pk)
+    active_company = get_active_company(request)
+    order = get_object_or_404(
+        orders_visible_to(request.user, company=active_company),
+        pk=pk,
+    )
     order_item = get_object_or_404(
         OrderItem.objects.select_related('clamp_request'),
         pk=item_id,
@@ -3838,7 +4031,11 @@ def order_item_publish_clamp(request, pk, item_id):
 @staff_member_required
 def order_delete(request, pk):
     """Cancel order preserving full history (no hard delete)."""
-    order = get_object_or_404(Order, pk=pk)
+    active_company = get_active_company(request)
+    order = get_object_or_404(
+        orders_visible_to(request.user, company=active_company),
+        pk=pk,
+    )
 
     if request.method == 'POST':
         cancel_reason = request.POST.get('cancel_reason', '').strip()
@@ -3847,7 +4044,10 @@ def order_delete(request, pk):
         changed = False
         try:
             with transaction.atomic():
-                locked_order = Order.objects.select_for_update().get(pk=order.pk)
+                locked_order = orders_visible_to(
+                    request.user,
+                    company=active_company,
+                ).select_for_update().get(pk=order.pk)
                 before = model_snapshot(locked_order, ['status', 'admin_notes', 'status_updated_at'])
                 changed = locked_order.change_status(
                     new_status=Order.STATUS_CANCELLED,

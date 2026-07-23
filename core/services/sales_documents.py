@@ -27,6 +27,7 @@ from core.models import (
     SALES_BILLING_MODE_AFIP_WSFE,
     SALES_BILLING_MODE_INTERNAL_DOCUMENT,
     SALES_BILLING_MODE_MANUAL_FISCAL,
+    FISCAL_STATUS_AUTHORIZED,
     STOCK_MOVEMENT_IN,
     STOCK_MOVEMENT_OUT,
     STOCK_MOVEMENT_RELEASE,
@@ -197,6 +198,33 @@ def _collect_order_quantities(order, *, group_equal_products):
     for item in order.items.select_related("product").all():
         if not item.product_id:
             continue
+        if not bool(getattr(item.product, "tracks_stock", False)):
+            continue
+        products[item.product_id] = item.product
+        quantity = int(item.quantity or 0)
+        if quantity <= 0:
+            continue
+        if group_equal_products:
+            grouped[item.product_id] += quantity
+        else:
+            rows.append((item.product, quantity))
+    if group_equal_products:
+        rows = [
+            (products[product_id], quantity)
+            for product_id, quantity in grouped.items()
+            if product_id in products
+        ]
+    return rows
+
+
+def _collect_fiscal_document_quantities(fiscal_document, *, group_equal_products):
+    """Use the immutable fiscal lines, including partial credit notes."""
+    grouped = defaultdict(int)
+    rows = []
+    products = {}
+    for item in fiscal_document.items.select_related("product").all():
+        if not item.product_id or not bool(getattr(item.product, "tracks_stock", False)):
+            continue
         products[item.product_id] = item.product
         quantity = int(item.quantity or 0)
         if quantity <= 0:
@@ -232,7 +260,13 @@ def ensure_stock_movements_for_order_document(
     fiscal_document=None,
 ):
     """Idempotently create stock movements from one configured document."""
-    if not order or not company or not sales_document_type or not sales_document_type.generate_stock_movement:
+    if not order or not company or not sales_document_type:
+        return []
+    if (
+        not fiscal_document
+        or fiscal_document.status != FISCAL_STATUS_AUTHORIZED
+        or not str(fiscal_document.cae or "").strip()
+    ):
         return []
 
     movement_type, direction_sign, mutates_stock = BEHAVIOR_STOCK_RULES.get(
@@ -243,10 +277,15 @@ def ensure_stock_movements_for_order_document(
         return []
 
     warehouse = sales_document_type.default_warehouse
-    rows = _collect_order_quantities(
-        order,
+    rows = _collect_fiscal_document_quantities(
+        fiscal_document,
         group_equal_products=bool(sales_document_type.group_equal_products),
     )
+    if not rows and not fiscal_document.items.exists():
+        rows = _collect_order_quantities(
+            order,
+            group_equal_products=bool(sales_document_type.group_equal_products),
+        )
     movements = []
 
     with transaction.atomic():

@@ -343,7 +343,7 @@
     letter-spacing: 0;
 }
 .order-record-page .order-record-add-item-grid {
-    grid-template-columns: minmax(0, 1fr) 74px 120px auto;
+    grid-template-columns: minmax(0, 1fr) 74px 120px minmax(190px, .7fr) auto;
     margin-top: 8px;
     padding-top: 8px;
     border-top: 1px dashed rgba(255, 255, 255, .12);
@@ -716,7 +716,21 @@
                         <div class="sales-record-grid order-record-mini-fields">
                             <div class="sales-record-field">
                                 <span class="sales-record-field-label">Vendedor</span>
-                                <span class="sales-record-field-value">{{ order.assigned_to.username|default:"Sin especificar" }}</span>
+                                <span class="sales-record-field-value">
+                                    <form method="post" style="display:flex;gap:6px;align-items:center;">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="action" value="assign_seller">
+                                        <select name="assigned_to" class="form-select" style="min-width:170px;">
+                                            <option value="">Sin especificar</option>
+                                            {% for seller in seller_options %}
+                                            <option value="{{ seller.pk }}" {% if order.assigned_to_id == seller.pk %}selected{% endif %}>
+                                                {{ seller.get_full_name|default:seller.username }}
+                                            </option>
+                                            {% endfor %}
+                                        </select>
+                                        <button type="submit" class="btn btn-outline btn-sm">Guardar</button>
+                                    </form>
+                                </span>
                             </div>
                             <div class="sales-record-field">
                                 <span class="sales-record-field-label">Prioridad</span>
@@ -800,6 +814,10 @@
                 <div class="form-group form-group-tight">
                     <label for="price" class="form-label">Precio</label>
                     <input type="number" step="0.01" min="0" name="price" id="order-item-price" class="form-input" placeholder="Auto">
+                </div>
+                <div class="form-group form-group-tight">
+                    <label for="price_override_note" class="form-label">Observacion de precio</label>
+                    <input type="text" name="price_override_note" id="order-item-price-note" class="form-input" placeholder="Obligatoria si queda bajo costo">
                 </div>
                 <button type="submit" class="btn btn-primary" id="order-add-item-btn">+ Agregar</button>
             </form>
@@ -974,6 +992,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const skuInput = document.getElementById('sku');
     const quantityInput = document.getElementById('quantity');
     const priceInput = document.getElementById('order-item-price');
+    const priceNoteInput = document.getElementById('order-item-price-note');
     const productIdInput = document.getElementById('order-product-id');
     const submitButton = document.getElementById('order-add-item-btn');
     const feedbackBox = document.getElementById('order-item-add-feedback');
@@ -1062,12 +1081,12 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Enter on Price -> Submit form
+    // Enter on Price -> price observation
     if (priceInput) {
         priceInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') {
                 e.preventDefault();
-                priceInput.form.submit();
+                if (priceNoteInput) priceNoteInput.focus();
             }
         });
     }
@@ -1116,6 +1135,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (skuInput) skuInput.value = '';
                 if (quantityInput) quantityInput.value = '1';
                 if (priceInput) priceInput.value = '';
+                if (priceNoteInput) priceNoteInput.value = '';
                 if (skuInput) skuInput.focus();
 
                 showFeedback(payload.message || 'Item agregado al documento.', 'success');

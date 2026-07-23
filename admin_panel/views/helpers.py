@@ -769,7 +769,7 @@ def _resolve_preferred_invoice_doc_type(order):
     company = getattr(order, "company", None)
     company_tax_condition = str(getattr(company, "tax_condition", "") or "").strip().lower()
     if company_tax_condition in {"monotributista", "exento"}:
-        return FISCAL_DOC_TYPE_FC
+        return FISCAL_DOC_TYPE_FB
     client_profile = _get_order_client_profile(order)
     if client_profile and client_profile.iva_condition == "responsable_inscripto":
         return FISCAL_DOC_TYPE_FA
@@ -953,6 +953,11 @@ def _is_order_items_edit_locked(order):
     """
     if not order:
         return False
+    if FiscalDocument.objects.filter(
+        order=order,
+        status=FISCAL_STATUS_AUTHORIZED,
+    ).exclude(cae="").exists():
+        return True
     movement_transaction = _resolve_order_charge_transaction(order)
     if not movement_transaction:
         return False
@@ -1287,6 +1292,10 @@ def _create_related_order_from_source(
             saas_document_number="",
             saas_document_cae="",
             follow_up_note="",
+            assigned_to=(
+                source_order.assigned_to
+                or (actor if getattr(actor, "is_staff", False) else None)
+            ),
         )
 
         for item in source_items:
@@ -1301,6 +1310,9 @@ def _create_related_order_from_source(
                 discount_percentage_used=item.discount_percentage_used,
                 price_list=item.price_list,
                 price_at_purchase=item.price_at_purchase,
+                cost_at_purchase=item.cost_at_purchase,
+                iva_rate_snapshot=item.iva_rate_snapshot,
+                price_override_note=item.price_override_note,
                 subtotal=item.subtotal,
             )
 
@@ -1376,6 +1388,7 @@ def _create_draft_order_for_client(
         saas_document_number="",
         saas_document_cae="",
         follow_up_note="",
+        assigned_to=actor if getattr(actor, "is_staff", False) else None,
     )
     OrderStatusHistory.objects.create(
         order=order,
@@ -1630,28 +1643,42 @@ def _extract_linked_company_ids(form_data):
 
 def _resolve_client_editor_company(request, client=None):
     companies = get_user_companies(getattr(request, "user", None)).filter(is_active=True).order_by("name")
+
+    def client_has_company(company):
+        if not client or not company:
+            return True
+        return client.company_links.filter(company=company, is_active=True).exists()
+
     requested_company_id = str(request.GET.get("company_id", "")).strip()
     if requested_company_id.isdigit():
         requested_company = companies.filter(pk=int(requested_company_id)).first()
-        if requested_company:
+        if requested_company and client_has_company(requested_company):
             return requested_company, companies
     active_company = get_admin_selected_company(request)
-    if active_company:
+    if active_company and companies.filter(pk=active_company.pk).exists() and client_has_company(active_company):
         return active_company, companies
     if client:
         preferred_link = (
             client.company_links.select_related("company")
-            .filter(company__is_active=True)
+            .filter(company__in=companies, company__is_active=True, is_active=True)
             .order_by("-is_active", "company__name", "company_id")
             .first()
         )
         if preferred_link:
             return preferred_link.company, companies
-    fallback_company = get_default_client_origin_company() or companies.first()
+        return None, companies
+    fallback_company = companies.filter(pk=getattr(get_default_client_origin_company(), "pk", None)).first()
+    fallback_company = fallback_company or companies.first()
     return fallback_company, companies
 
 
-def _build_client_form_values(client=None, active_company=None, client_company=None, form_data=None):
+def _build_client_form_values(
+    client=None,
+    active_company=None,
+    client_company=None,
+    form_data=None,
+    companies=None,
+):
     effective_category = None
     effective_discount = Decimal("0")
     linked_company_ids = []
@@ -1662,9 +1689,12 @@ def _build_client_form_values(client=None, active_company=None, client_company=N
             else client.client_category
         )
         effective_discount = client.get_effective_discount_percentage(company=active_company)
+        links = client.company_links.filter(company__is_active=True, is_active=True)
+        if companies is not None:
+            links = links.filter(company__in=companies)
         linked_company_ids = [
             str(link.company_id)
-            for link in client.company_links.filter(company__is_active=True, is_active=True).order_by("company__name", "company_id")
+            for link in links.order_by("company__name", "company_id")
         ]
     elif active_company:
         linked_company_ids = [str(active_company.pk)]
@@ -1839,6 +1869,7 @@ def _render_client_form(
             client=client,
             active_company=active_company,
             client_company=client_company,
+            companies=companies,
         )
 
     effective_category = (

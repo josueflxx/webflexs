@@ -1,0 +1,111 @@
+{% extends 'admin_panel/base.html' %}
+
+{% block page_title %}Revisiones fiscales de clientes{% endblock %}
+
+{% block content %}
+{% include 'admin_panel/clients/_module_panel.html' with client_panel='search' client_module_subtitle='Bandeja manual de CUIT duplicados o con datos fiscales en conflicto.' %}
+
+<div class="admin-table-container">
+    <div class="admin-toolbar">
+        <form method="get" class="toolbar-search" style="display:flex; gap:8px; flex-wrap:wrap;">
+            <input type="text" name="q" value="{{ search }}" placeholder="Buscar CUIT o cliente..." class="form-input">
+            <select name="status" class="form-select" style="max-width:190px;">
+                <option value="" {% if not status %}selected{% endif %}>Todos los estados</option>
+                {% for value, label in status_choices %}
+                <option value="{{ value }}" {% if status == value %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+            <button type="submit" class="btn btn-primary">Filtrar</button>
+            <a href="{% url 'admin_client_fiscal_review_list' %}" class="btn btn-outline">Pendientes</a>
+        </form>
+        <div class="toolbar-actions">
+            <span class="badge badge-warning">{{ pending_total }} pendiente{{ pending_total|pluralize:"s" }}</span>
+            <a href="{% url 'admin_client_list' %}" class="btn btn-outline">Volver a clientes</a>
+        </div>
+    </div>
+
+    <div class="alert alert-info" style="margin-bottom:14px;">
+        El sistema no crea el cliente duplicado. La revisión conserva los candidatos y exige una observación al cerrarla.
+    </div>
+
+    <div style="overflow-x:auto;">
+        <table class="admin-table">
+            <thead>
+                <tr>
+                    <th>Fecha</th>
+                    <th>Empresa</th>
+                    <th>CUIT / documento</th>
+                    <th>Motivo</th>
+                    <th>Clientes encontrados</th>
+                    <th>Estado</th>
+                    <th>Resolución</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for review in page_obj %}
+                <tr>
+                    <td>{{ review.created_at|date:"d/m/Y H:i" }}</td>
+                    <td>{{ review.company.name }}</td>
+                    <td><strong>{{ review.normalized_document }}</strong></td>
+                    <td>{{ review.get_reason_display }}</td>
+                    <td>
+                        {% for candidate in review.candidate_profiles.all %}
+                        <div style="margin-bottom:4px;">
+                            <a href="{% url 'admin_client_edit' candidate.pk %}">
+                                {{ candidate.company_name|default:candidate.user.username }}
+                            </a>
+                            <span class="text-muted">(#{{ candidate.pk }})</span>
+                        </div>
+                        {% empty %}
+                        <span class="text-muted">Sin candidatos asociados</span>
+                        {% endfor %}
+                    </td>
+                    <td>
+                        {% if review.status == 'pending' %}
+                        <span class="badge badge-warning">Pendiente</span>
+                        {% elif review.status == 'resolved' %}
+                        <span class="badge badge-success">Resuelta</span>
+                        {% else %}
+                        <span class="badge badge-secondary">Descartada</span>
+                        {% endif %}
+                    </td>
+                    <td style="min-width:290px;">
+                        {% if review.status == 'pending' and can_resolve_reviews %}
+                        <form method="post" action="{% url 'admin_client_fiscal_review_resolve' review.pk %}">
+                            {% csrf_token %}
+                            <textarea name="resolution_note" class="form-input" rows="2" required placeholder="Observación obligatoria..."></textarea>
+                            <div style="display:flex; gap:6px; margin-top:6px;">
+                                <button type="submit" name="action" value="resolved" class="btn btn-primary btn-sm">Marcar resuelta</button>
+                                <button type="submit" name="action" value="dismissed" class="btn btn-outline btn-sm">Descartar</button>
+                            </div>
+                        </form>
+                        {% else %}
+                        <div>{{ review.resolution_note|default:"-" }}</div>
+                        {% if review.resolved_by %}
+                        <small class="text-muted">{{ review.resolved_by.username }} · {{ review.resolved_at|date:"d/m/Y H:i" }}</small>
+                        {% endif %}
+                        {% endif %}
+                    </td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="7" class="text-center text-muted">No hay revisiones fiscales para este filtro.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    {% if page_obj.paginator.num_pages > 1 %}
+    <div class="pagination-container">
+        <div class="pagination-info">Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</div>
+        <div class="pagination-controls">
+            {% if page_obj.has_previous %}
+            <a href="?page={{ page_obj.previous_page_number }}&status={{ status }}&q={{ search }}" class="btn btn-outline btn-sm">Anterior</a>
+            {% endif %}
+            {% if page_obj.has_next %}
+            <a href="?page={{ page_obj.next_page_number }}&status={{ status }}&q={{ search }}" class="btn btn-outline btn-sm">Siguiente</a>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

@@ -555,6 +555,24 @@ class OrderItem(models.Model):
         verbose_name="Lista de precio",
     )
     price_at_purchase = models.DecimalField(max_digits=12, decimal_places=2, verbose_name="Precio unitario")
+    cost_at_purchase = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=0,
+        verbose_name="Costo al momento de la venta",
+    )
+    iva_rate_snapshot = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        verbose_name="Alicuota IVA al momento de la venta",
+    )
+    price_override_note = models.TextField(
+        blank=True,
+        default="",
+        verbose_name="Observacion de precio",
+    )
     subtotal = models.DecimalField(max_digits=12, decimal_places=2, verbose_name="Subtotal")
 
     class Meta:
@@ -574,6 +592,11 @@ class OrderItem(models.Model):
             raise ValidationError(
                 "No se pueden editar items en pedidos confirmados o en estados posteriores."
             )
+        if self._state.adding and self.product_id:
+            if not self.cost_at_purchase:
+                self.cost_at_purchase = self.product.cost or 0
+            if self.iva_rate_snapshot is None:
+                self.iva_rate_snapshot = self.product.iva_rate
         self.subtotal = self.price_at_purchase * self.quantity
         super().save(*args, **kwargs)
 

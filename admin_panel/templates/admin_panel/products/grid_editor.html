@@ -123,7 +123,9 @@
     .col-cost { width: 110px; }
     .col-price { width: 110px; }
     .col-margin { width: 95px; }
+    .col-iva { width: 90px; }
     .col-stock { width: 90px; }
+    .col-tracks-stock { width: 105px; }
     .col-active { width: 90px; }
     .col-actions { width: 70px; }
 
@@ -769,6 +771,21 @@
 
                 <div style="width: 1px; height: 20px; background: #374151;"></div>
 
+                <!-- Fiscal and stock configuration -->
+                <div class="bulk-action-item">
+                    <select id="bulkIvaRate" class="form-input" style="width: 115px; height: 30px; font-size: 11px; padding: 4px; background: #0b0f19; border-color: #374151; color: #fff;">
+                        <option value="">Sin IVA definido</option>
+                        {% for rate, label in iva_rate_choices %}
+                        <option value="{{ rate|unlocalize }}">IVA {{ label }}</option>
+                        {% endfor %}
+                    </select>
+                    <button type="button" class="btn btn-outline btn-sm" style="height: 30px; line-height: 1;" onclick="applyBulkAction('iva_rate')">Asignar IVA</button>
+                    <button type="button" class="btn btn-info btn-sm" style="height: 30px; line-height: 1;" onclick="applyBulkAction('tracks_stock', true)">Usar stock</button>
+                    <button type="button" class="btn btn-warning-outline btn-sm" style="height: 30px; line-height: 1;" onclick="applyBulkAction('tracks_stock', false)">No usar stock</button>
+                </div>
+
+                <div style="width: 1px; height: 20px; background: #374151;"></div>
+
                 <!-- Brand/Rubro Bulk Update -->
                 <div class="bulk-action-item">
                     <select id="bulkBrandSelect" class="form-input" style="width: 110px; height: 30px; font-size: 11px; padding: 4px; background: #0b0f19; border-color: #374151; color: #fff;" onchange="onBulkBrandChange()">
@@ -831,7 +848,9 @@
                         <th class="col-cost text-right">Costo ($)</th>
                         <th class="col-price text-right">Venta ($)</th>
                         <th class="col-margin text-right">Margen %</th>
+                        <th class="col-iva text-center">IVA</th>
                         <th class="col-stock text-center">Stock</th>
+                        <th class="col-tracks-stock text-center">Control stock</th>
                         <th class="col-active text-center">Activo</th>
                         <th class="col-actions text-center">Acción</th>
                     </tr>
@@ -868,7 +887,25 @@
                         <td>
                             <input type="text" name="f_supplier" value="{{ f_supplier }}" class="filter-input" placeholder="Filtrar Proveedor..." onkeydown="handleFilterKey(event)">
                         </td>
-                        <td colspan="6" style="background: #0f1524;">
+                        <td colspan="3" style="background: #0f1524;"></td>
+                        <td>
+                            <select name="f_iva" onchange="this.form.submit()" class="filter-select" style="width:100%;">
+                                <option value="">Todo IVA</option>
+                                <option value="missing" {% if f_iva == 'missing' %}selected{% endif %}>Sin definir</option>
+                                {% for rate, label in iva_rate_choices %}
+                                <option value="{{ rate|unlocalize }}" {% if f_iva == rate|stringformat:'s' %}selected{% endif %}>{{ label }}</option>
+                                {% endfor %}
+                            </select>
+                        </td>
+                        <td style="background: #0f1524;"></td>
+                        <td>
+                            <select name="f_tracks_stock" onchange="this.form.submit()" class="filter-select" style="width:100%;">
+                                <option value="">Todo stock</option>
+                                <option value="1" {% if f_tracks_stock == '1' %}selected{% endif %}>Controla</option>
+                                <option value="0" {% if f_tracks_stock == '0' %}selected{% endif %}>No controla</option>
+                            </select>
+                        </td>
+                        <td colspan="2" style="background: #0f1524;">
                             <!-- Active Status Quick Filter dropdown -->
                             <div style="display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding-right: 8px;">
                                 <label style="font-size: 11px; color: #9ca3af; font-weight: 500;">Estado:</label>
@@ -948,10 +985,18 @@
                         <td class="text-right" id="margin-{{ product.id }}" style="font-weight: 600; user-select: none;">
                             <span class="margin-value">0%</span>
                         </td>
+
+                        <td class="text-center">
+                            {% if product.iva_rate is not None %}{{ product.iva_rate|floatformat:2 }}%{% else %}<span class="badge badge-warning">Falta</span>{% endif %}
+                        </td>
                         
                         <!-- Stock -->
                         <td class="spreadsheet-cell text-center" tabindex="0" data-field="stock" data-val="{{ product.stock }}">
                             <span class="cell-display {% if product.stock == 0 %}stock-empty{% elif product.stock < 5 %}stock-low{% endif %}">{{ product.stock }}</span>
+                        </td>
+
+                        <td class="text-center">
+                            {% if product.tracks_stock %}<span class="badge badge-success">Si</span>{% else %}<span class="text-muted">No</span>{% endif %}
                         </td>
                         
                         <!-- Active Status Checkbox -->
@@ -966,7 +1011,7 @@
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="12" class="text-center" style="padding: 40px; color: #9ca3af;">
+                        <td colspan="15" class="text-center" style="padding: 40px; color: #9ca3af;">
                             No se encontraron productos que coincidan con los filtros aplicados.
                         </td>
                     </tr>
@@ -984,8 +1029,8 @@
         </div>
         <div class="pagination-btns">
             {% if page_obj.has_previous %}
-            <a href="?page=1{% if f_category %}&f_category={{ f_category }}{% endif %}{% if f_sku %}&f_sku={{ f_sku }}{% endif %}{% if f_name %}&f_name={{ f_name }}{% endif %}{% if f_ref %}&f_ref={{ f_ref }}{% endif %}{% if f_supplier %}&f_supplier={{ f_supplier }}{% endif %}{% if active_filter %}&active={{ active_filter }}{% endif %}{% if order_by %}&order={{ order_by }}{% endif %}{% if f_brand %}&f_brand={{ f_brand }}{% endif %}{% if f_brand_rubro %}&f_brand_rubro={{ f_brand_rubro }}{% endif %}{% if f_brand_subrubro %}&f_brand_subrubro={{ f_brand_subrubro }}{% endif %}" class="btn btn-outline btn-sm">« Primera</a>
-            <a href="?page={{ page_obj.previous_page_number }}{% if f_category %}&f_category={{ f_category }}{% endif %}{% if f_sku %}&f_sku={{ f_sku }}{% endif %}{% if f_name %}&f_name={{ f_name }}{% endif %}{% if f_ref %}&f_ref={{ f_ref }}{% endif %}{% if f_supplier %}&f_supplier={{ f_supplier }}{% endif %}{% if active_filter %}&active={{ active_filter }}{% endif %}{% if order_by %}&order={{ order_by }}{% endif %}{% if f_brand %}&f_brand={{ f_brand }}{% endif %}{% if f_brand_rubro %}&f_brand_rubro={{ f_brand_rubro }}{% endif %}{% if f_brand_subrubro %}&f_brand_subrubro={{ f_brand_subrubro }}{% endif %}" class="btn btn-outline btn-sm">‹ Anterior</a>
+            <a href="?page=1{% if f_category %}&f_category={{ f_category }}{% endif %}{% if f_sku %}&f_sku={{ f_sku }}{% endif %}{% if f_name %}&f_name={{ f_name }}{% endif %}{% if f_ref %}&f_ref={{ f_ref }}{% endif %}{% if f_supplier %}&f_supplier={{ f_supplier }}{% endif %}{% if f_iva %}&f_iva={{ f_iva }}{% endif %}{% if f_tracks_stock %}&f_tracks_stock={{ f_tracks_stock }}{% endif %}{% if active_filter %}&active={{ active_filter }}{% endif %}{% if order_by %}&order={{ order_by }}{% endif %}{% if f_brand %}&f_brand={{ f_brand }}{% endif %}{% if f_brand_rubro %}&f_brand_rubro={{ f_brand_rubro }}{% endif %}{% if f_brand_subrubro %}&f_brand_subrubro={{ f_brand_subrubro }}{% endif %}" class="btn btn-outline btn-sm">« Primera</a>
+            <a href="?page={{ page_obj.previous_page_number }}{% if f_category %}&f_category={{ f_category }}{% endif %}{% if f_sku %}&f_sku={{ f_sku }}{% endif %}{% if f_name %}&f_name={{ f_name }}{% endif %}{% if f_ref %}&f_ref={{ f_ref }}{% endif %}{% if f_supplier %}&f_supplier={{ f_supplier }}{% endif %}{% if f_iva %}&f_iva={{ f_iva }}{% endif %}{% if f_tracks_stock %}&f_tracks_stock={{ f_tracks_stock }}{% endif %}{% if active_filter %}&active={{ active_filter }}{% endif %}{% if order_by %}&order={{ order_by }}{% endif %}{% if f_brand %}&f_brand={{ f_brand }}{% endif %}{% if f_brand_rubro %}&f_brand_rubro={{ f_brand_rubro }}{% endif %}{% if f_brand_subrubro %}&f_brand_subrubro={{ f_brand_subrubro }}{% endif %}" class="btn btn-outline btn-sm">‹ Anterior</a>
             {% endif %}
 
             <span style="display: flex; align-items: center; padding: 0 10px; font-weight: 600; color: #ff6b35;">
@@ -993,8 +1038,8 @@
             </span>
 
             {% if page_obj.has_next %}
-            <a href="?page={{ page_obj.next_page_number }}{% if f_category %}&f_category={{ f_category }}{% endif %}{% if f_sku %}&f_sku={{ f_sku }}{% endif %}{% if f_name %}&f_name={{ f_name }}{% endif %}{% if f_ref %}&f_ref={{ f_ref }}{% endif %}{% if f_supplier %}&f_supplier={{ f_supplier }}{% endif %}{% if active_filter %}&active={{ active_filter }}{% endif %}{% if order_by %}&order={{ order_by }}{% endif %}{% if f_brand %}&f_brand={{ f_brand }}{% endif %}{% if f_brand_rubro %}&f_brand_rubro={{ f_brand_rubro }}{% endif %}{% if f_brand_subrubro %}&f_brand_subrubro={{ f_brand_subrubro }}{% endif %}" class="btn btn-outline btn-sm">Siguiente ›</a>
-            <a href="?page={{ page_obj.paginator.num_pages }}{% if f_category %}&f_category={{ f_category }}{% endif %}{% if f_sku %}&f_sku={{ f_sku }}{% endif %}{% if f_name %}&f_name={{ f_name }}{% endif %}{% if f_ref %}&f_ref={{ f_ref }}{% endif %}{% if f_supplier %}&f_supplier={{ f_supplier }}{% endif %}{% if active_filter %}&active={{ active_filter }}{% endif %}{% if order_by %}&order={{ order_by }}{% endif %}{% if f_brand %}&f_brand={{ f_brand }}{% endif %}{% if f_brand_rubro %}&f_brand_rubro={{ f_brand_rubro }}{% endif %}{% if f_brand_subrubro %}&f_brand_subrubro={{ f_brand_subrubro }}{% endif %}" class="btn btn-outline btn-sm">Última »</a>
+            <a href="?page={{ page_obj.next_page_number }}{% if f_category %}&f_category={{ f_category }}{% endif %}{% if f_sku %}&f_sku={{ f_sku }}{% endif %}{% if f_name %}&f_name={{ f_name }}{% endif %}{% if f_ref %}&f_ref={{ f_ref }}{% endif %}{% if f_supplier %}&f_supplier={{ f_supplier }}{% endif %}{% if f_iva %}&f_iva={{ f_iva }}{% endif %}{% if f_tracks_stock %}&f_tracks_stock={{ f_tracks_stock }}{% endif %}{% if active_filter %}&active={{ active_filter }}{% endif %}{% if order_by %}&order={{ order_by }}{% endif %}{% if f_brand %}&f_brand={{ f_brand }}{% endif %}{% if f_brand_rubro %}&f_brand_rubro={{ f_brand_rubro }}{% endif %}{% if f_brand_subrubro %}&f_brand_subrubro={{ f_brand_subrubro }}{% endif %}" class="btn btn-outline btn-sm">Siguiente ›</a>
+            <a href="?page={{ page_obj.paginator.num_pages }}{% if f_category %}&f_category={{ f_category }}{% endif %}{% if f_sku %}&f_sku={{ f_sku }}{% endif %}{% if f_name %}&f_name={{ f_name }}{% endif %}{% if f_ref %}&f_ref={{ f_ref }}{% endif %}{% if f_supplier %}&f_supplier={{ f_supplier }}{% endif %}{% if f_iva %}&f_iva={{ f_iva }}{% endif %}{% if f_tracks_stock %}&f_tracks_stock={{ f_tracks_stock }}{% endif %}{% if active_filter %}&active={{ active_filter }}{% endif %}{% if order_by %}&order={{ order_by }}{% endif %}{% if f_brand %}&f_brand={{ f_brand }}{% endif %}{% if f_brand_rubro %}&f_brand_rubro={{ f_brand_rubro }}{% endif %}{% if f_brand_subrubro %}&f_brand_subrubro={{ f_brand_subrubro }}{% endif %}" class="btn btn-outline btn-sm">Última »</a>
             {% endif %}
         </div>
     </div>
@@ -2108,7 +2153,13 @@
         else if (action === "supplier") {
             const supplier = document.getElementById("bulkSupplierInput").value;
             payload.supplier = supplier;
-        } 
+        }
+        else if (action === "iva_rate") {
+            payload.iva_rate = document.getElementById("bulkIvaRate").value;
+        }
+        else if (action === "tracks_stock") {
+            payload.tracks_stock = targetFieldExtra === true;
+        }
         else if (action === "status") {
             payload.is_active = targetFieldExtra;
         }
@@ -2140,6 +2191,11 @@
                 f_name: "{{ f_name }}",
                 f_ref: "{{ f_ref }}",
                 f_supplier: "{{ f_supplier }}",
+                f_iva: "{{ f_iva }}",
+                f_tracks_stock: "{{ f_tracks_stock }}",
+                f_brand: "{{ f_brand }}",
+                f_brand_rubro: "{{ f_brand_rubro }}",
+                f_brand_subrubro: "{{ f_brand_subrubro }}",
                 active: "{{ active_filter }}"
             };
         }

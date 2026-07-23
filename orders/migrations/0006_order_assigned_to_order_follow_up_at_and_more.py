@@ -19,14 +19,15 @@ def add_missing_order_columns(apps, schema_editor):
     columns = _get_column_names(schema_editor, table_name)
 
     vendor = schema_editor.connection.vendor
+    datetime_type = "timestamp with time zone" if vendor == "postgresql" else "datetime"
     statements = {
         "assigned_to_id": (
             "ALTER TABLE orders_order ADD COLUMN assigned_to_id INTEGER NULL"
             if vendor == "sqlite"
             else "ALTER TABLE orders_order ADD COLUMN assigned_to_id bigint NULL"
         ),
-        "follow_up_at": "ALTER TABLE orders_order ADD COLUMN follow_up_at datetime NULL",
-        "follow_up_done_at": "ALTER TABLE orders_order ADD COLUMN follow_up_done_at datetime NULL",
+        "follow_up_at": f"ALTER TABLE orders_order ADD COLUMN follow_up_at {datetime_type} NULL",
+        "follow_up_done_at": f"ALTER TABLE orders_order ADD COLUMN follow_up_done_at {datetime_type} NULL",
         "follow_up_note": "ALTER TABLE orders_order ADD COLUMN follow_up_note varchar(255) NOT NULL DEFAULT ''",
         "priority": "ALTER TABLE orders_order ADD COLUMN priority varchar(16) NOT NULL DEFAULT 'normal'",
         "saas_document_cae": "ALTER TABLE orders_order ADD COLUMN saas_document_cae varchar(40) NOT NULL DEFAULT ''",

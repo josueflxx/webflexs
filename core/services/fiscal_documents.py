@@ -15,6 +15,10 @@ from core.models import (
     FISCAL_ISSUE_MODE_ARCA_WSFE,
     FISCAL_ISSUE_MODE_EXTERNAL_SAAS,
     FISCAL_ISSUE_MODE_MANUAL,
+    FISCAL_DOC_TYPE_FA,
+    FISCAL_DOC_TYPE_FB,
+    FISCAL_DOC_TYPE_NCA,
+    FISCAL_DOC_TYPE_NCB,
     FISCAL_STATUS_AUTHORIZED,
     FISCAL_STATUS_EXTERNAL_RECORDED,
     FISCAL_STATUS_PENDING_RETRY,
@@ -38,6 +42,12 @@ from core.services.sales_documents import (
 
 
 ALLOWED_DOC_TYPES_FOR_PHASE3 = {code for code, _label in FiscalDocument.DOC_TYPE_CHOICES}
+ALLOWED_ARCA_DOC_TYPES = {
+    FISCAL_DOC_TYPE_FA,
+    FISCAL_DOC_TYPE_FB,
+    FISCAL_DOC_TYPE_NCA,
+    FISCAL_DOC_TYPE_NCB,
+}
 LOCAL_ISSUE_MODES_FOR_PHASE3 = {
     FISCAL_ISSUE_MODE_ARCA_WSFE,
     FISCAL_ISSUE_MODE_MANUAL,
@@ -124,7 +134,7 @@ def _apply_item_tax_breakdown(*, base_amount, iva_rate):
         return amount, Decimal("0.00"), amount
 
     mode = str(
-        getattr(settings, "FISCAL_ITEM_TAX_CALCULATION_MODE", "gross") or "gross"
+        getattr(settings, "FISCAL_ITEM_TAX_CALCULATION_MODE", "net") or "net"
     ).strip().lower()
     if mode == "net":
         net_amount = amount
@@ -132,7 +142,7 @@ def _apply_item_tax_breakdown(*, base_amount, iva_rate):
         total_amount = (net_amount + iva_amount).quantize(Decimal("0.01"))
         return net_amount, iva_amount, total_amount
 
-    # gross (default): amount already includes IVA and gets split out.
+    # Legacy compatibility mode: amount already includes IVA and gets split out.
     divisor = Decimal("1.00") + (iva_rate / Decimal("100"))
     if divisor <= 0:
         return amount, Decimal("0.00"), amount
@@ -146,8 +156,6 @@ def _build_order_items_payload(order, *, doc_type, issue_mode):
     payload = []
     line_number = 1
     apply_tax = _should_apply_item_tax(issue_mode)
-    default_iva_rate = _resolve_default_iva_rate_for_doc(doc_type) if apply_tax else Decimal("0.00")
-
     for item in order.items.select_related("product").all():
         quantity = Decimal(item.quantity or 0)
         unit_price_base = Decimal(getattr(item, "unit_price_base", None) or item.price_at_purchase or 0)
@@ -157,9 +165,25 @@ def _build_order_items_payload(order, *, doc_type, issue_mode):
         if discount_amount < 0:
             discount_amount = Decimal("0.00")
 
+        iva_rate = Decimal("0.00")
+        if apply_tax:
+            snapshot_rate = getattr(item, "iva_rate_snapshot", None)
+            product_rate = getattr(getattr(item, "product", None), "iva_rate", None)
+            raw_rate = snapshot_rate if snapshot_rate is not None else product_rate
+            if raw_rate is None:
+                if item.product_id:
+                    raise ValidationError(
+                        f'El producto "{item.product_sku or item.product_name}" no tiene alicuota de IVA configurada.'
+                    )
+                # Compatibilidad para lineas historicas sin producto enlazado:
+                # no pueden editarse en catalogo, por lo que usan la alicuota
+                # fiscal predeterminada del tipo de comprobante.
+                raw_rate = _resolve_default_iva_rate_for_doc(doc_type)
+            iva_rate = _to_decimal(raw_rate, "0.00").quantize(Decimal("0.01"))
+
         net_amount, iva_amount, total_amount = _apply_item_tax_breakdown(
             base_amount=line_amount,
-            iva_rate=default_iva_rate,
+            iva_rate=iva_rate,
         )
         if not apply_tax:
             net_amount = line_amount
@@ -177,7 +201,7 @@ def _build_order_items_payload(order, *, doc_type, issue_mode):
                 "discount_percentage": _get_discount_percentage(item, order).quantize(Decimal("0.01")),
                 "discount_amount": discount_amount,
                 "net_amount": net_amount,
-                "iva_rate": default_iva_rate,
+                "iva_rate": iva_rate,
                 "iva_amount": iva_amount,
                 "total_amount": total_amount,
             }
@@ -373,6 +397,10 @@ def create_local_fiscal_document_from_order(
     )
     if issue_mode not in LOCAL_ISSUE_MODES_FOR_PHASE3:
         raise ValidationError("Modo de comprobante invalido para creacion local.")
+    if issue_mode == FISCAL_ISSUE_MODE_ARCA_WSFE and doc_type not in ALLOWED_ARCA_DOC_TYPES:
+        raise ValidationError(
+            "La emision electronica admite solamente Factura A/B y Nota de Credito A/B."
+        )
 
     invoice_ready, invoice_errors = is_invoice_ready(order)
     if require_invoice_ready and not invoice_ready:

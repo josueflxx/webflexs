@@ -242,7 +242,10 @@ ALERT_IMPORT_ERROR_RATE_PERCENT = max(_env_int('ALERT_IMPORT_ERROR_RATE_PERCENT'
 
 # Feature flags (incremental rollout, no-breaking deployments)
 FEATURE_API_V1_ENABLED = os.getenv('FEATURE_API_V1_ENABLED', 'True').lower() == 'true'
+FEATURE_EXTERNAL_EDITOR_ENABLED = os.getenv('FEATURE_EXTERNAL_EDITOR_ENABLED', 'False').lower() == 'true'
+FEATURE_EXTERNAL_EDITOR_WRITES = os.getenv('FEATURE_EXTERNAL_EDITOR_WRITES', 'False').lower() == 'true'
 FEATURE_BACKGROUND_JOBS_ENABLED = os.getenv('FEATURE_BACKGROUND_JOBS_ENABLED', 'False').lower() == 'true'
+EXTERNAL_EDITOR_SYNC_LIMIT = max(_env_int('EXTERNAL_EDITOR_SYNC_LIMIT', 250), 1)
 FEATURE_ADVANCED_SEARCH_ENABLED = os.getenv('FEATURE_ADVANCED_SEARCH_ENABLED', 'False').lower() == 'true'
 FEATURE_OBSERVABILITY_ENABLED = os.getenv('FEATURE_OBSERVABILITY_ENABLED', 'False').lower() == 'true'
 FEATURE_READ_ONLY_MODE = os.getenv('FEATURE_READ_ONLY_MODE', 'False').lower() == 'true'
@@ -294,10 +297,10 @@ FISCAL_ARCA_REQUIRE_LAST_AUTH_SYNC = os.getenv(
 # - gross: order line prices are final and IVA is split out
 FISCAL_AUTO_ITEM_TAX_ENABLED = os.getenv("FISCAL_AUTO_ITEM_TAX_ENABLED", "True").lower() == "true"
 FISCAL_ITEM_TAX_CALCULATION_MODE = str(
-    os.getenv("FISCAL_ITEM_TAX_CALCULATION_MODE", "gross") or "gross"
+    os.getenv("FISCAL_ITEM_TAX_CALCULATION_MODE", "net") or "net"
 ).strip().lower()
 if FISCAL_ITEM_TAX_CALCULATION_MODE not in {"net", "gross"}:
-    FISCAL_ITEM_TAX_CALCULATION_MODE = "gross"
+    FISCAL_ITEM_TAX_CALCULATION_MODE = "net"
 FISCAL_APPLY_TAX_TO_MANUAL_DOCS = os.getenv("FISCAL_APPLY_TAX_TO_MANUAL_DOCS", "False").lower() == "true"
 FISCAL_DOC_TYPE_DEFAULT_IVA_RATES = _env_json(
     "FISCAL_DOC_TYPE_DEFAULT_IVA_RATES_JSON",

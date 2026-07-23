@@ -593,6 +593,7 @@ def convert_request_to_order(*, order_request, actor=None, source_proposal=None,
             saas_document_number="",
             saas_document_cae="",
             follow_up_note="",
+            assigned_to=actor if getattr(actor, "is_staff", False) else None,
         )
         OrderItem.objects.bulk_create(
             [
@@ -607,6 +608,8 @@ def convert_request_to_order(*, order_request, actor=None, source_proposal=None,
                     discount_percentage_used=row["discount_percentage_used"],
                     price_list=row["price_list"],
                     price_at_purchase=row["price_at_snapshot"],
+                    cost_at_purchase=(row["product"].cost if row["product"] else 0),
+                    iva_rate_snapshot=(row["product"].iva_rate if row["product"] else None),
                     subtotal=row["subtotal"],
                 )
                 for row in normalized_items

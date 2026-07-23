@@ -438,9 +438,19 @@ def product_create(request):
             price = request.POST.get('price', '0')
             cost = request.POST.get('cost', '0')
             stock = request.POST.get('stock', '0')
+            iva_rate_raw = request.POST.get('iva_rate', '').strip().replace(',', '.')
             price_value = parse_admin_decimal_input(price, 'Precio', min_value='0')
             cost_value = parse_admin_decimal_input(cost, 'Costo', min_value='0')
             stock_value = parse_int_value(stock, 'Stock', min_value=0)
+            iva_rate_value = (
+                parse_admin_decimal_input(iva_rate_raw, 'Alicuota IVA', min_value='0')
+                if iva_rate_raw
+                else None
+            )
+            allowed_iva_rates = {choice[0] for choice in Product.IVA_RATE_CHOICES}
+            if iva_rate_value is not None and iva_rate_value not in allowed_iva_rates:
+                raise ValueError("Selecciona una alicuota de IVA valida.")
+            tracks_stock = request.POST.get('tracks_stock') == 'on'
             primary_category_id = request.POST.get('category', '')
             selected_category_ids = normalize_category_ids(request.POST.getlist('categories'))
             description = request.POST.get('description', '').strip()
@@ -469,7 +479,9 @@ def product_create(request):
                     'category_options': category_options,
                     'selected_category_ids': selected_category_ids,
                     'supplier_suggestions': supplier_suggestions,
-                        'action': 'Crear',
+                    'iva_rate_choices': Product.IVA_RATE_CHOICES,
+                    'form_iva_rate': iva_rate_raw,
+                    'action': 'Crear',
                     })
 
             missing_required, missing_recommended = validate_attributes_for_category(
@@ -485,6 +497,8 @@ def product_create(request):
                     'category_options': category_options,
                     'selected_category_ids': selected_category_ids,
                     'supplier_suggestions': supplier_suggestions,
+                    'iva_rate_choices': Product.IVA_RATE_CHOICES,
+                    'form_iva_rate': iva_rate_raw,
                     'action': 'Crear',
                 })
             if missing_recommended:
@@ -503,7 +517,9 @@ def product_create(request):
                     supplier_ref=supplier_obj,
                     cost=cost_value,
                     price=price_value,
+                    iva_rate=iva_rate_value,
                     stock=stock_value,
+                    tracks_stock=tracks_stock,
                     category_id=int(primary_category_id) if str(primary_category_id).isdigit() else None,
                     description=description,
                     attributes=attributes_data,
@@ -555,6 +571,8 @@ def product_create(request):
         'category_options': category_options,
         'selected_category_ids': [],
         'supplier_suggestions': supplier_suggestions,
+        'iva_rate_choices': Product.IVA_RATE_CHOICES,
+        'form_iva_rate': request.POST.get('iva_rate', '') if request.method == 'POST' else '',
         'action': 'Crear',
         'existing_blocks_json': '{}',
     })
@@ -601,6 +619,17 @@ def product_edit(request, pk):
             product.cost = parse_admin_decimal_input(request.POST.get('cost', '0'), 'Costo', min_value='0')
             product.price = parse_admin_decimal_input(request.POST.get('price', '0'), 'Precio', min_value='0')
             product.stock = parse_int_value(request.POST.get('stock', '0'), 'Stock', min_value=0)
+            iva_rate_raw = request.POST.get('iva_rate', '').strip().replace(',', '.')
+            product.iva_rate = (
+                parse_admin_decimal_input(iva_rate_raw, 'Alicuota IVA', min_value='0')
+                if iva_rate_raw
+                else None
+            )
+            if product.iva_rate is not None and product.iva_rate not in {
+                choice[0] for choice in Product.IVA_RATE_CHOICES
+            }:
+                raise ValueError("Selecciona una alicuota de IVA valida.")
+            product.tracks_stock = request.POST.get('tracks_stock') == 'on'
             product.description = request.POST.get('description', '').strip()
             product.is_active = request.POST.get('is_active') == 'on'
             uploaded_image = request.FILES.get('image')
@@ -628,6 +657,7 @@ def product_edit(request, pk):
                     'category_options': category_options,
                     'selected_category_ids': selected_category_ids,
                     'supplier_suggestions': supplier_suggestions,
+                    'iva_rate_choices': Product.IVA_RATE_CHOICES,
                     'action': 'Editar',
                     'existing_blocks_json': existing_blocks_json,
                 })
@@ -657,6 +687,7 @@ def product_edit(request, pk):
                     'category_options': category_options,
                     'selected_category_ids': selected_category_ids,
                     'supplier_suggestions': supplier_suggestions,
+                    'iva_rate_choices': Product.IVA_RATE_CHOICES,
                     'action': 'Editar',
                     'existing_blocks_json': existing_blocks_json,
                 })
@@ -733,6 +764,7 @@ def product_edit(request, pk):
         'category_options': category_options,
         'selected_category_ids': selected_category_ids,
         'supplier_suggestions': supplier_suggestions,
+        'iva_rate_choices': Product.IVA_RATE_CHOICES,
         'preferred_supplier_offer': preferred_supplier_offer,
         'supplier_offers': supplier_offers,
         'supplier_options': supplier_options,
@@ -4182,6 +4214,8 @@ def product_grid_editor(request):
     f_name = request.GET.get('f_name', '').strip()
     f_ref = request.GET.get('f_ref', '').strip()
     f_supplier = request.GET.get('f_supplier', '').strip()
+    f_iva = request.GET.get('f_iva', '').strip().replace(',', '.')
+    f_tracks_stock = request.GET.get('f_tracks_stock', '').strip()
     active_filter = request.GET.get('active', '').strip()
     
     f_brand = request.GET.get('f_brand', '').strip()
@@ -4215,6 +4249,14 @@ def product_grid_editor(request):
             Q(supplier_offers__supplier__name__icontains=f_supplier) |
             Q(supplier_offers__supplier_code__icontains=f_supplier)
         ).distinct()
+
+    if f_iva == 'missing':
+        products = products.filter(iva_rate__isnull=True)
+    elif f_iva:
+        products = products.filter(iva_rate=f_iva)
+
+    if f_tracks_stock in {'0', '1'}:
+        products = products.filter(tracks_stock=(f_tracks_stock == '1'))
         
     if active_filter:
         products = products.filter(is_active=(active_filter == '1'))
@@ -4277,6 +4319,9 @@ def product_grid_editor(request):
         'f_name': f_name,
         'f_ref': f_ref,
         'f_supplier': f_supplier,
+        'f_iva': f_iva,
+        'f_tracks_stock': f_tracks_stock,
+        'iva_rate_choices': Product.IVA_RATE_CHOICES,
         'active_filter': active_filter,
         'f_brand': f_brand,
         'f_brand_rubro': f_brand_rubro,
@@ -4453,6 +4498,110 @@ def product_grid_update_cell(request):
     })
 
 
+def _filter_products_for_fiscal_bulk(filters):
+    """Rebuild the grid filter scope for select-all IVA/stock updates."""
+    filters = filters if isinstance(filters, dict) else {}
+    products = Product.objects.all()
+    f_category = str(filters.get('f_category', '') or '').strip()
+    if f_category:
+        normalized_query = unicodedata.normalize("NFKD", f_category.lower())
+        normalized_query = "".join(
+            char for char in normalized_query if not unicodedata.combining(char)
+        )
+        if normalized_query == 'sin categoria':
+            products = products.filter(category__isnull=True)
+        else:
+            products = products.filter(
+                Q(category__name__icontains=f_category)
+                | Q(categories__name__icontains=f_category)
+            ).distinct()
+    if filters.get('f_sku'):
+        products = products.filter(sku__icontains=str(filters['f_sku']).strip())
+    if filters.get('f_name'):
+        products = products.filter(name__icontains=str(filters['f_name']).strip())
+    if filters.get('f_ref'):
+        products = products.filter(filter_1__icontains=str(filters['f_ref']).strip())
+    if filters.get('f_supplier'):
+        supplier_filter = str(filters['f_supplier']).strip()
+        products = products.filter(
+            Q(supplier__icontains=supplier_filter)
+            | Q(supplier_ref__name__icontains=supplier_filter)
+            | Q(supplier_offers__supplier__name__icontains=supplier_filter)
+            | Q(supplier_offers__supplier_code__icontains=supplier_filter)
+        ).distinct()
+    active_filter = str(filters.get('active', '') or '').strip()
+    if active_filter in {'0', '1'}:
+        products = products.filter(is_active=(active_filter == '1'))
+    f_iva = str(filters.get('f_iva', '') or '').strip().replace(',', '.')
+    if f_iva == 'missing':
+        products = products.filter(iva_rate__isnull=True)
+    elif f_iva:
+        products = products.filter(iva_rate=f_iva)
+    f_tracks_stock = str(filters.get('f_tracks_stock', '') or '').strip()
+    if f_tracks_stock in {'0', '1'}:
+        products = products.filter(tracks_stock=(f_tracks_stock == '1'))
+    f_brand = str(filters.get('f_brand', '') or '').strip()
+    f_brand_rubro = str(filters.get('f_brand_rubro', '') or '').strip()
+    f_brand_subrubro = str(filters.get('f_brand_subrubro', '') or '').strip()
+    if f_brand_subrubro:
+        products = products.filter(
+            brand_subrubro_orders__brand_subrubro_id=f_brand_subrubro
+        ).distinct()
+    elif f_brand_rubro:
+        products = products.filter(
+            Q(brand_rubro_orders__brand_rubro_id=f_brand_rubro)
+            | Q(brand_subrubro_orders__brand_subrubro__brand_rubro_id=f_brand_rubro)
+        ).distinct()
+    elif f_brand:
+        products = products.filter(
+            Q(brand_rubro_orders__brand_rubro__brand_id=f_brand)
+            | Q(brand_subrubro_orders__brand_subrubro__brand_rubro__brand_id=f_brand)
+        ).distinct()
+    return products
+
+
+def _parse_product_bulk_iva_rate(raw_value):
+    normalized = str(raw_value or '').strip().replace(',', '.')
+    if not normalized:
+        return None
+    rate = parse_admin_decimal_input(normalized, 'Alicuota IVA', min_value='0')
+    if rate not in {choice[0] for choice in Product.IVA_RATE_CHOICES}:
+        raise ValueError('Alicuota IVA invalida.')
+    return rate
+
+
+def _apply_product_fiscal_bulk(*, request, products_qs, action, data, target_id, all_filtered):
+    if action == 'iva_rate':
+        iva_rate = _parse_product_bulk_iva_rate(data.get('iva_rate'))
+        updated_count = products_qs.update(iva_rate=iva_rate, updated_at=timezone.now())
+        details = {
+            'iva_rate': str(iva_rate) if iva_rate is not None else '',
+            'count': updated_count,
+            'all_filtered': all_filtered,
+        }
+    elif action == 'tracks_stock':
+        tracks_stock = data.get('tracks_stock') is True
+        updated_count = products_qs.update(
+            tracks_stock=tracks_stock,
+            updated_at=timezone.now(),
+        )
+        details = {
+            'tracks_stock': tracks_stock,
+            'count': updated_count,
+            'all_filtered': all_filtered,
+        }
+    else:
+        raise ValueError('Accion fiscal masiva no soportada.')
+    log_admin_action(
+        request,
+        action=f'product_grid_bulk_{action}',
+        target_type='product_list',
+        target_id=target_id,
+        details=details,
+    )
+    return updated_count
+
+
 @staff_member_required
 @csrf_protect
 @require_POST
@@ -4484,6 +4633,29 @@ def product_grid_bulk_update(request):
     if not product_ids or not action:
         return JsonResponse({'status': 'error', 'message': 'Faltan parámetros requeridos.'}, status=400)
 
+    if product_ids == 'all_filtered':
+        if action not in {'iva_rate', 'tracks_stock'}:
+            return JsonResponse(
+                {
+                    'status': 'error',
+                    'message': 'La seleccion total filtrada solo admite IVA o control de stock.',
+                },
+                status=400,
+            )
+        try:
+            with transaction.atomic():
+                updated_count = _apply_product_fiscal_bulk(
+                    request=request,
+                    products_qs=_filter_products_for_fiscal_bulk(data.get('filters')),
+                    action=action,
+                    data=data,
+                    target_id='all_filtered',
+                    all_filtered=True,
+                )
+        except (ValueError, InvalidOperation) as exc:
+            return JsonResponse({'status': 'error', 'message': str(exc)}, status=400)
+        return JsonResponse({'status': 'success', 'updated_count': updated_count})
+
     try:
         product_ids = [int(pid) for pid in product_ids]
     except (ValueError, TypeError):
@@ -4494,7 +4666,17 @@ def product_grid_bulk_update(request):
 
     try:
         with transaction.atomic():
-            if action == 'markup':
+            if action in {'iva_rate', 'tracks_stock'}:
+                updated_count = _apply_product_fiscal_bulk(
+                    request=request,
+                    products_qs=products_qs,
+                    action=action,
+                    data=data,
+                    target_id=','.join(map(str, product_ids[:100])),
+                    all_filtered=False,
+                )
+
+            elif action == 'markup':
                 target_field = data.get('target_field')
                 percentage_str = data.get('percentage')
                 

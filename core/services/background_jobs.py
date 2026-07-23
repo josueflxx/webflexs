@@ -80,3 +80,28 @@ def dispatch_import_job(
     thread.start()
     ImportTaskManager.set_backend(task_id, backend="thread", job_id="")
     return {"backend": "thread", "job_id": ""}
+
+
+def dispatch_external_editor_job(job_id):
+    """Dispatch a durable editor job without blocking the HTTP request."""
+
+    if getattr(settings, "FEATURE_BACKGROUND_JOBS_ENABLED", False):
+        try:
+            from core.tasks import execute_external_editor_job_task
+
+            async_result = execute_external_editor_job_task.delay(job_id)
+            return {"backend": "celery", "job_id": getattr(async_result, "id", "")}
+        except Exception:
+            logger.exception("External editor Celery dispatch failed, using thread fallback.")
+
+    def run_job():
+        from core.services.external_editor_jobs import execute_external_editor_job
+
+        try:
+            execute_external_editor_job(job_id)
+        except Exception:
+            logger.exception("External editor thread job %s failed.", job_id)
+
+    thread = threading.Thread(target=run_job, daemon=True, name=f"editor-job-{job_id}")
+    thread.start()
+    return {"backend": "thread", "job_id": ""}

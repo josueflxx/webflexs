@@ -61,6 +61,10 @@
                     <label for="price" class="form-label">Precio</label>
                     <input type="number" step="0.01" min="0" name="price" id="price" class="form-input" value="{{ form_price }}">
                 </div>
+                <div>
+                    <label for="price_override_note" class="form-label">Observacion de precio</label>
+                    <textarea name="price_override_note" id="price_override_note" class="form-textarea" rows="2" placeholder="Obligatoria si el precio queda por debajo del costo">{{ form_price_override_note }}</textarea>
+                </div>
                 <button type="submit" class="btn btn-primary">Guardar cambios</button>
                 <a href="{% url 'admin_order_detail' order.pk %}" class="btn btn-outline">Cancelar</a>
             </div>

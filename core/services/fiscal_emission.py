@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import timedelta
 from decimal import Decimal
+import logging
 from typing import Optional
 
 from django.conf import settings
@@ -16,6 +17,10 @@ from accounts.services.account_movement_service import (
     sync_fiscal_document_account_movement,
 )
 from core.models import (
+    FISCAL_DOC_TYPE_FA,
+    FISCAL_DOC_TYPE_FB,
+    FISCAL_DOC_TYPE_NCA,
+    FISCAL_DOC_TYPE_NCB,
     FISCAL_INVOICE_DOC_TYPES,
     FISCAL_ISSUE_MODE_ARCA_WSFE,
     FISCAL_STATUS_AUTHORIZED,
@@ -38,10 +43,24 @@ from core.services.fiscal import (
     resolve_payment_due_date,
     validate_credit_note_relationship,
 )
-from core.services.sales_documents import sync_sales_document_type_counter
+from core.services.sales_documents import (
+    ensure_stock_movements_for_order_document,
+    sync_sales_document_type_counter,
+)
+from core.services.sensitive_data import (
+    sanitize_sensitive_payload,
+    sanitize_sensitive_text,
+)
 
 
-ALLOWED_DOC_TYPES_FOR_EMISSION = {code for code, _label in FiscalDocument.DOC_TYPE_CHOICES}
+logger = logging.getLogger(__name__)
+
+ALLOWED_DOC_TYPES_FOR_EMISSION = {
+    FISCAL_DOC_TYPE_FA,
+    FISCAL_DOC_TYPE_FB,
+    FISCAL_DOC_TYPE_NCA,
+    FISCAL_DOC_TYPE_NCB,
+}
 RETRYABLE_DOCUMENT_STATUSES = {
     FISCAL_STATUS_READY_TO_ISSUE,
     FISCAL_STATUS_PENDING_RETRY,
@@ -192,6 +211,20 @@ def emit_fiscal_document_now(*, fiscal_document: FiscalDocument, actor=None) -> 
             .get(pk=document_id)
         )
         if locked_doc.status == FISCAL_STATUS_AUTHORIZED and locked_doc.cae:
+            if locked_doc.order_id:
+                try:
+                    ensure_stock_movements_for_order_document(
+                        order=locked_doc.order,
+                        company=locked_doc.company,
+                        sales_document_type=locked_doc.sales_document_type,
+                        actor=actor,
+                        fiscal_document=locked_doc,
+                    )
+                except Exception:
+                    logger.exception(
+                        "No se pudo reconciliar stock del comprobante autorizado %s",
+                        locked_doc.pk,
+                    )
             return FiscalEmissionOutcome(
                 document=locked_doc,
                 state="authorized",
@@ -278,6 +311,13 @@ def emit_fiscal_document_now(*, fiscal_document: FiscalDocument, actor=None) -> 
         result_status = "pending"
         error_code = "unexpected_error"
         error_message = f"Fallo inesperado en emision fiscal: {exc}"
+
+    # ARCA responses can include the complete SOAP envelope and WSAA
+    # credentials.  Sanitize at the persistence boundary so every caller,
+    # including unexpected exception paths, receives the same protection.
+    request_payload = sanitize_sensitive_payload(request_payload or {})
+    response_payload = sanitize_sensitive_payload(response_payload or {})
+    error_message = sanitize_sensitive_text(error_message)
 
     finished_at = timezone.now()
     duration_ms = max(int((finished_at - started_at).total_seconds() * 1000), 0)
@@ -370,7 +410,27 @@ def emit_fiscal_document_now(*, fiscal_document: FiscalDocument, actor=None) -> 
             actor=actor,
         )
     except Exception:
-        pass
+        logger.exception(
+            "No se pudo sincronizar cuenta corriente luego de emitir el comprobante %s",
+            locked_doc.pk,
+        )
+
+    if final_state == FISCAL_STATUS_AUTHORIZED and locked_doc.cae and locked_doc.order_id:
+        try:
+            ensure_stock_movements_for_order_document(
+                order=locked_doc.order,
+                company=locked_doc.company,
+                sales_document_type=locked_doc.sales_document_type,
+                actor=actor,
+                fiscal_document=locked_doc,
+            )
+        except Exception:
+            # A CAE otorgado no se puede deshacer localmente. El fallo queda en
+            # logs para reparacion idempotente sin alterar la autorizacion fiscal.
+            logger.exception(
+                "No se pudo actualizar stock luego del CAE del comprobante %s",
+                locked_doc.pk,
+            )
 
     message = {
         FISCAL_STATUS_AUTHORIZED: "Comprobante autorizado en ARCA.",

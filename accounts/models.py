@@ -417,6 +417,90 @@ class ClientCompany(models.Model):
         return False
 
 
+class ClientFiscalReview(models.Model):
+    """Manual queue for duplicate/conflicting client fiscal identities."""
+
+    REASON_DUPLICATE = "duplicate"
+    REASON_ARCA_CONFLICT = "arca_conflict"
+    REASON_LOOKUP_ERROR = "lookup_error"
+    REASON_CHOICES = [
+        (REASON_DUPLICATE, "CUIT duplicado"),
+        (REASON_ARCA_CONFLICT, "Datos locales distintos de ARCA"),
+        (REASON_LOOKUP_ERROR, "Error de consulta fiscal"),
+    ]
+
+    STATUS_PENDING = "pending"
+    STATUS_RESOLVED = "resolved"
+    STATUS_DISMISSED = "dismissed"
+    STATUS_CHOICES = [
+        (STATUS_PENDING, "Pendiente"),
+        (STATUS_RESOLVED, "Resuelta"),
+        (STATUS_DISMISSED, "Descartada"),
+    ]
+
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.PROTECT,
+        related_name="client_fiscal_reviews",
+        verbose_name="Empresa",
+    )
+    normalized_document = models.CharField(
+        max_length=20,
+        db_index=True,
+        verbose_name="Documento normalizado",
+    )
+    reason = models.CharField(max_length=24, choices=REASON_CHOICES)
+    status = models.CharField(
+        max_length=16,
+        choices=STATUS_CHOICES,
+        default=STATUS_PENDING,
+        db_index=True,
+    )
+    candidate_profiles = models.ManyToManyField(
+        ClientProfile,
+        blank=True,
+        related_name="fiscal_reviews",
+        verbose_name="Clientes candidatos",
+    )
+    lookup_payload = models.JSONField(default=dict, blank=True)
+    requested_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="requested_client_fiscal_reviews",
+    )
+    resolved_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="resolved_client_fiscal_reviews",
+    )
+    resolution_note = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    resolved_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+        indexes = [
+            models.Index(
+                fields=["company", "status", "created_at"],
+                name="acct_fiscal_review_queue_idx",
+            ),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["company", "normalized_document", "reason"],
+                condition=models.Q(status="pending"),
+                name="uniq_pending_client_fiscal_review",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.normalized_document} - {self.get_reason_display()}"
+
 class ClientCategoryCompanyRule(models.Model):
     """Commercial rule for a category scoped to a company."""
 

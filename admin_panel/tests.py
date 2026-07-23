@@ -370,7 +370,7 @@ class ClientOrderHistoryViewTests(AdminPanelTestCase):
         self.client.force_login(self.staff)
         response = self.client.get(
             reverse('admin_client_cuit_lookup'),
-            {'cuit': '20-12345678-9'},
+            {'cuit': '20-12345678-6'},
         )
 
         self.assertEqual(response.status_code, 200)
@@ -378,7 +378,7 @@ class ClientOrderHistoryViewTests(AdminPanelTestCase):
         self.assertTrue(payload['ok'])
         self.assertEqual(payload['source'], 'fallback')
         self.assertEqual(payload['document_type'], 'cuit')
-        self.assertEqual(payload['document_number'], '20123456789')
+        self.assertEqual(payload['document_number'], '20123456786')
 
     def test_invoice_movement_cannot_be_reopened_after_closing(self):
         order = Order.objects.filter(

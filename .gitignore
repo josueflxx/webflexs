@@ -11,6 +11,16 @@ env/
 # Environment variables
 .env
 
+# Fiscal certificates and private keys (fixtures must use non-secret samples)
+*.key
+*.pem
+*.p12
+*.pfx
+*.crt
+*.cer
+certificates/
+certs/
+
 # Database
 *.sqlite3
 *.sqlite3-*

@@ -141,8 +141,8 @@ class LoginRedirectCompanySelectionTests(TestCase):
         response = self.client.get(reverse("login_redirect"))
 
         self.assertEqual(response.status_code, 302)
-        self.assertIn(reverse("select_company"), response.url)
-        self.assertNotIn("active_company_id", self.client.session)
+        self.assertIn(reverse("catalog"), response.url)
+        self.assertIn("active_company_id", self.client.session)
 
     def test_staff_with_multiple_companies_still_goes_to_company_selector(self):
         staff = User.objects.create_user(

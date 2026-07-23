@@ -8,6 +8,7 @@ from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db.models import Q
 from django.utils import timezone
 from django.utils.text import slugify
+from decimal import Decimal
 import re
 import uuid
 
@@ -435,6 +436,15 @@ class PriceListItem(models.Model):
 class Product(models.Model):
     """Product model with all required fields."""
 
+    IVA_RATE_CHOICES = [
+        (Decimal("0.00"), "0%"),
+        (Decimal("2.50"), "2,5%"),
+        (Decimal("5.00"), "5%"),
+        (Decimal("10.50"), "10,5%"),
+        (Decimal("21.00"), "21%"),
+        (Decimal("27.00"), "27%"),
+    ]
+
     sku = models.CharField(max_length=50, unique=True, db_index=True, verbose_name="SKU")
     name = models.CharField(max_length=255, db_index=True, verbose_name="Nombre")
     supplier = models.CharField(max_length=120, blank=True, db_index=True, verbose_name="Proveedor")
@@ -453,8 +463,26 @@ class Product(models.Model):
         default=0,
         verbose_name="Costo",
     )
-    price = models.DecimalField(max_digits=12, decimal_places=2, verbose_name="Precio")
+    price = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        verbose_name="Precio neto sin IVA",
+    )
+    iva_rate = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        choices=IVA_RATE_CHOICES,
+        null=True,
+        blank=True,
+        verbose_name="Alicuota IVA",
+        help_text="Se aplica al emitir comprobantes electronicos. El precio de catalogo no incluye IVA.",
+    )
     stock = models.IntegerField(default=0, verbose_name="Stock")
+    tracks_stock = models.BooleanField(
+        default=False,
+        verbose_name="Controlar stock",
+        help_text="Si esta activo, el stock se actualiza cuando el comprobante obtiene CAE.",
+    )
     # Legacy single category (kept for backward compatibility and as primary category)
     category = models.ForeignKey(
         Category,
@@ -951,12 +979,22 @@ class SupplierPriceListBatch(models.Model):
     STATUS_APPLIED = "applied"
     STATUS_FAILED = "failed"
     STATUS_CANCELLED = "cancelled"
+    STATUS_ROLLED_BACK = "rolled_back"
+    STATUS_ROLLBACK_PARTIAL = "rollback_partial"
     STATUS_CHOICES = [
         (STATUS_UPLOADED, "Subido"),
         (STATUS_PREVIEWED, "Previsualizado"),
         (STATUS_APPLIED, "Aplicado"),
         (STATUS_FAILED, "Fallido"),
         (STATUS_CANCELLED, "Cancelado"),
+        (STATUS_ROLLED_BACK, "Revertido"),
+        (STATUS_ROLLBACK_PARTIAL, "Reversion parcial"),
+    ]
+    PRICING_COST_ONLY = "cost_only"
+    PRICING_PRESERVE_MARGIN = "preserve_margin"
+    PRICING_MODE_CHOICES = [
+        (PRICING_COST_ONLY, "Actualizar solo costo"),
+        (PRICING_PRESERVE_MARGIN, "Mantener margen y recalcular venta"),
     ]
 
     supplier = models.ForeignKey(
@@ -1007,6 +1045,11 @@ class SupplierPriceListBatch(models.Model):
         default=STATUS_UPLOADED,
         db_index=True,
     )
+    pricing_mode = models.CharField(
+        max_length=24,
+        choices=PRICING_MODE_CHOICES,
+        default=PRICING_COST_ONLY,
+    )
     preview_signature = models.CharField(max_length=64, blank=True)
     summary = models.JSONField(default=dict, blank=True)
     error_message = models.TextField(blank=True)
@@ -1027,6 +1070,14 @@ class SupplierPriceListBatch(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     previewed_at = models.DateTimeField(null=True, blank=True)
     applied_at = models.DateTimeField(null=True, blank=True)
+    rolled_back_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="rolled_back_supplier_price_list_batches",
+    )
+    rolled_back_at = models.DateTimeField(null=True, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:

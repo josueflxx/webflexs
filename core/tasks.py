@@ -200,3 +200,16 @@ def retry_pending_webhooks_task():
 
     ids = retry_pending_webhooks()
     return {"queued": len(ids), "delivery_ids": ids}
+
+
+@shared_task(name="core.execute_external_editor_job_task")
+def execute_external_editor_job_task(job_id):
+    from core.services.external_editor_jobs import execute_external_editor_job
+
+    job = execute_external_editor_job(job_id)
+    return {
+        "job_id": job.pk,
+        "status": job.status,
+        "succeeded": job.succeeded,
+        "failed": job.failed,
+    }

@@ -591,7 +591,7 @@ def resolve_sales_workspace_active_keys(stage):
     return SALES_WORKSPACE_STAGE_ACTIVE_KEYS.get(str(stage or "").strip().lower(), [])
 
 
-def build_sales_workspace(company=None, hub_url_name=""):
+def build_sales_workspace(company=None, companies=None, hub_url_name=""):
     request_qs = OrderRequest.objects.all()
     orders_qs = Order.objects.all()
     fiscal_qs = FiscalDocument.objects.exclude(status=FISCAL_STATUS_VOIDED)
@@ -602,6 +602,11 @@ def build_sales_workspace(company=None, hub_url_name=""):
         orders_qs = orders_qs.filter(company=company)
         fiscal_qs = fiscal_qs.filter(company=company)
         remito_qs = remito_qs.filter(company=company)
+    elif companies is not None:
+        request_qs = request_qs.filter(company__in=companies)
+        orders_qs = orders_qs.filter(company__in=companies)
+        fiscal_qs = fiscal_qs.filter(company__in=companies)
+        remito_qs = remito_qs.filter(company__in=companies)
 
     invoice_order_ids = fiscal_qs.filter(doc_type__in=INVOICE_FISCAL_DOC_TYPES).values_list("order_id", flat=True)
     remito_order_ids = remito_qs.values_list("order_id", flat=True)
@@ -691,7 +696,7 @@ def build_sales_workspace(company=None, hub_url_name=""):
     ]
 
 
-def build_sales_pipeline_rows(*, company=None, stage="", client_query=""):
+def build_sales_pipeline_rows(*, company=None, companies=None, stage="", client_query=""):
     stage = str(stage or "").strip().lower()
     client_query = str(client_query or "").strip()
 
@@ -728,6 +733,11 @@ def build_sales_pipeline_rows(*, company=None, stage="", client_query=""):
         orders_qs = orders_qs.filter(company=company)
         fiscal_qs = fiscal_qs.filter(company=company)
         remito_qs = remito_qs.filter(company=company)
+    elif companies is not None:
+        request_qs = request_qs.filter(company__in=companies)
+        orders_qs = orders_qs.filter(company__in=companies)
+        fiscal_qs = fiscal_qs.filter(company__in=companies)
+        remito_qs = remito_qs.filter(company__in=companies)
 
     if client_query:
         request_qs = request_qs.filter(

@@ -32,7 +32,7 @@ from django.db.models import (
     Prefetch,
 )
 from django.db.models.functions import Coalesce
-from django.http import JsonResponse, HttpResponse
+from django.http import JsonResponse, HttpResponse, HttpResponseForbidden
 from django.views.decorators.csrf import csrf_protect
 from django.views.decorators.http import require_POST
 from django.utils import timezone
@@ -54,6 +54,7 @@ from accounts.models import (
     AccountRequest,
     ClientCategory,
     ClientCompany,
+    ClientFiscalReview,
     ClientPayment,
     ClientProfile,
     ClientTransaction,
@@ -147,6 +148,16 @@ from core.services.company_context import (
     get_user_companies,
     set_active_company,
     user_has_company_access,
+)
+from accounts.services.fiscal_review import (
+    find_client_profiles_by_document,
+    is_valid_cuit,
+    normalize_fiscal_document,
+    queue_client_fiscal_review,
+)
+from core.services.access_scope import (
+    client_links_fully_manageable_by,
+    clients_visible_to,
 )
 from django.contrib.auth.models import Group, User
 from admin_panel.forms.import_forms import ProductImportForm, ClientImportForm, CategoryImportForm
@@ -308,9 +319,9 @@ def client_dashboard(request):
     """Simple dashboard for the clients module."""
     active_company = get_active_company(request)
 
-    clients = ClientProfile.objects.select_related("user", "client_category")
-    if active_company:
-        clients = clients.filter(company_links__company=active_company).distinct()
+    clients = clients_visible_to(request.user, company=active_company).select_related(
+        "user", "client_category"
+    )
 
     total_clients = clients.count()
     approved_clients = clients.filter(is_approved=True).count()
@@ -906,12 +917,9 @@ def client_report_debtors(request):
 def client_list(request):
     """Client list with search."""
     active_company = get_active_company(request)
-    clients = ClientProfile.objects.select_related('user', 'client_category').all()
-    if active_company:
-        clients = clients.filter(
-            company_links__company=active_company,
-            company_links__is_active=True,
-        ).distinct()
+    clients = clients_visible_to(request.user, company=active_company).select_related(
+        'user', 'client_category'
+    )
 
     missing_email_filter = Q(user__isnull=True) | Q(user__email__isnull=True) | Q(user__email__exact="")
     missing_email_only = str(request.GET.get("missing_email", "")).strip() == "1"
@@ -933,12 +941,20 @@ def client_list(request):
     page = request.GET.get('page', 1)
     page_obj = paginator.get_page(page)
 
+    review_scope = ClientFiscalReview.objects.filter(
+        company__in=get_user_companies(request.user).filter(is_active=True),
+        status=ClientFiscalReview.STATUS_PENDING,
+    )
+    if active_company:
+        review_scope = review_scope.filter(company=active_company)
+
     return render(request, 'admin_panel/clients/list.html', {
         'page_obj': page_obj,
         'search': search,
         'missing_email_only': missing_email_only,
         'missing_email_total': missing_email_total,
         'missing_email_sample': missing_email_sample,
+        'pending_fiscal_review_total': review_scope.count(),
         'can_manage_client_categories': can_edit_client_profile(request.user),
         'can_edit_client_profile': can_edit_client_profile(request.user),
         'can_create_client': can_edit_client_profile(request.user),
@@ -1284,6 +1300,38 @@ def client_create(request):
                 form_values=form_values,
             )
 
+        submitted_document = (
+            form_values.get("document_number", "")
+            or form_values.get("cuit_dni", "")
+        )
+        normalized_document = normalize_fiscal_document(submitted_document)
+        if len(normalized_document) == 11:
+            duplicate_profiles = list(
+                find_client_profiles_by_document(
+                    normalized_document,
+                    company=company,
+                )[:20]
+            )
+            if duplicate_profiles:
+                review, _ = queue_client_fiscal_review(
+                    company=company,
+                    document=normalized_document,
+                    candidates=duplicate_profiles,
+                    requested_by=request.user,
+                    lookup_payload={"source": "client_create", "candidate_count": len(duplicate_profiles)},
+                )
+                messages.error(
+                    request,
+                    f"El CUIT ya existe. Se envio a revision manual #{review.pk} y no se creo un duplicado.",
+                )
+                return _render_client_form(
+                    request,
+                    active_company=company,
+                    companies=companies,
+                    client_company=None,
+                    form_values=form_values,
+                )
+
         try:
             selected_category = parse_optional_client_category(form_values.get("client_category", ""))
             discount_value = parse_admin_decimal_input(
@@ -1449,7 +1497,10 @@ def client_create(request):
 @staff_member_required
 def client_edit(request, pk):
     """Edit client profile."""
-    client = get_object_or_404(ClientProfile.objects.select_related("user", "client_category"), pk=pk)
+    client = get_object_or_404(
+        clients_visible_to(request.user).select_related("user", "client_category"),
+        pk=pk,
+    )
     active_company, companies = _resolve_client_editor_company(request, client=client)
     client_company = None
     if active_company:
@@ -1476,18 +1527,23 @@ def client_edit(request, pk):
         return redirect('admin_client_order_history', pk=client.pk)
     
     if request.method == 'POST':
+        if not client_links_fully_manageable_by(request.user, client):
+            return HttpResponseForbidden(
+                "No puedes modificar un cliente compartido con empresas fuera de tu alcance."
+            )
         form_values = _build_client_form_values(
             client=client,
             active_company=active_company,
             client_company=client_company,
             form_data=request.POST,
+            companies=companies,
         )
         company = None
         company_id = form_values.get("company_id", "")
         if company_id.isdigit():
             company = companies.filter(pk=int(company_id), is_active=True).first()
         if not company:
-            company = active_company or get_default_client_origin_company()
+            company = active_company or companies.first()
             if company:
                 form_values["company_id"] = str(company.pk)
 
@@ -1589,6 +1645,40 @@ def client_edit(request, pk):
                 form_values=form_values,
             )
 
+        submitted_document = (
+            form_values.get("document_number", "")
+            or form_values.get("cuit_dni", "")
+        )
+        normalized_document = normalize_fiscal_document(submitted_document)
+        if len(normalized_document) == 11:
+            duplicate_profiles = list(
+                find_client_profiles_by_document(
+                    normalized_document,
+                    company=company,
+                    exclude_profile=client,
+                )[:20]
+            )
+            if duplicate_profiles:
+                review, _ = queue_client_fiscal_review(
+                    company=company,
+                    document=normalized_document,
+                    candidates=[client, *duplicate_profiles],
+                    requested_by=request.user,
+                    lookup_payload={"source": "client_edit", "candidate_count": len(duplicate_profiles) + 1},
+                )
+                messages.error(
+                    request,
+                    f"El CUIT corresponde a otro cliente. Se envio a revision manual #{review.pk}.",
+                )
+                return _render_client_form(
+                    request,
+                    client=client,
+                    active_company=company,
+                    companies=companies,
+                    client_company=client_company,
+                    form_values=form_values,
+                )
+
         document_type_choices = {choice[0] for choice in ClientProfile.DOCUMENT_TYPE_CHOICES}
         client_type_choices = {choice[0] for choice in ClientProfile.CLIENT_TYPE_CHOICES}
         iva_choices = {choice[0] for choice in ClientProfile.IVA_CHOICES}
@@ -1630,7 +1720,10 @@ def client_edit(request, pk):
                     "client_category_id": link.client_category_id,
                     "discount_percentage": str(link.discount_percentage or Decimal("0")),
                 }
-                for link in client.company_links.filter(company__is_active=True).order_by("company__name", "company_id")
+                for link in client.company_links.filter(
+                    company__in=companies,
+                    company__is_active=True,
+                ).order_by("company__name", "company_id")
             ],
         }
 
@@ -1672,6 +1765,7 @@ def client_edit(request, pk):
         selected_company_ids = {linked_company.id for linked_company in selected_companies}
         ClientCompany.objects.filter(
             client_profile=client,
+            company__in=companies,
             company__is_active=True,
         ).exclude(company_id__in=selected_company_ids).update(is_active=False)
 
@@ -1743,7 +1837,10 @@ def client_edit(request, pk):
                     "client_category_id": company_link.client_category_id,
                     "discount_percentage": str(company_link.discount_percentage or Decimal("0")),
                 }
-                for company_link in client.company_links.filter(company__is_active=True).order_by("company__name", "company_id")
+                for company_link in client.company_links.filter(
+                    company__in=companies,
+                    company__is_active=True,
+                ).order_by("company__name", "company_id")
             ],
         }
         log_admin_change(
@@ -1780,7 +1877,10 @@ def client_edit(request, pk):
 @staff_member_required
 @require_POST
 def client_quick_order(request, pk):
-    client = get_object_or_404(ClientProfile.objects.select_related('user'), pk=pk)
+    client = get_object_or_404(
+        clients_visible_to(request.user).select_related('user'),
+        pk=pk,
+    )
     action = request.POST.get("action", "quote").strip().lower()
     selected_origin_channel = str(
         request.POST.get("origin_channel", Order.ORIGIN_ADMIN)
@@ -2210,7 +2310,7 @@ def client_quick_order(request, pk):
 @staff_member_required
 def client_cuit_lookup(request):
     cuit = request.GET.get("cuit", "").strip()
-    normalized_cuit = "".join(ch for ch in cuit if ch.isdigit())
+    normalized_cuit = normalize_fiscal_document(cuit)
     if not normalized_cuit:
         return JsonResponse({"ok": False, "message": "CUIT requerido."}, status=400)
     if len(normalized_cuit) not in {8, 11}:
@@ -2221,10 +2321,64 @@ def client_cuit_lookup(request):
             },
             status=400,
         )
+    if len(normalized_cuit) == 11 and not is_valid_cuit(normalized_cuit):
+        return JsonResponse(
+            {
+                "ok": False,
+                "message": "El CUIT no supera la validacion del digito verificador.",
+                "normalized_cuit": normalized_cuit,
+            },
+            status=400,
+        )
+
+    active_company = get_active_company(request)
+    if not active_company or not user_has_company_access(request.user, active_company):
+        return JsonResponse(
+            {"ok": False, "message": "Selecciona una empresa antes de consultar el CUIT."},
+            status=400,
+        )
+
+    duplicate_profiles = list(
+        find_client_profiles_by_document(
+            normalized_cuit,
+            company=active_company,
+        )[:20]
+    )
+    if duplicate_profiles:
+        review, _created = queue_client_fiscal_review(
+            company=active_company,
+            document=normalized_cuit,
+            candidates=duplicate_profiles,
+            requested_by=request.user,
+            lookup_payload={"source": "client_cuit_lookup", "candidate_count": len(duplicate_profiles)},
+        )
+        return JsonResponse(
+            {
+                "ok": False,
+                "duplicate": True,
+                "review_id": review.pk,
+                "normalized_cuit": normalized_cuit,
+                "message": (
+                    f"El CUIT ya esta asociado a otro cliente. "
+                    f"Se envio a revision manual #{review.pk}."
+                ),
+                "existing_clients": [
+                    {
+                        "id": profile.pk,
+                        "company_name": profile.company_name,
+                        "username": profile.user.username,
+                    }
+                    for profile in duplicate_profiles
+                ],
+            },
+            status=409,
+        )
+
     return JsonResponse(
         {
             "ok": True,
             "source": "fallback",
+            "official_verification_pending": True,
             "message": (
                 "No se pudo consultar ARCA/AFIP en este entorno. "
                 "Se preparo el documento fiscal para seguir la carga manual."
@@ -2240,6 +2394,99 @@ def client_cuit_lookup(request):
             "normalized_cuit": normalized_cuit,
         }
     )
+
+
+@staff_member_required
+def client_fiscal_review_list(request):
+    companies = get_user_companies(request.user).filter(is_active=True)
+    active_company = get_active_company(request)
+    reviews = ClientFiscalReview.objects.filter(company__in=companies)
+    if active_company and user_has_company_access(request.user, active_company):
+        reviews = reviews.filter(company=active_company)
+
+    pending_total = reviews.filter(status=ClientFiscalReview.STATUS_PENDING).count()
+    status = str(request.GET.get("status", ClientFiscalReview.STATUS_PENDING)).strip().lower()
+    valid_statuses = {choice[0] for choice in ClientFiscalReview.STATUS_CHOICES}
+    if status in valid_statuses:
+        reviews = reviews.filter(status=status)
+    else:
+        status = ""
+
+    search = str(request.GET.get("q", "")).strip()
+    if search:
+        normalized_search = normalize_fiscal_document(search)
+        filters = Q(candidate_profiles__company_name__icontains=search) | Q(
+            candidate_profiles__user__username__icontains=search
+        )
+        if normalized_search:
+            filters |= Q(normalized_document__icontains=normalized_search)
+        reviews = reviews.filter(filters)
+
+    reviews = reviews.select_related(
+        "company", "requested_by", "resolved_by"
+    ).prefetch_related("candidate_profiles__user").distinct()
+    page_obj = Paginator(reviews, 50).get_page(request.GET.get("page", 1))
+    return render(
+        request,
+        "admin_panel/clients/fiscal_reviews.html",
+        {
+            "page_obj": page_obj,
+            "search": search,
+            "status": status,
+            "status_choices": ClientFiscalReview.STATUS_CHOICES,
+            "pending_total": pending_total,
+            "can_resolve_reviews": can_edit_client_profile(request.user),
+        },
+    )
+
+
+@staff_member_required
+@require_POST
+def client_fiscal_review_resolve(request, pk):
+    if not can_edit_client_profile(request.user):
+        return HttpResponseForbidden("No tenes permisos para resolver revisiones fiscales.")
+
+    accessible_companies = get_user_companies(request.user).filter(is_active=True)
+    with transaction.atomic():
+        review = get_object_or_404(
+            ClientFiscalReview.objects.select_for_update(),
+            pk=pk,
+            company__in=accessible_companies,
+        )
+        if review.status != ClientFiscalReview.STATUS_PENDING:
+            messages.info(request, "La revision fiscal ya estaba cerrada.")
+            return redirect("admin_client_fiscal_review_list")
+
+        action = str(request.POST.get("action", "resolved")).strip().lower()
+        if action not in {ClientFiscalReview.STATUS_RESOLVED, ClientFiscalReview.STATUS_DISMISSED}:
+            messages.error(request, "Accion de revision invalida.")
+            return redirect("admin_client_fiscal_review_list")
+        note = str(request.POST.get("resolution_note", "")).strip()
+        if not note:
+            messages.error(request, "Es obligatorio escribir una observacion para cerrar la revision.")
+            return redirect("admin_client_fiscal_review_list")
+
+        before = model_snapshot(review, ["status", "resolution_note", "resolved_by_id", "resolved_at"])
+        review.status = action
+        review.resolution_note = note
+        review.resolved_by = request.user
+        review.resolved_at = timezone.now()
+        review.save(
+            update_fields=["status", "resolution_note", "resolved_by", "resolved_at", "updated_at"]
+        )
+        after = model_snapshot(review, ["status", "resolution_note", "resolved_by_id", "resolved_at"])
+
+    log_admin_change(
+        request,
+        action="client_fiscal_review_closed",
+        target_type="ClientFiscalReview",
+        target_id=review.pk,
+        before=before,
+        after=after,
+        extra={"normalized_document": review.normalized_document},
+    )
+    messages.success(request, "Revision fiscal cerrada y registrada en auditoria.")
+    return redirect("admin_client_fiscal_review_list")
 
 
 CLIENT_HISTORY_MOVEMENT_TABS = {
@@ -2342,7 +2589,10 @@ def _row_matches_movement_bucket(row, bucket_key):
 @staff_member_required
 def client_order_history(request, pk):
     """Show order history for one client profile."""
-    client = get_object_or_404(ClientProfile.objects.select_related('user'), pk=pk)
+    client = get_object_or_404(
+        clients_visible_to(request.user).select_related('user'),
+        pk=pk,
+    )
     history_base_url = reverse("admin_client_order_history", args=[client.pk])
 
     def build_history_url(**updates):
@@ -2355,15 +2605,16 @@ def client_order_history(request, pk):
         encoded = params.urlencode()
         return f"{history_base_url}?{encoded}" if encoded else history_base_url
 
-    companies = Company.objects.filter(is_active=True).order_by("name")
+    companies = get_user_companies(request.user).filter(is_active=True).order_by("name")
     active_company = get_admin_company_filter(request)
+    company_scope = companies.filter(pk=active_company.pk) if active_company else companies
     selected_company_id = "all" if active_company is None else str(active_company.pk)
     active_company_label = active_company.name if active_company else "Todas las empresas"
     client_company = None
     if active_company:
         client_company = (
             ClientCompany.objects.select_related("company", "client_category", "price_list")
-            .filter(client_profile=client, company=active_company)
+            .filter(client_profile=client, company=active_company, is_active=True)
             .first()
         )
     client_company_missing = bool(active_company and not client_company)
@@ -2388,7 +2639,9 @@ def client_order_history(request, pk):
             effective_category.default_sale_condition,
         )
 
-    orders = _get_client_orders_queryset(client, company=active_company).prefetch_related('items')
+    orders = _get_client_orders_queryset(client, company=active_company).filter(
+        company__in=company_scope
+    ).prefetch_related('items')
 
     status = request.GET.get('status', '').strip()
     orders_filtered = orders
@@ -2405,7 +2658,9 @@ def client_order_history(request, pk):
         status__in=[Order.STATUS_DRAFT, Order.STATUS_CONFIRMED, Order.STATUS_PREPARING]
     ).count()
 
-    balance_orders_qs = client.get_orders_queryset_for_balance(company=active_company)
+    balance_orders_qs = client.get_orders_queryset_for_balance(company=active_company).filter(
+        company__in=company_scope
+    )
     balance_orders_summary = balance_orders_qs.aggregate(
         orders_count=Count('id'),
         total_amount=Sum('total'),
@@ -2418,10 +2673,9 @@ def client_order_history(request, pk):
 
     payments_qs = ClientPayment.objects.select_related('order', 'created_by', 'company').filter(
         client_profile=client,
+        company__in=company_scope,
         is_cancelled=False,
     )
-    if active_company:
-        payments_qs = payments_qs.filter(company=active_company)
     payments_summary = payments_qs.aggregate(
         total_paid=Sum('amount'),
         payments_count=Count('id'),
@@ -2430,10 +2684,9 @@ def client_order_history(request, pk):
     payments_recent = list(payments_qs.order_by('-paid_at')[:20])
 
     documents_qs = InternalDocument.objects.filter(
-        Q(client_profile=client) | Q(client_company_ref__client_profile=client)
+        Q(client_profile=client) | Q(client_company_ref__client_profile=client),
+        company__in=company_scope,
     )
-    if active_company:
-        documents_qs = documents_qs.filter(company=active_company)
     documents_qs = documents_qs.select_related("company", "sales_document_type").order_by("-issued_at")
     recent_internal_documents = list(documents_qs[:16])
     documents_by_type = {
@@ -2446,11 +2699,10 @@ def client_order_history(request, pk):
 
     official_docs_qs = Order.objects.filter(
         user_id=client.user_id,
+        company__in=company_scope,
     ).exclude(
         saas_document_number=""
     )
-    if active_company:
-        official_docs_qs = official_docs_qs.filter(company=active_company)
     official_docs = list(
         official_docs_qs.only(
             "id",
@@ -2469,11 +2721,12 @@ def client_order_history(request, pk):
             "order",
             "related_document",
         )
-        .filter(Q(client_profile=client) | Q(client_company_ref__client_profile=client))
+        .filter(
+            Q(client_profile=client) | Q(client_company_ref__client_profile=client),
+            company__in=company_scope,
+        )
         .order_by("-created_at", "-id")
     )
-    if active_company:
-        fiscal_documents_qs = fiscal_documents_qs.filter(company=active_company)
     recent_fiscal_documents = list(fiscal_documents_qs[:12])
     for document in recent_internal_documents:
         movement_transaction = _resolve_internal_document_transaction(document)
@@ -2491,6 +2744,7 @@ def client_order_history(request, pk):
     try:
         ledger_entries = list(
             client.get_ledger_queryset(company=active_company)
+            .filter(company__in=company_scope)
             .select_related('order', 'payment', 'payment__order', 'created_by', 'company')
         )
         ledger_order_ids = {tx.order_id for tx in ledger_entries if tx.order_id}
@@ -2510,10 +2764,9 @@ def client_order_history(request, pk):
             ).filter(
                 Q(order_id__in=ledger_order_ids)
                 | Q(payment_id__in=ledger_payment_ids)
-                | Q(transaction_id__in=ledger_transaction_ids)
+                | Q(transaction_id__in=ledger_transaction_ids),
+                company__in=company_scope,
             )
-            if active_company:
-                related_internal_documents = related_internal_documents.filter(company=active_company)
             related_internal_documents = related_internal_documents.order_by("-issued_at", "-id")
 
         related_fiscal_documents = FiscalDocument.objects.none()
@@ -2522,9 +2775,7 @@ def client_order_history(request, pk):
                 "company",
                 "point_of_sale",
                 "sales_document_type",
-            ).filter(order_id__in=ledger_order_ids)
-            if active_company:
-                related_fiscal_documents = related_fiscal_documents.filter(company=active_company)
+            ).filter(order_id__in=ledger_order_ids, company__in=company_scope)
             related_fiscal_documents = related_fiscal_documents.exclude(status="voided").order_by("-created_at", "-id")
 
         receipt_documents_by_payment = {}
@@ -3245,10 +3496,10 @@ def client_order_history(request, pk):
         'latest_document_label': latest_document_label,
         'latest_document_hint': latest_document_hint,
     }
-    activity_timeline = build_client_activity_timeline(
-        client,
-        company=active_company,
-        limit=12,
+    activity_timeline = (
+        build_client_activity_timeline(client, company=active_company, limit=12)
+        if active_company
+        else []
     )
     active_ledger_title_map = {
         key: meta["title"] for key, meta in CLIENT_HISTORY_MOVEMENT_TABS.items()
@@ -3343,21 +3594,20 @@ def client_order_history(request, pk):
 @staff_member_required
 @require_POST
 def client_transaction_set_state(request, pk, tx_id):
-    client = get_object_or_404(ClientProfile, pk=pk)
+    client = get_object_or_404(clients_visible_to(request.user), pk=pk)
+    active_company = get_active_company(request)
+    company_scope = (
+        get_user_companies(request.user).filter(pk=active_company.pk)
+        if active_company
+        else get_user_companies(request.user)
+    )
     transaction_obj = get_object_or_404(
-        ClientTransaction.objects.select_related("company", "client_profile", "order"),
+        ClientTransaction.objects.select_related("company", "client_profile", "order").filter(
+            company__in=company_scope
+        ),
         pk=tx_id,
         client_profile=client,
     )
-    active_company = get_active_company(request)
-    if (
-        active_company
-        and transaction_obj.company_id
-        and transaction_obj.company_id != active_company.id
-    ):
-        messages.error(request, "El movimiento no pertenece a la empresa activa.")
-        return redirect(reverse("admin_client_order_history", args=[client.pk]))
-
     target_state = str(request.POST.get("state", "")).strip().lower()
     redirect_url = _resolve_safe_next_url(
         request,
@@ -3430,7 +3680,7 @@ def client_transaction_set_state(request, pk, tx_id):
 @staff_member_required
 def client_password_change(request, pk):
     """Change client password."""
-    client = get_object_or_404(ClientProfile, pk=pk)
+    client = get_object_or_404(clients_visible_to(request.user), pk=pk)
 
     if not can_manage_client_credentials(request.user):
         messages.error(
@@ -3472,7 +3722,7 @@ def client_password_change(request, pk):
 @require_POST
 def client_password_reset_email(request, pk):
     """Send password reset email to a client user."""
-    client = get_object_or_404(ClientProfile.objects.select_related("user"), pk=pk)
+    client = get_object_or_404(clients_visible_to(request.user).select_related("user"), pk=pk)
     redirect_url = _resolve_safe_next_url(
         request,
         reverse("admin_client_order_history", kwargs={"pk": client.pk}),
@@ -3512,7 +3762,7 @@ def client_password_reset_email(request, pk):
 @staff_member_required
 def client_delete(request, pk):
     """Deactivate single client without hard delete."""
-    client = get_object_or_404(ClientProfile, pk=pk)
+    client = get_object_or_404(clients_visible_to(request.user), pk=pk)
 
     if not can_delete_client_record(request.user):
         messages.error(
@@ -3773,4 +4023,4 @@ def request_reject(request, pk):
     messages.info(request, 'Solicitud rechazada.')
     return redirect('admin_request_list')
 
-__all__ = ['parse_optional_client_category', 'client_dashboard', 'client_tools_hub', 'client_export', 'client_reports_hub', 'client_report_list', 'client_report_ranking', 'client_report_debtors', 'client_list', 'client_category_list', 'client_category_create', 'client_category_edit', 'client_category_delete', 'client_create', 'client_edit', 'client_quick_order', 'client_cuit_lookup', 'client_order_history', 'client_transaction_set_state', 'client_password_change', 'client_password_reset_email', 'client_delete', 'request_list', 'request_approve', 'request_reject']
+__all__ = ['parse_optional_client_category', 'client_dashboard', 'client_tools_hub', 'client_export', 'client_reports_hub', 'client_report_list', 'client_report_ranking', 'client_report_debtors', 'client_list', 'client_category_list', 'client_category_create', 'client_category_edit', 'client_category_delete', 'client_create', 'client_edit', 'client_quick_order', 'client_cuit_lookup', 'client_fiscal_review_list', 'client_fiscal_review_resolve', 'client_order_history', 'client_transaction_set_state', 'client_password_change', 'client_password_reset_email', 'client_delete', 'request_list', 'request_approve', 'request_reject']

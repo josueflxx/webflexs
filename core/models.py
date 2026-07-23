@@ -1423,6 +1423,189 @@ class AdminAuditLog(models.Model):
         return f"{self.created_at:%Y-%m-%d %H:%M} {self.action}"
 
 
+class ExternalEditorJob(models.Model):
+    """Auditable, idempotent product mutation requested by the external editor."""
+
+    STATUS_PENDING = "pending"
+    STATUS_RUNNING = "running"
+    STATUS_COMPLETED = "completed"
+    STATUS_PARTIAL = "partial"
+    STATUS_FAILED = "failed"
+    STATUS_ROLLED_BACK = "rolled_back"
+    STATUS_ROLLBACK_PARTIAL = "rollback_partial"
+    STATUS_CHOICES = [
+        (STATUS_PENDING, "Pendiente"),
+        (STATUS_RUNNING, "En proceso"),
+        (STATUS_COMPLETED, "Completado"),
+        (STATUS_PARTIAL, "Completado con errores"),
+        (STATUS_FAILED, "Fallido"),
+        (STATUS_ROLLED_BACK, "Revertido"),
+        (STATUS_ROLLBACK_PARTIAL, "Reversion parcial"),
+    ]
+
+    created_by = models.ForeignKey(
+        "auth.User",
+        on_delete=models.PROTECT,
+        related_name="external_editor_jobs",
+    )
+    rolled_back_by = models.ForeignKey(
+        "auth.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="external_editor_jobs_rolled_back",
+    )
+    idempotency_key = models.CharField(max_length=120)
+    status = models.CharField(max_length=24, choices=STATUS_CHOICES, default=STATUS_PENDING)
+    request_payload = models.JSONField(default=dict)
+    total = models.PositiveIntegerField(default=0)
+    processed = models.PositiveIntegerField(default=0)
+    succeeded = models.PositiveIntegerField(default=0)
+    failed = models.PositiveIntegerField(default=0)
+    error = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    started_at = models.DateTimeField(null=True, blank=True)
+    finished_at = models.DateTimeField(null=True, blank=True)
+    rolled_back_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["created_by", "idempotency_key"],
+                name="core_editor_job_user_idempotency_uniq",
+            )
+        ]
+        indexes = [
+            models.Index(fields=["status", "created_at"]),
+            models.Index(fields=["created_by", "created_at"]),
+        ]
+
+    def __str__(self):
+        return f"Editor job {self.pk} ({self.status})"
+
+
+class ExternalEditorJobItem(models.Model):
+    """Per-product snapshot used for diagnostics and safe rollback."""
+
+    STATUS_PENDING = "pending"
+    STATUS_COMPLETED = "completed"
+    STATUS_FAILED = "failed"
+    STATUS_ROLLED_BACK = "rolled_back"
+    STATUS_ROLLBACK_CONFLICT = "rollback_conflict"
+    STATUS_CHOICES = [
+        (STATUS_PENDING, "Pendiente"),
+        (STATUS_COMPLETED, "Completado"),
+        (STATUS_FAILED, "Fallido"),
+        (STATUS_ROLLED_BACK, "Revertido"),
+        (STATUS_ROLLBACK_CONFLICT, "Conflicto al revertir"),
+    ]
+
+    job = models.ForeignKey(
+        ExternalEditorJob,
+        on_delete=models.CASCADE,
+        related_name="items",
+    )
+    product = models.ForeignKey(
+        "catalog.Product",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="external_editor_job_items",
+    )
+    product_id_snapshot = models.PositiveIntegerField()
+    sku = models.CharField(max_length=50, blank=True)
+    status = models.CharField(max_length=24, choices=STATUS_CHOICES, default=STATUS_PENDING)
+    before = models.JSONField(default=dict, blank=True)
+    after = models.JSONField(default=dict, blank=True)
+    error = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["job", "product_id_snapshot"],
+                name="core_editor_job_item_product_uniq",
+            )
+        ]
+        indexes = [models.Index(fields=["job", "status"])]
+
+    def __str__(self):
+        return f"Editor job {self.job_id}: {self.sku or self.product_id_snapshot}"
+
+
+class ExternalEditorSavedView(models.Model):
+    """Reusable server-side filter preset owned by an editor user."""
+
+    created_by = models.ForeignKey(
+        "auth.User",
+        on_delete=models.CASCADE,
+        related_name="external_editor_saved_views",
+    )
+    name = models.CharField(max_length=120)
+    filters = models.JSONField(default=dict)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["name", "id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["created_by", "name"],
+                name="core_editor_saved_view_user_name_uniq",
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.created_by}: {self.name}"
+
+
+class ExternalEditorDraft(models.Model):
+    """A named set of per-product changes that can be reviewed before publication."""
+
+    STATUS_DRAFT = "draft"
+    STATUS_PUBLISHED = "published"
+    STATUS_CANCELLED = "cancelled"
+    STATUS_CHOICES = [
+        (STATUS_DRAFT, "Borrador"),
+        (STATUS_PUBLISHED, "Publicado"),
+        (STATUS_CANCELLED, "Cancelado"),
+    ]
+
+    created_by = models.ForeignKey(
+        "auth.User",
+        on_delete=models.CASCADE,
+        related_name="external_editor_drafts",
+    )
+    name = models.CharField(max_length=160)
+    status = models.CharField(max_length=16, choices=STATUS_CHOICES, default=STATUS_DRAFT)
+    changes = models.JSONField(default=list)
+    published_job = models.ForeignKey(
+        ExternalEditorJob,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="published_drafts",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    published_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-updated_at", "-id"]
+        indexes = [
+            models.Index(
+                fields=["created_by", "status", "updated_at"],
+                name="core_editor_created_aa51a1_idx",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.name} ({self.status})"
+
+
 def generate_webhook_secret():
     return secrets.token_urlsafe(36)
 

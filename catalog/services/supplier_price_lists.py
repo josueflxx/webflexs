@@ -18,6 +18,7 @@ from django.db import transaction
 from django.utils import timezone
 from django.utils.dateparse import parse_date
 from openpyxl import load_workbook
+from openpyxl.utils import get_column_letter
 from openpyxl.utils.datetime import from_excel
 
 from catalog.models import (
@@ -57,6 +58,8 @@ OPTIONAL_TERM_FIELDS = {
 }
 SUPPORTED_EXTENSIONS = {".xlsx", ".csv"}
 MONEY_QUANTUM = Decimal("0.0001")
+COORDINATE_COLUMN_PREFIX = "__excel_column__:"
+COORDINATE_SCAN_ROWS = 25
 
 
 def hash_uploaded_file(uploaded_file):
@@ -107,6 +110,79 @@ def _header_labels(values):
     return labels
 
 
+def _coordinate_key(index):
+    return f"{COORDINATE_COLUMN_PREFIX}{index}"
+
+
+def _coordinate_columns(width):
+    return [
+        {
+            "index": index,
+            "letter": get_column_letter(index),
+            "key": _coordinate_key(index),
+        }
+        for index in range(1, width + 1)
+    ]
+
+
+def _header_columns(headers):
+    return [
+        {
+            "index": index,
+            "letter": get_column_letter(index),
+            "key": header,
+            "header": header,
+        }
+        for index, header in enumerate(headers, start=1)
+    ]
+
+
+def _last_used_column(values):
+    for index in range(len(values), 0, -1):
+        if values[index - 1] not in (None, ""):
+            return index
+    return 0
+
+
+def _coordinate_inspection(*, sheets, selected, rows, start_row, sample_limit):
+    scanned_rows = []
+    width = 0
+    scan_limit = max(COORDINATE_SCAN_ROWS, int(sample_limit or 0))
+    for row_number, values in enumerate(rows, start=start_row):
+        if not any(value not in (None, "") for value in values):
+            continue
+        values = tuple(values)
+        scanned_rows.append((row_number, values))
+        width = max(width, _last_used_column(values))
+        if len(scanned_rows) >= scan_limit:
+            break
+    if not width:
+        raise ValidationError(f"No se encontraron datos desde la fila {start_row}.")
+    columns = _coordinate_columns(width)
+    headers = [column["key"] for column in columns]
+    samples = [
+        {
+            column["key"]: _json_value(values[column["index"] - 1])
+            if column["index"] <= len(values)
+            else None
+            for column in columns
+        }
+        for _row_number, values in scanned_rows[:sample_limit]
+    ]
+    return {
+        "mode": "coordinates",
+        "sheets": sheets,
+        "sheet_name": selected,
+        "data_start_row": start_row,
+        "headers": headers,
+        "columns": columns,
+        "samples": samples,
+        "sample_row_numbers": [
+            row_number for row_number, _values in scanned_rows[:sample_limit]
+        ],
+    }
+
+
 def _open_csv(file_path):
     last_error = None
     for encoding in ("utf-8-sig", "cp1252", "latin-1"):
@@ -114,10 +190,27 @@ def _open_csv(file_path):
             handle = open(file_path, "r", encoding=encoding, newline="")
             sample = handle.read(8192)
             handle.seek(0)
+            nonempty_lines = [line for line in sample.splitlines() if line.strip()][:25]
+            preferred_delimiter = next(
+                (
+                    delimiter
+                    for delimiter in (";", "\t", "|")
+                    if nonempty_lines and all(delimiter in line for line in nonempty_lines)
+                ),
+                None,
+            )
             try:
-                dialect = csv.Sniffer().sniff(sample, delimiters=",;\t|")
+                dialect = (
+                    None
+                    if preferred_delimiter
+                    else csv.Sniffer().sniff(sample, delimiters=",;\t|")
+                )
             except csv.Error:
-                delimiter = ";" if sample.count(";") > sample.count(",") else ","
+                dialect = None
+            if preferred_delimiter or dialect is None:
+                delimiter = preferred_delimiter or (
+                    ";" if sample.count(";") > sample.count(",") else ","
+                )
 
                 class FallbackDialect(csv.excel):
                     pass
@@ -134,12 +227,19 @@ def _open_csv(file_path):
     raise ValidationError("No se pudo leer la codificacion del CSV.") from last_error
 
 
-def inspect_source_file(file_path, *, sheet_name="", header_row=1, sample_limit=5):
+def inspect_source_file(
+    file_path,
+    *,
+    sheet_name="",
+    header_row=1,
+    sample_limit=5,
+    coordinate_mode=False,
+):
     """Return sheets, unique column labels and a few JSON-safe sample rows."""
     extension = _extension(file_path)
     header_row = int(header_row or 1)
     if header_row < 1 or header_row > 500:
-        raise ValidationError("La fila de encabezado debe estar entre 1 y 500.")
+        raise ValidationError("La fila debe estar entre 1 y 500.")
 
     if extension == ".xlsx":
         try:
@@ -153,6 +253,14 @@ def inspect_source_file(file_path, *, sheet_name="", header_row=1, sample_limit=
                 raise ValidationError("El libro no contiene hojas.")
             worksheet = workbook[selected]
             rows = worksheet.iter_rows(min_row=header_row, values_only=True)
+            if coordinate_mode:
+                return _coordinate_inspection(
+                    sheets=sheets,
+                    selected=selected,
+                    rows=rows,
+                    start_row=header_row,
+                    sample_limit=sample_limit,
+                )
             header_values = next(rows, None)
             if not header_values:
                 raise ValidationError("No se encontro una fila de encabezado.")
@@ -166,7 +274,14 @@ def inspect_source_file(file_path, *, sheet_name="", header_row=1, sample_limit=
                 )
                 if len(samples) >= sample_limit:
                     break
-            return {"sheets": sheets, "sheet_name": selected, "headers": headers, "samples": samples}
+            return {
+                "mode": "headers",
+                "sheets": sheets,
+                "sheet_name": selected,
+                "headers": headers,
+                "columns": _header_columns(headers),
+                "samples": samples,
+            }
         finally:
             workbook.close()
 
@@ -175,6 +290,14 @@ def inspect_source_file(file_path, *, sheet_name="", header_row=1, sample_limit=
         rows = csv.reader(handle, dialect)
         for _ in range(header_row - 1):
             next(rows, None)
+        if coordinate_mode:
+            return _coordinate_inspection(
+                sheets=["CSV"],
+                selected="CSV",
+                rows=rows,
+                start_row=header_row,
+                sample_limit=sample_limit,
+            )
         header_values = next(rows, None)
         if not header_values:
             raise ValidationError("No se encontro una fila de encabezado en el CSV.")
@@ -186,18 +309,26 @@ def inspect_source_file(file_path, *, sheet_name="", header_row=1, sample_limit=
             samples.append({header: _json_value(value) for header, value in zip(headers, values)})
             if len(samples) >= sample_limit:
                 break
-        return {"sheets": ["CSV"], "sheet_name": "CSV", "headers": headers, "samples": samples}
+        return {
+            "mode": "headers",
+            "sheets": ["CSV"],
+            "sheet_name": "CSV",
+            "headers": headers,
+            "columns": _header_columns(headers),
+            "samples": samples,
+        }
     finally:
         handle.close()
 
 
-def iter_source_rows(file_path, *, sheet_name="", header_row=1):
+def iter_source_rows(file_path, *, sheet_name="", header_row=1, coordinate_mode=False):
     extension = _extension(file_path)
     inspection = inspect_source_file(
         file_path,
         sheet_name=sheet_name,
         header_row=header_row,
         sample_limit=0,
+        coordinate_mode=coordinate_mode,
     )
     headers = inspection["headers"]
     max_rows = int(getattr(settings, "SUPPLIER_PRICE_LIST_MAX_ROWS", 100000))
@@ -206,15 +337,18 @@ def iter_source_rows(file_path, *, sheet_name="", header_row=1):
         workbook = load_workbook(file_path, read_only=True, data_only=True)
         try:
             worksheet = workbook[inspection["sheet_name"]]
+            first_data_row = int(header_row) if coordinate_mode else int(header_row) + 1
             for offset, values in enumerate(
-                worksheet.iter_rows(min_row=int(header_row) + 1, values_only=True),
-                start=int(header_row) + 1,
+                worksheet.iter_rows(min_row=first_data_row, values_only=True),
+                start=first_data_row,
             ):
-                if offset - int(header_row) > max_rows:
+                if offset - first_data_row + 1 > max_rows:
                     raise ValidationError(f"La lista supera el limite de {max_rows} filas.")
                 if not any(value not in (None, "") for value in values):
                     continue
-                yield offset, {header: _json_value(value) for header, value in zip(headers, values)}
+                yield offset, {
+                    header: _json_value(value) for header, value in zip(headers, values)
+                }
         finally:
             workbook.close()
         return
@@ -222,10 +356,12 @@ def iter_source_rows(file_path, *, sheet_name="", header_row=1):
     handle, dialect = _open_csv(file_path)
     try:
         rows = csv.reader(handle, dialect)
-        for _ in range(int(header_row)):
+        rows_to_skip = int(header_row) - 1 if coordinate_mode else int(header_row)
+        for _ in range(rows_to_skip):
             next(rows, None)
-        for offset, values in enumerate(rows, start=int(header_row) + 1):
-            if offset - int(header_row) > max_rows:
+        first_data_row = int(header_row) if coordinate_mode else int(header_row) + 1
+        for offset, values in enumerate(rows, start=first_data_row):
+            if offset - first_data_row + 1 > max_rows:
                 raise ValidationError(f"La lista supera el limite de {max_rows} filas.")
             if not any(str(value or "").strip() for value in values):
                 continue
@@ -328,11 +464,20 @@ def _date(value):
 
 def validate_mapping(mapping):
     mapping = {str(key): str(value or "").strip() for key, value in (mapping or {}).items()}
+    if not mapping.get("supplier_code"):
+        raise ValidationError("Debes seleccionar la columna del codigo del proveedor.")
     if not mapping.get("cost"):
-        raise ValidationError("Debes mapear la columna de costo.")
-    if not any(mapping.get(field) for field in IDENTITY_FIELDS):
-        raise ValidationError("Mapea al menos codigo de proveedor, SKU interno o descripcion.")
+        raise ValidationError("Debes seleccionar la columna del precio o costo.")
+    if mapping["supplier_code"] == mapping["cost"]:
+        raise ValidationError("El codigo y el precio deben usar columnas diferentes.")
     return {key: value for key, value in mapping.items() if value}
+
+
+def mapping_uses_coordinates(mapping):
+    return any(
+        str(value or "").startswith(COORDINATE_COLUMN_PREFIX)
+        for value in (mapping or {}).values()
+    )
 
 
 def _mapped_value(raw, mapping, field):
@@ -477,11 +622,13 @@ def generate_supplier_price_list_preview(batch, *, mapping, sheet_name="", heade
         raise ValidationError("Este mismo archivo ya fue aplicado para el proveedor.")
 
     mapping = validate_mapping(mapping)
+    coordinate_mode = mapping_uses_coordinates(mapping)
     inspection = inspect_source_file(
         batch.source_file.path,
         sheet_name=sheet_name,
         header_row=header_row,
         sample_limit=0,
+        coordinate_mode=coordinate_mode,
     )
     missing_columns = sorted(set(mapping.values()) - set(inspection["headers"]))
     if missing_columns:
@@ -497,6 +644,7 @@ def generate_supplier_price_list_preview(batch, *, mapping, sheet_name="", heade
         batch.source_file.path,
         sheet_name=inspection["sheet_name"],
         header_row=header_row,
+        coordinate_mode=coordinate_mode,
     ):
         warnings = []
         supplier_code = _text(_mapped_value(raw, mapping, "supplier_code"))
@@ -791,7 +939,7 @@ def update_row_decisions(batch, decisions):
     return len(changed)
 
 
-def apply_supplier_price_list(batch, *, user):
+def apply_supplier_price_list(batch, *, user, pricing_mode=None):
     """Apply approved rows atomically and append the existing immutable cost history."""
     try:
         with transaction.atomic():
@@ -813,6 +961,11 @@ def apply_supplier_price_list(batch, *, user):
                 raise ValidationError(
                     f"Quedan {review_count} filas en revision. Decide aplicar u omitir cada una."
                 )
+            pricing_mode = str(
+                pricing_mode or locked.pricing_mode or SupplierPriceListBatch.PRICING_COST_ONLY
+            ).strip()
+            if pricing_mode not in dict(SupplierPriceListBatch.PRICING_MODE_CHOICES):
+                raise ValidationError("El modo de actualizacion de precios no es valido.")
 
             execution = ImportExecution.objects.create(
                 user=user if getattr(user, "is_authenticated", False) else None,
@@ -829,6 +982,8 @@ def apply_supplier_price_list(batch, *, user):
             created_count = 0
             updated_count = 0
             history_count = 0
+            repriced_count = 0
+            pricing_skipped_count = 0
             rows = list(
                 locked.rows.filter(decision=SupplierPriceListRow.DECISION_APPLY)
                 .select_related("matched_product", "product_supplier")
@@ -841,9 +996,14 @@ def apply_supplier_price_list(batch, *, user):
                     or SupplierPriceListRow.DECISION_APPLY not in allowed_decisions_for_row(row)
                 ):
                     raise ValidationError(f"La fila {row.row_number} no se puede aplicar.")
+                product = row.matched_product
+                previous_product_cost = Decimal(product.cost or 0)
+                previous_sale_price = Decimal(product.price or 0)
+                previous_supplier_ref_id = product.supplier_ref_id
+                previous_supplier_name = product.supplier
                 current_offer = (
                     ProductSupplier.objects.select_for_update()
-                    .filter(product=row.matched_product, supplier=locked.supplier)
+                    .filter(product=product, supplier=locked.supplier)
                     .first()
                 )
                 current_cost = current_offer.current_cost if current_offer else None
@@ -857,7 +1017,7 @@ def apply_supplier_price_list(batch, *, user):
                         f"Las condiciones comerciales de la fila {row.row_number} cambiaron desde la previsualizacion."
                     )
                 offer, history = upsert_product_supplier_offer(
-                    product=row.matched_product,
+                    product=product,
                     supplier=locked.supplier,
                     current_cost=row.proposed_cost,
                     currency=row.currency,
@@ -892,12 +1052,53 @@ def apply_supplier_price_list(batch, *, user):
                     created_count += 1
                 if history:
                     history_count += 1
+                new_sale_price = previous_sale_price
+                pricing_warning = ""
+                if pricing_mode == SupplierPriceListBatch.PRICING_PRESERVE_MARGIN and offer.is_preferred:
+                    if previous_product_cost > 0:
+                        multiplier = previous_sale_price / previous_product_cost
+                        new_sale_price = (Decimal(product.cost or 0) * multiplier).quantize(
+                            Decimal("0.01"),
+                            rounding=ROUND_HALF_UP,
+                        )
+                        if product.price != new_sale_price:
+                            product.price = new_sale_price
+                            product.save(update_fields=["price", "updated_at"])
+                            repriced_count += 1
+                    else:
+                        pricing_warning = (
+                            "No se recalculo la venta porque el costo anterior del producto era cero."
+                        )
+                        pricing_skipped_count += 1
+
+                normalized_data = dict(row.normalized_data or {})
+                normalized_data["applied_offer"] = _offer_snapshot(offer)
+                normalized_data["pricing_snapshot"] = {
+                    "mode": pricing_mode,
+                    "previous_product_cost": str(previous_product_cost),
+                    "new_product_cost": str(product.cost),
+                    "previous_sale_price": str(previous_sale_price),
+                    "new_sale_price": str(new_sale_price),
+                    "previous_supplier_ref_id": previous_supplier_ref_id,
+                    "previous_supplier_name": previous_supplier_name,
+                }
+                warnings = list(row.warnings or [])
+                if pricing_warning and pricing_warning not in warnings:
+                    warnings.append(pricing_warning)
                 row.product_supplier = offer
                 row.cost_history = history
                 row.applied = True
-                row.save(update_fields=["product_supplier", "cost_history", "applied", "updated_at"])
+                row.normalized_data = normalized_data
+                row.warnings = warnings
+                row.save(
+                    update_fields=[
+                        "product_supplier", "cost_history", "applied", "normalized_data",
+                        "warnings", "updated_at",
+                    ]
+                )
 
             locked.status = SupplierPriceListBatch.STATUS_APPLIED
+            locked.pricing_mode = pricing_mode
             locked.applied_by = user
             locked.applied_at = timezone.now()
             locked.summary = {
@@ -905,13 +1106,16 @@ def apply_supplier_price_list(batch, *, user):
                 "created_offers": created_count,
                 "updated_offers": updated_count,
                 "cost_history_rows": history_count,
+                "pricing_mode": pricing_mode,
+                "repriced_products": repriced_count,
+                "pricing_skipped": pricing_skipped_count,
             }
             locked.import_execution = execution
             locked.error_message = ""
             locked.save(
                 update_fields=[
-                    "status", "applied_by", "applied_at", "summary", "import_execution",
-                    "error_message", "updated_at",
+                    "status", "pricing_mode", "applied_by", "applied_at", "summary",
+                    "import_execution", "error_message", "updated_at",
                 ]
             )
             execution.status = ImportExecution.STATUS_COMPLETED
@@ -934,6 +1138,141 @@ def apply_supplier_price_list(batch, *, user):
             status=SupplierPriceListBatch.STATUS_APPLIED
         ).update(error_message=str(exc)[:2000])
         raise
+
+
+def rollback_supplier_price_list(batch, *, user):
+    """Safely reverse an applied supplier batch when its current values still match."""
+    with transaction.atomic():
+        locked = (
+            SupplierPriceListBatch.objects.select_for_update()
+            .select_related("supplier", "company")
+            .get(pk=batch.pk)
+        )
+        if locked.status != SupplierPriceListBatch.STATUS_APPLIED:
+            raise ValidationError("Solo se puede revertir una lista aplicada.")
+
+        reverted = 0
+        conflicts = 0
+        rows = list(
+            locked.rows.filter(applied=True)
+            .select_related("matched_product", "product_supplier")
+            .order_by("-row_number")
+        )
+        for row in rows:
+            product = Product.objects.select_for_update().get(pk=row.matched_product_id)
+            current_offer = (
+                ProductSupplier.objects.select_for_update()
+                .filter(product=product, supplier=locked.supplier)
+                .first()
+            )
+            warnings = list(row.warnings or [])
+            normalized_data = dict(row.normalized_data or {})
+            snapshot = dict(normalized_data.get("pricing_snapshot") or {})
+            expected_offer = normalized_data.get("applied_offer")
+            expected_price = snapshot.get("new_sale_price")
+            if not current_offer or current_offer.current_cost != row.proposed_cost:
+                warnings.append(
+                    "No se revirtio: el costo del proveedor cambio despues de aplicar el lote."
+                )
+                row.warnings = warnings
+                row.save(update_fields=["warnings", "updated_at"])
+                conflicts += 1
+                continue
+            if expected_offer and _offer_snapshot(current_offer) != expected_offer:
+                warnings.append(
+                    "No se revirtio: las condiciones del proveedor cambiaron despues de aplicar."
+                )
+                row.warnings = warnings
+                row.save(update_fields=["warnings", "updated_at"])
+                conflicts += 1
+                continue
+            if expected_price not in (None, "") and Decimal(product.price) != Decimal(expected_price):
+                warnings.append(
+                    "No se revirtio: el precio de venta cambio despues de aplicar el lote."
+                )
+                row.warnings = warnings
+                row.save(update_fields=["warnings", "updated_at"])
+                conflicts += 1
+                continue
+
+            previous_offer = dict(normalized_data.get("previous_offer") or {})
+            if row.previous_cost is None:
+                current_offer.status = ProductSupplier.STATUS_INACTIVE
+                current_offer.is_preferred = False
+                current_offer.notes = (
+                    f"{current_offer.notes}\nRevertido por lista de proveedor #{locked.pk}"
+                ).strip()
+                current_offer.save(update_fields=["status", "is_preferred", "notes", "updated_at"])
+                product.cost = Decimal(snapshot.get("previous_product_cost") or product.cost)
+                product.price = Decimal(snapshot.get("previous_sale_price") or product.price)
+                product.supplier_ref_id = snapshot.get("previous_supplier_ref_id")
+                product.supplier = str(snapshot.get("previous_supplier_name") or "")
+                product.save(
+                    update_fields=["cost", "price", "supplier_ref", "supplier", "updated_at"]
+                )
+            else:
+                upsert_product_supplier_offer(
+                    product=product,
+                    supplier=locked.supplier,
+                    current_cost=row.previous_cost,
+                    currency=previous_offer.get("currency") or current_offer.currency,
+                    supplier_code=previous_offer.get("supplier_code") or current_offer.supplier_code,
+                    supplier_description=(
+                        previous_offer.get("supplier_description")
+                        or current_offer.supplier_description
+                    ),
+                    discount_percentage=previous_offer.get("discount_percentage", 0),
+                    bonus_percentage=previous_offer.get("bonus_percentage", 0),
+                    tax_percentage=previous_offer.get("tax_percentage", 0),
+                    minimum_purchase_quantity=previous_offer.get("minimum_purchase_quantity", 1),
+                    is_available=previous_offer.get("is_available", True),
+                    lead_time_days=previous_offer.get("lead_time_days", 0),
+                    price_list_date=parse_date(previous_offer.get("price_list_date") or ""),
+                    source="supplier_price_list_rollback",
+                    source_file=locked.original_filename,
+                    source_row=row.row_number,
+                    import_execution=locked.import_execution,
+                    changed_by=user,
+                    reason=f"Reversion lista de proveedor #{locked.pk}",
+                    is_preferred=previous_offer.get("is_preferred", current_offer.is_preferred),
+                    status=previous_offer.get("status") or current_offer.status,
+                    match_confidence=row.match_confidence,
+                    match_method="supplier_price_list_rollback",
+                    notes=current_offer.notes,
+                )
+                if snapshot:
+                    product.refresh_from_db(fields=["price"])
+                    product.price = Decimal(snapshot.get("previous_sale_price") or product.price)
+                    product.save(update_fields=["price", "updated_at"])
+
+            normalized_data["rollback"] = {
+                "at": timezone.now().isoformat(),
+                "by": getattr(user, "username", ""),
+            }
+            row.normalized_data = normalized_data
+            row.applied = False
+            row.save(update_fields=["normalized_data", "applied", "updated_at"])
+            reverted += 1
+
+        locked.status = (
+            SupplierPriceListBatch.STATUS_ROLLED_BACK
+            if not conflicts
+            else SupplierPriceListBatch.STATUS_ROLLBACK_PARTIAL
+        )
+        locked.rolled_back_by = user
+        locked.rolled_back_at = timezone.now()
+        locked.summary = {
+            **(locked.summary or {}),
+            "rollback_reverted": reverted,
+            "rollback_conflicts": conflicts,
+        }
+        locked.save(
+            update_fields=[
+                "status", "rolled_back_by", "rolled_back_at", "summary", "updated_at",
+            ]
+        )
+    batch.refresh_from_db()
+    return batch
 
 
 def report_rows(batch):

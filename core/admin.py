@@ -13,6 +13,10 @@ from core.models import (
     UserActivity,
     CatalogAnalyticsEvent,
     AdminAuditLog,
+    ExternalEditorJob,
+    ExternalEditorJobItem,
+    ExternalEditorDraft,
+    ExternalEditorSavedView,
     ImportExecution,
 )
 
@@ -127,6 +131,68 @@ class AdminAuditLogAdmin(admin.ModelAdmin):
     list_display = ("created_at", "action", "target_type", "target_id", "user")
     list_filter = ("action", "target_type", "created_at")
     search_fields = ("action", "target_type", "target_id", "user__username")
+
+
+class ExternalEditorJobItemInline(admin.TabularInline):
+    model = ExternalEditorJobItem
+    extra = 0
+    fields = ("product_id_snapshot", "sku", "status", "error", "updated_at")
+    readonly_fields = fields
+    can_delete = False
+    max_num = 0
+
+
+@admin.register(ExternalEditorJob)
+class ExternalEditorJobAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "created_at",
+        "created_by",
+        "status",
+        "total",
+        "processed",
+        "succeeded",
+        "failed",
+    )
+    list_filter = ("status", "created_at")
+    search_fields = ("idempotency_key", "created_by__username")
+    readonly_fields = (
+        "created_by",
+        "rolled_back_by",
+        "idempotency_key",
+        "status",
+        "request_payload",
+        "total",
+        "processed",
+        "succeeded",
+        "failed",
+        "error",
+        "created_at",
+        "started_at",
+        "finished_at",
+        "rolled_back_at",
+    )
+    inlines = (ExternalEditorJobItemInline,)
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(ExternalEditorDraft)
+class ExternalEditorDraftAdmin(admin.ModelAdmin):
+    list_display = ("id", "name", "created_by", "status", "updated_at", "published_at")
+    list_filter = ("status", "updated_at")
+    search_fields = ("name", "created_by__username")
+    readonly_fields = ("published_job", "published_at", "created_at", "updated_at")
+
+
+@admin.register(ExternalEditorSavedView)
+class ExternalEditorSavedViewAdmin(admin.ModelAdmin):
+    list_display = ("name", "created_by", "updated_at")
+    search_fields = ("name", "created_by__username")
 
 
 @admin.register(ImportExecution)

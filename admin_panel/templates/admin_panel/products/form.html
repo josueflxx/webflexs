@@ -100,7 +100,7 @@
         </div>
 
         <div class="form-group">
-            <label for="price" class="form-label">Precio *</label>
+            <label for="price" class="form-label">Precio neto sin IVA *</label>
             <input type="number" 
                    step="0.01" 
                    name="price" 
@@ -109,7 +109,18 @@
                    required 
                    value="{% if product %}{{ product.price|unlocalize }}{% else %}0{% endif %}" 
                    {% if not user.is_superuser %}disabled{% endif %}>
-            <small class="text-muted">En importaciones SaaS se usa Precio Final ($) como precio de catalogo.</small>
+            <small class="text-muted">El catalogo conserva el precio sin IVA. El IVA se suma al emitir la factura electronica.</small>
+        </div>
+
+        <div class="form-group">
+            <label for="iva_rate" class="form-label">Alicuota IVA</label>
+            <select name="iva_rate" id="iva_rate" class="form-select" {% if not user.is_superuser %}disabled{% endif %}>
+                <option value="">Seleccionar antes de facturar</option>
+                {% for rate, label in iva_rate_choices %}
+                <option value="{{ rate|unlocalize }}" {% if product and product.iva_rate == rate %}selected{% elif not product and form_iva_rate == rate|stringformat:'s' %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+            <small class="text-muted">Es obligatoria para incluir el producto en un comprobante electronico.</small>
         </div>
 
         <div class="form-group">
@@ -131,6 +142,11 @@
                    class="form-input" 
                    value="{{ product.stock|default:'0' }}" 
                    {% if not user.is_superuser %}disabled{% endif %}>
+            <label class="form-label" style="margin-top: 8px;">
+                <input type="checkbox" name="tracks_stock" {% if product.tracks_stock %}checked{% endif %} {% if not user.is_superuser %}disabled{% endif %}>
+                Controlar stock para este producto
+            </label>
+            <small class="text-muted">Si esta activo, se descuenta o repone solamente cuando la factura o nota de credito obtiene CAE.</small>
         </div>
 
         <div class="form-group">
