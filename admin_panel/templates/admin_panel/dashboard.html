@@ -647,11 +647,11 @@
 <div class="dashboard-compact">
     <section class="dashboard-command-header">
         <div>
-            <span class="dashboard-command-kicker">Centro operativo</span>
-            <h2>Prioridades, movimientos y accesos diarios</h2>
+            <span class="dashboard-command-kicker">Resumen de hoy</span>
+            <h2>Tu operacion, de un vistazo</h2>
             <p>
-                La pantalla queda ordenada por uso real: primero pendientes y actividad, despues las areas de trabajo, y al final los indicadores comerciales.
-                {% if active_company %}Contexto activo: <strong>{{ active_company.name }}</strong>.{% endif %}
+                Revisa pendientes, ventas y actividad reciente sin perder de vista las herramientas de trabajo.
+                {% if active_company %}Empresa activa: <strong>{{ active_company.name }}</strong>.{% endif %}
             </p>
         </div>
         <div class="dashboard-command-actions">
@@ -666,7 +666,15 @@
         </div>
     </section>
 
-    <section class="dashboard-manager-grid" aria-label="Indicadores gerenciales">
+    <section class="dashboard-summary-section" aria-labelledby="dashboardSummaryTitle">
+        <div class="dashboard-summary-head">
+            <div>
+                <span class="dashboard-section-kicker">Indicadores</span>
+                <h3 id="dashboardSummaryTitle">Resumen comercial</h3>
+            </div>
+            <p>Facturacion, margen, pedidos y stock en el periodo actual.</p>
+        </div>
+        <div class="dashboard-manager-grid" aria-label="Indicadores gerenciales">
         <a href="{% url 'admin_fiscal_document_list' %}" class="dashboard-manager-card">
             <span>Facturado hoy</span>
             <strong>${{ today_sales.sales_total|floatformat:2 }}</strong>
@@ -697,6 +705,7 @@
             <strong>{{ critical_stock_count }}</strong>
             <small>Stock menor o igual a {{ critical_stock_threshold }} · {{ new_clients_month }} clientes nuevos</small>
         </a>
+        </div>
     </section>
 
     <section class="dashboard-control-grid">
@@ -753,6 +762,7 @@
         </article>
     </section>
 
+    <div class="dashboard-workspace-board" aria-label="Areas de trabajo">
     <section class="dashboard-function-section is-daily">
         <div class="dashboard-function-head">
             <div>
@@ -906,6 +916,8 @@
             </article>
         </div>
     </section>
+
+    </div>
 
     <section class="dashboard-rankings-section">
         <div class="dashboard-function-head">
