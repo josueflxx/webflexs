@@ -186,6 +186,24 @@
     min-height: 38px;
 }
 
+.admin-body .header-quoter-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border-color: rgba(255, 107, 53, 0.7);
+    background: linear-gradient(135deg, #ff6b35, #e94f1d);
+    color: #fff;
+    font-weight: 800;
+    box-shadow: 0 8px 20px rgba(255, 107, 53, 0.22);
+}
+
+.admin-body .header-quoter-link:hover {
+    border-color: rgba(255, 139, 92, 0.9);
+    background: linear-gradient(135deg, #ff7b46, #f05a27);
+    color: #fff;
+    transform: translateY(-1px);
+}
+
 .admin-body .admin-content {
     width: min(1660px, 100%);
     max-width: 1660px;
