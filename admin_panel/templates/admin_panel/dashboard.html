@@ -710,7 +710,7 @@
             </div>
             <div class="dashboard-priority-grid">
                 {% for item in operational_snapshot_cards %}
-                <a href="{{ item.url }}" class="dashboard-priority-item">
+                <a href="{{ item.url }}" class="dashboard-priority-item{% if item.count %} has-work{% endif %}">
                     <span>{{ item.label }}</span>
                     <strong>{{ item.count }}</strong>
                     <small>{{ item.help_text }}</small>

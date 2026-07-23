@@ -18,6 +18,7 @@
     <link rel="stylesheet" href="{% static 'core/css/admin.css' %}?v=20260602-lightmode">
     <link rel="stylesheet" href="{% static 'core/css/admin_right_sidebar.css' %}?v=4">
     <link rel="stylesheet" href="{% static 'core/css/search_suggestions.css' %}?v=5">
+    <link rel="stylesheet" href="{% static 'core/css/admin_ux.css' %}?v=20260723">
     <link rel="icon" type="image/x-icon" href="{% static 'core/img/favicon.ico' %}">
     <link rel="icon" type="image/png" sizes="32x32" href="{% static 'core/img/favicon-32.png' %}">
     <link rel="icon" type="image/png" sizes="64x64" href="{% static 'core/img/favicon-64.png' %}">
@@ -68,7 +69,7 @@
 
 <body class="admin-body">
     <div class="admin-layout" id="adminLayout">
-        <aside class="admin-sidebar">
+        <aside class="admin-sidebar" id="adminSidebar">
             <div class="sidebar-header">
                 <a href="{% url 'admin_dashboard' %}" class="sidebar-logo">
                     <img
@@ -241,14 +242,14 @@
         <main class="admin-main">
             <header class="admin-header">
                 <div class="header-title">
-                    <button type="button" class="left-sidebar-toggle" id="leftSidebarToggle" title="Menu">
+                    <button type="button" class="left-sidebar-toggle" id="leftSidebarToggle" title="Menu" aria-controls="adminSidebar" aria-expanded="false">
                         &#9776;
                     </button>
                     <h1>{% block page_title %}Dashboard{% endblock %}</h1>
                 </div>
                 <div class="header-user">
                     {% if 'global_search' in admin_capabilities %}
-                    <form method="get" action="{% url 'admin_global_search' %}" style="display:flex;gap:6px;min-width:min(360px,32vw);">
+                    <form method="get" action="{% url 'admin_global_search' %}" class="header-search">
                         <input type="search" name="q" class="form-input" placeholder="Buscar en todo..." aria-label="Buscador global">
                         <button type="submit" class="btn btn-ghost" aria-label="Buscar">&#128269;</button>
                     </form>
@@ -286,7 +287,131 @@
                     {% endif %}
                 </div>
             </header>
-            <nav class="admin-top-nav-wrap" aria-label="Paneles principales">
+
+            <nav class="admin-quick-nav-wrap" aria-label="Accesos principales">
+                <div class="admin-quick-nav">
+                    <div class="admin-quick-links">
+                        <a href="{% url 'admin_dashboard' %}" class="top-nav-item {% if request.resolver_match.url_name == 'admin_dashboard' %}active{% endif %}">
+                            <span aria-hidden="true">&#128202;</span> Dashboard
+                        </a>
+                        <a href="{% url 'admin_product_list' %}" class="top-nav-item {% if 'product' in request.resolver_match.url_name and 'uncategorized' not in request.resolver_match.url_name and 'grid_editor' not in request.resolver_match.url_name %}active{% endif %}">
+                            <span aria-hidden="true">&#128230;</span> Productos
+                        </a>
+                        <a href="{% url 'admin_client_dashboard' %}" class="top-nav-item {% if 'client' in request.resolver_match.url_name or 'admin_request' in request.resolver_match.url_name %}active{% endif %}">
+                            <span aria-hidden="true">&#128101;</span> Clientes
+                        </a>
+                        <a href="{% url 'admin_order_list' %}" class="top-nav-item {% if 'order' in request.resolver_match.url_name and 'admin_order_request' not in request.resolver_match.url_name %}active{% endif %}">
+                            <span aria-hidden="true">&#128722;</span> Pedidos
+                        </a>
+                        <a href="{% url 'admin_payment_list' %}" class="top-nav-item quick-nav-secondary {% if 'payment' in request.resolver_match.url_name %}active{% endif %}">
+                            <span aria-hidden="true">&#128179;</span> Cobros
+                        </a>
+                        <a href="{% url 'admin_fiscal_document_list' %}" class="top-nav-item quick-nav-secondary {% if 'admin_fiscal_document' in request.resolver_match.url_name %}active{% endif %}">
+                            <span aria-hidden="true">&#129534;</span> Fiscal
+                        </a>
+                    </div>
+
+                    <details class="admin-tools-menu" id="adminToolsMenu">
+                        <summary class="top-nav-item admin-tools-trigger">
+                            <span aria-hidden="true">&#9776;</span>
+                            Mas herramientas
+                            <span class="top-nav-caret" aria-hidden="true">&#9662;</span>
+                        </summary>
+                        <div class="admin-tools-panel">
+                            <section class="admin-tools-group" aria-labelledby="toolsCatalogo">
+                                <span class="admin-tools-title" id="toolsCatalogo">Catalogo</span>
+                                <a href="{% url 'admin_product_grid_editor' %}" class="admin-tool-link {% if 'grid_editor' in request.resolver_match.url_name %}is-active{% endif %}">
+                                    <span aria-hidden="true">&#128202;</span><span><strong>Editor masivo</strong><small>Precios y productos en grilla</small></span>
+                                </a>
+                                <a href="{% url 'admin_category_list' %}" class="admin-tool-link {% if 'category' in request.resolver_match.url_name and 'uncategorized' not in request.resolver_match.url_name %}is-active{% endif %}">
+                                    <span aria-hidden="true">&#128193;</span><span><strong>Categorias</strong><small>Clasificacion del catalogo</small></span>
+                                </a>
+                                <a href="{% url 'admin_brand_list' %}" class="admin-tool-link {% if 'brand' in request.resolver_match.url_name %}is-active{% endif %}">
+                                    <span aria-hidden="true">&#127991;</span><span><strong>Marcas</strong><small>Marcas y rubros asociados</small></span>
+                                </a>
+                                <a href="{% url 'admin_products_uncategorized' %}" class="admin-tool-link {% if 'uncategorized' in request.resolver_match.url_name %}is-active{% endif %}">
+                                    <span aria-hidden="true">&#128194;</span><span><strong>Sin categoria</strong><small>Productos pendientes de ordenar</small></span>
+                                </a>
+                                <a href="{% url 'admin_supplier_list' %}" class="admin-tool-link {% if 'supplier' in request.resolver_match.url_name %}is-active{% endif %}">
+                                    <span aria-hidden="true">&#127981;</span><span><strong>Proveedores</strong><small>Proveedores y articulos vinculados</small></span>
+                                </a>
+                                {% if 'run_imports' in admin_capabilities and 'manage_products' in admin_capabilities %}
+                                <a href="{% url 'admin_supplier_price_list_batches' %}" class="admin-tool-link {% if 'supplier_price_list' in request.resolver_match.url_name %}is-active{% endif %}">
+                                    <span aria-hidden="true">&#128200;</span><span><strong>Listas de proveedor</strong><small>Cargas y actualizaciones de precios</small></span>
+                                </a>
+                                {% endif %}
+                            </section>
+
+                            <section class="admin-tools-group" aria-labelledby="toolsClientes">
+                                <span class="admin-tools-title" id="toolsClientes">Clientes</span>
+                                <a href="{% url 'admin_client_list' %}" class="admin-tool-link">
+                                    <span aria-hidden="true">&#128269;</span><span><strong>Buscar clientes</strong><small>Ficha, movimientos y cuenta corriente</small></span>
+                                </a>
+                                <a href="{% url 'admin_client_create' %}" class="admin-tool-link {% if request.resolver_match.url_name == 'admin_client_create' %}is-active{% endif %}">
+                                    <span aria-hidden="true">&#10010;</span><span><strong>Agregar cliente</strong><small>Alta comercial y fiscal</small></span>
+                                </a>
+                                <a href="{% url 'admin_client_reports_hub' %}" class="admin-tool-link {% if 'client_report' in request.resolver_match.url_name %}is-active{% endif %}">
+                                    <span aria-hidden="true">&#128202;</span><span><strong>Informes</strong><small>Ranking, listado y deudores</small></span>
+                                </a>
+                                <a href="{% url 'admin_client_category_list' %}" class="admin-tool-link {% if 'client_category' in request.resolver_match.url_name %}is-active{% endif %}">
+                                    <span aria-hidden="true">&#128203;</span><span><strong>Categorias de clientes</strong><small>Descuentos y reglas comerciales</small></span>
+                                </a>
+                                <a href="{% url 'admin_client_tools_hub' %}" class="admin-tool-link {% if request.resolver_match.url_name == 'admin_client_tools_hub' or request.resolver_match.url_name == 'admin_client_export' or request.resolver_match.url_name == 'admin_import_process' %}is-active{% endif %}">
+                                    <span aria-hidden="true">&#9881;</span><span><strong>Herramientas</strong><small>Importar, exportar y revisar altas</small></span>
+                                </a>
+                            </section>
+
+                            <section class="admin-tools-group" aria-labelledby="toolsVentas">
+                                <span class="admin-tools-title" id="toolsVentas">Ventas y gestion</span>
+                                <a href="{% url 'admin_sales_workspace' %}" class="admin-tool-link {% if request.resolver_match.url_name == 'admin_sales_workspace' %}is-active{% endif %}">
+                                    <span aria-hidden="true">&#128200;</span><span><strong>Seguimiento de ventas</strong><small>Actividad y rendimiento comercial</small></span>
+                                </a>
+                                <a href="{% url 'admin_order_request_list' %}" class="admin-tool-link {% if 'admin_order_request' in request.resolver_match.url_name %}is-active{% endif %}">
+                                    <span aria-hidden="true">&#128221;</span><span><strong>Solicitudes de compra</strong><small>Pedidos recibidos desde el portal</small></span>
+                                </a>
+                                <a href="{% url 'admin_payment_list' %}" class="admin-tool-link {% if 'payment' in request.resolver_match.url_name %}is-active{% endif %}">
+                                    <span aria-hidden="true">&#128179;</span><span><strong>Cobros y saldos</strong><small>Pagos y cuenta corriente</small></span>
+                                </a>
+                                <a href="{% url 'admin_fiscal_document_list' %}" class="admin-tool-link {% if 'admin_fiscal_document' in request.resolver_match.url_name %}is-active{% endif %}">
+                                    <span aria-hidden="true">&#129534;</span><span><strong>Comprobantes fiscales</strong><small>Facturas y notas de credito</small></span>
+                                </a>
+                                <a href="{% url 'admin_clamp_quoter' %}" class="admin-tool-link {% if 'clamp_quoter' in request.resolver_match.url_name %}is-active{% endif %}">
+                                    <span aria-hidden="true">&#128208;</span><span><strong>Cotizador</strong><small>Calculo para abrazaderas a medida</small></span>
+                                </a>
+                            </section>
+
+                            <section class="admin-tools-group" aria-labelledby="toolsSistema">
+                                <span class="admin-tools-title" id="toolsSistema">Tecnica y sistema</span>
+                                <a href="{% url 'admin_clamp_request_list' %}" class="admin-tool-link {% if 'clamp_request' in request.resolver_match.url_name %}is-active{% endif %}">
+                                    <span aria-hidden="true">&#128203;</span><span><strong>Solicitudes a medida</strong><small>Trabajos tecnicos personalizados</small></span>
+                                </a>
+                                {% if user.is_superuser %}
+                                <a href="{% url 'admin_settings' %}" class="admin-tool-link {% if request.resolver_match.url_name == 'admin_settings' or request.resolver_match.url_name == 'admin_user_list' or request.resolver_match.url_name == 'admin_user_permissions' or request.resolver_match.url_name == 'admin_company_list' or request.resolver_match.url_name == 'admin_company_edit' or request.resolver_match.url_name == 'admin_fiscal_config' or request.resolver_match.url_name == 'admin_fiscal_point_create' or request.resolver_match.url_name == 'admin_fiscal_point_edit' or request.resolver_match.url_name == 'admin_fiscal_point_toggle_active' or request.resolver_match.url_name == 'admin_fiscal_point_set_default' or 'import' in request.resolver_match.url_name or 'catalog_excel' in request.resolver_match.url_name or 'sales_document_type' in request.resolver_match.url_name or 'sales_type' in request.resolver_match.url_name or 'warehouse' in request.resolver_match.url_name %}is-active{% endif %}">
+                                    <span aria-hidden="true">&#9881;</span><span><strong>Configuracion</strong><small>Empresa, permisos y preferencias</small></span>
+                                </a>
+                                {% endif %}
+                                {% if 'manage_backups' in admin_capabilities %}
+                                <a href="{% url 'admin_backup_center' %}" class="admin-tool-link {% if request.resolver_match.url_name == 'admin_backup_center' %}is-active{% endif %}">
+                                    <span aria-hidden="true">&#128190;</span><span><strong>Backups</strong><small>Copias de seguridad y restauracion</small></span>
+                                </a>
+                                {% endif %}
+                                {% if 'manage_integrations' in admin_capabilities %}
+                                <a href="{% url 'admin_webhook_center' %}" class="admin-tool-link {% if request.resolver_match.url_name == 'admin_webhook_center' %}is-active{% endif %}">
+                                    <span aria-hidden="true">&#128279;</span><span><strong>API y webhooks</strong><small>Integraciones externas</small></span>
+                                </a>
+                                {% endif %}
+                                <a href="{% url 'select_company' %}?next={{ request.get_full_path|urlencode }}" class="admin-tool-link">
+                                    <span aria-hidden="true">&#127970;</span><span><strong>Cambiar empresa</strong><small>{{ active_company.name|default:"Elegir contexto activo" }}</small></span>
+                                </a>
+                            </section>
+                        </div>
+                    </details>
+                </div>
+            </nav>
+
+            {% comment %}La navegacion extensa anterior se conserva temporalmente como referencia de rutas.{% endcomment %}
+            {% comment %}
+            <nav class="admin-top-nav-wrap admin-top-nav-legacy" aria-hidden="true">
                 <div class="admin-top-nav">
                     <div class="top-nav-group">
                         <span class="top-nav-group-label">General</span>
@@ -394,6 +519,7 @@
 
                 </div>
             </nav>
+            {% endcomment %}
 
             {% if messages %}
             <div class="admin-messages">
@@ -506,11 +632,15 @@
 
         function setLeftSidebarState(opened) {
             const adminLayout = document.getElementById('adminLayout');
+            const leftToggle = document.getElementById('leftSidebarToggle');
             if (!adminLayout) return;
             if (opened) {
                 adminLayout.classList.add('left-sidebar-open');
             } else {
                 adminLayout.classList.remove('left-sidebar-open');
+            }
+            if (leftToggle) {
+                leftToggle.setAttribute('aria-expanded', opened ? 'true' : 'false');
             }
         }
 
@@ -933,6 +1063,20 @@
             );
             setupTopNavScrollPersistence();
             setupClientsTopNavFloatingSubmenu();
+            const adminToolsMenu = document.getElementById('adminToolsMenu');
+            if (adminToolsMenu) {
+                document.addEventListener('click', function (event) {
+                    if (adminToolsMenu.open && !adminToolsMenu.contains(event.target)) {
+                        adminToolsMenu.removeAttribute('open');
+                    }
+                });
+                document.addEventListener('keydown', function (event) {
+                    if (event.key === 'Escape' && adminToolsMenu.open) {
+                        adminToolsMenu.removeAttribute('open');
+                        adminToolsMenu.querySelector('summary')?.focus();
+                    }
+                });
+            }
             const interactionEvents = ['pointerdown', 'keydown', 'mousemove', 'scroll', 'touchstart'];
             interactionEvents.forEach((eventName) => {
                 document.addEventListener(eventName, handleAdminInteractionTouch, { passive: true });
