@@ -306,6 +306,20 @@ img {
     filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.35));
 }
 
+.logo-dark-theme {
+    display: block !important;
+}
+.logo-light-theme {
+    display: none !important;
+}
+
+html[data-theme="light"] .logo-dark-theme {
+    display: none !important;
+}
+html[data-theme="light"] .logo-light-theme {
+    display: block !important;
+}
+
 .navbar-content .logo {
     margin-right: clamp(14px, 2vw, 28px);
 }
@@ -420,6 +434,27 @@ img {
 
 .cart-link:hover {
     background: rgba(255, 255, 255, 0.1);
+}
+
+.cart-icon {
+    width: 22px;
+    height: 22px;
+    display: inline-grid;
+    place-items: center;
+    color: currentColor;
+}
+
+.cart-icon svg,
+.footer-measure-icon svg,
+.omni-search-icon svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
 }
 
 .cart-badge {
@@ -885,6 +920,22 @@ img {
 
 .footer-section a:hover {
     color: var(--color-primary);
+}
+
+.footer-measure-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--color-primary);
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.footer-measure-icon {
+    width: 21px;
+    height: 21px;
+    display: inline-grid;
+    place-items: center;
 }
 
 .footer-bottom {
@@ -1416,7 +1467,10 @@ html[data-theme="light"] .omni-search-overlay {
     left: 22px;
     top: 50%;
     transform: translateY(-50%);
-    font-size: var(--font-size-2xl);
+    width: 25px;
+    height: 25px;
+    display: grid;
+    place-items: center;
     color: var(--color-primary);
     pointer-events: none;
 }
@@ -1475,10 +1529,24 @@ html[data-theme="light"] .omni-search-overlay {
 .omni-search-item-img {
     width: 48px;
     height: 48px;
-    object-fit: cover;
     border-radius: var(--radius-sm);
     background: rgba(255, 107, 53, 0.05);
     border: 1px solid var(--theme-card-border);
+    display: grid;
+    place-items: center;
+    color: var(--color-primary);
+    flex: 0 0 auto;
+}
+
+.omni-search-item-img svg {
+    width: 24px;
+    height: 24px;
+    display: block;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
 }
 
 .omni-search-item-info {
@@ -2259,4 +2327,3 @@ html[data-theme="light"] {
         background: rgba(15, 23, 42, 0.15) !important;
     }
 }
-

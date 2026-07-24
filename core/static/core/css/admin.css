@@ -194,8 +194,22 @@
     margin-bottom: 6px;
     padding: 6px 10px;
     border-radius: 10px;
-    background: rgba(255, 255, 255, 0.08);
-    border: 1px solid rgba(255, 255, 255, 0.18);
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.sidebar-brand-logo.logo-dark-theme {
+    display: block !important;
+}
+.sidebar-brand-logo.logo-light-theme {
+    display: none !important;
+}
+
+html[data-theme="light"] .sidebar-brand-logo.logo-dark-theme {
+    display: none !important;
+}
+html[data-theme="light"] .sidebar-brand-logo.logo-light-theme {
+    display: block !important;
 }
 
 

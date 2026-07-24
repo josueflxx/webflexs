@@ -13,7 +13,7 @@
 {% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="{% static 'core/css/home.css' %}?v=20260529-premium">
+<link rel="stylesheet" href="{% static 'core/css/home.css' %}?v=20260724-industrial-media">
 {% endblock %}
 
 {% block content %}
@@ -227,28 +227,55 @@
         </div>
         <div class="services-grid reveal-on-scroll">
             <div class="service-card" data-tilt>
-                <div class="service-icon">&#128230;</div>
-                <h3>Amplio Cat&aacute;logo, Amplio Stock</h3>
-                <p>
-                    M&aacute;s de 8.000 productos disponibles con stock permanente para satisfacer
-                    todas sus necesidades de repuestos.
-                </p>
+                <figure class="service-media">
+                    <img
+                        src="{% static 'core/img/home/service-stock.webp' %}"
+                        alt="Dep&oacute;sito organizado con repuestos para suspensi&oacute;n"
+                        loading="lazy"
+                        decoding="async"
+                    >
+                </figure>
+                <div class="service-card-copy">
+                    <h3>Amplio Cat&aacute;logo, Amplio Stock</h3>
+                    <p>
+                        M&aacute;s de 8.000 productos disponibles con stock permanente para satisfacer
+                        todas sus necesidades de repuestos.
+                    </p>
+                </div>
             </div>
             <div class="service-card" data-tilt>
-                <div class="service-icon">&#128295;</div>
-                <h3>Fabricaci&oacute;n Propia</h3>
-                <p>
-                    Producimos nuestras propias abrazaderas U-bolt con la m&aacute;s alta calidad
-                    y especificaciones precisas.
-                </p>
+                <figure class="service-media">
+                    <img
+                        src="{% static 'core/img/home/service-manufacturing.webp' %}?v=20260724-correct-plate-v2"
+                        alt="Abrazadera fabricada con terminaci&oacute;n de precisi&oacute;n"
+                        loading="lazy"
+                        decoding="async"
+                    >
+                </figure>
+                <div class="service-card-copy">
+                    <h3>Fabricaci&oacute;n Propia</h3>
+                    <p>
+                        Producimos nuestras propias abrazaderas U-bolt con la m&aacute;s alta calidad
+                        y especificaciones precisas.
+                    </p>
+                </div>
             </div>
             <div class="service-card" data-tilt>
-                <div class="service-icon">&#128666;</div>
-                <h3>Entregas R&aacute;pidas y Atenci&oacute;n Personalizada</h3>
-                <p>
-                    Env&iacute;os a todo el pa&iacute;s con rapidez y un equipo dedicado a resolver
-                    todas sus consultas.
-                </p>
+                <figure class="service-media">
+                    <img
+                        src="{% static 'core/img/home/service-delivery.webp' %}"
+                        alt="Log&iacute;stica preparada para el despacho de repuestos"
+                        loading="lazy"
+                        decoding="async"
+                    >
+                </figure>
+                <div class="service-card-copy">
+                    <h3>Entregas R&aacute;pidas y Atenci&oacute;n Personalizada</h3>
+                    <p>
+                        Env&iacute;os a todo el pa&iacute;s con rapidez y un equipo dedicado a resolver
+                        todas sus consultas.
+                    </p>
+                </div>
             </div>
         </div>
     </div>
@@ -266,40 +293,89 @@
         </div>
         <div class="products-grid reveal-on-scroll">
             <div class="product-category-card">
-                <div class="category-icon">&#128297;</div>
+                <div class="category-icon" aria-hidden="true">
+                    <svg viewBox="0 0 64 64">
+                        <path d="M8 39c12 13 36 13 48 0M11 31c10 11 32 11 42 0M15 23c8 8 26 8 34 0"/>
+                        <path d="M18 24v23M46 24v23"/>
+                    </svg>
+                </div>
                 <h4>El&aacute;sticos</h4>
             </div>
             <div class="product-category-card">
-                <div class="category-icon">&#9881;&#65039;</div>
+                <div class="category-icon" aria-hidden="true">
+                    <svg viewBox="0 0 64 64">
+                        <circle cx="32" cy="32" r="18"/>
+                        <circle cx="32" cy="32" r="8"/>
+                        <path d="M16 20l-5-5M48 20l5-5M16 44l-5 5M48 44l5 5"/>
+                    </svg>
+                </div>
                 <h4>Bujes</h4>
             </div>
             <div class="product-category-card">
-                <div class="category-icon">&#127981;</div>
+                <div class="category-icon" aria-hidden="true">
+                    <svg viewBox="0 0 64 64">
+                        <path d="M12 48h40V28L40 35V24l-12 8V20l-16 10z"/>
+                        <path d="M20 48V37h8v11M38 42h6M38 35h6M16 16h9"/>
+                    </svg>
+                </div>
                 <h4>Fundici&oacute;n</h4>
             </div>
             <div class="product-category-card">
-                <div class="category-icon">&#128279;</div>
+                <div class="category-icon" aria-hidden="true">
+                    <svg viewBox="0 0 64 64">
+                        <circle cx="17" cy="32" r="7"/>
+                        <circle cx="47" cy="32" r="7"/>
+                        <path d="M24 32h16M13 22v-6M51 22v-6M13 48v-6M51 48v-6"/>
+                    </svg>
+                </div>
                 <h4>Pernos</h4>
             </div>
             <div class="product-category-card">
-                <div class="category-icon">&#128295;</div>
+                <div class="category-icon" aria-hidden="true">
+                    <svg viewBox="0 0 64 64">
+                        <path d="M18 12h18l7 7-7 7H18l-7-7z"/>
+                        <path d="M27 26v27M20 33h14M20 40h14M20 47h14"/>
+                    </svg>
+                </div>
                 <h4>Buloner&iacute;a</h4>
             </div>
             <div class="product-category-card featured">
-                <div class="category-icon">&#128296;</div>
+                <div class="category-icon" aria-hidden="true">
+                    <svg viewBox="0 0 64 64">
+                        <path d="M16 48V23c0-9 7-15 16-15s16 6 16 15v25"/>
+                        <path d="M11 48h10M43 48h10M13 54h6M45 54h6"/>
+                    </svg>
+                </div>
                 <h4>Abrazaderas</h4>
                 <span class="featured-badge">Fabricaci&oacute;n propia</span>
             </div>
             <div class="product-category-card">
-                <div class="category-icon">&#128168;</div>
+                <div class="category-icon" aria-hidden="true">
+                    <svg viewBox="0 0 64 64">
+                        <path d="M20 15h24M17 23h30M17 41h30M20 49h24"/>
+                        <path d="M20 23c-5 6-5 12 0 18h24c5-6 5-12 0-18z"/>
+                        <path d="M26 31h12M26 36h12"/>
+                    </svg>
+                </div>
                 <h4>Suspensi&oacute;n Neum&aacute;tica</h4>
             </div>
             <div class="product-category-card">
-                <div class="category-icon">&#128206;</div>
+                <div class="category-icon" aria-hidden="true">
+                    <svg viewBox="0 0 64 64">
+                        <path d="M10 24h44l-5 8H15zM14 38h36l-4 8H18z"/>
+                        <path d="M21 18h22M24 52h16"/>
+                    </svg>
+                </div>
                 <h4>Insertos de El&aacute;stico</h4>
             </div>
             <div class="product-category-card">
-                <div class="category-icon">&#9878;&#65039;</div>
+                <div class="category-icon" aria-hidden="true">
+                    <svg viewBox="0 0 64 64">
+                        <path d="M8 29h48M14 29l8 15h20l8-15"/>
+                        <circle cx="32" cy="48" r="6"/>
+                        <path d="M32 12v30M25 12h14"/>
+                    </svg>
+                </div>
                 <h4>Balancines</h4>
             </div>
         </div>
@@ -448,14 +524,23 @@
         <div class="contact-grid reveal-on-scroll">
             <div class="contact-info">
                 <div class="contact-item">
-                    <span class="contact-icon">&#128205;</span>
+                    <span class="contact-icon" aria-hidden="true">
+                        <svg viewBox="0 0 64 64">
+                            <path d="M32 56s18-17 18-32a18 18 0 1 0-36 0c0 15 18 32 18 32z"/>
+                            <circle cx="32" cy="24" r="6"/>
+                        </svg>
+                    </span>
                     <div>
                         <h4>Direcci&oacute;n</h4>
                         <p>{{ site_settings.company_address }}</p>
                     </div>
                 </div>
                 <div class="contact-item">
-                    <span class="contact-icon">&#128222;</span>
+                    <span class="contact-icon" aria-hidden="true">
+                        <svg viewBox="0 0 64 64">
+                            <path d="M18 10l9 12-6 7c5 9 10 14 19 19l7-6 12 9-5 9c-2 3-6 4-10 2C22 54 10 42 2 20c-2-4-1-8 2-10z" transform="translate(2 -4) scale(.9)"/>
+                        </svg>
+                    </span>
                     <div>
                         <h4>Tel&eacute;fonos</h4>
                         <p>
@@ -467,7 +552,12 @@
                     </div>
                 </div>
                 <div class="contact-item">
-                    <span class="contact-icon">&#9993;&#65039;</span>
+                    <span class="contact-icon" aria-hidden="true">
+                        <svg viewBox="0 0 64 64">
+                            <rect x="8" y="14" width="48" height="36" rx="5"/>
+                            <path d="M10 18l22 18 22-18"/>
+                        </svg>
+                    </span>
                     <div>
                         <h4>Email</h4>
                         <p><a href="mailto:{{ site_settings.company_email }}">{{ site_settings.company_email }}</a></p>
