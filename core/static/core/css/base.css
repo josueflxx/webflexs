@@ -306,17 +306,21 @@ img {
     filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.35));
 }
 
-.logo-dark-theme {
+.logo-dark-theme,
+img.logo-dark-theme {
     display: block !important;
 }
-.logo-light-theme {
+.logo-light-theme,
+img.logo-light-theme {
     display: none !important;
 }
 
-html[data-theme="light"] .logo-dark-theme {
+html[data-theme="light"] .logo-dark-theme,
+html[data-theme="light"] img.logo-dark-theme {
     display: none !important;
 }
-html[data-theme="light"] .logo-light-theme {
+html[data-theme="light"] .logo-light-theme,
+html[data-theme="light"] img.logo-light-theme {
     display: block !important;
 }
 

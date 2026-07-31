@@ -219,143 +219,290 @@
         }
         
         .client-ledger-sales-head {
-            padding: 16px 24px;
-            border-top: 2px solid rgba(255, 107, 53, 0.8);
+            padding: 20px 24px;
+            border-top: 3px solid var(--color-primary);
             border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-            background: linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.01));
+            background: linear-gradient(135deg, rgba(255, 107, 53, 0.08), rgba(15, 23, 42, 0.7));
+            border-radius: 20px 20px 0 0;
         }
         
-        .client-ledger-plus {
-            width: 36px;
-            height: 36px;
+        .client-ledger-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 14px;
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            border-radius: 99px;
-            border: 1px solid rgba(255, 255, 255, 0.12);
-            background: rgba(255, 255, 255, 0.04);
+            background: linear-gradient(135deg, rgba(255, 107, 53, 0.22), rgba(255, 107, 53, 0.06));
+            color: var(--color-primary-light);
+            border: 1px solid rgba(255, 107, 53, 0.3);
+            box-shadow: 0 6px 16px rgba(255, 107, 53, 0.15);
+            flex: 0 0 auto;
+        }
+        
+        .client-ledger-plus {
+            height: 38px;
+            padding: 0 16px;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            border-radius: 12px;
+            border: 1px solid rgba(255, 107, 53, 0.4);
+            background: linear-gradient(135deg, var(--color-primary), var(--color-primary-dark));
             color: #fff;
-            font-size: 1.2rem;
+            font-size: 0.84rem;
+            font-weight: 600;
             cursor: pointer;
+            box-shadow: 0 4px 14px rgba(255, 107, 53, 0.28);
             transition: var(--transition-smooth);
         }
         
         .client-ledger-plus:hover {
-            background: var(--color-primary);
+            background: linear-gradient(135deg, var(--color-primary-light), var(--color-primary));
             border-color: var(--color-primary-light);
-            transform: scale(1.05);
+            transform: translateY(-1px);
+            box-shadow: 0 6px 20px rgba(255, 107, 53, 0.4);
         }
         
         .client-ledger-tabs {
-            padding: 0 24px;
-            gap: 0;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            margin: 16px 24px 0;
+            padding: 6px;
+            gap: 6px;
+            border-radius: 14px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            background: rgba(15, 23, 42, 0.65);
             overflow-x: auto;
-            background: rgba(255, 255, 255, 0.01);
+            justify-content: flex-start;
         }
         
         .client-ledger-tab {
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            min-height: 42px;
-            padding: 0 20px;
-            border-right: 1px solid rgba(255, 255, 255, 0.08);
-            color: #d8dfeb;
+            height: 38px;
+            padding: 0 18px;
+            border-radius: 10px;
+            border: 0;
+            color: #94a3b8;
             text-decoration: none;
             white-space: nowrap;
-            background: rgba(255, 255, 255, 0.02);
-            font-size: 0.85rem;
+            background: transparent;
+            font-size: 0.84rem;
             font-weight: 500;
             transition: var(--transition-smooth);
         }
         
         .client-ledger-tab:first-child {
-            border-left: 1px solid rgba(255, 255, 255, 0.08);
+            border-left: 0;
         }
         
-        .client-ledger-tab:hover {
-            background: rgba(255, 255, 255, 0.05);
-            color: #fff;
+        .client-ledger-tab:hover:not(.active) {
+            background: rgba(255, 255, 255, 0.06);
+            color: #f1f5f9;
         }
         
         .client-ledger-tab.active {
-            background: linear-gradient(180deg, rgba(255, 107, 53, 0.16), rgba(255, 107, 53, 0.06));
-            color: #fff;
-            box-shadow: inset 0 -2px 0 var(--color-primary);
+            background: linear-gradient(135deg, rgba(255, 107, 53, 0.28), rgba(255, 107, 53, 0.14));
+            border: 1px solid rgba(255, 107, 53, 0.4);
+            color: #ffffff;
+            font-weight: 600;
+            box-shadow: 0 4px 12px rgba(255, 107, 53, 0.18);
         }
         
         .client-ledger-open-row {
-            padding: 16px 24px 0;
+            padding: 20px 24px 0;
+        }
+        
+        .client-ledger-subtabs {
+            gap: 8px;
         }
         
         .client-ledger-subtab {
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            padding: 6px 14px;
+            padding: 6px 16px;
             border-radius: 99px;
-            border: 1px solid rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.1);
             background: rgba(255, 255, 255, 0.03);
-            color: #e7edf7;
+            color: #94a3b8;
             text-decoration: none;
             font-size: 0.8rem;
+            font-weight: 500;
             transition: var(--transition-smooth);
         }
         
         .client-ledger-subtab:hover {
-            border-color: rgba(255, 255, 255, 0.2);
+            border-color: rgba(255, 255, 255, 0.22);
             background: rgba(255, 255, 255, 0.06);
+            color: #f8fafc;
         }
         
         .client-ledger-subtab.active {
-            background: rgba(255, 107, 53, 0.12);
-            border-color: rgba(255, 107, 53, 0.35);
-            color: var(--color-primary-light);
+            background: rgba(255, 107, 53, 0.18);
+            border-color: rgba(255, 107, 53, 0.45);
+            color: #ff8c5a;
+            font-weight: 600;
         }
         
         .client-ledger-open-grid {
             display: grid;
             grid-template-columns: repeat(2, minmax(0, 1fr));
-            gap: 12px;
+            gap: 14px;
             padding: 16px 24px 0;
         }
         
         .client-ledger-open-item,
         .client-ledger-activity-item {
-            padding: 16px;
+            padding: 18px 20px;
             border-radius: 16px;
-            border: 1px solid rgba(255, 255, 255, 0.06);
-            background: rgba(255, 255, 255, 0.01);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            background: rgba(15, 23, 42, 0.4);
             backdrop-filter: var(--glass-blur);
             transition: var(--transition-smooth);
         }
         
         .client-ledger-open-item:hover,
         .client-ledger-activity-item:hover {
-            border-color: rgba(255, 255, 255, 0.12);
-            background: rgba(255, 255, 255, 0.025);
+            border-color: rgba(255, 107, 53, 0.2);
+            background: rgba(15, 23, 42, 0.6);
+            transform: translateY(-1px);
+        }
+
+        .client-ledger-open-item.is-empty {
+            grid-column: 1 / -1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 36px 24px;
+            border: 1px dashed rgba(255, 255, 255, 0.12);
+            background: rgba(15, 23, 42, 0.3);
+            border-radius: 16px;
+        }
+
+        .client-ledger-open-item.is-empty .empty-state-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(255, 255, 255, 0.04);
+            color: #64748b;
+            margin-bottom: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.06);
+        }
+
+        .client-ledger-open-item.is-empty p {
+            margin: 0;
+            color: #94a3b8;
+            font-size: 0.88rem;
         }
         
         .client-ledger-open-copy {
             display: grid;
             gap: 6px;
             color: #c9d1de;
-            font-size: 0.82rem;
+            font-size: 0.84rem;
         }
         
         .client-ledger-table-card {
             border-radius: 16px;
             overflow: hidden;
-            border: 1px solid rgba(255, 255, 255, 0.06);
-            background: rgba(255, 255, 255, 0.015);
-            box-shadow: 0 10px 24px rgba(0,0,0,0.12);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            background: rgba(15, 23, 42, 0.4);
+            box-shadow: 0 10px 28px rgba(0,0,0,0.18);
         }
         
         .client-ledger-table-head {
-            padding: 16px 20px;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+            padding: 18px 24px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
             background: rgba(255, 255, 255, 0.02);
+        }
+
+        .admin-table th {
+            padding: 14px 18px;
+            color: #cbd5e1;
+            font-size: 0.74rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            background: rgba(255, 255, 255, 0.02);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .admin-table td {
+            padding: 14px 18px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+            font-size: 0.85rem;
+            color: #e2e8f0;
+        }
+
+        .admin-table tr:hover td {
+            background: rgba(255, 107, 53, 0.03);
+        }
+
+        .table-empty-cell {
+            padding: 40px 20px !important;
+            text-align: center;
+        }
+
+        .empty-table-wrap {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            color: #64748b;
+        }
+
+        .empty-table-wrap p {
+            margin: 0;
+            color: #94a3b8;
+            font-size: 0.88rem;
+        }
+
+        .client-ledger-details {
+            margin: 20px 24px 24px;
+            border-radius: 14px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            background: rgba(15, 23, 42, 0.45);
+            padding: 14px 18px;
+            transition: var(--transition-smooth);
+        }
+
+        .client-ledger-details[open] {
+            border-color: rgba(255, 107, 53, 0.2);
+            background: rgba(15, 23, 42, 0.65);
+        }
+
+        .client-ledger-summary {
+            cursor: pointer;
+            color: #f1f5f9;
+            font-weight: 600;
+            font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            user-select: none;
+            outline: none;
+            list-style: none;
+        }
+
+        .client-ledger-summary::-webkit-details-marker {
+            display: none;
+        }
+
+        .summary-chevron {
+            color: #94a3b8;
+            transition: transform 0.22s ease;
+        }
+
+        .client-ledger-details[open] .summary-chevron {
+            transform: rotate(180deg);
+            color: var(--color-primary-light);
         }
         
         .client-ledger-pills {
@@ -574,6 +721,11 @@
                 </div>
             </div>
             <div class="client-ledger-actions">
+                {% if active_company and not client_company_missing %}
+                <a href="{% url 'admin_client_tasks' client.pk %}?company_id={{ active_company.pk }}" class="btn btn-primary">
+                    Tareas{% if pending_client_tasks %} ({{ pending_client_tasks }}){% endif %}
+                </a>
+                {% endif %}
                 {% if can_edit_client_profile %}<a href="{% url 'admin_client_edit' client.pk %}" class="btn btn-outline">Editar cliente</a>{% endif %}
                 <a href="{% url 'admin_client_list' %}" class="btn btn-outline">Volver a clientes</a>
             </div>
@@ -631,6 +783,13 @@
                 </article>
             </div>
 
+            {% if client.commercial_observation %}
+            <article class="client-ledger-box" style="margin-bottom:16px;">
+                <span class="client-ledger-label">Observacion comercial</span>
+                <p style="margin:0;color:#cbd3de;line-height:1.55;">{{ client.commercial_observation|linebreaksbr }}</p>
+            </article>
+            {% endif %}
+
             <div class="client-ledger-grid wide">
                 <article class="client-ledger-box">
                     <span class="client-ledger-label">Situacion del cliente</span>
@@ -672,7 +831,9 @@
     <section class="client-ledger-panel is-sales">
         <div class="client-ledger-sales-head">
             <div class="client-ledger-title-row">
-                <div class="client-ledger-icon" aria-hidden="true">&#128179;</div>
+                <div class="client-ledger-icon" aria-hidden="true">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
+                </div>
                 <div>
                     <h2>Ventas del cliente {{ client.company_name }}</h2>
                     <p>Centro comercial del cliente para cuenta corriente, pagos, facturas, remitos, pedidos y presupuestos.</p>
@@ -680,7 +841,10 @@
             </div>
             {% if quick_sales_document_actions %}
             <div class="client-ledger-menu" data-movement-menu>
-                <button type="button" class="client-ledger-plus" data-movement-toggle title="Nuevo movimiento">+</button>
+                <button type="button" class="client-ledger-plus" data-movement-toggle title="Nuevo movimiento">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                    <span>Nuevo movimiento</span>
+                </button>
                 <div class="client-ledger-popover" data-movement-popover hidden>
                     <div class="client-ledger-head" style="padding:0 0 10px;background:none;border:0;">
                         <div>
@@ -717,7 +881,7 @@
 
         <div class="client-ledger-open-row">
             <div>
-                <h3 style="margin:0;color:#fff">Movimientos abiertos</h3>
+                <h3 style="margin:0;color:#fff;font-weight:700;font-size:1.05rem;">Movimientos abiertos</h3>
                 <p>Borradores y anulados quedan aca hasta que se cierren o revisen.</p>
             </div>
             <div class="client-ledger-subtabs">
@@ -743,7 +907,12 @@
                 </div>
             </article>
             {% empty %}
-            <article class="client-ledger-open-item">{% if open_state_tab == 'voided' %}No hay movimientos anulados para este cliente en la empresa activa.{% else %}No hay movimientos abiertos para este cliente en la empresa activa.{% endif %}</article>
+            <article class="client-ledger-open-item is-empty">
+                <div class="empty-state-icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                </div>
+                <p>{% if open_state_tab == 'voided' %}No hay movimientos anulados para este cliente en la empresa activa.{% else %}No hay movimientos abiertos para este cliente en la empresa activa.{% endif %}</p>
+            </article>
             {% endfor %}
         </div>
 
@@ -762,7 +931,12 @@
                 </div>
             </article>
             {% empty %}
-            <article class="client-ledger-open-item">Sin actividad reciente para este cliente.</article>
+            <article class="client-ledger-open-item is-empty">
+                <div class="empty-state-icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                </div>
+                <p>Sin actividad reciente para este cliente.</p>
+            </article>
             {% endfor %}
         </div>
         {% else %}
@@ -771,8 +945,8 @@
                 <div class="client-ledger-table-card">
                     <div class="client-ledger-table-head">
                         <div>
-                            <h3>{{ active_ledger_title }}</h3>
-                            <p>{{ active_ledger_subtitle }}</p>
+                            <h3 style="margin:0;color:#fff;font-weight:700;font-size:1.05rem;">{{ active_ledger_title }}</h3>
+                            <p style="margin:4px 0 0;color:#94a3b8;font-size:0.84rem;">{{ active_ledger_subtitle }}</p>
                         </div>
                         {% if movement_tab == 'account' %}
                         <div class="client-ledger-pills">
@@ -815,12 +989,19 @@
                                 </td>
                             </tr>
                             {% empty %}
-                            <tr><td colspan="{% if movement_tab == 'account' %}9{% else %}7{% endif %}" class="text-center text-muted">No hay movimientos para este filtro.</td></tr>
+                            <tr>
+                                <td colspan="{% if movement_tab == 'account' %}9{% else %}7{% endif %}" class="table-empty-cell">
+                                    <div class="empty-table-wrap">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                                        <p>No hay movimientos registrados para este filtro.</p>
+                                    </div>
+                                </td>
+                            </tr>
                             {% endfor %}
                         </tbody>
                     </table>
                     <div class="client-ledger-table-foot">
-                        <span>{{ ledger_rows_total }} movimientos | mostrando {{ ledger_rows|length }}</span>
+                        <span><strong>{{ ledger_rows_total }}</strong> movimientos | mostrando {{ ledger_rows|length }}</span>
                         <div class="client-ledger-inline">
                             {% if ledger_hidden_count > 0 and ledger_more_url %}<a href="{{ ledger_more_url }}" class="btn btn-outline btn-sm">Mostrar mas</a>{% endif %}
                             {% if ledger_hidden_count > 0 and ledger_show_all_url %}<a href="{{ ledger_show_all_url }}" class="btn btn-outline btn-sm">Mostrar todo</a>{% endif %}
@@ -830,13 +1011,16 @@
             </div>
         {% endif %}
 
-        <details class="client-ledger-table-wrap" style="padding-top:0;">
-            <summary style="cursor:pointer;color:#fff;padding:0 0 10px;">Detalle tecnico de documentos</summary>
-            <div class="client-ledger-grid">
-                <article class="client-ledger-box"><span class="client-ledger-label">Internos</span><strong style="color:#fff">{{ documents_summary.internal_count }}</strong><div style="margin-top:6px;color:#aab4c5">{{ documents_summary.latest_internal_label }}</div></article>
-                <article class="client-ledger-box"><span class="client-ledger-label">Fiscales</span><strong style="color:#fff">{{ documents_summary.fiscal_count }}</strong><div style="margin-top:6px;color:#aab4c5">{{ documents_summary.latest_fiscal_label }}</div></article>
-                <article class="client-ledger-box"><span class="client-ledger-label">SaaS</span><strong style="color:#fff">{{ documents_summary.official_count }}</strong><div style="margin-top:6px;color:#aab4c5">{{ documents_summary.latest_document_hint }}</div></article>
-                <article class="client-ledger-box"><span class="client-ledger-label">Ultimo documento</span><strong style="color:#fff">{{ documents_summary.latest_document_label }}</strong><div style="margin-top:6px;color:#aab4c5">{{ documents_summary.latest_document_hint }}</div></article>
+        <details class="client-ledger-details">
+            <summary class="client-ledger-summary">
+                <span>Detalle técnico de documentos</span>
+                <svg class="summary-chevron" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+            </summary>
+            <div class="client-ledger-grid" style="margin-top:16px;margin-bottom:0;">
+                <article class="client-ledger-box"><span class="client-ledger-label">Internos</span><strong style="color:#fff;font-size:1.3rem;">{{ documents_summary.internal_count }}</strong><div style="margin-top:6px;color:#aab4c5;font-size:0.8rem;">{{ documents_summary.latest_internal_label }}</div></article>
+                <article class="client-ledger-box"><span class="client-ledger-label">Fiscales</span><strong style="color:#fff;font-size:1.3rem;">{{ documents_summary.fiscal_count }}</strong><div style="margin-top:6px;color:#aab4c5;font-size:0.8rem;">{{ documents_summary.latest_fiscal_label }}</div></article>
+                <article class="client-ledger-box"><span class="client-ledger-label">SaaS</span><strong style="color:#fff;font-size:1.3rem;">{{ documents_summary.official_count }}</strong><div style="margin-top:6px;color:#aab4c5;font-size:0.8rem;">{{ documents_summary.latest_document_hint }}</div></article>
+                <article class="client-ledger-box"><span class="client-ledger-label">Ultimo documento</span><strong style="color:#fff;font-size:1.1rem;">{{ documents_summary.latest_document_label }}</strong><div style="margin-top:6px;color:#aab4c5;font-size:0.8rem;">{{ documents_summary.latest_document_hint }}</div></article>
             </div>
         </details>
     </section>
