@@ -14,10 +14,10 @@
         
         .client-ledger-panel {
             border-radius: 20px;
-            border: 1px solid var(--glass-border-light);
-            background: radial-gradient(circle at top right, rgba(255, 107, 53, 0.04), transparent 45%), var(--glass-bg);
+            border: 1px solid rgba(255, 107, 53, 0.15);
+            background: linear-gradient(145deg, rgba(16, 22, 34, 0.95), rgba(11, 15, 25, 0.98));
             backdrop-filter: var(--glass-blur);
-            box-shadow: var(--glass-shadow);
+            box-shadow: 0 16px 48px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.05);
             overflow: hidden;
             transition: var(--transition-smooth);
         }
@@ -39,9 +39,11 @@
         }
         
         .client-ledger-head {
-            padding: 20px 24px;
-            background: linear-gradient(180deg, rgba(255, 107, 53, 0.12), rgba(255, 107, 53, 0.03));
-            border-bottom: 1px solid rgba(255, 107, 53, 0.18);
+            padding: 22px 26px;
+            border-top: 3px solid var(--color-primary);
+            background: linear-gradient(135deg, rgba(255, 107, 53, 0.1), rgba(15, 23, 42, 0.7));
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 20px 20px 0 0;
         }
         
         .client-ledger-title-row {
@@ -52,16 +54,16 @@
         }
         
         .client-ledger-icon {
-            width: 50px;
-            height: 50px;
-            border-radius: 12px;
+            width: 48px;
+            height: 48px;
+            border-radius: 14px;
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            background: rgba(255, 255, 255, 0.95);
-            color: #111722;
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            font-size: 1.4rem;
+            background: linear-gradient(135deg, rgba(255, 107, 53, 0.22), rgba(255, 107, 53, 0.06));
+            color: var(--color-primary-light);
+            border: 1px solid rgba(255, 107, 53, 0.3);
+            box-shadow: 0 6px 16px rgba(255, 107, 53, 0.15);
             flex: 0 0 auto;
         }
         
@@ -69,23 +71,25 @@
         .client-ledger-sales-head h2,
         .client-ledger-sales-head h3 {
             margin: 0;
-            color: #fff;
-            font-weight: 600;
+            color: #f8fafc;
+            font-weight: 700;
+            font-size: 1.25rem;
+            letter-spacing: -0.01em;
         }
         
         .client-ledger-head p,
         .client-ledger-sales-head p,
         .client-ledger-open-row p,
         .client-ledger-table-head p {
-            margin: 6px 0 0;
-            color: #c7d0df;
-            font-size: 0.78rem;
+            margin: 4px 0 0;
+            color: #94a3b8;
+            font-size: 0.82rem;
             line-height: 1.45;
         }
         
         .client-ledger-body,
         .client-ledger-table-wrap {
-            padding: 20px 24px;
+            padding: 24px;
         }
         
         .client-ledger-grid {
@@ -100,32 +104,34 @@
         }
         
         .client-ledger-box {
-            padding: 18px;
+            padding: 20px;
             border-radius: 16px;
-            border: 1px solid rgba(255, 255, 255, 0.06);
-            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            background: rgba(15, 23, 42, 0.4);
             backdrop-filter: var(--glass-blur);
-            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
             min-width: 0;
             transition: var(--transition-smooth);
         }
         
         .client-ledger-box:hover {
-            border-color: rgba(255, 107, 53, 0.15);
-            background: rgba(255, 255, 255, 0.035);
+            border-color: rgba(255, 107, 53, 0.25);
+            background: rgba(15, 23, 42, 0.6);
+            transform: translateY(-1px);
         }
         
         .client-ledger-label {
             display: inline-flex;
             align-items: center;
-            padding: 4px 8px;
+            padding: 4px 10px;
+            border-radius: 6px;
             margin-bottom: 14px;
             border-left: 3px solid var(--color-primary);
-            background: rgba(255, 107, 53, 0.1);
-            color: var(--color-primary-light);
-            font-size: 0.68rem;
+            background: rgba(255, 107, 53, 0.12);
+            color: #ff8c5a;
+            font-size: 0.72rem;
             font-weight: 700;
-            letter-spacing: 0.04em;
+            letter-spacing: 0.05em;
             text-transform: uppercase;
         }
         
@@ -134,18 +140,19 @@
             grid-template-columns: minmax(110px, 140px) minmax(0, 1fr);
             gap: 8px 12px;
             margin: 0;
-            font-size: 0.82rem;
+            font-size: 0.84rem;
         }
         
         .client-ledger-data dt {
-            color: #a6b0c0;
+            color: #94a3b8;
             font-weight: 600;
             margin: 0;
         }
         
         .client-ledger-data dd {
             margin: 0;
-            color: #fff;
+            color: #f1f5f9;
+            font-weight: 500;
             overflow-wrap: anywhere;
         }
         
@@ -156,37 +163,42 @@
         }
         
         .client-ledger-kpi {
-            padding: 12px 14px;
-            border-radius: 12px;
-            border: 1px solid rgba(255, 255, 255, 0.06);
-            background: rgba(255, 255, 255, 0.03);
+            padding: 14px 16px;
+            border-radius: 14px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            background: rgba(255, 255, 255, 0.02);
             transition: var(--transition-smooth);
         }
         
         .client-ledger-kpi:hover {
-            border-color: rgba(255, 255, 255, 0.12);
+            border-color: rgba(255, 255, 255, 0.15);
+            background: rgba(255, 255, 255, 0.04);
         }
         
         .client-ledger-kpi span {
             display: block;
-            color: #9faac0;
-            font-size: 0.68rem;
+            color: #94a3b8;
+            font-size: 0.72rem;
             text-transform: uppercase;
-            letter-spacing: 0.08em;
+            letter-spacing: 0.06em;
+            font-weight: 600;
         }
         
         .client-ledger-kpi strong {
             display: block;
             margin-top: 6px;
-            color: #fff;
-            font-size: 1.25rem;
+            color: #f8fafc;
+            font-size: 1.3rem;
             font-weight: 700;
         }
         
         /* Semantics for Ledger KPIs */
         .client-ledger-kpi:nth-child(4) { /* Saldo KPI card */
-            border-color: rgba(255, 107, 53, 0.15);
-            background: rgba(255, 107, 53, 0.04);
+            border-color: rgba(255, 107, 53, 0.3);
+            background: rgba(255, 107, 53, 0.08);
+        }
+        .client-ledger-kpi:nth-child(4) strong {
+            color: #ff8c5a;
         }
         .client-ledger-kpi:nth-child(4) strong {
             color: var(--color-primary-light);
@@ -714,20 +726,31 @@
     <section class="client-ledger-panel">
         <div class="client-ledger-head">
             <div class="client-ledger-title-row">
-                <div class="client-ledger-icon" aria-hidden="true">&#128101;</div>
+                <div class="client-ledger-icon" aria-hidden="true">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                </div>
                 <div>
                     <h2>Ver el cliente {{ client.company_name }}</h2>
-                    <p>Legajo comercial del cliente con datos de contacto, condicion fiscal, situacion actual y acceso rapido a ventas, cobros y cuenta corriente.</p>
+                    <p>Legajo comercial del cliente con datos de contacto, condición fiscal, situación actual y acceso rápido a ventas, cobros y cuenta corriente.</p>
                 </div>
             </div>
             <div class="client-ledger-actions">
                 {% if active_company and not client_company_missing %}
                 <a href="/admin-panel/clientes/{{ client.pk }}/tareas/?company_id={{ active_company.pk }}" class="btn btn-primary">
-                    Tareas{% if pending_client_tasks %} ({{ pending_client_tasks }}){% endif %}
+                    <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9ZM10 21h4"/></svg>
+                    <span>Tareas{% if pending_client_tasks %} ({{ pending_client_tasks }}){% endif %}</span>
                 </a>
                 {% endif %}
-                {% if can_edit_client_profile %}<a href="{% url 'admin_client_edit' client.pk %}" class="btn btn-outline">Editar cliente</a>{% endif %}
-                <a href="{% url 'admin_client_list' %}" class="btn btn-outline">Volver a clientes</a>
+                {% if can_edit_client_profile %}
+                <a href="{% url 'admin_client_edit' client.pk %}" class="btn btn-outline">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                    <span>Editar cliente</span>
+                </a>
+                {% endif %}
+                <a href="{% url 'admin_client_list' %}" class="btn btn-outline">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+                    <span>Volver a clientes</span>
+                </a>
             </div>
         </div>
 

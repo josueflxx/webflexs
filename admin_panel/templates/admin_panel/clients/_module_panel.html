@@ -5,7 +5,11 @@
     </div>
 
     <div class="client-module-head">
-        <div class="client-module-icon" aria-hidden="true">&#128101;</div>
+        <div class="client-module-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none">
+                <path d="M16 20v-1.4a4.1 4.1 0 0 0-4.1-4.1H7.1A4.1 4.1 0 0 0 3 18.6V20M9.5 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM15.5 4.2a3.6 3.6 0 0 1 0 6.6M21 20v-1.4a4.1 4.1 0 0 0-3.1-4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+            </svg>
+        </div>
         <div class="client-module-copy">
             <span class="client-module-kicker">Modulo comercial</span>
             <h2>Clientes</h2>
@@ -27,7 +31,9 @@
 
     <div class="client-module-grid">
         <a href="{% url 'admin_client_list' %}" class="client-module-card {% if client_panel == 'search' %}is-active{% endif %}">
-            <div class="client-module-card-icon" aria-hidden="true">&#128269;</div>
+            <div class="client-module-card-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none"><circle cx="10.5" cy="10.5" r="6.5" stroke="currentColor" stroke-width="1.8"/><path d="m15.5 15.5 5 5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+            </div>
             <div class="client-module-card-copy">
                 <span class="client-module-card-label">Buscar clientes</span>
                 <strong>Ficha comercial</strong>
@@ -36,7 +42,9 @@
         </a>
 
         <a href="{% url 'admin_client_create' %}" class="client-module-card {% if client_panel == 'add' %}is-active{% endif %}">
-            <div class="client-module-card-icon" aria-hidden="true">&#10010;</div>
+            <div class="client-module-card-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none"><path d="M15 20v-1.5a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4V20M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM18 8v6M15 11h6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+            </div>
             <div class="client-module-card-copy">
                 <span class="client-module-card-label">Agregar clientes</span>
                 <strong>Nuevo cliente</strong>
@@ -44,8 +52,21 @@
             </div>
         </a>
 
+        <a href="/admin-panel/clientes/tareas/" class="client-module-card {% if client_panel == 'tasks' %}is-active{% endif %}">
+            <div class="client-module-card-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9ZM10 21h4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </div>
+            <div class="client-module-card-copy">
+                <span class="client-module-card-label">Seguimiento</span>
+                <strong>Tareas y recordatorios</strong>
+                <small>Agenda personal, vencimientos y seguimiento del equipo comercial.</small>
+            </div>
+        </a>
+
         <a href="{% url 'admin_client_reports_hub' %}" class="client-module-card {% if client_panel == 'reports' %}is-active{% endif %}">
-            <div class="client-module-card-icon" aria-hidden="true">&#128202;</div>
+            <div class="client-module-card-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none"><path d="M4 20V10m6 10V4m6 16v-7m4 7H2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+            </div>
             <div class="client-module-card-copy">
                 <span class="client-module-card-label">Informes</span>
                 <strong>Lista y ranking</strong>
@@ -54,7 +75,9 @@
         </a>
 
         <a href="{% url 'admin_client_tools_hub' %}" class="client-module-card {% if client_panel == 'tools' %}is-active{% endif %}">
-            <div class="client-module-card-icon" aria-hidden="true">&#9881;</div>
+            <div class="client-module-card-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none"><path d="M4 7h10M4 17h16M18 7h2M4 12h3M11 12h9" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><circle cx="16" cy="7" r="2" stroke="currentColor" stroke-width="1.7"/><circle cx="9" cy="12" r="2" stroke="currentColor" stroke-width="1.7"/></svg>
+            </div>
             <div class="client-module-card-copy">
                 <span class="client-module-card-label-row">
                     <span class="client-module-card-label">Herramientas</span>
@@ -65,7 +88,9 @@
         </a>
 
         <a href="{% url 'admin_client_category_list' %}" class="client-module-card {% if client_panel == 'settings' %}is-active{% endif %}">
-            <div class="client-module-card-icon" aria-hidden="true">&#128203;</div>
+            <div class="client-module-card-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none"><path d="M7 4h10v17H7V4Z" stroke="currentColor" stroke-width="1.7"/><path d="M9 4V2h6v2M10 9h4M10 13h4M10 17h3" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+            </div>
             <div class="client-module-card-copy">
                 <span class="client-module-card-label">Categorias</span>
                 <strong>Tipos de cliente</strong>
