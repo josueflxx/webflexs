@@ -199,28 +199,30 @@
         grid-template-columns: minmax(0, 1fr) auto;
         gap: 16px;
         align-items: center;
-        padding: 20px;
-        border: 1px solid var(--glass-border);
-        border-radius: 16px;
-        background: radial-gradient(circle at top left, rgba(255, 107, 53, 0.08), transparent 36%), var(--glass-bg);
+        padding: 22px 26px;
+        border-top: 3px solid var(--color-primary);
+        border: 1px solid rgba(255, 107, 53, 0.18);
+        border-radius: 20px;
+        background: linear-gradient(135deg, rgba(255, 107, 53, 0.1), rgba(15, 23, 42, 0.75));
         backdrop-filter: var(--glass-blur);
-        box-shadow: var(--glass-shadow);
-        margin-bottom: 12px;
+        box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
+        margin-bottom: 16px;
     }
     
     .dashboard-command-header h2 {
-        margin: 8px 0 6px;
-        font-size: 1.35rem;
+        margin: 6px 0;
+        font-size: 1.45rem;
         font-weight: 700;
         line-height: 1.15;
-        color: #fff;
+        color: #f8fafc;
+        letter-spacing: -0.01em;
     }
     
     .dashboard-command-header p {
         margin: 0;
         max-width: 96ch;
-        color: rgba(210, 217, 226, 0.75);
-        font-size: 0.82rem;
+        color: #94a3b8;
+        font-size: 0.84rem;
         line-height: 1.45;
     }
     
@@ -236,53 +238,62 @@
         display: grid;
         gap: 4px;
         min-width: 160px;
-        padding: 10px 12px;
-        border-radius: 10px;
-        border: 1px solid rgba(255, 255, 255, 0.06);
-        background: rgba(255, 255, 255, 0.03);
-        color: rgba(210, 217, 226, 0.7);
+        padding: 10px 14px;
+        border-radius: 12px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        background: rgba(15, 23, 42, 0.6);
+        color: #94a3b8;
         font-size: 0.72rem;
     }
     
     .dashboard-command-meta strong {
-        color: #fff;
-        font-size: 0.88rem;
+        color: #f8fafc;
+        font-size: 0.9rem;
+        font-weight: 700;
     }
     
     .dashboard-control-grid {
         display: grid;
         grid-template-columns: minmax(0, 1.1fr) minmax(340px, 0.74fr);
-        gap: 12px;
-        margin-bottom: 12px;
+        gap: 16px;
+        margin-bottom: 16px;
     }
 
     .dashboard-manager-grid {
         display: grid;
-        grid-template-columns: repeat(6, minmax(0, 1fr));
-        gap: 10px;
-        margin-bottom: 12px;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 12px;
+        margin-bottom: 16px;
     }
 
     .dashboard-manager-card {
         display: grid;
-        gap: 5px;
-        padding: 14px;
-        border-radius: 14px;
-        border: 1px solid rgba(255, 255, 255, 0.07);
-        background: rgba(10, 17, 29, 0.72);
+        gap: 6px;
+        padding: 16px;
+        border-radius: 16px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        background: rgba(15, 23, 42, 0.45);
+        backdrop-filter: var(--glass-blur);
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
         color: inherit;
         text-decoration: none;
+        transition: var(--transition-smooth);
     }
 
-    .dashboard-manager-card span,
-    .dashboard-manager-card small { color: rgba(210, 217, 226, 0.68); font-size: .69rem; }
-    .dashboard-manager-card strong { color: #fff; font-size: 1.12rem; }
-    .dashboard-manager-card:hover { border-color: rgba(255, 107, 53, .32); }
+    .dashboard-manager-card span { color: #94a3b8; font-size: 0.72rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; }
+    .dashboard-manager-card small { color: #64748b; font-size: 0.72rem; }
+    .dashboard-manager-card strong { color: #f8fafc; font-size: 1.3rem; font-weight: 700; }
+    .dashboard-manager-card:hover {
+        border-color: rgba(255, 107, 53, 0.35);
+        background: rgba(15, 23, 42, 0.7);
+        transform: translateY(-2px);
+        box-shadow: 0 10px 28px rgba(255, 107, 53, 0.12);
+    }
     
     .dashboard-priority-grid {
         display: grid;
         grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 8px;
+        gap: 10px;
         padding: 4px 0 0;
     }
     
@@ -293,78 +304,101 @@
         grid-template-columns: minmax(0, 1fr) auto;
         gap: 6px;
         align-items: start;
-        padding: 14px;
-        border-radius: 12px;
-        border: 1px solid rgba(255, 107, 53, 0.08);
-        background: linear-gradient(90deg, rgba(255, 107, 53, 0.08), transparent 3px), rgba(8, 14, 26, 0.45);
+        padding: 16px;
+        border-radius: 14px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        background: rgba(15, 23, 42, 0.45);
+        backdrop-filter: var(--glass-blur);
         color: inherit;
         text-decoration: none;
         transition: var(--transition-smooth);
     }
+
+    .dashboard-priority-item.has-work {
+        border-color: rgba(255, 107, 53, 0.28);
+        background: linear-gradient(135deg, rgba(255, 107, 53, 0.1), rgba(15, 23, 42, 0.55));
+    }
     
     .dashboard-priority-item:hover {
-        background: rgba(255, 107, 53, 0.08);
-        border-color: rgba(255, 107, 53, 0.28);
+        background: rgba(15, 23, 42, 0.7);
+        border-color: rgba(255, 107, 53, 0.4);
         transform: translateY(-2px);
-        box-shadow: 0 8px 24px rgba(255, 107, 53, 0.06);
+        box-shadow: 0 10px 24px rgba(255, 107, 53, 0.12);
     }
     
     .dashboard-priority-item span {
-        color: rgba(210, 217, 226, 0.85);
-        font-size: 0.76rem;
+        color: #e2e8f0;
+        font-size: 0.8rem;
         font-weight: 600;
         line-height: 1.25;
     }
     
     .dashboard-priority-item strong {
-        color: #fff;
-        font-size: 1.45rem;
+        color: #f8fafc;
+        font-size: 1.5rem;
         line-height: 1;
         letter-spacing: -0.02em;
+        font-weight: 700;
+    }
+
+    .dashboard-priority-item.has-work strong {
+        color: #ff8c5a;
     }
     
     .dashboard-priority-item small {
         grid-column: 1 / -1;
-        color: rgba(210, 217, 226, 0.6);
-        font-size: 0.68rem;
+        color: #64748b;
+        font-size: 0.72rem;
         line-height: 1.35;
         margin-top: 4px;
     }
     
     .dashboard-activity-compact {
         display: grid;
-        gap: 8px;
+        gap: 10px;
         padding: 4px 0 0;
         max-height: 380px;
         overflow-y: auto;
     }
     
     .dashboard-activity-compact::-webkit-scrollbar {
-        width: 6px;
+        width: 5px;
     }
     
     .dashboard-activity-compact::-webkit-scrollbar-thumb {
-        background: rgba(255, 255, 255, 0.08);
+        background: rgba(255, 107, 53, 0.3);
         border-radius: 99px;
     }
     
     .dashboard-activity-compact .dashboard-activity-item {
         position: relative;
-        padding-left: 14px;
-        background: linear-gradient(90deg, rgba(0, 197, 255, 0.08), transparent 3px), rgba(8, 14, 26, 0.4);
+        padding: 14px 16px;
+        border-radius: 14px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        background: rgba(15, 23, 42, 0.45);
+        backdrop-filter: var(--glass-blur);
+        transition: var(--transition-smooth);
+    }
+
+    .dashboard-activity-compact .dashboard-activity-item:hover {
+        border-color: rgba(255, 107, 53, 0.25);
+        background: rgba(15, 23, 42, 0.65);
     }
     
     .dashboard-activity-compact .dashboard-activity-badge {
-        border-color: rgba(255, 107, 53, 0.18);
-        background: rgba(255, 107, 53, 0.08);
-        color: #ffd6c5;
+        border-color: rgba(255, 107, 53, 0.3);
+        background: rgba(255, 107, 53, 0.12);
+        color: #ff8c5a;
         font-weight: 700;
+        padding: 3px 10px;
+        border-radius: 99px;
     }
     
     .dashboard-activity-compact .dashboard-activity-meta .btn {
-        min-height: 25px;
-        padding: 4px 8px;
-        font-size: 0.62rem;
+        min-height: 26px;
+        padding: 4px 10px;
+        font-size: 0.7rem;
+        border-radius: 8px;
     }
     
     .dashboard-function-grid {
@@ -659,10 +693,26 @@
                 <span>Empresa activa</span>
                 <strong>{{ active_company.name|default:"Sin seleccionar" }}</strong>
             </div>
-            <a href="{% url 'admin_order_list' %}" class="btn btn-primary">Pedidos</a>
-            <a href="{% url 'admin_client_dashboard' %}" class="btn btn-outline">Clientes</a>
-            <a href="{% url 'admin_payment_list' %}" class="btn btn-outline">Cobros</a>
-            <a href="{% url 'select_company' %}?next={{ request.get_full_path|urlencode }}" class="btn btn-outline">Cambiar empresa</a>
+            <a href="{% url 'admin_order_list' %}" class="btn btn-primary">
+                <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
+                <span>Pedidos</span>
+            </a>
+            <a href="{% url 'admin_client_dashboard' %}" class="btn btn-outline">
+                <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+                <span>Clientes</span>
+            </a>
+            <a href="{% url 'admin_seller_performance' %}" class="btn btn-outline">
+                <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><polyline points="17 11 19 13 23 9"/></svg>
+                <span>Vendedores</span>
+            </a>
+            <a href="{% url 'admin_payment_list' %}" class="btn btn-outline">
+                <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+                <span>Cobros</span>
+            </a>
+            <a href="{% url 'select_company' %}?next={{ request.get_full_path|urlencode }}" class="btn btn-outline">
+                <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V7l8-4v18"/><path d="M19 21V11l-6-4"/></svg>
+                <span>Cambiar empresa</span>
+            </a>
         </div>
     </section>
 
@@ -699,6 +749,11 @@
             <span>Pedidos pendientes</span>
             <strong>{{ pending_orders_count }}</strong>
             <small>Hasta entrega</small>
+        </a>
+        <a href="{% url 'admin_client_task_inbox' %}" class="dashboard-manager-card">
+            <span>Mis recordatorios</span>
+            <strong>{{ my_client_tasks_count }}</strong>
+            <small>{{ my_client_tasks_overdue }} vencidos en {{ active_company.name }}</small>
         </a>
         <a href="{% url 'admin_product_list' %}?stock=low" class="dashboard-manager-card">
             <span>Stock critico</span>
