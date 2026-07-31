@@ -96,12 +96,31 @@
         }
 
         .sheet {
+            position: relative;
             width: var(--paper-width);
             min-height: var(--paper-min-height);
             margin: 0 auto;
             background: #ffffff;
             box-shadow: 0 12px 34px rgba(15, 23, 42, 0.15);
             padding: 16mm 14mm 12mm;
+        }
+
+        .legal-watermark {
+            position: fixed;
+            z-index: 999;
+            top: 44%;
+            left: 8%;
+            width: 84%;
+            transform: rotate(-24deg);
+            border: 4px solid rgba(185, 28, 28, 0.34);
+            color: rgba(185, 28, 28, 0.34);
+            font-size: 30px;
+            font-weight: 900;
+            letter-spacing: 2px;
+            line-height: 1.2;
+            padding: 10px;
+            text-align: center;
+            pointer-events: none;
         }
 
         .doc-header {
@@ -383,6 +402,9 @@
     </style>
 </head>
 <body>
+    {% if legal_watermark %}
+    <div class="legal-watermark">{{ legal_watermark }}</div>
+    {% endif %}
     <div class="print-toolbar">
         <div class="print-copy-links">
             <a href="?copy=original">Original</a>
@@ -400,7 +422,7 @@
             <section class="brand-block">
                 <img src="{% static 'core/img/flexs-logo.png' %}" alt="FLEXS" class="brand-logo">
                 <div class="brand-meta">
-                    {{ company_legal_name|default:fiscal_document.company.name }}<br>
+                    {{ company_legal_name|default:"-" }}<br>
                     {{ company_address_line|default:"-" }}<br>
                     {{ company_contact_line|default:"-" }}<br>
                     {{ company_contact_site|default:"-" }}
@@ -423,7 +445,8 @@
         <section class="issuer-grid">
             <div>
                 <strong>CUIT:</strong> {{ emitter_cuit|default:"-" }}<br>
-                <strong>Condicion fiscal:</strong> {{ emitter_tax_condition_label|default:"-" }}
+                <strong>Condicion fiscal:</strong> {{ emitter_tax_condition_label|default:"-" }}<br>
+                <strong>Inicio de actividades:</strong> {{ emitter_activity_start_date|default:"-" }}
             </div>
             <div>
                 <strong>Punto de venta:</strong> {{ point_of_sale_display|default:"-" }}<br>
@@ -441,7 +464,7 @@
             <div>
                 <strong>Condicion de venta:</strong> {{ sale_condition_label|default:"-" }}<br>
                 <strong>Usuario:</strong> {{ operator_label|default:"-" }}<br>
-                <strong>Pedido:</strong> #{{ fiscal_document.order_id|default:"-" }}<br>
+                <strong>Pedido:</strong> #{{ order_reference|default:"-" }}<br>
                 {% if fiscal_document.external_system %}
                 <strong>Externo:</strong> {{ fiscal_document.external_system }} {{ fiscal_document.external_number|default:fiscal_document.external_id|default:"-" }}
                 {% endif %}
@@ -513,9 +536,19 @@
                     <div class="arca-mark">ARCA</div>
                     {% endif %}
                     <div class="arca-details">
+                        {% if legally_authorized %}
                         <strong>Comprobante autorizado</strong><br>
                         CAE: {{ fiscal_document.cae|default:"-" }}<br>
                         Fecha de vto. de CAE: {{ fiscal_document.cae_due_date|date:"d-m-Y"|default:"-" }}<br>
+                        {% elif is_rejected %}
+                        <strong>Comprobante rechazado — sin validez fiscal</strong><br>
+                        CAE: no otorgado<br>
+                        Estado: {{ fiscal_document.get_status_display }}<br>
+                        {% else %}
+                        <strong>Comprobante no autorizado — sin validez fiscal</strong><br>
+                        CAE: no otorgado<br>
+                        Estado: {{ fiscal_document.get_status_display }}<br>
+                        {% endif %}
                         Tipo: {{ fiscal_document.get_doc_type_display }}<br>
                         Ref. interna: {{ fiscal_document.source_key }}
                     </div>
@@ -530,7 +563,7 @@
                     </tr>
                     <tr>
                         <td>Descuento ({{ order_total_discount_percentage|floatformat:2 }} %):</td>
-                        <td>${{ fiscal_document.discount_total|floatformat:2 }}</td>
+                        <td>${{ discount_total|floatformat:2 }}</td>
                     </tr>
                     <tr>
                         <td>Neto despues de descuento:</td>
@@ -538,16 +571,16 @@
                     </tr>
                     <tr>
                         <td>IVA:</td>
-                        <td>${{ fiscal_document.tax_total|floatformat:2 }}</td>
+                        <td>${{ tax_total|floatformat:2 }}</td>
                     </tr>
                     <tr class="total-row">
                         <td>TOTAL:</td>
-                        <td>${{ fiscal_document.total|floatformat:2 }}</td>
+                        <td>${{ document_total|floatformat:2 }}</td>
                     </tr>
                 </table>
 
                 <div class="summary-note">
-                    {% if fiscal_document.tax_total %}
+                    {% if tax_total %}
                     Importes fiscales calculados en documento local.
                     {% else %}
                     Formato comercial alineado al comprobante oficial. El detalle de IVA por alicuota sigue sujeto a la configuracion fiscal del documento.

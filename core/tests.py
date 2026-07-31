@@ -29,6 +29,7 @@ from core.models import (
 from core.services.company_context import get_default_company, get_user_companies
 from core.services.fiscal import validate_credit_note_relationship
 from core.services.fiscal_documents import create_local_fiscal_document_from_order
+from core.services.fiscal_integrity import FiscalPayloadConflict, fiscal_payload_hash
 from core.services.sales_documents import resolve_sales_document_type
 from orders.models import Order
 from orders.models import OrderItem
@@ -579,7 +580,7 @@ class FiscalDocumentSnapshotTests(TestCase):
     def setUp(self):
         self.company = get_default_company()
         self.company.legal_name = self.company.legal_name or "Empresa Test Snapshot SA"
-        self.company.cuit = self.company.cuit or "30712345678"
+        self.company.cuit = self.company.cuit or "30693450239"
         self.company.tax_condition = self.company.tax_condition or "responsable_inscripto"
         self.company.fiscal_address = self.company.fiscal_address or "Calle Fiscal 100"
         self.company.fiscal_city = self.company.fiscal_city or "San Martin"
@@ -592,7 +593,7 @@ class FiscalDocumentSnapshotTests(TestCase):
             user=self.user,
             company_name="Cliente Snapshot SRL",
             document_type="cuit",
-            document_number="30700111223",
+            document_number="20123456786",
             iva_condition="responsable_inscripto",
             fiscal_address="Domicilio Cliente 123",
             fiscal_city="San Martin",
@@ -657,10 +658,11 @@ class FiscalDocumentSnapshotTests(TestCase):
         )
 
         self.assertTrue(created)
-        self.assertIsInstance(document.request_payload, dict)
-        snapshot = document.request_payload.get("snapshot")
+        self.assertIsInstance(document.fiscal_snapshot, dict)
+        snapshot = document.fiscal_snapshot
         self.assertIsInstance(snapshot, dict)
-        self.assertEqual(snapshot.get("version"), 1)
+        self.assertEqual(snapshot.get("version"), 2)
+        self.assertEqual(document.snapshot_hash, fiscal_payload_hash(snapshot))
         self.assertEqual(snapshot.get("emitter", {}).get("company_id"), self.company.id)
         self.assertEqual(snapshot.get("emitter", {}).get("point_of_sale"), self.point_of_sale.number)
         self.assertEqual(snapshot.get("client", {}).get("client_profile_id"), self.client_profile.id)
@@ -676,7 +678,7 @@ class FiscalDocumentSnapshotTests(TestCase):
             issue_mode="manual",
             require_invoice_ready=False,
         )
-        original_snapshot = dict(document.request_payload.get("snapshot", {}))
+        original_snapshot = dict(document.fiscal_snapshot)
         original_emitter_name = original_snapshot.get("emitter", {}).get("legal_name")
 
         self.company.legal_name = "Empresa Renombrada"
@@ -684,18 +686,18 @@ class FiscalDocumentSnapshotTests(TestCase):
         self.client_profile.company_name = "Cliente Renombrado"
         self.client_profile.save(update_fields=["company_name", "updated_at"])
 
-        document_again, created_again = create_local_fiscal_document_from_order(
-            order=self.order,
-            company=self.company,
-            doc_type=FISCAL_DOC_TYPE_FB,
-            point_of_sale=self.point_of_sale,
-            issue_mode="manual",
-            require_invoice_ready=False,
-        )
+        with self.assertRaises(FiscalPayloadConflict):
+            create_local_fiscal_document_from_order(
+                order=self.order,
+                company=self.company,
+                doc_type=FISCAL_DOC_TYPE_FB,
+                point_of_sale=self.point_of_sale,
+                issue_mode="manual",
+                require_invoice_ready=False,
+            )
 
-        self.assertFalse(created_again)
-        self.assertEqual(document_again.pk, document.pk)
-        current_snapshot = document_again.request_payload.get("snapshot", {})
+        document.refresh_from_db()
+        current_snapshot = document.fiscal_snapshot
         self.assertEqual(current_snapshot.get("emitter", {}).get("legal_name"), original_emitter_name)
         self.assertEqual(current_snapshot, original_snapshot)
 
@@ -771,3 +773,18 @@ class CoreHomePageTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, reverse("catalog_how_to_measure"))
         self.assertContains(response, "Manual de Medición")
+
+    def test_home_page_uses_professional_media_instead_of_emoji_icons(self):
+        response = self.client.get(reverse("home"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "core/img/home/service-stock.webp")
+        self.assertContains(response, "core/img/home/service-manufacturing.webp")
+        self.assertContains(response, "core/img/home/service-delivery.webp")
+        self.assertContains(response, 'class="category-icon"', count=9)
+        self.assertNotContains(response, "🛒")
+        self.assertNotContains(response, "📐")
+        self.assertNotContains(response, "🔍")
+        self.assertNotContains(response, "&#128230;")
+        self.assertNotContains(response, "&#128295;")
+        self.assertNotContains(response, "&#128666;")

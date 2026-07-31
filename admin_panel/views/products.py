@@ -70,6 +70,7 @@ from catalog.models import (
     BrandRubroProductOrder,
     BrandSubrubroProductOrder,
 )
+from catalog.services.brand_cataloging import assign_products_to_brand_catalog
 from accounts.models import (
     AccountRequest,
     ClientCategory,
@@ -155,6 +156,7 @@ from core.models import (
     CatalogExcelTemplate,
     CatalogExcelTemplateSheet,
     CatalogExcelTemplateColumn,
+    ProductWarehouseStock,
     StockMovement,
     Warehouse,
 )
@@ -179,6 +181,10 @@ from admin_panel.forms.export_forms import (
 )
 from admin_panel.forms.sales_document_type_forms import SalesDocumentTypeForm, WarehouseForm
 from catalog.services.product_importer import ProductImporter
+from catalog.services.product_timeline import (
+    TIMELINE_KIND_CHOICES,
+    build_product_timeline,
+)
 from accounts.services.client_importer import ClientImporter
 from catalog.services.category_importer import CategoryImporter
 from catalog.services.abrazadera_importer import AbrazaderaImporter
@@ -403,6 +409,17 @@ def product_list(request):
     
     category_options = get_cached_category_options(only_active=True, include_inactive_suffix=False)
     filter_chips = build_product_filter_chips(request.GET, category_options)
+    brand_assignment_tree = Brand.objects.filter(is_active=True).prefetch_related(
+        Prefetch(
+            "rubros",
+            queryset=BrandRubro.objects.filter(is_active=True).prefetch_related(
+                Prefetch(
+                    "subrubros",
+                    queryset=BrandSubrubro.objects.filter(is_active=True),
+                )
+            ),
+        )
+    ).order_by("order", "name")
     
     context = {
         'page_obj': page_obj,
@@ -417,8 +434,101 @@ def product_list(request):
         'search_result_limit': search_result_limit,
         'search_total_matches': search_total_matches,
         'search_results_truncated': search_results_truncated,
+        'brand_assignment_tree': brand_assignment_tree,
     }
     return render(request, 'admin_panel/products/list.html', context)
+
+
+@staff_member_required
+def product_workspace(request, pk):
+    """Commercial product center with pricing, stock and unified activity."""
+    product = get_object_or_404(
+        Product.objects.select_related("category", "supplier_ref").prefetch_related("categories"),
+        pk=pk,
+    )
+    warehouse_balances = list(
+        ProductWarehouseStock.objects.filter(product=product)
+        .select_related("warehouse", "warehouse__company")
+        .order_by("warehouse__company__name", "warehouse__name")
+    )
+    supplier_offers = list(
+        ProductSupplier.objects.filter(product=product)
+        .select_related("supplier")
+        .order_by("-is_preferred", "supplier__name")
+    )
+    order_metrics = (
+        OrderItem.objects.filter(product=product)
+        .exclude(order__status=Order.STATUS_CANCELLED)
+        .aggregate(
+            order_count=Count("order_id", distinct=True),
+            quantity_sold=Coalesce(Sum("quantity"), Value(0)),
+            commercial_total=Coalesce(
+                Sum("subtotal"),
+                Value(Decimal("0.00")),
+                output_field=DecimalField(max_digits=16, decimal_places=2),
+            ),
+            last_sale_at=Max("order__created_at"),
+        )
+    )
+    warehouse_totals = ProductWarehouseStock.objects.filter(product=product).aggregate(
+        on_hand=Coalesce(
+            Sum("on_hand"),
+            Value(Decimal("0.000")),
+            output_field=DecimalField(max_digits=16, decimal_places=3),
+        ),
+        reserved=Coalesce(
+            Sum("reserved"),
+            Value(Decimal("0.000")),
+            output_field=DecimalField(max_digits=16, decimal_places=3),
+        ),
+    )
+    warehouse_totals["available"] = warehouse_totals["on_hand"] - warehouse_totals["reserved"]
+    price = Decimal(product.price or 0)
+    cost = Decimal(product.cost or 0)
+    iva_rate = Decimal(product.iva_rate or 0)
+    final_price = (price * (Decimal("1") + iva_rate / Decimal("100"))).quantize(
+        Decimal("0.01")
+    )
+    margin_percentage = (
+        ((price - cost) / cost * Decimal("100")).quantize(Decimal("0.01"))
+        if cost > 0
+        else None
+    )
+    can_view_costs = request.user.is_superuser or has_capability(
+        request.user,
+        CAP_CHANGE_PRICES,
+    )
+    can_view_supplier_terms = request.user.is_superuser or has_capability(
+        request.user,
+        CAP_MANAGE_PRODUCTS,
+    )
+    timeline_kind = str(request.GET.get("kind", "") or "").strip().lower()
+    timeline = build_product_timeline(
+        product,
+        kind=timeline_kind,
+        limit=120,
+        include_costs=can_view_costs,
+    )
+
+    return render(
+        request,
+        "admin_panel/products/workspace.html",
+        {
+            "product": product,
+            "warehouse_balances": warehouse_balances,
+            "warehouse_totals": warehouse_totals,
+            "supplier_offers": supplier_offers,
+            "order_metrics": order_metrics,
+            "final_price": final_price,
+            "margin_percentage": margin_percentage,
+            "timeline": timeline,
+            "timeline_kind": timeline_kind,
+            "timeline_kind_choices": TIMELINE_KIND_CHOICES,
+            "warehouse_stock_enabled": SiteSettings.get_settings().warehouse_stock_enabled,
+            "can_view_costs": can_view_costs,
+            "can_view_supplier_terms": can_view_supplier_terms,
+        },
+    )
 
 
 @staff_member_required
@@ -451,12 +561,28 @@ def product_create(request):
             if iva_rate_value is not None and iva_rate_value not in allowed_iva_rates:
                 raise ValueError("Selecciona una alicuota de IVA valida.")
             tracks_stock = request.POST.get('tracks_stock') == 'on'
+            allow_negative_stock = request.POST.get('allow_negative_stock') == 'on'
+            is_sellable = (
+                request.POST.get('is_sellable') == 'on'
+                if 'is_sellable' in request.POST
+                else True
+            )
+            is_purchasable = (
+                request.POST.get('is_purchasable') == 'on'
+                if 'is_purchasable' in request.POST
+                else True
+            )
             primary_category_id = request.POST.get('category', '')
             selected_category_ids = normalize_category_ids(request.POST.getlist('categories'))
             description = request.POST.get('description', '').strip()
             attributes_payload = request.POST.get('attributes_json', '{}')
             uploaded_image = request.FILES.get('image')
             settings = SiteSettings.get_settings()
+            if settings.warehouse_stock_enabled and stock_value != 0:
+                raise ValueError(
+                    "Con stock por deposito activo, crea el producto con stock 0 "
+                    "y luego asigna la existencia al deposito correspondiente."
+                )
 
             if uploaded_image:
                 _validate_admin_image_upload(uploaded_image)
@@ -520,6 +646,9 @@ def product_create(request):
                     iva_rate=iva_rate_value,
                     stock=stock_value,
                     tracks_stock=tracks_stock,
+                    allow_negative_stock=allow_negative_stock,
+                    is_sellable=is_sellable,
+                    is_purchasable=is_purchasable,
                     category_id=int(primary_category_id) if str(primary_category_id).isdigit() else None,
                     description=description,
                     attributes=attributes_data,
@@ -538,6 +667,26 @@ def product_create(request):
                         match_method="manual",
                     )
                 assign_categories_to_product(product, selected_category_ids, primary_category_id)
+                if settings.warehouse_stock_enabled:
+                    now = timezone.now()
+                    ProductWarehouseStock.objects.bulk_create(
+                        [
+                            ProductWarehouseStock(
+                                product=product,
+                                warehouse=warehouse,
+                                on_hand=0,
+                                reserved=0,
+                                minimum=0,
+                                ideal=0,
+                                initialized_at=now,
+                            )
+                            for warehouse in Warehouse.objects.filter(
+                                stock_balance_enabled=True,
+                                is_active=True,
+                            )
+                        ],
+                        ignore_conflicts=True,
+                    )
                 blocks_payload = request.POST.get('product_blocks_json', '{}')
                 try:
                     blocks_data = json.loads(blocks_payload or '{}')
@@ -583,6 +732,23 @@ def product_create(request):
 def product_edit(request, pk):
     """Edit existing product."""
     product = get_object_or_404(Product, pk=pk)
+    product_audit_fields = [
+        "sku",
+        "name",
+        "supplier",
+        "supplier_ref_id",
+        "cost",
+        "price",
+        "iva_rate",
+        "stock",
+        "tracks_stock",
+        "allow_negative_stock",
+        "is_sellable",
+        "is_purchasable",
+        "category_id",
+        "is_active",
+    ]
+    before_product = model_snapshot(product, product_audit_fields)
     _attach_import_duplicate_alert(product)
     category_options = get_cached_category_options(only_active=True, include_inactive_suffix=False)
     existing_blocks = {
@@ -618,7 +784,42 @@ def product_edit(request, pk):
             supplier_code = request.POST.get('supplier_code', '').strip()
             product.cost = parse_admin_decimal_input(request.POST.get('cost', '0'), 'Costo', min_value='0')
             product.price = parse_admin_decimal_input(request.POST.get('price', '0'), 'Precio', min_value='0')
-            product.stock = parse_int_value(request.POST.get('stock', '0'), 'Stock', min_value=0)
+            stock_value = parse_int_value(request.POST.get('stock', '0'), 'Stock', min_value=0)
+            settings = SiteSettings.get_settings()
+            has_initialized_warehouse_stock = ProductWarehouseStock.objects.filter(
+                product=product,
+                initialized_at__isnull=False,
+            ).exists()
+            if (
+                settings.warehouse_stock_enabled
+                and has_initialized_warehouse_stock
+                and stock_value != product.stock
+            ):
+                raise ValueError(
+                    "El stock global no puede editarse porque este producto ya usa saldos por deposito."
+                )
+            product.stock = stock_value
+            warehouse_threshold_updates = []
+            for balance in ProductWarehouseStock.objects.filter(product=product):
+                minimum_key = f"warehouse_minimum_{balance.pk}"
+                ideal_key = f"warehouse_ideal_{balance.pk}"
+                if minimum_key not in request.POST and ideal_key not in request.POST:
+                    continue
+                minimum = parse_admin_decimal_input(
+                    request.POST.get(minimum_key, balance.minimum),
+                    f"Stock minimo de {balance.warehouse}",
+                    min_value="0",
+                )
+                ideal = parse_admin_decimal_input(
+                    request.POST.get(ideal_key, balance.ideal),
+                    f"Stock ideal de {balance.warehouse}",
+                    min_value="0",
+                )
+                if ideal < minimum:
+                    raise ValueError(
+                        f"El stock ideal de {balance.warehouse} no puede ser menor que el minimo."
+                    )
+                warehouse_threshold_updates.append((balance, minimum, ideal))
             iva_rate_raw = request.POST.get('iva_rate', '').strip().replace(',', '.')
             product.iva_rate = (
                 parse_admin_decimal_input(iva_rate_raw, 'Alicuota IVA', min_value='0')
@@ -630,6 +831,11 @@ def product_edit(request, pk):
             }:
                 raise ValueError("Selecciona una alicuota de IVA valida.")
             product.tracks_stock = request.POST.get('tracks_stock') == 'on'
+            product.allow_negative_stock = request.POST.get('allow_negative_stock') == 'on'
+            if 'is_sellable' in request.POST:
+                product.is_sellable = request.POST.get('is_sellable') == 'on'
+            if 'is_purchasable' in request.POST:
+                product.is_purchasable = request.POST.get('is_purchasable') == 'on'
             product.description = request.POST.get('description', '').strip()
             product.is_active = request.POST.get('is_active') == 'on'
             uploaded_image = request.FILES.get('image')
@@ -707,6 +913,10 @@ def product_edit(request, pk):
                 new_image_applied = True
             
             product.save()
+            for balance, minimum, ideal in warehouse_threshold_updates:
+                balance.minimum = minimum
+                balance.ideal = ideal
+                balance.save(update_fields=["minimum", "ideal", "updated_at"])
             if product.supplier_ref_id:
                 set_preferred_supplier_preserving_terms(
                     product=product,
@@ -738,12 +948,14 @@ def product_edit(request, pk):
                     ).update(block_label=clean_block)
             if new_image_applied and old_image_name:
                 _delete_orphan_product_image(old_image_name)
-            log_admin_action(
+            log_admin_change(
                 request,
                 action="product_edit",
                 target_type="product",
                 target_id=product.pk,
-                details={
+                before=before_product,
+                after=model_snapshot(product, product_audit_fields),
+                extra={
                     "sku": product.sku,
                     "supplier": product.supplier,
                     "categories": selected_category_ids,
@@ -758,6 +970,11 @@ def product_edit(request, pk):
     selected_category_ids = list(product.categories.values_list('id', flat=True))
     if not selected_category_ids and product.category_id:
         selected_category_ids = [product.category_id]
+    warehouse_balances = list(
+        ProductWarehouseStock.objects.filter(product=product)
+        .select_related("warehouse", "warehouse__company")
+        .order_by("warehouse__company__name", "warehouse__name")
+    )
 
     return render(request, 'admin_panel/products/form.html', {
         'product': product,
@@ -768,6 +985,8 @@ def product_edit(request, pk):
         'preferred_supplier_offer': preferred_supplier_offer,
         'supplier_offers': supplier_offers,
         'supplier_options': supplier_options,
+        'warehouse_balances': warehouse_balances,
+        'warehouse_stock_enabled': SiteSettings.get_settings().warehouse_stock_enabled,
         'action': 'Editar',
         'existing_blocks_json': existing_blocks_json,
     })
@@ -1206,6 +1425,89 @@ def product_bulk_image_update(request):
             'mode': image_mode,
             'select_all_pages': select_all_pages,
         },
+    )
+    return _redirect_admin_product_list_with_filters(request)
+
+
+@staff_member_required
+@require_POST
+@superuser_required_for_modifications
+def product_bulk_brand_update(request):
+    """Assign selected or filtered products to a brand destination with audit and undo."""
+    raw_post_body = request.body
+    brand_id = str(request.POST.get("brand_id", "") or "").strip()
+    rubro_id = str(request.POST.get("rubro_id", "") or "").strip()
+    subrubro_id = str(request.POST.get("subrubro_id", "") or "").strip()
+    observation = request.POST.get("observation", "")
+    mode = str(request.POST.get("mode", "add") or "add").strip().lower()
+    if not brand_id.isdigit() or not rubro_id.isdigit():
+        messages.error(request, "Selecciona una marca y un rubro validos.")
+        return _redirect_admin_product_list_with_filters(request)
+
+    brand = get_object_or_404(Brand, pk=int(brand_id), is_active=True)
+    rubro = get_object_or_404(
+        BrandRubro,
+        pk=int(rubro_id),
+        brand=brand,
+        is_active=True,
+    )
+    subrubro = None
+    if subrubro_id.isdigit():
+        subrubro = get_object_or_404(
+            BrandSubrubro,
+            pk=int(subrubro_id),
+            brand_rubro=rubro,
+            is_active=True,
+        )
+
+    if request.POST.get("select_all_pages") == "true":
+        selected_products, _search, _category, _active = get_product_queryset(
+            request.POST
+        )
+        product_ids = (
+            [product.pk for product in selected_products]
+            if isinstance(selected_products, list)
+            else list(selected_products.values_list("pk", flat=True))
+        )
+    else:
+        product_ids = extract_target_product_ids_from_post(
+            request.POST,
+            raw_post_body,
+        )
+
+    try:
+        batch = assign_products_to_brand_catalog(
+            product_ids=product_ids,
+            brand=brand,
+            rubro=rubro,
+            subrubro=subrubro,
+            user=request.user,
+            observation=observation,
+            mode=mode,
+        )
+    except ValueError as exc:
+        messages.error(request, str(exc))
+        return _redirect_admin_product_list_with_filters(request)
+
+    log_admin_action(
+        request,
+        action="product_bulk_brand_update",
+        target_type="brand_catalog_batch",
+        target_id=batch.pk,
+        details={
+            "brand_id": brand.pk,
+            "rubro_id": rubro.pk,
+            "subrubro_id": subrubro.pk if subrubro else None,
+            "mode": mode,
+            "count": len(batch.product_ids),
+            "observation": batch.observation,
+        },
+    )
+    destination = subrubro or rubro
+    messages.success(
+        request,
+        f"{len(batch.product_ids)} producto(s) asignado(s) a {destination}. "
+        f"Puedes deshacer el lote #{batch.pk} desde Marcas.",
     )
     return _redirect_admin_product_list_with_filters(request)
 
@@ -5003,6 +5305,6 @@ def product_grid_remove_brand_association(request):
     })
 
 
-__all__ = ['product_list', 'product_create', 'product_edit', 'product_supplier_offer_save', 'product_duplicate_reviews', 'product_duplicate_review_decision', 'product_delete', 'product_toggle_active', 'product_bulk_category_update', 'product_bulk_status_update', 'product_bulk_image_update', 'supplier_list', 'supplier_detail', 'supplier_bulk_action', 'supplier_export', 'supplier_print', 'supplier_unassigned', 'supplier_toggle_active', 'category_list', 'category_reorder', 'category_sort_roots_alpha', 'category_bulk_status', 'category_create', 'category_create_ajax', 'category_edit', 'category_move', 'category_delete', 'category_attribute_create', 'category_attribute_edit', 'category_attribute_delete', 'category_manage_products', 'category_products_reorder', 'get_category_attributes', 'parse_product_description', 'parse_clamp_code_api', 'products_uncategorized', 'import_triler_excel', 'rollback_movigom_import', 'product_grid_editor', 'product_grid_update_cell', 'product_grid_bulk_update', 'product_grid_add_brand_association', 'product_grid_remove_brand_association']
+__all__ = ['product_list', 'product_workspace', 'product_create', 'product_edit', 'product_supplier_offer_save', 'product_duplicate_reviews', 'product_duplicate_review_decision', 'product_delete', 'product_toggle_active', 'product_bulk_category_update', 'product_bulk_status_update', 'product_bulk_image_update', 'product_bulk_brand_update', 'supplier_list', 'supplier_detail', 'supplier_bulk_action', 'supplier_export', 'supplier_print', 'supplier_unassigned', 'supplier_toggle_active', 'category_list', 'category_reorder', 'category_sort_roots_alpha', 'category_bulk_status', 'category_create', 'category_create_ajax', 'category_edit', 'category_move', 'category_delete', 'category_attribute_create', 'category_attribute_edit', 'category_attribute_delete', 'category_manage_products', 'category_products_reorder', 'get_category_attributes', 'parse_product_description', 'parse_clamp_code_api', 'products_uncategorized', 'import_triler_excel', 'rollback_movigom_import', 'product_grid_editor', 'product_grid_update_cell', 'product_grid_bulk_update', 'product_grid_add_brand_association', 'product_grid_remove_brand_association']
 
 

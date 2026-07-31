@@ -8,6 +8,8 @@ from core.models import (
     FiscalEmissionAttempt,
     FiscalPointOfSale,
     FiscalDocumentSeries,
+    FiscalSeriesReconciliation,
+    FiscalMutationAudit,
     InternalDocument,
     SiteSettings,
     UserActivity,
@@ -18,7 +20,51 @@ from core.models import (
     ExternalEditorDraft,
     ExternalEditorSavedView,
     ImportExecution,
+    ProductWarehouseStock,
 )
+
+
+def _concrete_field_names(model):
+    """Return every persisted field so newly added fiscal fields stay read-only."""
+    return tuple(field.name for field in model._meta.concrete_fields)
+
+
+class ReadOnlyFiscalAdminMixin:
+    """Expose fiscal evidence for inspection without any mutation path."""
+
+    actions = ()
+
+    def get_readonly_fields(self, request, obj=None):
+        return _concrete_field_names(self.model)
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+class ReadOnlyFiscalInlineMixin:
+    """Read-only counterpart for evidence embedded in a fiscal document."""
+
+    extra = 0
+    max_num = 0
+    can_delete = False
+
+    def get_readonly_fields(self, request, obj=None):
+        return _concrete_field_names(self.model)
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(Company)
@@ -46,31 +92,87 @@ class DocumentSeriesAdmin(admin.ModelAdmin):
 
 @admin.register(FiscalDocumentSeries)
 class FiscalDocumentSeriesAdmin(admin.ModelAdmin):
+    SYSTEM_MANAGED_FIELDS = (
+        "remote_last_authorized",
+        "last_reconciled_at",
+        "blocked_at",
+        "blocked_reason",
+        "blocked_by_document",
+        "version",
+        "created_at",
+        "updated_at",
+    )
+    IDENTITY_AND_NUMBER_FIELDS = (
+        "company",
+        "point_of_sale_ref",
+        "point_of_sale",
+        "doc_type",
+        "issuer_cuit",
+        "environment",
+        "next_number",
+    )
+
     list_display = ("company", "point_of_sale_ref", "point_of_sale", "doc_type", "next_number", "updated_at")
     list_filter = ("company", "doc_type", "point_of_sale_ref")
     search_fields = ("company__name", "point_of_sale", "point_of_sale_ref__number")
 
+    def _has_fiscal_usage(self, obj):
+        if not obj or not obj.pk:
+            return False
+        if obj.blocked_by_document_id or obj.reconciliations.exists():
+            return True
+
+        documents = FiscalDocument.objects.filter(
+            company_id=obj.company_id,
+            doc_type=obj.doc_type,
+        )
+        if obj.point_of_sale_ref_id:
+            documents = documents.filter(point_of_sale_id=obj.point_of_sale_ref_id)
+        else:
+            documents = documents.filter(
+                issuer_cuit_snapshot=obj.issuer_cuit,
+                environment_snapshot=obj.environment,
+                point_of_sale_number_snapshot=obj.point_of_sale,
+            )
+        return documents.exists()
+
+    def get_readonly_fields(self, request, obj=None):
+        readonly = list(self.SYSTEM_MANAGED_FIELDS)
+        if self._has_fiscal_usage(obj):
+            readonly.extend(self.IDENTITY_AND_NUMBER_FIELDS)
+        return tuple(dict.fromkeys(readonly))
+
 
 @admin.register(FiscalPointOfSale)
 class FiscalPointOfSaleAdmin(admin.ModelAdmin):
+    IDENTITY_FIELDS = ("company", "number", "environment")
+
     list_display = ("company", "number", "name", "environment", "is_default", "is_active")
     list_filter = ("company", "environment", "is_default", "is_active")
     search_fields = ("company__name", "number", "name")
 
+    def _has_fiscal_usage(self, obj):
+        if not obj or not obj.pk:
+            return False
+        return obj.fiscal_documents.exists() or obj.fiscal_series.exists()
 
-class FiscalDocumentItemInline(admin.TabularInline):
+    def get_readonly_fields(self, request, obj=None):
+        readonly = ["created_at", "updated_at"]
+        if self._has_fiscal_usage(obj):
+            readonly.extend(self.IDENTITY_FIELDS)
+        return tuple(readonly)
+
+
+class FiscalDocumentItemInline(ReadOnlyFiscalInlineMixin, admin.TabularInline):
     model = FiscalDocumentItem
-    extra = 0
 
 
-class FiscalEmissionAttemptInline(admin.TabularInline):
+class FiscalEmissionAttemptInline(ReadOnlyFiscalInlineMixin, admin.TabularInline):
     model = FiscalEmissionAttempt
-    extra = 0
-    readonly_fields = ("created_at",)
 
 
 @admin.register(FiscalDocument)
-class FiscalDocumentAdmin(admin.ModelAdmin):
+class FiscalDocumentAdmin(ReadOnlyFiscalAdminMixin, admin.ModelAdmin):
     list_display = (
         "company",
         "point_of_sale",
@@ -88,17 +190,58 @@ class FiscalDocumentAdmin(admin.ModelAdmin):
 
 
 @admin.register(FiscalDocumentItem)
-class FiscalDocumentItemAdmin(admin.ModelAdmin):
+class FiscalDocumentItemAdmin(ReadOnlyFiscalAdminMixin, admin.ModelAdmin):
     list_display = ("fiscal_document", "line_number", "sku", "quantity", "net_amount", "iva_amount", "total_amount")
     list_filter = ("fiscal_document__company", "iva_rate")
     search_fields = ("fiscal_document__source_key", "sku", "description")
 
 
 @admin.register(FiscalEmissionAttempt)
-class FiscalEmissionAttemptAdmin(admin.ModelAdmin):
+class FiscalEmissionAttemptAdmin(ReadOnlyFiscalAdminMixin, admin.ModelAdmin):
     list_display = ("fiscal_document", "result_status", "triggered_by", "error_code", "created_at")
     list_filter = ("result_status", "created_at")
     search_fields = ("fiscal_document__source_key", "error_code", "error_message")
+
+
+@admin.register(FiscalSeriesReconciliation)
+class FiscalSeriesReconciliationAdmin(ReadOnlyFiscalAdminMixin, admin.ModelAdmin):
+    list_display = (
+        "created_at",
+        "series",
+        "fiscal_document",
+        "environment",
+        "point_of_sale",
+        "doc_type",
+        "remote_last_authorized",
+        "outcome",
+    )
+    list_filter = ("environment", "doc_type", "outcome", "created_at")
+    search_fields = (
+        "issuer_cuit",
+        "point_of_sale",
+        "correlation_id",
+        "reason",
+        "fiscal_document__source_key",
+    )
+
+
+@admin.register(FiscalMutationAudit)
+class FiscalMutationAuditAdmin(ReadOnlyFiscalAdminMixin, admin.ModelAdmin):
+    list_display = (
+        "created_at",
+        "fiscal_document",
+        "action",
+        "reason",
+        "source",
+        "actor",
+    )
+    list_filter = ("action", "source", "created_at")
+    search_fields = (
+        "fiscal_document__source_key",
+        "reason",
+        "correlation_id",
+        "actor__username",
+    )
 
 
 @admin.register(InternalDocument)
@@ -110,7 +253,29 @@ class InternalDocumentAdmin(admin.ModelAdmin):
 
 @admin.register(SiteSettings)
 class SiteSettingsAdmin(admin.ModelAdmin):
-    list_display = ("company_name", "show_public_prices", "require_primary_category_for_multicategory")
+    list_display = (
+        "company_name",
+        "show_public_prices",
+        "require_primary_category_for_multicategory",
+        "warehouse_stock_enabled",
+    )
+
+
+@admin.register(ProductWarehouseStock)
+class ProductWarehouseStockAdmin(admin.ModelAdmin):
+    list_display = (
+        "product",
+        "warehouse",
+        "on_hand",
+        "reserved",
+        "minimum",
+        "ideal",
+        "initialized_at",
+        "updated_at",
+    )
+    list_filter = ("warehouse__company", "warehouse")
+    search_fields = ("product__sku", "product__name", "warehouse__name")
+    readonly_fields = ("initialized_at", "created_at", "updated_at")
 
 
 @admin.register(UserActivity)

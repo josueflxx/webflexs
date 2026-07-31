@@ -10,9 +10,12 @@ django.setup()
 
 from django.contrib.auth.models import User
 
-username = 'josueflexs'
-password = 'josueflexs2007'
-email = 'ventas@flexs.com.ar'
+username = os.getenv('DJANGO_SUPERUSER_USERNAME', 'admin')
+password = os.getenv('DJANGO_SUPERUSER_PASSWORD')
+email = os.getenv('DJANGO_SUPERUSER_EMAIL', 'admin@example.com')
+
+if not password:
+    raise RuntimeError('Define DJANGO_SUPERUSER_PASSWORD antes de ejecutar este script.')
 
 if not User.objects.filter(username=username).exists():
     user = User.objects.create_superuser(
@@ -20,8 +23,8 @@ if not User.objects.filter(username=username).exists():
         email=email,
         password=password
     )
-    user.first_name = 'Josue'
-    user.last_name = 'FLEXS'
+    user.first_name = os.getenv('DJANGO_SUPERUSER_FIRST_NAME', '')
+    user.last_name = os.getenv('DJANGO_SUPERUSER_LAST_NAME', '')
     user.save()
     print(f'Superusuario "{username}" creado exitosamente!')
 else:

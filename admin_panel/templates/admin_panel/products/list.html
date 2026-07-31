@@ -157,6 +157,55 @@
                 </div>
 
                 <div class="products-bulk-section products-bulk-section-wide">
+                    <div class="products-bulk-label">Marcas y rubros</div>
+                    <form id="bulkBrandForm" method="post" action="{% url 'admin_product_bulk_brand' %}"
+                        class="products-bulk-form products-brand-bulk-form" onsubmit="return validateBulkBrandAction()">
+                        {% csrf_token %}
+                        <input type="hidden" name="q" value="{{ search }}">
+                        <input type="hidden" name="category" value="{{ current_category_id|default:'' }}">
+                        <input type="hidden" name="active" value="{{ active_filter }}">
+                        <input type="hidden" name="order" value="{{ order_by }}">
+                        <input type="hidden" name="page" value="{{ page_obj.number }}">
+                        <input type="hidden" name="select_all_pages" id="bulkBrandSelectAllPages" value="false">
+                        <input type="hidden" name="product_ids_csv" id="bulkBrandProductIdsCsv" value="">
+
+                        <select name="brand_id" id="bulkBrandId" class="form-select" required>
+                            <option value="">Marca destino...</option>
+                            {% for brand in brand_assignment_tree %}
+                            <option value="{{ brand.id|unlocalize }}">{{ brand.name }}</option>
+                            {% endfor %}
+                        </select>
+                        <select name="rubro_id" id="bulkBrandRubroId" class="form-select" required disabled>
+                            <option value="">Rubro destino...</option>
+                            {% for brand in brand_assignment_tree %}
+                                {% for rubro in brand.rubros.all %}
+                                <option value="{{ rubro.id|unlocalize }}" data-brand-id="{{ brand.id|unlocalize }}" hidden>{{ rubro.name }}</option>
+                                {% endfor %}
+                            {% endfor %}
+                        </select>
+                        <select name="subrubro_id" id="bulkBrandSubrubroId" class="form-select" disabled>
+                            <option value="">Sin subrubro</option>
+                            {% for brand in brand_assignment_tree %}
+                                {% for rubro in brand.rubros.all %}
+                                    {% for subrubro in rubro.subrubros.all %}
+                                    <option value="{{ subrubro.id|unlocalize }}" data-rubro-id="{{ rubro.id|unlocalize }}" hidden>{{ subrubro.name }}</option>
+                                    {% endfor %}
+                                {% endfor %}
+                            {% endfor %}
+                        </select>
+                        <select name="mode" id="bulkBrandMode" class="form-select">
+                            <option value="add">Agregar tambien</option>
+                            <option value="move">Mover desde otras marcas</option>
+                        </select>
+                        <input type="text" name="observation" id="bulkBrandObservation" class="form-input"
+                            required maxlength="300" placeholder="Observacion obligatoria">
+                        <button type="submit" class="btn btn-primary" id="bulkBrandSubmitBtn" disabled>
+                            Asignar a marca
+                        </button>
+                    </form>
+                </div>
+
+                <div class="products-bulk-section products-bulk-section-wide">
                     <div class="products-bulk-label">Imagenes</div>
                 <form id="bulkImageForm" method="post" enctype="multipart/form-data"
                     action="{% url 'admin_product_bulk_image' %}" class="products-bulk-form"
@@ -811,6 +860,19 @@
             background: var(--products-surface-soft);
         }
 
+        .products-brand-bulk-form {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(150px, 1fr)) minmax(220px, 1.35fr) auto;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .products-brand-bulk-form .form-input,
+        .products-brand-bulk-form .form-select {
+            width: 100%;
+            min-width: 0;
+        }
+
         .products-bulk-selection-bar {
             border-color: var(--products-border);
         }
@@ -1194,9 +1256,17 @@
             .product-filter-actions {
                 grid-column: 1 / -1;
             }
+
+            .products-brand-bulk-form {
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+            }
         }
 
         @media (max-width: 768px) {
+            .products-brand-bulk-form {
+                grid-template-columns: 1fr;
+            }
+
             .products-admin-panel {
                 width: calc(100vw - 20px);
                 border-radius: 11px;
@@ -1453,6 +1523,10 @@
             if (bulkImageSelectAll) {
                 bulkImageSelectAll.value = value;
             }
+            const bulkBrandSelectAll = document.getElementById('bulkBrandSelectAllPages');
+            if (bulkBrandSelectAll) {
+                bulkBrandSelectAll.value = value;
+            }
         }
 
         function collectSelectedProductIds() {
@@ -1484,6 +1558,8 @@
             if (statusCsv) statusCsv.value = csv;
             const imageCsv = document.getElementById('bulkImageProductIdsCsv');
             if (imageCsv) imageCsv.value = csv;
+            const brandCsv = document.getElementById('bulkBrandProductIdsCsv');
+            if (brandCsv) brandCsv.value = csv;
             return selectedIds.length;
         }
 
@@ -1615,9 +1691,15 @@
             const activateBtn = document.getElementById('bulkActivateBtn');
             const deactivateBtn = document.getElementById('bulkDeactivateBtn');
             const imageBtn = document.getElementById('bulkImageSubmitBtn');
+            const brandBtn = document.getElementById('bulkBrandSubmitBtn');
             const imageMode = document.getElementById('bulkImageMode')?.value || 'set';
             const imageInput = document.getElementById('bulkImageInput');
             const hasImageFile = Boolean(imageInput && imageInput.files && imageInput.files.length > 0);
+            const brandReady = Boolean(
+                document.getElementById('bulkBrandId')?.value
+                && document.getElementById('bulkBrandRubroId')?.value
+                && document.getElementById('bulkBrandObservation')?.value.trim()
+            );
             const selectedLabel = document.getElementById('bulkSelectedCount');
             const selectedInlineLabel = document.getElementById('bulkSelectedCountInline');
 
@@ -1662,6 +1744,14 @@
                         ? `Quitar imagen (${count})`
                         : `Aplicar imagen (${count})`;
                 }
+                if (brandBtn) {
+                    if (brandReady) {
+                        brandBtn.removeAttribute('disabled');
+                    } else {
+                        brandBtn.setAttribute('disabled', 'true');
+                    }
+                    brandBtn.textContent = `Asignar a marca (${count})`;
+                }
             } else {
                 if (selectedLabel) selectedLabel.textContent = '0 seleccionados';
                 if (selectedInlineLabel) selectedInlineLabel.textContent = '0 seleccionados';
@@ -1680,6 +1770,10 @@
                 if (imageBtn) {
                     imageBtn.setAttribute('disabled', 'true');
                     imageBtn.innerHTML = imageMode === 'clear' ? 'Quitar imagen' : 'Aplicar imagen';
+                }
+                if (brandBtn) {
+                    brandBtn.setAttribute('disabled', 'true');
+                    brandBtn.textContent = 'Asignar a marca';
                 }
             }
 
@@ -1738,6 +1832,65 @@
             return true;
         }
 
+        function updateBulkBrandRubros() {
+            const brandId = document.getElementById('bulkBrandId')?.value || '';
+            const rubroSelect = document.getElementById('bulkBrandRubroId');
+            const subrubroSelect = document.getElementById('bulkBrandSubrubroId');
+            if (!rubroSelect || !subrubroSelect) return;
+            rubroSelect.value = '';
+            rubroSelect.disabled = !brandId;
+            Array.from(rubroSelect.options).forEach((option, index) => {
+                if (index === 0) return;
+                option.hidden = option.dataset.brandId !== brandId;
+            });
+            subrubroSelect.value = '';
+            subrubroSelect.disabled = true;
+            Array.from(subrubroSelect.options).forEach((option, index) => {
+                if (index === 0) return;
+                option.hidden = true;
+            });
+            updateBulkButton();
+        }
+
+        function updateBulkBrandSubrubros() {
+            const rubroId = document.getElementById('bulkBrandRubroId')?.value || '';
+            const subrubroSelect = document.getElementById('bulkBrandSubrubroId');
+            if (!subrubroSelect) return;
+            subrubroSelect.value = '';
+            subrubroSelect.disabled = !rubroId;
+            Array.from(subrubroSelect.options).forEach((option, index) => {
+                if (index === 0) return;
+                option.hidden = option.dataset.rubroId !== rubroId;
+            });
+            updateBulkButton();
+        }
+
+        function validateBulkBrandAction() {
+            const form = document.getElementById('bulkBrandForm');
+            const globalInput = document.getElementById('selectAllPagesInput');
+            const selectAllGlobal = globalInput ? globalInput.value === 'true' : false;
+            if (!selectAllGlobal) {
+                const count = appendSelectedIdsToForm(form);
+                if (count === 0) {
+                    alert('Selecciona al menos un producto.');
+                    return false;
+                }
+            }
+            if (!document.getElementById('bulkBrandId')?.value
+                || !document.getElementById('bulkBrandRubroId')?.value) {
+                alert('Selecciona una marca y un rubro.');
+                return false;
+            }
+            if (!document.getElementById('bulkBrandObservation')?.value.trim()) {
+                alert('Escribe una observacion para registrar el cambio.');
+                return false;
+            }
+            if (document.getElementById('bulkBrandMode')?.value === 'move') {
+                return confirm('Se retiraran las asociaciones con otras marcas y se podra deshacer el lote. ¿Continuar?');
+            }
+            return true;
+        }
+
         function submitBulkStatus(setActiveValue) {
             const actionInput = document.getElementById('bulkStatusActionInput');
             if (!actionInput) return;
@@ -1758,6 +1911,11 @@
         document.addEventListener('DOMContentLoaded', function () {
             document.getElementById('bulkImageMode')?.addEventListener('change', updateBulkButton);
             document.getElementById('bulkImageInput')?.addEventListener('change', updateBulkButton);
+            document.getElementById('bulkBrandId')?.addEventListener('change', updateBulkBrandRubros);
+            document.getElementById('bulkBrandRubroId')?.addEventListener('change', updateBulkBrandSubrubros);
+            document.getElementById('bulkBrandSubrubroId')?.addEventListener('change', updateBulkButton);
+            document.getElementById('bulkBrandMode')?.addEventListener('change', updateBulkButton);
+            document.getElementById('bulkBrandObservation')?.addEventListener('input', updateBulkButton);
             document.querySelectorAll('.products-table-wrapper').forEach((el) => {
                 el.scrollLeft = 0;
             });
@@ -1799,8 +1957,8 @@
                     </td>
                     <td class="product-name-cell" title="{{ product.name }}">
                         <div class="product-name-stack">
-                            <a href="{% url 'admin_product_edit' product.pk %}" class="product-name-link"
-                                title="{% if user.is_superuser %}Editar{% else %}Ver{% endif %} {{ product.name }}">
+                            <a href="{% url 'admin_product_workspace' product.pk %}" class="product-name-link"
+                                title="Abrir centro comercial de {{ product.name }}">
                                 {{ product.name|truncatechars:52 }}
                             </a>
                             {% if product.import_duplicate_alert %}
@@ -1862,9 +2020,9 @@
                     </td>
                     <td class="product-actions-cell">
                         <div class="product-row-actions">
-                            <a href="{% url 'admin_product_edit' product.pk %}" class="btn btn-outline"
-                                title="{% if user.is_superuser %}Editar{% else %}Ver{% endif %}">
-                                {% if user.is_superuser %}Editar{% else %}Ver{% endif %}
+                            <a href="{% url 'admin_product_workspace' product.pk %}" class="btn btn-outline"
+                                title="Abrir centro comercial">
+                                Abrir
                             </a>
                             {% if user.is_superuser %}
                             <a href="{% url 'admin_product_delete' product.pk %}" class="btn btn-danger-outline"
@@ -1905,8 +2063,8 @@
                 </div>
             </div>
             <h3>
-                <a href="{% url 'admin_product_edit' product.pk %}" class="mobile-product-title-link"
-                    title="{% if user.is_superuser %}Editar{% else %}Ver{% endif %} {{ product.name }}">
+                <a href="{% url 'admin_product_workspace' product.pk %}" class="mobile-product-title-link"
+                    title="Abrir centro comercial de {{ product.name }}">
                     {{ product.name }}
                 </a>
             </h3>
@@ -1947,8 +2105,8 @@
                 {% endif %}
             </div>
             <div class="mobile-product-actions">
-                <a href="{% url 'admin_product_edit' product.pk %}" class="btn btn-outline">
-                    {% if user.is_superuser %}Editar{% else %}Ver{% endif %}
+                <a href="{% url 'admin_product_workspace' product.pk %}" class="btn btn-outline">
+                    Abrir
                 </a>
                 {% if user.is_superuser %}
                 <a href="{% url 'admin_product_delete' product.pk %}" class="btn btn-danger-outline">Eliminar</a>

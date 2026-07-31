@@ -146,6 +146,10 @@ from core.services.authorization import (
     get_user_capabilities,
     normalize_capabilities,
 )
+from core.services.warehouse_stock import (
+    get_warehouse_stock_initialization_preview,
+    initialize_warehouse_from_legacy_stock,
+)
 from core.services.company_context import (
     admin_company_access_table_available,
     get_active_company,
@@ -337,6 +341,7 @@ WAREHOUSE_SNAPSHOT_FIELDS = [
     "code",
     "name",
     "is_active",
+    "stock_balance_enabled",
     "notes",
 ]
 
@@ -559,6 +564,65 @@ def warehouse_edit(request, pk):
             "active_company": active_company,
             "form": form,
             "warehouse": warehouse,
+        },
+    )
+
+
+@user_passes_test(is_primary_superadmin)
+def warehouse_stock_initialize(request, pk):
+    active_company = _get_settings_active_company(
+        request,
+        message="Selecciona una empresa activa para inicializar stock.",
+    )
+    if not active_company:
+        return redirect("select_company")
+
+    warehouse = get_object_or_404(
+        Warehouse.objects.select_related("company"),
+        pk=pk,
+        company=active_company,
+    )
+    preview = get_warehouse_stock_initialization_preview(warehouse)
+    confirmation_text = f"INICIALIZAR {warehouse.code}".upper()
+
+    if request.method == "POST":
+        provided_confirmation = str(request.POST.get("confirmation", "")).strip().upper()
+        observation = str(request.POST.get("observation", "")).strip()
+        if provided_confirmation != confirmation_text:
+            messages.error(request, f"Escribe exactamente: {confirmation_text}")
+        elif len(observation) < 5:
+            messages.error(request, "La observacion es obligatoria y debe explicar la inicializacion.")
+        else:
+            result = initialize_warehouse_from_legacy_stock(warehouse)
+            log_admin_action(
+                request,
+                action="warehouse_stock_initialize",
+                target_type="warehouse",
+                target_id=warehouse.pk,
+                details={
+                    "company_id": warehouse.company_id,
+                    "warehouse_code": warehouse.code,
+                    "created_count": result.created_count,
+                    "skipped_count": result.skipped_count,
+                    "stock_total": str(result.stock_total),
+                    "observation": observation,
+                },
+            )
+            messages.success(
+                request,
+                f"Se inicializaron {result.created_count} productos en {warehouse.name}. "
+                "Verifica los saldos antes de activar el deposito.",
+            )
+            return redirect("admin_warehouse_edit", pk=warehouse.pk)
+
+    return render(
+        request,
+        "admin_panel/settings/warehouse_stock_initialize.html",
+        {
+            "active_company": active_company,
+            "warehouse": warehouse,
+            "preview": preview,
+            "confirmation_text": confirmation_text,
         },
     )
 
@@ -1786,4 +1850,4 @@ def export_products_diagnostic(request):
     return response
 
 
-__all__ = ['company_list', 'company_edit', '_get_settings_active_company', 'warehouse_list', 'warehouse_create', 'warehouse_edit', 'sales_document_type_list', 'sales_document_type_create', 'sales_document_type_edit', 'sales_document_type_toggle_enabled', '_sales_document_type_usage', '_resync_order_charges_for_sales_document_type', 'sales_document_type_delete', '_sync_company_default_pos', 'admin_user_list', 'admin_user_edit', 'admin_user_password_change', 'admin_user_send_password_reset_email', 'admin_user_delete', 'admin_user_permissions', 'export_products_diagnostic']
+__all__ = ['company_list', 'company_edit', '_get_settings_active_company', 'warehouse_list', 'warehouse_create', 'warehouse_edit', 'warehouse_stock_initialize', 'sales_document_type_list', 'sales_document_type_create', 'sales_document_type_edit', 'sales_document_type_toggle_enabled', '_sales_document_type_usage', '_resync_order_charges_for_sales_document_type', 'sales_document_type_delete', '_sync_company_default_pos', 'admin_user_list', 'admin_user_edit', 'admin_user_password_change', 'admin_user_send_password_reset_email', 'admin_user_delete', 'admin_user_permissions', 'export_products_diagnostic']

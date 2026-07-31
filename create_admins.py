@@ -3,26 +3,30 @@ Create admin users for FLEXS system.
 """
 import os
 import django
+import json
 
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'flexs_project.settings.local')
 django.setup()
 
 from django.contrib.auth.models import User
 
-# Admin users to create
-admins = [
-    {'username': 'josueflexs', 'password': 'josueflexs2007'},
-    {'username': 'fedeflexs', 'password': 'fedeflexs2026'},
-    {'username': 'ricardoroces', 'password': 'ricardoflexs1954'},
-    {'username': 'brianroces', 'password': 'brianrocesflexs2026'},
-]
+# JSON esperado: [{"username":"...","password":"..."}, ...]
+raw_admins = os.getenv('DJANGO_ADMIN_USERS_JSON')
+if not raw_admins:
+    raise RuntimeError('Define DJANGO_ADMIN_USERS_JSON antes de ejecutar este script.')
+
+admins = json.loads(raw_admins)
+if not isinstance(admins, list) or not admins:
+    raise RuntimeError('DJANGO_ADMIN_USERS_JSON debe ser una lista no vacía.')
 
 print("Creating admin users...")
 print("-" * 50)
 
 for admin_data in admins:
-    username = admin_data['username']
-    password = admin_data['password']
+    username = str(admin_data.get('username', '')).strip()
+    password = str(admin_data.get('password', ''))
+    if not username or not password:
+        raise RuntimeError('Cada administrador requiere username y password.')
     
     # Check if user already exists
     if User.objects.filter(username=username).exists():

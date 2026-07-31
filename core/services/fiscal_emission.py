@@ -1,14 +1,16 @@
-"""Fiscal emission workflow (Phase 4 - ARCA homologation first)."""
+"""Fail-closed ARCA authorization workflow.
+
+No retry path in this module can authorize an uncertain operation again.
+Uncertainty is resolved exclusively by ``core.services.fiscal_recovery``.
+"""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import timedelta
 from decimal import Decimal
 import logging
-from typing import Optional
+from typing import Callable
 
-from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.utils import timezone
@@ -17,6 +19,11 @@ from accounts.services.account_movement_service import (
     sync_fiscal_document_account_movement,
 )
 from core.models import (
+    FISCAL_ATTEMPT_OPERATION_AUTHORIZE,
+    FISCAL_ATTEMPT_RESULT_ERROR,
+    FISCAL_ATTEMPT_RESULT_SUCCESS,
+    FISCAL_ATTEMPT_RESULT_UNCERTAIN,
+    FISCAL_AUTHORIZED_STATUSES,
     FISCAL_DOC_TYPE_FA,
     FISCAL_DOC_TYPE_FB,
     FISCAL_DOC_TYPE_NCA,
@@ -24,13 +31,17 @@ from core.models import (
     FISCAL_INVOICE_DOC_TYPES,
     FISCAL_ISSUE_MODE_ARCA_WSFE,
     FISCAL_STATUS_AUTHORIZED,
-    FISCAL_STATUS_PENDING_RETRY,
+    FISCAL_STATUS_AUTHORIZED_WITH_OBSERVATIONS,
+    FISCAL_STATUS_MANUAL_REVIEW,
     FISCAL_STATUS_READY_TO_ISSUE,
     FISCAL_STATUS_REJECTED,
     FISCAL_STATUS_SUBMITTING,
+    FISCAL_STATUS_UNCERTAIN,
+    FISCAL_UNCERTAIN_STATUSES,
     FiscalDocument,
     FiscalDocumentSeries,
     FiscalEmissionAttempt,
+    FiscalSeriesReconciliation,
 )
 from core.services.arca_client import (
     ArcaConfigurationError,
@@ -39,9 +50,11 @@ from core.services.arca_client import (
 )
 from core.services.fiscal import (
     is_company_fiscal_ready,
-    is_invoice_ready,
-    resolve_payment_due_date,
     validate_credit_note_relationship,
+)
+from core.services.fiscal_integrity import (
+    fiscal_payload_hash,
+    validate_line_and_totals,
 )
 from core.services.sales_documents import (
     ensure_stock_movements_for_order_document,
@@ -61,11 +74,6 @@ ALLOWED_DOC_TYPES_FOR_EMISSION = {
     FISCAL_DOC_TYPE_NCA,
     FISCAL_DOC_TYPE_NCB,
 }
-RETRYABLE_DOCUMENT_STATUSES = {
-    FISCAL_STATUS_READY_TO_ISSUE,
-    FISCAL_STATUS_PENDING_RETRY,
-    FISCAL_STATUS_REJECTED,
-}
 
 
 @dataclass
@@ -75,60 +83,34 @@ class FiscalEmissionOutcome:
     message: str
 
 
-def _should_sync_series_with_arca(series: FiscalDocumentSeries) -> bool:
-    policy = str(getattr(settings, "FISCAL_ARCA_LAST_AUTH_SYNC_POLICY", "first") or "first").strip().lower()
-    if policy == "never":
-        return False
-    if policy == "always":
-        return True
-    # default: first
-    return int(series.next_number or 1) <= 1
+def _actor_for_fk(actor):
+    return actor if getattr(actor, "is_authenticated", False) else None
 
 
-def _sync_series_with_arca_last_authorized(document: FiscalDocument, series: FiscalDocumentSeries) -> None:
-    if document.issue_mode != FISCAL_ISSUE_MODE_ARCA_WSFE:
-        return
-    if not _should_sync_series_with_arca(series):
-        return
-
-    require_sync = bool(getattr(settings, "FISCAL_ARCA_REQUIRE_LAST_AUTH_SYNC", False))
-    try:
-        client = ArcaWsfeClient(company=document.company, point_of_sale=document.point_of_sale)
-        remote_last = int(client.fetch_last_authorized_number(doc_type=document.doc_type) or 0)
-        remote_next = max(remote_last + 1, 1)
-        current_next = int(series.next_number or 1)
-        if remote_next > current_next:
-            series.next_number = remote_next
-            series.save(update_fields=["next_number", "updated_at"])
-    except Exception as exc:
-        if require_sync:
-            raise ValidationError(
-                f"No se pudo sincronizar numeracion ARCA antes de emitir: {exc}"
-            )
+def _attempt_request_evidence(document, *, number):
+    return {
+        "correlation_id": str(document.correlation_id),
+        "idempotency_key": str(document.idempotency_key),
+        "snapshot_hash": document.snapshot_hash,
+        "payload_hash": document.payload_hash,
+        "issuer_cuit": document.issuer_cuit_snapshot,
+        "environment": document.environment_snapshot,
+        "point_of_sale": document.point_of_sale_number_snapshot,
+        "doc_type": document.doc_type,
+        "cbte_number": int(number),
+    }
 
 
-def _reserve_fiscal_number(document: FiscalDocument) -> int:
-    if document.number:
-        return int(document.number)
-
-    series, _ = FiscalDocumentSeries.objects.select_for_update().get_or_create(
-        company=document.company,
-        point_of_sale_ref=document.point_of_sale,
-        doc_type=document.doc_type,
-        defaults={
-            "point_of_sale": document.point_of_sale.number,
-            "next_number": 1,
-        },
-    )
-    if series.point_of_sale != document.point_of_sale.number:
-        series.point_of_sale = document.point_of_sale.number
-        series.save(update_fields=["point_of_sale", "updated_at"])
-    _sync_series_with_arca_last_authorized(document, series)
-
-    number = int(series.next_number or 1)
-    series.next_number = number + 1
-    series.save(update_fields=["next_number", "updated_at"])
-    return number
+def _document_lines(document):
+    return [
+        {
+            "net_amount": item.net_amount,
+            "discount_amount": item.discount_amount,
+            "iva_amount": item.iva_amount,
+            "total_amount": item.total_amount,
+        }
+        for item in document.items.all()
+    ]
 
 
 def _validate_before_submit(document: FiscalDocument):
@@ -136,306 +118,606 @@ def _validate_before_submit(document: FiscalDocument):
         raise ValidationError("Solo se puede emitir por ARCA cuando el modo es ARCA WSFE.")
     if document.doc_type not in ALLOWED_DOC_TYPES_FOR_EMISSION:
         raise ValidationError("Tipo de comprobante fiscal no permitido para emision ARCA.")
-    if document.status not in RETRYABLE_DOCUMENT_STATUSES:
+    if document.status != FISCAL_STATUS_READY_TO_ISSUE:
         raise ValidationError(
-            f"Estado fiscal no emitible: {document.get_status_display()}."
+            "La operacion no esta lista para una primera autorizacion. "
+            "Los resultados inciertos sólo admiten consulta."
         )
-    if not document.company_id:
-        raise ValidationError("Documento fiscal sin empresa.")
-    if not document.point_of_sale_id:
-        raise ValidationError("Documento fiscal sin punto de venta.")
+    if document.number is not None:
+        raise ValidationError("Una operacion READY no puede traer un numero decidido previamente.")
+    if not document.snapshot_hash or not isinstance(document.fiscal_snapshot, dict):
+        raise ValidationError("El documento no tiene snapshot fiscal inmutable y verificable.")
+    if fiscal_payload_hash(document.fiscal_snapshot) != document.snapshot_hash:
+        raise ValidationError("El hash del snapshot fiscal no coincide con su contenido.")
+    if not document.company_id or not document.point_of_sale_id:
+        raise ValidationError("Documento fiscal sin empresa o punto de venta.")
     if document.point_of_sale.company_id != document.company_id:
         raise ValidationError("El punto de venta no coincide con la empresa del comprobante.")
+    if (
+        document.environment_snapshot != document.point_of_sale.environment
+        or document.point_of_sale_number_snapshot != document.point_of_sale.number
+    ):
+        raise ValidationError("La identidad fiscal congelada no coincide con el punto de venta.")
+    if document.environment_snapshot != "homologation":
+        raise ValidationError("La autorizacion ARCA sólo esta habilitada para homologacion.")
     if not str(document.point_of_sale.number or "").isdigit():
-        raise ValidationError("El punto de venta fiscal debe ser numerico para emitir en ARCA.")
+        raise ValidationError("El punto de venta fiscal debe ser numerico.")
     if not document.point_of_sale.is_active:
         raise ValidationError("El punto de venta fiscal esta inactivo.")
-    if not document.client_company_ref_id:
-        raise ValidationError("Documento fiscal sin cliente empresa.")
-    if document.client_company_ref.company_id != document.company_id:
-        raise ValidationError("El cliente empresa no coincide con la empresa del comprobante.")
-    if document.order_id:
-        if document.order.company_id != document.company_id:
-            raise ValidationError("El pedido relacionado no coincide con la empresa del comprobante.")
-        if document.order.client_company_ref_id != document.client_company_ref_id:
-            raise ValidationError("El cliente empresa del pedido no coincide con el comprobante fiscal.")
-        invoice_ready, invoice_errors = is_invoice_ready(document.order)
-        if not invoice_ready:
-            raise ValidationError("Pedido no listo para facturar: " + " | ".join(invoice_errors))
+    if document.receiver_iva_condition_id_snapshot is None:
+        raise ValidationError("Falta CondicionIVAReceptorId en el snapshot fiscal.")
     if not document.items.exists():
-        raise ValidationError("El comprobante fiscal no tiene items cargados.")
-    if document.total is None or document.total <= 0:
+        raise ValidationError("El comprobante fiscal no tiene items congelados.")
+    if any(item.arca_iva_id is None for item in document.items.all()):
+        raise ValidationError("Existe una linea sin identificador de alicuota ARCA.")
+    totals = {
+        "subtotal_net": document.subtotal_net,
+        "discount_total": document.discount_total,
+        "tax_total": document.tax_total,
+        "total": document.total,
+    }
+    validate_line_and_totals(_document_lines(document), totals)
+    if Decimal(document.total or 0) <= 0:
         raise ValidationError("El comprobante fiscal debe tener total mayor a cero.")
-    allow_zero_iva = bool(getattr(settings, "FISCAL_ALLOW_ZERO_IVA_ARCA", False))
-    doc_supports_zero_iva = document.doc_type in {"FC", "NCC", "NDC"}
-    if not allow_zero_iva and not doc_supports_zero_iva:
-        iva_total = Decimal(document.tax_total or 0).quantize(Decimal("0.01"))
-        if iva_total <= 0:
-            raise ValidationError(
-                "El comprobante requiere IVA mayor a cero para emitir en ARCA."
-            )
     if document.doc_type in FISCAL_INVOICE_DOC_TYPES and document.related_document_id:
         raise ValidationError("Las facturas no deben vincularse a otro comprobante base.")
-
     relation_ok, relation_errors = validate_credit_note_relationship(document)
     if not relation_ok:
         raise ValidationError("Relacion fiscal invalida: " + " | ".join(relation_errors))
-
     company_ready, company_errors = is_company_fiscal_ready(document.company)
     if not company_ready:
         raise ValidationError("Empresa no lista para ARCA: " + " | ".join(company_errors))
 
 
-def emit_fiscal_document_now(*, fiscal_document: FiscalDocument, actor=None) -> FiscalEmissionOutcome:
-    """
-    Execute one real ARCA emission attempt for an existing local FiscalDocument.
-    No automatic retries in this phase.
-    """
+def _series_identity(document):
+    return {
+        "issuer_cuit": document.issuer_cuit_snapshot,
+        "environment": document.environment_snapshot,
+        "point_of_sale": document.point_of_sale_number_snapshot,
+        "doc_type": document.doc_type,
+    }
+
+
+def _record_reconciliation(
+    *,
+    series,
+    document,
+    actor,
+    local_before,
+    local_after,
+    remote_last,
+    outcome,
+    reason="",
+):
+    return FiscalSeriesReconciliation.objects.create(
+        series=series,
+        fiscal_document=document,
+        triggered_by=_actor_for_fk(actor),
+        correlation_id=document.correlation_id,
+        issuer_cuit=series.issuer_cuit,
+        environment=series.environment,
+        point_of_sale=series.point_of_sale,
+        doc_type=series.doc_type,
+        local_next_before=local_before,
+        local_next_after=local_after,
+        remote_last_authorized=remote_last,
+        outcome=outcome,
+        reason=sanitize_sensitive_text(reason)[:255],
+    )
+
+
+def _block_after_reconciliation_failure(*, document, series, actor, reason):
+    now = timezone.now()
+    local_next = int(series.next_number or 1)
+    series.blocked_at = now
+    series.blocked_reason = sanitize_sensitive_text(reason)[:255]
+    series.blocked_by_document = document
+    series.version = int(series.version or 0) + 1
+    series.save(
+        update_fields=[
+            "blocked_at",
+            "blocked_reason",
+            "blocked_by_document",
+            "version",
+            "updated_at",
+        ]
+    )
+    _record_reconciliation(
+        series=series,
+        document=document,
+        actor=actor,
+        local_before=local_next,
+        local_after=local_next,
+        remote_last=None,
+        outcome=FiscalSeriesReconciliation.OUTCOME_FAILED,
+        reason=reason,
+    )
+    document.transition_to(
+        FISCAL_STATUS_MANUAL_REVIEW,
+        error_code="series_reconciliation_failed",
+        error_message=sanitize_sensitive_text(reason),
+    )
+    return FiscalEmissionOutcome(
+        document=document,
+        state=FISCAL_STATUS_MANUAL_REVIEW,
+        message="No se pudo verificar la correlatividad; la serie quedo bloqueada.",
+    )
+
+
+def _finalize_safe_predispatch_failure(*, document_id, attempt_id, error_code, message):
+    with transaction.atomic():
+        document = FiscalDocument.objects.select_for_update().get(pk=document_id)
+        attempt = FiscalEmissionAttempt.objects.select_for_update().get(pk=attempt_id)
+        series = FiscalDocumentSeries.objects.select_for_update().get(pk=document.series_id)
+        attempt.finalize(
+            result_status=FISCAL_ATTEMPT_RESULT_ERROR,
+            response_payload={},
+            error_code=error_code,
+            error_message=sanitize_sensitive_text(message),
+        )
+        attempted_number = int(attempt.attempted_number or 0)
+        if attempted_number:
+            series.next_number = attempted_number
+        series.blocked_at = None
+        series.blocked_reason = ""
+        series.blocked_by_document = None
+        series.version = int(series.version or 0) + 1
+        series.save(
+            update_fields=[
+                "next_number",
+                "blocked_at",
+                "blocked_reason",
+                "blocked_by_document",
+                "version",
+                "updated_at",
+            ]
+        )
+        document.transition_to(
+            FISCAL_STATUS_READY_TO_ISSUE,
+            number=None,
+            payload_hash="",
+            authorization_started_at=None,
+            issued_at=None,
+            error_code=error_code,
+            error_message=sanitize_sensitive_text(message),
+        )
+    return FiscalEmissionOutcome(
+        document=document,
+        state=FISCAL_STATUS_READY_TO_ISSUE,
+        message="La autorizacion no fue despachada; la operacion sigue lista.",
+    )
+
+
+def _persist_authorization_boundary(*, attempt_id):
+    """Record possible dispatch before the SOAP transport is entered."""
+    try:
+        with transaction.atomic():
+            attempt = FiscalEmissionAttempt.objects.select_for_update().get(
+                pk=attempt_id
+            )
+            if not attempt.request_may_have_been_sent:
+                attempt.mark_dispatched()
+    except Exception as exc:
+        raise ArcaConfigurationError(
+            "No se pudo persistir la frontera de despacho fiscal."
+        ) from exc
+
+
+def emit_fiscal_document_now(
+    *,
+    fiscal_document: FiscalDocument,
+    actor=None,
+    client_factory: Callable = ArcaWsfeClient,
+) -> FiscalEmissionOutcome:
+    """Authorize exactly once; ambiguous outcomes become query-only."""
+
     document_id = getattr(fiscal_document, "id", None)
     if not document_id:
         raise ValidationError("Documento fiscal invalido.")
 
     started_at = timezone.now()
+    client = None
 
     with transaction.atomic():
-        locked_doc = (
-            FiscalDocument.objects.select_for_update()
+        document = (
+            FiscalDocument.objects.select_for_update(of=("self",))
             .select_related(
                 "company",
                 "point_of_sale",
-                "client_company_ref",
-                "client_profile",
-                "order",
+                "series",
+                "related_document",
+                "sales_document_type",
             )
             .prefetch_related("items")
             .get(pk=document_id)
         )
-        if locked_doc.status == FISCAL_STATUS_AUTHORIZED and locked_doc.cae:
-            if locked_doc.order_id:
-                try:
-                    ensure_stock_movements_for_order_document(
-                        order=locked_doc.order,
-                        company=locked_doc.company,
-                        sales_document_type=locked_doc.sales_document_type,
-                        actor=actor,
-                        fiscal_document=locked_doc,
-                    )
-                except Exception:
-                    logger.exception(
-                        "No se pudo reconciliar stock del comprobante autorizado %s",
-                        locked_doc.pk,
-                    )
+        if document.status in FISCAL_AUTHORIZED_STATUSES and document.cae:
             return FiscalEmissionOutcome(
-                document=locked_doc,
-                state="authorized",
-                message="El comprobante ya estaba autorizado con CAE.",
+                document=document,
+                state=document.status,
+                message="El comprobante ya estaba autorizado.",
+            )
+        _validate_before_submit(document)
+
+        identity = _series_identity(document)
+        series, _ = FiscalDocumentSeries.objects.get_or_create(
+            company=document.company,
+            point_of_sale_ref=document.point_of_sale,
+            doc_type=document.doc_type,
+            defaults={
+                **identity,
+                "next_number": 1,
+            },
+        )
+        series = FiscalDocumentSeries.objects.select_for_update().get(pk=series.pk)
+        if (
+            series.issuer_cuit != identity["issuer_cuit"]
+            or series.environment != identity["environment"]
+            or series.point_of_sale != identity["point_of_sale"]
+        ):
+            raise ValidationError("La serie existente no coincide con la identidad fiscal congelada.")
+        if series.blocked_at:
+            raise ValidationError(
+                "La serie fiscal esta bloqueada y requiere reconciliacion o recuperacion."
+            )
+        blocking_operation = (
+            FiscalDocument.objects.filter(
+                issuer_cuit_snapshot=identity["issuer_cuit"],
+                environment_snapshot=identity["environment"],
+                point_of_sale_number_snapshot=identity["point_of_sale"],
+                doc_type=identity["doc_type"],
+                status__in=FISCAL_UNCERTAIN_STATUSES,
+            )
+            .exclude(pk=document.pk)
+            .first()
+        )
+        if blocking_operation:
+            raise ValidationError(
+                "Otra operacion incierta mantiene bloqueada esta serie fiscal."
             )
 
-        if locked_doc.status == FISCAL_STATUS_SUBMITTING:
-            raise ValidationError("El comprobante ya se encuentra en proceso de envio.")
+        client = client_factory(
+            company=document.company,
+            point_of_sale=document.point_of_sale,
+        )
+        local_before = int(series.next_number or 1)
+        try:
+            remote_last = int(
+                client.fetch_last_authorized_number(doc_type=document.doc_type)
+            )
+        except Exception as exc:
+            return _block_after_reconciliation_failure(
+                document=document,
+                series=series,
+                actor=actor,
+                reason=f"No se pudo consultar FECompUltimoAutorizado: {exc}",
+            )
+        if remote_last < 0:
+            return _block_after_reconciliation_failure(
+                document=document,
+                series=series,
+                actor=actor,
+                reason="FECompUltimoAutorizado devolvio un valor invalido.",
+            )
 
-        _validate_before_submit(locked_doc)
-        reserved_number = _reserve_fiscal_number(locked_doc)
-        locked_doc.number = reserved_number
-        locked_doc.status = FISCAL_STATUS_SUBMITTING
-        locked_doc.attempts_count = int(locked_doc.attempts_count or 0) + 1
-        locked_doc.last_attempt_at = started_at
-        locked_doc.error_code = ""
-        locked_doc.error_message = ""
-        locked_doc.save(
+        local_last = max(local_before - 1, 0)
+        if local_last > remote_last:
+            series.remote_last_authorized = remote_last
+            series.last_reconciled_at = timezone.now()
+            series.blocked_at = timezone.now()
+            series.blocked_reason = "La numeracion local esta adelantada a ARCA."
+            series.blocked_by_document = document
+            series.version = int(series.version or 0) + 1
+            series.save(
+                update_fields=[
+                    "remote_last_authorized",
+                    "last_reconciled_at",
+                    "blocked_at",
+                    "blocked_reason",
+                    "blocked_by_document",
+                    "version",
+                    "updated_at",
+                ]
+            )
+            _record_reconciliation(
+                series=series,
+                document=document,
+                actor=actor,
+                local_before=local_before,
+                local_after=local_before,
+                remote_last=remote_last,
+                outcome=FiscalSeriesReconciliation.OUTCOME_BLOCKED,
+                reason=series.blocked_reason,
+            )
+            document.transition_to(
+                FISCAL_STATUS_MANUAL_REVIEW,
+                error_code="local_number_ahead",
+                error_message=series.blocked_reason,
+            )
+            return FiscalEmissionOutcome(
+                document=document,
+                state=FISCAL_STATUS_MANUAL_REVIEW,
+                message=series.blocked_reason,
+            )
+
+        number = remote_last + 1
+        local_after_reconcile = number
+        outcome = (
+            FiscalSeriesReconciliation.OUTCOME_ADVANCED
+            if remote_last > local_last
+            else FiscalSeriesReconciliation.OUTCOME_MATCHED
+        )
+        series.next_number = number + 1
+        series.remote_last_authorized = remote_last
+        series.last_reconciled_at = timezone.now()
+        series.blocked_at = started_at
+        series.blocked_reason = "Autorizacion fiscal en curso."
+        series.blocked_by_document = document
+        series.version = int(series.version or 0) + 1
+
+        payload_hash = fiscal_payload_hash(
+            {
+                "snapshot_hash": document.snapshot_hash,
+                **identity,
+                "number": number,
+            }
+        )
+        attempt_number = (
+            document.emission_attempts.filter(
+                operation=FISCAL_ATTEMPT_OPERATION_AUTHORIZE
+            ).count()
+            + 1
+        )
+        document.transition_to(
+            FISCAL_STATUS_SUBMITTING,
+            series=series,
+            number=number,
+            payload_hash=payload_hash,
+            issued_at=started_at,
+            authorization_started_at=started_at,
+            attempts_count=int(document.attempts_count or 0) + 1,
+            last_attempt_at=started_at,
+            next_retry_at=None,
+            error_code="",
+            error_message="",
+        )
+        series.save(
             update_fields=[
-                "number",
-                "status",
-                "attempts_count",
-                "last_attempt_at",
-                "error_code",
-                "error_message",
+                "next_number",
+                "remote_last_authorized",
+                "last_reconciled_at",
+                "blocked_at",
+                "blocked_reason",
+                "blocked_by_document",
+                "version",
                 "updated_at",
             ]
         )
-        sync_sales_document_type_counter(
-            sales_document_type=locked_doc.sales_document_type,
-            number=reserved_number,
+        _record_reconciliation(
+            series=series,
+            document=document,
+            actor=actor,
+            local_before=local_before,
+            local_after=local_after_reconcile,
+            remote_last=remote_last,
+            outcome=outcome,
+            reason="Reconciliacion previa obligatoria.",
         )
-        attempt_number = int(locked_doc.attempts_count or 1)
-
-    request_payload = {}
-    response_payload = {}
-    result_status = "pending"
-    final_state = FISCAL_STATUS_PENDING_RETRY
-    error_code = ""
-    error_message = ""
-    cae = ""
-    cae_due_date = None
+        attempt = FiscalEmissionAttempt.objects.create(
+            fiscal_document=document,
+            triggered_by=_actor_for_fk(actor),
+            request_payload=_attempt_request_evidence(document, number=number),
+            response_payload={},
+            operation=FISCAL_ATTEMPT_OPERATION_AUTHORIZE,
+            correlation_id=document.correlation_id,
+            payload_hash=payload_hash,
+            request_may_have_been_sent=False,
+            issuer_cuit=identity["issuer_cuit"],
+            environment=identity["environment"],
+            point_of_sale=identity["point_of_sale"],
+            doc_type=identity["doc_type"],
+            attempted_number=number,
+            attempt_number=attempt_number,
+            will_retry=False,
+        )
 
     try:
-        client = ArcaWsfeClient(company=locked_doc.company, point_of_sale=locked_doc.point_of_sale)
-        client_result = client.emit_fiscal_document(
-            fiscal_document=locked_doc,
-            cbte_number=int(locked_doc.number),
+        result = client.emit_fiscal_document(
+            fiscal_document=document,
+            cbte_number=number,
+            mark_dispatched=lambda: _persist_authorization_boundary(
+                attempt_id=attempt.id
+            ),
         )
-        request_payload = client_result.request_payload or {}
-        response_payload = client_result.response_payload or {}
-        error_code = client_result.error_code or ""
-        error_message = client_result.error_message or ""
-
-        if client_result.state == "authorized":
-            final_state = FISCAL_STATUS_AUTHORIZED
-            result_status = "success"
-            cae = client_result.cae or ""
-            cae_due_date = client_result.cae_due_date
-        elif client_result.state == "rejected":
-            final_state = FISCAL_STATUS_REJECTED
-            result_status = "error"
-        else:
-            final_state = FISCAL_STATUS_PENDING_RETRY
-            result_status = "pending"
-            if not error_code:
-                error_code = "pending_retry"
-            if not error_message:
-                error_message = "No se pudo completar la emision. Reintentar manualmente."
-    except ArcaConfigurationError as exc:
-        final_state = FISCAL_STATUS_REJECTED
-        result_status = "error"
-        error_code = "arca_config"
-        error_message = str(exc)
     except ArcaTemporaryError as exc:
-        final_state = FISCAL_STATUS_PENDING_RETRY
-        result_status = "pending"
-        error_code = exc.error_code or "temporary_error"
+        if not exc.possibly_sent:
+            return _finalize_safe_predispatch_failure(
+                document_id=document_id,
+                attempt_id=attempt.id,
+                error_code=exc.error_code or "predispatch_temporary_error",
+                message=str(exc),
+            )
+        result = None
+        final_state = FISCAL_STATUS_UNCERTAIN
+        result_status = FISCAL_ATTEMPT_RESULT_UNCERTAIN
+        response_payload = exc.response_payload or {}
+        error_code = exc.error_code or "uncertain_transport"
         error_message = str(exc)
-        request_payload = exc.request_payload or request_payload
-        response_payload = exc.response_payload or response_payload
+        cae = ""
+        cae_due_date = None
+    except ArcaConfigurationError as exc:
+        return _finalize_safe_predispatch_failure(
+            document_id=document_id,
+            attempt_id=attempt.id,
+            error_code="arca_configuration",
+            message=str(exc),
+        )
     except Exception as exc:
-        final_state = FISCAL_STATUS_PENDING_RETRY
-        result_status = "pending"
-        error_code = "unexpected_error"
-        error_message = f"Fallo inesperado en emision fiscal: {exc}"
+        result = None
+        final_state = FISCAL_STATUS_UNCERTAIN
+        result_status = FISCAL_ATTEMPT_RESULT_UNCERTAIN
+        response_payload = {}
+        error_code = "unexpected_after_authorization_boundary"
+        error_message = f"Resultado de autorizacion incierto: {exc}"
+        cae = ""
+        cae_due_date = None
+    else:
+        final_state = {
+            "authorized": FISCAL_STATUS_AUTHORIZED,
+            "authorized_with_observations": FISCAL_STATUS_AUTHORIZED_WITH_OBSERVATIONS,
+            "rejected": FISCAL_STATUS_REJECTED,
+            "uncertain": FISCAL_STATUS_UNCERTAIN,
+        }.get(result.state, FISCAL_STATUS_UNCERTAIN)
+        result_status = (
+            FISCAL_ATTEMPT_RESULT_SUCCESS
+            if final_state in {
+                FISCAL_STATUS_AUTHORIZED,
+                FISCAL_STATUS_AUTHORIZED_WITH_OBSERVATIONS,
+            }
+            else (
+                FISCAL_ATTEMPT_RESULT_ERROR
+                if final_state == FISCAL_STATUS_REJECTED
+                else FISCAL_ATTEMPT_RESULT_UNCERTAIN
+            )
+        )
+        response_payload = result.response_payload or {}
+        error_code = result.error_code or ""
+        error_message = result.error_message or ""
+        cae = result.cae or ""
+        cae_due_date = result.cae_due_date
 
-    # ARCA responses can include the complete SOAP envelope and WSAA
-    # credentials.  Sanitize at the persistence boundary so every caller,
-    # including unexpected exception paths, receives the same protection.
-    request_payload = sanitize_sensitive_payload(request_payload or {})
-    response_payload = sanitize_sensitive_payload(response_payload or {})
-    error_message = sanitize_sensitive_text(error_message)
+    if final_state in {
+        FISCAL_STATUS_AUTHORIZED,
+        FISCAL_STATUS_AUTHORIZED_WITH_OBSERVATIONS,
+    } and (not cae or not cae_due_date):
+        final_state = FISCAL_STATUS_UNCERTAIN
+        result_status = FISCAL_ATTEMPT_RESULT_UNCERTAIN
+        error_code = "authorized_response_incomplete"
+        error_message = "La respuesta autorizada no incluyo CAE y vencimiento completos."
 
     finished_at = timezone.now()
     duration_ms = max(int((finished_at - started_at).total_seconds() * 1000), 0)
-    retry_minutes = int(getattr(settings, "FISCAL_RETRY_MINUTES", 10) or 10)
-    max_retry_attempts = int(getattr(settings, "FISCAL_MAX_AUTO_RETRIES", 5) or 5)
+    response_payload = sanitize_sensitive_payload(response_payload)
+    error_message = sanitize_sensitive_text(error_message)
 
     with transaction.atomic():
-        locked_doc = FiscalDocument.objects.select_for_update().get(pk=document_id)
-        will_retry = final_state == FISCAL_STATUS_PENDING_RETRY
-        next_retry_at = None
-        if will_retry:
-            if int(locked_doc.attempts_count or 0) >= max_retry_attempts:
-                final_state = FISCAL_STATUS_REJECTED
-                will_retry = False
-                if not error_code:
-                    error_code = "retry_limit_reached"
-                if not error_message:
-                    error_message = "Se alcanzo el maximo de reintentos automaticos."
-            else:
-                retry_delay = retry_minutes if retry_minutes >= 1 else 1
-                next_retry_at = timezone.now() + timedelta(minutes=retry_delay)
-
-        FiscalEmissionAttempt.objects.create(
-            fiscal_document=locked_doc,
-            triggered_by=actor if getattr(actor, "is_authenticated", False) else None,
-            request_payload=request_payload or {},
-            response_payload=response_payload or {},
-            attempt_number=attempt_number,
-            duration_ms=duration_ms,
-            will_retry=will_retry,
+        document = FiscalDocument.objects.select_for_update().get(pk=document_id)
+        attempt = FiscalEmissionAttempt.objects.select_for_update().get(pk=attempt.id)
+        series = FiscalDocumentSeries.objects.select_for_update().get(pk=document.series_id)
+        if not attempt.request_may_have_been_sent:
+            # Defensive compatibility for a custom test/provider adapter that
+            # returned without honoring the dispatch callback.
+            attempt.mark_dispatched()
+        attempt.finalize(
             result_status=result_status,
+            response_payload=response_payload,
+            duration_ms=duration_ms,
             error_code=error_code,
             error_message=error_message,
         )
 
-        locked_doc.status = final_state
-        locked_doc.error_code = error_code or ""
-        locked_doc.error_message = error_message or ""
-        existing_request_payload = (
-            dict(locked_doc.request_payload)
-            if isinstance(locked_doc.request_payload, dict)
-            else {}
+        if final_state in {
+            FISCAL_STATUS_AUTHORIZED,
+            FISCAL_STATUS_AUTHORIZED_WITH_OBSERVATIONS,
+        }:
+            series.remote_last_authorized = number
+            series.next_number = number + 1
+            series.blocked_at = None
+            series.blocked_reason = ""
+            series.blocked_by_document = None
+
+        if final_state == FISCAL_STATUS_REJECTED:
+            series.next_number = number
+            series.blocked_at = None
+            series.blocked_reason = ""
+            series.blocked_by_document = None
+
+        if final_state == FISCAL_STATUS_UNCERTAIN:
+            series.blocked_at = series.blocked_at or finished_at
+            series.blocked_reason = "Resultado de autorizacion incierto; sólo se permite consultar."
+            series.blocked_by_document = document
+
+        series.version = int(series.version or 0) + 1
+        series.save(
+            update_fields=[
+                "next_number",
+                "remote_last_authorized",
+                "blocked_at",
+                "blocked_reason",
+                "blocked_by_document",
+                "version",
+                "updated_at",
+            ]
         )
-        existing_response_payload = (
-            dict(locked_doc.response_payload)
-            if isinstance(locked_doc.response_payload, dict)
-            else {}
-        )
-        existing_request_payload["arca_request"] = request_payload or {}
-        existing_request_payload["arca_attempt"] = {
-            "attempt_number": attempt_number,
-            "at": finished_at.isoformat(),
+
+        transition_changes = {
+            "error_code": error_code,
+            "error_message": error_message,
+            "response_payload": response_payload,
+            "last_attempt_at": finished_at,
+            "next_retry_at": None,
         }
-        existing_response_payload["arca_response"] = response_payload or {}
-        locked_doc.request_payload = existing_request_payload
-        locked_doc.response_payload = existing_response_payload
-        locked_doc.last_attempt_at = finished_at
-        locked_doc.next_retry_at = next_retry_at
-
-        update_fields = [
-            "status",
-            "error_code",
-            "error_message",
-            "request_payload",
-            "response_payload",
-            "last_attempt_at",
-            "next_retry_at",
-            "updated_at",
-        ]
-
-        if final_state == FISCAL_STATUS_AUTHORIZED:
-            locked_doc.cae = cae
-            locked_doc.cae_due_date = cae_due_date
-            if not locked_doc.issued_at:
-                locked_doc.issued_at = timezone.now()
-                update_fields.append("issued_at")
-            if not locked_doc.payment_due_date:
-                locked_doc.payment_due_date = resolve_payment_due_date(
-                    order=locked_doc.order,
-                    issued_at=locked_doc.issued_at or locked_doc.created_at,
-                )
-                update_fields.append("payment_due_date")
-            update_fields.extend(["cae", "cae_due_date"])
-
-        locked_doc.save(update_fields=update_fields)
-
-    try:
-        sync_fiscal_document_account_movement(
-            fiscal_document=locked_doc,
-            actor=actor,
-        )
-    except Exception:
-        logger.exception(
-            "No se pudo sincronizar cuenta corriente luego de emitir el comprobante %s",
-            locked_doc.pk,
-        )
-
-    if final_state == FISCAL_STATUS_AUTHORIZED and locked_doc.cae and locked_doc.order_id:
-        try:
-            ensure_stock_movements_for_order_document(
-                order=locked_doc.order,
-                company=locked_doc.company,
-                sales_document_type=locked_doc.sales_document_type,
-                actor=actor,
-                fiscal_document=locked_doc,
+        if final_state in {
+            FISCAL_STATUS_AUTHORIZED,
+            FISCAL_STATUS_AUTHORIZED_WITH_OBSERVATIONS,
+        }:
+            transition_changes.update(
+                {
+                    "cae": cae,
+                    "cae_due_date": cae_due_date,
+                    "resolved_at": finished_at,
+                }
             )
+        elif final_state == FISCAL_STATUS_REJECTED:
+            transition_changes.update(
+                {
+                    "number": None,
+                    "resolved_at": finished_at,
+                }
+            )
+        document.transition_to(final_state, **transition_changes)
+
+    if final_state in {
+        FISCAL_STATUS_AUTHORIZED,
+        FISCAL_STATUS_AUTHORIZED_WITH_OBSERVATIONS,
+    }:
+        sync_sales_document_type_counter(
+            sales_document_type=document.sales_document_type,
+            number=number,
+        )
+        try:
+            sync_fiscal_document_account_movement(
+                fiscal_document=document,
+                actor=actor,
+            )
+            if document.order_id:
+                ensure_stock_movements_for_order_document(
+                    order=document.order,
+                    company=document.company,
+                    sales_document_type=document.sales_document_type,
+                    actor=actor,
+                    fiscal_document=document,
+                )
         except Exception:
-            # A CAE otorgado no se puede deshacer localmente. El fallo queda en
-            # logs para reparacion idempotente sin alterar la autorizacion fiscal.
             logger.exception(
-                "No se pudo actualizar stock luego del CAE del comprobante %s",
-                locked_doc.pk,
+                "Fallo una proyeccion comercial posterior a CAE para documento %s",
+                document.pk,
             )
 
     message = {
         FISCAL_STATUS_AUTHORIZED: "Comprobante autorizado en ARCA.",
-        FISCAL_STATUS_PENDING_RETRY: "No se pudo completar la emision. Quedo pendiente de reintento.",
-        FISCAL_STATUS_REJECTED: "ARCA rechazo la emision del comprobante.",
-    }.get(final_state, "Resultado de emision fiscal actualizado.")
-
-    return FiscalEmissionOutcome(document=locked_doc, state=final_state, message=message)
+        FISCAL_STATUS_AUTHORIZED_WITH_OBSERVATIONS: (
+            "Comprobante autorizado en ARCA con observaciones."
+        ),
+        FISCAL_STATUS_REJECTED: (
+            "ARCA rechazo esta operacion; una correccion requiere una nueva operacion."
+        ),
+        FISCAL_STATUS_UNCERTAIN: (
+            "Resultado incierto: no se reenviara y sólo se consultara el comprobante."
+        ),
+    }[final_state]
+    return FiscalEmissionOutcome(
+        document=document,
+        state=final_state,
+        message=message,
+    )

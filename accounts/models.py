@@ -11,6 +11,7 @@ from django.utils import timezone
 from django.core.exceptions import ValidationError
 from django.utils.text import slugify
 
+from accounts.fiscal_identity import is_valid_cuit, normalize_fiscal_document
 from core.models import Company, FISCAL_BILLABLE_DOC_TYPES
 
 class ClientCategory(models.Model):
@@ -107,6 +108,20 @@ class ClientProfile(models.Model):
         ('exento', 'Exento'),
         ('consumidor_final', 'Consumidor Final'),
     ]
+    IVA_SOURCE_UNKNOWN = "unknown"
+    IVA_SOURCE_LEGACY_PENDING = "legacy_pending"
+    IVA_SOURCE_MANUAL = "manual"
+    IVA_SOURCE_ARCA = "arca"
+    IVA_SOURCE_PROVIDER = "provider"
+    IVA_SOURCE_IMPORT = "import"
+    IVA_SOURCE_CHOICES = [
+        (IVA_SOURCE_UNKNOWN, "Pendiente de validar"),
+        (IVA_SOURCE_LEGACY_PENDING, "Dato historico pendiente"),
+        (IVA_SOURCE_MANUAL, "Validacion manual"),
+        (IVA_SOURCE_ARCA, "Parametro ARCA"),
+        (IVA_SOURCE_PROVIDER, "Proveedor externo"),
+        (IVA_SOURCE_IMPORT, "Importacion"),
+    ]
     CLIENT_TYPE_CHOICES = [
         ('taller', 'Taller'),
         ('distribuidora', 'Distribuidora'),
@@ -147,6 +162,15 @@ class ClientProfile(models.Model):
         max_length=20,
         blank=True,
         verbose_name="CUIT/DNI"
+    )
+    normalized_fiscal_document = models.CharField(
+        max_length=20,
+        null=True,
+        blank=True,
+        unique=True,
+        db_index=True,
+        editable=False,
+        verbose_name="Documento fiscal normalizado",
     )
     province = models.CharField(
         max_length=100,
@@ -195,6 +219,22 @@ class ClientProfile(models.Model):
         blank=True,
         verbose_name="Condición IVA"
     )
+    iva_condition_arca_id = models.PositiveSmallIntegerField(
+        null=True,
+        blank=True,
+        verbose_name="Condicion IVA ARCA ID",
+    )
+    iva_condition_source = models.CharField(
+        max_length=20,
+        choices=IVA_SOURCE_CHOICES,
+        default=IVA_SOURCE_UNKNOWN,
+        verbose_name="Fuente condicion IVA",
+    )
+    iva_condition_validated_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="Condicion IVA validada",
+    )
     client_type = models.CharField(
         max_length=50,
         choices=CLIENT_TYPE_CHOICES,
@@ -204,6 +244,11 @@ class ClientProfile(models.Model):
     is_approved = models.BooleanField(
         default=True,
         verbose_name="Cuenta aprobada"
+    )
+    commercial_observation = models.TextField(
+        blank=True,
+        verbose_name="Observacion comercial",
+        help_text="Contexto general para ventas y atencion del cliente.",
     )
     notes = models.TextField(
         blank=True,
@@ -217,6 +262,65 @@ class ClientProfile(models.Model):
         verbose_name_plural = "Perfiles de Clientes"
         ordering = ['company_name']
 
+    def clean(self):
+        super().clean()
+        document_number = self.document_number or self.cuit_dni or ""
+        normalized = normalize_fiscal_document(document_number)
+
+        if self.document_type in {"cuit", "cuil"} and normalized:
+            if not is_valid_cuit(normalized):
+                raise ValidationError(
+                    {"document_number": "El CUIT/CUIL no tiene formato o digito verificador valido."}
+                )
+
+        self.normalized_fiscal_document = normalized or None
+        if self.document_type in {"cuit", "cuil"} and normalized:
+            self.document_number = normalized
+            self.cuit_dni = normalized
+
+        pending_sources = {
+            self.IVA_SOURCE_UNKNOWN,
+            self.IVA_SOURCE_LEGACY_PENDING,
+        }
+        if self.iva_condition_arca_id is not None:
+            errors = {}
+            if self.iva_condition_source in pending_sources:
+                errors["iva_condition_source"] = (
+                    "Debe indicarse la fuente verificable de la condicion IVA ARCA."
+                )
+            if not self.iva_condition_validated_at:
+                errors["iva_condition_validated_at"] = (
+                    "Debe indicarse cuando se valido la condicion IVA ARCA."
+                )
+            if errors:
+                raise ValidationError(errors)
+        elif self.iva_condition_validated_at:
+            raise ValidationError(
+                {
+                    "iva_condition_validated_at": (
+                        "No puede registrarse una validacion sin un ID oficial de condicion IVA."
+                    )
+                }
+            )
+
+    def save(self, *args, **kwargs):
+        if not kwargs.get("raw"):
+            if self.pk:
+                previous = type(self).objects.filter(pk=self.pk).only(
+                    "iva_condition",
+                    "iva_condition_arca_id",
+                ).first()
+                if (
+                    previous
+                    and previous.iva_condition != self.iva_condition
+                    and previous.iva_condition_arca_id == self.iva_condition_arca_id
+                ):
+                    self.iva_condition_arca_id = None
+                    self.iva_condition_source = self.IVA_SOURCE_LEGACY_PENDING
+                    self.iva_condition_validated_at = None
+            self.clean()
+        super().save(*args, **kwargs)
+
     def __str__(self):
         return f"{self.company_name} ({self.user.username})"
 
@@ -228,6 +332,7 @@ class ClientProfile(models.Model):
             .filter(company=company, is_active=True, company__is_active=True)
             .first()
         )
+
 
     def get_effective_client_category(self, company=None):
         link = self.get_company_link(company) if company else None
@@ -353,6 +458,100 @@ class ClientProfile(models.Model):
         if transactions.exclude(movement_state='voided').exists():
             return Decimal('0.00')
         return self.get_total_orders_for_balance(company=company) - self.get_total_paid(company=company)
+
+
+class ClientTask(models.Model):
+    """Auditable commercial reminder assigned to an internal operator."""
+
+    STATUS_PENDING = "pending"
+    STATUS_COMPLETED = "completed"
+    STATUS_CANCELLED = "cancelled"
+    STATUS_CHOICES = [
+        (STATUS_PENDING, "Pendiente"),
+        (STATUS_COMPLETED, "Completada"),
+        (STATUS_CANCELLED, "Cancelada"),
+    ]
+
+    PRIORITY_LOW = "low"
+    PRIORITY_NORMAL = "normal"
+    PRIORITY_HIGH = "high"
+    PRIORITY_URGENT = "urgent"
+    PRIORITY_CHOICES = [
+        (PRIORITY_LOW, "Baja"),
+        (PRIORITY_NORMAL, "Normal"),
+        (PRIORITY_HIGH, "Alta"),
+        (PRIORITY_URGENT, "Urgente"),
+    ]
+
+    client_profile = models.ForeignKey(
+        ClientProfile,
+        on_delete=models.CASCADE,
+        related_name="commercial_tasks",
+        verbose_name="Cliente",
+    )
+    company = models.ForeignKey(
+        "core.Company",
+        on_delete=models.PROTECT,
+        related_name="client_tasks",
+        verbose_name="Empresa",
+    )
+    assigned_to = models.ForeignKey(
+        User,
+        on_delete=models.PROTECT,
+        related_name="assigned_client_tasks",
+        verbose_name="Responsable",
+    )
+    title = models.CharField(max_length=160, verbose_name="Titulo")
+    note = models.TextField(blank=True, verbose_name="Detalle")
+    due_at = models.DateTimeField(verbose_name="Fecha del recordatorio")
+    priority = models.CharField(
+        max_length=16,
+        choices=PRIORITY_CHOICES,
+        default=PRIORITY_NORMAL,
+        verbose_name="Prioridad",
+    )
+    status = models.CharField(
+        max_length=16,
+        choices=STATUS_CHOICES,
+        default=STATUS_PENDING,
+        db_index=True,
+        verbose_name="Estado",
+    )
+    completion_note = models.TextField(blank=True, verbose_name="Resultado")
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.PROTECT,
+        related_name="created_client_tasks",
+        verbose_name="Creada por",
+    )
+    completed_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="completed_client_tasks",
+        verbose_name="Cerrada por",
+    )
+    completed_at = models.DateTimeField(null=True, blank=True, verbose_name="Cerrada")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Tarea comercial de cliente"
+        verbose_name_plural = "Tareas comerciales de clientes"
+        ordering = ["status", "due_at", "-priority", "-id"]
+        indexes = [
+            models.Index(fields=["company", "status", "due_at"]),
+            models.Index(fields=["assigned_to", "status", "due_at"]),
+            models.Index(fields=["client_profile", "status", "due_at"]),
+        ]
+
+    @property
+    def is_overdue(self):
+        return self.status == self.STATUS_PENDING and self.due_at < timezone.now()
+
+    def __str__(self):
+        return f"{self.client_profile.company_name}: {self.title}"
 
 
 class ClientCompany(models.Model):

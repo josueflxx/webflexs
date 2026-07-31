@@ -3,12 +3,14 @@ Core app models - site-wide settings, analytics, and operation logs.
 """
 import secrets
 import uuid
+import logging
 from urllib.parse import urlsplit
 
 from django.db import models, transaction
 from django.conf import settings
 from django.core.cache import cache
 from django.core.exceptions import ValidationError
+from django.db.models.deletion import ProtectedError
 from django.utils import timezone
 from django.utils.text import slugify
 
@@ -59,31 +61,86 @@ FISCAL_ISSUE_MODE_CHOICES = [
     (FISCAL_ISSUE_MODE_EXTERNAL_SAAS, "Externo SaaS"),
 ]
 
+FISCAL_STATUS_DRAFT = "draft"
 FISCAL_STATUS_READY_TO_ISSUE = "ready_to_issue"
 FISCAL_STATUS_SUBMITTING = "submitting"
 FISCAL_STATUS_AUTHORIZED = "authorized"
+FISCAL_STATUS_AUTHORIZED_WITH_OBSERVATIONS = "authorized_with_observations"
+FISCAL_STATUS_UNCERTAIN = "uncertain"
+FISCAL_STATUS_RECOVERY_PENDING = "recovery_pending"
+FISCAL_STATUS_RECOVERED_AUTHORIZED = "recovered_authorized"
+FISCAL_STATUS_RECOVERED_NOT_FOUND = "recovered_not_found"
+FISCAL_STATUS_MANUAL_REVIEW = "manual_review"
 FISCAL_STATUS_PENDING_RETRY = "pending_retry"
 FISCAL_STATUS_REJECTED = "rejected"
 FISCAL_STATUS_VOIDED = "voided"
 FISCAL_STATUS_EXTERNAL_RECORDED = "external_recorded"
 FISCAL_STATUS_CHOICES = [
+    (FISCAL_STATUS_DRAFT, "Borrador"),
     (FISCAL_STATUS_READY_TO_ISSUE, "Listo para emitir"),
     (FISCAL_STATUS_SUBMITTING, "Enviando"),
     (FISCAL_STATUS_AUTHORIZED, "Autorizado"),
-    (FISCAL_STATUS_PENDING_RETRY, "Pendiente reintento"),
+    (FISCAL_STATUS_AUTHORIZED_WITH_OBSERVATIONS, "Autorizado con observaciones"),
+    (FISCAL_STATUS_UNCERTAIN, "Resultado incierto"),
+    (FISCAL_STATUS_RECOVERY_PENDING, "Consulta de recuperacion pendiente"),
+    (FISCAL_STATUS_RECOVERED_AUTHORIZED, "Autorizado recuperado"),
+    (FISCAL_STATUS_RECOVERED_NOT_FOUND, "No encontrado durante recuperacion"),
+    (FISCAL_STATUS_MANUAL_REVIEW, "Revision manual"),
+    (FISCAL_STATUS_PENDING_RETRY, "Pendiente reintento (legado)"),
     (FISCAL_STATUS_REJECTED, "Rechazado"),
     (FISCAL_STATUS_VOIDED, "Anulado"),
     (FISCAL_STATUS_EXTERNAL_RECORDED, "Registrado externo"),
 ]
 
+FISCAL_AUTHORIZED_STATUSES = {
+    FISCAL_STATUS_AUTHORIZED,
+    FISCAL_STATUS_AUTHORIZED_WITH_OBSERVATIONS,
+    FISCAL_STATUS_RECOVERED_AUTHORIZED,
+    FISCAL_STATUS_EXTERNAL_RECORDED,
+}
+FISCAL_UNCERTAIN_STATUSES = {
+    FISCAL_STATUS_SUBMITTING,
+    FISCAL_STATUS_UNCERTAIN,
+    FISCAL_STATUS_RECOVERY_PENDING,
+    FISCAL_STATUS_RECOVERED_NOT_FOUND,
+    FISCAL_STATUS_MANUAL_REVIEW,
+}
+FISCAL_ACTIVE_OPERATION_STATUSES = {
+    FISCAL_STATUS_DRAFT,
+    FISCAL_STATUS_READY_TO_ISSUE,
+    FISCAL_STATUS_SUBMITTING,
+    FISCAL_STATUS_PENDING_RETRY,
+    FISCAL_STATUS_UNCERTAIN,
+    FISCAL_STATUS_RECOVERY_PENDING,
+    FISCAL_STATUS_RECOVERED_NOT_FOUND,
+    FISCAL_STATUS_MANUAL_REVIEW,
+}
+
 FISCAL_ATTEMPT_RESULT_PENDING = "pending"
 FISCAL_ATTEMPT_RESULT_SUCCESS = "success"
 FISCAL_ATTEMPT_RESULT_ERROR = "error"
+FISCAL_ATTEMPT_RESULT_UNCERTAIN = "uncertain"
+FISCAL_ATTEMPT_RESULT_NOT_FOUND = "not_found"
+FISCAL_ATTEMPT_RESULT_RECOVERED = "recovered"
 FISCAL_ATTEMPT_RESULT_CHOICES = [
     (FISCAL_ATTEMPT_RESULT_PENDING, "Pendiente"),
     (FISCAL_ATTEMPT_RESULT_SUCCESS, "Exitoso"),
     (FISCAL_ATTEMPT_RESULT_ERROR, "Con error"),
+    (FISCAL_ATTEMPT_RESULT_UNCERTAIN, "Resultado incierto"),
+    (FISCAL_ATTEMPT_RESULT_NOT_FOUND, "No encontrado"),
+    (FISCAL_ATTEMPT_RESULT_RECOVERED, "Recuperado"),
 ]
+
+FISCAL_ATTEMPT_OPERATION_AUTHORIZE = "authorize"
+FISCAL_ATTEMPT_OPERATION_RECOVER = "recover"
+FISCAL_ATTEMPT_OPERATION_RECONCILE = "reconcile"
+FISCAL_ATTEMPT_OPERATION_CHOICES = [
+    (FISCAL_ATTEMPT_OPERATION_AUTHORIZE, "Autorizar"),
+    (FISCAL_ATTEMPT_OPERATION_RECOVER, "Recuperar por consulta"),
+    (FISCAL_ATTEMPT_OPERATION_RECONCILE, "Reconciliar serie"),
+]
+
+logger = logging.getLogger(__name__)
 
 SALES_BEHAVIOR_FACTURA = "Factura"
 SALES_BEHAVIOR_NOTA_CREDITO = "NotaCredito"
@@ -202,6 +259,12 @@ class Company(models.Model):
         blank=True,
         verbose_name="Codigo postal",
     )
+    activity_start_date = models.DateField(
+        null=True,
+        blank=True,
+        verbose_name="Inicio de actividades",
+        help_text="Dato fiscal oficial. No se completa automaticamente.",
+    )
     point_of_sale_default = models.CharField(
         max_length=10,
         blank=True,
@@ -229,6 +292,19 @@ class Company(models.Model):
         ]
 
     def save(self, *args, **kwargs):
+        if self.pk and not kwargs.get("raw"):
+            previous = type(self).objects.filter(pk=self.pk).only("cuit").first()
+            if (
+                previous
+                and previous.cuit != self.cuit
+                and (
+                    self.fiscal_documents.exists()
+                    or self.fiscal_points_of_sale.filter(fiscal_series__isnull=False).exists()
+                )
+            ):
+                raise ValidationError(
+                    "El CUIT de una empresa con operaciones fiscales no puede modificarse."
+                )
         if not self.slug:
             base_slug = slugify(self.name) or "empresa"
             candidate = base_slug
@@ -318,6 +394,11 @@ class Warehouse(models.Model):
     code = models.SlugField(max_length=40, verbose_name="Codigo")
     name = models.CharField(max_length=80, verbose_name="Nombre")
     is_active = models.BooleanField(default=True, verbose_name="Activo")
+    stock_balance_enabled = models.BooleanField(
+        default=False,
+        verbose_name="Usar saldos por deposito",
+        help_text="Solo debe activarse despues de inicializar y verificar los saldos de este deposito.",
+    )
     notes = models.TextField(blank=True, verbose_name="Notas")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -336,12 +417,113 @@ class Warehouse(models.Model):
         return f"{self.company.name} - {self.name}"
 
 
+class ProductWarehouseStock(models.Model):
+    """Materialized stock balance and thresholds for one product and warehouse."""
+
+    product = models.ForeignKey(
+        "catalog.Product",
+        on_delete=models.PROTECT,
+        related_name="warehouse_balances",
+        verbose_name="Producto",
+    )
+    warehouse = models.ForeignKey(
+        Warehouse,
+        on_delete=models.PROTECT,
+        related_name="product_balances",
+        verbose_name="Deposito",
+    )
+    on_hand = models.DecimalField(
+        max_digits=14,
+        decimal_places=3,
+        default=0,
+        verbose_name="Stock actual",
+    )
+    reserved = models.DecimalField(
+        max_digits=14,
+        decimal_places=3,
+        default=0,
+        verbose_name="Stock reservado",
+    )
+    minimum = models.DecimalField(
+        max_digits=14,
+        decimal_places=3,
+        default=0,
+        verbose_name="Stock minimo",
+    )
+    ideal = models.DecimalField(
+        max_digits=14,
+        decimal_places=3,
+        default=0,
+        verbose_name="Stock ideal",
+    )
+    initialized_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="Inicializado",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Stock de producto por deposito"
+        verbose_name_plural = "Stocks de productos por deposito"
+        ordering = ["warehouse__company_id", "warehouse__name", "product__name"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["product", "warehouse"],
+                name="uniq_product_warehouse_stock",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(reserved__gte=0),
+                name="product_warehouse_reserved_gte_0",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(minimum__gte=0),
+                name="product_warehouse_minimum_gte_0",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(ideal__gte=0),
+                name="product_warehouse_ideal_gte_0",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(ideal__gte=models.F("minimum")),
+                name="product_warehouse_ideal_gte_minimum",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["warehouse", "product"]),
+            models.Index(fields=["product", "updated_at"]),
+            models.Index(fields=["warehouse", "on_hand"]),
+        ]
+
+    @property
+    def available(self):
+        return self.on_hand - self.reserved
+
+    @property
+    def is_below_minimum(self):
+        return self.on_hand < self.minimum
+
+    def clean(self):
+        if self.reserved < 0:
+            raise ValidationError("El stock reservado no puede ser negativo.")
+        if self.minimum < 0 or self.ideal < 0:
+            raise ValidationError("Los niveles minimo e ideal no pueden ser negativos.")
+        if self.ideal < self.minimum:
+            raise ValidationError("El stock ideal no puede ser menor que el minimo.")
+
+    def __str__(self):
+        return f"{self.product} - {self.warehouse}: {self.on_hand}"
+
+
 class FiscalPointOfSale(models.Model):
     """Fiscal point of sale configuration per company."""
 
+    ENV_DISABLED = "disabled"
     ENV_HOMOLOGATION = "homologation"
     ENV_PRODUCTION = "production"
     ENV_CHOICES = [
+        (ENV_DISABLED, "Deshabilitado"),
         (ENV_HOMOLOGATION, "Homologacion"),
         (ENV_PRODUCTION, "Produccion"),
     ]
@@ -358,7 +540,7 @@ class FiscalPointOfSale(models.Model):
     environment = models.CharField(
         max_length=20,
         choices=ENV_CHOICES,
-        default=ENV_HOMOLOGATION,
+        default=ENV_DISABLED,
         verbose_name="Entorno",
     )
     is_default = models.BooleanField(default=False, verbose_name="Default")
@@ -387,6 +569,25 @@ class FiscalPointOfSale(models.Model):
         self.name = (self.name or "").strip()
         if not kwargs.get("raw"):
             self.clean()
+            if self.pk:
+                previous = type(self).objects.filter(pk=self.pk).only(
+                    "number",
+                    "environment",
+                ).first()
+                if (
+                    previous
+                    and (
+                        previous.number != self.number
+                        or previous.environment != self.environment
+                    )
+                    and (
+                        self.fiscal_series.exists()
+                        or self.fiscal_documents.exists()
+                    )
+                ):
+                    raise ValidationError(
+                        "El numero y el entorno de un punto de venta con historial fiscal son inmutables."
+                    )
         super().save(*args, **kwargs)
         if self.is_default:
             FiscalPointOfSale.objects.filter(
@@ -669,7 +870,50 @@ class FiscalDocumentSeries(models.Model):
         choices=DOC_TYPE_CHOICES,
         verbose_name="Tipo",
     )
+    issuer_cuit = models.CharField(
+        max_length=11,
+        blank=True,
+        db_index=True,
+        verbose_name="CUIT emisor congelado",
+    )
+    environment = models.CharField(
+        max_length=20,
+        choices=FiscalPointOfSale.ENV_CHOICES,
+        default=FiscalPointOfSale.ENV_DISABLED,
+        db_index=True,
+        verbose_name="Entorno fiscal",
+    )
     next_number = models.PositiveIntegerField(default=1, verbose_name="Siguiente numero")
+    remote_last_authorized = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        verbose_name="Ultimo autorizado remoto",
+    )
+    last_reconciled_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="Ultima reconciliacion",
+    )
+    blocked_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="Serie bloqueada desde",
+    )
+    blocked_reason = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        verbose_name="Motivo de bloqueo",
+    )
+    blocked_by_document = models.ForeignKey(
+        "core.FiscalDocument",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="blocked_fiscal_series",
+        verbose_name="Documento que bloquea la serie",
+    )
+    version = models.PositiveIntegerField(default=1, verbose_name="Version de concurrencia")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -679,6 +923,15 @@ class FiscalDocumentSeries(models.Model):
         unique_together = [("point_of_sale_ref", "doc_type")]
         indexes = [
             models.Index(fields=["point_of_sale_ref", "doc_type"]),
+            models.Index(fields=["issuer_cuit", "environment", "point_of_sale_ref", "doc_type"]),
+            models.Index(fields=["blocked_at"]),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["issuer_cuit", "environment", "point_of_sale", "doc_type"],
+                condition=~models.Q(issuer_cuit="") & ~models.Q(point_of_sale=""),
+                name="uniq_fiscal_series_identity",
+            ),
         ]
 
     def __str__(self):
@@ -692,13 +945,108 @@ class FiscalDocumentSeries(models.Model):
             if self.point_of_sale_ref.company_id != self.company_id:
                 raise ValidationError("La empresa de la serie no coincide con el punto de venta fiscal.")
             self.point_of_sale = self.point_of_sale_ref.number
+            if self.environment != self.point_of_sale_ref.environment:
+                raise ValidationError("El entorno de la serie no coincide con el punto de venta fiscal.")
         elif not (self.point_of_sale or "").strip():
             raise ValidationError("Debe definirse un punto de venta fiscal.")
+        normalized_cuit = "".join(char for char in str(self.issuer_cuit or "") if char.isdigit())
+        if normalized_cuit and len(normalized_cuit) != 11:
+            raise ValidationError("El CUIT emisor de la serie debe tener 11 digitos.")
+        self.issuer_cuit = normalized_cuit
 
     def save(self, *args, **kwargs):
         if not kwargs.get("raw"):
             self.clean()
         super().save(*args, **kwargs)
+
+
+FISCAL_DOCUMENT_PROTECTED_FIELDS = {
+    "source_key",
+    "idempotency_key",
+    "correlation_id",
+    "company",
+    "company_id",
+    "client_company_ref",
+    "client_company_ref_id",
+    "client_profile",
+    "client_profile_id",
+    "order",
+    "order_id",
+    "internal_document",
+    "internal_document_id",
+    "related_document",
+    "related_document_id",
+    "point_of_sale",
+    "point_of_sale_id",
+    "doc_type",
+    "issue_mode",
+    "number",
+    "issued_at",
+    "payment_due_date",
+    "cae",
+    "cae_due_date",
+    "subtotal_net",
+    "discount_total",
+    "tax_total",
+    "total",
+    "currency",
+    "exchange_rate",
+    "sales_document_type",
+    "sales_document_type_id",
+    "series",
+    "series_id",
+    "fiscal_snapshot",
+    "snapshot_hash",
+    "snapshot_schema_version",
+    "prepared_at",
+    "resolved_at",
+    "payload_hash",
+    "request_payload",
+    "response_payload",
+    "issuer_cuit_snapshot",
+    "environment_snapshot",
+    "point_of_sale_number_snapshot",
+    "receiver_iva_condition_id_snapshot",
+    "receiver_iva_condition_label_snapshot",
+    "receiver_iva_condition_source_snapshot",
+    "receiver_iva_condition_validated_at_snapshot",
+}
+
+
+class FiscalDocumentQuerySet(models.QuerySet):
+    """Prevent bulk operations from bypassing fiscal immutability."""
+
+    def update(self, **kwargs):
+        protected = FISCAL_DOCUMENT_PROTECTED_FIELDS.intersection(kwargs)
+        if protected and self.exclude(status=FISCAL_STATUS_DRAFT).exists():
+            logger.warning(
+                "Rejected bulk mutation of protected fiscal fields: %s",
+                sorted(protected),
+            )
+            raise ValidationError("No se pueden modificar campos fiscales protegidos en bloque.")
+        if "status" in kwargs:
+            raise ValidationError("Los estados fiscales deben cambiar mediante una transicion de dominio.")
+        return super().update(**kwargs)
+
+    def delete(self):
+        protected = self.exclude(status=FISCAL_STATUS_DRAFT)
+        if protected.exists():
+            logger.warning(
+                "Rejected bulk deletion of authorized fiscal documents; count=%s",
+                protected.count(),
+            )
+            raise ProtectedError(
+                "Los comprobantes fiscales autorizados no pueden eliminarse.",
+                list(protected[:20]),
+            )
+        return super().delete()
+
+    def bulk_update(self, objs, fields, batch_size=None):
+        if "status" in fields or FISCAL_DOCUMENT_PROTECTED_FIELDS.intersection(fields):
+            raise ValidationError(
+                "Los campos fiscales protegidos no pueden modificarse mediante bulk_update."
+            )
+        return super().bulk_update(objs, fields, batch_size=batch_size)
 
 
 class FiscalDocument(models.Model):
@@ -707,12 +1055,72 @@ class FiscalDocument(models.Model):
     DOC_TYPE_CHOICES = FISCAL_DOC_TYPE_CHOICES
     ISSUE_MODE_CHOICES = FISCAL_ISSUE_MODE_CHOICES
     STATUS_CHOICES = FISCAL_STATUS_CHOICES
+    AUTHORIZED_STATUSES = FISCAL_AUTHORIZED_STATUSES
+    ALLOWED_STATUS_TRANSITIONS = {
+        FISCAL_STATUS_DRAFT: {
+            FISCAL_STATUS_READY_TO_ISSUE,
+            FISCAL_STATUS_VOIDED,
+        },
+        FISCAL_STATUS_READY_TO_ISSUE: {
+            FISCAL_STATUS_SUBMITTING,
+            FISCAL_STATUS_RECOVERY_PENDING,
+            FISCAL_STATUS_MANUAL_REVIEW,
+            FISCAL_STATUS_EXTERNAL_RECORDED,
+            FISCAL_STATUS_VOIDED,
+        },
+        FISCAL_STATUS_SUBMITTING: {
+            FISCAL_STATUS_READY_TO_ISSUE,
+            FISCAL_STATUS_AUTHORIZED,
+            FISCAL_STATUS_AUTHORIZED_WITH_OBSERVATIONS,
+            FISCAL_STATUS_REJECTED,
+            FISCAL_STATUS_UNCERTAIN,
+            FISCAL_STATUS_MANUAL_REVIEW,
+        },
+        FISCAL_STATUS_PENDING_RETRY: {
+            FISCAL_STATUS_UNCERTAIN,
+            FISCAL_STATUS_MANUAL_REVIEW,
+        },
+        FISCAL_STATUS_UNCERTAIN: {
+            FISCAL_STATUS_RECOVERY_PENDING,
+            FISCAL_STATUS_MANUAL_REVIEW,
+        },
+        FISCAL_STATUS_RECOVERY_PENDING: {
+            FISCAL_STATUS_RECOVERED_AUTHORIZED,
+            FISCAL_STATUS_RECOVERED_NOT_FOUND,
+            FISCAL_STATUS_MANUAL_REVIEW,
+        },
+        FISCAL_STATUS_RECOVERED_NOT_FOUND: {
+            FISCAL_STATUS_RECOVERY_PENDING,
+            FISCAL_STATUS_MANUAL_REVIEW,
+        },
+        FISCAL_STATUS_REJECTED: {
+            FISCAL_STATUS_MANUAL_REVIEW,
+            FISCAL_STATUS_VOIDED,
+        },
+        FISCAL_STATUS_MANUAL_REVIEW: {
+            FISCAL_STATUS_READY_TO_ISSUE,
+            FISCAL_STATUS_RECOVERY_PENDING,
+            FISCAL_STATUS_VOIDED,
+        },
+    }
 
     source_key = models.CharField(
         max_length=160,
         unique=True,
         db_index=True,
         verbose_name="Clave de origen",
+    )
+    idempotency_key = models.UUIDField(
+        default=uuid.uuid4,
+        unique=True,
+        editable=False,
+        verbose_name="Clave de idempotencia",
+    )
+    correlation_id = models.UUIDField(
+        default=uuid.uuid4,
+        unique=True,
+        editable=False,
+        verbose_name="ID de correlacion",
     )
     company = models.ForeignKey(
         Company,
@@ -754,7 +1162,7 @@ class FiscalDocument(models.Model):
     )
     related_document = models.ForeignKey(
         "self",
-        on_delete=models.SET_NULL,
+        on_delete=models.PROTECT,
         null=True,
         blank=True,
         related_name="credit_notes",
@@ -765,6 +1173,14 @@ class FiscalDocument(models.Model):
         on_delete=models.PROTECT,
         related_name="fiscal_documents",
         verbose_name="Punto de venta fiscal",
+    )
+    series = models.ForeignKey(
+        "core.FiscalDocumentSeries",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="fiscal_documents",
+        verbose_name="Serie fiscal congelada",
     )
     doc_type = models.CharField(
         max_length=3,
@@ -783,11 +1199,35 @@ class FiscalDocument(models.Model):
         verbose_name="Numero fiscal",
     )
     status = models.CharField(
-        max_length=24,
+        max_length=32,
         choices=STATUS_CHOICES,
-        default=FISCAL_STATUS_READY_TO_ISSUE,
+        default=FISCAL_STATUS_DRAFT,
         verbose_name="Estado fiscal",
         db_index=True,
+    )
+    dispatch_requested_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="Solicitud de despacho encolada",
+    )
+    authorization_started_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="Inicio de autorizacion remota",
+    )
+    recovery_attempts_count = models.PositiveIntegerField(
+        default=0,
+        verbose_name="Consultas de recuperacion",
+    )
+    last_recovery_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="Ultima consulta de recuperacion",
+    )
+    next_recovery_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="Proxima consulta de recuperacion",
     )
     issued_at = models.DateTimeField(
         null=True,
@@ -826,6 +1266,79 @@ class FiscalDocument(models.Model):
         related_name="fiscal_documents",
         verbose_name="Tipo de documento comercial",
     )
+    fiscal_snapshot = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name="Snapshot fiscal inmutable",
+    )
+    snapshot_schema_version = models.PositiveSmallIntegerField(
+        default=2,
+        verbose_name="Version del snapshot fiscal",
+    )
+    snapshot_hash = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        db_index=True,
+        verbose_name="Hash SHA-256 del snapshot fiscal",
+    )
+    prepared_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="Snapshot fiscal preparado",
+    )
+    resolved_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="Operacion fiscal resuelta",
+    )
+    payload_hash = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        db_index=True,
+        verbose_name="Hash SHA-256 del payload fiscal",
+    )
+    issuer_cuit_snapshot = models.CharField(
+        max_length=11,
+        blank=True,
+        default="",
+        verbose_name="CUIT emisor usado",
+    )
+    environment_snapshot = models.CharField(
+        max_length=20,
+        choices=FiscalPointOfSale.ENV_CHOICES,
+        default=FiscalPointOfSale.ENV_DISABLED,
+        verbose_name="Entorno usado",
+    )
+    point_of_sale_number_snapshot = models.CharField(
+        max_length=6,
+        blank=True,
+        default="",
+        verbose_name="Punto de venta usado",
+    )
+    receiver_iva_condition_id_snapshot = models.PositiveSmallIntegerField(
+        null=True,
+        blank=True,
+        verbose_name="Condicion IVA receptor usada (ARCA ID)",
+    )
+    receiver_iva_condition_label_snapshot = models.CharField(
+        max_length=120,
+        blank=True,
+        default="",
+        verbose_name="Condicion IVA receptor usada",
+    )
+    receiver_iva_condition_source_snapshot = models.CharField(
+        max_length=40,
+        blank=True,
+        default="",
+        verbose_name="Fuente condicion IVA receptor",
+    )
+    receiver_iva_condition_validated_at_snapshot = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="Validacion condicion IVA receptor usada",
+    )
     request_payload = models.JSONField(default=dict, blank=True, verbose_name="Request payload")
     response_payload = models.JSONField(default=dict, blank=True, verbose_name="Response payload")
     error_code = models.CharField(max_length=80, blank=True, default="", verbose_name="Codigo error")
@@ -856,6 +1369,8 @@ class FiscalDocument(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    objects = FiscalDocumentQuerySet.as_manager()
+
     class Meta:
         verbose_name = "Documento Fiscal"
         verbose_name_plural = "Documentos Fiscales"
@@ -865,12 +1380,42 @@ class FiscalDocument(models.Model):
             models.Index(fields=["company", "doc_type", "created_at"]),
             models.Index(fields=["point_of_sale", "doc_type", "number"]),
             models.Index(fields=["external_system", "external_id"]),
+            models.Index(fields=["environment_snapshot", "issuer_cuit_snapshot", "point_of_sale_number_snapshot", "doc_type"]),
+            models.Index(fields=["status", "next_recovery_at"]),
         ]
         constraints = [
             models.UniqueConstraint(
                 fields=["company", "point_of_sale", "doc_type", "number"],
                 condition=models.Q(number__isnull=False),
                 name="uniq_fiscal_doc_company_pos_type_number",
+            ),
+            models.UniqueConstraint(
+                fields=[
+                    "environment_snapshot",
+                    "issuer_cuit_snapshot",
+                    "point_of_sale_number_snapshot",
+                    "doc_type",
+                    "number",
+                ],
+                condition=(
+                    models.Q(number__isnull=False)
+                    & ~models.Q(issuer_cuit_snapshot="")
+                    & ~models.Q(point_of_sale_number_snapshot="")
+                ),
+                name="uniq_fiscal_doc_identity_number",
+            ),
+            models.UniqueConstraint(
+                fields=["company", "order"],
+                condition=(
+                    models.Q(order__isnull=False)
+                    & models.Q(issue_mode=FISCAL_ISSUE_MODE_ARCA_WSFE)
+                    & models.Q(
+                        status__in=tuple(
+                            sorted(FISCAL_ACTIVE_OPERATION_STATUSES)
+                        )
+                    )
+                ),
+                name="uniq_active_arca_operation_per_order",
             ),
         ]
 
@@ -883,11 +1428,118 @@ class FiscalDocument(models.Model):
             raise ValidationError("La empresa del documento fiscal no coincide con el punto de venta.")
         if self.client_company_ref_id and self.client_company_ref.company_id != self.company_id:
             raise ValidationError("La empresa del documento fiscal no coincide con el cliente empresa.")
+        if (
+            self.environment_snapshot
+            and self.environment_snapshot != FiscalPointOfSale.ENV_DISABLED
+            and self.point_of_sale_id
+        ):
+            if self.environment_snapshot != self.point_of_sale.environment:
+                raise ValidationError("El entorno congelado no coincide con el punto de venta fiscal.")
+        if self.point_of_sale_number_snapshot and self.point_of_sale_id:
+            if self.point_of_sale_number_snapshot != self.point_of_sale.number:
+                raise ValidationError("El punto de venta congelado no coincide con la configuracion.")
+        normalized_cuit = "".join(
+            char for char in str(self.issuer_cuit_snapshot or "") if char.isdigit()
+        )
+        if normalized_cuit and len(normalized_cuit) != 11:
+            raise ValidationError("El CUIT emisor congelado debe tener 11 digitos.")
+        self.issuer_cuit_snapshot = normalized_cuit
 
     def save(self, *args, **kwargs):
+        allow_transition = bool(kwargs.pop("allow_fiscal_transition", False))
         if not kwargs.get("raw"):
             self.clean()
+        if self.pk and not kwargs.get("raw"):
+            previous = type(self).objects.filter(pk=self.pk).first()
+            if previous:
+                changed_protected = []
+                for field_name in FISCAL_DOCUMENT_PROTECTED_FIELDS:
+                    attr_name = field_name
+                    if field_name.endswith("_id"):
+                        attr_name = field_name
+                    if not hasattr(previous, attr_name) or not hasattr(self, attr_name):
+                        continue
+                    if getattr(previous, attr_name) != getattr(self, attr_name):
+                        changed_protected.append(field_name)
+
+                if previous.status in FISCAL_AUTHORIZED_STATUSES and changed_protected:
+                    self._record_rejected_mutation(
+                        action="update",
+                        fields=changed_protected,
+                        reason="authorized_document_immutable",
+                    )
+                    raise ValidationError(
+                        "Un comprobante fiscal autorizado es inmutable; emita un documento relacionado."
+                    )
+
+                if previous.status != self.status:
+                    allowed = self.ALLOWED_STATUS_TRANSITIONS.get(previous.status, set())
+                    if not allow_transition or self.status not in allowed:
+                        self._record_rejected_mutation(
+                            action="status_transition",
+                            fields=["status"],
+                            reason=f"invalid_transition:{previous.status}->{self.status}",
+                        )
+                        raise ValidationError(
+                            f"Transicion fiscal no permitida: {previous.status} -> {self.status}."
+                        )
+
+                payload_locked = previous.status != FISCAL_STATUS_DRAFT
+                if payload_locked and changed_protected and not allow_transition:
+                    self._record_rejected_mutation(
+                        action="update",
+                        fields=changed_protected,
+                        reason="fiscal_payload_locked",
+                    )
+                    raise ValidationError(
+                        "El payload fiscal no puede modificarse despues de iniciar su procesamiento."
+                    )
         super().save(*args, **kwargs)
+
+    def transition_to(self, status, *, update_fields=None, **changes):
+        """Apply one explicit, auditable fiscal state transition."""
+        for field_name, value in changes.items():
+            setattr(self, field_name, value)
+        self.status = status
+        fields = set(update_fields or changes.keys())
+        fields.update({"status", "updated_at"})
+        self.save(
+            update_fields=sorted(fields),
+            allow_fiscal_transition=True,
+        )
+        return self
+
+    def _record_rejected_mutation(self, *, action, fields, reason):
+        logger.warning(
+            "Rejected fiscal mutation document=%s action=%s fields=%s reason=%s",
+            self.pk,
+            action,
+            sorted(set(fields or [])),
+            reason,
+        )
+        try:
+            FiscalMutationAudit.objects.create(
+                fiscal_document=self,
+                action=action,
+                attempted_fields=sorted(set(fields or [])),
+                reason=reason,
+                correlation_id=self.correlation_id,
+            )
+        except Exception:
+            logger.debug("Could not persist rejected fiscal mutation audit", exc_info=True)
+
+    def delete(self, *args, **kwargs):
+        if self.status != FISCAL_STATUS_DRAFT:
+            self._record_rejected_mutation(
+                action="delete",
+                fields=[],
+                reason="authorized_document_delete_blocked",
+            )
+            raise ProtectedError(
+                "Las operaciones fiscales que salieron de borrador no pueden eliminarse.",
+                [self],
+            )
+        return super().delete(*args, **kwargs)
 
     def __str__(self):
         number_text = self.number if self.number is not None else "-"
@@ -912,11 +1564,68 @@ class FiscalDocument(models.Model):
 
     @property
     def can_retry_now(self):
-        if self.status != FISCAL_STATUS_PENDING_RETRY:
+        return False
+
+    @property
+    def can_recover_now(self):
+        if self.status not in {
+            FISCAL_STATUS_UNCERTAIN,
+            FISCAL_STATUS_RECOVERY_PENDING,
+            FISCAL_STATUS_RECOVERED_NOT_FOUND,
+            FISCAL_STATUS_MANUAL_REVIEW,
+        }:
             return False
-        if not self.next_retry_at:
+        if not self.next_recovery_at:
             return True
-        return self.next_retry_at <= timezone.now()
+        return self.next_recovery_at <= timezone.now()
+
+
+class FiscalDocumentItemQuerySet(models.QuerySet):
+    def bulk_create(
+        self,
+        objs,
+        batch_size=None,
+        ignore_conflicts=False,
+        update_conflicts=False,
+        update_fields=None,
+        unique_fields=None,
+    ):
+        document_ids = {
+            item.fiscal_document_id
+            for item in objs
+            if getattr(item, "fiscal_document_id", None)
+        }
+        if document_ids and FiscalDocument.objects.filter(
+            pk__in=document_ids
+        ).exclude(status=FISCAL_STATUS_DRAFT).exists():
+            raise ValidationError(
+                "Los items sólo pueden agregarse mientras el comprobante está en borrador."
+            )
+        return super().bulk_create(
+            objs,
+            batch_size=batch_size,
+            ignore_conflicts=ignore_conflicts,
+            update_conflicts=update_conflicts,
+            update_fields=update_fields,
+            unique_fields=unique_fields,
+        )
+
+    def update(self, **kwargs):
+        if self.exclude(
+            fiscal_document__status=FISCAL_STATUS_DRAFT
+        ).exists():
+            raise ValidationError("Los items fiscales ya procesados son inmutables.")
+        return super().update(**kwargs)
+
+    def delete(self):
+        if self.exclude(
+            fiscal_document__status=FISCAL_STATUS_DRAFT
+        ).exists():
+            raise ProtectedError("Los items fiscales ya procesados no pueden eliminarse.", list(self[:20]))
+        return super().delete()
+
+    def bulk_update(self, objs, fields, batch_size=None):
+        raise ValidationError("Los items fiscales no pueden modificarse mediante bulk_update.")
 
 
 class FiscalDocumentItem(models.Model):
@@ -924,7 +1633,7 @@ class FiscalDocumentItem(models.Model):
 
     fiscal_document = models.ForeignKey(
         FiscalDocument,
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,
         related_name="items",
         verbose_name="Documento fiscal",
     )
@@ -945,10 +1654,27 @@ class FiscalDocumentItem(models.Model):
     discount_amount = models.DecimalField(max_digits=14, decimal_places=2, default=0, verbose_name="Monto descuento")
     net_amount = models.DecimalField(max_digits=14, decimal_places=2, default=0, verbose_name="Neto")
     iva_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0, verbose_name="Alicuota IVA (%)")
+    arca_iva_id = models.PositiveSmallIntegerField(
+        null=True,
+        blank=True,
+        verbose_name="Identificador de alicuota ARCA",
+    )
+    tax_treatment = models.CharField(
+        max_length=20,
+        choices=[
+            ("taxed", "Gravado"),
+            ("exempt", "Exento"),
+            ("non_taxed", "No gravado"),
+        ],
+        default="taxed",
+        verbose_name="Tratamiento fiscal",
+    )
     iva_amount = models.DecimalField(max_digits=14, decimal_places=2, default=0, verbose_name="IVA")
     total_amount = models.DecimalField(max_digits=14, decimal_places=2, default=0, verbose_name="Total")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    objects = FiscalDocumentItemQuerySet.as_manager()
 
     class Meta:
         verbose_name = "Item de Documento Fiscal"
@@ -963,6 +1689,27 @@ class FiscalDocumentItem(models.Model):
     def __str__(self):
         return f"{self.fiscal_document_id} - linea {self.line_number}"
 
+    def _assert_mutable(self):
+        if self.fiscal_document.status != FISCAL_STATUS_DRAFT:
+            raise ValidationError("El item pertenece a un comprobante fiscal inmutable.")
+
+    def save(self, *args, **kwargs):
+        if self.fiscal_document_id:
+            self._assert_mutable()
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        self._assert_mutable()
+        return super().delete(*args, **kwargs)
+
+
+class FiscalEmissionAttemptQuerySet(models.QuerySet):
+    def update(self, **kwargs):
+        raise ValidationError("Los intentos fiscales son append-only.")
+
+    def delete(self):
+        raise ProtectedError("Los intentos fiscales no pueden eliminarse.", list(self[:20]))
+
 
 class FiscalEmissionAttempt(models.Model):
     """One request/response attempt against fiscal backend."""
@@ -971,7 +1718,7 @@ class FiscalEmissionAttempt(models.Model):
 
     fiscal_document = models.ForeignKey(
         FiscalDocument,
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,
         related_name="emission_attempts",
         verbose_name="Documento fiscal",
     )
@@ -985,6 +1732,58 @@ class FiscalEmissionAttempt(models.Model):
     )
     request_payload = models.JSONField(default=dict, blank=True, verbose_name="Request payload")
     response_payload = models.JSONField(default=dict, blank=True, verbose_name="Response payload")
+    operation = models.CharField(
+        max_length=20,
+        choices=FISCAL_ATTEMPT_OPERATION_CHOICES,
+        default=FISCAL_ATTEMPT_OPERATION_AUTHORIZE,
+        verbose_name="Operacion",
+    )
+    correlation_id = models.UUIDField(
+        default=uuid.uuid4,
+        unique=True,
+        db_index=True,
+        verbose_name="ID de correlacion",
+    )
+    payload_hash = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        verbose_name="Hash del payload",
+    )
+    request_may_have_been_sent = models.BooleanField(
+        default=False,
+        verbose_name="La solicitud pudo haber sido enviada",
+    )
+    issuer_cuit = models.CharField(
+        max_length=11,
+        blank=True,
+        default="",
+        verbose_name="CUIT emisor intentado",
+    )
+    environment = models.CharField(
+        max_length=20,
+        choices=FiscalPointOfSale.ENV_CHOICES,
+        default=FiscalPointOfSale.ENV_DISABLED,
+        verbose_name="Entorno intentado",
+    )
+    point_of_sale = models.CharField(
+        max_length=6,
+        blank=True,
+        default="",
+        verbose_name="Punto de venta intentado",
+    )
+    doc_type = models.CharField(
+        max_length=3,
+        choices=FISCAL_DOC_TYPE_CHOICES,
+        blank=True,
+        default="",
+        verbose_name="Tipo de comprobante intentado",
+    )
+    attempted_number = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        verbose_name="Numero intentado",
+    )
     attempt_number = models.PositiveIntegerField(default=1, verbose_name="Numero de intento")
     duration_ms = models.PositiveIntegerField(null=True, blank=True, verbose_name="Duracion (ms)")
     will_retry = models.BooleanField(default=False, verbose_name="Permite reintento")
@@ -996,7 +1795,19 @@ class FiscalEmissionAttempt(models.Model):
     )
     error_code = models.CharField(max_length=80, blank=True, default="", verbose_name="Codigo error")
     error_message = models.TextField(blank=True, default="", verbose_name="Mensaje error")
+    dispatched_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="Despacho remoto iniciado",
+    )
+    completed_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="Intento finalizado",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
+
+    objects = FiscalEmissionAttemptQuerySet.as_manager()
 
     class Meta:
         verbose_name = "Intento de Emision Fiscal"
@@ -1006,10 +1817,238 @@ class FiscalEmissionAttempt(models.Model):
             models.Index(fields=["fiscal_document", "created_at"]),
             models.Index(fields=["result_status", "created_at"]),
             models.Index(fields=["fiscal_document", "attempt_number"]),
+            models.Index(fields=["correlation_id"]),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["fiscal_document", "operation", "attempt_number"],
+                name="uniq_fiscal_attempt_operation_number",
+            ),
         ]
 
     def __str__(self):
         return f"Intento {self.fiscal_document_id} #{self.attempt_number} - {self.result_status}"
+
+    def save(self, *args, **kwargs):
+        if self.pk:
+            previous = type(self).objects.get(pk=self.pk)
+            immutable_fields = {
+                "fiscal_document_id",
+                "triggered_by_id",
+                "request_payload",
+                "operation",
+                "correlation_id",
+                "payload_hash",
+                "attempt_number",
+                "issuer_cuit",
+                "environment",
+                "point_of_sale",
+                "doc_type",
+                "attempted_number",
+                "created_at",
+            }
+            changed_immutable = [
+                field_name
+                for field_name in immutable_fields
+                if getattr(previous, field_name) != getattr(self, field_name)
+            ]
+            if changed_immutable:
+                raise ValidationError(
+                    "La identidad y el request de un intento fiscal son inmutables."
+                )
+            if previous.result_status != FISCAL_ATTEMPT_RESULT_PENDING:
+                raise ValidationError("Un intento fiscal finalizado es inmutable.")
+            if (
+                previous.request_may_have_been_sent
+                and not self.request_may_have_been_sent
+            ):
+                raise ValidationError("No puede revertirse la marca de despacho fiscal.")
+            if (
+                self.result_status != FISCAL_ATTEMPT_RESULT_PENDING
+                and not self.completed_at
+            ):
+                raise ValidationError("Debe registrarse la fecha de finalizacion del intento.")
+        super().save(*args, **kwargs)
+
+    def mark_dispatched(self):
+        if self.result_status != FISCAL_ATTEMPT_RESULT_PENDING:
+            raise ValidationError("El intento fiscal ya fue finalizado.")
+        self.request_may_have_been_sent = True
+        self.dispatched_at = timezone.now()
+        self.save(update_fields=["request_may_have_been_sent", "dispatched_at"])
+        return self
+
+    def finalize(
+        self,
+        *,
+        result_status,
+        response_payload=None,
+        duration_ms=None,
+        error_code="",
+        error_message="",
+    ):
+        if result_status == FISCAL_ATTEMPT_RESULT_PENDING:
+            raise ValidationError("La finalizacion requiere un resultado terminal.")
+        self.result_status = result_status
+        self.response_payload = response_payload or {}
+        self.duration_ms = duration_ms
+        self.will_retry = False
+        self.error_code = error_code or ""
+        self.error_message = error_message or ""
+        self.completed_at = timezone.now()
+        self.save(
+            update_fields=[
+                "result_status",
+                "response_payload",
+                "duration_ms",
+                "will_retry",
+                "error_code",
+                "error_message",
+                "completed_at",
+            ]
+        )
+        return self
+
+    def delete(self, *args, **kwargs):
+        raise ProtectedError("Los intentos fiscales no pueden eliminarse.", [self])
+
+
+class FiscalSeriesReconciliation(models.Model):
+    """Append-only evidence of every local/remote series comparison."""
+
+    OUTCOME_MATCHED = "matched"
+    OUTCOME_ADVANCED = "advanced"
+    OUTCOME_BLOCKED = "blocked"
+    OUTCOME_FAILED = "failed"
+    OUTCOME_CHOICES = [
+        (OUTCOME_MATCHED, "Coincide"),
+        (OUTCOME_ADVANCED, "Serie local adelantada al remoto"),
+        (OUTCOME_BLOCKED, "Serie bloqueada"),
+        (OUTCOME_FAILED, "Consulta fallida"),
+    ]
+
+    series = models.ForeignKey(
+        FiscalDocumentSeries,
+        on_delete=models.PROTECT,
+        related_name="reconciliations",
+    )
+    fiscal_document = models.ForeignKey(
+        FiscalDocument,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="series_reconciliations",
+    )
+    triggered_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="fiscal_series_reconciliations",
+    )
+    correlation_id = models.UUIDField(default=uuid.uuid4, db_index=True)
+    issuer_cuit = models.CharField(max_length=11)
+    environment = models.CharField(max_length=20, choices=FiscalPointOfSale.ENV_CHOICES)
+    point_of_sale = models.CharField(max_length=6)
+    doc_type = models.CharField(max_length=3, choices=FISCAL_DOC_TYPE_CHOICES)
+    local_next_before = models.PositiveIntegerField()
+    local_next_after = models.PositiveIntegerField()
+    remote_last_authorized = models.PositiveIntegerField(null=True, blank=True)
+    outcome = models.CharField(max_length=20, choices=OUTCOME_CHOICES)
+    reason = models.CharField(max_length=255, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+        indexes = [
+            models.Index(fields=["series", "created_at"]),
+            models.Index(fields=["issuer_cuit", "environment", "point_of_sale", "doc_type"]),
+        ]
+
+    def save(self, *args, **kwargs):
+        if self.pk:
+            raise ValidationError("La reconciliacion fiscal es append-only.")
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise ProtectedError("La reconciliacion fiscal no puede eliminarse.", [self])
+
+
+class FiscalMutationAudit(models.Model):
+    """Rejected attempts to alter an immutable fiscal record."""
+
+    fiscal_document = models.ForeignKey(
+        FiscalDocument,
+        on_delete=models.PROTECT,
+        related_name="rejected_mutations",
+    )
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="rejected_fiscal_mutations",
+    )
+    action = models.CharField(max_length=40)
+    attempted_fields = models.JSONField(default=list, blank=True)
+    reason = models.CharField(max_length=255)
+    source = models.CharField(max_length=80, blank=True, default="model")
+    correlation_id = models.UUIDField(default=uuid.uuid4, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+        indexes = [models.Index(fields=["fiscal_document", "created_at"])]
+
+    def save(self, *args, **kwargs):
+        if self.pk:
+            raise ValidationError("La auditoria de mutaciones fiscales es append-only.")
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise ProtectedError("La auditoria fiscal no puede eliminarse.", [self])
+
+
+class ArcaReceiverIvaConditionParameter(models.Model):
+    """Versioned receiver VAT condition obtained from an ARCA parameter source."""
+
+    arca_id = models.PositiveSmallIntegerField(unique=True)
+    description = models.CharField(max_length=160)
+    voucher_classes = models.JSONField(default=list, blank=True)
+    source = models.CharField(max_length=40)
+    fetched_at = models.DateTimeField()
+    valid_from = models.DateTimeField(null=True, blank=True)
+    valid_until = models.DateTimeField(null=True, blank=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["arca_id"]
+
+    def __str__(self):
+        return f"{self.arca_id} - {self.description}"
+
+
+class ArcaVatRateParameter(models.Model):
+    """Versioned VAT rate mapping; local code is not the definitive catalog."""
+
+    arca_id = models.PositiveSmallIntegerField(unique=True)
+    rate = models.DecimalField(max_digits=5, decimal_places=2, unique=True)
+    description = models.CharField(max_length=120)
+    source = models.CharField(max_length=40)
+    fetched_at = models.DateTimeField()
+    valid_from = models.DateTimeField(null=True, blank=True)
+    valid_until = models.DateTimeField(null=True, blank=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["rate"]
+
+    def __str__(self):
+        return f"{self.rate}% (ARCA {self.arca_id})"
 
 
 class InternalDocument(models.Model):
@@ -1213,6 +2252,16 @@ class StockMovement(models.Model):
         related_name="stock_movements_created",
         verbose_name="Generado por",
     )
+    warehouse_balance_applied_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="Aplicado al saldo por deposito",
+    )
+    warehouse_balance_error = models.CharField(
+        max_length=255,
+        blank=True,
+        verbose_name="Error de saldo por deposito",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -1285,6 +2334,11 @@ class SiteSettings(models.Model):
         default=False,
         verbose_name="Exigir categoria principal en multi-categoria",
         help_text="Si esta activo, al vincular un producto a multiples categorias se exige definir categoria principal.",
+    )
+    warehouse_stock_enabled = models.BooleanField(
+        default=False,
+        verbose_name="Activar stock por deposito",
+        help_text="Activa la escritura de saldos por deposito despues de inicializar el inventario.",
     )
 
     class Meta:

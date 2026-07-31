@@ -1,0 +1,235 @@
+{% extends 'admin_panel/base.html' %}
+
+{% block page_title %}Estadisticas de vendedores{% endblock %}
+
+{% block content %}
+<style>
+    .seller-report { max-width: 1480px; margin: 0 auto; }
+    .seller-report-head,
+    .seller-report-panel,
+    .seller-detail-panel {
+        border-radius: 18px;
+        border: 1px solid rgba(148, 163, 184, .18);
+        background: rgba(13, 19, 29, .93);
+    }
+    .seller-report-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 18px;
+        padding: 22px 24px;
+        margin-bottom: 14px;
+    }
+    .seller-report-head h1 { margin: 0 0 6px; font-size: 1.45rem; }
+    .seller-report-head p { margin: 0; color: #98a4b3; max-width: 760px; }
+    .seller-report-kpis {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 10px;
+        margin-bottom: 14px;
+    }
+    .seller-report-kpi {
+        padding: 15px 17px;
+        border-radius: 14px;
+        border: 1px solid rgba(148, 163, 184, .16);
+        background: rgba(10, 17, 27, .84);
+    }
+    .seller-report-kpi span { color: #929eae; font-size: .75rem; }
+    .seller-report-kpi strong { display: block; margin-top: 5px; font-size: 1.22rem; }
+    .seller-report-panel { overflow: hidden; }
+    .seller-report-filters {
+        display: grid;
+        grid-template-columns: minmax(170px, .7fr) minmax(170px, .7fr) minmax(220px, 1fr) auto;
+        gap: 9px;
+        padding: 17px;
+        border-bottom: 1px solid rgba(148, 163, 184, .14);
+    }
+    .seller-report-table { width: 100%; border-collapse: collapse; }
+    .seller-report-table th,
+    .seller-report-table td {
+        padding: 14px 15px;
+        text-align: left;
+        border-bottom: 1px solid rgba(148, 163, 184, .11);
+        vertical-align: middle;
+    }
+    .seller-report-table th {
+        color: #8f9aaa;
+        font-size: .67rem;
+        text-transform: uppercase;
+        letter-spacing: .05em;
+        background: rgba(30, 41, 54, .46);
+    }
+    .seller-report-table td { color: #ccd4df; font-size: .8rem; }
+    .seller-report-table tr:last-child td { border-bottom: 0; }
+    .seller-report-table tr.is-selected { background: rgba(255, 100, 48, .08); }
+    .seller-name strong { display: block; color: #fff; }
+    .seller-name small { color: #8f9aaa; }
+    .seller-money { color: #fff; font-weight: 800; white-space: nowrap; }
+    .seller-money.is-credit { color: #ff9b78; }
+    .seller-detail-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
+        gap: 14px;
+        margin-top: 14px;
+    }
+    .seller-detail-panel { overflow: hidden; }
+    .seller-detail-head {
+        padding: 17px 19px;
+        border-bottom: 1px solid rgba(148, 163, 184, .14);
+    }
+    .seller-detail-head h2 { margin: 0 0 5px; font-size: 1rem; }
+    .seller-detail-head p { margin: 0; color: #919dac; font-size: .76rem; }
+    .seller-detail-list { list-style: none; margin: 0; padding: 0; }
+    .seller-detail-item {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 14px;
+        padding: 14px 18px;
+        border-bottom: 1px solid rgba(148, 163, 184, .1);
+    }
+    .seller-detail-item:last-child { border-bottom: 0; }
+    .seller-detail-item strong { display: block; color: #d9e0e9; font-size: .8rem; }
+    .seller-detail-item small { color: #8f9baa; }
+    .seller-detail-value { color: #fff; font-weight: 800; text-align: right; }
+    .seller-report-empty { padding: 48px 20px; text-align: center; color: #909cab; }
+    .seller-report-note {
+        margin-top: 12px;
+        color: #8895a5;
+        font-size: .72rem;
+        line-height: 1.45;
+    }
+    @media (max-width: 1050px) {
+        .seller-report-kpis { grid-template-columns: repeat(3, 1fr); }
+        .seller-detail-grid { grid-template-columns: 1fr; }
+        .seller-report-table-wrap { overflow-x: auto; }
+    }
+    @media (max-width: 720px) {
+        .seller-report-head { align-items: stretch; flex-direction: column; }
+        .seller-report-kpis { grid-template-columns: 1fr 1fr; }
+        .seller-report-filters { grid-template-columns: 1fr; }
+    }
+</style>
+
+<div class="seller-report">
+    <section class="seller-report-head">
+        <div>
+            <h1>Estadisticas de vendedores</h1>
+            <p>Pedidos, facturacion y productos agrupados por el vendedor actualmente asignado a cada venta en {{ active_company.name }}.</p>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <a href="{% url 'admin_dashboard' %}" class="btn btn-outline">Dashboard</a>
+            <a href="{% url 'admin_order_list' %}" class="btn btn-primary">Ver pedidos</a>
+        </div>
+    </section>
+
+    <div class="seller-report-kpis">
+        <div class="seller-report-kpi"><span>Vendedores con actividad</span><strong>{{ summary.seller_count }}</strong></div>
+        <div class="seller-report-kpi"><span>Pedidos</span><strong>{{ summary.orders_count }}</strong></div>
+        <div class="seller-report-kpi"><span>Facturas</span><strong>{{ summary.invoices_count }}</strong></div>
+        <div class="seller-report-kpi"><span>Facturado</span><strong>${{ summary.billed_total|floatformat:2 }}</strong></div>
+        <div class="seller-report-kpi"><span>Neto de notas de credito</span><strong>${{ summary.net_billed|floatformat:2 }}</strong></div>
+    </div>
+
+    <section class="seller-report-panel">
+        <form method="get" class="seller-report-filters">
+            <input type="date" name="date_from" value="{{ date_from|date:'Y-m-d' }}" class="form-input" aria-label="Desde">
+            <input type="date" name="date_to" value="{{ date_to|date:'Y-m-d' }}" class="form-input" aria-label="Hasta">
+            <select name="seller_id" class="form-select" aria-label="Vendedor">
+                <option value="">Todos los vendedores</option>
+                {% for seller in seller_options %}
+                <option value="{{ seller.pk }}" {% if selected_seller.pk == seller.pk %}selected{% endif %}>
+                    {{ seller.get_full_name|default:seller.username }}
+                </option>
+                {% endfor %}
+            </select>
+            <button type="submit" class="btn btn-primary">Aplicar</button>
+        </form>
+
+        <div class="seller-report-table-wrap">
+            <table class="seller-report-table">
+                <thead>
+                    <tr>
+                        <th>Vendedor</th>
+                        <th>Pedidos</th>
+                        <th>Total pedidos</th>
+                        <th>Facturas</th>
+                        <th>Facturado</th>
+                        <th>Notas credito</th>
+                        <th>Neto</th>
+                        <th>Clientes</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in seller_rows %}
+                    <tr {% if selected_seller and row.seller_id == selected_seller.pk %}class="is-selected"{% endif %}>
+                        <td class="seller-name"><strong>{{ row.seller_name }}</strong><small>{{ row.username }}</small></td>
+                        <td>{{ row.orders_count }}</td>
+                        <td class="seller-money">${{ row.orders_total|floatformat:2 }}</td>
+                        <td>{{ row.invoices_count }}</td>
+                        <td class="seller-money">${{ row.billed_total|floatformat:2 }}</td>
+                        <td class="seller-money is-credit">{{ row.credit_notes_count }} · ${{ row.credit_total|floatformat:2 }}</td>
+                        <td class="seller-money">${{ row.net_billed|floatformat:2 }}</td>
+                        <td>{{ row.clients_count }}</td>
+                        <td>{% if row.detail_url %}<a href="{{ row.detail_url }}" class="btn btn-outline btn-sm">Detalle</a>{% endif %}</td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="9" class="seller-report-empty">No hay actividad comercial en el periodo elegido.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    {% if selected_seller %}
+    <div class="seller-detail-grid">
+        <section class="seller-detail-panel">
+            <div class="seller-detail-head">
+                <h2>Productos vendidos por {{ selected_seller.get_full_name|default:selected_seller.username }}</h2>
+                <p>Ranking calculado solamente con facturas cerradas del periodo.</p>
+            </div>
+            <ol class="seller-detail-list">
+                {% for item in top_products %}
+                <li class="seller-detail-item">
+                    <div>
+                        <strong>{{ item.description }}</strong>
+                        <small>{{ item.sku|default:"Sin SKU" }} · {{ item.documents_count }} comprobantes</small>
+                    </div>
+                    <div class="seller-detail-value">{{ item.quantity_total|floatformat:3 }}<br><small>${{ item.amount_total|floatformat:2 }}</small></div>
+                </li>
+                {% empty %}
+                <li class="seller-report-empty">No hay productos facturados para este vendedor.</li>
+                {% endfor %}
+            </ol>
+        </section>
+
+        <section class="seller-detail-panel">
+            <div class="seller-detail-head">
+                <h2>Comprobantes recientes</h2>
+                <p>Facturas autorizadas o registradas externamente.</p>
+            </div>
+            <ul class="seller-detail-list">
+                {% for document in recent_documents %}
+                <li class="seller-detail-item">
+                    <div>
+                        <strong>{{ document.commercial_type_label }} {{ document.display_number }}</strong>
+                        <small>
+                            {% if document.client_profile %}{{ document.client_profile.company_name }}{% elif document.client_company_ref %}{{ document.client_company_ref.client_profile.company_name }}{% else %}Sin cliente{% endif %}
+                            · {{ document.issued_at|date:"d/m/Y H:i" }}
+                        </small>
+                    </div>
+                    <div class="seller-detail-value">${{ document.total|floatformat:2 }}<br><a href="{% url 'admin_fiscal_document_detail' document.pk %}">Abrir</a></div>
+                </li>
+                {% empty %}
+                <li class="seller-report-empty">No hay comprobantes para este vendedor.</li>
+                {% endfor %}
+            </ul>
+        </section>
+    </div>
+    {% endif %}
+
+    <p class="seller-report-note">
+        Este informe usa la asignacion actual del pedido. Cada cambio de vendedor queda auditado; una etapa posterior podra congelar un vendedor historico por comprobante antes de calcular comisiones.
+    </p>
+</div>
+{% endblock %}

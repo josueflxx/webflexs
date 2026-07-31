@@ -57,6 +57,7 @@ from accounts.models import (
     ClientFiscalReview,
     ClientPayment,
     ClientProfile,
+    ClientTask,
     ClientTransaction,
 )
 from accounts.services.ledger import (
@@ -1452,6 +1453,7 @@ def client_create(request):
                 client_type=form_values.get("client_type", "") if form_values.get("client_type", "") in client_type_choices else "",
                 client_category=selected_category if should_update_legacy else None,
                 is_approved=client_is_approved,
+                commercial_observation=form_values.get("commercial_observation", ""),
                 notes=form_values.get("notes", ""),
             )
             client_links = []
@@ -1706,6 +1708,7 @@ def client_edit(request, pk):
                     'iva_condition',
                     'client_category_id',
                     'is_approved',
+                    'commercial_observation',
                     'notes',
                 ],
             ),
@@ -1748,6 +1751,7 @@ def client_edit(request, pk):
         client.postal_code = form_values.get('postal_code', '')
         client.phone = form_values.get('phone', '')
         client.is_approved = form_values.get("client_is_approved", True)
+        client.commercial_observation = form_values.get("commercial_observation", "")
         client.notes = form_values.get("notes", "")
         should_update_legacy = client.uses_legacy_commercial_rules(company=company)
         if should_update_legacy:
@@ -1823,6 +1827,7 @@ def client_edit(request, pk):
                     'iva_condition',
                     'client_category_id',
                     'is_approved',
+                    'commercial_observation',
                     'notes',
                 ],
             ),
@@ -2584,6 +2589,378 @@ def _row_matches_movement_bucket(row, bucket_key):
     if bucket_key == "account":
         return _row_has_visible_amount(row) or movement_state == ClientTransaction.STATE_VOIDED
     return False
+
+
+def _client_task_context(request, pk):
+    client = get_object_or_404(
+        clients_visible_to(request.user).select_related("user"),
+        pk=pk,
+    )
+    company = get_admin_company_required(request)
+    if not company or not user_has_company_access(request.user, company):
+        return client, None, None
+    client_company = (
+        ClientCompany.objects.select_related("company")
+        .filter(
+            client_profile=client,
+            company=company,
+            is_active=True,
+            company__is_active=True,
+        )
+        .first()
+    )
+    return client, company, client_company
+
+
+def _client_task_assignees(company):
+    if not company:
+        return User.objects.none()
+    return (
+        User.objects.filter(is_staff=True, is_active=True)
+        .filter(
+            Q(is_superuser=True)
+            | Q(
+                company_access_links__company=company,
+                company_access_links__is_active=True,
+            )
+        )
+        .distinct()
+        .order_by("first_name", "last_name", "username")
+    )
+
+
+def _client_tasks_redirect(client, company, *, scope="mine", status="pending"):
+    params = {"scope": scope, "status": status}
+    if company:
+        params["company_id"] = company.pk
+    return redirect(
+        f"{reverse('admin_client_tasks', args=[client.pk])}?{urlencode(params)}"
+    )
+
+
+@staff_member_required
+def client_task_inbox(request):
+    """Company-wide task inbox with personal/team views."""
+    company = get_admin_company_required(request)
+    if not company:
+        messages.error(request, "Selecciona una empresa para abrir los recordatorios.")
+        return redirect("select_company")
+
+    scope = str(request.GET.get("scope", "mine")).strip().lower()
+    if scope not in {"mine", "all"}:
+        scope = "mine"
+    status = str(request.GET.get("status", ClientTask.STATUS_PENDING)).strip().lower()
+    valid_statuses = {choice[0] for choice in ClientTask.STATUS_CHOICES}
+    if status not in {*valid_statuses, "all"}:
+        status = ClientTask.STATUS_PENDING
+    due_filter = str(request.GET.get("due", "all")).strip().lower()
+    if due_filter not in {"all", "overdue", "today", "upcoming"}:
+        due_filter = "all"
+    search = str(request.GET.get("q", "")).strip()
+
+    tasks = ClientTask.objects.filter(company=company).select_related(
+        "client_profile",
+        "assigned_to",
+        "created_by",
+        "completed_by",
+    )
+    if scope == "mine":
+        tasks = tasks.filter(assigned_to=request.user)
+    scoped_tasks = tasks
+    if status != "all":
+        tasks = tasks.filter(status=status)
+    if search:
+        tasks = tasks.filter(
+            Q(title__icontains=search)
+            | Q(note__icontains=search)
+            | Q(client_profile__company_name__icontains=search)
+            | Q(assigned_to__username__icontains=search)
+            | Q(assigned_to__first_name__icontains=search)
+            | Q(assigned_to__last_name__icontains=search)
+        )
+
+    now = timezone.now()
+    today_start = timezone.make_aware(
+        datetime.combine(timezone.localdate(), time.min),
+        timezone.get_current_timezone(),
+    )
+    tomorrow_start = today_start + timedelta(days=1)
+    if due_filter == "overdue":
+        tasks = tasks.filter(
+            status=ClientTask.STATUS_PENDING,
+            due_at__lt=now,
+        )
+    elif due_filter == "today":
+        tasks = tasks.filter(due_at__gte=today_start, due_at__lt=tomorrow_start)
+    elif due_filter == "upcoming":
+        tasks = tasks.filter(due_at__gte=tomorrow_start)
+
+    status_order = Case(
+        When(status=ClientTask.STATUS_PENDING, then=Value(0)),
+        When(status=ClientTask.STATUS_COMPLETED, then=Value(1)),
+        default=Value(2),
+        output_field=IntegerField(),
+    )
+    priority_order = Case(
+        When(priority=ClientTask.PRIORITY_URGENT, then=Value(0)),
+        When(priority=ClientTask.PRIORITY_HIGH, then=Value(1)),
+        When(priority=ClientTask.PRIORITY_NORMAL, then=Value(2)),
+        default=Value(3),
+        output_field=IntegerField(),
+    )
+    tasks = tasks.order_by(status_order, "due_at", priority_order, "-id")
+    task_counts = {
+        "pending": scoped_tasks.filter(status=ClientTask.STATUS_PENDING).count(),
+        "overdue": scoped_tasks.filter(
+            status=ClientTask.STATUS_PENDING,
+            due_at__lt=now,
+        ).count(),
+        "today": scoped_tasks.filter(
+            status=ClientTask.STATUS_PENDING,
+            due_at__gte=today_start,
+            due_at__lt=tomorrow_start,
+        ).count(),
+        "completed": scoped_tasks.filter(status=ClientTask.STATUS_COMPLETED).count(),
+    }
+    page_obj = Paginator(tasks, 50).get_page(request.GET.get("page", 1))
+    return render(
+        request,
+        "admin_panel/clients/task_inbox.html",
+        {
+            "active_company": company,
+            "page_obj": page_obj,
+            "scope": scope,
+            "status": status,
+            "due_filter": due_filter,
+            "search": search,
+            "status_choices": ClientTask.STATUS_CHOICES,
+            "task_counts": task_counts,
+        },
+    )
+
+
+@staff_member_required
+def client_tasks(request, pk):
+    """List commercial reminders for one client in the active company."""
+    client, company, client_company = _client_task_context(request, pk)
+    if not company:
+        messages.error(request, "Selecciona una empresa para ver las tareas del cliente.")
+        return _redirect_client_history(client)
+    if not client_company:
+        messages.error(request, "El cliente no esta habilitado en la empresa activa.")
+        return _redirect_client_history(client, company)
+
+    scope = str(request.GET.get("scope", "mine")).strip().lower()
+    if scope not in {"mine", "all"}:
+        scope = "mine"
+    status = str(request.GET.get("status", ClientTask.STATUS_PENDING)).strip().lower()
+    valid_statuses = {choice[0] for choice in ClientTask.STATUS_CHOICES}
+    if status not in {*valid_statuses, "all"}:
+        status = ClientTask.STATUS_PENDING
+
+    tasks = ClientTask.objects.filter(
+        client_profile=client,
+        company=company,
+    ).select_related("assigned_to", "created_by", "completed_by")
+    if scope == "mine":
+        tasks = tasks.filter(assigned_to=request.user)
+    if status != "all":
+        tasks = tasks.filter(status=status)
+
+    counts_qs = ClientTask.objects.filter(client_profile=client, company=company)
+    task_counts = {
+        "pending": counts_qs.filter(status=ClientTask.STATUS_PENDING).count(),
+        "completed": counts_qs.filter(status=ClientTask.STATUS_COMPLETED).count(),
+        "cancelled": counts_qs.filter(status=ClientTask.STATUS_CANCELLED).count(),
+        "overdue": counts_qs.filter(
+            status=ClientTask.STATUS_PENDING,
+            due_at__lt=timezone.now(),
+        ).count(),
+    }
+    page_obj = Paginator(tasks, 40).get_page(request.GET.get("page", 1))
+    return render(
+        request,
+        "admin_panel/clients/tasks.html",
+        {
+            "client": client,
+            "company": company,
+            "client_company": client_company,
+            "page_obj": page_obj,
+            "scope": scope,
+            "status": status,
+            "status_choices": ClientTask.STATUS_CHOICES,
+            "priority_choices": ClientTask.PRIORITY_CHOICES,
+            "assignees": _client_task_assignees(company),
+            "task_counts": task_counts,
+            "default_due_at": timezone.localtime(
+                timezone.now() + timedelta(hours=1)
+            ).strftime("%Y-%m-%dT%H:%M"),
+        },
+    )
+
+
+@staff_member_required
+@require_POST
+def client_task_create(request, pk):
+    client, company, client_company = _client_task_context(request, pk)
+    if not company:
+        messages.error(request, "Selecciona una empresa antes de crear la tarea.")
+        return _redirect_client_history(client)
+    if not client_company:
+        messages.error(request, "El cliente no esta habilitado en la empresa activa.")
+        return _redirect_client_history(client, company)
+
+    title = str(request.POST.get("title", "")).strip()
+    note = str(request.POST.get("note", "")).strip()
+    due_raw = str(request.POST.get("due_at", "")).strip()
+    priority = str(request.POST.get("priority", ClientTask.PRIORITY_NORMAL)).strip().lower()
+    assigned_raw = str(request.POST.get("assigned_to", "")).strip()
+    scope = str(request.POST.get("scope", "mine")).strip().lower()
+
+    if not title:
+        messages.error(request, "Escribe un titulo para la tarea.")
+        return _client_tasks_redirect(client, company, scope=scope)
+    if len(title) > 160:
+        messages.error(request, "El titulo no puede superar 160 caracteres.")
+        return _client_tasks_redirect(client, company, scope=scope)
+
+    due_at = parse_datetime(due_raw)
+    if due_at is None:
+        try:
+            due_at = datetime.strptime(due_raw, "%Y-%m-%dT%H:%M")
+        except (TypeError, ValueError):
+            due_at = None
+    if due_at is None:
+        messages.error(request, "Ingresa una fecha y hora validas.")
+        return _client_tasks_redirect(client, company, scope=scope)
+    if timezone.is_naive(due_at):
+        due_at = timezone.make_aware(due_at, timezone.get_current_timezone())
+
+    valid_priorities = {choice[0] for choice in ClientTask.PRIORITY_CHOICES}
+    if priority not in valid_priorities:
+        priority = ClientTask.PRIORITY_NORMAL
+
+    assignees = _client_task_assignees(company)
+    assigned_to = (
+        assignees.filter(pk=int(assigned_raw)).first()
+        if assigned_raw.isdigit()
+        else None
+    )
+    if not assigned_to:
+        messages.error(request, "Selecciona un responsable habilitado para la empresa.")
+        return _client_tasks_redirect(client, company, scope=scope)
+
+    task = ClientTask.objects.create(
+        client_profile=client,
+        company=company,
+        assigned_to=assigned_to,
+        title=title,
+        note=note,
+        due_at=due_at,
+        priority=priority,
+        created_by=request.user,
+    )
+    log_admin_action(
+        request,
+        action="client_task_create",
+        target_type="client_task",
+        target_id=task.pk,
+        details={
+            "client_profile_id": client.pk,
+            "company_id": company.pk,
+            "assigned_to_id": assigned_to.pk,
+            "title": task.title,
+            "due_at": task.due_at.isoformat(),
+            "priority": task.priority,
+        },
+    )
+    messages.success(request, "Tarea comercial creada.")
+    return _client_tasks_redirect(client, company, scope=scope)
+
+
+@staff_member_required
+@require_POST
+def client_task_set_status(request, pk, task_id):
+    client, company, client_company = _client_task_context(request, pk)
+    if not company:
+        messages.error(request, "Selecciona una empresa antes de modificar la tarea.")
+        return _redirect_client_history(client)
+    if not client_company:
+        messages.error(request, "El cliente no esta habilitado en la empresa activa.")
+        return _redirect_client_history(client, company)
+
+    action = str(request.POST.get("action", "")).strip().lower()
+    observation = str(request.POST.get("observation", "")).strip()
+    scope = str(request.POST.get("scope", "mine")).strip().lower()
+    status_filter = str(request.POST.get("status_filter", "pending")).strip().lower()
+    target_statuses = {
+        "complete": ClientTask.STATUS_COMPLETED,
+        "cancel": ClientTask.STATUS_CANCELLED,
+        "reopen": ClientTask.STATUS_PENDING,
+    }
+    target_status = target_statuses.get(action)
+    if not target_status:
+        messages.error(request, "Accion de tarea invalida.")
+        return _client_tasks_redirect(
+            client, company, scope=scope, status=status_filter
+        )
+    if not observation:
+        messages.error(request, "La observacion del cambio es obligatoria.")
+        return _client_tasks_redirect(
+            client, company, scope=scope, status=status_filter
+        )
+
+    with transaction.atomic():
+        task = get_object_or_404(
+            ClientTask.objects.select_for_update(),
+            pk=task_id,
+            client_profile=client,
+            company=company,
+        )
+        before = model_snapshot(
+            task,
+            ["status", "completion_note", "completed_by_id", "completed_at"],
+        )
+        task.status = target_status
+        if target_status == ClientTask.STATUS_PENDING:
+            task.completion_note = ""
+            task.completed_by = None
+            task.completed_at = None
+        else:
+            task.completion_note = observation
+            task.completed_by = request.user
+            task.completed_at = timezone.now()
+        task.save(
+            update_fields=[
+                "status",
+                "completion_note",
+                "completed_by",
+                "completed_at",
+                "updated_at",
+            ]
+        )
+        after = model_snapshot(
+            task,
+            ["status", "completion_note", "completed_by_id", "completed_at"],
+        )
+        log_admin_change(
+            request,
+            action="client_task_status_change",
+            target_type="client_task",
+            target_id=task.pk,
+            before=before,
+            after=after,
+            extra={
+                "client_profile_id": client.pk,
+                "company_id": company.pk,
+                "observation": observation,
+            },
+        )
+
+    messages.success(request, "Estado de la tarea actualizado.")
+    return _client_tasks_redirect(
+        client, company, scope=scope, status=status_filter
+    )
 
 
 @staff_member_required
@@ -3501,6 +3878,15 @@ def client_order_history(request, pk):
         if active_company
         else []
     )
+    pending_client_tasks = (
+        ClientTask.objects.filter(
+            client_profile=client,
+            company=active_company,
+            status=ClientTask.STATUS_PENDING,
+        ).count()
+        if active_company
+        else 0
+    )
     active_ledger_title_map = {
         key: meta["title"] for key, meta in CLIENT_HISTORY_MOVEMENT_TABS.items()
     }
@@ -3538,6 +3924,7 @@ def client_order_history(request, pk):
         },
         'payments_recent': payments_recent,
         'activity_timeline': activity_timeline,
+        'pending_client_tasks': pending_client_tasks,
         'payment_history_rows': payment_history_rows,
         'payments_summary': {
             'total_paid': payments_summary.get('total_paid') or Decimal('0.00'),
@@ -4023,4 +4410,4 @@ def request_reject(request, pk):
     messages.info(request, 'Solicitud rechazada.')
     return redirect('admin_request_list')
 
-__all__ = ['parse_optional_client_category', 'client_dashboard', 'client_tools_hub', 'client_export', 'client_reports_hub', 'client_report_list', 'client_report_ranking', 'client_report_debtors', 'client_list', 'client_category_list', 'client_category_create', 'client_category_edit', 'client_category_delete', 'client_create', 'client_edit', 'client_quick_order', 'client_cuit_lookup', 'client_fiscal_review_list', 'client_fiscal_review_resolve', 'client_order_history', 'client_transaction_set_state', 'client_password_change', 'client_password_reset_email', 'client_delete', 'request_list', 'request_approve', 'request_reject']
+__all__ = ['parse_optional_client_category', 'client_dashboard', 'client_tools_hub', 'client_export', 'client_reports_hub', 'client_report_list', 'client_report_ranking', 'client_report_debtors', 'client_list', 'client_category_list', 'client_category_create', 'client_category_edit', 'client_category_delete', 'client_create', 'client_edit', 'client_quick_order', 'client_cuit_lookup', 'client_fiscal_review_list', 'client_fiscal_review_resolve', 'client_task_inbox', 'client_tasks', 'client_task_create', 'client_task_set_status', 'client_order_history', 'client_transaction_set_state', 'client_password_change', 'client_password_reset_email', 'client_delete', 'request_list', 'request_approve', 'request_reject']

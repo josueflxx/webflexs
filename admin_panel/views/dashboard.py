@@ -61,6 +61,7 @@ from accounts.models import (
     ClientCompany,
     ClientPayment,
     ClientProfile,
+    ClientTask,
     ClientTransaction,
 )
 from accounts.services.ledger import (
@@ -104,6 +105,7 @@ from core.models import (
     Company,
     DocumentSeries,
     FISCAL_BILLABLE_DOC_TYPES,
+    FISCAL_CREDIT_NOTE_DOC_TYPES,
     FISCAL_DOC_TYPE_FA,
     FISCAL_DOC_TYPE_FB,
     FISCAL_DOC_TYPE_FC,
@@ -119,6 +121,7 @@ from core.models import (
     FISCAL_STATUS_SUBMITTING,
     FISCAL_STATUS_VOIDED,
     FiscalDocument,
+    FiscalDocumentItem,
     FiscalPointOfSale,
     InternalDocument,
     SALES_BEHAVIOR_COTIZACION,
@@ -462,11 +465,20 @@ def dashboard(request):
 
     operational_snapshot_cards = build_operational_snapshot(company=active_company)
     recent_activity = build_company_activity_timeline(company=active_company, limit=10)
+    my_client_tasks = ClientTask.objects.filter(
+        company=active_company,
+        assigned_to=request.user,
+        status=ClientTask.STATUS_PENDING,
+    )
+    my_client_tasks_count = my_client_tasks.count()
+    my_client_tasks_overdue = my_client_tasks.filter(due_at__lt=timezone.now()).count()
 
     context = {
         'active_company': active_company,
         'operational_snapshot_cards': operational_snapshot_cards,
         'recent_activity': recent_activity,
+        'my_client_tasks_count': my_client_tasks_count,
+        'my_client_tasks_overdue': my_client_tasks_overdue,
         'top_clients_rank': top_clients_rank,
         'top_products_rank': top_products_rank,
         'top_debtors_rank': top_debtors_rank,
@@ -481,4 +493,243 @@ def dashboard(request):
     }
     return render(request, 'admin_panel/dashboard.html', context)
 
-__all__ = ['dashboard']
+
+@staff_member_required
+def seller_performance_report(request):
+    """Read-only seller statistics based on the order's current assignment."""
+    active_company = get_active_company(request)
+    if not active_company:
+        messages.error(request, "Selecciona una empresa para ver vendedores.")
+        return redirect("select_company")
+
+    today = timezone.localdate()
+    default_from = today.replace(day=1)
+    date_from = parse_date(str(request.GET.get("date_from", "")).strip()) or default_from
+    date_to = parse_date(str(request.GET.get("date_to", "")).strip()) or today
+    if date_to < date_from:
+        date_from, date_to = date_to, date_from
+    start_at = timezone.make_aware(
+        datetime.combine(date_from, time.min),
+        timezone.get_current_timezone(),
+    )
+    end_at = timezone.make_aware(
+        datetime.combine(date_to + timedelta(days=1), time.min),
+        timezone.get_current_timezone(),
+    )
+    selected_seller_raw = str(request.GET.get("seller_id", "")).strip()
+    selected_seller_id = int(selected_seller_raw) if selected_seller_raw.isdigit() else None
+
+    orders_qs = (
+        Order.objects.filter(
+            company=active_company,
+            created_at__gte=start_at,
+            created_at__lt=end_at,
+        )
+        .exclude(status=Order.STATUS_CANCELLED)
+    )
+    invoices_qs = FiscalDocument.objects.filter(
+        company=active_company,
+        doc_type__in=FISCAL_BILLABLE_DOC_TYPES,
+        status__in=[FISCAL_STATUS_AUTHORIZED, FISCAL_STATUS_EXTERNAL_RECORDED],
+        issued_at__gte=start_at,
+        issued_at__lt=end_at,
+    )
+    credit_notes_qs = FiscalDocument.objects.filter(
+        company=active_company,
+        doc_type__in=FISCAL_CREDIT_NOTE_DOC_TYPES,
+        status__in=[FISCAL_STATUS_AUTHORIZED, FISCAL_STATUS_EXTERNAL_RECORDED],
+        issued_at__gte=start_at,
+        issued_at__lt=end_at,
+    )
+
+    seller_rows = {}
+
+    def ensure_seller_row(raw):
+        seller_id = raw.get("seller_id")
+        row = seller_rows.setdefault(
+            seller_id,
+            {
+                "seller_id": seller_id,
+                "seller_name": (
+                    raw.get("seller_name")
+                    or raw.get("username")
+                    or "Sin vendedor asignado"
+                ),
+                "username": raw.get("username") or "-",
+                "orders_count": 0,
+                "orders_total": Decimal("0.00"),
+                "invoices_count": 0,
+                "billed_total": Decimal("0.00"),
+                "credit_notes_count": 0,
+                "credit_total": Decimal("0.00"),
+                "clients_count": 0,
+            },
+        )
+        return row
+
+    order_stats = (
+        orders_qs.values(
+            seller_id=F("assigned_to_id"),
+            seller_name=Coalesce(
+                F("assigned_to__first_name"),
+                F("assigned_to__username"),
+                Value(""),
+            ),
+            username=Coalesce(F("assigned_to__username"), Value("")),
+        )
+        .annotate(
+            orders_count=Count("id"),
+            orders_total=Coalesce(
+                Sum("total"),
+                Value(Decimal("0.00")),
+                output_field=DecimalField(max_digits=14, decimal_places=2),
+            ),
+        )
+    )
+    for item in order_stats:
+        row = ensure_seller_row(item)
+        row["orders_count"] = item["orders_count"] or 0
+        row["orders_total"] = item["orders_total"] or Decimal("0.00")
+
+    invoice_stats = (
+        invoices_qs.values(
+            seller_id=F("order__assigned_to_id"),
+            seller_name=Coalesce(
+                F("order__assigned_to__first_name"),
+                F("order__assigned_to__username"),
+                Value(""),
+            ),
+            username=Coalesce(F("order__assigned_to__username"), Value("")),
+        )
+        .annotate(
+            invoices_count=Count("id"),
+            billed_total=Coalesce(
+                Sum("total"),
+                Value(Decimal("0.00")),
+                output_field=DecimalField(max_digits=14, decimal_places=2),
+            ),
+            clients_count=Count("order__user_id", distinct=True),
+        )
+    )
+    for item in invoice_stats:
+        row = ensure_seller_row(item)
+        row["invoices_count"] = item["invoices_count"] or 0
+        row["billed_total"] = item["billed_total"] or Decimal("0.00")
+        row["clients_count"] = item["clients_count"] or 0
+
+    credit_stats = (
+        credit_notes_qs.values(
+            seller_id=F("order__assigned_to_id"),
+            seller_name=Coalesce(
+                F("order__assigned_to__first_name"),
+                F("order__assigned_to__username"),
+                Value(""),
+            ),
+            username=Coalesce(F("order__assigned_to__username"), Value("")),
+        )
+        .annotate(
+            credit_notes_count=Count("id"),
+            credit_total=Coalesce(
+                Sum("total"),
+                Value(Decimal("0.00")),
+                output_field=DecimalField(max_digits=14, decimal_places=2),
+            ),
+        )
+    )
+    for item in credit_stats:
+        row = ensure_seller_row(item)
+        row["credit_notes_count"] = item["credit_notes_count"] or 0
+        row["credit_total"] = item["credit_total"] or Decimal("0.00")
+
+    rows = list(seller_rows.values())
+    for row in rows:
+        row["net_billed"] = (
+            Decimal(row["billed_total"]) - Decimal(row["credit_total"])
+        )
+        if row["seller_id"]:
+            row["detail_url"] = (
+                f"{reverse('admin_seller_performance')}?"
+                f"{urlencode({
+                    'date_from': date_from.isoformat(),
+                    'date_to': date_to.isoformat(),
+                    'seller_id': row['seller_id'],
+                })}"
+            )
+        else:
+            row["detail_url"] = ""
+    rows.sort(
+        key=lambda row: (
+            row["net_billed"],
+            row["orders_total"],
+            row["orders_count"],
+        ),
+        reverse=True,
+    )
+
+    seller_options = User.objects.filter(
+        pk__in=[
+            seller_id
+            for seller_id in seller_rows
+            if seller_id is not None
+        ]
+    ).order_by("first_name", "last_name", "username")
+    selected_seller = (
+        seller_options.filter(pk=selected_seller_id).first()
+        if selected_seller_id
+        else None
+    )
+    top_products = []
+    recent_documents = []
+    if selected_seller:
+        selected_invoices = invoices_qs.filter(order__assigned_to=selected_seller)
+        top_products = list(
+            FiscalDocumentItem.objects.filter(fiscal_document__in=selected_invoices)
+            .values("product_id", "sku", "description")
+            .annotate(
+                quantity_total=Sum("quantity"),
+                amount_total=Sum("total_amount"),
+                documents_count=Count("fiscal_document_id", distinct=True),
+            )
+            .order_by("-quantity_total", "-amount_total")[:15]
+        )
+        recent_documents = list(
+            selected_invoices.select_related(
+                "client_profile",
+                "client_company_ref__client_profile",
+                "point_of_sale",
+            ).order_by("-issued_at", "-id")[:20]
+        )
+
+    summary = {
+        "seller_count": len([row for row in rows if row["seller_id"]]),
+        "orders_count": sum(row["orders_count"] for row in rows),
+        "invoices_count": sum(row["invoices_count"] for row in rows),
+        "billed_total": sum(
+            (Decimal(row["billed_total"]) for row in rows),
+            Decimal("0.00"),
+        ),
+        "credit_total": sum(
+            (Decimal(row["credit_total"]) for row in rows),
+            Decimal("0.00"),
+        ),
+    }
+    summary["net_billed"] = summary["billed_total"] - summary["credit_total"]
+
+    return render(
+        request,
+        "admin_panel/sellers/performance.html",
+        {
+            "active_company": active_company,
+            "date_from": date_from,
+            "date_to": date_to,
+            "seller_rows": rows,
+            "seller_options": seller_options,
+            "selected_seller": selected_seller,
+            "top_products": top_products,
+            "recent_documents": recent_documents,
+            "summary": summary,
+        },
+    )
+
+
+__all__ = ['dashboard', 'seller_performance_report']

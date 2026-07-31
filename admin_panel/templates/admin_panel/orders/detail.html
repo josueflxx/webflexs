@@ -1,4 +1,5 @@
 {% extends 'admin_panel/base.html' %}
+{% load static %}
 
 {% block page_title %}Ficha de venta {% if primary_sales_document %}{{ primary_sales_document.commercial_type_label }} {{ primary_sales_document.display_number }}{% elif order.status == 'draft' %}Cotizacion operativa #{{ order.pk }}{% else %}Pedido operativo #{{ order.pk }}{% endif %}{% endblock %}
 
@@ -402,6 +403,7 @@
     }
 }
 </style>
+<link rel="stylesheet" href="{% static 'core/css/order_detail.css' %}?v=20260731-1">
 {% endblock %}
 
 {% block content %}
@@ -409,23 +411,45 @@
     <section class="sales-record-shell order-record-shell">
         <div class="sales-record-header order-record-header">
             <div class="sales-record-title-wrap">
-                <div class="sales-record-icon" aria-hidden="true">&#128441;</div>
+                <div class="sales-record-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" role="img">
+                        <path d="M7 3.75h8.4L19.25 7.6V20.25H7z"></path>
+                        <path d="M15.25 3.75V7.75H19.25"></path>
+                        <path d="M10 11h6M10 14.5h6M10 18h4"></path>
+                        <path d="M4.75 6.25V20.25H7"></path>
+                    </svg>
+                </div>
                 <div>
-                    <p class="sales-record-kicker">Movimiento operativo</p>
-                    <h2 class="sales-record-heading">
-                        Ficha de venta
-                        {% if primary_sales_document %}
-                            {{ primary_sales_document.commercial_type_label }} {{ primary_sales_document.display_number }}
-                        {% elif order.status == 'draft' %}
-                            Cotizacion #{{ order.pk }}
+                    <p class="sales-record-kicker">Ficha operativa de venta</p>
+                    <div class="order-record-title-line">
+                        <h2 class="sales-record-heading">
+                            {% if primary_sales_document %}
+                                {{ primary_sales_document.commercial_type_label }} {{ primary_sales_document.display_number }}
+                            {% elif order.status == 'draft' %}
+                                Cotizacion #{{ order.pk }}
+                            {% else %}
+                                Pedido #{{ order.pk }}
+                            {% endif %}
+                        </h2>
+                        {% if order.status == 'delivered' %}
+                        <span class="sales-record-tag is-success">Entregado</span>
+                        {% elif order.status == 'cancelled' %}
+                        <span class="sales-record-tag is-danger">Cancelado</span>
+                        {% elif order.status == 'shipped' %}
+                        <span class="sales-record-tag is-info">Enviado</span>
+                        {% elif order.status == 'preparing' %}
+                        <span class="sales-record-tag is-warning">En preparacion</span>
+                        {% elif order.status == 'confirmed' %}
+                        <span class="sales-record-tag is-success">Confirmado</span>
                         {% else %}
-                            Pedido #{{ order.pk }}
+                        <span class="sales-record-tag is-info">Borrador</span>
                         {% endif %}
-                    </h2>
-                    <p class="sales-record-subcopy">
-                        {{ order.company.name|default:"-" }} &middot; {{ order.client_company|default:order.user.username|default:"-" }} &middot;
-                        {{ order.created_at|date:"d/m/Y H:i" }}
-                    </p>
+                    </div>
+                    <div class="order-record-meta" aria-label="Datos principales de la venta">
+                        <span>{{ order.company.name|default:"-" }}</span>
+                        <span>{{ order_client_profile.company_name|default:order.client_company|default:order.user.username|default:"-" }}</span>
+                        <span>{{ order.created_at|date:"d/m/Y H:i" }}</span>
+                    </div>
                 </div>
             </div>
             <div class="sales-record-actions">
@@ -475,26 +499,38 @@
             </div>
         </div>
 
+        <section class="order-record-summary-strip" aria-label="Resumen economico de la venta">
+            <article class="order-record-stat is-total">
+                <span class="order-record-stat-label">Total</span>
+                <strong class="order-record-stat-value" id="order-hero-total">${{ order.total|floatformat:2 }}</strong>
+                <small>Importe final de la venta</small>
+            </article>
+            <article class="order-record-stat is-paid">
+                <span class="order-record-stat-label">Pagado</span>
+                <strong class="order-record-stat-value" id="order-hero-paid">${{ order_paid_amount|floatformat:2 }}</strong>
+                <small>Cobros vinculados</small>
+            </article>
+            <article class="order-record-stat {% if order_pending_amount %}is-pending{% endif %}">
+                <span class="order-record-stat-label">Saldo pendiente</span>
+                <strong class="order-record-stat-value" id="order-hero-pending">${{ order_pending_amount|floatformat:2 }}</strong>
+                <small>Importe por cobrar</small>
+            </article>
+            <article class="order-record-stat">
+                <span class="order-record-stat-label">Productos</span>
+                <strong class="order-record-stat-value" id="order-hero-items-count">{{ order_items|length }}</strong>
+                <small>Renglones cargados</small>
+            </article>
+        </section>
+
         <div class="sales-record-top-grid order-record-top-grid">
             <section class="sales-record-panel">
+                <span class="order-record-visually-hidden">Datos basicos</span>
                 <div class="sales-record-panel-header">
                     <div>
-                        <p class="sales-record-panel-eyebrow">Datos basicos</p>
-                        <h3 class="sales-record-panel-title">Resumen operativo</h3>
+                        <p class="sales-record-panel-eyebrow">Venta</p>
+                        <h3 class="sales-record-panel-title">Datos del documento</h3>
                     </div>
-                    {% if order.status == 'delivered' %}
-                    <span class="sales-record-tag is-success">Entregado</span>
-                    {% elif order.status == 'cancelled' %}
-                    <span class="sales-record-tag">Cancelado</span>
-                    {% elif order.status == 'shipped' %}
-                    <span class="sales-record-tag is-info">Enviado</span>
-                    {% elif order.status == 'preparing' %}
-                    <span class="sales-record-tag">En preparacion</span>
-                    {% elif order.status == 'confirmed' %}
-                    <span class="sales-record-tag is-success">Confirmado</span>
-                    {% else %}
-                    <span class="sales-record-tag is-info">Borrador</span>
-                    {% endif %}
+                    <span class="order-record-section-number">01</span>
                 </div>
                 <div class="sales-record-grid">
                     <div class="sales-record-field">
@@ -552,7 +588,10 @@
 
             <section class="sales-record-panel">
                 <div class="sales-record-panel-header">
-                    <h3 class="sales-record-panel-title">Cliente</h3>
+                    <div>
+                        <p class="sales-record-panel-eyebrow">Cliente</p>
+                        <h3 class="sales-record-panel-title">Datos fiscales y contacto</h3>
+                    </div>
                     <span class="sales-record-tag is-info">Empresa {{ order.company.name|default:"-" }}</span>
                 </div>
                 <div class="sales-record-grid">
@@ -600,8 +639,9 @@
             <div class="sales-record-card-head">
                 <div>
                     <h3>Flujo comercial</h3>
-                    <p>Lectura rapida del recorrido de la venta desde origen hasta cobro, con accesos directos a cada tramo.</p>
+                    <p>Estado de la operacion desde la solicitud hasta el cobro.</p>
                 </div>
+                <span class="order-record-section-number">02</span>
             </div>
             <div class="sales-flow-grid">
                 {% for step in order_flow_steps %}
@@ -616,7 +656,14 @@
             </div>
         </section>
 
-        <section class="sales-record-card">
+        <section class="sales-record-card order-record-secondary-card">
+            <div class="sales-record-card-head">
+                <div>
+                    <h3>Informacion complementaria</h3>
+                    <p>Consulta solamente los datos que necesitas para esta operacion.</p>
+                </div>
+                <span class="order-record-section-number">03</span>
+            </div>
             <div class="order-classic-collapsible-grid">
                 <details class="order-classic-toggle" open>
                     <summary>Datos adicionales</summary>
@@ -746,13 +793,16 @@
             </div>
         </section>
 
-        <section class="sales-record-card order-record-products-card">
+        <section class="sales-record-card order-record-products-card" id="order-products">
             <div class="sales-record-card-head">
                 <div>
                     <h3>Productos de la venta</h3>
                     <p>Detalle comercial con cantidades, descuentos y acciones del documento.</p>
                 </div>
-                <span class="sales-record-tag" id="order-items-count-tag">{{ order_items|length }} item{{ order_items|length|pluralize }}</span>
+                <div class="order-record-card-meta">
+                    <span class="order-record-section-number">04</span>
+                    <span class="sales-record-tag" id="order-items-count-tag">{{ order_items|length }} item{{ order_items|length|pluralize }}</span>
+                </div>
             </div>
 
             <div class="sales-record-table-wrap">
@@ -961,23 +1011,26 @@
                 </div>
                 {% endif %}
 
-                <div class="order-movement-inline">
-                    <div class="order-movement-inline-head">
-                        <span class="order-movement-inline-label">Historial completo del pedido</span>
+                <details class="order-record-timeline">
+                    <summary>
+                        <span>
+                            <span class="order-movement-inline-label">Historial completo del pedido</span>
+                            <strong>Actividad y cambios registrados</strong>
+                        </span>
                         <span class="order-movement-inline-state">{{ order_timeline|length }} eventos</span>
-                    </div>
-                    <div class="order-movement-inline-history-list" style="display:grid;gap:8px;margin-top:10px;">
+                    </summary>
+                    <div class="order-movement-inline-history-list order-record-timeline-list">
                         {% for event in order_timeline %}
-                        <div style="padding:10px;border-left:3px solid {% if event.state == 'danger' %}#ef4444{% elif event.state == 'success' %}#22c55e{% else %}#3b82f6{% endif %};background:rgba(255,255,255,.025);border-radius:8px;">
+                        <div class="order-record-timeline-event is-{{ event.state|default:'info' }}">
                             <strong>{{ event.title }}</strong>
-                            <div class="text-muted">{{ event.occurred_at|date:"d/m/Y H:i" }} · {{ event.actor }}{% if event.amount is not None %} · ${{ event.amount|floatformat:2 }}{% endif %}</div>
+                            <div class="text-muted">{{ event.occurred_at|date:"d/m/Y H:i" }} &middot; {{ event.actor }}{% if event.amount is not None %} &middot; ${{ event.amount|floatformat:2 }}{% endif %}</div>
                             {% if event.summary %}<small>{{ event.summary }}</small>{% endif %}
                         </div>
                         {% empty %}
                         <span class="text-muted">Todavia no hay eventos registrados.</span>
                         {% endfor %}
                     </div>
-                </div>
+                </details>
 
             </section>
         </div>
@@ -1004,6 +1057,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const paidEl = document.getElementById('order-total-paid');
     const pendingEl = document.getElementById('order-total-pending');
     const grandEl = document.getElementById('order-total-grand');
+    const heroTotalEl = document.getElementById('order-hero-total');
+    const heroPaidEl = document.getElementById('order-hero-paid');
+    const heroPendingEl = document.getElementById('order-hero-pending');
+    const heroItemsCountEl = document.getElementById('order-hero-items-count');
 
     const formatArs = (value) => {
         const num = Number(value || 0);
@@ -1029,10 +1086,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (paidEl) paidEl.textContent = formatArs(totals.paid);
         if (pendingEl) pendingEl.textContent = formatArs(totals.pending);
         if (grandEl) grandEl.textContent = formatArs(totals.total);
+        if (heroTotalEl) heroTotalEl.textContent = formatArs(totals.total);
+        if (heroPaidEl) heroPaidEl.textContent = formatArs(totals.paid);
+        if (heroPendingEl) heroPendingEl.textContent = formatArs(totals.pending);
     };
-
-    // Auto-focus the search field on page load
-    if (skuInput) skuInput.focus();
 
     // Listen for the custom event dispatched by the suggest engine
     // when a product suggestion is picked. This carries the full item
@@ -1128,6 +1185,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 if (itemsCountTag && payload.items_label) {
                     itemsCountTag.textContent = payload.items_label;
+                }
+                if (heroItemsCountEl && payload.items_label) {
+                    heroItemsCountEl.textContent = String(payload.items_label).split(' ')[0];
                 }
                 updateTotals(payload.totals || {});
 

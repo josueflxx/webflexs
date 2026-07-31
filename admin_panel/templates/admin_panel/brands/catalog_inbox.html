@@ -1,0 +1,608 @@
+{% extends "admin_panel/base.html" %}
+{% load l10n %}
+
+{% block page_title %}Catalogador por marcas{% endblock %}
+
+{% block extra_css %}
+<style>
+    .catalog-workspace { max-width: 1520px; margin: 0 auto; }
+    .workspace-header,
+    .quality-strip,
+    .filters-panel,
+    .assignment-panel,
+    .products-panel,
+    .batch-panel {
+        border: 1px solid rgba(255, 255, 255, .09);
+        background: rgba(14, 20, 31, .88);
+        border-radius: 14px;
+    }
+    .workspace-header {
+        display: flex;
+        justify-content: space-between;
+        gap: 24px;
+        align-items: center;
+        padding: 22px 24px;
+        margin-bottom: 16px;
+        border-color: rgba(255, 107, 53, .25);
+        background:
+            linear-gradient(105deg, rgba(255, 107, 53, .12), transparent 42%),
+            rgba(14, 20, 31, .94);
+    }
+    .eyebrow {
+        color: var(--color-primary);
+        font-size: .72rem;
+        font-weight: 800;
+        letter-spacing: .12em;
+        text-transform: uppercase;
+        margin-bottom: 7px;
+    }
+    .workspace-header h1 { margin: 0; font-size: clamp(1.45rem, 2.3vw, 2rem); }
+    .workspace-header p { color: #9ca3af; margin: 7px 0 0; max-width: 760px; line-height: 1.55; }
+    .header-actions { display: flex; gap: 9px; flex-wrap: wrap; justify-content: flex-end; }
+    .quality-strip {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(125px, 1fr));
+        gap: 1px;
+        overflow: hidden;
+        margin-bottom: 16px;
+        background: rgba(255, 255, 255, .08);
+    }
+    .quality-card { padding: 16px 18px; background: #101722; min-height: 86px; }
+    .quality-card span { display: block; color: #8f98a8; font-size: .74rem; margin-bottom: 7px; }
+    .quality-card strong { display: block; font-size: 1.35rem; line-height: 1; }
+    .quality-card small { display: block; color: #687386; font-size: .68rem; margin-top: 7px; }
+    .quality-card.is-warning strong { color: #ff9a6c; }
+    .quality-card.is-good strong { color: #4ade80; }
+    .filters-panel { padding: 14px; margin-bottom: 16px; }
+    .filters-grid {
+        display: grid;
+        grid-template-columns: minmax(240px, 2fr) minmax(180px, 1fr) minmax(170px, 1fr) 145px auto;
+        gap: 10px;
+        align-items: end;
+    }
+    .field label {
+        display: block;
+        color: #9ca3af;
+        font-size: .72rem;
+        font-weight: 700;
+        margin: 0 0 6px;
+        text-transform: uppercase;
+        letter-spacing: .05em;
+    }
+    .filter-actions { display: flex; gap: 7px; }
+    .catalog-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 330px;
+        gap: 16px;
+        align-items: start;
+    }
+    .assignment-panel {
+        position: sticky;
+        top: 92px;
+        padding: 18px;
+        grid-column: 2;
+        grid-row: 1;
+    }
+    .assignment-panel h2 { font-size: 1rem; margin: 0 0 5px; }
+    .assignment-panel > p { color: #8f98a8; font-size: .78rem; margin: 0 0 16px; line-height: 1.5; }
+    .assignment-panel .field { margin-bottom: 12px; }
+    .selection-count {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 12px;
+        border: 1px solid rgba(64, 196, 255, .22);
+        background: rgba(64, 196, 255, .07);
+        border-radius: 9px;
+        margin-bottom: 14px;
+        font-size: .78rem;
+    }
+    .selection-count strong { color: #67d8ff; }
+    .assignment-help {
+        color: #f0b28f;
+        background: rgba(255, 107, 53, .07);
+        border-left: 3px solid var(--color-primary);
+        padding: 9px 10px;
+        font-size: .72rem;
+        line-height: 1.45;
+        margin-bottom: 12px;
+    }
+    .products-panel { overflow: hidden; grid-column: 1; grid-row: 1; }
+    .products-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 16px;
+        padding: 15px 18px;
+        border-bottom: 1px solid rgba(255, 255, 255, .08);
+    }
+    .products-head h2 { margin: 0; font-size: 1rem; }
+    .products-head span { color: #8f98a8; font-size: .76rem; }
+    .select-all { display: inline-flex; align-items: center; gap: 7px; color: #c7cdd7; font-size: .76rem; cursor: pointer; }
+    .product-row {
+        display: grid;
+        grid-template-columns: 34px minmax(220px, 1.35fr) minmax(150px, .75fr) minmax(245px, 1.2fr);
+        gap: 14px;
+        padding: 17px 18px;
+        border-bottom: 1px solid rgba(255, 255, 255, .065);
+        align-items: start;
+        transition: background .16s ease, box-shadow .16s ease;
+    }
+    .product-row:last-child { border-bottom: 0; }
+    .product-row:hover { background: rgba(255, 255, 255, .018); }
+    .product-row.is-selected {
+        background: rgba(255, 107, 53, .055);
+        box-shadow: inset 3px 0 var(--color-primary);
+    }
+    .product-check { width: 17px; height: 17px; accent-color: var(--color-primary); margin-top: 3px; }
+    .sku { color: #7dd3fc; font: 700 .72rem/1.2 ui-monospace, SFMono-Regular, Consolas, monospace; letter-spacing: .025em; }
+    .product-name { color: #f5f7fa; font-weight: 750; line-height: 1.35; margin-top: 6px; }
+    .product-meta { color: #7f899a; font-size: .72rem; line-height: 1.45; margin-top: 7px; }
+    .meta-label { display: block; color: #687386; font-size: .66rem; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 3px; }
+    .suggestions { display: flex; flex-direction: column; gap: 7px; }
+    .suggestions-title { color: #8f98a8; font-size: .68rem; text-transform: uppercase; letter-spacing: .06em; font-weight: 750; }
+    .suggestion {
+        width: 100%;
+        text-align: left;
+        border: 1px solid rgba(255, 255, 255, .1);
+        border-radius: 9px;
+        background: rgba(255, 255, 255, .025);
+        color: #e9edf3;
+        padding: 9px 10px;
+        cursor: pointer;
+        transition: border-color .16s, background .16s;
+    }
+    .suggestion:hover { border-color: rgba(255, 107, 53, .55); background: rgba(255, 107, 53, .07); }
+    .suggestion-top { display: flex; justify-content: space-between; gap: 8px; font-weight: 750; font-size: .75rem; }
+    .confidence { color: #4ade80; font-size: .68rem; white-space: nowrap; }
+    .suggestion small { display: block; color: #7f899a; font-size: .65rem; line-height: 1.35; margin-top: 4px; }
+    .no-suggestion {
+        color: #778193;
+        font-size: .72rem;
+        border: 1px dashed rgba(255, 255, 255, .1);
+        border-radius: 8px;
+        padding: 11px;
+    }
+    .empty-state { padding: 60px 24px; text-align: center; }
+    .empty-state h3 { margin: 0 0 8px; }
+    .empty-state p { color: #8f98a8; margin: 0; }
+    .pagination {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 6px;
+        padding: 15px;
+        border-top: 1px solid rgba(255,255,255,.07);
+    }
+    .pagination a, .pagination span {
+        min-width: 34px;
+        text-align: center;
+        padding: 7px 9px;
+        border-radius: 7px;
+        font-size: .74rem;
+    }
+    .pagination a { color: #dfe5ed; border: 1px solid rgba(255,255,255,.1); }
+    .pagination .current { background: var(--color-primary); color: #fff; font-weight: 800; }
+    .batch-panel { margin-top: 16px; padding: 18px; }
+    .batch-panel h2 { font-size: 1rem; margin: 0 0 13px; }
+    .batch-list { display: grid; gap: 8px; }
+    .batch-row {
+        display: grid;
+        grid-template-columns: 90px minmax(220px, 1fr) 160px auto;
+        gap: 12px;
+        align-items: center;
+        padding: 10px 12px;
+        border: 1px solid rgba(255,255,255,.07);
+        border-radius: 9px;
+        font-size: .74rem;
+    }
+    .batch-row small { color: #7f899a; display: block; margin-top: 3px; }
+    .status-chip { border-radius: 999px; padding: 4px 8px; font-size: .65rem; font-weight: 800; width: fit-content; }
+    .status-applied { color: #4ade80; background: rgba(74,222,128,.1); }
+    .status-undone { color: #9ca3af; background: rgba(156,163,175,.1); }
+    @media (max-width: 1100px) {
+        .quality-strip { grid-template-columns: repeat(3, 1fr); }
+        .filters-grid { grid-template-columns: repeat(2, 1fr); }
+        .catalog-grid { grid-template-columns: 1fr; }
+        .assignment-panel { position: static; grid-column: 1; grid-row: 1; }
+        .products-panel { grid-row: 2; }
+    }
+    @media (max-width: 760px) {
+        .workspace-header { align-items: flex-start; flex-direction: column; }
+        .header-actions { justify-content: flex-start; }
+        .quality-strip { grid-template-columns: repeat(2, 1fr); }
+        .filters-grid { grid-template-columns: 1fr; }
+        .product-row { grid-template-columns: 28px 1fr; }
+        .product-row > :nth-child(3), .product-row > :nth-child(4) { grid-column: 2; }
+        .batch-row { grid-template-columns: 1fr; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="catalog-workspace">
+    <header class="workspace-header">
+        <div>
+            <div class="eyebrow">Catalogación asistida</div>
+            <h1>Productos pendientes de clasificar por marca</h1>
+            <p>Revisa sugerencias, selecciona uno o varios productos y ubícalos en Marca, Rubro y Subrubro. Ninguna sugerencia se aplica sola.</p>
+        </div>
+        <div class="header-actions">
+            <a class="btn btn-secondary" href="{% url 'admin_brand_list' %}">Ver estructura</a>
+            <a class="btn btn-secondary" href="{% url 'admin_brand_catalog_settings' %}">Alias y reglas</a>
+            <a class="btn btn-primary" href="{% url 'admin_brand_catalog_export' %}">Exportar revisión</a>
+        </div>
+    </header>
+
+    <section class="quality-strip" aria-label="Calidad de catalogación">
+        <div class="quality-card is-good">
+            <span>Cobertura</span>
+            <strong>{{ quality_metrics.coverage }}%</strong>
+            <small>{{ quality_metrics.assigned }} de {{ quality_metrics.total }} activos</small>
+        </div>
+        <div class="quality-card is-warning">
+            <span>Sin clasificar</span>
+            <strong>{{ quality_metrics.unassigned }}</strong>
+            <small>Requieren ubicación</small>
+        </div>
+        <div class="quality-card">
+            <span>Con subrubro</span>
+            <strong>{{ quality_metrics.with_subrubro }}</strong>
+            <small>Clasificación completa</small>
+        </div>
+        <div class="quality-card">
+            <span>Solo en rubro</span>
+            <strong>{{ quality_metrics.rubro_only }}</strong>
+            <small>Pueden detallarse más</small>
+        </div>
+        <div class="quality-card {% if quality_metrics.ambiguous %}is-warning{% endif %}">
+            <span>En varias marcas</span>
+            <strong>{{ quality_metrics.ambiguous }}</strong>
+            <small>Conviene revisar</small>
+        </div>
+    </section>
+
+    <section class="filters-panel">
+        <form method="get" class="filters-grid">
+            <div class="field">
+                <label for="id_q">Buscar producto</label>
+                <input class="form-input" id="id_q" name="q" value="{{ search }}" placeholder="SKU, nombre o proveedor">
+            </div>
+            <div class="field">
+                <label for="id_category">Categoría</label>
+                <select class="form-select" id="id_category" name="category">
+                    <option value="">Todas</option>
+                    {% for option in category_options %}
+                        <option value="{{ option.id|unlocalize }}" {% if category_id == option.id|stringformat:"s" %}selected{% endif %}>
+                            {% for item in option.parent_path_list %}{{ item }} / {% endfor %}{{ option.name }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="field">
+                <label for="id_supplier">Proveedor</label>
+                <select class="form-select" id="id_supplier" name="supplier">
+                    <option value="">Todos</option>
+                    {% for item in suppliers %}
+                        <option value="{{ item }}" {% if supplier == item %}selected{% endif %}>{{ item }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="field">
+                <label for="id_product_status">Estado</label>
+                <select class="form-select" id="id_product_status" name="product_status">
+                    <option value="active" {% if product_status == "active" %}selected{% endif %}>Activos</option>
+                    <option value="inactive" {% if product_status == "inactive" %}selected{% endif %}>Inactivos</option>
+                    <option value="all" {% if product_status == "all" %}selected{% endif %}>Todos</option>
+                </select>
+            </div>
+            <div class="filter-actions">
+                <button class="btn btn-primary" type="submit">Filtrar</button>
+                <a class="btn btn-secondary" href="{% url 'admin_brand_catalog_inbox' %}">Limpiar</a>
+            </div>
+        </form>
+    </section>
+
+    <form method="post" action="{% url 'admin_brand_catalog_assign' %}" id="catalogAssignmentForm">
+        {% csrf_token %}
+        <input type="hidden" name="used_suggestion" id="usedSuggestion" value="0">
+        <div class="catalog-grid">
+            <aside class="assignment-panel">
+                <h2>Destino de la selección</h2>
+                <p>Elige el destino. Un subrubro también vincula el producto con su rubro padre.</p>
+                <div class="selection-count">
+                    <span>Productos seleccionados</span>
+                    <strong id="selectionCount">0</strong>
+                </div>
+                <div class="field">
+                    <label for="catalogBrand">Marca</label>
+                    <select class="form-select" id="catalogBrand" name="brand_id" required>
+                        <option value="">Seleccionar marca</option>
+                        {% for brand in brands %}
+                            <option value="{{ brand.id|unlocalize }}">{{ brand.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="catalogRubro">Rubro</label>
+                    <select class="form-select" id="catalogRubro" name="rubro_id" required disabled>
+                        <option value="">Seleccionar rubro</option>
+                        {% for brand in brands %}
+                            {% for rubro in brand.rubros.all %}
+                                {% if rubro.is_active %}
+                                    <option value="{{ rubro.id|unlocalize }}" data-brand="{{ brand.id|unlocalize }}">{{ rubro.name }}</option>
+                                {% endif %}
+                            {% endfor %}
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="catalogSubrubro">Subrubro opcional</label>
+                    <select class="form-select" id="catalogSubrubro" name="subrubro_id" disabled>
+                        <option value="">Sin subrubro</option>
+                        {% for brand in brands %}
+                            {% for rubro in brand.rubros.all %}
+                                {% for subrubro in rubro.subrubros.all %}
+                                    {% if subrubro.is_active %}
+                                        <option value="{{ subrubro.id|unlocalize }}" data-rubro="{{ rubro.id|unlocalize }}">{{ subrubro.name }}</option>
+                                    {% endif %}
+                                {% endfor %}
+                            {% endfor %}
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="catalogObservation">Observación obligatoria</label>
+                    <textarea class="form-input" id="catalogObservation" name="observation" rows="3" required placeholder="Ej. Revisión del catálogo Ford, lote julio"></textarea>
+                </div>
+                <div class="assignment-help" id="assignmentHelp">
+                    Selecciona productos y un rubro para habilitar el guardado.
+                </div>
+                <button class="btn btn-primary" type="submit" id="assignButton" style="width:100%" disabled>
+                    Asignar y continuar
+                </button>
+            </aside>
+
+            <section class="products-panel">
+                <div class="products-head">
+                    <div>
+                        <h2>Cola de revisión</h2>
+                        <span>{{ page_obj.paginator.count }} producto(s) encontrados</span>
+                    </div>
+                    {% if page_obj.object_list %}
+                        <label class="select-all">
+                            <input type="checkbox" id="selectAll">
+                            Seleccionar página
+                        </label>
+                    {% endif %}
+                </div>
+
+                {% for product in page_obj %}
+                    <article class="product-row" data-product-row="{{ product.id|unlocalize }}">
+                        <div>
+                            <input class="product-check" type="checkbox" name="product_ids" value="{{ product.id|unlocalize }}" aria-label="Seleccionar {{ product.sku }}">
+                        </div>
+                        <div>
+                            <div class="sku">{{ product.sku }}</div>
+                            <div class="product-name">{{ product.name }}</div>
+                            <div class="product-meta">
+                                {% if product.category %}
+                                    {{ product.category.get_full_path }}
+                                {% elif product.categories.all %}
+                                    {% for category in product.categories.all|slice:":2" %}
+                                        {{ category.get_full_path }}{% if not forloop.last %}; {% endif %}
+                                    {% endfor %}
+                                {% else %}
+                                    Sin categoría general
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div>
+                            <span class="meta-label">Proveedor</span>
+                            <div class="product-meta" style="margin-top:0">
+                                {% if product.supplier_ref %}{{ product.supplier_ref.name }}{% elif product.supplier %}{{ product.supplier }}{% else %}Sin proveedor{% endif %}
+                            </div>
+                            <span class="meta-label" style="margin-top:11px">Estado</span>
+                            <div class="product-meta" style="margin-top:0">{% if product.is_active %}Activo{% else %}Inactivo{% endif %}</div>
+                        </div>
+                        <div class="suggestions">
+                            <div class="suggestions-title">Sugerencias</div>
+                            {% for suggestion in product.catalog_suggestions %}
+                                <button
+                                    type="button"
+                                    class="suggestion"
+                                    data-product="{{ product.id|unlocalize }}"
+                                    data-brand="{{ suggestion.brand.id|unlocalize }}"
+                                    data-rubro="{% if suggestion.rubro %}{{ suggestion.rubro.id|unlocalize }}{% endif %}"
+                                    data-subrubro="{% if suggestion.subrubro %}{{ suggestion.subrubro.id|unlocalize }}{% endif %}"
+                                >
+                                    <span class="suggestion-top">
+                                        <span>{{ suggestion.destination }}</span>
+                                        <span class="confidence">{{ suggestion.confidence }}%</span>
+                                    </span>
+                                    <small>{{ suggestion.reason }}</small>
+                                </button>
+                            {% empty %}
+                                <div class="no-suggestion">Sin coincidencias confiables. Selecciona el destino manualmente.</div>
+                            {% endfor %}
+                        </div>
+                    </article>
+                {% empty %}
+                    <div class="empty-state">
+                        <h3>No hay productos pendientes con estos filtros</h3>
+                        <p>Prueba otra búsqueda o revisa la estructura completa de marcas.</p>
+                    </div>
+                {% endfor %}
+
+                {% if page_obj.paginator.num_pages > 1 %}
+                    <nav class="pagination" aria-label="Paginación">
+                        {% if page_obj.has_previous %}
+                            <a href="?page={{ page_obj.previous_page_number }}&q={{ search|urlencode }}&category={{ category_id }}&supplier={{ supplier|urlencode }}&product_status={{ product_status }}">Anterior</a>
+                        {% endif %}
+                        <span class="current">{{ page_obj.number }}</span>
+                        <span>de {{ page_obj.paginator.num_pages }}</span>
+                        {% if page_obj.has_next %}
+                            <a href="?page={{ page_obj.next_page_number }}&q={{ search|urlencode }}&category={{ category_id }}&supplier={{ supplier|urlencode }}&product_status={{ product_status }}">Siguiente</a>
+                        {% endif %}
+                    </nav>
+                {% endif %}
+            </section>
+        </div>
+    </form>
+
+    {% if recent_batches %}
+        <section class="batch-panel">
+            <h2>Últimos lotes</h2>
+            <div class="batch-list">
+                {% for batch in recent_batches %}
+                    <div class="batch-row">
+                        <div>
+                            <strong>#{{ batch.id }}</strong>
+                            <small>{{ batch.created_at|date:"d/m/Y H:i" }}</small>
+                        </div>
+                        <div>
+                            <strong>{{ batch.brand.name }} / {{ batch.brand_rubro.name }}{% if batch.brand_subrubro %} / {{ batch.brand_subrubro.name }}{% endif %}</strong>
+                            <small>{{ batch.product_ids|length }} producto(s) · {{ batch.observation|truncatechars:90 }}</small>
+                        </div>
+                        <div>
+                            <span class="status-chip {% if batch.status == 'applied' %}status-applied{% else %}status-undone{% endif %}">
+                                {{ batch.get_status_display }}
+                            </span>
+                            <small>{% if batch.created_by %}{{ batch.created_by.username }}{% else %}Sistema{% endif %}</small>
+                        </div>
+                        <div>
+                            {% if batch.can_undo %}
+                                <form method="post" action="{% url 'admin_brand_catalog_batch_undo' batch.id %}" onsubmit="return confirm('¿Deshacer solo las asociaciones creadas por el lote #{{ batch.id }}?');">
+                                    {% csrf_token %}
+                                    <button class="btn btn-secondary" type="submit">Deshacer</button>
+                                </form>
+                            {% else %}
+                                <span style="color:#687386;font-size:.72rem">Sin acciones</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        </section>
+    {% endif %}
+</div>
+
+<script>
+(function () {
+    const form = document.getElementById("catalogAssignmentForm");
+    const brand = document.getElementById("catalogBrand");
+    const rubro = document.getElementById("catalogRubro");
+    const subrubro = document.getElementById("catalogSubrubro");
+    const observation = document.getElementById("catalogObservation");
+    const submit = document.getElementById("assignButton");
+    const count = document.getElementById("selectionCount");
+    const help = document.getElementById("assignmentHelp");
+    const selectAll = document.getElementById("selectAll");
+    const checks = Array.from(document.querySelectorAll(".product-check"));
+    const usedSuggestion = document.getElementById("usedSuggestion");
+
+    function filterOptions(select, attribute, value) {
+        let currentIsValid = !select.value;
+        Array.from(select.options).forEach(function (option, index) {
+            if (index === 0) {
+                option.disabled = false;
+                option.hidden = false;
+                return;
+            }
+            const visible = value && option.dataset[attribute] === String(value);
+            option.hidden = !visible;
+            option.disabled = !visible;
+            if (visible && option.value === select.value) currentIsValid = true;
+        });
+        if (!currentIsValid) select.value = "";
+        select.disabled = !value;
+    }
+
+    function syncDestination() {
+        filterOptions(rubro, "brand", brand.value);
+        filterOptions(subrubro, "rubro", rubro.value);
+        validate();
+    }
+
+    function updateSelection() {
+        const selected = checks.filter(function (check) { return check.checked; });
+        count.textContent = selected.length;
+        checks.forEach(function (check) {
+            const row = check.closest(".product-row");
+            if (row) row.classList.toggle("is-selected", check.checked);
+        });
+        if (selectAll) {
+            selectAll.checked = checks.length > 0 && selected.length === checks.length;
+            selectAll.indeterminate = selected.length > 0 && selected.length < checks.length;
+        }
+        validate();
+    }
+
+    function validate() {
+        const selectedCount = checks.filter(function (check) { return check.checked; }).length;
+        const ready = selectedCount > 0 && brand.value && rubro.value && observation.value.trim();
+        submit.disabled = !ready;
+        if (!selectedCount) {
+            help.textContent = "Selecciona al menos un producto.";
+        } else if (!brand.value) {
+            help.textContent = "Selecciona una marca.";
+        } else if (!rubro.value) {
+            help.textContent = "Selecciona un rubro.";
+        } else if (!observation.value.trim()) {
+            help.textContent = "Explica brevemente el criterio de esta asignación.";
+        } else {
+            help.textContent = "La asignación está lista. Podrás deshacer este lote después.";
+        }
+    }
+
+    brand.addEventListener("change", function () {
+        usedSuggestion.value = "0";
+        syncDestination();
+    });
+    rubro.addEventListener("change", function () {
+        usedSuggestion.value = "0";
+        filterOptions(subrubro, "rubro", rubro.value);
+        validate();
+    });
+    subrubro.addEventListener("change", function () {
+        usedSuggestion.value = "0";
+        validate();
+    });
+    observation.addEventListener("input", validate);
+    checks.forEach(function (check) { check.addEventListener("change", updateSelection); });
+
+    if (selectAll) {
+        selectAll.addEventListener("change", function () {
+            checks.forEach(function (check) { check.checked = selectAll.checked; });
+            updateSelection();
+        });
+    }
+
+    document.querySelectorAll(".suggestion").forEach(function (button) {
+        button.addEventListener("click", function () {
+            const productCheck = document.querySelector('.product-check[value="' + button.dataset.product + '"]');
+            if (productCheck) productCheck.checked = true;
+            brand.value = button.dataset.brand || "";
+            filterOptions(rubro, "brand", brand.value);
+            rubro.value = button.dataset.rubro || "";
+            filterOptions(subrubro, "rubro", rubro.value);
+            subrubro.value = button.dataset.subrubro || "";
+            usedSuggestion.value = "1";
+            updateSelection();
+            if (!rubro.value) {
+                help.textContent = "La marca fue reconocida. Elige el rubro para completar el destino.";
+            }
+            document.querySelector(".assignment-panel").scrollIntoView({ behavior: "smooth", block: "nearest" });
+        });
+    });
+
+    form.addEventListener("submit", function (event) {
+        validate();
+        if (submit.disabled) event.preventDefault();
+    });
+    syncDestination();
+    updateSelection();
+})();
+</script>
+{% endblock %}

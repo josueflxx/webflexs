@@ -483,6 +483,21 @@ class Product(models.Model):
         verbose_name="Controlar stock",
         help_text="Si esta activo, el stock se actualiza cuando el comprobante obtiene CAE.",
     )
+    allow_negative_stock = models.BooleanField(
+        default=False,
+        verbose_name="Permitir stock negativo",
+        help_text="Permite continuar la operacion cuando el producto controlado no tiene existencia suficiente.",
+    )
+    is_sellable = models.BooleanField(
+        default=True,
+        verbose_name="Disponible para venta",
+        help_text="Controla si el producto puede agregarse a nuevas operaciones comerciales.",
+    )
+    is_purchasable = models.BooleanField(
+        default=True,
+        verbose_name="Disponible para compra",
+        help_text="Reserva la disponibilidad del producto para futuros flujos de compras.",
+    )
     # Legacy single category (kept for backward compatibility and as primary category)
     category = models.ForeignKey(
         Category,
@@ -568,12 +583,12 @@ class Product(models.Model):
     def catalog_visible(cls, queryset=None, include_uncategorized=False):
         """Return active products linked to at least one visible category."""
         qs = queryset if queryset is not None else cls.objects.all()
-        return qs.filter(is_active=True).filter(
+        return qs.filter(is_active=True, is_sellable=True).filter(
             cls.catalog_visibility_q(include_uncategorized=include_uncategorized)
         ).distinct()
 
     def is_visible_in_catalog(self, include_uncategorized=False):
-        if not self.is_active:
+        if not self.is_active or not self.is_sellable:
             return False
         linked_categories = self.get_linked_categories()
         if not linked_categories:
@@ -1661,3 +1676,269 @@ class BrandSubrubroProductOrder(models.Model):
 
     def __str__(self):
         return f"{self.brand_subrubro_id}:{self.product_id} #{self.sort_order}"
+
+
+class BrandAlias(models.Model):
+    """Commercial alias used to recognize a brand in product data."""
+
+    brand = models.ForeignKey(
+        Brand,
+        on_delete=models.CASCADE,
+        related_name="aliases",
+        verbose_name="Marca",
+    )
+    value = models.CharField(max_length=120, verbose_name="Alias")
+    normalized_value = models.CharField(
+        max_length=120,
+        unique=True,
+        editable=False,
+        db_index=True,
+        verbose_name="Alias normalizado",
+    )
+    is_active = models.BooleanField(default=True, verbose_name="Activo")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["brand__name", "value"]
+        verbose_name = "Alias de marca"
+        verbose_name_plural = "Alias de marcas"
+
+    @staticmethod
+    def normalize(value):
+        import unicodedata
+
+        ascii_value = unicodedata.normalize("NFKD", str(value or "")).encode("ascii", "ignore").decode("ascii")
+        return re.sub(r"[^A-Z0-9]+", " ", ascii_value.upper()).strip()
+
+    def clean(self):
+        super().clean()
+        self.normalized_value = self.normalize(self.value)
+        if not self.normalized_value:
+            raise ValidationError({"value": "Ingresa un alias con letras o numeros."})
+        duplicate = BrandAlias.objects.filter(normalized_value=self.normalized_value).exclude(pk=self.pk)
+        if duplicate.exists():
+            raise ValidationError({"value": "Este alias ya esta asociado a una marca."})
+
+    def save(self, *args, **kwargs):
+        self.normalized_value = self.normalize(self.value)
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.value} -> {self.brand.name}"
+
+
+class BrandCatalogRule(models.Model):
+    """Reusable rule for suggesting a destination in the brand catalog."""
+
+    FIELD_ANY = "any"
+    FIELD_NAME = "name"
+    FIELD_SKU = "sku"
+    FIELD_SUPPLIER = "supplier"
+    FIELD_CATEGORY = "category"
+    FIELD_CHOICES = [
+        (FIELD_ANY, "Cualquier dato"),
+        (FIELD_NAME, "Nombre"),
+        (FIELD_SKU, "SKU"),
+        (FIELD_SUPPLIER, "Proveedor"),
+        (FIELD_CATEGORY, "Categoria"),
+    ]
+
+    MATCH_CONTAINS = "contains"
+    MATCH_WORD = "word"
+    MATCH_PREFIX = "prefix"
+    MATCH_CHOICES = [
+        (MATCH_CONTAINS, "Contiene"),
+        (MATCH_WORD, "Palabra completa"),
+        (MATCH_PREFIX, "Comienza con"),
+    ]
+
+    brand = models.ForeignKey(
+        Brand,
+        on_delete=models.CASCADE,
+        related_name="catalog_rules",
+        verbose_name="Marca",
+    )
+    brand_rubro = models.ForeignKey(
+        BrandRubro,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="catalog_rules",
+        verbose_name="Rubro",
+    )
+    brand_subrubro = models.ForeignKey(
+        BrandSubrubro,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="catalog_rules",
+        verbose_name="Subrubro",
+    )
+    source_field = models.CharField(
+        max_length=20,
+        choices=FIELD_CHOICES,
+        default=FIELD_ANY,
+        verbose_name="Campo a revisar",
+    )
+    match_mode = models.CharField(
+        max_length=20,
+        choices=MATCH_CHOICES,
+        default=MATCH_WORD,
+        verbose_name="Tipo de coincidencia",
+    )
+    pattern = models.CharField(max_length=160, verbose_name="Texto a reconocer")
+    priority = models.PositiveSmallIntegerField(default=50, verbose_name="Prioridad")
+    confidence = models.PositiveSmallIntegerField(
+        default=85,
+        validators=[MinValueValidator(1), MaxValueValidator(100)],
+        verbose_name="Confianza",
+    )
+    is_active = models.BooleanField(default=True, verbose_name="Activa")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-priority", "-confidence", "brand__name", "pattern"]
+        verbose_name = "Regla de catalogacion por marca"
+        verbose_name_plural = "Reglas de catalogacion por marca"
+
+    def clean(self):
+        super().clean()
+        errors = {}
+        normalized_pattern = BrandAlias.normalize(self.pattern)
+        if not normalized_pattern:
+            errors["pattern"] = "Ingresa un texto valido para reconocer."
+        if self.brand_rubro_id and self.brand_rubro.brand_id != self.brand_id:
+            errors["brand_rubro"] = "El rubro debe pertenecer a la marca seleccionada."
+        if self.brand_subrubro_id:
+            if self.brand_subrubro.brand_rubro.brand_id != self.brand_id:
+                errors["brand_subrubro"] = "El subrubro debe pertenecer a la marca seleccionada."
+            if self.brand_rubro_id and self.brand_subrubro.brand_rubro_id != self.brand_rubro_id:
+                errors["brand_subrubro"] = "El subrubro debe pertenecer al rubro seleccionado."
+        if errors:
+            raise ValidationError(errors)
+
+    def __str__(self):
+        destination = self.brand_subrubro or self.brand_rubro or self.brand
+        return f"{self.pattern} -> {destination}"
+
+
+class BrandCatalogBatch(models.Model):
+    """Audit record for a reversible bulk catalog assignment."""
+
+    OPERATION_ASSIGN = "assign"
+    OPERATION_RULE = "rule"
+    OPERATION_IMPORT = "import"
+    OPERATION_MOVE = "move"
+    OPERATION_REMOVE = "remove"
+    OPERATION_CHOICES = [
+        (OPERATION_ASSIGN, "Asignacion manual"),
+        (OPERATION_RULE, "Asignacion sugerida"),
+        (OPERATION_IMPORT, "Importacion"),
+        (OPERATION_MOVE, "Movimiento entre marcas"),
+        (OPERATION_REMOVE, "Desasignacion manual"),
+    ]
+
+    STATUS_APPLIED = "applied"
+    STATUS_UNDONE = "undone"
+    STATUS_CHOICES = [
+        (STATUS_APPLIED, "Aplicado"),
+        (STATUS_UNDONE, "Deshecho"),
+    ]
+
+    operation = models.CharField(
+        max_length=20,
+        choices=OPERATION_CHOICES,
+        default=OPERATION_ASSIGN,
+        verbose_name="Origen",
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default=STATUS_APPLIED,
+        db_index=True,
+        verbose_name="Estado",
+    )
+    brand = models.ForeignKey(
+        Brand,
+        on_delete=models.PROTECT,
+        related_name="catalog_batches",
+        verbose_name="Marca",
+    )
+    brand_rubro = models.ForeignKey(
+        BrandRubro,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="catalog_batches",
+        verbose_name="Rubro",
+    )
+    brand_subrubro = models.ForeignKey(
+        BrandSubrubro,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="catalog_batches",
+        verbose_name="Subrubro",
+    )
+    product_ids = models.JSONField(default=list, blank=True, verbose_name="Productos")
+    created_rubro_row_ids = models.JSONField(default=list, blank=True)
+    created_subrubro_row_ids = models.JSONField(default=list, blank=True)
+    removed_rubro_rows = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Asociaciones de rubro retiradas por el lote para poder restaurarlas.",
+    )
+    removed_subrubro_rows = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Asociaciones de subrubro retiradas por el lote para poder restaurarlas.",
+    )
+    observation = models.TextField(verbose_name="Observacion")
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="brand_catalog_batches",
+        verbose_name="Creado por",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    undone_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="undone_brand_catalog_batches",
+        verbose_name="Deshecho por",
+    )
+    undone_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+        verbose_name = "Lote de catalogacion por marca"
+        verbose_name_plural = "Lotes de catalogacion por marca"
+
+    @property
+    def can_undo(self):
+        return self.status == self.STATUS_APPLIED
+
+    def clean(self):
+        super().clean()
+        errors = {}
+        if not str(self.observation or "").strip():
+            errors["observation"] = "La observacion es obligatoria."
+        if self.brand_rubro_id and self.brand_rubro.brand_id != self.brand_id:
+            errors["brand_rubro"] = "El rubro debe pertenecer a la marca seleccionada."
+        if self.brand_subrubro_id:
+            if self.brand_subrubro.brand_rubro.brand_id != self.brand_id:
+                errors["brand_subrubro"] = "El subrubro debe pertenecer a la marca seleccionada."
+            if self.brand_rubro_id and self.brand_subrubro.brand_rubro_id != self.brand_rubro_id:
+                errors["brand_subrubro"] = "El subrubro debe pertenecer al rubro seleccionado."
+        if errors:
+            raise ValidationError(errors)
+
+    def __str__(self):
+        return f"Lote {self.pk or '-'} | {self.brand.name} | {len(self.product_ids or [])} productos"

@@ -79,6 +79,11 @@ class ProductStaffSerializer(ProductBaseSerializer):
     class Meta(ProductBaseSerializer.Meta):
         fields = ProductBaseSerializer.Meta.fields + [
             "cost",
+            "iva_rate",
+            "tracks_stock",
+            "allow_negative_stock",
+            "is_sellable",
+            "is_purchasable",
             "is_active",
         ]
 

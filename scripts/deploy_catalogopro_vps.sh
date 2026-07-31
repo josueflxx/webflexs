@@ -1,142 +1,107 @@
-#!/bin/bash
-# Script de despliegue interno en VPS para CatalogoPRO
-set -e
+#!/usr/bin/env bash
+set -euo pipefail
 
-echo "=== Iniciando despliegue de CatalogoPRO en VPS ==="
+# Deploy the React mass editor as a first-party WEBFLEXS frontend. Product writes
+# go through /api/v1/editor/ in Django. The legacy service remains available
+# during the canary unless its retirement is explicitly requested.
 
-# 1. Asegurar directorios de producción y detener el servicio para liberar el binario
-systemctl stop catalogopro || true
-mkdir -p /var/www/catalogopro/api /var/www/catalogopro/editor-masivo
-rm -rf /var/www/catalogopro/editor-masivo/*
+WEBFLEXS_ROOT="${WEBFLEXS_ROOT:-/var/www/webflexs}"
+BUILD_DIR="${WEBFLEXS_ROOT}/catalogopro_build/frontend"
+TARGET_DIR="/var/www/catalogopro/editor-masivo"
+RETIRE_LEGACY_CATALOGOPRO="${RETIRE_LEGACY_CATALOGOPRO:-0}"
 
-# 2. Copiar archivos precompilados a producción
-cp -r /var/www/webflexs/catalogopro_build/api/* /var/www/catalogopro/api/
-cp -r /var/www/webflexs/catalogopro_build/frontend/* /var/www/catalogopro/editor-masivo/
-
-# 3. Dar permisos de ejecución al binario
-chmod +x /var/www/catalogopro/api/CatalogoPro.WebAPI
-
-# 4. Leer configuración de base de datos desde .env de Django
-DB_NAME=$(grep '^DB_NAME=' /var/www/webflexs/.env | cut -d '=' -f2- | tr -d '\r')
-DB_USER=$(grep '^DB_USER=' /var/www/webflexs/.env | cut -d '=' -f2- | tr -d '\r')
-DB_PASSWORD=$(grep '^DB_PASSWORD=' /var/www/webflexs/.env | cut -d '=' -f2- | tr -d '\r')
-DB_HOST=$(grep '^DB_HOST=' /var/www/webflexs/.env | cut -d '=' -f2- | tr -d '\r')
-DB_PORT=$(grep '^DB_PORT=' /var/www/webflexs/.env | cut -d '=' -f2- | tr -d '\r')
-
-# Valores por defecto en caso de no estar definidos
-DB_NAME=${DB_NAME:-flexs_db}
-DB_USER=${DB_USER:-flexs_user}
-DB_PASSWORD=${DB_PASSWORD:-}
-DB_HOST=${DB_HOST:-localhost}
-DB_PORT=${DB_PORT:-5432}
-
-# 5. Generar appsettings.Production.json
-CATALOGO_CONN="Host=${DB_HOST};Port=${DB_PORT};Database=${DB_NAME};Username=${DB_USER};Password=${DB_PASSWORD};Include Error Detail=true"
-
-cat <<EOF > /var/www/catalogopro/api/appsettings.Production.json
-{
-  "Logging": {
-    "LogLevel": {
-      "Default": "Information",
-      "Microsoft.AspNetCore": "Warning"
-    }
-  },
-  "AllowedHosts": "*",
-  "ConnectionStrings": {
-    "DefaultConnection": "${CATALOGO_CONN}"
-  },
-  "JwtSettings": {
-    "Secret": "SuperSecretSecureKeyForCatalogoProSystem2026!_MustBeAtLeast32CharsLong",
-    "Issuer": "CatalogoProAPI",
-    "Audience": "CatalogoProClient",
-    "ExpiryInMinutes": 1440
-  }
-}
-EOF
-
-# 6. Crear o actualizar servicio Systemd
-cat <<EOF > /etc/systemd/system/catalogopro.service
-[Unit]
-Description=CatalogoPro C# WebAPI Service
-After=network.target
-
-[Service]
-WorkingDirectory=/var/www/catalogopro/api
-ExecStart=/var/www/catalogopro/api/CatalogoPro.WebAPI --urls "http://localhost:5050"
-Restart=always
-RestartSec=10
-KillSignal=SIGINT
-SyslogIdentifier=catalogopro-api
-Environment=ASPNETCORE_ENVIRONMENT=Production
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-# 5.5 Asegurar que el runtime de ASP.NET Core 8 esté instalado en el VPS
-if ! dpkg -s aspnetcore-runtime-8.0 &> /dev/null; then
-    echo "Instalando ASP.NET Core 8 runtime en el VPS..."
-    apt-get update
-    apt-get install -y aspnetcore-runtime-8.0
+if [[ ! -f "${BUILD_DIR}/index.html" ]]; then
+    echo "Missing editor build at ${BUILD_DIR}." >&2
+    exit 1
 fi
 
-# Recargar y reiniciar el servicio
-systemctl daemon-reload
-systemctl enable catalogopro
-systemctl restart catalogopro
+install -d -m 0755 "${TARGET_DIR}"
+if [[ "${TARGET_DIR}" != "/var/www/catalogopro/editor-masivo" ]]; then
+    echo "Unexpected deployment target: ${TARGET_DIR}" >&2
+    exit 1
+fi
+find "${TARGET_DIR}" -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +
+cp -a "${BUILD_DIR}/." "${TARGET_DIR}/"
 
-# 7. Configurar Nginx si no está inyectado
+if [[ "${RETIRE_LEGACY_CATALOGOPRO}" == "1" ]]; then
+    # Run only after the official editor has completed its stabilization period.
+    systemctl disable --now catalogopro 2>/dev/null || true
+    rm -f /var/www/catalogopro/api/appsettings.Production.json
+fi
+
 NGINX_FILE=""
-for f in /etc/nginx/sites-enabled/*; do
-    if [ -f "$f" ]; then
-        NGINX_FILE="$f"
+for candidate in /etc/nginx/sites-enabled/*; do
+    if [[ -f "${candidate}" ]]; then
+        NGINX_FILE="$(readlink -f "${candidate}")"
         break
     fi
 done
 
-if [ -n "$NGINX_FILE" ]; then
-    if ! grep -q "/editor-masivo" "$NGINX_FILE"; then
-        echo "Inyectando reglas de Nginx en $NGINX_FILE..."
-        python3 -c "
-with open('$NGINX_FILE', 'r') as f:
-    content = f.read()
-
-last_brace = content.rfind('}')
-if last_brace == -1:
-    import sys
-    sys.exit(1)
-
-blocks = '''
-    # Frontend de CatalogoPRO
-    location /editor-masivo {
-        root /var/www/catalogopro;
-        try_files \$uri \$uri/ /editor-masivo/index.html;
-    }
-
-    # Backend Proxy de CatalogoPRO (C# API)
-    location /api/catalogopro/ {
-        proxy_pass http://localhost:5050/api/;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade \$http_upgrade;
-        proxy_set_header Connection keep-alive;
-        proxy_set_header Host \$host;
-        proxy_cache_bypass \$http_upgrade;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
-    }
-'''
-
-new_content = content[:last_brace] + blocks + content[last_brace:]
-with open('$NGINX_FILE', 'w') as f:
-    f.write(new_content)
-"
-        systemctl reload nginx
-        echo "Nginx configurado y recargado con éxito."
-    else
-        echo "Nginx ya tiene la ruta /editor-masivo configurada."
-    fi
-else
-    echo "No se encontró el archivo de configuración activo de Nginx."
+if [[ -z "${NGINX_FILE}" || ! -f "${NGINX_FILE}" ]]; then
+    echo "No active Nginx site was found." >&2
+    exit 1
 fi
 
-echo "=== Despliegue de CatalogoPRO completado con éxito ==="
+NGINX_FILE="${NGINX_FILE}" RETIRE_LEGACY_CATALOGOPRO="${RETIRE_LEGACY_CATALOGOPRO}" python3 <<'PY'
+import os
+import re
+from pathlib import Path
+
+path = Path(os.environ["NGINX_FILE"])
+content = path.read_text(encoding="utf-8")
+
+
+def remove_location(source, location_expression):
+    pattern = re.compile(r"(?m)^\s*location\s+" + location_expression + r"\s*\{")
+    while True:
+        match = pattern.search(source)
+        if not match:
+            return source
+        depth = 0
+        end = None
+        for index in range(match.end() - 1, len(source)):
+            if source[index] == "{":
+                depth += 1
+            elif source[index] == "}":
+                depth -= 1
+                if depth == 0:
+                    end = index + 1
+                    break
+        if end is None:
+            raise SystemExit(f"Unbalanced Nginx location in {path}")
+        source = source[: match.start()] + source[end:]
+
+
+# Replace previous static editor variants. Keep the legacy API proxy throughout
+# the canary; removing it is a separate, explicit retirement action.
+content = remove_location(content, r"=?\s*/editor-masivo/?")
+if os.environ.get("RETIRE_LEGACY_CATALOGOPRO") == "1":
+    content = remove_location(content, r"/api/catalogopro/")
+
+last_brace = content.rfind("}")
+if last_brace < 0:
+    raise SystemExit(f"Invalid Nginx configuration in {path}")
+
+block = r'''
+    # CatálogoPRO editor backed by the official WEBFLEXS API.
+    location = /editor-masivo {
+        return 301 /editor-masivo/;
+    }
+
+    location /editor-masivo/ {
+        alias /var/www/catalogopro/editor-masivo/;
+        try_files $uri $uri/ /editor-masivo/index.html;
+    }
+'''
+content = content[:last_brace].rstrip() + "\n" + block + "\n" + content[last_brace:]
+path.write_text(content, encoding="utf-8")
+PY
+
+nginx -t
+systemctl reload nginx
+
+echo "Editor deployed at /editor-masivo/."
+echo "Keep FEATURE_EXTERNAL_EDITOR_WRITES=False until staging validation is approved."
+if [[ "${RETIRE_LEGACY_CATALOGOPRO}" != "1" ]]; then
+    echo "Legacy CatalogoPRO remains active for canary fallback."
+fi

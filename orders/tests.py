@@ -1,4 +1,5 @@
 from decimal import Decimal
+from datetime import date
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
@@ -1068,12 +1069,13 @@ class OrderRequestReviewActionsTests(TestCase):
         self.client.force_login(self.staff_user)
         self._activate_company()
         self.company.legal_name = 'Flexs Fiscal Test SA'
-        self.company.cuit = '30-12345678-9'
+        self.company.cuit = '30-69345023-9'
         self.company.tax_condition = 'responsable_inscripto'
         self.company.fiscal_address = 'Av Fiscal 123'
         self.company.fiscal_city = 'San Martin'
         self.company.fiscal_province = 'Buenos Aires'
         self.company.postal_code = '1650'
+        self.company.activity_start_date = date(2020, 1, 1)
         self.company.point_of_sale_default = self.point_of_sale.number
         self.company.save(
             update_fields=[
@@ -1084,12 +1086,13 @@ class OrderRequestReviewActionsTests(TestCase):
                 'fiscal_city',
                 'fiscal_province',
                 'postal_code',
+                'activity_start_date',
                 'point_of_sale_default',
                 'updated_at',
             ]
         )
         self.client_profile.document_type = 'cuit'
-        self.client_profile.document_number = '20123456789'
+        self.client_profile.document_number = '20123456786'
         self.client_profile.iva_condition = 'responsable_inscripto'
         self.client_profile.fiscal_address = 'Calle Cliente 456'
         self.client_profile.fiscal_city = 'San Martin'

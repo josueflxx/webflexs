@@ -22,6 +22,19 @@ def _env_int(name, default):
         return default
 
 
+def _env_guard_bool(name, default):
+    """Keep ambiguous security booleans visible so the ARCA gate rejects them."""
+    raw = os.getenv(name)
+    if raw is None or raw == "":
+        return bool(default)
+    normalized = raw.lower()
+    if normalized == "true":
+        return True
+    if normalized == "false":
+        return False
+    return raw
+
+
 def _env_json(name, default):
     raw = os.getenv(name, "").strip()
     if not raw:
@@ -251,30 +264,104 @@ FEATURE_OBSERVABILITY_ENABLED = os.getenv('FEATURE_OBSERVABILITY_ENABLED', 'Fals
 FEATURE_READ_ONLY_MODE = os.getenv('FEATURE_READ_ONLY_MODE', 'False').lower() == 'true'
 ORDER_REQUIRE_PAYMENT_FOR_CONFIRMATION = os.getenv('ORDER_REQUIRE_PAYMENT_FOR_CONFIRMATION', 'False').lower() == 'true'
 
-# ARCA / WSFE integration (Phase 4 - homologation first)
-ARCA_ALLOW_PRODUCTION = os.getenv("ARCA_ALLOW_PRODUCTION", "False").lower() == "true"
-ARCA_TIMEOUT_SECONDS = max(_env_int("ARCA_TIMEOUT_SECONDS", 30), 5)
-ARCA_OPENSSL_BIN = os.getenv("ARCA_OPENSSL_BIN", "openssl").strip() or "openssl"
-ARCA_WSAA_SERVICE = os.getenv("ARCA_WSAA_SERVICE", "wsfe").strip() or "wsfe"
-ARCA_WSAA_URL_HOMOLOGATION = os.getenv(
-    "ARCA_WSAA_URL_HOMOLOGATION",
-    "https://wsaahomo.afip.gov.ar/ws/services/LoginCms",
+# ARCA / WSFE integration. Every capability is disabled unless explicitly
+# enabled. Endpoint environment values are still checked against the closed
+# allowlist in core.services.arca_config before any network I/O.
+ARCA_ENABLED = _env_guard_bool("ARCA_ENABLED", False)
+ARCA_ENVIRONMENT = str(
+    os.getenv("ARCA_ENVIRONMENT", "disabled") or "disabled"
+)
+ARCA_HOMOLOGATION_NETWORK_ENABLED = _env_guard_bool(
+    "ARCA_HOMOLOGATION_NETWORK_ENABLED",
+    False,
+)
+ARCA_HOMOLOGATION_READ_ENABLED = _env_guard_bool(
+    "ARCA_HOMOLOGATION_READ_ENABLED",
+    False,
+)
+ARCA_HOMOLOGATION_EMISSION_ENABLED = _env_guard_bool(
+    "ARCA_HOMOLOGATION_EMISSION_ENABLED",
+    False,
+)
+ARCA_PRODUCTION_ENABLED = _env_guard_bool(
+    "ARCA_PRODUCTION_ENABLED",
+    False,
+)
+READY_ARCA_HOMOLOGACION_READONLY = _env_guard_bool(
+    "READY_ARCA_HOMOLOGACION_READONLY",
+    False,
+)
+ARCA_WSASS_AUTHORIZATION_CONFIRMED = _env_guard_bool(
+    "ARCA_WSASS_AUTHORIZATION_CONFIRMED",
+    False,
+)
+
+ARCA_WSAA_URL = str(os.getenv("ARCA_WSAA_URL", "") or "")
+ARCA_WSFE_URL = str(os.getenv("ARCA_WSFE_URL", "") or "")
+ARCA_WSFE_WSDL = str(os.getenv("ARCA_WSFE_WSDL", "") or "")
+ARCA_CONNECT_TIMEOUT_SECONDS = max(
+    _env_int("ARCA_CONNECT_TIMEOUT_SECONDS", 10),
+    5,
+)
+ARCA_READ_TIMEOUT_SECONDS = max(_env_int("ARCA_READ_TIMEOUT_SECONDS", 30), 5)
+# Compatibility alias used by the existing strict SOAP transport.
+ARCA_TIMEOUT_SECONDS = ARCA_READ_TIMEOUT_SECONDS
+ARCA_TA_RENEWAL_MARGIN_SECONDS = max(
+    _env_int("ARCA_TA_RENEWAL_MARGIN_SECONDS", 120),
+    30,
+)
+ARCA_TLS_VERIFY = _env_guard_bool("ARCA_TLS_VERIFY", True)
+ARCA_REDACT_SECRETS = _env_guard_bool("ARCA_REDACT_SECRETS", True)
+ARCA_TOKEN_CACHE_ENABLED = _env_guard_bool(
+    "ARCA_TOKEN_CACHE_ENABLED",
+    False,
+)
+ARCA_TOKEN_CACHE_BACKEND = str(
+    os.getenv("ARCA_TOKEN_CACHE_BACKEND", "") or ""
+)
+ARCA_TOKEN_CACHE_URL = str(
+    os.getenv("ARCA_TOKEN_CACHE_URL", "") or ""
+)
+ARCA_TOKEN_CACHE_PREFIX = str(
+    os.getenv(
+        "ARCA_TOKEN_CACHE_PREFIX",
+        "webflexs:arca:homo",
+    )
+)
+ARCA_TOKEN_CACHE_PATH = str(
+    os.getenv("ARCA_TOKEN_CACHE_PATH", "") or ""
 ).strip()
-ARCA_WSAA_URL_PRODUCTION = os.getenv(
-    "ARCA_WSAA_URL_PRODUCTION",
-    "https://wsaa.afip.gov.ar/ws/services/LoginCms",
+
+ARCA_CREDENTIAL_ID = str(os.getenv("ARCA_CREDENTIAL_ID", "") or "").strip()
+ARCA_SERVICE_ID = str(os.getenv("ARCA_SERVICE_ID", "") or "").strip()
+ARCA_CUIT = str(os.getenv("ARCA_CUIT", "") or "").strip()
+ARCA_PTO_VTA = str(os.getenv("ARCA_PTO_VTA", "") or "").strip()
+ARCA_DEFAULT_CBTE_TIPO = str(
+    os.getenv("ARCA_DEFAULT_CBTE_TIPO", "") or ""
 ).strip()
-ARCA_WSFE_URL_HOMOLOGATION = os.getenv(
-    "ARCA_WSFE_URL_HOMOLOGATION",
-    "https://wswhomo.afip.gov.ar/wsfev1/service.asmx",
+ARCA_CERT_PATH = str(os.getenv("ARCA_CERT_PATH", "") or "").strip()
+ARCA_PRIVATE_KEY_PATH = str(
+    os.getenv("ARCA_PRIVATE_KEY_PATH", "") or ""
 ).strip()
-ARCA_WSFE_URL_PRODUCTION = os.getenv(
-    "ARCA_WSFE_URL_PRODUCTION",
-    "https://servicios1.afip.gov.ar/wsfev1/service.asmx",
+ARCA_PRIVATE_KEY_PASSPHRASE_FILE = str(
+    os.getenv("ARCA_PRIVATE_KEY_PASSPHRASE_FILE", "") or ""
 ).strip()
-# JSON esperado:
-# {"ubolt":{"homologation":{"cuit":"20123456789","cert_path":"C:/certs/ubolt_homo.crt","key_path":"C:/certs/ubolt_homo.key"}}}
-ARCA_COMPANY_CONFIG = _env_json("ARCA_COMPANY_CONFIG_JSON", {})
+ARCA_EXPECTED_CERT_SHA256 = str(
+    os.getenv("ARCA_EXPECTED_CERT_SHA256", "") or ""
+).strip()
+
+ARCA_OPENSSL_BIN = "openssl"
+# The identifier must be confirmed by the user in WSASS; there is no fallback.
+ARCA_WSAA_SERVICE = ARCA_SERVICE_ID
+ARCA_WSAA_LOCK_SECONDS = max(_env_int("ARCA_WSAA_LOCK_SECONDS", 60), 30)
+ARCA_WSAA_WAIT_SECONDS = max(_env_int("ARCA_WSAA_WAIT_SECONDS", 5), 1)
+# JSON backend-only. Every entry must carry an explicit environment label.
+# The legacy variable is read only as a migration bridge; unsafe/untagged
+# entries are rejected by the credential loader.
+ARCA_COMPANY_CONFIG = _env_json(
+    "ARCA_CREDENTIALS_CONFIG_JSON",
+    _env_json("ARCA_COMPANY_CONFIG_JSON", {}),
+)
 
 # Fiscal emission behavior tuning
 FISCAL_RETRY_MINUTES = max(_env_int("FISCAL_RETRY_MINUTES", 10), 1)
@@ -375,7 +462,25 @@ ADMIN_PRESENCE_EXCLUDED_USERS = tuple(
 
 # Optional shared cache (recommended in production with multiple workers)
 REDIS_URL = os.getenv("REDIS_URL", "").strip()
-if REDIS_URL:
+if ARCA_TOKEN_CACHE_BACKEND == "redis":
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.redis.RedisCache",
+            "LOCATION": ARCA_TOKEN_CACHE_URL,
+            "TIMEOUT": 300,
+        }
+    }
+elif ARCA_TOKEN_CACHE_BACKEND == "memcached":
+    CACHES = {
+        "default": {
+            "BACKEND": (
+                "django.core.cache.backends.memcached.PyMemcacheCache"
+            ),
+            "LOCATION": ARCA_TOKEN_CACHE_URL,
+            "TIMEOUT": 300,
+        }
+    }
+elif REDIS_URL:
     CACHES = {
         "default": {
             "BACKEND": "django.core.cache.backends.redis.RedisCache",
@@ -443,11 +548,18 @@ LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
+    "filters": {
+        "redact_sensitive": {
+            "()": "core.services.sensitive_data.SensitiveDataFilter",
+        },
+    },
     "formatters": {
         "verbose": {
+            "()": "core.services.sensitive_data.RedactingFormatter",
             "format": "[%(asctime)s] %(levelname)s %(name)s %(message)s",
         },
         "simple": {
+            "()": "core.services.sensitive_data.RedactingFormatter",
             "format": "%(levelname)s %(name)s %(message)s",
         },
     },
@@ -455,6 +567,7 @@ LOGGING = {
         "console": {
             "class": "logging.StreamHandler",
             "formatter": "verbose" if not DEBUG else "simple",
+            "filters": ["redact_sensitive"],
         },
     },
     "root": {
@@ -469,6 +582,7 @@ if FEATURE_OBSERVABILITY_ENABLED:
         try:
             import sentry_sdk
             from sentry_sdk.integrations.django import DjangoIntegration
+            from core.services.sensitive_data import sanitize_sentry_event
 
             sentry_sdk.init(
                 dsn=sentry_dsn,
@@ -476,6 +590,7 @@ if FEATURE_OBSERVABILITY_ENABLED:
                 traces_sample_rate=float(os.getenv("SENTRY_TRACES_SAMPLE_RATE", "0.05")),
                 send_default_pii=False,
                 environment=os.getenv("SENTRY_ENVIRONMENT", "local" if DEBUG else "production"),
+                before_send=sanitize_sentry_event,
             )
         except Exception:
             # Never fail startup because of optional observability integration.

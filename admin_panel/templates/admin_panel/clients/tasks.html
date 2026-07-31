@@ -1,0 +1,270 @@
+{% extends 'admin_panel/base.html' %}
+
+{% block page_title %}Tareas de {{ client.company_name }}{% endblock %}
+
+{% block content %}
+<style>
+    .client-tasks-shell { max-width: 1480px; margin: 0 auto; }
+    .client-tasks-head,
+    .client-task-create,
+    .client-task-list {
+        border: 1px solid rgba(148, 163, 184, .18);
+        background: rgba(14, 20, 30, .92);
+        border-radius: 18px;
+    }
+    .client-tasks-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 20px;
+        padding: 22px 24px;
+        margin-bottom: 16px;
+    }
+    .client-tasks-head h1 { margin: 0 0 6px; font-size: 1.45rem; }
+    .client-tasks-head p { margin: 0; color: #9aa6b5; }
+    .client-tasks-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    .client-task-kpis {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 10px;
+        margin-bottom: 16px;
+    }
+    .client-task-kpi {
+        padding: 15px 17px;
+        border-radius: 14px;
+        border: 1px solid rgba(148, 163, 184, .16);
+        background: rgba(11, 17, 26, .85);
+    }
+    .client-task-kpi span { color: #8f9bab; font-size: .78rem; }
+    .client-task-kpi strong { display: block; margin-top: 4px; font-size: 1.35rem; }
+    .client-task-kpi.is-alert { border-color: rgba(255, 100, 45, .42); }
+    .client-task-layout {
+        display: grid;
+        grid-template-columns: minmax(310px, .72fr) minmax(0, 1.6fr);
+        gap: 16px;
+        align-items: start;
+    }
+    .client-task-create { padding: 20px; position: sticky; top: 18px; }
+    .client-task-create h2,
+    .client-task-list h2 { margin: 0 0 6px; font-size: 1rem; }
+    .client-task-create > p { margin: 0 0 18px; color: #909cab; font-size: .82rem; }
+    .client-task-field { margin-bottom: 13px; }
+    .client-task-field label {
+        display: block;
+        margin-bottom: 6px;
+        color: #cbd3de;
+        font-size: .78rem;
+        font-weight: 700;
+    }
+    .client-task-two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .client-task-list { overflow: hidden; }
+    .client-task-toolbar {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        align-items: center;
+        padding: 17px 19px;
+        border-bottom: 1px solid rgba(148, 163, 184, .15);
+    }
+    .client-task-filters { display: flex; gap: 8px; flex-wrap: wrap; }
+    .client-task-card {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(250px, .58fr);
+        gap: 18px;
+        padding: 18px 20px;
+        border-bottom: 1px solid rgba(148, 163, 184, .12);
+    }
+    .client-task-card:last-child { border-bottom: 0; }
+    .client-task-card.is-overdue { box-shadow: inset 3px 0 #ff6430; }
+    .client-task-title-row { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+    .client-task-title-row h3 { margin: 0; font-size: .98rem; }
+    .client-task-meta {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+        color: #929eae;
+        font-size: .76rem;
+        margin-top: 8px;
+    }
+    .client-task-note { margin: 12px 0 0; color: #c4ccd7; line-height: 1.45; }
+    .client-task-result {
+        margin-top: 12px;
+        padding: 10px 12px;
+        border-radius: 10px;
+        background: rgba(35, 45, 58, .65);
+        color: #bfc8d3;
+        font-size: .8rem;
+    }
+    .client-task-status-form textarea { min-height: 68px; resize: vertical; }
+    .client-task-status-buttons { display: flex; gap: 7px; flex-wrap: wrap; margin-top: 8px; }
+    .client-task-empty { padding: 54px 24px; text-align: center; color: #909cab; }
+    .client-task-badge {
+        display: inline-flex;
+        padding: 4px 8px;
+        border-radius: 999px;
+        font-size: .68rem;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: .04em;
+        color: #cbd5e1;
+        background: rgba(100, 116, 139, .2);
+        border: 1px solid rgba(148, 163, 184, .2);
+    }
+    .client-task-badge.is-urgent,
+    .client-task-badge.is-overdue { color: #ff9a76; border-color: rgba(255,100,48,.45); }
+    .client-task-badge.is-completed { color: #60d394; border-color: rgba(40,190,112,.38); }
+    @media (max-width: 980px) {
+        .client-task-layout { grid-template-columns: 1fr; }
+        .client-task-create { position: static; }
+        .client-task-card { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 680px) {
+        .client-tasks-head,
+        .client-task-toolbar { align-items: stretch; flex-direction: column; }
+        .client-task-kpis { grid-template-columns: 1fr 1fr; }
+        .client-task-two { grid-template-columns: 1fr; }
+    }
+</style>
+
+<div class="client-tasks-shell">
+    <section class="client-tasks-head">
+        <div>
+            <h1>Tareas y recordatorios</h1>
+            <p><strong>{{ client.company_name }}</strong> · {{ company.name }} · seguimiento comercial auditable.</p>
+        </div>
+        <div class="client-tasks-actions">
+            <a href="{% url 'admin_client_order_history' client.pk %}?company_id={{ company.pk }}" class="btn btn-outline">Ficha del cliente</a>
+            <a href="{% url 'admin_client_edit' client.pk %}?company_id={{ company.pk }}" class="btn btn-outline">Editar cliente</a>
+        </div>
+    </section>
+
+    <div class="client-task-kpis">
+        <div class="client-task-kpi"><span>Pendientes</span><strong>{{ task_counts.pending }}</strong></div>
+        <div class="client-task-kpi is-alert"><span>Vencidas</span><strong>{{ task_counts.overdue }}</strong></div>
+        <div class="client-task-kpi"><span>Completadas</span><strong>{{ task_counts.completed }}</strong></div>
+        <div class="client-task-kpi"><span>Canceladas</span><strong>{{ task_counts.cancelled }}</strong></div>
+    </div>
+
+    <div class="client-task-layout">
+        <form method="post" action="{% url 'admin_client_task_create' client.pk %}" class="client-task-create">
+            {% csrf_token %}
+            <input type="hidden" name="company_id" value="{{ company.pk }}">
+            <input type="hidden" name="scope" value="{{ scope }}">
+            <h2>Nueva tarea</h2>
+            <p>Programa un seguimiento y asignalo a un integrante habilitado para esta empresa.</p>
+            <div class="client-task-field">
+                <label for="task-title">Titulo</label>
+                <input id="task-title" name="title" maxlength="160" required class="form-input" placeholder="Ej. Llamar para confirmar presupuesto">
+            </div>
+            <div class="client-task-field">
+                <label for="task-note">Detalle</label>
+                <textarea id="task-note" name="note" rows="4" class="form-input" placeholder="Contexto, proximo paso o informacion necesaria..."></textarea>
+            </div>
+            <div class="client-task-field">
+                <label for="task-assigned">Responsable</label>
+                <select id="task-assigned" name="assigned_to" required class="form-select">
+                    {% for assignee in assignees %}
+                    <option value="{{ assignee.pk }}" {% if assignee.pk == request.user.pk %}selected{% endif %}>
+                        {{ assignee.get_full_name|default:assignee.username }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="client-task-two">
+                <div class="client-task-field">
+                    <label for="task-due">Fecha y hora</label>
+                    <input id="task-due" type="datetime-local" name="due_at" value="{{ default_due_at }}" required class="form-input">
+                </div>
+                <div class="client-task-field">
+                    <label for="task-priority">Prioridad</label>
+                    <select id="task-priority" name="priority" class="form-select">
+                        {% for value, label in priority_choices %}
+                        <option value="{{ value }}" {% if value == 'normal' %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            <button type="submit" class="btn btn-primary" style="width:100%;">Crear tarea</button>
+        </form>
+
+        <section class="client-task-list">
+            <div class="client-task-toolbar">
+                <div>
+                    <h2>Seguimiento</h2>
+                    <span class="text-muted">{{ page_obj.paginator.count }} resultado{{ page_obj.paginator.count|pluralize:"s" }}</span>
+                </div>
+                <form method="get" class="client-task-filters">
+                    <input type="hidden" name="company_id" value="{{ company.pk }}">
+                    <select name="scope" class="form-select">
+                        <option value="mine" {% if scope == 'mine' %}selected{% endif %}>Mis tareas</option>
+                        <option value="all" {% if scope == 'all' %}selected{% endif %}>Todo el equipo</option>
+                    </select>
+                    <select name="status" class="form-select">
+                        <option value="all" {% if status == 'all' %}selected{% endif %}>Todos los estados</option>
+                        {% for value, label in status_choices %}
+                        <option value="{{ value }}" {% if status == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                    <button type="submit" class="btn btn-outline">Aplicar</button>
+                </form>
+            </div>
+
+            {% for task in page_obj %}
+            <article class="client-task-card {% if task.is_overdue %}is-overdue{% endif %}">
+                <div>
+                    <div class="client-task-title-row">
+                        <h3>{{ task.title }}</h3>
+                        <span class="client-task-badge {% if task.priority == 'urgent' %}is-urgent{% endif %}">{{ task.get_priority_display }}</span>
+                        <span class="client-task-badge {% if task.status == 'completed' %}is-completed{% endif %}">{{ task.get_status_display }}</span>
+                        {% if task.is_overdue %}<span class="client-task-badge is-overdue">Vencida</span>{% endif %}
+                    </div>
+                    <div class="client-task-meta">
+                        <span>Responsable: <strong>{{ task.assigned_to.get_full_name|default:task.assigned_to.username }}</strong></span>
+                        <span>Fecha: <strong>{{ task.due_at|date:"d/m/Y H:i" }}</strong></span>
+                        <span>Creada por {{ task.created_by.username }}</span>
+                    </div>
+                    {% if task.note %}<p class="client-task-note">{{ task.note|linebreaksbr }}</p>{% endif %}
+                    {% if task.completion_note %}
+                    <div class="client-task-result">
+                        <strong>Resultado:</strong> {{ task.completion_note|linebreaksbr }}
+                        {% if task.completed_by %}<br><small>{{ task.completed_by.username }} · {{ task.completed_at|date:"d/m/Y H:i" }}</small>{% endif %}
+                    </div>
+                    {% endif %}
+                </div>
+                <form method="post" action="{% url 'admin_client_task_set_status' client.pk task.pk %}" class="client-task-status-form">
+                    {% csrf_token %}
+                    <input type="hidden" name="company_id" value="{{ company.pk }}">
+                    <input type="hidden" name="scope" value="{{ scope }}">
+                    <input type="hidden" name="status_filter" value="{{ status }}">
+                    <textarea name="observation" required class="form-input" placeholder="{% if task.status == 'pending' %}Resultado u observacion obligatoria...{% else %}Motivo para reabrir la tarea...{% endif %}"></textarea>
+                    <div class="client-task-status-buttons">
+                        {% if task.status == 'pending' %}
+                        <button type="submit" name="action" value="complete" class="btn btn-primary btn-sm">Completar</button>
+                        <button type="submit" name="action" value="cancel" class="btn btn-outline btn-sm">Cancelar</button>
+                        {% else %}
+                        <button type="submit" name="action" value="reopen" class="btn btn-outline btn-sm">Reabrir</button>
+                        {% endif %}
+                    </div>
+                </form>
+            </article>
+            {% empty %}
+            <div class="client-task-empty">No hay tareas para estos filtros.</div>
+            {% endfor %}
+
+            {% if page_obj.paginator.num_pages > 1 %}
+            <div class="pagination-container" style="padding:16px 20px;">
+                <div class="pagination-info">Pagina {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</div>
+                <div class="pagination-controls">
+                    {% if page_obj.has_previous %}
+                    <a href="?company_id={{ company.pk }}&scope={{ scope }}&status={{ status }}&page={{ page_obj.previous_page_number }}" class="btn btn-outline btn-sm">Anterior</a>
+                    {% endif %}
+                    {% if page_obj.has_next %}
+                    <a href="?company_id={{ company.pk }}&scope={{ scope }}&status={{ status }}&page={{ page_obj.next_page_number }}" class="btn btn-outline btn-sm">Siguiente</a>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+        </section>
+    </div>
+</div>
+{% endblock %}

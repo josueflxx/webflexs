@@ -7,6 +7,7 @@ from accounts.models import (
     ClientCompany,
     ClientPayment,
     ClientProfile,
+    ClientTask,
 )
 
 
@@ -60,6 +61,26 @@ class ClientCompanyAdmin(admin.ModelAdmin):
     list_display = ("client_profile", "company", "client_category", "price_list", "discount_percentage", "is_active")
     search_fields = ("client_profile__company_name", "client_profile__user__username", "company__name")
     list_filter = ("company", "price_list", "is_active")
+
+
+@admin.register(ClientTask)
+class ClientTaskAdmin(admin.ModelAdmin):
+    list_display = (
+        "title",
+        "client_profile",
+        "company",
+        "assigned_to",
+        "due_at",
+        "priority",
+        "status",
+    )
+    search_fields = (
+        "title",
+        "note",
+        "client_profile__company_name",
+        "assigned_to__username",
+    )
+    list_filter = ("company", "status", "priority", "assigned_to")
 
 
 @admin.register(ClientCategory)

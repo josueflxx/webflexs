@@ -503,10 +503,17 @@
 
         <section class="client-flat-section">
             <div class="client-flat-section-label">Observaciones</div>
-            <div class="client-flat-field span-12">
+            <div class="client-flat-grid">
+            <div class="client-flat-field span-6">
+                <label for="commercial_observation" class="form-label">Observacion comercial</label>
+                <textarea name="commercial_observation" id="commercial_observation" class="form-textarea" rows="7" placeholder="Preferencias, forma de trabajo, horarios, seguimiento o contexto util para ventas.">{{ form_values.commercial_observation }}</textarea>
+                <small class="text-muted">Visible para el equipo comercial como contexto general del cliente.</small>
+            </div>
+            <div class="client-flat-field span-6">
                 <label for="notes" class="form-label">Notas internas</label>
-                <textarea name="notes" id="notes" class="form-textarea" rows="7" placeholder="Observaciones comerciales, fiscales u operativas del cliente.">{{ form_values.notes }}</textarea>
-                <small class="text-muted">Se guardan como texto interno para el equipo comercial y administrativo.</small>
+                <textarea name="notes" id="notes" class="form-textarea" rows="7" placeholder="Notas administrativas, fiscales u operativas sensibles.">{{ form_values.notes }}</textarea>
+                <small class="text-muted">Separadas del contexto comercial para evitar mezclar informacion.</small>
+            </div>
             </div>
         </section>
 
@@ -647,6 +654,7 @@
             <button type="submit" class="btn btn-primary">{% if is_create %}Agregar{% else %}Guardar cambios{% endif %}</button>
             {% if not is_create %}
             <a href="{% url 'admin_client_order_history' client.pk %}" class="btn btn-warning-outline">Ver historial</a>
+            <a href="{% url 'admin_client_tasks' client.pk %}" class="btn btn-outline">Tareas y recordatorios</a>
             <a href="{% url 'admin_payment_list' %}?client_id={{ client.pk }}" class="btn btn-primary">Ver pagos</a>
             {% if can_manage_client_credentials and client.user %}
             <a href="{% url 'admin_client_password' client.pk %}" class="btn btn-outline">Cambiar clave</a>

@@ -1,4 +1,6 @@
 from decimal import Decimal
+from types import SimpleNamespace
+from unittest.mock import patch
 
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
@@ -13,6 +15,7 @@ from core.models import (
     FISCAL_ISSUE_MODE_ARCA_WSFE,
     FISCAL_STATUS_AUTHORIZED,
     FISCAL_STATUS_READY_TO_ISSUE,
+    FISCAL_STATUS_SUBMITTING,
     SALES_BEHAVIOR_FACTURA,
     SALES_BEHAVIOR_NOTA_CREDITO,
     SALES_BILLING_MODE_AFIP_WSFE,
@@ -77,11 +80,15 @@ class ElectronicInvoiceTaxRulesTests(TestCase):
     def test_electronic_invoice_adds_selected_iva_to_net_catalog_price(self):
         item = self._add_product()
 
-        payload = _build_order_items_payload(
-            self.order,
-            doc_type=FISCAL_DOC_TYPE_FA,
-            issue_mode=FISCAL_ISSUE_MODE_ARCA_WSFE,
-        )
+        with patch(
+            "core.services.fiscal_documents.get_vat_rate_parameter",
+            return_value=SimpleNamespace(arca_id=5),
+        ):
+            payload = _build_order_items_payload(
+                self.order,
+                doc_type=FISCAL_DOC_TYPE_FA,
+                issue_mode=FISCAL_ISSUE_MODE_ARCA_WSFE,
+            )
 
         self.assertEqual(item.iva_rate_snapshot, Decimal("21.00"))
         self.assertEqual(payload[0]["net_amount"], Decimal("200.00"))
@@ -190,9 +197,11 @@ class StockAfterCaeRulesTests(TestCase):
         self.tracked.refresh_from_db()
         self.assertEqual(self.tracked.stock, 10)
 
-        self.invoice.status = FISCAL_STATUS_AUTHORIZED
-        self.invoice.cae = "12345678901234"
-        self.invoice.save(update_fields=["status", "cae", "updated_at"])
+        self.invoice.transition_to(FISCAL_STATUS_SUBMITTING)
+        self.invoice.transition_to(
+            FISCAL_STATUS_AUTHORIZED,
+            cae="12345678901234",
+        )
 
         self.assertEqual(len(self._apply(self.invoice, self.invoice_type)), 1)
         self.tracked.refresh_from_db()
@@ -207,9 +216,11 @@ class StockAfterCaeRulesTests(TestCase):
         self.assertEqual(StockMovement.objects.count(), 1)
 
     def test_authorized_credit_note_replenishes_stock(self):
-        self.invoice.status = FISCAL_STATUS_AUTHORIZED
-        self.invoice.cae = "12345678901234"
-        self.invoice.save(update_fields=["status", "cae", "updated_at"])
+        self.invoice.transition_to(FISCAL_STATUS_SUBMITTING)
+        self.invoice.transition_to(
+            FISCAL_STATUS_AUTHORIZED,
+            cae="12345678901234",
+        )
         self._apply(self.invoice, self.invoice_type)
 
         credit_type = SalesDocumentType.objects.create(
@@ -228,8 +239,7 @@ class StockAfterCaeRulesTests(TestCase):
             point_of_sale=self.point_of_sale,
             sales_document_type=credit_type,
             doc_type=FISCAL_DOC_TYPE_NCB,
-            status=FISCAL_STATUS_AUTHORIZED,
-            cae="22345678901234",
+            status="draft",
         )
         FiscalDocumentItem.objects.create(
             fiscal_document=credit_note,
@@ -243,6 +253,12 @@ class StockAfterCaeRulesTests(TestCase):
             iva_rate=Decimal("21.00"),
             iva_amount=Decimal("21.00"),
             total_amount=Decimal("121.00"),
+        )
+        credit_note.transition_to(FISCAL_STATUS_READY_TO_ISSUE)
+        credit_note.transition_to(FISCAL_STATUS_SUBMITTING)
+        credit_note.transition_to(
+            FISCAL_STATUS_AUTHORIZED,
+            cae="22345678901234",
         )
 
         self._apply(credit_note, credit_type)

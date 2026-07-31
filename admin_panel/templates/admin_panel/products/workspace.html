@@ -1,0 +1,288 @@
+{% extends 'admin_panel/base.html' %}
+
+{% block page_title %}{{ product.sku }} · Producto{% endblock %}
+
+{% block extra_css %}
+<style>
+    .product-center { display:grid; gap:18px; }
+    .product-center-hero {
+        display:flex; justify-content:space-between; gap:18px; align-items:flex-start;
+        padding:22px; border:1px solid var(--border-color, #2a3442); border-radius:16px;
+        background:linear-gradient(135deg, rgba(255,107,53,.13), rgba(15,23,42,.45));
+    }
+    .product-center-title { margin:4px 0 8px; font-size:clamp(1.35rem, 2vw, 2rem); }
+    .product-center-meta, .product-center-actions, .product-center-badges {
+        display:flex; flex-wrap:wrap; gap:8px; align-items:center;
+    }
+    .product-center-kpis {
+        display:grid; grid-template-columns:repeat(6, minmax(140px, 1fr)); gap:12px;
+    }
+    .product-center-kpi {
+        padding:16px; border:1px solid var(--border-color, #2a3442); border-radius:14px;
+        background:var(--card-bg, rgba(15,23,42,.72));
+    }
+    .product-center-kpi small { display:block; color:var(--text-muted, #94a3b8); margin-bottom:7px; }
+    .product-center-kpi strong { display:block; font-size:1.25rem; }
+    .product-center-grid { display:grid; grid-template-columns:minmax(0, 1.15fr) minmax(320px, .85fr); gap:18px; }
+    .product-center-card {
+        border:1px solid var(--border-color, #2a3442); border-radius:16px;
+        background:var(--card-bg, rgba(15,23,42,.72)); overflow:hidden;
+    }
+    .product-center-card-head {
+        display:flex; justify-content:space-between; gap:12px; align-items:center;
+        padding:16px 18px; border-bottom:1px solid var(--border-color, #2a3442);
+    }
+    .product-center-card-head h3 { margin:0; font-size:1rem; }
+    .product-center-card-body { padding:16px 18px; }
+    .product-center-details {
+        display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:12px 18px; margin:0;
+    }
+    .product-center-details div { min-width:0; }
+    .product-center-details dt { color:var(--text-muted, #94a3b8); font-size:.78rem; }
+    .product-center-details dd { margin:4px 0 0; font-weight:650; overflow-wrap:anywhere; }
+    .product-timeline { display:grid; gap:10px; }
+    .product-timeline-item {
+        display:grid; grid-template-columns:100px minmax(0, 1fr) auto; gap:14px;
+        padding:14px; border:1px solid var(--border-color, #2a3442); border-radius:12px;
+        background:rgba(2,6,23,.2);
+    }
+    .product-timeline-time { color:var(--text-muted, #94a3b8); font-size:.78rem; }
+    .product-timeline-main h4 { margin:5px 0; font-size:.94rem; }
+    .product-timeline-main p { margin:0; color:var(--text-muted, #94a3b8); line-height:1.45; }
+    .product-timeline-side { text-align:right; min-width:120px; font-size:.8rem; }
+    .product-timeline-filters { display:flex; flex-wrap:wrap; gap:7px; }
+    .product-timeline-filters a.is-active { background:#ff6b35; border-color:#ff6b35; color:#fff; }
+    @media (max-width:1200px) {
+        .product-center-kpis { grid-template-columns:repeat(3, minmax(140px, 1fr)); }
+    }
+    @media (max-width:900px) {
+        .product-center-hero, .product-center-grid { grid-template-columns:1fr; display:grid; }
+        .product-center-kpis { grid-template-columns:repeat(2, minmax(130px, 1fr)); }
+        .product-timeline-item { grid-template-columns:1fr; }
+        .product-timeline-side { text-align:left; }
+    }
+    @media (max-width:560px) {
+        .product-center-kpis, .product-center-details { grid-template-columns:1fr; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="product-center">
+    <section class="product-center-hero">
+        <div>
+            <div class="product-center-meta">
+                <a href="{% url 'admin_product_list' %}" class="text-muted">Productos</a>
+                <span class="text-muted">/</span>
+                <strong>{{ product.sku }}</strong>
+            </div>
+            <h1 class="product-center-title">{{ product.name }}</h1>
+            <div class="product-center-badges">
+                {% if product.is_active %}<span class="badge badge-success">Activo</span>{% else %}<span class="badge badge-secondary">Inactivo</span>{% endif %}
+                {% if product.is_sellable %}<span class="badge badge-success">Venta habilitada</span>{% else %}<span class="badge badge-warning">No vendible</span>{% endif %}
+                {% if product.is_purchasable %}<span class="badge badge-info">Compra habilitada</span>{% endif %}
+                {% if product.tracks_stock %}<span class="badge badge-info">Controla stock</span>{% else %}<span class="badge badge-secondary">Stock opcional</span>{% endif %}
+                {% if product.allow_negative_stock %}<span class="badge badge-warning">Admite negativo</span>{% endif %}
+            </div>
+        </div>
+        <div class="product-center-actions">
+            {% if user.is_superuser %}
+            <a href="{% url 'admin_product_edit' product.pk %}" class="btn btn-primary">Editar producto</a>
+            {% endif %}
+            <a href="{% url 'admin_product_list' %}" class="btn btn-outline">Volver</a>
+        </div>
+    </section>
+
+    <section class="product-center-kpis">
+        {% if can_view_costs %}
+        <article class="product-center-kpi">
+            <small>Costo vigente</small>
+            <strong>${{ product.cost|floatformat:2 }}</strong>
+        </article>
+        {% endif %}
+        <article class="product-center-kpi">
+            <small>Precio neto</small>
+            <strong>${{ product.price|floatformat:2 }}</strong>
+        </article>
+        <article class="product-center-kpi">
+            <small>Precio final con IVA</small>
+            <strong>${{ final_price|floatformat:2 }}</strong>
+        </article>
+        {% if can_view_costs %}
+        <article class="product-center-kpi">
+            <small>Margen sobre costo</small>
+            <strong>{% if margin_percentage is not None %}{{ margin_percentage|floatformat:2 }}%{% else %}-{% endif %}</strong>
+        </article>
+        {% endif %}
+        <article class="product-center-kpi">
+            <small>Stock global compatible</small>
+            <strong>{{ product.stock }}</strong>
+        </article>
+        <article class="product-center-kpi">
+            <small>Disponible en depósitos</small>
+            <strong>{{ warehouse_totals.available|floatformat:3 }}</strong>
+        </article>
+        <article class="product-center-kpi">
+            <small>Pedidos registrados</small>
+            <strong>{{ order_metrics.order_count }}</strong>
+        </article>
+        <article class="product-center-kpi">
+            <small>Unidades en operaciones</small>
+            <strong>{{ order_metrics.quantity_sold }}</strong>
+        </article>
+    </section>
+
+    <section class="product-center-grid">
+        <article class="product-center-card">
+            <div class="product-center-card-head">
+                <h3>Información comercial</h3>
+            </div>
+            <div class="product-center-card-body">
+                <dl class="product-center-details">
+                    <div><dt>SKU</dt><dd>{{ product.sku }}</dd></div>
+                    <div><dt>IVA</dt><dd>{% if product.iva_rate is not None %}{{ product.iva_rate|floatformat:2 }}%{% else %}<span class="badge badge-warning">Sin definir</span>{% endif %}</dd></div>
+                    <div><dt>Categoría principal</dt><dd>{{ product.category.name|default:"Sin categoría" }}</dd></div>
+                    <div>
+                        <dt>Categorías vinculadas</dt>
+                        <dd>
+                            {% for category in product.get_linked_categories %}
+                                {{ category.name }}{% if not forloop.last %}, {% endif %}
+                            {% empty %}-{% endfor %}
+                        </dd>
+                    </div>
+                    {% if can_view_supplier_terms %}
+                    <div><dt>Proveedor preferido</dt><dd>{{ product.supplier_ref.name|default:product.supplier|default:"-" }}</dd></div>
+                    {% endif %}
+                    <div><dt>Última actualización</dt><dd>{{ product.updated_at|date:"d/m/Y H:i" }}</dd></div>
+                    <div><dt>Última operación</dt><dd>{{ order_metrics.last_sale_at|date:"d/m/Y H:i"|default:"-" }}</dd></div>
+                    <div><dt>Total comercial histórico</dt><dd>${{ order_metrics.commercial_total|floatformat:2 }}</dd></div>
+                </dl>
+                {% if product.description %}
+                <div style="margin-top:16px; padding-top:16px; border-top:1px solid var(--border-color, #2a3442);">
+                    <small class="text-muted">Descripción</small>
+                    <p style="margin:6px 0 0;">{{ product.description|linebreaksbr }}</p>
+                </div>
+                {% endif %}
+            </div>
+        </article>
+
+        <article class="product-center-card">
+            <div class="product-center-card-head">
+                <h3>Proveedores</h3>
+                <span class="badge badge-secondary">{{ supplier_offers|length }}</span>
+            </div>
+            <div class="product-center-card-body">
+                {% if can_view_supplier_terms %}
+                <div class="product-timeline">
+                    {% for offer in supplier_offers %}
+                    <div>
+                        <div style="display:flex; justify-content:space-between; gap:10px;">
+                            <strong>{{ offer.supplier.name }}</strong>
+                            {% if offer.is_preferred %}<span class="badge badge-success">Preferido</span>{% endif %}
+                        </div>
+                        <div class="text-muted" style="margin-top:5px;">
+                            Código {{ offer.supplier_code|default:"-" }}
+                            {% if can_view_costs %} · Costo {{ offer.currency }} {{ offer.current_cost|floatformat:4 }}{% endif %}
+                        </div>
+                    </div>
+                    {% empty %}
+                    <p class="text-muted">No hay proveedores vinculados.</p>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p class="text-muted">No tienes permiso para consultar condiciones de proveedores.</p>
+                {% endif %}
+            </div>
+        </article>
+    </section>
+
+    <section class="product-center-card">
+        <div class="product-center-card-head">
+            <div>
+                <h3>Stock por depósito</h3>
+                <small class="text-muted">
+                    {% if warehouse_stock_enabled %}Escritura dual habilitada globalmente.{% else %}Preparado, todavía sin activación global.{% endif %}
+                </small>
+            </div>
+        </div>
+        <div style="overflow-x:auto;">
+            <table class="admin-table">
+                <thead>
+                    <tr>
+                        <th>Empresa</th><th>Depósito</th><th>Actual</th><th>Reservado</th>
+                        <th>Disponible</th><th>Mínimo</th><th>Ideal</th><th>Estado</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for balance in warehouse_balances %}
+                    <tr>
+                        <td>{{ balance.warehouse.company.name }}</td>
+                        <td><strong>{{ balance.warehouse.name }}</strong></td>
+                        <td>{{ balance.on_hand|floatformat:3 }}</td>
+                        <td>{{ balance.reserved|floatformat:3 }}</td>
+                        <td>{{ balance.available|floatformat:3 }}</td>
+                        <td>{{ balance.minimum|floatformat:3 }}</td>
+                        <td>{{ balance.ideal|floatformat:3 }}</td>
+                        <td>
+                            {% if balance.is_below_minimum %}
+                            <span class="badge badge-danger">Debajo del mínimo</span>
+                            {% elif balance.warehouse.stock_balance_enabled %}
+                            <span class="badge badge-success">Activo</span>
+                            {% else %}
+                            <span class="badge badge-secondary">Inicializado</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="8" class="text-center text-muted">Este producto todavía usa solamente el stock global compatible.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <section class="product-center-card">
+        <div class="product-center-card-head">
+            <div>
+                <h3>Historial comercial unificado</h3>
+                <small class="text-muted">Ventas, pedidos, stock, costos y cambios administrativos.</small>
+            </div>
+            <div class="product-timeline-filters">
+                {% for value, label in timeline_kind_choices %}
+                    {% if value != "cost" or can_view_costs %}
+                    <a href="?kind={{ value }}" class="btn btn-outline btn-sm {% if timeline_kind == value %}is-active{% endif %}">{{ label }}</a>
+                    {% endif %}
+                {% endfor %}
+            </div>
+        </div>
+        <div class="product-center-card-body">
+            <div class="product-timeline">
+                {% for entry in timeline %}
+                <article class="product-timeline-item">
+                    <div class="product-timeline-time">
+                        {{ entry.occurred_at|date:"d/m/Y" }}<br>
+                        {{ entry.occurred_at|date:"H:i" }}
+                    </div>
+                    <div class="product-timeline-main">
+                        <span class="badge badge-secondary">{{ entry.kind_label }}</span>
+                        <h4>{{ entry.title }}</h4>
+                        <p>{{ entry.description }}</p>
+                        <div class="text-muted" style="margin-top:7px; font-size:.78rem;">
+                            {{ entry.actor }}{% if entry.company %} · {{ entry.company }}{% endif %}
+                        </div>
+                    </div>
+                    <div class="product-timeline-side">
+                        <div>{{ entry.status }}</div>
+                        {% if entry.link %}
+                        <a href="{{ entry.link }}" class="btn btn-outline btn-sm" style="margin-top:8px;">{{ entry.link_label }}</a>
+                        {% endif %}
+                    </div>
+                </article>
+                {% empty %}
+                <p class="text-muted">No hay movimientos para este filtro.</p>
+                {% endfor %}
+            </div>
+        </div>
+    </section>
+</div>
+{% endblock %}

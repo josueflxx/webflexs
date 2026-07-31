@@ -598,7 +598,7 @@ def payment_list(request):
                 locked_order = orders_visible_to(
                     request.user,
                     company=order.company,
-                ).select_for_update().select_related('user').get(pk=order.pk)
+                ).select_for_update(of=("self",)).select_related('user').get(pk=order.pk)
                 order = locked_order
                 company_for_action = order.company
             if not order and not company_for_action:
@@ -1982,7 +1982,11 @@ def _build_order_request_proposal_payloads(source_rows, post_data):
                 raise ValidationError(
                     f'El producto alternativo de la linea {row.line_number} no es valido.'
                 )
-            replacement_product = Product.objects.filter(pk=int(replacement_product_id), is_active=True).first()
+            replacement_product = Product.objects.filter(
+                pk=int(replacement_product_id),
+                is_active=True,
+                is_sellable=True,
+            ).first()
             if not replacement_product:
                 raise ValidationError(
                     f'No se encontro el producto alternativo seleccionado para la linea {row.line_number}.'
@@ -3586,7 +3590,11 @@ def order_item_edit(request, pk, item_id):
 
         selected_product = None
         if form_product_id.isdigit():
-            selected_product = Product.objects.filter(pk=int(form_product_id), is_active=True).first()
+            selected_product = Product.objects.filter(
+                pk=int(form_product_id),
+                is_active=True,
+                is_sellable=True,
+            ).first()
         if not selected_product and form_sku:
             product_matches = _find_products_for_order_query(form_sku, limit=5)
             if len(product_matches) == 1:

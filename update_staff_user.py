@@ -11,9 +11,12 @@ django.setup()
 from django.contrib.auth.models import User
 
 # Define the target user
-username = 'luisflexs'
-password = 'castrezanaflexs'
-old_username = 'ventas'
+username = os.getenv('STAFF_USERNAME', 'staff')
+password = os.getenv('STAFF_PASSWORD')
+old_username = os.getenv('STAFF_OLD_USERNAME', 'ventas')
+
+if not password:
+    raise RuntimeError('Define STAFF_PASSWORD antes de ejecutar este script.')
 
 print(f"Updating staff user: '{username}'...")
 

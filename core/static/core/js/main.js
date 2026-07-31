@@ -3,7 +3,7 @@
  */
 
 document.addEventListener('DOMContentLoaded', function () {
-    const PUBLIC_NAV_MOBILE_BREAKPOINT = 900;
+    const PUBLIC_NAV_MOBILE_BREAKPOINT = 1220;
     // Mobile menu toggle
     const mobileMenuToggle = document.getElementById('mobileMenuToggle');
     const navMenu = document.getElementById('navMenu');
@@ -615,27 +615,44 @@ document.addEventListener('DOMContentLoaded', function () {
             let htmlContent = '';
             suggestions.forEach((item, index) => {
                 let link = '';
-                let iconSymbol = '⚙️';
+                let iconType = 'generic';
+                let iconSymbol = `
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <circle cx="10.5" cy="10.5" r="6.5"></circle>
+                        <path d="M15.5 15.5L21 21"></path>
+                    </svg>
+                `;
                 
                 if (item.kind === 'product') {
                     link = `/catalogo/producto/${encodeURIComponent(item.value)}/`;
-                    iconSymbol = '🔧';
+                    iconType = 'product';
+                    iconSymbol = `
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M14 6a5 5 0 0 0-6.5 6.5L3 17l4 4 4.5-4.5A5 5 0 0 0 18 10l-3 3-4-4z"></path>
+                        </svg>
+                    `;
                 } else if (item.kind === 'category') {
                     const slug = item.value.replace('cat:', '');
                     link = `/catalogo/?category=${encodeURIComponent(slug)}`;
-                    iconSymbol = '📂';
+                    iconType = 'category';
+                    iconSymbol = `
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M3 7h7l2 2h9v10H3z"></path>
+                            <path d="M3 7V5h7l2 2"></path>
+                        </svg>
+                    `;
                 }
 
                 htmlContent += `
                     <a href="${link}" class="omni-search-item" data-index="${index}">
-                        <div class="omni-search-item-img" style="display:flex;align-items:center;justify-content:center;font-size:20px;">
+                        <div class="omni-search-item-img is-${iconType}">
                             ${iconSymbol}
                         </div>
                         <div class="omni-search-item-info">
                             <span class="omni-search-item-title">${item.label}</span>
                             <span class="omni-search-item-sub">${item.meta}</span>
                         </div>
-                        ${item.kind === 'product' ? `<span class="omni-search-item-price">Ver Detalle ➜</span>` : ''}
+                        ${item.kind === 'product' ? `<span class="omni-search-item-price">Ver detalle</span>` : ''}
                     </a>
                 `;
             });

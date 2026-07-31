@@ -8,3 +8,5 @@ class CoreConfig(AppConfig):
     def ready(self):
         # Register audit signal handlers.
         import core.signals  # noqa: F401
+        # Register fail-safe integration checks.
+        import core.checks  # noqa: F401

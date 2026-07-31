@@ -2,108 +2,480 @@
 
 {% block page_title %}Configuracion{% endblock %}
 
+{% block extra_css %}
+<style>
+    .settings-hub {
+        width: min(1480px, calc(100vw - 36px));
+        gap: 16px;
+        padding: 16px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 20px;
+        background:
+            radial-gradient(circle at 90% 4%, rgba(27, 166, 214, 0.09), transparent 28%),
+            radial-gradient(circle at 5% 8%, rgba(255, 107, 53, 0.08), transparent 27%),
+            rgba(11, 15, 22, 0.72);
+    }
+    .settings-dashboard-hero {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(360px, 0.62fr);
+        gap: 22px;
+        align-items: stretch;
+        padding: 22px;
+        overflow: hidden;
+        position: relative;
+        border: 1px solid rgba(255, 255, 255, 0.09);
+        border-radius: 16px;
+        background:
+            linear-gradient(135deg, rgba(255, 107, 53, 0.09), transparent 42%),
+            linear-gradient(180deg, rgba(20, 25, 35, 0.98), rgba(13, 17, 25, 0.98));
+        box-shadow: 0 16px 34px rgba(0, 0, 0, 0.18);
+    }
+    .settings-dashboard-hero::after {
+        content: "";
+        position: absolute;
+        width: 280px;
+        height: 280px;
+        right: -110px;
+        top: -150px;
+        border: 1px solid rgba(255, 107, 53, 0.13);
+        border-radius: 50%;
+        pointer-events: none;
+    }
+    .settings-hero-main {
+        display: flex;
+        gap: 16px;
+        align-items: flex-start;
+        min-width: 0;
+    }
+    .settings-hero-mark {
+        flex: 0 0 auto;
+        width: 48px;
+        height: 48px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: #ff8b5e;
+        border: 1px solid rgba(255, 107, 53, 0.3);
+        border-radius: 13px;
+        background: rgba(255, 107, 53, 0.11);
+        box-shadow: inset 0 1px rgba(255, 255, 255, 0.06);
+    }
+    .settings-hero-mark svg {
+        width: 25px;
+        height: 25px;
+    }
+    .settings-dashboard-hero h2 {
+        margin: 0;
+        padding: 0;
+        border: 0;
+        font-size: clamp(1.45rem, 2vw, 1.85rem);
+        letter-spacing: -0.025em;
+    }
+    .settings-dashboard-hero .settings-hero-copy {
+        max-width: 720px;
+        margin-top: 9px;
+        font-size: 0.86rem;
+    }
+    .settings-hero-side {
+        display: grid;
+        gap: 11px;
+        align-content: center;
+    }
+    .settings-hero-summary {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 8px;
+    }
+    .settings-summary-item {
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+        min-width: 0;
+        padding: 10px 12px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 10px;
+        background: rgba(255, 255, 255, 0.025);
+    }
+    .settings-summary-item strong {
+        color: #f7f9fc;
+        font-size: 1rem;
+    }
+    .settings-summary-item span {
+        overflow: hidden;
+        color: rgba(207, 216, 227, 0.68);
+        font-size: 0.67rem;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .settings-hero-actions {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 8px;
+    }
+    .settings-quick-action {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 7px;
+        min-height: 36px;
+        padding: 7px 10px;
+        color: #e7ebf1;
+        border: 1px solid rgba(255, 255, 255, 0.13);
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.035);
+        font-size: 0.72rem;
+        font-weight: 750;
+        text-decoration: none;
+        transition: border-color 0.18s, background-color 0.18s, color 0.18s;
+    }
+    .settings-quick-action:hover {
+        color: #fff;
+        border-color: rgba(255, 107, 53, 0.46);
+        background: rgba(255, 107, 53, 0.1);
+    }
+    .settings-quick-action svg {
+        width: 15px;
+        height: 15px;
+    }
+    .settings-section {
+        padding: 17px;
+        border-radius: 16px;
+    }
+    .settings-section-header {
+        align-items: center;
+        margin-bottom: 14px;
+        padding-bottom: 12px;
+    }
+    .settings-section-count {
+        flex: 0 0 auto;
+        padding: 6px 9px;
+        color: #ff9c73;
+        border: 1px solid rgba(255, 107, 53, 0.22);
+        border-radius: 999px;
+        background: rgba(255, 107, 53, 0.08);
+        font-size: 0.68rem;
+        font-weight: 750;
+    }
+    .settings-area-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
+    }
+    .settings-area-card {
+        min-width: 0;
+        padding: 14px;
+        border: 1px solid rgba(255, 255, 255, 0.085);
+        border-radius: 13px;
+        background:
+            linear-gradient(180deg, rgba(255, 255, 255, 0.026), rgba(255, 255, 255, 0.012)),
+            rgba(12, 16, 24, 0.72);
+    }
+    .settings-area-header {
+        display: flex;
+        align-items: center;
+        gap: 11px;
+        min-height: 43px;
+        margin-bottom: 12px;
+    }
+    .settings-area-icon,
+    .settings-access-icon {
+        flex: 0 0 auto;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: #ff8e61;
+        border: 1px solid rgba(255, 107, 53, 0.24);
+        background: rgba(255, 107, 53, 0.09);
+    }
+    .settings-area-icon {
+        width: 40px;
+        height: 40px;
+        border-radius: 10px;
+    }
+    .settings-area-icon svg {
+        width: 20px;
+        height: 20px;
+    }
+    .settings-area-header h4 {
+        margin: 0 0 3px;
+        font-size: 0.94rem;
+    }
+    .settings-area-header p {
+        margin: 0;
+        color: rgba(207, 216, 227, 0.62);
+        font-size: 0.69rem;
+    }
+    .settings-access-list {
+        display: grid;
+        gap: 7px;
+    }
+    .settings-access-item {
+        display: grid;
+        grid-template-columns: 36px minmax(0, 1fr) 18px;
+        gap: 10px;
+        align-items: center;
+        min-width: 0;
+        padding: 10px;
+        color: inherit;
+        border: 1px solid rgba(255, 255, 255, 0.07);
+        border-radius: 10px;
+        background: rgba(255, 255, 255, 0.018);
+        text-decoration: none;
+        transition: transform 0.18s, border-color 0.18s, background-color 0.18s;
+    }
+    .settings-access-item:hover {
+        transform: translateY(-1px);
+        border-color: rgba(255, 107, 53, 0.32);
+        background: rgba(255, 107, 53, 0.055);
+    }
+    .settings-access-icon {
+        width: 34px;
+        height: 34px;
+        border-radius: 8px;
+    }
+    .settings-access-icon svg {
+        width: 17px;
+        height: 17px;
+    }
+    .settings-access-copy {
+        min-width: 0;
+    }
+    .settings-access-copy strong,
+    .settings-access-copy small {
+        display: block;
+    }
+    .settings-access-copy strong {
+        margin-bottom: 3px;
+        color: #f1f4f8;
+        font-size: 0.78rem;
+    }
+    .settings-access-copy small {
+        overflow: hidden;
+        color: rgba(207, 216, 227, 0.62);
+        font-size: 0.65rem;
+        line-height: 1.35;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .settings-access-arrow {
+        display: inline-flex;
+        color: rgba(207, 216, 227, 0.46);
+        transition: color 0.18s, transform 0.18s;
+    }
+    .settings-access-arrow svg {
+        width: 17px;
+        height: 17px;
+    }
+    .settings-access-item:hover .settings-access-arrow {
+        color: #ff8e61;
+        transform: translateX(2px);
+    }
+    .settings-form-card {
+        border-radius: 12px;
+    }
+    .settings-quick-action:focus-visible,
+    .settings-access-item:focus-visible {
+        outline: 2px solid var(--color-primary);
+        outline-offset: 3px;
+    }
+    html[data-theme="light"] .settings-hub {
+        border-color: rgba(15, 23, 42, 0.08) !important;
+        background:
+            radial-gradient(circle at 90% 4%, rgba(27, 166, 214, 0.06), transparent 28%),
+            radial-gradient(circle at 5% 8%, rgba(255, 107, 53, 0.055), transparent 27%),
+            #f4f7fb !important;
+    }
+    html[data-theme="light"] .settings-dashboard-hero,
+    html[data-theme="light"] .settings-area-card {
+        border-color: rgba(15, 23, 42, 0.09);
+        background: rgba(255, 255, 255, 0.88);
+        box-shadow: 0 14px 30px rgba(15, 23, 42, 0.055);
+    }
+    html[data-theme="light"] .settings-summary-item,
+    html[data-theme="light"] .settings-quick-action,
+    html[data-theme="light"] .settings-access-item {
+        border-color: rgba(15, 23, 42, 0.09);
+        background: rgba(15, 23, 42, 0.018);
+    }
+    html[data-theme="light"] .settings-summary-item strong,
+    html[data-theme="light"] .settings-dashboard-hero h2,
+    html[data-theme="light"] .settings-area-header h4,
+    html[data-theme="light"] .settings-access-copy strong {
+        color: #0f172a;
+    }
+    html[data-theme="light"] .settings-summary-item span,
+    html[data-theme="light"] .settings-area-header p,
+    html[data-theme="light"] .settings-access-copy small {
+        color: #64748b;
+    }
+    html[data-theme="light"] .settings-quick-action {
+        color: #334155;
+    }
+    @media (max-width: 1120px) {
+        .settings-dashboard-hero {
+            grid-template-columns: 1fr;
+        }
+        .settings-area-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+    }
+    @media (max-width: 720px) {
+        .settings-hub {
+            width: calc(100vw - 20px);
+            padding: 10px;
+            border-radius: 14px;
+        }
+        .settings-dashboard-hero {
+            padding: 16px;
+        }
+        .settings-hero-main {
+            flex-direction: column;
+        }
+        .settings-hero-summary,
+        .settings-hero-actions,
+        .settings-area-grid {
+            grid-template-columns: 1fr;
+        }
+        .settings-section-header {
+            align-items: flex-start;
+        }
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="admin-form-container settings-hub">
-    <section class="settings-hero">
-        <div>
-            <p class="settings-eyebrow">Centro de sistema</p>
-            <h2>Configuracion general</h2>
-            <p class="settings-hero-copy">
-                Este espacio concentra configuraciones importantes, accesos de sistema y herramientas operativas
-                para que la barra superior quede enfocada en catalogo, clientes y ventas.
-            </p>
-        </div>
-        <div class="settings-hero-actions">
-            <a href="{% url 'admin_company_list' %}" class="btn btn-outline btn-sm">Empresas</a>
-            <a href="{% url 'admin_fiscal_config' %}" class="btn btn-outline btn-sm">Fiscal</a>
-            <a href="{% url 'admin_import_dashboard' %}" class="btn btn-outline btn-sm">Importar</a>
-        </div>
-    </section>
-
-    <section class="settings-section">
-        <div class="settings-section-header">
+    <section class="settings-dashboard-hero">
+        <div class="settings-hero-main">
+            <span class="settings-hero-mark" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none">
+                    <path d="M12 15.25A3.25 3.25 0 1 0 12 8.75a3.25 3.25 0 0 0 0 6.5Z" stroke="currentColor" stroke-width="1.7"/>
+                    <path d="M19.2 13.1c.06-.36.1-.72.1-1.1s-.04-.74-.1-1.1l2-1.55-1.9-3.3-2.46.98a7.84 7.84 0 0 0-1.9-1.1L14.57 3h-3.8l-.38 2.93a7.84 7.84 0 0 0-1.9 1.1l-2.45-.98-1.9 3.3 2 1.55c-.07.36-.1.72-.1 1.1s.03.74.1 1.1l-2 1.55 1.9 3.3 2.45-.98c.58.45 1.22.82 1.9 1.1l.38 2.93h3.8l.38-2.93a7.84 7.84 0 0 0 1.9-1.1l2.45.98 1.9-3.3-2-1.55Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+                </svg>
+            </span>
             <div>
-                <h3>Accesos clave</h3>
-                <p>Funciones que antes ocupaban la barra de control ahora viven dentro de configuracion.</p>
+                <p class="settings-eyebrow">Centro de sistema</p>
+                <h2>Configuración general</h2>
+                <p class="settings-hero-copy">
+                    Administra las reglas del negocio, los accesos internos y las herramientas de mantenimiento
+                    desde un único lugar.
+                </p>
             </div>
         </div>
+        <div class="settings-hero-side">
+            <div class="settings-hero-summary" aria-label="Resumen de configuración">
+                <span class="settings-summary-item"><strong>3</strong><span>áreas organizadas</span></span>
+                <span class="settings-summary-item"><strong>9</strong><span>herramientas</span></span>
+                <span class="settings-summary-item"><strong>1</strong><span>centro de control</span></span>
+            </div>
+            <div class="settings-hero-actions">
+                <a href="{% url 'admin_company_list' %}" class="settings-quick-action">
+                    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 21V5l8-3v19M4 21h16M15 8h3a2 2 0 0 1 2 2v11M8 7h1M8 11h1M8 15h1" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    Empresas
+                </a>
+                <a href="{% url 'admin_fiscal_config' %}" class="settings-quick-action">
+                    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 3h8l4 4v14H7V3Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M15 3v5h4M10 12h6M10 16h6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+                    Fiscal
+                </a>
+                <a href="{% url 'admin_import_dashboard' %}" class="settings-quick-action">
+                    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3v12m0-12 4 4m-4-4L8 7M5 14v6h14v-6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    Importar
+                </a>
+            </div>
+        </div>
+    </section>
 
-        <div class="settings-card-grid">
-            <article class="settings-link-card">
-                <span class="settings-link-icon">AF</span>
-                <span class="settings-link-kicker">Sistema</span>
-                <h4>Factura electronica</h4>
-                <p>Readiness fiscal, puntos de venta y configuracion de emision por empresa.</p>
-                <a href="{% url 'admin_fiscal_config' %}" class="btn btn-outline btn-sm">Abrir fiscal</a>
+    <section class="settings-section" id="accesos-configuracion">
+        <div class="settings-section-header">
+            <div>
+                <h3>Herramientas del sistema</h3>
+                <p>Accesos agrupados por función para encontrar cada configuración con rapidez.</p>
+            </div>
+            <span class="settings-section-count">9 accesos</span>
+        </div>
+
+        <div class="settings-area-grid">
+            <article class="settings-area-card">
+                <header class="settings-area-header">
+                    <span class="settings-area-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none"><path d="M7 3h8l4 4v14H7V3Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M15 3v5h4M10 12h6M10 16h6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+                    </span>
+                    <div><h4>Ventas y fiscal</h4><p>Comprobantes, reportes y reglas comerciales</p></div>
+                </header>
+                <nav class="settings-access-list" aria-label="Ventas y fiscal">
+                    <a href="{% url 'admin_fiscal_config' %}" class="settings-access-item">
+                        <span class="settings-access-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2V3Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M9 8h6M9 12h6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></span>
+                        <span class="settings-access-copy"><strong>Factura electrónica</strong><small>Emisión, puntos de venta y preparación fiscal</small></span>
+                        <span class="settings-access-arrow" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="m9 5 7 7-7 7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+                    </a>
+                    <a href="{% url 'admin_fiscal_report' %}" class="settings-access-item">
+                        <span class="settings-access-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M4 20V10m6 10V4m6 16v-7m4 7H2" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></span>
+                        <span class="settings-access-copy"><strong>Reportes fiscales</strong><small>Totales, rechazos, reintentos y vencimientos</small></span>
+                        <span class="settings-access-arrow" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="m9 5 7 7-7 7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+                    </a>
+                    <a href="{% url 'admin_sales_document_type_list' %}" class="settings-access-item">
+                        <span class="settings-access-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M4 7h10M4 17h16M18 7h2M4 12h3M11 12h9" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><circle cx="16" cy="7" r="2" stroke="currentColor" stroke-width="1.7"/><circle cx="9" cy="12" r="2" stroke="currentColor" stroke-width="1.7"/></svg></span>
+                        <span class="settings-access-copy"><strong>Tipos de venta</strong><small>Numeración, stock y movimientos comerciales</small></span>
+                        <span class="settings-access-arrow" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="m9 5 7 7-7 7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+                    </a>
+                </nav>
             </article>
 
-            <article class="settings-link-card">
-                <span class="settings-link-icon">RF</span>
-                <span class="settings-link-kicker">Fiscal</span>
-                <h4>Reportes fiscales</h4>
-                <p>Seguimiento de totales, rechazos, reintentos y comprobantes vencidos.</p>
-                <a href="{% url 'admin_fiscal_report' %}" class="btn btn-outline btn-sm">Ver reportes</a>
+            <article class="settings-area-card">
+                <header class="settings-area-header">
+                    <span class="settings-area-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none"><path d="M4 21V5l8-3v19M4 21h16M15 8h3a2 2 0 0 1 2 2v11M8 7h1M8 11h1M8 15h1" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    </span>
+                    <div><h4>Empresa y operación</h4><p>Organización, depósitos y acceso interno</p></div>
+                </header>
+                <nav class="settings-access-list" aria-label="Empresa y operación">
+                    <a href="{% url 'admin_company_list' %}" class="settings-access-item">
+                        <span class="settings-access-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M4 21V5l8-3v19M4 21h16M15 8h3a2 2 0 0 1 2 2v11M8 7h1M8 11h1M8 15h1" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+                        <span class="settings-access-copy"><strong>Empresas</strong><small>Razones sociales y datos maestros</small></span>
+                        <span class="settings-access-arrow" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="m9 5 7 7-7 7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+                    </a>
+                    <a href="{% url 'admin_warehouse_list' %}" class="settings-access-item">
+                        <span class="settings-access-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="m3 10 9-6 9 6v10H3V10Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M7 20v-6h10v6M8 10h.01M12 10h.01M16 10h.01" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></span>
+                        <span class="settings-access-copy"><strong>Depósitos</strong><small>Ubicaciones e impacto operativo de stock</small></span>
+                        <span class="settings-access-arrow" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="m9 5 7 7-7 7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+                    </a>
+                    <a href="{% url 'admin_user_list' %}" class="settings-access-item">
+                        <span class="settings-access-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M16 20v-1.5A3.5 3.5 0 0 0 12.5 15h-5A3.5 3.5 0 0 0 4 18.5V20M10 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM17 8h4M19 6v4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></span>
+                        <span class="settings-access-copy"><strong>Administradores</strong><small>Cuentas internas y permisos del panel</small></span>
+                        <span class="settings-access-arrow" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="m9 5 7 7-7 7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+                    </a>
+                </nav>
             </article>
 
-            <article class="settings-link-card">
-                <span class="settings-link-icon">EM</span>
-                <span class="settings-link-kicker">Sistema</span>
-                <h4>Empresas</h4>
-                <p>Razones sociales, datos maestros y configuracion base por compania.</p>
-                <a href="{% url 'admin_company_list' %}" class="btn btn-outline btn-sm">Gestionar empresas</a>
-            </article>
-
-            <article class="settings-link-card">
-                <span class="settings-link-icon">TV</span>
-                <span class="settings-link-kicker">Ventas</span>
-                <h4>Tipos de venta</h4>
-                <p>Motor configurable de comprobantes y movimientos comerciales: numeracion, stock, cuenta y fiscal.</p>
-                <a href="{% url 'admin_sales_document_type_list' %}" class="btn btn-outline btn-sm">Abrir tipos</a>
-            </article>
-
-            <article class="settings-link-card">
-                <span class="settings-link-icon">DP</span>
-                <span class="settings-link-kicker">Logistica</span>
-                <h4>Depositos</h4>
-                <p>Depositos disponibles para documentos con impacto de stock y operacion comercial.</p>
-                <a href="{% url 'admin_warehouse_list' %}" class="btn btn-outline btn-sm">Ver depositos</a>
-            </article>
-
-            <article class="settings-link-card">
-                <span class="settings-link-icon">AD</span>
-                <span class="settings-link-kicker">Acceso</span>
-                <h4>Admins</h4>
-                <p>Permisos de acceso al panel y administracion de cuentas internas.</p>
-                <a href="{% url 'admin_user_list' %}" class="btn btn-outline btn-sm">Ver admins</a>
-            </article>
-
-            <article class="settings-link-card">
-                <span class="settings-link-icon">IM</span>
-                <span class="settings-link-kicker">Herramientas</span>
-                <h4>Importaciones</h4>
-                <p>Dashboard de importacion, seguimiento de tareas y rollback cuando aplique.</p>
-                <a href="{% url 'admin_import_dashboard' %}" class="btn btn-outline btn-sm">Abrir importador</a>
-            </article>
-
-            <article class="settings-link-card">
-                <span class="settings-link-icon">XL</span>
-                <span class="settings-link-kicker">Herramientas</span>
-                <h4>Exportar Excel</h4>
-                <p>Plantillas y estructuras para exportes comerciales del catalogo.</p>
-                <a href="{% url 'admin_catalog_excel_template_list' %}" class="btn btn-outline btn-sm">Abrir exportes</a>
-            </article>
-
-            <article class="settings-link-card">
-                <span class="settings-link-icon">DI</span>
-                <span class="settings-link-kicker">Herramientas</span>
-                <h4>Diagnóstico Catálogo</h4>
-                <p>Auditoría de productos catalogados y huérfanos sin categoría asignada.</p>
-                <a href="{% url 'admin_export_products_diagnostic' %}" class="btn btn-outline btn-sm">Descargar diagnóstico</a>
+            <article class="settings-area-card">
+                <header class="settings-area-header">
+                    <span class="settings-area-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none"><path d="M4 5h16v14H4V5Z" stroke="currentColor" stroke-width="1.7"/><path d="M4 10h16M9 5v14M14 10v9" stroke="currentColor" stroke-width="1.7"/></svg>
+                    </span>
+                    <div><h4>Datos y herramientas</h4><p>Importación, exportación y controles del catálogo</p></div>
+                </header>
+                <nav class="settings-access-list" aria-label="Datos y herramientas">
+                    <a href="{% url 'admin_import_dashboard' %}" class="settings-access-item">
+                        <span class="settings-access-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M12 3v12m0-12 4 4m-4-4L8 7M5 14v6h14v-6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+                        <span class="settings-access-copy"><strong>Importaciones</strong><small>Tareas, seguimiento y reversión de cargas</small></span>
+                        <span class="settings-access-arrow" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="m9 5 7 7-7 7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+                    </a>
+                    <a href="{% url 'admin_catalog_excel_template_list' %}" class="settings-access-item">
+                        <span class="settings-access-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M5 3h10l4 4v14H5V3Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M15 3v5h4M8.5 12l4 5m0-5-4 5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></span>
+                        <span class="settings-access-copy"><strong>Exportar Excel</strong><small>Plantillas y estructuras comerciales</small></span>
+                        <span class="settings-access-arrow" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="m9 5 7 7-7 7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+                    </a>
+                    <a href="{% url 'admin_export_products_diagnostic' %}" class="settings-access-item">
+                        <span class="settings-access-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M11 19a8 8 0 1 1 5.65-2.35L21 21M8 9h6M8 12h4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+                        <span class="settings-access-copy"><strong>Diagnóstico del catálogo</strong><small>Auditoría de productos y categorías faltantes</small></span>
+                        <span class="settings-access-arrow" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="m9 5 7 7-7 7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+                    </a>
+                </nav>
             </article>
         </div>
     </section>
 
-    <section class="settings-section">
+    <section class="settings-section" id="preferencias-sitio">
         <div class="settings-section-header">
             <div>
                 <h3>Preferencias del sitio</h3>
@@ -130,6 +502,14 @@
                     <span>
                         <strong>Exigir categoria principal con multiples categorias</strong>
                         <small>Si se activa, al asignar mas de una categoria en productos se vuelve obligatoria la categoria principal.</small>
+                    </span>
+                </label>
+
+                <label class="settings-toggle">
+                    <input type="checkbox" name="warehouse_stock_enabled" id="warehouse_stock_enabled" {% if settings.warehouse_stock_enabled %}checked{% endif %}>
+                    <span>
+                        <strong>Activar stock por depósito</strong>
+                        <small>Habilita la escritura dual solamente en depósitos inicializados y activados individualmente.</small>
                     </span>
                 </label>
 

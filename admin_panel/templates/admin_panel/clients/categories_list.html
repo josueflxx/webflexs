@@ -2,122 +2,651 @@
 
 {% block page_title %}Tipos de clientes{% endblock %}
 
+{% block extra_css %}
+<style>
+    .client-category-page {
+        width: min(1480px, calc(100vw - 36px));
+        max-width: 100%;
+        margin-inline: auto;
+        display: grid;
+        gap: 14px;
+    }
+    .client-category-page .client-module-shell {
+        margin-bottom: 0;
+        padding: 16px;
+        overflow: hidden;
+        position: relative;
+        border: 1px solid rgba(255, 255, 255, 0.09);
+        border-radius: 16px;
+        background:
+            radial-gradient(circle at 92% 8%, rgba(255, 107, 53, 0.11), transparent 26%),
+            radial-gradient(circle at 4% 0%, rgba(0, 197, 255, 0.065), transparent 24%),
+            linear-gradient(180deg, rgba(18, 23, 32, 0.98), rgba(12, 16, 23, 0.98));
+        box-shadow: 0 16px 34px rgba(0, 0, 0, 0.18);
+    }
+    .client-category-page .client-module-ribbon {
+        width: fit-content;
+        margin-bottom: 13px;
+        padding: 5px 9px;
+        border-radius: 999px;
+        font-size: 0.62rem;
+        letter-spacing: 0.08em;
+    }
+    .client-category-page .client-module-head {
+        grid-template-columns: 46px minmax(0, 1fr) auto;
+        gap: 13px;
+        align-items: center;
+        margin-bottom: 15px;
+    }
+    .client-category-page .client-module-icon {
+        width: 46px;
+        height: 46px;
+        color: #ff9368;
+        border: 1px solid rgba(255, 107, 53, 0.26);
+        border-radius: 12px;
+        background: rgba(255, 107, 53, 0.1);
+    }
+    .client-category-page .client-module-icon svg {
+        width: 23px;
+        height: 23px;
+    }
+    .client-category-page .client-module-copy h2 {
+        margin-top: 2px;
+        font-size: 1.28rem;
+        letter-spacing: -0.02em;
+    }
+    .client-category-page .client-module-copy p {
+        max-width: 86ch;
+        font-size: 0.8rem;
+        line-height: 1.45;
+    }
+    .client-category-page .client-module-company {
+        min-width: 135px;
+        padding: 10px 12px;
+        border-radius: 10px;
+        background: rgba(255, 255, 255, 0.03);
+    }
+    .client-category-page .client-module-grid {
+        grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+        gap: 8px;
+    }
+    .client-category-page .client-module-card {
+        min-height: 86px;
+        padding: 11px;
+        border: 1px solid rgba(255, 255, 255, 0.075);
+        border-radius: 11px;
+        background: rgba(255, 255, 255, 0.022);
+        transition: transform 0.18s, border-color 0.18s, background-color 0.18s;
+    }
+    .client-category-page .client-module-card:hover {
+        transform: translateY(-2px);
+        border-color: rgba(255, 107, 53, 0.34);
+        background: rgba(255, 107, 53, 0.055);
+    }
+    .client-category-page .client-module-card-icon {
+        width: 32px;
+        height: 32px;
+        color: #ff946b;
+        border-color: rgba(255, 107, 53, 0.2);
+        border-radius: 8px;
+        background: rgba(255, 107, 53, 0.09);
+    }
+    .client-category-page .client-module-card-icon svg {
+        width: 17px;
+        height: 17px;
+    }
+    .client-category-page .client-module-card strong {
+        font-size: 0.8rem;
+    }
+    .client-category-page .client-module-card small {
+        display: -webkit-box;
+        overflow: hidden;
+        font-size: 0.65rem;
+        line-height: 1.35;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 2;
+    }
+    .client-category-workspace {
+        overflow: hidden;
+        border: 1px solid rgba(255, 255, 255, 0.09);
+        border-radius: 16px;
+        background:
+            radial-gradient(circle at 100% 0%, rgba(0, 197, 255, 0.045), transparent 32%),
+            linear-gradient(180deg, rgba(255, 255, 255, 0.028), rgba(255, 255, 255, 0.012));
+        box-shadow: 0 12px 28px rgba(0, 0, 0, 0.15);
+    }
+    .client-category-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 18px;
+        padding: 17px 18px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.075);
+    }
+    .client-category-title {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        min-width: 0;
+    }
+    .client-category-title-icon {
+        flex: 0 0 auto;
+        width: 40px;
+        height: 40px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: #ff9368;
+        border: 1px solid rgba(255, 107, 53, 0.24);
+        border-radius: 10px;
+        background: rgba(255, 107, 53, 0.09);
+    }
+    .client-category-title-icon svg {
+        width: 20px;
+        height: 20px;
+    }
+    .client-category-title h2 {
+        margin: 0 0 4px;
+        color: #f4f6f9;
+        font-size: 1rem;
+    }
+    .client-category-title p {
+        margin: 0;
+        color: rgba(207, 216, 227, 0.62);
+        font-size: 0.7rem;
+        line-height: 1.4;
+    }
+    .client-category-total {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        margin-left: 6px;
+        padding: 4px 8px;
+        color: #ff9c73;
+        border: 1px solid rgba(255, 107, 53, 0.23);
+        border-radius: 999px;
+        background: rgba(255, 107, 53, 0.075);
+        font-size: 0.65rem;
+        font-weight: 750;
+        vertical-align: middle;
+    }
+    .client-category-header-actions {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+    .client-category-action {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        min-height: 34px;
+        padding: 7px 10px;
+        color: #e7ebf1;
+        border: 1px solid rgba(255, 255, 255, 0.13);
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.028);
+        font-size: 0.68rem;
+        font-weight: 750;
+        text-decoration: none;
+    }
+    .client-category-action.is-primary {
+        color: #fff;
+        border-color: rgba(255, 107, 53, 0.74);
+        background: linear-gradient(135deg, #ff7848, #ff5c2a);
+        box-shadow: 0 7px 16px rgba(255, 92, 42, 0.2);
+    }
+    .client-category-action:hover {
+        color: #fff;
+        border-color: rgba(255, 107, 53, 0.42);
+        background: rgba(255, 107, 53, 0.08);
+    }
+    .client-category-action.is-primary:hover {
+        background: linear-gradient(135deg, #ff865d, #ff6535);
+    }
+    .client-category-action svg {
+        width: 15px;
+        height: 15px;
+    }
+    .client-category-filter {
+        padding: 13px 18px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.075);
+        background: rgba(255, 255, 255, 0.012);
+    }
+    .client-category-filter form {
+        display: grid;
+        grid-template-columns: minmax(260px, 1fr) 180px auto auto;
+        gap: 8px;
+        align-items: center;
+    }
+    .client-category-search {
+        position: relative;
+        min-width: 0;
+    }
+    .client-category-search svg {
+        position: absolute;
+        left: 11px;
+        top: 50%;
+        width: 16px;
+        height: 16px;
+        color: rgba(207, 216, 227, 0.5);
+        transform: translateY(-50%);
+        pointer-events: none;
+    }
+    .client-category-search .form-input {
+        width: 100%;
+        min-width: 0;
+        padding-left: 36px;
+    }
+    .client-category-filter .form-select {
+        width: 100%;
+        max-width: none;
+    }
+    .client-category-filter-button {
+        min-height: 36px;
+        padding: 7px 11px;
+    }
+    .client-category-table-wrap {
+        overflow-x: auto;
+    }
+    .client-category-table {
+        width: 100%;
+        min-width: 1080px;
+        border-collapse: collapse;
+    }
+    .client-category-table thead {
+        background: rgba(255, 255, 255, 0.025);
+    }
+    .client-category-table th {
+        padding: 10px 12px;
+        color: rgba(207, 216, 227, 0.54);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.075);
+        font-size: 0.58rem;
+        font-weight: 750;
+        letter-spacing: 0.075em;
+        text-align: left;
+        text-transform: uppercase;
+        white-space: nowrap;
+    }
+    .client-category-table td {
+        padding: 11px 12px;
+        color: rgba(233, 237, 243, 0.88);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.055);
+        font-size: 0.7rem;
+        vertical-align: middle;
+    }
+    .client-category-table tbody tr {
+        transition: background-color 0.16s;
+    }
+    .client-category-table tbody tr:hover {
+        background: rgba(255, 107, 53, 0.028);
+    }
+    .client-category-table tbody tr:last-child td {
+        border-bottom: 0;
+    }
+    .client-category-name {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        min-width: 150px;
+    }
+    .client-category-monogram {
+        flex: 0 0 auto;
+        width: 30px;
+        height: 30px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: #ff9b73;
+        border: 1px solid rgba(255, 107, 53, 0.2);
+        border-radius: 8px;
+        background: rgba(255, 107, 53, 0.075);
+        font-size: 0.6rem;
+        font-weight: 800;
+    }
+    .client-category-name strong {
+        overflow: hidden;
+        color: #f3f5f8;
+        font-size: 0.74rem;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .client-category-pill {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+        min-height: 22px;
+        padding: 3px 7px;
+        border: 1px solid rgba(255, 255, 255, 0.11);
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.04);
+        color: rgba(226, 232, 240, 0.68);
+        font-size: 0.61rem;
+        font-weight: 700;
+        white-space: nowrap;
+    }
+    .client-category-pill.is-yes,
+    .client-category-pill.is-active {
+        color: #55d984;
+        border-color: rgba(40, 167, 69, 0.32);
+        background: rgba(40, 167, 69, 0.11);
+    }
+    .client-category-pill.is-discount {
+        color: #59d3e6;
+        border-color: rgba(23, 162, 184, 0.34);
+        background: rgba(23, 162, 184, 0.1);
+    }
+    .client-category-pill.is-inactive {
+        color: #ff8793;
+        border-color: rgba(220, 53, 69, 0.3);
+        background: rgba(220, 53, 69, 0.09);
+    }
+    .client-category-number {
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+    }
+    .client-category-count {
+        color: #f1f4f8;
+        font-size: 0.76rem;
+        font-weight: 750;
+    }
+    .client-category-row-actions {
+        display: flex;
+        gap: 6px;
+        align-items: center;
+        white-space: nowrap;
+    }
+    .client-category-row-action {
+        min-height: 28px;
+        padding: 5px 8px;
+        border-radius: 7px;
+        font-size: 0.61rem;
+        font-weight: 750;
+    }
+    .client-category-empty {
+        padding: 34px !important;
+        color: rgba(207, 216, 227, 0.58) !important;
+        text-align: center;
+    }
+    .client-category-page .pagination-container {
+        margin: 0;
+        padding: 13px 18px;
+        border-top: 1px solid rgba(255, 255, 255, 0.075);
+        background: rgba(255, 255, 255, 0.012);
+    }
+    .client-category-action:focus-visible,
+    .client-category-row-action:focus-visible {
+        outline: 2px solid var(--color-primary);
+        outline-offset: 3px;
+    }
+    html[data-theme="light"] .client-category-page .client-module-shell,
+    html[data-theme="light"] .client-category-workspace {
+        border-color: rgba(15, 23, 42, 0.08);
+        background: rgba(255, 255, 255, 0.9);
+        box-shadow: 0 12px 27px rgba(15, 23, 42, 0.055);
+    }
+    html[data-theme="light"] .client-category-header,
+    html[data-theme="light"] .client-category-filter,
+    html[data-theme="light"] .client-category-table th,
+    html[data-theme="light"] .client-category-table td,
+    html[data-theme="light"] .client-category-page .pagination-container {
+        border-color: rgba(15, 23, 42, 0.075);
+    }
+    html[data-theme="light"] .client-category-title h2,
+    html[data-theme="light"] .client-category-name strong,
+    html[data-theme="light"] .client-category-count {
+        color: #0f172a;
+    }
+    html[data-theme="light"] .client-category-title p {
+        color: #64748b;
+    }
+    html[data-theme="light"] .client-category-table th {
+        color: #64748b;
+        background: rgba(15, 23, 42, 0.025);
+    }
+    html[data-theme="light"] .client-category-table td {
+        color: #334155;
+    }
+    @media (max-width: 960px) {
+        .client-category-header {
+            align-items: flex-start;
+            flex-direction: column;
+        }
+        .client-category-filter form {
+            grid-template-columns: minmax(0, 1fr) 170px auto;
+        }
+        .client-category-filter form .client-category-clear {
+            grid-column: 1 / -1;
+            justify-self: start;
+        }
+    }
+    @media (max-width: 720px) {
+        .client-category-page {
+            width: calc(100vw - 24px);
+        }
+        .client-category-page .client-module-head {
+            grid-template-columns: 1fr;
+        }
+        .client-category-page .client-module-company {
+            width: 100%;
+        }
+        .client-category-page .client-module-grid,
+        .client-category-filter form {
+            grid-template-columns: 1fr;
+        }
+        .client-category-filter form .client-category-clear {
+            grid-column: auto;
+            justify-self: stretch;
+        }
+        .client-category-header-actions,
+        .client-category-action,
+        .client-category-filter-button {
+            width: 100%;
+        }
+        .client-category-table-wrap {
+            overflow: visible;
+            padding: 10px;
+        }
+        .client-category-table,
+        .client-category-table tbody,
+        .client-category-table tr,
+        .client-category-table td {
+            display: block;
+            width: 100%;
+            min-width: 0;
+        }
+        .client-category-table thead {
+            display: none;
+        }
+        .client-category-table tbody {
+            display: grid;
+            gap: 9px;
+        }
+        .client-category-table tbody tr {
+            padding: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.075);
+            border-radius: 11px;
+            background: rgba(255, 255, 255, 0.018);
+        }
+        .client-category-table td {
+            display: grid;
+            grid-template-columns: 112px minmax(0, 1fr);
+            gap: 10px;
+            align-items: center;
+            padding: 7px 4px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        .client-category-table td::before {
+            content: attr(data-label);
+            color: rgba(207, 216, 227, 0.5);
+            font-size: 0.57rem;
+            font-weight: 750;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+        }
+        .client-category-table td:last-child {
+            border-bottom: 0;
+        }
+        .client-category-row-actions {
+            flex-wrap: wrap;
+        }
+    }
+</style>
+{% endblock %}
+
 {% block content %}
-{% include 'admin_panel/clients/_module_panel.html' with client_panel='settings' client_module_subtitle='Tipos, descuentos y reglas que ordenan la operacion comercial del modulo.' %}
-<div class="admin-table-container">
-    <div class="admin-toolbar">
-        <form method="get" class="toolbar-search" style="display:flex; gap:8px; flex-wrap:wrap;">
-            <input
-                type="text"
-                name="q"
-                value="{{ search }}"
-                placeholder="Buscar nombre o lista de precio..."
-                class="form-input"
-                style="min-width:280px;"
-            >
-            <select name="status" class="form-select" style="max-width:180px;">
-                <option value="" {% if not status %}selected{% endif %}>Todos</option>
-                <option value="active" {% if status == 'active' %}selected{% endif %}>Activas</option>
-                <option value="inactive" {% if status == 'inactive' %}selected{% endif %}>Inactivas</option>
-            </select>
-            <button type="submit" class="btn btn-primary">Filtrar</button>
-            <a href="{% url 'admin_client_category_list' %}" class="btn btn-outline">Limpiar</a>
-        </form>
-        <div class="toolbar-actions">
-            <a href="{% url 'admin_client_category_create' %}" class="btn btn-primary">+ Nuevo tipo</a>
-            <a href="{% url 'admin_client_list' %}" class="btn btn-outline">Volver a clientes</a>
-        </div>
-    </div>
+<div class="client-category-page">
+    {% include 'admin_panel/clients/_module_panel.html' with client_panel='settings' client_module_subtitle='Tipos, descuentos y reglas que ordenan la operación comercial del módulo.' %}
 
-    <table class="admin-table">
-        <thead>
-            <tr>
-                <th>Nombre</th>
-                <th>Cond. venta</th>
-                <th>CC</th>
-                <th>Limite CC</th>
-                <th>Costo</th>
-                <th>Descuento</th>
-                <th>Lista precio</th>
-                <th>Estado</th>
-                <th>Clientes</th>
-                <th>Acciones</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for category in page_obj %}
-            <tr>
-                <td><strong>{{ category.name }}</strong></td>
-                <td>{{ category.get_default_sale_condition_display }}</td>
-                <td>
-                    {% if category.allows_account_current %}
-                    <span class="badge badge-success">Si</span>
-                    {% else %}
-                    <span class="badge badge-secondary">No</span>
-                    {% endif %}
-                </td>
-                <td>${{ category.account_current_limit|floatformat:2 }}</td>
-                <td>
-                    {% if category.expose_cost %}
-                    <span class="badge badge-info">Si</span>
-                    {% else %}
-                    <span class="badge badge-secondary">No</span>
-                    {% endif %}
-                </td>
-                <td><span class="badge badge-success">{{ category.discount_percentage|floatformat:2 }}%</span></td>
-                <td>{{ category.price_list_name }}</td>
-                <td>
-                    {% if category.is_active %}
-                    <span class="badge badge-success">Activa</span>
-                    {% else %}
-                    <span class="badge badge-danger">Inactiva</span>
-                    {% endif %}
-                </td>
-                <td>{{ category.clients.count }}</td>
-                <td class="actions">
-                    <a href="{% url 'admin_client_category_edit' category.pk %}" class="btn btn-outline btn-sm">Editar</a>
-                    <form
-                        method="post"
-                        action="{% url 'admin_client_category_delete' category.pk %}"
-                        style="display:inline;"
-                        onsubmit="return confirm('Se eliminara la categoria y los clientes quedaran sin categoria. Continuar?');"
+    <section class="client-category-workspace" aria-labelledby="clientCategoryTitle">
+        <header class="client-category-header">
+            <div class="client-category-title">
+                <span class="client-category-title-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none"><path d="M7 4h10v17H7V4Z" stroke="currentColor" stroke-width="1.7"/><path d="M9 4V2h6v2M10 9h4M10 13h4M10 17h3" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+                </span>
+                <div>
+                    <h2 id="clientCategoryTitle">
+                        Tipos de cliente
+                        <span class="client-category-total">{{ page_obj.paginator.count }} configuraciones</span>
+                    </h2>
+                    <p>Define condiciones de venta, descuentos, límites y acceso a cuenta corriente.</p>
+                </div>
+            </div>
+            <div class="client-category-header-actions">
+                <a href="{% url 'admin_client_category_create' %}" class="client-category-action is-primary">
+                    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg>
+                    Nuevo tipo
+                </a>
+                <a href="{% url 'admin_client_list' %}" class="client-category-action">
+                    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m15 5-7 7 7 7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    Volver a clientes
+                </a>
+            </div>
+        </header>
+
+        <div class="client-category-filter">
+            <form method="get">
+                <div class="client-category-search">
+                    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" stroke="currentColor" stroke-width="1.8"/><path d="m15.5 15.5 5 5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+                    <input
+                        type="text"
+                        name="q"
+                        value="{{ search }}"
+                        placeholder="Buscar por nombre o lista de precio..."
+                        class="form-input"
+                        aria-label="Buscar tipos de cliente"
                     >
-                        {% csrf_token %}
-                        <button type="submit" class="btn btn-danger-outline btn-sm">Eliminar</button>
-                    </form>
-                </td>
-            </tr>
-            {% empty %}
-            <tr>
-                <td colspan="10" class="text-center text-muted">No hay tipos de clientes.</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-
-    {% if page_obj.paginator.num_pages > 1 %}
-    <div class="pagination-container">
-        <div class="pagination-info">
-            Pagina {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}
+                </div>
+                <select name="status" class="form-select" aria-label="Filtrar por estado">
+                    <option value="" {% if not status %}selected{% endif %}>Todos los estados</option>
+                    <option value="active" {% if status == 'active' %}selected{% endif %}>Activas</option>
+                    <option value="inactive" {% if status == 'inactive' %}selected{% endif %}>Inactivas</option>
+                </select>
+                <button type="submit" class="btn btn-primary client-category-filter-button">Filtrar</button>
+                <a href="{% url 'admin_client_category_list' %}" class="btn btn-outline client-category-filter-button client-category-clear">Limpiar</a>
+            </form>
         </div>
-        <div class="pagination-controls">
-            {% if page_obj.has_previous %}
-            <a href="?page=1{% if search %}&q={{ search }}{% endif %}{% if status %}&status={{ status }}{% endif %}" class="btn btn-outline btn-sm"><< Primera</a>
-            <a href="?page={{ page_obj.previous_page_number }}{% if search %}&q={{ search }}{% endif %}{% if status %}&status={{ status }}{% endif %}" class="btn btn-outline btn-sm">Anterior</a>
-            {% else %}
-            <button class="btn btn-outline btn-sm" disabled><< Primera</button>
-            <button class="btn btn-outline btn-sm" disabled>Anterior</button>
-            {% endif %}
 
-            {% if page_obj.has_next %}
-            <a href="?page={{ page_obj.next_page_number }}{% if search %}&q={{ search }}{% endif %}{% if status %}&status={{ status }}{% endif %}" class="btn btn-outline btn-sm">Siguiente</a>
-            <a href="?page={{ page_obj.paginator.num_pages }}{% if search %}&q={{ search }}{% endif %}{% if status %}&status={{ status }}{% endif %}" class="btn btn-outline btn-sm">Ultima >></a>
-            {% else %}
-            <button class="btn btn-outline btn-sm" disabled>Siguiente</button>
-            <button class="btn btn-outline btn-sm" disabled>Ultima >></button>
-            {% endif %}
+        <div class="client-category-table-wrap">
+            <table class="client-category-table">
+                <thead>
+                    <tr>
+                        <th>Nombre</th>
+                        <th>Condición de venta</th>
+                        <th>Cuenta corriente</th>
+                        <th>Límite CC</th>
+                        <th>Expone costo</th>
+                        <th>Descuento</th>
+                        <th>Lista de precio</th>
+                        <th>Estado</th>
+                        <th>Clientes</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for category in page_obj %}
+                    <tr>
+                        <td data-label="Nombre">
+                            <span class="client-category-name">
+                                <span class="client-category-monogram" aria-hidden="true">{{ category.name|slice:":2"|upper }}</span>
+                                <strong>{{ category.name }}</strong>
+                            </span>
+                        </td>
+                        <td data-label="Condición">{{ category.get_default_sale_condition_display }}</td>
+                        <td data-label="Cuenta corriente">
+                            {% if category.allows_account_current %}
+                            <span class="client-category-pill is-yes">Sí</span>
+                            {% else %}
+                            <span class="client-category-pill">No</span>
+                            {% endif %}
+                        </td>
+                        <td data-label="Límite CC" class="client-category-number">${{ category.account_current_limit|floatformat:2 }}</td>
+                        <td data-label="Expone costo">
+                            {% if category.expose_cost %}
+                            <span class="client-category-pill is-yes">Sí</span>
+                            {% else %}
+                            <span class="client-category-pill">No</span>
+                            {% endif %}
+                        </td>
+                        <td data-label="Descuento"><span class="client-category-pill is-discount">{{ category.discount_percentage|floatformat:2 }}%</span></td>
+                        <td data-label="Lista de precio">{{ category.price_list_name|default:"Sin lista" }}</td>
+                        <td data-label="Estado">
+                            {% if category.is_active %}
+                            <span class="client-category-pill is-active">Activa</span>
+                            {% else %}
+                            <span class="client-category-pill is-inactive">Inactiva</span>
+                            {% endif %}
+                        </td>
+                        <td data-label="Clientes"><span class="client-category-count">{{ category.clients.count }}</span></td>
+                        <td data-label="Acciones">
+                            <div class="client-category-row-actions">
+                                <a href="{% url 'admin_client_category_edit' category.pk %}" class="btn btn-outline client-category-row-action">Editar</a>
+                                <form
+                                    method="post"
+                                    action="{% url 'admin_client_category_delete' category.pk %}"
+                                    style="display:inline;"
+                                    onsubmit="return confirm('Se eliminará la categoría y los clientes quedarán sin categoría. ¿Continuar?');"
+                                >
+                                    {% csrf_token %}
+                                    <button type="submit" class="btn btn-danger-outline client-category-row-action">Eliminar</button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="10" class="client-category-empty">No hay tipos de cliente para mostrar.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
         </div>
-    </div>
-    {% endif %}
+
+        {% if page_obj.paginator.num_pages > 1 %}
+        <div class="pagination-container">
+            <div class="pagination-info">
+                Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}
+            </div>
+            <div class="pagination-controls">
+                {% if page_obj.has_previous %}
+                <a href="?page=1{% if search %}&q={{ search }}{% endif %}{% if status %}&status={{ status }}{% endif %}" class="btn btn-outline btn-sm">Primera</a>
+                <a href="?page={{ page_obj.previous_page_number }}{% if search %}&q={{ search }}{% endif %}{% if status %}&status={{ status }}{% endif %}" class="btn btn-outline btn-sm">Anterior</a>
+                {% else %}
+                <button class="btn btn-outline btn-sm" disabled>Primera</button>
+                <button class="btn btn-outline btn-sm" disabled>Anterior</button>
+                {% endif %}
+
+                {% if page_obj.has_next %}
+                <a href="?page={{ page_obj.next_page_number }}{% if search %}&q={{ search }}{% endif %}{% if status %}&status={{ status }}{% endif %}" class="btn btn-outline btn-sm">Siguiente</a>
+                <a href="?page={{ page_obj.paginator.num_pages }}{% if search %}&q={{ search }}{% endif %}{% if status %}&status={{ status }}{% endif %}" class="btn btn-outline btn-sm">Última</a>
+                {% else %}
+                <button class="btn btn-outline btn-sm" disabled>Siguiente</button>
+                <button class="btn btn-outline btn-sm" disabled>Última</button>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+    </section>
 </div>
 {% endblock %}

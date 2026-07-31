@@ -1,14 +1,15 @@
 """Fiscal readiness helpers (pre-ARCA)."""
 from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
-import os
 from typing import List, Tuple
 
 from django.conf import settings
 from django.db.models import Sum
 from django.utils import timezone
 
+from accounts.fiscal_identity import is_valid_cuit
 from core.models import (
+    FISCAL_AUTHORIZED_STATUSES,
     FISCAL_CREDIT_NOTE_DOC_TYPES,
     FISCAL_DOC_TYPE_FA,
     FISCAL_DOC_TYPE_FB,
@@ -20,6 +21,17 @@ from core.models import (
     FISCAL_STATUS_EXTERNAL_RECORDED,
     FISCAL_STATUS_VOIDED,
     FiscalPointOfSale,
+)
+from core.services.arca_config import (
+    ArcaEnvironment,
+    ArcaSecurityConfigurationError,
+    configured_arca_environment,
+    require_homologation_environment,
+)
+from core.services.arca_credentials import (
+    ArcaCredentialError,
+    resolve_credential_spec,
+    validate_credential_offline,
 )
 
 
@@ -158,7 +170,7 @@ def _append_order_amount_errors(order, errors: List[str]):
         errors.append("El descuento del pedido no puede ser negativo.")
 
     subtotal_delta = abs(calculated_subtotal - order_subtotal)
-    if subtotal_delta > Decimal("2.00"):
+    if subtotal_delta > Decimal("0.01"):
         errors.append(
             "El subtotal del pedido no coincide con los items cargados."
         )
@@ -167,7 +179,7 @@ def _append_order_amount_errors(order, errors: List[str]):
     if expected_total < 0:
         errors.append("El total calculado del pedido no puede ser negativo.")
     total_delta = abs(expected_total - order_total)
-    if total_delta > Decimal("2.00"):
+    if total_delta > Decimal("0.01"):
         errors.append(
             "El total del pedido no coincide con subtotal y descuentos."
         )
@@ -181,8 +193,8 @@ def _append_client_tax_errors(client_profile, errors: List[str]):
         or ""
     )
     digits = _normalize_digits(doc_number)
-    if doc_type in {"cuit", "cuil"} and len(digits) != 11:
-        errors.append("El documento fiscal del cliente debe tener 11 digitos (CUIT/CUIL).")
+    if doc_type in {"cuit", "cuil"} and not is_valid_cuit(digits):
+        errors.append("El CUIT/CUIL del cliente no tiene digito verificador valido.")
     if doc_type == "dni" and len(digits) < 7:
         errors.append("El DNI del cliente parece invalido.")
 
@@ -228,6 +240,7 @@ def is_invoice_ready(order) -> Tuple[bool, List[str]]:
             ("fiscal_province", "Provincia fiscal de la empresa"),
             ("postal_code", "Codigo postal de la empresa"),
             ("point_of_sale_default", "Punto de venta de la empresa"),
+            ("activity_start_date", "Fecha de inicio de actividades"),
         ]
         for field, label in company_requirements:
             if _is_blank(getattr(company, field, "")):
@@ -273,10 +286,13 @@ def is_company_fiscal_ready(company) -> Tuple[bool, List[str]]:
         ("fiscal_province", "Provincia fiscal de la empresa"),
         ("postal_code", "Codigo postal de la empresa"),
         ("point_of_sale_default", "Punto de venta default de la empresa"),
+        ("activity_start_date", "Fecha de inicio de actividades"),
     ]
     for field, label in company_requirements:
         if _is_blank(getattr(company, field, "")):
             errors.append(f"Falta {label}.")
+    if getattr(company, "cuit", None) and not is_valid_cuit(company.cuit):
+        errors.append("El CUIT de la empresa no tiene digito verificador valido.")
 
     points = FiscalPointOfSale.objects.filter(company=company)
     active_points = points.filter(is_active=True)
@@ -294,17 +310,20 @@ def is_company_fiscal_ready(company) -> Tuple[bool, List[str]]:
             errors.append(
                 "El punto de venta default de la empresa no coincide con el POS default marcado."
             )
-        env_cfg = _get_company_arca_env_config(company, getattr(default_point, "environment", "homologation"))
-        cert_path = str(env_cfg.get("cert_path", "") or "").strip()
-        key_path = str(env_cfg.get("key_path", "") or "").strip()
-        if not cert_path:
-            errors.append("Falta cert_path ARCA para el entorno del POS default.")
-        elif not os.path.exists(cert_path):
-            errors.append("El cert_path ARCA del POS default no existe en el servidor.")
-        if not key_path:
-            errors.append("Falta key_path ARCA para el entorno del POS default.")
-        elif not os.path.exists(key_path):
-            errors.append("El key_path ARCA del POS default no existe en el servidor.")
+        try:
+            environment = require_homologation_environment(
+                point_environment=default_point.environment,
+            )
+            credential = resolve_credential_spec(
+                company=company,
+                environment=environment,
+            )
+            validate_credential_offline(
+                credential,
+                openssl_bin=str(getattr(settings, "ARCA_OPENSSL_BIN", "openssl")),
+            )
+        except (ArcaSecurityConfigurationError, ArcaCredentialError) as exc:
+            errors.append(f"Configuracion ARCA no apta: {exc}.")
 
     return len(errors) == 0, errors
 
@@ -341,7 +360,7 @@ def validate_credit_note_relationship(document) -> Tuple[bool, List[str]]:
     if related.doc_type != expected_base_type:
         errors.append("La letra/tipo de la nota de credito no coincide con la factura base.")
 
-    if related.status not in {FISCAL_STATUS_AUTHORIZED, FISCAL_STATUS_EXTERNAL_RECORDED}:
+    if related.status not in FISCAL_AUTHORIZED_STATUSES:
         errors.append("La factura base debe estar emitida/cerrada para aceptar nota de credito.")
     if related.status == FISCAL_STATUS_VOIDED:
         errors.append("La factura base esta anulada.")

@@ -8,6 +8,7 @@ python create_operators.py
 import os
 import django
 import sys
+import json
 
 # Setup Django environment
 sys.path.append(os.getcwd())
@@ -16,25 +17,23 @@ django.setup()
 
 from django.contrib.auth.models import User
 
-# ==========================================
-# LISTA DE OPERADORES A CREAR (Edita esto)
-# ==========================================
-operators = [
-    {'username': 'brianroces', 'password': 'contraseña2026'},
-    {'username': 'fedeflexs', 'password': 'villanueva2026'},
-    {'username': 'ricardoroces', 'password': 'roces1954'},
-]
+# JSON esperado: [{"username":"...","password":"..."}, ...]
+raw_operators = os.getenv('DJANGO_OPERATOR_USERS_JSON')
+if not raw_operators:
+    raise RuntimeError('Define DJANGO_OPERATOR_USERS_JSON antes de ejecutar este script.')
+
+operators = json.loads(raw_operators)
+if not isinstance(operators, list) or not operators:
+    raise RuntimeError('DJANGO_OPERATOR_USERS_JSON debe ser una lista no vacía.')
 
 print("Creating Operator users...")
 print("-" * 50)
 
-if not operators:
-    print("No operators defined in the script.")
-    print("Please edit 'create_operators.py' and add users to the 'operators' list.")
-
 for op_data in operators:
-    username = op_data['username']
-    password = op_data['password']
+    username = str(op_data.get('username', '')).strip()
+    password = str(op_data.get('password', ''))
+    if not username or not password:
+        raise RuntimeError('Cada operador requiere username y password.')
     
     if User.objects.filter(username=username).exists():
         user = User.objects.get(username=username)

@@ -1,91 +1,154 @@
 <style>
     .sales-workspace-shell {
         display: grid;
-        gap: 9px;
+        gap: 14px;
         margin: 0;
-        padding: 12px;
-        border-radius: 10px;
-        border: 1px solid rgba(255,255,255,.1);
-        background: linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.015));
-        box-shadow: 0 10px 22px rgba(0,0,0,.12);
+        padding: 16px;
+        border: 1px solid rgba(255, 255, 255, 0.085);
+        border-radius: 15px;
+        background:
+            radial-gradient(circle at 100% 0%, rgba(255, 107, 53, 0.075), transparent 30%),
+            linear-gradient(180deg, rgba(255, 255, 255, 0.028), rgba(255, 255, 255, 0.012));
+        box-shadow: 0 12px 28px rgba(0, 0, 0, 0.14);
     }
     .sales-workspace-head {
         display: flex;
         justify-content: space-between;
-        gap: 12px;
-        align-items: flex-start;
+        gap: 16px;
+        align-items: center;
     }
     .sales-workspace-head h3 {
-        margin: 2px 0 0;
+        margin: 4px 0 0;
         color: #fff;
-        font-size: .92rem;
+        font-size: 1rem;
+        letter-spacing: -0.015em;
     }
     .sales-workspace-head p {
-        margin: 4px 0 0;
-        color: rgba(208,216,226,.76);
-        font-size: .78rem;
+        margin: 5px 0 0;
+        max-width: 850px;
+        color: rgba(208, 216, 226, 0.68);
+        font-size: 0.72rem;
         line-height: 1.45;
     }
     .sales-workspace-kicker {
         display: inline-flex;
         align-items: center;
-        padding: 3px 8px;
+        gap: 6px;
+        padding: 4px 8px;
         border-radius: 999px;
-        border: 1px solid rgba(255,255,255,.12);
-        background: rgba(255,255,255,.04);
-        color: #ffb08e;
-        font-size: .68rem;
+        border: 1px solid rgba(255, 107, 53, 0.23);
+        background: rgba(255, 107, 53, 0.075);
+        color: #ffae8c;
+        font-size: 0.61rem;
+        font-weight: 750;
         text-transform: uppercase;
-        letter-spacing: .08em;
+        letter-spacing: 0.08em;
+    }
+    .sales-workspace-kicker svg {
+        width: 13px;
+        height: 13px;
+    }
+    .sales-workspace-count {
+        flex: 0 0 auto;
+        display: inline-flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 2px;
+        padding: 9px 11px;
+        border: 1px solid rgba(255, 255, 255, 0.09);
+        border-radius: 9px;
+        background: rgba(255, 255, 255, 0.022);
+    }
+    .sales-workspace-count strong {
+        color: #f4f6f9;
+        font-size: 0.9rem;
+    }
+    .sales-workspace-count span {
+        color: rgba(208, 216, 226, 0.55);
+        font-size: 0.59rem;
     }
     .sales-workspace-cards {
         display: grid;
-        grid-template-columns: repeat(6, minmax(128px, 1fr));
+        grid-template-columns: repeat(6, minmax(150px, 1fr));
         gap: 8px;
     }
     .sales-workspace-card {
         display: grid;
-        grid-template-columns: minmax(0, 1fr) auto;
+        grid-template-columns: 28px minmax(0, 1fr) auto;
         grid-template-areas:
-            "label value"
-            "help help";
-        gap: 5px 8px;
-        align-items: center;
-        padding: 9px 10px;
-        border-radius: 8px;
-        border: 1px solid rgba(255,255,255,.08);
-        background: rgba(8, 14, 26, .48);
+            "index label value"
+            "index help value";
+        gap: 3px 9px;
+        align-items: start;
+        min-width: 0;
+        min-height: 82px;
+        padding: 10px;
+        border: 1px solid rgba(255, 255, 255, 0.07);
+        border-radius: 10px;
+        background: rgba(8, 14, 26, 0.42);
         color: inherit;
         text-decoration: none;
-        transition: transform .18s ease, border-color .18s ease, background .18s ease;
+        transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease;
     }
     .sales-workspace-card:hover {
-        transform: translateY(-1px);
-        border-color: rgba(255,255,255,.16);
-        background: rgba(10, 18, 31, .7);
+        transform: translateY(-2px);
+        border-color: rgba(255, 107, 53, 0.3);
+        background: rgba(255, 107, 53, 0.045);
     }
     .sales-workspace-card.is-active {
-        border-color: rgba(251, 146, 60, .45);
-        box-shadow: inset 0 0 0 1px rgba(251, 146, 60, .18);
-        background: rgba(37, 22, 12, .55);
+        border-color: rgba(251, 146, 60, 0.48);
+        box-shadow: inset 0 0 0 1px rgba(251, 146, 60, 0.13);
+        background: rgba(50, 27, 16, 0.52);
+    }
+    .sales-workspace-index {
+        grid-area: index;
+        width: 27px;
+        height: 27px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: rgba(220, 226, 235, 0.58);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 7px;
+        background: rgba(255, 255, 255, 0.03);
+        font-size: 0.57rem;
+        font-weight: 800;
+    }
+    .sales-workspace-card.is-active .sales-workspace-index {
+        color: #ffae8c;
+        border-color: rgba(255, 107, 53, 0.28);
+        background: rgba(255, 107, 53, 0.1);
     }
     .sales-workspace-label {
         grid-area: label;
-        color: rgba(208,216,226,.82);
-        font-size: .76rem;
+        overflow: hidden;
+        color: rgba(232, 236, 242, 0.86);
+        font-size: 0.7rem;
+        font-weight: 700;
         line-height: 1.35;
+        text-overflow: ellipsis;
+        white-space: nowrap;
     }
     .sales-workspace-value {
         grid-area: value;
-        color: #fff;
-        font-size: 1.25rem;
+        align-self: center;
+        color: #f4f6f9;
+        font-size: 1.35rem;
         line-height: 1;
     }
     .sales-workspace-card small {
         grid-area: help;
-        color: rgba(208,216,226,.68);
-        font-size: .7rem;
-        line-height: 1.45;
+        display: -webkit-box;
+        overflow: hidden;
+        color: rgba(208, 216, 226, 0.56);
+        font-size: 0.62rem;
+        line-height: 1.35;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 2;
+    }
+    .sales-workspace-card:focus-visible {
+        outline: 2px solid var(--color-primary);
+        outline-offset: 3px;
     }
     @media (max-width: 1320px) {
         .sales-workspace-cards {
@@ -98,6 +161,13 @@
         }
     }
     @media (max-width: 640px) {
+        .sales-workspace-head {
+            align-items: flex-start;
+            flex-direction: column;
+        }
+        .sales-workspace-count {
+            align-items: flex-start;
+        }
         .sales-workspace-cards {
             grid-template-columns: 1fr;
         }
@@ -107,18 +177,23 @@
 <section class="sales-workspace-shell">
     <div class="sales-workspace-head">
         <div>
-            <span class="sales-workspace-kicker">Workspace de ventas</span>
-            <h3>Solicitud -> Pedido -> Remito -> Factura -> Cobro</h3>
-            <p>Esta franja resume la cola comercial y te deja saltar directo al tramo del flujo que necesita trabajo ahora.</p>
+            <span class="sales-workspace-kicker">
+                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 12h14m-4-4 4 4-4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                Flujo comercial
+            </span>
+            <h3>Solicitud → Pedido → Remito → Factura → Cobro</h3>
+            <p>Selecciona una etapa para concentrar la cola en el tramo que necesita atención.</p>
         </div>
+        <span class="sales-workspace-count"><strong>6</strong><span>etapas operativas</span></span>
     </div>
-    <div class="sales-workspace-cards">
+    <nav class="sales-workspace-cards" aria-label="Etapas del flujo comercial">
         {% for item in sales_workspace_cards %}
-        <a href="{{ item.url }}" class="sales-workspace-card {% if item.key in sales_workspace_active_keys %}is-active{% endif %}">
+        <a href="{{ item.url }}" class="sales-workspace-card {% if item.key in sales_workspace_active_keys %}is-active{% endif %}" {% if item.key in sales_workspace_active_keys %}aria-current="page"{% endif %}>
+            <span class="sales-workspace-index" aria-hidden="true">0{{ forloop.counter }}</span>
             <span class="sales-workspace-label">{{ item.label }}</span>
             <strong class="sales-workspace-value">{{ item.count }}</strong>
             <small>{{ item.help_text }}</small>
         </a>
         {% endfor %}
-    </div>
+    </nav>
 </section>

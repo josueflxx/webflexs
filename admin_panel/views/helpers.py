@@ -984,7 +984,7 @@ def _find_products_for_order_query(raw_value, *, limit=6):
     if not query:
         return []
 
-    queryset = Product.objects.filter(is_active=True).select_related("supplier_ref")
+    queryset = Product.objects.filter(is_active=True, is_sellable=True).select_related("supplier_ref")
     parsed_query = parse_text_search_query(
         query,
         max_include=6,
@@ -1724,6 +1724,7 @@ def _build_client_form_values(
         "phone": getattr(client, "phone", "") or "",
         "client_type": getattr(client, "client_type", "") or "",
         "iva_condition": getattr(client, "iva_condition", "") or "",
+        "commercial_observation": getattr(client, "commercial_observation", "") or "",
         "notes": getattr(client, "notes", "") or "",
         "linked_company_ids": linked_company_ids,
     }
@@ -1751,6 +1752,7 @@ def _build_client_form_values(
         "phone",
         "client_type",
         "iva_condition",
+        "commercial_observation",
         "notes",
     ]
     for field_name in text_fields:
@@ -2569,6 +2571,7 @@ def settings_view(request):
         settings.require_primary_category_for_multicategory = (
             request.POST.get('require_primary_category_for_multicategory') == 'on'
         )
+        settings.warehouse_stock_enabled = request.POST.get('warehouse_stock_enabled') == 'on'
         settings.public_prices_message = request.POST.get('public_prices_message', '').strip()
         settings.company_name = request.POST.get('company_name', '').strip()
         settings.company_email = request.POST.get('company_email', '').strip()
@@ -2584,6 +2587,7 @@ def settings_view(request):
             details={
                 "show_public_prices": settings.show_public_prices,
                 "require_primary_category_for_multicategory": settings.require_primary_category_for_multicategory,
+                "warehouse_stock_enabled": settings.warehouse_stock_enabled,
             },
         )
         

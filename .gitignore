@@ -10,6 +10,8 @@ env/
 
 # Environment variables
 .env
+.env.*
+!.env.example
 
 # Fiscal certificates and private keys (fixtures must use non-secret samples)
 *.key
@@ -18,8 +20,22 @@ env/
 *.pfx
 *.crt
 *.cer
+*.der
+*.p7b
+*.p7c
+*.pkcs7
+*.pkcs8
+*.jks
+*.keystore
+*.kdb
+*.csr
+*.srl
+id_rsa*
+id_ed25519*
 certificates/
 certs/
+credentials/
+secrets/
 
 # Database
 *.sqlite3
@@ -55,6 +71,7 @@ flexs_project/settings/local_preview.py
 
 # Local/runtime artifacts
 tmp/
+output/pdf/
 backups/automatic/
 backups/integrity_audit/
 *.bak

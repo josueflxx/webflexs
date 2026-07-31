@@ -1,0 +1,314 @@
+{% extends "admin_panel/base.html" %}
+
+{% block page_title %}Alias y reglas de marcas{% endblock %}
+
+{% block extra_css %}
+<style>
+    .rules-workspace { max-width: 1380px; margin: 0 auto; }
+    .rules-header,
+    .config-card,
+    .records-card {
+        border: 1px solid rgba(255,255,255,.09);
+        border-radius: 14px;
+        background: rgba(14,20,31,.9);
+    }
+    .rules-header {
+        padding: 22px 24px;
+        display: flex;
+        justify-content: space-between;
+        gap: 20px;
+        align-items: center;
+        margin-bottom: 16px;
+        border-color: rgba(255,107,53,.24);
+        background: linear-gradient(105deg, rgba(255,107,53,.11), transparent 45%), #101722;
+    }
+    .rules-header h1 { margin: 0; font-size: 1.65rem; }
+    .rules-header p { margin: 7px 0 0; color: #919aaa; max-width: 780px; line-height: 1.5; }
+    .rules-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    .config-grid { display: grid; grid-template-columns: .78fr 1.22fr; gap: 16px; align-items: start; }
+    .config-card { padding: 20px; }
+    .config-card h2, .records-card h2 { margin: 0; font-size: 1.05rem; }
+    .config-card > p, .records-card > p { margin: 6px 0 18px; color: #8590a0; font-size: .78rem; line-height: 1.5; }
+    .field { margin-bottom: 12px; }
+    .field label {
+        display: block;
+        color: #a6afbd;
+        font-size: .7rem;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: .055em;
+        margin-bottom: 6px;
+    }
+    .field-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+    .field-row.three { grid-template-columns: repeat(3, 1fr); }
+    .check-field { display: flex; align-items: center; gap: 8px; color: #c7cdd7; font-size: .78rem; margin: 12px 0 16px; }
+    .check-field input { accent-color: var(--color-primary); }
+    .field-errors { color: #fb7185; font-size: .7rem; margin: 5px 0 0; }
+    .form-errors {
+        border: 1px solid rgba(251,113,133,.32);
+        background: rgba(251,113,133,.08);
+        color: #fda4af;
+        padding: 10px 12px;
+        border-radius: 8px;
+        margin-bottom: 12px;
+        font-size: .75rem;
+    }
+    .records-card { margin-top: 16px; overflow: hidden; }
+    .records-head { padding: 18px 20px 0; }
+    .record-table { width: 100%; border-collapse: collapse; }
+    .record-table th {
+        color: #7f899a;
+        font-size: .66rem;
+        text-transform: uppercase;
+        letter-spacing: .055em;
+        text-align: left;
+        padding: 11px 14px;
+        border-top: 1px solid rgba(255,255,255,.07);
+        border-bottom: 1px solid rgba(255,255,255,.07);
+        background: rgba(255,255,255,.02);
+    }
+    .record-table td {
+        padding: 11px 14px;
+        border-bottom: 1px solid rgba(255,255,255,.06);
+        font-size: .76rem;
+        vertical-align: middle;
+    }
+    .record-table tbody tr:last-child td { border-bottom: 0; }
+    .record-table small { display: block; color: #778193; margin-top: 3px; }
+    .state { font-size: .65rem; font-weight: 800; padding: 4px 8px; border-radius: 999px; }
+    .state-active { color: #4ade80; background: rgba(74,222,128,.1); }
+    .state-inactive { color: #9ca3af; background: rgba(156,163,175,.1); }
+    .empty-row { text-align: center; color: #7f899a; padding: 28px !important; }
+    .danger-link {
+        color: #fb7185;
+        background: transparent;
+        border: 0;
+        padding: 5px;
+        cursor: pointer;
+        font-size: .72rem;
+        font-weight: 700;
+    }
+    @media (max-width: 1000px) {
+        .config-grid { grid-template-columns: 1fr; }
+        .record-table { min-width: 760px; }
+        .records-card { overflow-x: auto; }
+    }
+    @media (max-width: 680px) {
+        .rules-header { flex-direction: column; align-items: flex-start; }
+        .field-row, .field-row.three { grid-template-columns: 1fr; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="rules-workspace">
+    <header class="rules-header">
+        <div>
+            <h1>Reconocimiento de marcas</h1>
+            <p>Los alias corrigen distintas formas de escribir una marca. Las reglas sugieren una ubicación cuando un dato del producto coincide; nunca asignan productos automáticamente.</p>
+        </div>
+        <div class="rules-actions">
+            <a class="btn btn-secondary" href="{% url 'admin_brand_list' %}">Ver estructura</a>
+            <a class="btn btn-primary" href="{% url 'admin_brand_catalog_inbox' %}">Abrir catalogador</a>
+        </div>
+    </header>
+
+    <div class="config-grid">
+        <section class="config-card">
+            <h2>Nuevo alias</h2>
+            <p>Úsalo para abreviaturas, variantes comerciales o nombres que llegan desde proveedores.</p>
+            <form method="post" action="{% url 'admin_brand_alias_create' %}">
+                {% csrf_token %}
+                {% if alias_form.non_field_errors %}
+                    <div class="form-errors">{{ alias_form.non_field_errors }}</div>
+                {% endif %}
+                <div class="field">
+                    <label for="{{ alias_form.brand.id_for_label }}">Marca</label>
+                    {{ alias_form.brand }}
+                    {% if alias_form.brand.errors %}<div class="field-errors">{{ alias_form.brand.errors|striptags }}</div>{% endif %}
+                </div>
+                <div class="field">
+                    <label for="{{ alias_form.value.id_for_label }}">Alias a reconocer</label>
+                    {{ alias_form.value }}
+                    {% if alias_form.value.errors %}<div class="field-errors">{{ alias_form.value.errors|striptags }}</div>{% endif %}
+                </div>
+                <label class="check-field">{{ alias_form.is_active }} Disponible para sugerencias</label>
+                <button class="btn btn-primary" type="submit">Guardar alias</button>
+            </form>
+        </section>
+
+        <section class="config-card">
+            <h2>Nueva regla</h2>
+            <p>Define qué texto buscar, dónde buscarlo y qué destino proponer al catalogador.</p>
+            <form method="post" action="{% url 'admin_brand_catalog_rule_create' %}" id="ruleForm">
+                {% csrf_token %}
+                {% if rule_form.non_field_errors %}
+                    <div class="form-errors">{{ rule_form.non_field_errors }}</div>
+                {% endif %}
+                <div class="field-row three">
+                    <div class="field">
+                        <label for="{{ rule_form.brand.id_for_label }}">Marca</label>
+                        {{ rule_form.brand }}
+                        {% if rule_form.brand.errors %}<div class="field-errors">{{ rule_form.brand.errors|striptags }}</div>{% endif %}
+                    </div>
+                    <div class="field">
+                        <label for="{{ rule_form.brand_rubro.id_for_label }}">Rubro opcional</label>
+                        {{ rule_form.brand_rubro }}
+                        {% if rule_form.brand_rubro.errors %}<div class="field-errors">{{ rule_form.brand_rubro.errors|striptags }}</div>{% endif %}
+                    </div>
+                    <div class="field">
+                        <label for="{{ rule_form.brand_subrubro.id_for_label }}">Subrubro opcional</label>
+                        {{ rule_form.brand_subrubro }}
+                        {% if rule_form.brand_subrubro.errors %}<div class="field-errors">{{ rule_form.brand_subrubro.errors|striptags }}</div>{% endif %}
+                    </div>
+                </div>
+                <div class="field-row three">
+                    <div class="field">
+                        <label for="{{ rule_form.source_field.id_for_label }}">Dato a revisar</label>
+                        {{ rule_form.source_field }}
+                    </div>
+                    <div class="field">
+                        <label for="{{ rule_form.match_mode.id_for_label }}">Coincidencia</label>
+                        {{ rule_form.match_mode }}
+                    </div>
+                    <div class="field">
+                        <label for="{{ rule_form.pattern.id_for_label }}">Texto a reconocer</label>
+                        {{ rule_form.pattern }}
+                        {% if rule_form.pattern.errors %}<div class="field-errors">{{ rule_form.pattern.errors|striptags }}</div>{% endif %}
+                    </div>
+                </div>
+                <div class="field-row">
+                    <div class="field">
+                        <label for="{{ rule_form.priority.id_for_label }}">Prioridad</label>
+                        {{ rule_form.priority }}
+                    </div>
+                    <div class="field">
+                        <label for="{{ rule_form.confidence.id_for_label }}">Confianza (1 a 100)</label>
+                        {{ rule_form.confidence }}
+                        {% if rule_form.confidence.errors %}<div class="field-errors">{{ rule_form.confidence.errors|striptags }}</div>{% endif %}
+                    </div>
+                </div>
+                <label class="check-field">{{ rule_form.is_active }} Regla activa</label>
+                <button class="btn btn-primary" type="submit">Guardar regla</button>
+            </form>
+        </section>
+    </div>
+
+    <section class="records-card">
+        <div class="records-head">
+            <h2>Alias configurados</h2>
+            <p>{{ aliases|length }} registro(s). Un mismo alias solo puede pertenecer a una marca.</p>
+        </div>
+        <table class="record-table">
+            <thead>
+                <tr><th>Marca</th><th>Alias</th><th>Estado</th><th>Acción</th></tr>
+            </thead>
+            <tbody>
+                {% for alias in aliases %}
+                    <tr>
+                        <td><strong>{{ alias.brand.name }}</strong></td>
+                        <td>{{ alias.value }}<small>{{ alias.normalized_value }}</small></td>
+                        <td><span class="state {% if alias.is_active %}state-active{% else %}state-inactive{% endif %}">{% if alias.is_active %}Activo{% else %}Inactivo{% endif %}</span></td>
+                        <td>
+                            <form method="post" action="{% url 'admin_brand_alias_delete' alias.id %}" onsubmit="return confirm('¿Eliminar el alias {{ alias.value|escapejs }}?');">
+                                {% csrf_token %}
+                                <button type="submit" class="danger-link">Eliminar</button>
+                            </form>
+                        </td>
+                    </tr>
+                {% empty %}
+                    <tr><td colspan="4" class="empty-row">Todavía no hay alias configurados.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </section>
+
+    <section class="records-card">
+        <div class="records-head">
+            <h2>Reglas configuradas</h2>
+            <p>{{ rules|length }} registro(s), ordenados por prioridad y confianza.</p>
+        </div>
+        <table class="record-table">
+            <thead>
+                <tr><th>Coincidencia</th><th>Destino sugerido</th><th>Prioridad</th><th>Estado</th><th>Acción</th></tr>
+            </thead>
+            <tbody>
+                {% for rule in rules %}
+                    <tr>
+                        <td>
+                            <strong>{{ rule.get_source_field_display }} {{ rule.get_match_mode_display|lower }} “{{ rule.pattern }}”</strong>
+                            <small>Confianza {{ rule.confidence }}%</small>
+                        </td>
+                        <td>
+                            {{ rule.brand.name }}
+                            {% if rule.brand_rubro %} / {{ rule.brand_rubro.name }}{% endif %}
+                            {% if rule.brand_subrubro %} / {{ rule.brand_subrubro.name }}{% endif %}
+                        </td>
+                        <td>{{ rule.priority }}</td>
+                        <td><span class="state {% if rule.is_active %}state-active{% else %}state-inactive{% endif %}">{% if rule.is_active %}Activa{% else %}Inactiva{% endif %}</span></td>
+                        <td>
+                            <form method="post" action="{% url 'admin_brand_catalog_rule_delete' rule.id %}" onsubmit="return confirm('¿Eliminar esta regla?');">
+                                {% csrf_token %}
+                                <button type="submit" class="danger-link">Eliminar</button>
+                            </form>
+                        </td>
+                    </tr>
+                {% empty %}
+                    <tr><td colspan="5" class="empty-row">Todavía no hay reglas configuradas.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </section>
+</div>
+
+{{ catalog_tree|json_script:"brandCatalogTree" }}
+<script>
+(function () {
+    const tree = JSON.parse(document.getElementById("brandCatalogTree").textContent);
+    const brand = document.querySelector('[data-catalog-brand="true"]');
+    const rubro = document.querySelector('[data-catalog-rubro="true"]');
+    const subrubro = document.querySelector('[data-catalog-subrubro="true"]');
+    if (!brand || !rubro || !subrubro) return;
+
+    const rubroToBrand = {};
+    const subrubroToRubro = {};
+    tree.forEach(function (brandItem) {
+        brandItem.rubros.forEach(function (rubroItem) {
+            rubroToBrand[String(rubroItem.id)] = String(brandItem.id);
+            rubroItem.subrubros.forEach(function (subrubroId) {
+                subrubroToRubro[String(subrubroId)] = String(rubroItem.id);
+            });
+        });
+    });
+
+    function filterSelect(select, allowed) {
+        let valid = !select.value;
+        Array.from(select.options).forEach(function (option, index) {
+            if (index === 0) {
+                option.hidden = false;
+                option.disabled = false;
+                return;
+            }
+            const visible = allowed(option.value);
+            option.hidden = !visible;
+            option.disabled = !visible;
+            if (visible && option.value === select.value) valid = true;
+        });
+        if (!valid) select.value = "";
+    }
+
+    function syncRubros() {
+        filterSelect(rubro, function (value) { return brand.value && rubroToBrand[value] === brand.value; });
+        rubro.disabled = !brand.value;
+        syncSubrubros();
+    }
+    function syncSubrubros() {
+        filterSelect(subrubro, function (value) { return rubro.value && subrubroToRubro[value] === rubro.value; });
+        subrubro.disabled = !rubro.value;
+    }
+    brand.addEventListener("change", syncRubros);
+    rubro.addEventListener("change", syncSubrubros);
+    syncRubros();
+})();
+</script>
+{% endblock %}

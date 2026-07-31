@@ -1,0 +1,367 @@
+{% load l10n %}
+<div
+    class="brand-product-workspace"
+    id="brandProductWorkspace"
+    data-target-kind="{{ target_kind }}"
+    data-target-id="{% if subrubro %}{{ subrubro.id|unlocalize }}{% else %}{{ rubro.id|unlocalize }}{% endif %}"
+    data-search-url="{{ workspace_search_url }}"
+    data-bulk-add-url="{{ workspace_bulk_add_url }}"
+    data-bulk-remove-url="{{ workspace_bulk_remove_url }}"
+    data-reorder-url="{{ workspace_reorder_url }}"
+    data-sync-url="{{ workspace_sync_url }}"
+    data-undo-url-template="{{ workspace_undo_url_template }}"
+>
+    <form class="brand-workspace-token" aria-hidden="true">{% csrf_token %}</form>
+
+    <a href="{% url 'admin_brand_list' %}" class="brand-workspace-back">
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m15 18-6-6 6-6" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Volver a marcas
+    </a>
+
+    <header class="brand-workspace-hero">
+        <div class="brand-workspace-title">
+            <span class="brand-workspace-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none"><path d="M4 7.5 12 3l8 4.5v9L12 21l-8-4.5v-9Z" stroke="currentColor" stroke-width="1.7"/><path d="m4.5 7.5 7.5 4 7.5-4M12 11.5V21" stroke="currentColor" stroke-width="1.7"/></svg>
+            </span>
+            <div>
+                <span class="brand-workspace-eyebrow">Catalogación por marca</span>
+                <h2>
+                    {{ brand.name }}
+                    <span aria-hidden="true">/</span>
+                    {{ rubro.name }}
+                    {% if subrubro %}
+                    <span aria-hidden="true">/</span>
+                    {{ subrubro.name }}
+                    {% endif %}
+                </h2>
+                <p>Busca, compara y asigna productos en lote sin abandonar esta pantalla.</p>
+            </div>
+        </div>
+        <div class="brand-workspace-summary">
+            <span>
+                <strong id="assignedHeroCount">{{ order_rows|length }}</strong>
+                <small>asignados</small>
+            </span>
+            <span>
+                <strong id="availableHeroCount">—</strong>
+                <small>disponibles</small>
+            </span>
+            <button type="button" class="btn btn-primary brand-sync-open" id="openSyncPreview">
+                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M18.2 12A7 7 0 0 0 6.1 7.2L4 9m2 3a7 7 0 0 0 12.1 4.8L20 15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                Preparar sincronización
+            </button>
+        </div>
+    </header>
+
+    <section class="brand-workspace-grid">
+        <article class="brand-workspace-panel brand-available-panel">
+            <header class="brand-panel-head">
+                <div>
+                    <span class="brand-panel-kicker">Catálogo general</span>
+                    <h3>Productos disponibles</h3>
+                    <p>Selecciona productos individuales, la página actual o todos los resultados filtrados.</p>
+                </div>
+                <span class="brand-result-count" id="availableResultCount">Cargando</span>
+            </header>
+
+            <div class="brand-product-filters">
+                <label class="brand-search-field">
+                    <span>Buscar productos</span>
+                    <span class="brand-input-with-icon">
+                        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" stroke="currentColor" stroke-width="1.8"/><path d="m15.5 15.5 5 5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+                        <input type="search" id="brandProductSearch" class="form-input" placeholder="SKU, nombre o proveedor" autocomplete="off">
+                    </span>
+                </label>
+                <label>
+                    <span>Categoría</span>
+                    <select id="brandCategoryFilter" class="form-select">
+                        <option value="">Todas las categorías</option>
+                        {% for option in category_options %}
+                        <option value="{{ option.id|unlocalize }}">{{ option.label }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+                <label>
+                    <span>Proveedor</span>
+                    <select id="brandSupplierFilter" class="form-select">
+                        <option value="">Todos los proveedores</option>
+                        {% for supplier in suppliers %}
+                        <option value="{{ supplier }}">{{ supplier }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+                <label>
+                    <span>Estado</span>
+                    <select id="brandStatusFilter" class="form-select">
+                        <option value="all">Activos e inactivos</option>
+                        <option value="active" selected>Solo activos</option>
+                        <option value="inactive">Solo inactivos</option>
+                    </select>
+                </label>
+                <label>
+                    <span>Stock</span>
+                    <select id="brandStockFilter" class="form-select">
+                        <option value="all">Cualquier stock</option>
+                        <option value="available">Con existencia</option>
+                        <option value="empty">Sin existencia</option>
+                        <option value="tracked">Con control de stock</option>
+                    </select>
+                </label>
+                <label>
+                    <span>Asignación</span>
+                    <select id="brandAssignmentFilter" class="form-select">
+                        <option value="available" selected>No asignados aquí</option>
+                        <option value="unassigned">Sin ninguna marca</option>
+                        <option value="other">Asignados a otra marca</option>
+                        <option value="associated">Ya asignados aquí</option>
+                        <option value="all">Todos</option>
+                    </select>
+                </label>
+            </div>
+
+            <div class="brand-selection-tools">
+                <button type="button" class="brand-text-button" id="selectVisibleProducts">Seleccionar página</button>
+                <button type="button" class="brand-text-button" id="selectAllFilteredProducts">Seleccionar todos los resultados</button>
+                <button type="button" class="brand-text-button is-muted" id="clearAvailableSelection">Limpiar selección</button>
+            </div>
+
+            <div class="brand-products-results" id="brandProductsResults" aria-live="polite">
+                <div class="brand-loading-state">
+                    <span class="brand-spinner" aria-hidden="true"></span>
+                    Buscando productos
+                </div>
+            </div>
+
+            <div class="brand-results-footer">
+                <span id="brandResultsPageInfo"></span>
+                <button type="button" class="btn btn-outline" id="loadMoreBrandProducts" hidden>Cargar más</button>
+            </div>
+
+            <div class="brand-selection-dock" id="brandSelectionDock" hidden>
+                <div>
+                    <strong id="brandSelectionCount">0 seleccionados</strong>
+                    <span id="brandSelectionHint">La selección se conserva al cambiar filtros.</span>
+                </div>
+                <button type="button" class="btn btn-primary" id="openAssignModal">
+                    Agregar al destino
+                    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+            </div>
+        </article>
+
+        <aside class="brand-workspace-panel brand-assigned-panel">
+            <header class="brand-panel-head">
+                <div>
+                    <span class="brand-panel-kicker">Destino actual</span>
+                    <h3>Productos asignados</h3>
+                    <p>Ordena, busca o quita varios productos en una sola operación.</p>
+                </div>
+                <span class="brand-result-count">{{ order_rows|length }}</span>
+            </header>
+
+            <div class="brand-assigned-toolbar">
+                <span class="brand-input-with-icon">
+                    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" stroke="currentColor" stroke-width="1.8"/><path d="m15.5 15.5 5 5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+                    <input type="search" id="assignedProductSearch" class="form-input" placeholder="Buscar dentro del destino">
+                </span>
+                <button type="button" class="brand-text-button" id="selectAllAssigned">Seleccionar todos</button>
+            </div>
+
+            <div class="brand-assigned-list" id="brandAssignedList">
+                {% for row in order_rows %}
+                <article class="brand-assigned-row" draggable="true" data-product-id="{{ row.product.id|unlocalize }}" data-search="{{ row.product.sku|lower }} {{ row.product.name|lower }}">
+                    <label class="brand-check" title="Seleccionar {{ row.product.sku }}">
+                        <input type="checkbox" class="assigned-product-check" value="{{ row.product.id|unlocalize }}">
+                        <span aria-hidden="true"></span>
+                    </label>
+                    <div class="brand-assigned-media">
+                        {% if row.product.image %}
+                        <img src="{{ row.product.image.url }}" alt="">
+                        {% else %}
+                        <span aria-hidden="true">
+                            <svg viewBox="0 0 24 24" fill="none"><path d="M4 5h16v14H4V5Z" stroke="currentColor" stroke-width="1.5"/><path d="m7 16 3.5-4 2.5 3 2-2 2 3M9 9h.01" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                        </span>
+                        {% endif %}
+                    </div>
+                    <div class="brand-assigned-copy">
+                        <code>{{ row.product.sku }}</code>
+                        <strong>{{ row.product.name }}</strong>
+                        <small>
+                            {% if row.product.supplier_ref %}{{ row.product.supplier_ref.name }}{% elif row.product.supplier %}{{ row.product.supplier }}{% else %}Sin proveedor{% endif %}
+                        </small>
+                    </div>
+                    <label class="brand-position-field" title="Posición">
+                        <span>Pos.</span>
+                        <input type="number" class="brand-position-input" min="1" value="{{ forloop.counter }}">
+                    </label>
+                    <button type="button" class="brand-drag-handle" title="Arrastrar para ordenar" aria-label="Arrastrar {{ row.product.sku }}">
+                        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 7h.01M15 7h.01M9 12h.01M15 12h.01M9 17h.01M15 17h.01" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>
+                    </button>
+                </article>
+                {% empty %}
+                <div class="brand-empty-assigned" id="brandEmptyAssigned">
+                    <span aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none"><path d="M4 7.5 12 3l8 4.5v9L12 21l-8-4.5v-9Z" stroke="currentColor" stroke-width="1.6"/><path d="M8 12h8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+                    </span>
+                    <strong>Este destino todavía está vacío</strong>
+                    <p>Selecciona productos del catálogo o prepara una sincronización.</p>
+                </div>
+                {% endfor %}
+            </div>
+
+            {% if order_rows %}
+            <div class="brand-assigned-actions">
+                <span id="assignedSelectionCount">0 seleccionados</span>
+                <button type="button" class="btn btn-danger-outline" id="openRemoveModal" disabled>Quitar seleccionados</button>
+                <button type="button" class="btn btn-outline" id="saveAssignedOrder" disabled>Guardar orden</button>
+            </div>
+            {% endif %}
+
+            <section class="brand-recent-batches">
+                <header>
+                    <div>
+                        <span class="brand-panel-kicker">Historial reversible</span>
+                        <h4>Últimos cambios</h4>
+                    </div>
+                    <a href="{% url 'admin_brand_catalog_inbox' %}">Ver auditoría</a>
+                </header>
+                <div class="brand-batch-list">
+                    {% for batch in recent_batches %}
+                    <article class="brand-batch-row" data-batch-id="{{ batch.id|unlocalize }}">
+                        <div>
+                            <strong>Lote #{{ batch.id }} · {{ batch.get_operation_display }}</strong>
+                            <span>{{ batch.product_ids|length }} productos · {{ batch.created_at|date:"d/m H:i" }}</span>
+                            <small>{{ batch.observation|truncatechars:72 }}</small>
+                        </div>
+                        {% if batch.can_undo %}
+                        <button type="button" class="brand-undo-batch" data-batch-id="{{ batch.id|unlocalize }}">Deshacer</button>
+                        {% else %}
+                        <span class="brand-batch-undone">Deshecho</span>
+                        {% endif %}
+                    </article>
+                    {% empty %}
+                    <p class="brand-batch-empty">Todavía no hay cambios registrados para este destino.</p>
+                    {% endfor %}
+                </div>
+            </section>
+        </aside>
+    </section>
+
+    <dialog class="brand-workspace-dialog" id="brandAssignDialog">
+        <form method="dialog" class="brand-dialog-card" id="brandAssignForm">
+            <header>
+                <span class="brand-dialog-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none"><path d="M5 12h14m-5-5 5 5-5 5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </span>
+                <div>
+                    <span>Asignación masiva</span>
+                    <h3>Agregar productos al destino</h3>
+                </div>
+                <button type="button" class="brand-dialog-close" data-close-dialog aria-label="Cerrar">×</button>
+            </header>
+            <div class="brand-dialog-body">
+                <p id="brandAssignSummary"></p>
+                <label>
+                    <span>Tratamiento de productos con otra marca</span>
+                    <select class="form-select" id="brandAssignMode">
+                        <option value="add">Agregar también y conservar asociaciones actuales</option>
+                        <option value="move">Mover y retirar asociaciones con otras marcas</option>
+                    </select>
+                </label>
+                <label>
+                    <span>Observación obligatoria</span>
+                    <textarea class="form-input" id="brandAssignObservation" rows="3" maxlength="500" required placeholder="Ej. Revisión manual de productos Chevrolet para el rubro Bujes"></textarea>
+                </label>
+                <div class="brand-dialog-note">
+                    Los duplicados se omiten automáticamente. La operación quedará registrada y podrá deshacerse.
+                </div>
+            </div>
+            <footer>
+                <button type="button" class="btn btn-outline" data-close-dialog>Cancelar</button>
+                <button type="submit" class="btn btn-primary" id="confirmBrandAssignment">Confirmar asignación</button>
+            </footer>
+        </form>
+    </dialog>
+
+    <dialog class="brand-workspace-dialog brand-sync-dialog" id="brandSyncDialog">
+        <form method="dialog" class="brand-dialog-card" id="brandSyncForm">
+            <header>
+                <span class="brand-dialog-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none"><path d="M20 7v5h-5M4 17v-5h5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M18.2 12A7 7 0 0 0 6.1 7.2L4 9m2 3a7 7 0 0 0 12.1 4.8L20 15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </span>
+                <div>
+                    <span>Vista previa segura</span>
+                    <h3>Sincronización automática</h3>
+                </div>
+                <button type="button" class="brand-dialog-close" data-close-dialog aria-label="Cerrar">×</button>
+            </header>
+            <div class="brand-dialog-body">
+                <div class="brand-sync-loading" id="brandSyncLoading">
+                    <span class="brand-spinner" aria-hidden="true"></span>
+                    Analizando categorías, alias y reglas
+                </div>
+                <div id="brandSyncPreview" hidden>
+                    <div class="brand-sync-metrics">
+                        <span><strong id="syncCandidateCount">0</strong><small>coincidencias</small></span>
+                        <span><strong id="syncNewCount">0</strong><small>nuevos</small></span>
+                        <span><strong id="syncExistingCount">0</strong><small>ya asignados</small></span>
+                        <span><strong id="syncConflictCount">0</strong><small>con otra marca</small></span>
+                    </div>
+                    <div class="brand-sync-products" id="brandSyncProducts"></div>
+                    <label>
+                        <span>Tratamiento de conflictos</span>
+                        <select class="form-select" id="brandSyncMode">
+                            <option value="add">Agregar también</option>
+                            <option value="move">Mover desde otras marcas</option>
+                        </select>
+                    </label>
+                    <label>
+                        <span>Observación obligatoria</span>
+                        <textarea class="form-input" id="brandSyncObservation" rows="3" maxlength="500" required placeholder="Ej. Sincronización revisada según categorías ayudantes"></textarea>
+                    </label>
+                </div>
+                <div class="brand-dialog-error" id="brandSyncError" hidden></div>
+            </div>
+            <footer>
+                <button type="button" class="btn btn-outline" data-close-dialog>Cancelar</button>
+                <button type="submit" class="btn btn-primary" id="confirmBrandSync" disabled>Confirmar sincronización</button>
+            </footer>
+        </form>
+    </dialog>
+
+    <dialog class="brand-workspace-dialog" id="brandRemoveDialog">
+        <form method="dialog" class="brand-dialog-card" id="brandRemoveForm">
+            <header>
+                <span class="brand-dialog-icon is-danger" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none"><path d="M5 7h14M9 7V4h6v3m-8 0 1 13h8l1-13M10 11v5M14 11v5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </span>
+                <div>
+                    <span>Cambio reversible</span>
+                    <h3>Quitar productos del destino</h3>
+                </div>
+                <button type="button" class="brand-dialog-close" data-close-dialog aria-label="Cerrar">×</button>
+            </header>
+            <div class="brand-dialog-body">
+                <p id="brandRemoveSummary"></p>
+                <label>
+                    <span>Observación obligatoria</span>
+                    <textarea class="form-input" id="brandRemoveObservation" rows="3" maxlength="500" required placeholder="Explica por qué se retiran estos productos"></textarea>
+                </label>
+                <div class="brand-dialog-note">La baja se registrará como lote y podrá restaurarse desde “Últimos cambios”.</div>
+            </div>
+            <footer>
+                <button type="button" class="btn btn-outline" data-close-dialog>Cancelar</button>
+                <button type="submit" class="btn btn-danger" id="confirmBrandRemoval">Quitar productos</button>
+            </footer>
+        </form>
+    </dialog>
+
+    <div class="brand-workspace-toast" id="brandWorkspaceToast" role="status" aria-live="polite" hidden>
+        <span class="brand-toast-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none"><path d="m5 12 4 4L19 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </span>
+        <span id="brandWorkspaceToastText"></span>
+        <button type="button" id="brandToastUndo" hidden>Deshacer</button>
+        <button type="button" id="brandToastClose" aria-label="Cerrar">×</button>
+    </div>
+</div>

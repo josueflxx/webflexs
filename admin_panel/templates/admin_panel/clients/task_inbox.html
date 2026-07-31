@@ -1,0 +1,150 @@
+{% extends 'admin_panel/base.html' %}
+
+{% block page_title %}Tareas comerciales{% endblock %}
+
+{% block content %}
+{% include 'admin_panel/clients/_module_panel.html' with client_panel='tasks' client_module_subtitle='Agenda comercial por empresa para no perder seguimientos, vencimientos ni compromisos con clientes.' %}
+
+<style>
+    .task-inbox-shell { max-width: 1480px; margin: 0 auto; }
+    .task-inbox-kpis {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 10px;
+        margin: 16px 0;
+    }
+    .task-inbox-kpi {
+        padding: 16px 18px;
+        border-radius: 14px;
+        border: 1px solid rgba(148, 163, 184, .17);
+        background: rgba(11, 17, 27, .86);
+    }
+    .task-inbox-kpi span { color: #929eae; font-size: .76rem; }
+    .task-inbox-kpi strong { display: block; margin-top: 5px; font-size: 1.35rem; }
+    .task-inbox-kpi.is-alert { border-color: rgba(255, 100, 48, .44); }
+    .task-inbox-panel {
+        border-radius: 17px;
+        border: 1px solid rgba(148, 163, 184, .18);
+        background: rgba(13, 19, 29, .93);
+        overflow: hidden;
+    }
+    .task-inbox-toolbar {
+        display: grid;
+        grid-template-columns: minmax(230px, 1.4fr) repeat(3, minmax(145px, .5fr)) auto;
+        gap: 9px;
+        padding: 17px;
+        border-bottom: 1px solid rgba(148, 163, 184, .14);
+    }
+    .task-inbox-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1.5fr) minmax(180px, .55fr) minmax(155px, .5fr) auto;
+        align-items: center;
+        gap: 16px;
+        padding: 17px 19px;
+        border-bottom: 1px solid rgba(148, 163, 184, .12);
+    }
+    .task-inbox-row:last-child { border-bottom: 0; }
+    .task-inbox-row.is-overdue { box-shadow: inset 3px 0 #ff6430; }
+    .task-inbox-main h3 { margin: 0; font-size: .94rem; }
+    .task-inbox-main p { margin: 6px 0 0; color: #96a2b1; font-size: .78rem; line-height: 1.42; }
+    .task-inbox-meta { color: #9aa6b5; font-size: .77rem; }
+    .task-inbox-meta strong { display: block; color: #d5dce6; margin-top: 3px; }
+    .task-inbox-badges { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+    .task-inbox-badge {
+        display: inline-flex;
+        padding: 4px 8px;
+        border-radius: 999px;
+        border: 1px solid rgba(148, 163, 184, .22);
+        color: #cbd5e1;
+        font-size: .65rem;
+        font-weight: 800;
+        text-transform: uppercase;
+    }
+    .task-inbox-badge.is-alert { color: #ff9b78; border-color: rgba(255,100,48,.44); }
+    .task-inbox-badge.is-done { color: #67d697; border-color: rgba(38,190,110,.4); }
+    .task-inbox-empty { padding: 60px 24px; text-align: center; color: #929eae; }
+    @media (max-width: 1050px) {
+        .task-inbox-toolbar { grid-template-columns: 1fr 1fr; }
+        .task-inbox-row { grid-template-columns: 1fr 1fr; }
+    }
+    @media (max-width: 680px) {
+        .task-inbox-kpis { grid-template-columns: 1fr 1fr; }
+        .task-inbox-toolbar,
+        .task-inbox-row { grid-template-columns: 1fr; }
+    }
+</style>
+
+<div class="task-inbox-shell">
+    <div class="task-inbox-kpis">
+        <div class="task-inbox-kpi"><span>Pendientes</span><strong>{{ task_counts.pending }}</strong></div>
+        <div class="task-inbox-kpi is-alert"><span>Vencidas</span><strong>{{ task_counts.overdue }}</strong></div>
+        <div class="task-inbox-kpi"><span>Para hoy</span><strong>{{ task_counts.today }}</strong></div>
+        <div class="task-inbox-kpi"><span>Completadas</span><strong>{{ task_counts.completed }}</strong></div>
+    </div>
+
+    <section class="task-inbox-panel">
+        <form method="get" class="task-inbox-toolbar">
+            <input type="hidden" name="company_id" value="{{ active_company.pk }}">
+            <input type="search" name="q" value="{{ search }}" class="form-input" placeholder="Buscar tarea, cliente o responsable...">
+            <select name="scope" class="form-select">
+                <option value="mine" {% if scope == 'mine' %}selected{% endif %}>Mis tareas</option>
+                <option value="all" {% if scope == 'all' %}selected{% endif %}>Todo el equipo</option>
+            </select>
+            <select name="status" class="form-select">
+                <option value="all" {% if status == 'all' %}selected{% endif %}>Todos los estados</option>
+                {% for value, label in status_choices %}
+                <option value="{{ value }}" {% if status == value %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+            <select name="due" class="form-select">
+                <option value="all" {% if due_filter == 'all' %}selected{% endif %}>Cualquier fecha</option>
+                <option value="overdue" {% if due_filter == 'overdue' %}selected{% endif %}>Vencidas</option>
+                <option value="today" {% if due_filter == 'today' %}selected{% endif %}>Para hoy</option>
+                <option value="upcoming" {% if due_filter == 'upcoming' %}selected{% endif %}>Proximas</option>
+            </select>
+            <button type="submit" class="btn btn-primary">Filtrar</button>
+        </form>
+
+        {% for task in page_obj %}
+        <article class="task-inbox-row {% if task.is_overdue %}is-overdue{% endif %}">
+            <div class="task-inbox-main">
+                <h3>{{ task.title }}</h3>
+                <p>{{ task.client_profile.company_name }}{% if task.note %} · {{ task.note|truncatechars:130 }}{% endif %}</p>
+                <div class="task-inbox-badges">
+                    <span class="task-inbox-badge {% if task.priority == 'urgent' %}is-alert{% endif %}">{{ task.get_priority_display }}</span>
+                    <span class="task-inbox-badge {% if task.status == 'completed' %}is-done{% endif %}">{{ task.get_status_display }}</span>
+                    {% if task.is_overdue %}<span class="task-inbox-badge is-alert">Vencida</span>{% endif %}
+                </div>
+            </div>
+            <div class="task-inbox-meta">
+                Responsable
+                <strong>{{ task.assigned_to.get_full_name|default:task.assigned_to.username }}</strong>
+            </div>
+            <div class="task-inbox-meta">
+                Fecha
+                <strong>{{ task.due_at|date:"d/m/Y H:i" }}</strong>
+            </div>
+            <a href="{% url 'admin_client_tasks' task.client_profile.pk %}?company_id={{ active_company.pk }}&scope=all&status=all" class="btn btn-outline btn-sm">
+                Abrir seguimiento
+            </a>
+        </article>
+        {% empty %}
+        <div class="task-inbox-empty">No hay recordatorios para estos filtros.</div>
+        {% endfor %}
+
+        {% if page_obj.paginator.num_pages > 1 %}
+        <div class="pagination-container" style="padding:16px 20px;">
+            <div class="pagination-info">Pagina {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</div>
+            <div class="pagination-controls">
+                {% if page_obj.has_previous %}
+                <a href="?company_id={{ active_company.pk }}&scope={{ scope }}&status={{ status }}&due={{ due_filter }}&q={{ search|urlencode }}&page={{ page_obj.previous_page_number }}" class="btn btn-outline btn-sm">Anterior</a>
+                {% endif %}
+                {% if page_obj.has_next %}
+                <a href="?company_id={{ active_company.pk }}&scope={{ scope }}&status={{ status }}&due={{ due_filter }}&q={{ search|urlencode }}&page={{ page_obj.next_page_number }}" class="btn btn-outline btn-sm">Siguiente</a>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+    </section>
+</div>
+{% endblock %}

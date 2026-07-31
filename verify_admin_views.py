@@ -1,6 +1,7 @@
 
 import os
 import django
+import secrets
 
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "flexs_project.settings.local")
 django.setup()
@@ -14,7 +15,7 @@ def run_test():
     print("--- Verifying Admin Attribute Views ---")
     
     # 1. Setup Admin User
-    password = 'password123'
+    password = secrets.token_urlsafe(24)
     username = 'admin_tester'
     if not User.objects.filter(username=username).exists():
         user = User.objects.create_superuser(username, 'admin@test.com', password)

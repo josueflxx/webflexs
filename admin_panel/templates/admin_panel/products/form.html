@@ -5,7 +5,12 @@
 
 {% block content %}
 <div class="admin-form-container">
-    <h2>{{ action }} Producto</h2>
+    <div class="admin-toolbar">
+        <h2 style="margin:0;">{{ action }} Producto</h2>
+        {% if product %}
+        <a href="{% url 'admin_product_workspace' product.pk %}" class="btn btn-outline">Ver centro comercial</a>
+        {% endif %}
+    </div>
 
     {% if product.import_duplicate_alert %}
     <div class="alert alert-warning product-duplicate-alert">
@@ -136,18 +141,117 @@
 
         <div class="form-group">
             <label for="stock" class="form-label">Stock</label>
+            {% if warehouse_stock_enabled and warehouse_balances %}
+            <input type="hidden" name="stock" value="{{ product.stock }}">
+            {% endif %}
             <input type="number" 
-                   name="stock" 
+                   {% if not warehouse_stock_enabled or not warehouse_balances %}name="stock"{% endif %}
                    id="stock" 
                    class="form-input" 
                    value="{{ product.stock|default:'0' }}" 
-                   {% if not user.is_superuser %}disabled{% endif %}>
+                   {% if not user.is_superuser or warehouse_stock_enabled and warehouse_balances %}disabled{% endif %}>
             <label class="form-label" style="margin-top: 8px;">
                 <input type="checkbox" name="tracks_stock" {% if product.tracks_stock %}checked{% endif %} {% if not user.is_superuser %}disabled{% endif %}>
                 Controlar stock para este producto
             </label>
+            <label class="form-label" style="margin-top: 8px;">
+                <input type="checkbox" name="allow_negative_stock" {% if product.allow_negative_stock %}checked{% endif %} {% if not user.is_superuser %}disabled{% endif %}>
+                Permitir operaciones con stock negativo
+            </label>
             <small class="text-muted">Si esta activo, se descuenta o repone solamente cuando la factura o nota de credito obtiene CAE.</small>
+            {% if warehouse_stock_enabled and warehouse_balances %}
+            <small class="text-muted">El stock global está protegido porque este producto ya se administra por depósito.</small>
+            {% endif %}
         </div>
+
+        <div class="form-group">
+            <input type="hidden" name="is_sellable" value="off">
+            <label class="form-label">
+                <input type="checkbox" name="is_sellable" value="on" {% if not product or product.is_sellable %}checked{% endif %} {% if not user.is_superuser %}disabled{% endif %}>
+                Disponible para venta
+            </label>
+            <input type="hidden" name="is_purchasable" value="off">
+            <label class="form-label" style="margin-top: 8px;">
+                <input type="checkbox" name="is_purchasable" value="on" {% if not product or product.is_purchasable %}checked{% endif %} {% if not user.is_superuser %}disabled{% endif %}>
+                Disponible para compra
+            </label>
+            <small class="text-muted">Estas opciones separan el estado comercial del estado general del producto.</small>
+        </div>
+
+        {% if product and warehouse_balances %}
+        <div class="form-group" style="grid-column:1 / -1;">
+            <div class="admin-table-container" style="margin:0;">
+                <div class="admin-toolbar">
+                    <div>
+                        <strong>Stock por depósito</strong>
+                        <div class="text-muted" style="margin-top:4px;">
+                            Saldos inicializados. El disponible resulta de actual menos reservado.
+                        </div>
+                    </div>
+                </div>
+                <div style="overflow-x:auto;">
+                    <table class="admin-table">
+                        <thead>
+                            <tr>
+                                <th>Empresa</th>
+                                <th>Depósito</th>
+                                <th>Actual</th>
+                                <th>Reservado</th>
+                                <th>Disponible</th>
+                                <th>Mínimo</th>
+                                <th>Ideal</th>
+                                <th>Estado</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for balance in warehouse_balances %}
+                            <tr>
+                                <td>{{ balance.warehouse.company.name }}</td>
+                                <td><strong>{{ balance.warehouse.name }}</strong></td>
+                                <td>{{ balance.on_hand|floatformat:3 }}</td>
+                                <td>{{ balance.reserved|floatformat:3 }}</td>
+                                <td>{{ balance.available|floatformat:3 }}</td>
+                                <td>
+                                    <input
+                                        type="number"
+                                        step="0.001"
+                                        min="0"
+                                        name="warehouse_minimum_{{ balance.pk }}"
+                                        class="form-input"
+                                        value="{{ balance.minimum|unlocalize }}"
+                                        style="min-width:110px;"
+                                        {% if not user.is_superuser %}disabled{% endif %}>
+                                </td>
+                                <td>
+                                    <input
+                                        type="number"
+                                        step="0.001"
+                                        min="0"
+                                        name="warehouse_ideal_{{ balance.pk }}"
+                                        class="form-input"
+                                        value="{{ balance.ideal|unlocalize }}"
+                                        style="min-width:110px;"
+                                        {% if not user.is_superuser %}disabled{% endif %}>
+                                </td>
+                                <td>
+                                    {% if not balance.initialized_at %}
+                                    <span class="badge badge-warning">Pendiente</span>
+                                    {% elif balance.is_below_minimum %}
+                                    <span class="badge badge-danger">Debajo del mínimo</span>
+                                    {% elif balance.warehouse.stock_balance_enabled %}
+                                    <span class="badge badge-success">Activo</span>
+                                    {% else %}
+                                    <span class="badge badge-secondary">Inicializado</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        {% endif %}
 
         <div class="form-group">
             <label for="category" class="form-label">Categoria principal (atributos/filtros)</label>

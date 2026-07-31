@@ -98,6 +98,7 @@ from core.models import (
     AdminCompanyAccess,
     Company,
     DocumentSeries,
+    FISCAL_AUTHORIZED_STATUSES,
     FISCAL_BILLABLE_DOC_TYPES,
     FISCAL_DOC_TYPE_FA,
     FISCAL_DOC_TYPE_FB,
@@ -107,11 +108,15 @@ from core.models import (
     FISCAL_ISSUE_MODE_EXTERNAL_SAAS,
     FISCAL_ISSUE_MODE_MANUAL,
     FISCAL_STATUS_AUTHORIZED,
+    FISCAL_STATUS_DRAFT,
     FISCAL_STATUS_EXTERNAL_RECORDED,
+    FISCAL_STATUS_RECOVERED_NOT_FOUND,
+    FISCAL_STATUS_RECOVERY_PENDING,
     FISCAL_STATUS_PENDING_RETRY,
     FISCAL_STATUS_READY_TO_ISSUE,
     FISCAL_STATUS_REJECTED,
     FISCAL_STATUS_SUBMITTING,
+    FISCAL_STATUS_UNCERTAIN,
     FISCAL_STATUS_VOIDED,
     FiscalDocument,
     FiscalPointOfSale,
@@ -203,6 +208,7 @@ from core.services.fiscal_documents import (
     register_external_fiscal_document_for_order,
     void_fiscal_document,
 )
+from core.services.fiscal_integrity import fiscal_payload_hash
 
 from core.services.documents import (
     ensure_document_for_adjustment,
@@ -291,6 +297,11 @@ from .helpers import *
 
 
 def _get_fiscal_snapshot(document):
+    frozen = getattr(document, "fiscal_snapshot", None)
+    if isinstance(frozen, dict) and frozen:
+        return frozen
+    # Read-only legacy compatibility. Legacy records are watermarked as
+    # unverified by the print view and are never treated as valid snapshots.
     payload = getattr(document, "request_payload", None)
     if not isinstance(payload, dict):
         return {}
@@ -638,18 +649,87 @@ def fiscal_document_emit(request, pk):
     try:
         from core.tasks import emit_fiscal_document_async_task
 
-        # We pre-validate to fail fast before queueing if something is obviously wrong
         from core.services.fiscal_emission import _validate_before_submit
-        _validate_before_submit(fiscal_document)
+        with transaction.atomic():
+            locked = (
+                FiscalDocument.objects.select_for_update(of=("self",))
+                .select_related("company", "point_of_sale", "related_document")
+                .prefetch_related("items")
+                .get(pk=fiscal_document.pk)
+            )
+            _validate_before_submit(locked)
+            duplicate_window = timezone.now() - timedelta(minutes=5)
+            if (
+                locked.dispatch_requested_at
+                and locked.dispatch_requested_at >= duplicate_window
+            ):
+                messages.info(
+                    request,
+                    "La misma operacion fiscal ya fue encolada; se conserva su clave idempotente.",
+                )
+                return redirect("admin_fiscal_document_detail", pk=locked.pk)
+            locked.dispatch_requested_at = timezone.now()
+            locked.save(update_fields=["dispatch_requested_at", "updated_at"])
+            transaction.on_commit(
+                lambda: emit_fiscal_document_async_task.delay(
+                    document_id=locked.pk,
+                    actor_id=request.user.pk,
+                )
+            )
 
-        emit_fiscal_document_async_task.delay(document_id=fiscal_document.pk, actor_id=request.user.pk)
-
-        messages.info(request, "Comprobante encolado para emision fiscal en AFIP. Esto puede demorar unos segundos.")
+        messages.info(
+            request,
+            "Operacion encolada una sola vez para autorizacion ARCA.",
+        )
     except ValidationError as exc:
         messages.error(request, "; ".join(exc.messages))
     except Exception as exc:
         messages.error(request, f"Error al encolar emision: {str(exc)}")
 
+    return redirect("admin_fiscal_document_detail", pk=fiscal_document.pk)
+
+
+@staff_member_required
+@require_POST
+def fiscal_document_recover(request, pk):
+    """Queue FECompConsultar only; this endpoint can never authorize again."""
+    active_company = get_active_company(request)
+    if not active_company:
+        messages.error(request, "Selecciona una empresa activa para operar.")
+        return redirect("select_company")
+    fiscal_document = get_object_or_404(FiscalDocument, pk=pk)
+    if fiscal_document.company_id != active_company.id:
+        messages.error(request, "No podes consultar comprobantes de otra empresa.")
+        return redirect("admin_fiscal_document_list")
+    denied_response = _deny_fiscal_operation_if_needed(
+        request,
+        redirect_url=reverse("admin_fiscal_document_detail", args=[fiscal_document.pk]),
+        action_label="consultar recuperaciones fiscales",
+    )
+    if denied_response:
+        return denied_response
+    if fiscal_document.status not in {
+        FISCAL_STATUS_SUBMITTING,
+        FISCAL_STATUS_UNCERTAIN,
+        FISCAL_STATUS_RECOVERY_PENDING,
+        FISCAL_STATUS_RECOVERED_NOT_FOUND,
+    }:
+        messages.error(
+            request,
+            "El comprobante no tiene un resultado incierto consultable.",
+        )
+        return redirect("admin_fiscal_document_detail", pk=fiscal_document.pk)
+
+    from core.tasks import recover_fiscal_document_async_task
+
+    recover_fiscal_document_async_task.delay(
+        document_id=fiscal_document.pk,
+        actor_id=request.user.pk,
+    )
+    messages.info(
+        request,
+        "Consulta FECompConsultar encolada; no se reenviara la autorizacion.",
+    )
     return redirect("admin_fiscal_document_detail", pk=fiscal_document.pk)
 
 
@@ -790,6 +870,10 @@ def fiscal_document_delete(request, pk):
         return denied_response
 
     blockers = _get_fiscal_document_delete_blockers(fiscal_document)
+    if fiscal_document.status != FISCAL_STATUS_DRAFT:
+        blockers.append(
+            "Sólo un borrador sin evidencia fiscal puede eliminarse fisicamente."
+        )
     if blockers:
         messages.error(request, "No se puede eliminar el comprobante fiscal: " + " ".join(blockers))
         return redirect("admin_fiscal_document_detail", pk=fiscal_document.pk)
@@ -907,14 +991,7 @@ def fiscal_document_print(request, pk):
         return redirect("select_company")
 
     fiscal_document = get_object_or_404(
-        FiscalDocument.objects.select_related(
-            "company",
-            "point_of_sale",
-            "client_company_ref__client_profile",
-            "client_profile",
-            "order",
-            "sales_document_type",
-        ).prefetch_related("items__product"),
+        FiscalDocument.objects.select_related("sales_document_type").prefetch_related("items"),
         pk=pk,
     )
     if fiscal_document.company_id != active_company.id:
@@ -932,123 +1009,159 @@ def fiscal_document_print(request, pk):
     if copy_type not in {"original", "duplicado", "triplicado"}:
         copy_type = "original"
 
-    site_settings = SiteSettings.get_settings()
-    client_profile = fiscal_document.client_profile
-    if not client_profile and getattr(fiscal_document, "client_company_ref", None):
-        client_profile = fiscal_document.client_company_ref.client_profile
     snapshot = _get_fiscal_snapshot(fiscal_document)
     emitter_snapshot = snapshot.get("emitter", {}) if isinstance(snapshot, dict) else {}
     client_snapshot = snapshot.get("client", {}) if isinstance(snapshot, dict) else {}
+    operation_snapshot = snapshot.get("operation", {}) if isinstance(snapshot, dict) else {}
+    totals_snapshot = snapshot.get("totals", {}) if isinstance(snapshot, dict) else {}
+    emitter_snapshot = emitter_snapshot if isinstance(emitter_snapshot, dict) else {}
+    client_snapshot = client_snapshot if isinstance(client_snapshot, dict) else {}
+    operation_snapshot = operation_snapshot if isinstance(operation_snapshot, dict) else {}
+    totals_snapshot = totals_snapshot if isinstance(totals_snapshot, dict) else {}
 
-    company = fiscal_document.company
-    order = fiscal_document.order
-    company_meta = FISCAL_PRINT_DOC_META.get(fiscal_document.doc_type, {"letter": "-", "code": "---"})
-    copy_label = FISCAL_PRINT_COPY_LABELS.get(copy_type, "ORIGINAL")
-    sale_condition_label = "-"
-    operator_label = "-"
-    observations = []
+    snapshot_verified = bool(
+        fiscal_document.fiscal_snapshot
+        and fiscal_document.snapshot_hash
+        and fiscal_payload_hash(fiscal_document.fiscal_snapshot)
+        == fiscal_document.snapshot_hash
+    )
+    authorization_data_complete = bool(
+        fiscal_document.number is not None
+        and fiscal_document.issued_at
+        and fiscal_document.cae
+        and fiscal_document.cae_due_date
+    )
+    legally_authorized = bool(
+        snapshot_verified
+        and fiscal_document.status in FISCAL_AUTHORIZED_STATUSES
+        and authorization_data_complete
+    )
 
-    if order:
-        if order.notes:
-            observations.append(order.notes)
-        if order.admin_notes:
-            observations.append(order.admin_notes)
-        if getattr(order, "assigned_to", None):
-            operator_label = order.assigned_to.get_full_name() or order.assigned_to.username
+    frozen_environment = str(
+        fiscal_document.environment_snapshot
+        or emitter_snapshot.get("environment")
+        or ""
+    ).strip()
+    is_homologation = frozen_environment == FiscalPointOfSale.ENV_HOMOLOGATION
+    watermark_parts = []
+    if is_homologation:
+        watermark_parts.append("HOMOLOGACIÓN – SIN VALIDEZ FISCAL")
+    if not snapshot_verified:
+        watermark_parts.append("SNAPSHOT NO VERIFICADO")
+    if fiscal_document.status == FISCAL_STATUS_REJECTED:
+        watermark_parts.append("COMPROBANTE RECHAZADO")
+    elif fiscal_document.status not in FISCAL_AUTHORIZED_STATUSES:
+        watermark_parts.append("COMPROBANTE NO AUTORIZADO")
+    elif not authorization_data_complete:
+        watermark_parts.append("AUTORIZACIÓN INCOMPLETA")
+    legal_watermark = " · ".join(watermark_parts)
 
-    client_company_link = getattr(fiscal_document, "client_company_ref", None)
-    effective_category = None
-    if client_company_link and getattr(client_company_link, "client_category_id", None):
-        effective_category = client_company_link.client_category
-    elif client_profile:
+    def _decimal_snapshot_value(key, fallback):
         try:
-            effective_category = client_profile.get_effective_client_category(company=company)
-        except Exception:
-            effective_category = None
-    if effective_category and getattr(effective_category, "default_sale_condition", None):
-        sale_condition_label = dict(ClientCategory.SALE_CONDITION_CHOICES).get(
-            effective_category.default_sale_condition,
-            effective_category.default_sale_condition,
-        )
-    elif getattr(order, "billing_mode", "") == "official":
-        sale_condition_label = "Cuenta corriente"
+            return Decimal(str(totals_snapshot.get(key, fallback)))
+        except (ArithmeticError, TypeError, ValueError):
+            return Decimal(str(fallback or 0))
 
-    company_legal_name = (
-        str(emitter_snapshot.get("legal_name", "") or "").strip()
-        or company.legal_name
-        or company.name
+    subtotal_before_discount = _decimal_snapshot_value(
+        "subtotal_net",
+        fiscal_document.subtotal_net,
     )
-    emitter_cuit = (
-        str(emitter_snapshot.get("cuit", "") or "").strip()
-        or str(company.cuit or "").strip()
+    discount_total = _decimal_snapshot_value(
+        "discount_total",
+        fiscal_document.discount_total,
     )
-    emitter_tax_condition_label = str(emitter_snapshot.get("tax_condition_label", "") or "").strip()
-    if not emitter_tax_condition_label and company.tax_condition:
-        try:
-            emitter_tax_condition_label = company.get_tax_condition_display()
-        except Exception:
-            emitter_tax_condition_label = str(company.tax_condition or "")
-    point_of_sale_display = (
-        str(emitter_snapshot.get("point_of_sale", "") or "").strip()
-        or str(getattr(fiscal_document.point_of_sale, "number", "") or "").strip()
-    )
-
-    company_address_bits = [
-        str(emitter_snapshot.get("fiscal_address", "") or "").strip() or company.fiscal_address,
-        str(emitter_snapshot.get("fiscal_city", "") or "").strip() or company.fiscal_city,
-        str(emitter_snapshot.get("fiscal_province", "") or "").strip() or company.fiscal_province,
-        str(emitter_snapshot.get("postal_code", "") or "").strip() or company.postal_code,
-    ]
-
-    client_name_display = (
-        str(client_snapshot.get("name", "") or "").strip()
-        or (client_profile.company_name if client_profile else "")
-    )
-    client_document_label = str(client_snapshot.get("document_type_label", "") or "").strip()
-    if not client_document_label:
-        client_document_label = (
-            client_profile.get_document_type_display() if client_profile and client_profile.document_type else "CUIT/DNI"
-        ) if client_profile else "CUIT/DNI"
-    client_document_value = (
-        str(client_snapshot.get("document_number", "") or "").strip()
-        or ((client_profile.document_number or client_profile.cuit_dni) if client_profile else "")
-    )
-    client_tax_condition_display = str(client_snapshot.get("tax_condition_label", "") or "").strip()
-    if not client_tax_condition_display and client_profile and client_profile.iva_condition:
-        try:
-            client_tax_condition_display = client_profile.get_iva_condition_display()
-        except Exception:
-            client_tax_condition_display = str(client_profile.iva_condition or "")
-    client_address_bits = [
-        str(client_snapshot.get("fiscal_address", "") or "").strip()
-        or ((client_profile.fiscal_address or client_profile.address) if client_profile else ""),
-        str(client_snapshot.get("fiscal_city", "") or "").strip()
-        or ((client_profile.fiscal_city or client_profile.province) if client_profile else ""),
-        str(client_snapshot.get("fiscal_province", "") or "").strip()
-        or (client_profile.fiscal_province if client_profile else ""),
-        str(client_snapshot.get("postal_code", "") or "").strip()
-        or (client_profile.postal_code if client_profile else ""),
-    ]
-
-    subtotal_before_discount = Decimal(fiscal_document.subtotal_net or 0)
-    discount_total = Decimal(fiscal_document.discount_total or 0)
+    tax_total = _decimal_snapshot_value("tax_total", fiscal_document.tax_total)
+    document_total = _decimal_snapshot_value("total", fiscal_document.total)
     taxable_net = subtotal_before_discount - discount_total
     if taxable_net < 0:
         taxable_net = Decimal("0.00")
 
-    order_total_discount_percentage = Decimal("0.00")
-    if order and getattr(order, "discount_percentage", None):
-        order_total_discount_percentage = Decimal(order.discount_percentage or 0)
+    frozen_point = (
+        str(emitter_snapshot.get("point_of_sale", "") or "").strip()
+        or str(fiscal_document.point_of_sale_number_snapshot or "").strip()
+    )
+    company_meta = FISCAL_PRINT_DOC_META.get(fiscal_document.doc_type, {"letter": "-", "code": "---"})
+    copy_label = FISCAL_PRINT_COPY_LABELS.get(copy_type, "ORIGINAL")
+    if fiscal_document.number is None:
+        document_number_display = fiscal_document.external_number or "-"
+    elif frozen_point:
+        document_number_display = (
+            f"{frozen_point.zfill(5)}-{str(fiscal_document.number).zfill(8)}"
+        )
+    else:
+        document_number_display = str(fiscal_document.number).zfill(8)
+
+    sale_condition_label = (
+        "Cuenta corriente"
+        if str(operation_snapshot.get("billing_mode", "") or "") == "official"
+        else "-"
+    )
+    operator_label = str(operation_snapshot.get("operator_name", "") or "").strip() or "-"
+    observations = [
+        str(operation_snapshot.get("notes", "") or "").strip(),
+        str(operation_snapshot.get("admin_notes", "") or "").strip(),
+    ]
+    order_reference = operation_snapshot.get("order_id") or "-"
+
+    company_legal_name = (
+        str(emitter_snapshot.get("legal_name", "") or "").strip()
+        or str(emitter_snapshot.get("name", "") or "").strip()
+        or "-"
+    )
+    emitter_cuit = (
+        str(emitter_snapshot.get("cuit", "") or "").strip()
+        or str(fiscal_document.issuer_cuit_snapshot or "").strip()
+        or "-"
+    )
+    emitter_tax_condition_label = str(emitter_snapshot.get("tax_condition_label", "") or "").strip()
+    point_of_sale_display = frozen_point or "-"
+
+    company_address_bits = [
+        str(emitter_snapshot.get("fiscal_address", "") or "").strip(),
+        str(emitter_snapshot.get("fiscal_city", "") or "").strip(),
+        str(emitter_snapshot.get("fiscal_province", "") or "").strip(),
+        str(emitter_snapshot.get("postal_code", "") or "").strip(),
+    ]
+
+    client_name_display = str(client_snapshot.get("name", "") or "").strip() or "-"
+    client_document_label = (
+        str(client_snapshot.get("document_type_label", "") or "").strip()
+        or "CUIT/DNI"
+    )
+    client_document_value = str(client_snapshot.get("document_number", "") or "").strip() or "-"
+    client_tax_condition_display = (
+        str(client_snapshot.get("tax_condition_label", "") or "").strip()
+        or "-"
+    )
+    client_address_bits = [
+        str(client_snapshot.get("fiscal_address", "") or "").strip(),
+        str(client_snapshot.get("fiscal_city", "") or "").strip(),
+        str(client_snapshot.get("fiscal_province", "") or "").strip(),
+        str(client_snapshot.get("postal_code", "") or "").strip(),
+    ]
+
+    try:
+        order_total_discount_percentage = Decimal(
+            str(operation_snapshot.get("discount_percentage", "0") or "0")
+        )
+    except (ArithmeticError, TypeError, ValueError):
+        order_total_discount_percentage = Decimal("0.00")
 
     # Generate QR Code
     qr_base64 = ""
     qr_url = ""
     try:
         from core.services.pdf_generator import generate_afip_qr_data, generate_qr_image_base64
-        qr_url = generate_afip_qr_data(fiscal_document)
-        qr_base64 = generate_qr_image_base64(qr_url)
-    except Exception as exc:
-        pass
+        if legally_authorized:
+            qr_url = generate_afip_qr_data(fiscal_document)
+            qr_base64 = generate_qr_image_base64(qr_url)
+    except Exception:
+        qr_url = ""
+        qr_base64 = ""
+    if legally_authorized and not qr_base64:
+        legally_authorized = False
+        watermark_parts.append("QR NO DISPONIBLE")
+        legal_watermark = " · ".join(watermark_parts)
 
     context = {
         "fiscal_document": fiscal_document,
@@ -1057,19 +1170,17 @@ def fiscal_document_print(request, pk):
         "copy_label": copy_label,
         "document_letter": company_meta["letter"],
         "document_code": company_meta["code"],
-        "document_number_display": (
-            _get_fiscal_document_number_display(fiscal_document)
-        ),
+        "document_number_display": document_number_display,
         "company_legal_name": company_legal_name,
         "company_address_line": " / ".join(bit for bit in company_address_bits if bit),
-        "company_contact_line": " / ".join(
-            bit for bit in [site_settings.company_phone, site_settings.company_phone_2, company.email or site_settings.company_email] if bit
-        ),
-        "company_contact_site": site_settings.company_address,
+        "company_contact_line": str(emitter_snapshot.get("email", "") or "").strip(),
+        "company_contact_site": "",
         "emitter_cuit": emitter_cuit,
         "emitter_tax_condition_label": emitter_tax_condition_label,
+        "emitter_activity_start_date": str(
+            emitter_snapshot.get("activity_start_date", "") or ""
+        ),
         "point_of_sale_display": point_of_sale_display,
-        "client_profile": client_profile,
         "client_name_display": client_name_display,
         "client_address_line": " / ".join(bit for bit in client_address_bits if bit),
         "client_document_label": client_document_label,
@@ -1077,12 +1188,22 @@ def fiscal_document_print(request, pk):
         "client_tax_condition_display": client_tax_condition_display,
         "sale_condition_label": sale_condition_label,
         "operator_label": operator_label,
+        "order_reference": order_reference,
         "observations_text": "\n".join(bit for bit in observations if bit).strip(),
         "subtotal_before_discount": subtotal_before_discount,
+        "discount_total": discount_total,
+        "tax_total": tax_total,
+        "document_total": document_total,
         "taxable_net": taxable_net,
         "order_total_discount_percentage": order_total_discount_percentage,
         "qr_base64": qr_base64,
         "qr_url": qr_url,
+        "snapshot_verified": snapshot_verified,
+        "legally_authorized": legally_authorized,
+        "is_rejected": fiscal_document.status == FISCAL_STATUS_REJECTED,
+        "is_homologation": is_homologation,
+        "frozen_environment": frozen_environment,
+        "legal_watermark": legal_watermark,
     }
 
     if request.GET.get('format') == 'pdf':
@@ -1092,7 +1213,10 @@ def fiscal_document_print(request, pk):
             html_string = render_to_string("admin_panel/fiscal/print.html", context)
             pdf_bytes = generate_document_pdf(html_string, base_url=request.build_absolute_uri("/"))
             response = HttpResponse(pdf_bytes, content_type='application/pdf')
-            response['Content-Disposition'] = f'attachment; filename="{fiscal_document.commercial_type_label}_{fiscal_document.display_number}_{copy_type}.pdf"'
+            response['Content-Disposition'] = (
+                f'attachment; filename="{fiscal_document.doc_type}_'
+                f'{document_number_display}_{copy_type}.pdf"'
+            )
             return response
         except ImportError:
              messages.error(request, "El generador de PDF no esta instalado correctamente.")
@@ -1513,4 +1637,4 @@ def fiscal_point_set_default(request, pk):
     messages.success(request, f"Punto de venta {point.number} configurado como default.")
     return redirect("admin_fiscal_config")
 
-__all__ = ['_get_fiscal_snapshot', '_get_fiscal_document_number_display', '_get_fiscal_document_delete_blockers', 'fiscal_document_list', 'fiscal_document_detail', 'fiscal_document_emit', 'fiscal_document_close', 'fiscal_document_reopen', 'fiscal_document_void', 'fiscal_document_delete', 'fiscal_document_send_email', 'fiscal_report', 'fiscal_health', 'fiscal_document_print', '_get_fiscal_active_company', '_run_fiscal_pos_preflight', 'fiscal_config', 'fiscal_point_preflight', 'fiscal_point_create', 'fiscal_point_edit', 'fiscal_point_toggle_active', 'fiscal_point_set_default']
+__all__ = ['_get_fiscal_snapshot', '_get_fiscal_document_number_display', '_get_fiscal_document_delete_blockers', 'fiscal_document_list', 'fiscal_document_detail', 'fiscal_document_emit', 'fiscal_document_recover', 'fiscal_document_close', 'fiscal_document_reopen', 'fiscal_document_void', 'fiscal_document_delete', 'fiscal_document_send_email', 'fiscal_report', 'fiscal_health', 'fiscal_document_print', '_get_fiscal_active_company', '_run_fiscal_pos_preflight', 'fiscal_config', 'fiscal_point_preflight', 'fiscal_point_create', 'fiscal_point_edit', 'fiscal_point_toggle_active', 'fiscal_point_set_default']

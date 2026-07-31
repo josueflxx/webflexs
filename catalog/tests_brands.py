@@ -3,7 +3,16 @@ from django.urls import reverse
 from django.contrib.auth.models import User
 from decimal import Decimal
 
-from catalog.models import Category, Product, Brand, BrandRubro, BrandSubrubro, BrandSubrubroProductOrder
+from catalog.models import (
+    Brand,
+    BrandCatalogBatch,
+    BrandRubro,
+    BrandRubroProductOrder,
+    BrandSubrubro,
+    BrandSubrubroProductOrder,
+    Category,
+    Product,
+)
 from core.services.company_context import get_default_company
 
 
@@ -311,6 +320,31 @@ class ProductGridBrandAssocTestCase(TestCase):
         self.assertEqual(data['status'], 'success')
         self.assertEqual(self.rubro.products.count(), 1)
 
+    def test_product_list_bulk_brand_assignment_creates_reversible_batch(self):
+        response = self.client.post(
+            reverse("admin_product_bulk_brand"),
+            {
+                "product_ids": [self.product.pk],
+                "product_ids_csv": str(self.product.pk),
+                "brand_id": self.brand.pk,
+                "rubro_id": self.rubro.pk,
+                "subrubro_id": self.subrubro.pk,
+                "mode": "add",
+                "observation": "Asignacion desde listado de productos",
+                "select_all_pages": "false",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        batch = BrandCatalogBatch.objects.get()
+        self.assertEqual(batch.product_ids, [self.product.pk])
+        self.assertTrue(
+            BrandSubrubroProductOrder.objects.filter(
+                brand_subrubro=self.subrubro,
+                product=self.product,
+            ).exists()
+        )
+
 
 class BrandCategoryAssociationTestCase(TestCase):
     """Test case for manual category filtering and bulk category association in brand rubro/subrubro products views."""
@@ -492,6 +526,98 @@ class BrandPremiumSPAAndPaginationTestCase(TestCase):
         self.assertTrue(data['has_more'])
         self.assertEqual(len(data['results']), 30)
 
+    def test_workspace_search_returns_commercial_metadata_and_conflicts(self):
+        other_brand = Brand.objects.create(name="Otra marca")
+        other_rubro = BrandRubro.objects.create(
+            brand=other_brand,
+            name="Motor",
+        )
+        BrandRubroProductOrder.objects.create(
+            brand_rubro=other_rubro,
+            product=self.products[10],
+            sort_order=10,
+        )
+
+        response = self.client.get(
+            reverse("admin_brand_rubro_products", args=[self.rubro.pk]),
+            {
+                "q": self.products[10].sku,
+                "assignment": "other",
+                "ajax": "1",
+            },
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["total_count"], 1)
+        result = payload["results"][0]
+        self.assertEqual(result["id"], self.products[10].pk)
+        self.assertIn("supplier", result)
+        self.assertIn("category", result)
+        self.assertIn("stock", result)
+        self.assertTrue(result["has_conflict"])
+        self.assertTrue(result["assignments"])
+
+    def test_workspace_bulk_assignment_requires_observation_and_is_undoable(self):
+        url = reverse("admin_brand_rubro_bulk_assign", args=[self.rubro.pk])
+        response = self.client.post(
+            url,
+            data='{"product_ids": [%d], "observation": ""}' % self.products[10].pk,
+            content_type="application/json",
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(BrandCatalogBatch.objects.exists())
+
+        response = self.client.post(
+            url,
+            data='{"product_ids": [%d], "observation": "Revision manual"}'
+            % self.products[10].pk,
+            content_type="application/json",
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["created_count"], 1)
+        self.assertTrue(payload["can_undo"])
+        self.assertTrue(
+            BrandRubroProductOrder.objects.filter(
+                brand_rubro=self.rubro,
+                product=self.products[10],
+            ).exists()
+        )
+
+    def test_sync_preview_does_not_change_data_and_confirm_creates_batch(self):
+        self.subrubro.helper_categories.add(self.category)
+        url = reverse("admin_brand_rubro_sync", args=[self.rubro.pk])
+        response = self.client.post(
+            url,
+            data='{"action": "preview"}',
+            content_type="application/json",
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        preview = response.json()
+        self.assertEqual(preview["new_count"], 30)
+        self.assertEqual(self.rubro.products.count(), 5)
+        self.assertFalse(BrandCatalogBatch.objects.exists())
+
+        response = self.client.post(
+            url,
+            data='{"action": "confirm", "mode": "add", "observation": "Vista previa revisada"}',
+            content_type="application/json",
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["created_count"], 30)
+        self.assertTrue(BrandCatalogBatch.objects.filter(pk=payload["batch_id"]).exists())
+        self.assertEqual(self.rubro.products.count(), 35)
+
     def test_rubro_bulk_add_preview_stats(self):
         url = reverse('admin_brand_rubro_preview_category_bulk', args=[self.rubro.pk])
         response = self.client.get(url, {'category_id': self.category.pk})
@@ -589,4 +715,3 @@ class BrandGridAutofiltersTestCase(TestCase):
         products = list(response.context['page_obj'].object_list)
         self.assertIn(self.product1, products)
         self.assertNotIn(self.product2, products)
-

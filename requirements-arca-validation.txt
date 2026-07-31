@@ -1,0 +1,5 @@
+-r requirements.txt
+
+# Local pre-homologation audit tooling. Not required by the application runtime.
+opencv-python-headless==5.0.0.93
+pypdf==6.6.2

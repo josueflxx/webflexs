@@ -15,9 +15,12 @@ from django.contrib.auth import get_user_model
 
 def reset_admin():
     User = get_user_model()
-    username = 'admin'
-    email = 'admin@example.com'
-    password = 'admin'  # Simple password for local dev
+    username = os.getenv('DJANGO_SUPERUSER_USERNAME', 'admin')
+    email = os.getenv('DJANGO_SUPERUSER_EMAIL', 'admin@example.com')
+    password = os.getenv('DJANGO_SUPERUSER_PASSWORD')
+
+    if not password:
+        raise RuntimeError('Define DJANGO_SUPERUSER_PASSWORD antes de ejecutar este script.')
 
     if not User.objects.filter(username=username).exists():
         print(f"Creating superuser '{username}'...")

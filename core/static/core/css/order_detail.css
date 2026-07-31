@@ -1,0 +1,913 @@
+.order-record-page {
+    --order-surface: rgba(13, 19, 29, 0.96);
+    --order-surface-raised: rgba(19, 27, 39, 0.92);
+    --order-surface-soft: rgba(255, 255, 255, 0.035);
+    --order-border: rgba(148, 163, 184, 0.16);
+    --order-border-strong: rgba(148, 163, 184, 0.24);
+    --order-text: #f8fafc;
+    --order-muted: #94a3b8;
+    --order-primary: #ff6b35;
+    --order-primary-soft: rgba(255, 107, 53, 0.12);
+    --order-info: #22d3ee;
+    --order-success: #34d399;
+    --order-warning: #fbbf24;
+    width: 100%;
+    max-width: none;
+    padding: 28px clamp(18px, 2.2vw, 38px) 48px;
+    background:
+        radial-gradient(circle at 8% 0%, rgba(255, 107, 53, 0.11), transparent 28%),
+        radial-gradient(circle at 92% 4%, rgba(34, 211, 238, 0.08), transparent 30%);
+}
+
+.order-record-page .order-record-shell {
+    width: min(1500px, 100%);
+    margin: 0 auto;
+    padding: 0;
+    gap: 0;
+    overflow: visible;
+    border: 1px solid var(--order-border);
+    border-radius: 20px;
+    background: var(--order-surface);
+    box-shadow: 0 24px 70px rgba(0, 0, 0, 0.3);
+}
+
+.order-record-page .order-record-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 24px;
+    padding: 26px 28px 24px;
+    border: 0;
+    border-bottom: 1px solid var(--order-border);
+    border-radius: 20px 20px 0 0;
+    background:
+        linear-gradient(115deg, rgba(255, 107, 53, 0.11), transparent 45%),
+        rgba(255, 255, 255, 0.02);
+}
+
+.order-record-page .sales-record-title-wrap {
+    flex: 1 1 480px;
+    align-items: flex-start;
+    gap: 16px;
+}
+
+.order-record-page .sales-record-icon {
+    width: 52px;
+    height: 52px;
+    border-radius: 14px;
+    border: 1px solid rgba(255, 107, 53, 0.32);
+    background: linear-gradient(145deg, rgba(255, 107, 53, 0.22), rgba(255, 107, 53, 0.06));
+    color: #ff9a73;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.order-record-page .sales-record-icon svg {
+    width: 27px;
+    height: 27px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.7;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.order-record-page .sales-record-kicker {
+    display: block;
+    margin: 1px 0 7px;
+    color: #ff9a73;
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+}
+
+.order-record-title-line {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.order-record-page .sales-record-heading {
+    color: var(--order-text);
+    font-size: clamp(1.45rem, 2vw, 1.9rem);
+    line-height: 1.12;
+}
+
+.order-record-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+.order-record-meta span {
+    display: inline-flex;
+    align-items: center;
+    min-height: 28px;
+    padding: 5px 10px;
+    border: 1px solid var(--order-border);
+    border-radius: 999px;
+    background: rgba(2, 6, 23, 0.3);
+    color: #cbd5e1;
+    font-size: 0.76rem;
+}
+
+.order-record-page .sales-record-actions {
+    flex: 1 1 520px;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+.order-record-page .sales-record-action {
+    min-height: 38px;
+    padding: 9px 13px;
+    border-color: var(--order-border-strong);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.035);
+    color: #e2e8f0;
+    font-size: 0.76rem;
+    font-weight: 750;
+}
+
+.order-record-page .sales-record-action:hover {
+    border-color: rgba(255, 107, 53, 0.5);
+    background: var(--order-primary-soft);
+    color: #fff;
+}
+
+.order-record-page .sales-record-action.is-primary {
+    border-color: #ff7b4d;
+    background: linear-gradient(135deg, #ff6b35, #ff845c);
+    color: #160a05;
+    box-shadow: 0 8px 18px rgba(255, 107, 53, 0.2);
+}
+
+.order-record-page .sales-record-action.is-disabled {
+    border-style: dashed;
+    background: transparent;
+    box-shadow: none;
+}
+
+.order-record-summary-strip {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+    padding: 18px 28px;
+    border-bottom: 1px solid var(--order-border);
+    background: rgba(2, 6, 23, 0.22);
+}
+
+.order-record-stat {
+    min-width: 0;
+    padding: 15px 16px;
+    border: 1px solid var(--order-border);
+    border-radius: 14px;
+    background: var(--order-surface-soft);
+}
+
+.order-record-stat.is-total {
+    border-color: rgba(255, 107, 53, 0.3);
+    background: linear-gradient(145deg, rgba(255, 107, 53, 0.14), rgba(255, 107, 53, 0.035));
+}
+
+.order-record-stat.is-paid {
+    border-color: rgba(52, 211, 153, 0.25);
+    background: linear-gradient(145deg, rgba(52, 211, 153, 0.11), rgba(52, 211, 153, 0.025));
+}
+
+.order-record-stat.is-pending {
+    border-color: rgba(251, 191, 36, 0.25);
+    background: linear-gradient(145deg, rgba(251, 191, 36, 0.1), rgba(251, 191, 36, 0.025));
+}
+
+.order-record-stat-label {
+    display: block;
+    color: var(--order-muted);
+    font-size: 0.69rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.order-record-stat-value {
+    display: block;
+    margin-top: 7px;
+    overflow: hidden;
+    color: var(--order-text);
+    font-size: clamp(1.2rem, 1.7vw, 1.6rem);
+    line-height: 1.15;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.order-record-stat small {
+    display: block;
+    margin-top: 5px;
+    color: #7f8ea3;
+    font-size: 0.71rem;
+}
+
+.order-record-page .sales-record-top-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+    padding: 20px 28px 4px;
+}
+
+.order-record-page .sales-record-panel {
+    padding: 18px;
+    border: 1px solid var(--order-border);
+    border-radius: 16px;
+    background: var(--order-surface-raised);
+    box-shadow: none;
+}
+
+.order-record-page .sales-record-panel-header {
+    min-height: 42px;
+    margin-bottom: 16px;
+    padding-bottom: 13px;
+    border-bottom: 1px solid var(--order-border);
+}
+
+.order-record-page .sales-record-panel-eyebrow {
+    width: auto;
+    margin: 0 0 4px;
+    padding: 0;
+    background: none;
+    color: #ff8c62;
+    font-size: 0.68rem;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+
+.order-record-page .sales-record-panel-title {
+    display: block;
+    color: var(--order-text);
+    font-size: 0.98rem;
+}
+
+.order-record-section-number {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 30px;
+    height: 26px;
+    padding: 0 8px;
+    border: 1px solid rgba(255, 107, 53, 0.28);
+    border-radius: 8px;
+    background: rgba(255, 107, 53, 0.08);
+    color: #ff9a73;
+    font-size: 0.69rem;
+    font-weight: 850;
+    letter-spacing: 0.06em;
+}
+
+.order-record-page .sales-record-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0;
+}
+
+.order-record-page .sales-record-field {
+    grid-template-columns: minmax(130px, 0.8fr) minmax(0, 1.2fr);
+    gap: 10px;
+    min-height: 38px;
+    padding: 8px 4px;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.09);
+}
+
+.order-record-page .sales-record-field:nth-last-child(-n + 2) {
+    border-bottom-color: transparent;
+}
+
+.order-record-page .sales-record-field-label {
+    color: var(--order-muted);
+    font-size: 0.72rem;
+    font-weight: 650;
+}
+
+.order-record-page .sales-record-field-value {
+    color: #edf2f7;
+    font-size: 0.8rem;
+    font-weight: 650;
+}
+
+.order-record-page .sales-flow-strip,
+.order-record-page .sales-record-card {
+    margin: 16px 28px 0;
+    padding: 18px;
+    border: 1px solid var(--order-border);
+    border-radius: 16px;
+    background: var(--order-surface-raised);
+    box-shadow: none;
+}
+
+.order-record-page .sales-flow-strip {
+    display: grid;
+}
+
+.order-record-page .sales-record-card-head {
+    align-items: center;
+    margin-bottom: 16px;
+    padding-bottom: 13px;
+    border-bottom: 1px solid var(--order-border);
+}
+
+.order-record-page .sales-record-card-head h3 {
+    width: auto;
+    margin: 0;
+    padding: 0;
+    background: none;
+    color: var(--order-text);
+    font-size: 1rem;
+}
+
+.order-record-page .sales-record-card-head p {
+    display: block;
+    margin-top: 4px;
+    color: var(--order-muted);
+    font-size: 0.76rem;
+}
+
+.order-record-page .sales-flow-grid {
+    counter-reset: sales-flow-step;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.order-record-page .sales-flow-step {
+    counter-increment: sales-flow-step;
+    position: relative;
+    min-height: 120px;
+    padding: 14px 14px 14px 48px;
+    border-color: var(--order-border);
+    border-radius: 13px;
+    background: rgba(2, 6, 23, 0.25);
+}
+
+.order-record-page .sales-flow-step::before {
+    content: counter(sales-flow-step);
+    position: absolute;
+    top: 14px;
+    left: 13px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 25px;
+    height: 25px;
+    border: 1px solid var(--order-border-strong);
+    border-radius: 50%;
+    color: #cbd5e1;
+    font-size: 0.7rem;
+    font-weight: 850;
+}
+
+.order-record-page .sales-flow-step.is-done::before {
+    border-color: rgba(52, 211, 153, 0.4);
+    background: rgba(52, 211, 153, 0.16);
+    color: #a7f3d0;
+}
+
+.order-record-page .sales-flow-step.is-current::before,
+.order-record-page .sales-flow-step.is-warning::before {
+    border-color: rgba(251, 191, 36, 0.42);
+    background: rgba(251, 191, 36, 0.14);
+    color: #fde68a;
+}
+
+.order-record-page .sales-flow-step strong {
+    font-size: 0.86rem;
+}
+
+.order-record-page .sales-flow-step .btn {
+    min-height: 30px;
+    padding: 6px 9px;
+    font-size: 0.7rem;
+}
+
+.order-record-page .order-record-secondary-card {
+    padding-bottom: 10px;
+}
+
+.order-record-page .order-classic-collapsible-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.order-record-page .order-classic-toggle {
+    overflow: hidden;
+    border: 1px solid var(--order-border);
+    border-radius: 12px;
+    background: rgba(2, 6, 23, 0.2);
+}
+
+.order-record-page .order-classic-toggle > summary {
+    width: 100%;
+    min-height: 45px;
+    padding: 11px 13px;
+    border-radius: 0;
+    background: transparent;
+    color: #dbe4ef;
+    font-size: 0.76rem;
+}
+
+.order-record-page .order-classic-toggle > summary::before {
+    content: "";
+    width: 7px;
+    height: 7px;
+    border-right: 1.5px solid #ff8c62;
+    border-bottom: 1.5px solid #ff8c62;
+    transform: rotate(-45deg);
+    transition: transform 0.18s ease;
+}
+
+.order-record-page .order-classic-toggle[open] > summary {
+    border-bottom: 1px solid var(--order-border);
+    background: rgba(255, 107, 53, 0.055);
+    color: #ffad8e;
+}
+
+.order-record-page .order-classic-toggle[open] > summary::before {
+    transform: rotate(45deg) translateY(-2px);
+}
+
+.order-record-page .order-classic-toggle-body {
+    padding: 8px 13px 13px;
+}
+
+.order-record-page .order-classic-toggle-body .sales-record-field {
+    grid-template-columns: minmax(100px, 0.85fr) minmax(0, 1.15fr);
+}
+
+.order-record-page .order-classic-toggle-body form {
+    flex-wrap: wrap;
+}
+
+.order-record-page .order-classic-toggle-body .form-select {
+    max-width: 100%;
+}
+
+.order-record-page .order-record-products-card {
+    scroll-margin-top: 20px;
+}
+
+.order-record-card-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.order-record-page .sales-record-table-wrap {
+    overflow-x: auto;
+    border: 1px solid var(--order-border);
+    border-radius: 12px;
+}
+
+.order-record-page .order-record-products-table {
+    min-width: 920px;
+    margin: 0;
+    font-size: 0.78rem;
+}
+
+.order-record-page .order-record-products-table th {
+    padding: 12px;
+    background: rgba(2, 6, 23, 0.5);
+    color: #aab7c7;
+    font-size: 0.67rem;
+    font-weight: 800;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+}
+
+.order-record-page .order-record-products-table td {
+    padding: 12px;
+    border-top-color: rgba(148, 163, 184, 0.1);
+}
+
+.order-record-page .order-record-add-item-grid {
+    grid-template-columns: minmax(280px, 1.6fr) 90px 135px minmax(210px, 0.9fr) auto;
+    gap: 10px;
+    margin: 14px 0 0;
+    padding: 14px;
+    border: 1px solid rgba(255, 107, 53, 0.18);
+    border-radius: 12px;
+    background: rgba(255, 107, 53, 0.04);
+}
+
+.order-record-page .order-record-empty-row td {
+    padding: 0;
+}
+
+.order-record-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    min-height: 150px;
+    padding: 28px;
+    color: #d8e0eb;
+    text-align: left;
+}
+
+.order-record-empty-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 46px;
+    height: 46px;
+    flex: 0 0 auto;
+    border: 1px solid var(--order-border);
+    border-radius: 13px;
+    background: rgba(255, 255, 255, 0.03);
+    color: #7f8ea3;
+}
+
+.order-record-empty-icon svg {
+    width: 25px;
+    height: 25px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.6;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.order-record-empty strong,
+.order-record-empty small {
+    display: block;
+}
+
+.order-record-empty small {
+    margin-top: 4px;
+    color: var(--order-muted);
+}
+
+.order-record-page .order-record-foot-grid {
+    grid-template-columns: minmax(0, 1.35fr) minmax(330px, 0.65fr);
+    gap: 16px;
+    margin: 16px 28px 28px;
+}
+
+.order-record-page .order-record-foot-grid > .sales-record-card {
+    margin: 0;
+    padding: 18px;
+    border: 1px solid var(--order-border);
+    border-radius: 16px;
+}
+
+.order-record-page .order-record-foot-grid > .sales-record-card:last-child {
+    align-self: start;
+    background:
+        linear-gradient(145deg, rgba(255, 107, 53, 0.075), transparent 44%),
+        var(--order-surface-raised);
+}
+
+.order-record-page .sales-record-note-box {
+    min-height: 145px;
+    border: 1px solid var(--order-border);
+    border-radius: 12px;
+    background: rgba(2, 6, 23, 0.22);
+    color: #d9e2ec;
+}
+
+.order-record-page .sales-record-summary {
+    width: 100%;
+    gap: 0;
+}
+
+.order-record-page .sales-record-summary-row {
+    min-height: 34px;
+    align-items: center;
+    padding: 6px 0;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+    color: #aab7c7;
+    font-size: 0.78rem;
+}
+
+.order-record-page .sales-record-summary-row.is-total {
+    margin-top: 5px;
+    padding-top: 13px;
+    border-top: 1px solid rgba(255, 107, 53, 0.3);
+    border-bottom: 0;
+}
+
+.order-record-page .sales-record-summary-row.is-total strong {
+    color: #ff9a73;
+    font-size: 1.45rem;
+}
+
+.order-record-page .order-movement-inline {
+    align-items: stretch;
+    margin-top: 16px;
+    padding-top: 14px;
+    border-top: 1px solid var(--order-border);
+}
+
+.order-record-page .order-movement-inline-head {
+    justify-content: space-between;
+}
+
+.order-record-page .order-movement-inline-actions {
+    justify-content: flex-start;
+}
+
+.order-record-page .order-movement-inline-actions .btn {
+    min-width: 0;
+    border-radius: 8px;
+}
+
+.order-record-timeline {
+    margin-top: 16px;
+    border-top: 1px solid var(--order-border);
+}
+
+.order-record-timeline > summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 15px 0 4px;
+    list-style: none;
+    cursor: pointer;
+}
+
+.order-record-timeline > summary::-webkit-details-marker {
+    display: none;
+}
+
+.order-record-timeline > summary > span:first-child {
+    display: grid;
+    gap: 3px;
+}
+
+.order-record-timeline > summary strong {
+    color: #e2e8f0;
+    font-size: 0.82rem;
+}
+
+.order-record-timeline-list {
+    gap: 8px;
+    margin-top: 10px;
+    padding: 0;
+}
+
+.order-record-timeline-event {
+    padding: 10px 11px;
+    border-left: 3px solid #3b82f6;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.025);
+}
+
+.order-record-timeline-event.is-danger {
+    border-left-color: #ef4444;
+}
+
+.order-record-timeline-event.is-success {
+    border-left-color: #22c55e;
+}
+
+.order-record-timeline-event small {
+    display: block;
+    margin-top: 4px;
+}
+
+.order-record-page .sales-record-tag.is-warning {
+    border-color: rgba(251, 191, 36, 0.3);
+    background: rgba(251, 191, 36, 0.12);
+    color: #fde68a;
+}
+
+.order-record-page .sales-record-tag.is-danger {
+    border-color: rgba(248, 113, 113, 0.32);
+    background: rgba(248, 113, 113, 0.12);
+    color: #fecaca;
+}
+
+.order-record-visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+.sales-record-relate-menu {
+    border-color: var(--order-border-strong);
+    box-shadow: 0 18px 45px rgba(0, 0, 0, 0.42);
+}
+
+html[data-theme="light"] .order-record-page {
+    --order-surface: #f8fafc;
+    --order-surface-raised: #ffffff;
+    --order-surface-soft: #f8fafc;
+    --order-border: rgba(15, 23, 42, 0.11);
+    --order-border-strong: rgba(15, 23, 42, 0.18);
+    --order-text: #0f172a;
+    --order-muted: #64748b;
+    background:
+        radial-gradient(circle at 8% 0%, rgba(255, 107, 53, 0.07), transparent 28%),
+        #f1f5f9 !important;
+}
+
+html[data-theme="light"] .order-record-page .order-record-shell,
+html[data-theme="light"] .order-record-page .sales-record-panel,
+html[data-theme="light"] .order-record-page .sales-record-card {
+    background: var(--order-surface-raised) !important;
+    border-color: var(--order-border) !important;
+}
+
+html[data-theme="light"] .order-record-page .order-record-header {
+    background:
+        linear-gradient(115deg, rgba(255, 107, 53, 0.08), transparent 45%),
+        #ffffff !important;
+}
+
+html[data-theme="light"] .order-record-page .sales-record-heading,
+html[data-theme="light"] .order-record-page .sales-record-panel-title,
+html[data-theme="light"] .order-record-page .sales-record-card-head h3,
+html[data-theme="light"] .order-record-page .sales-record-field-value,
+html[data-theme="light"] .order-record-stat-value {
+    color: #0f172a !important;
+}
+
+html[data-theme="light"] .order-record-meta span,
+html[data-theme="light"] .order-record-page .sales-flow-step,
+html[data-theme="light"] .order-record-page .order-classic-toggle,
+html[data-theme="light"] .order-record-page .sales-record-note-box {
+    background: #f8fafc !important;
+    color: #334155;
+}
+
+html[data-theme="light"] .order-record-page .order-classic-toggle > summary,
+html[data-theme="light"] .order-record-timeline > summary strong,
+html[data-theme="light"] .order-record-empty {
+    color: #1e293b !important;
+}
+
+html[data-theme="light"] .order-record-page .order-record-products-table th {
+    background: #f1f5f9;
+    color: #475569;
+}
+
+@media (max-width: 1180px) {
+    .order-record-page .order-record-header {
+        flex-direction: column;
+    }
+
+    .order-record-page .sales-record-actions {
+        width: 100%;
+        flex-basis: auto;
+        justify-content: flex-start;
+    }
+
+    .order-record-summary-strip {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .order-record-page .sales-record-top-grid,
+    .order-record-page .order-record-foot-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .order-record-page .sales-flow-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .order-record-page .order-classic-collapsible-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .order-record-page .order-record-add-item-grid {
+        grid-template-columns: minmax(260px, 1fr) 90px 135px;
+    }
+
+    .order-record-page .order-record-add-item-grid .form-group:nth-of-type(4) {
+        grid-column: 1 / 3;
+    }
+}
+
+@media (max-width: 760px) {
+    .order-record-page {
+        padding: 14px 10px 32px;
+    }
+
+    .order-record-page .order-record-shell {
+        border-radius: 14px;
+    }
+
+    .order-record-page .order-record-header,
+    .order-record-summary-strip,
+    .order-record-page .sales-record-top-grid {
+        padding-left: 14px;
+        padding-right: 14px;
+    }
+
+    .order-record-page .order-record-header {
+        border-radius: 14px 14px 0 0;
+    }
+
+    .order-record-page .sales-record-title-wrap {
+        flex-basis: auto;
+    }
+
+    .order-record-page .sales-record-actions {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .order-record-page .sales-record-action,
+    .order-record-page .sales-record-action-form,
+    .order-record-page .sales-record-action-form .sales-record-action,
+    .order-record-page .sales-record-relate-details,
+    .order-record-page .sales-record-relate-details > summary {
+        width: 100%;
+    }
+
+    .sales-record-relate-menu {
+        position: fixed;
+        inset: auto 12px 12px;
+        max-height: min(60vh, 420px);
+    }
+
+    .order-record-summary-strip {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+    }
+
+    .order-record-stat {
+        padding: 12px;
+    }
+
+    .order-record-page .sales-record-top-grid {
+        gap: 12px;
+    }
+
+    .order-record-page .sales-record-grid,
+    .order-record-page .sales-flow-grid,
+    .order-record-page .order-classic-collapsible-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .order-record-page .sales-record-field:nth-last-child(-n + 2) {
+        border-bottom-color: rgba(148, 163, 184, 0.09);
+    }
+
+    .order-record-page .sales-record-field:last-child {
+        border-bottom-color: transparent;
+    }
+
+    .order-record-page .sales-flow-strip,
+    .order-record-page .sales-record-card {
+        margin-left: 14px;
+        margin-right: 14px;
+        padding: 14px;
+    }
+
+    .order-record-page .sales-flow-step {
+        min-height: 0;
+    }
+
+    .order-record-page .order-record-add-item-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .order-record-page .order-record-add-item-grid .form-group:nth-of-type(4) {
+        grid-column: auto;
+    }
+
+    .order-record-page .order-record-foot-grid {
+        margin: 14px;
+    }
+}
+
+@media (max-width: 480px) {
+    .order-record-page .sales-record-icon {
+        width: 44px;
+        height: 44px;
+    }
+
+    .order-record-page .sales-record-actions {
+        grid-template-columns: 1fr;
+    }
+
+    .order-record-summary-strip {
+        grid-template-columns: 1fr;
+    }
+
+    .order-record-page .sales-record-field,
+    .order-record-page .order-classic-toggle-body .sales-record-field {
+        grid-template-columns: 1fr;
+        gap: 3px;
+    }
+
+    .order-record-page .sales-record-panel-header,
+    .order-record-page .sales-record-card-head {
+        align-items: flex-start;
+    }
+
+    .order-record-empty {
+        flex-direction: column;
+        text-align: center;
+    }
+}

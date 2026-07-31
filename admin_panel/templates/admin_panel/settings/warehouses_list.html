@@ -24,6 +24,7 @@
                 <th>Código</th>
                 <th>Nombre</th>
                 <th>Activo</th>
+                <th>Stock por depósito</th>
                 <th>Notas</th>
                 <th>Acciones</th>
             </tr>
@@ -40,14 +41,22 @@
                     <span class="badge badge-secondary">No</span>
                     {% endif %}
                 </td>
+                <td>
+                    {% if warehouse.stock_balance_enabled %}
+                    <span class="badge badge-success">Activo</span>
+                    {% else %}
+                    <span class="badge badge-secondary">Pendiente</span>
+                    {% endif %}
+                </td>
                 <td>{{ warehouse.notes|default:"-" }}</td>
                 <td class="actions">
                     <a href="{% url 'admin_warehouse_edit' warehouse.pk %}" class="btn btn-outline btn-sm">Editar</a>
+                    <a href="{% url 'admin_warehouse_stock_initialize' warehouse.pk %}" class="btn btn-outline btn-sm">Inicializar stock</a>
                 </td>
             </tr>
             {% empty %}
             <tr>
-                <td colspan="5" class="text-center text-muted">No hay depósitos configurados para esta empresa.</td>
+                <td colspan="6" class="text-center text-muted">No hay depósitos configurados para esta empresa.</td>
             </tr>
             {% endfor %}
         </tbody>

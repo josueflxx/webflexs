@@ -165,7 +165,10 @@ class ClientImporter(BaseImporter):
             'consumidor final': 'consumidor_final',
             'cf': 'consumidor_final'
         }
-        iva_choice = iva_map.get(iva_raw, 'consumidor_final') # Default
+        # The spreadsheet text is commercial context, not an official ARCA
+        # parameter ID. Unknown values remain blank and every imported value
+        # requires explicit backend validation before WSFE preparation.
+        iva_choice = iva_map.get(iva_raw, "")
         
         # Rubro / Client Type (legacy field, optional)
         type_raw = str(data.get('client_type', '')).lower()
@@ -273,6 +276,9 @@ class ClientImporter(BaseImporter):
                     else:
                         profile.discount = Decimal(str(discount_val))
                 profile.iva_condition = iva_choice
+                profile.iva_condition_arca_id = None
+                profile.iva_condition_source = ClientProfile.IVA_SOURCE_LEGACY_PENDING
+                profile.iva_condition_validated_at = None
                 profile.client_type = client_type_choice
                 
                 if notes:

@@ -549,7 +549,7 @@ def convert_request_to_order(*, order_request, actor=None, source_proposal=None,
 
     with transaction.atomic():
         locked_request = (
-            OrderRequest.objects.select_for_update()
+            OrderRequest.objects.select_for_update(of=("self",))
             .select_related("user", "company", "client_company_ref__client_profile")
             .get(pk=order_request.pk)
         )

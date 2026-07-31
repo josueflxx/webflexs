@@ -1,0 +1,72 @@
+{% extends 'admin_panel/base.html' %}
+
+{% block page_title %}Inicializar stock por depósito{% endblock %}
+
+{% block content %}
+<div class="admin-form-container">
+    <div class="admin-toolbar">
+        <div>
+            <h2 style="margin:0;">Inicializar stock por depósito</h2>
+            <p class="text-muted" style="margin:6px 0 0;">
+                {{ active_company.name }} · {{ warehouse.name }}
+            </p>
+        </div>
+        <a href="{% url 'admin_warehouse_edit' warehouse.pk %}" class="btn btn-outline">Volver</a>
+    </div>
+
+    <div class="alert alert-warning" style="margin-top:1.5rem;">
+        <strong>Esta operación copia el stock global actual.</strong>
+        <p style="margin:6px 0 0;">
+            No elimina ni modifica el stock existente. Sólo crea los saldos que todavía
+            no fueron inicializados en este depósito.
+        </p>
+    </div>
+
+    <div class="settings-two-col" style="margin-top:1rem;">
+        <article class="settings-form-card">
+            <h4>Productos a inicializar</h4>
+            <strong style="font-size:1.8rem;">{{ preview.created_count }}</strong>
+        </article>
+        <article class="settings-form-card">
+            <h4>Stock total a copiar</h4>
+            <strong style="font-size:1.8rem;">{{ preview.stock_total|floatformat:3 }}</strong>
+        </article>
+        <article class="settings-form-card">
+            <h4>Productos ya inicializados</h4>
+            <strong style="font-size:1.8rem;">{{ preview.skipped_count }}</strong>
+        </article>
+    </div>
+
+    <form method="post" style="margin-top:1.5rem;">
+        {% csrf_token %}
+        <div class="form-group">
+            <label for="observation" class="form-label">Observación obligatoria</label>
+            <textarea
+                name="observation"
+                id="observation"
+                class="form-textarea"
+                rows="4"
+                required
+                placeholder="Ejemplo: Inventario inicial verificado para el depósito principal.">{{ request.POST.observation|default:"" }}</textarea>
+        </div>
+        <div class="form-group">
+            <label for="confirmation" class="form-label">
+                Escribe <strong>{{ confirmation_text }}</strong> para confirmar
+            </label>
+            <input
+                type="text"
+                name="confirmation"
+                id="confirmation"
+                class="form-input"
+                required
+                autocomplete="off">
+        </div>
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary" {% if preview.created_count == 0 %}disabled{% endif %}>
+                Inicializar saldos
+            </button>
+            <a href="{% url 'admin_warehouse_edit' warehouse.pk %}" class="btn btn-outline">Cancelar</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

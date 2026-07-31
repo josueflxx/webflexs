@@ -1,0 +1,4 @@
+-r requirements.txt
+
+# Development/CI-only software-composition analysis.
+pip-audit==2.10.1

@@ -1,4 +1,5 @@
 {% extends 'admin_panel/base.html' %}
+{% load static %}
 
 {% block page_title %}Modificar venta {{ fiscal_document.commercial_type_label }} {{ document_number_display }}{% endblock %}
 
@@ -409,6 +410,7 @@
     }
 }
 </style>
+<link rel="stylesheet" href="{% static 'core/css/fiscal_detail.css' %}?v=20260731-1">
 {% endblock %}
 
 {% block content %}
@@ -416,12 +418,25 @@
     <section class="fiscal-classic-sheet">
         <header class="fiscal-classic-header">
             <div class="fiscal-classic-title">
-                <span class="fiscal-classic-icon" aria-hidden="true">&#128179;</span>
+                <span class="fiscal-classic-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24">
+                        <path d="M6.5 3.75h11v16.5l-2-1.4-1.75 1.4L12 18.85l-1.75 1.4-1.75-1.4-2 1.4z"></path>
+                        <path d="M9.5 8h5M9.5 11.5h5M9.5 15h3"></path>
+                    </svg>
+                </span>
                 <div>
-                    <h2 class="fiscal-classic-heading">Modificar venta {{ fiscal_document.commercial_type_label }} {{ document_number_display }}</h2>
-                    <p class="fiscal-classic-subcopy">
-                        {{ fiscal_document.company.name }} | {{ fiscal_document.get_doc_type_display }} | {{ fiscal_document.get_issue_mode_display }}
-                    </p>
+                    <p class="fiscal-detail-kicker">Comprobante fiscal</p>
+                    <div class="fiscal-detail-title-line">
+                        <h2 class="fiscal-classic-heading">{{ fiscal_document.commercial_type_label }} {{ document_number_display }}</h2>
+                        <span class="fiscal-detail-status {% if fiscal_document.status == 'voided' %}is-danger{% elif workflow_state.is_open %}is-warning{% else %}is-success{% endif %}">
+                            {{ workflow_state.label }}
+                        </span>
+                    </div>
+                    <div class="fiscal-detail-meta" aria-label="Datos principales del comprobante">
+                        <span>{{ fiscal_document.company.name }}</span>
+                        <span>{{ fiscal_document.get_doc_type_display }}</span>
+                        <span>{{ fiscal_document.get_issue_mode_display }}</span>
+                    </div>
                 </div>
             </div>
 
@@ -525,6 +540,30 @@
             </div>
         </header>
 
+        <section class="fiscal-detail-summary" aria-label="Resumen economico del comprobante">
+            <article class="fiscal-detail-stat is-total">
+                <span>Total</span>
+                <strong>${{ fiscal_document.total|floatformat:2 }}</strong>
+                <small>Importe final</small>
+            </article>
+            <article class="fiscal-detail-stat is-paid">
+                <span>Pagado</span>
+                <strong>${{ collection_snapshot.paid|floatformat:2 }}</strong>
+                <small>Cobros aplicados</small>
+            </article>
+            <article class="fiscal-detail-stat {% if collection_snapshot.pending %}is-pending{% endif %}">
+                <span>Saldo pendiente</span>
+                <strong>${{ collection_snapshot.pending|floatformat:2 }}</strong>
+                <small>{{ collection_snapshot.status_label }}</small>
+            </article>
+            <article class="fiscal-detail-stat">
+                <span>Productos</span>
+                <strong>{{ items|length }}</strong>
+                <small>Renglones fiscales</small>
+            </article>
+        </section>
+
+        <div class="fiscal-detail-alerts">
         {% if fiscal_delete_blockers %}
         <div class="alert alert-warning">Eliminacion bloqueada: {{ fiscal_delete_blockers|join:" " }}</div>
         {% endif %}
@@ -544,10 +583,18 @@
             </ul>
         </div>
         {% endif %}
+        </div>
 
         <div class="fiscal-classic-grid">
             <section class="fiscal-classic-card">
-                <h3>Datos basicos</h3>
+                <div class="fiscal-detail-card-head">
+                    <div>
+                        <span>Comprobante</span>
+                        <h3>Datos fiscales</h3>
+                    </div>
+                    <span class="fiscal-detail-section-number">01</span>
+                </div>
+                <span class="fiscal-detail-visually-hidden">Datos basicos</span>
                 <ul class="fiscal-kv">
                     <li>
                         <span class="fiscal-kv-label">Estado del comprobante</span>
@@ -574,7 +621,13 @@
             </section>
 
             <section class="fiscal-classic-card">
-                <h3>Cliente</h3>
+                <div class="fiscal-detail-card-head">
+                    <div>
+                        <span>Cliente</span>
+                        <h3>Identificacion y domicilio</h3>
+                    </div>
+                    <span class="fiscal-detail-section-number">02</span>
+                </div>
                 <ul class="fiscal-kv">
                     <li><span class="fiscal-kv-label">Nombre</span><span class="fiscal-kv-value">{{ client_name_display }}</span></li>
                     <li><span class="fiscal-kv-label">Nro de cliente</span><span class="fiscal-kv-value">{{ fiscal_document.client_company_ref_id|default:"-" }}</span></li>
@@ -587,6 +640,14 @@
             </section>
         </div>
 
+        <section class="fiscal-detail-complementary">
+            <div class="fiscal-detail-section-head">
+                <div>
+                    <h3>Informacion complementaria</h3>
+                    <p>Consulta los datos secundarios solamente cuando los necesites.</p>
+                </div>
+                <span class="fiscal-detail-section-number">03</span>
+            </div>
         <div class="fiscal-classic-collapsible-grid">
             <details class="fiscal-detail-box">
                 <summary>Datos adicionales</summary>
@@ -635,11 +696,18 @@
                 </div>
             </details>
         </div>
+        </section>
 
-        <section class="fiscal-classic-card">
+        <section class="fiscal-classic-card fiscal-products-card">
             <div class="fiscal-products-head">
-                <h3>Productos de la venta</h3>
-                <small>{{ items|length }} item{{ items|length|pluralize }}</small>
+                <div>
+                    <h3>Productos de la venta</h3>
+                    <p>Detalle de cantidades, precios netos, IVA y bonificaciones.</p>
+                </div>
+                <div class="fiscal-products-meta">
+                    <span class="fiscal-detail-section-number">04</span>
+                    <small>{{ items|length }} item{{ items|length|pluralize }}</small>
+                </div>
             </div>
             <div class="fiscal-classic-table-wrap">
                 <table class="fiscal-classic-table">
@@ -666,8 +734,21 @@
                             <td><strong>${{ item.total_amount|floatformat:2 }}</strong></td>
                         </tr>
                         {% empty %}
-                        <tr>
-                            <td colspan="7">Sin items fiscales.</td>
+                        <tr class="fiscal-empty-row">
+                            <td colspan="7">
+                                <div class="fiscal-empty-state">
+                                    <span class="fiscal-empty-icon" aria-hidden="true">
+                                        <svg viewBox="0 0 24 24">
+                                            <path d="M4.75 7.25 12 3.5l7.25 3.75v9.5L12 20.5l-7.25-3.75z"></path>
+                                            <path d="m4.75 7.25 7.25 3.8 7.25-3.8M12 11.05v9.45"></path>
+                                        </svg>
+                                    </span>
+                                    <span>
+                                        <strong>El comprobante no tiene productos fiscales</strong>
+                                        <small>Los renglones apareceran aqui cuando se vinculen a la venta.</small>
+                                    </span>
+                                </div>
+                            </td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -677,7 +758,12 @@
 
         <div class="fiscal-classic-bottom">
             <section class="fiscal-classic-card">
-                <h3>Observaciones</h3>
+                <div class="fiscal-detail-card-head">
+                    <div>
+                        <span>Notas</span>
+                        <h3>Observaciones</h3>
+                    </div>
+                </div>
                 <div class="fiscal-observations">
                     {% if fiscal_document.sales_document_type and fiscal_document.sales_document_type.print_signature %}
 {{ fiscal_document.sales_document_type.print_signature|linebreaksbr }}
@@ -692,7 +778,12 @@ Sin observaciones registradas para este comprobante.
             </section>
 
             <aside class="fiscal-total-box">
-                <h3 class="fiscal-inline-title">Totales</h3>
+                <div class="fiscal-detail-card-head">
+                    <div>
+                        <span>Resumen</span>
+                        <h3>Totales</h3>
+                    </div>
+                </div>
                 <div class="fiscal-total-line"><span>Subtotal:</span><strong>${{ subtotal_amount|floatformat:2 }}</strong></div>
                 <div class="fiscal-total-line"><span>Descuento:</span><strong>${{ discount_amount|floatformat:2 }}</strong></div>
                 <div class="fiscal-total-line"><span>Neto:</span><strong>${{ net_amount|floatformat:2 }}</strong></div>
@@ -702,7 +793,7 @@ Sin observaciones registradas para este comprobante.
             </aside>
         </div>
 
-        <details class="fiscal-detail-box">
+        <details class="fiscal-detail-box fiscal-technical-details">
             <summary>Panel tecnico y trazabilidad</summary>
             <div class="fiscal-detail-box-body">
                 {% if document_invoice_errors %}
@@ -784,7 +875,7 @@ Sin observaciones registradas para este comprobante.
         </div>
 
         <div class="fiscal-classic-footer">
-            <a href="{% url 'admin_fiscal_document_list' %}" class="fiscal-classic-action"><- Volver a comprobantes</a>
+            <a href="{% url 'admin_fiscal_document_list' %}" class="fiscal-classic-action">Volver a comprobantes</a>
             {% if can_emit %}
             <form method="post" action="{% url 'admin_fiscal_document_emit' fiscal_document.pk %}" style="margin:0;">
                 {% csrf_token %}

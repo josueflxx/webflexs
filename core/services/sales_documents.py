@@ -37,6 +37,7 @@ from core.models import (
     SalesDocumentType,
     StockMovement,
 )
+from core.services.warehouse_stock import apply_movement_to_warehouse_balance
 INTERNAL_DOC_BEHAVIOR_MAP = {
     "COT": SALES_BEHAVIOR_COTIZACION,
     "PED": SALES_BEHAVIOR_PEDIDO,
@@ -319,6 +320,11 @@ def ensure_stock_movements_for_order_document(
                 new_effect = int(movement.quantity) * direction_sign
                 delta = new_effect - old_effect
                 _apply_stock_delta(product_id=product.pk, delta=delta)
+                apply_movement_to_warehouse_balance(
+                    movement=movement,
+                    signed_effect=new_effect,
+                    previous_signed_effect=old_effect,
+                )
             movements.append(movement)
     return movements
 

@@ -4,6 +4,7 @@ from decimal import Decimal
 from django.contrib.auth.models import User
 from django.core.cache import cache
 from django.core import mail
+from django.core.exceptions import ValidationError
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
@@ -515,9 +516,13 @@ class ClientLedgerTests(TestCase):
         tx.refresh_from_db()
         self.assertEqual(tx.amount, Decimal("-10.00"))
 
-        reopen_fiscal_document(fiscal_document=credit_note)
+        with self.assertRaisesMessage(
+            ValidationError,
+            "Un comprobante fiscal cerrado es inmutable",
+        ):
+            reopen_fiscal_document(fiscal_document=credit_note)
         tx.refresh_from_db()
-        self.assertEqual(tx.amount, Decimal("0.00"))
+        self.assertEqual(tx.amount, Decimal("-10.00"))
 
     def test_discount_decimal_uses_client_category_when_assigned(self):
         category = ClientCategory.objects.create(

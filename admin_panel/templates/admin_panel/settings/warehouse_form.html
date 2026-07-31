@@ -42,8 +42,21 @@
             </label>
         </div>
 
+        <div class="form-group" style="display:flex; align-items:flex-start; min-width:260px;">
+            <label style="display:flex; align-items:flex-start; gap:8px;">
+                {{ form.stock_balance_enabled }}
+                <span>
+                    <strong>Usar saldos por depósito</strong><br>
+                    <small class="text-muted">Actívalo solamente después de inicializar y verificar el inventario de este depósito.</small>
+                </span>
+            </label>
+        </div>
+
         <div class="form-actions">
             <button type="submit" class="btn btn-primary">Guardar</button>
+            {% if warehouse %}
+            <a href="{% url 'admin_warehouse_stock_initialize' warehouse.pk %}" class="btn btn-outline">Inicializar stock</a>
+            {% endif %}
             <a href="{% url 'admin_warehouse_list' %}" class="btn btn-outline">Volver</a>
         </div>
     </form>

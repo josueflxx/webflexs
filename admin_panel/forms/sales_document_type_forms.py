@@ -1,6 +1,7 @@
 from django import forms
 from django.contrib.auth.models import User
 
+from catalog.models import Product
 from core.models import (
     FiscalPointOfSale,
     SALES_BEHAVIOR_COTIZACION,
@@ -20,7 +21,7 @@ from core.models import (
 class WarehouseForm(forms.ModelForm):
     class Meta:
         model = Warehouse
-        fields = ["code", "name", "is_active", "notes"]
+        fields = ["code", "name", "is_active", "stock_balance_enabled", "notes"]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -28,6 +29,37 @@ class WarehouseForm(forms.ModelForm):
         self.fields["name"].widget.attrs.update({"class": "form-input"})
         self.fields["notes"].widget.attrs.update({"class": "form-textarea"})
         self.fields["is_active"].widget.attrs.update({"style": "width:18px; height:18px;"})
+        self.fields["stock_balance_enabled"].widget.attrs.update(
+            {"style": "width:18px; height:18px;"}
+        )
+
+    def clean_stock_balance_enabled(self):
+        enabled = bool(self.cleaned_data.get("stock_balance_enabled"))
+        if not enabled:
+            return False
+        if not self.instance or not self.instance.pk:
+            raise forms.ValidationError(
+                "Guarda el deposito e inicializa sus saldos antes de activar esta opcion."
+            )
+
+        required_product_ids = Product.objects.filter(
+            tracks_stock=True,
+            is_active=True,
+        ).values_list("pk", flat=True)
+        missing_count = (
+            Product.objects.filter(pk__in=required_product_ids)
+            .exclude(
+                warehouse_balances__warehouse=self.instance,
+                warehouse_balances__initialized_at__isnull=False,
+            )
+            .count()
+        )
+        if missing_count:
+            raise forms.ValidationError(
+                f"Faltan inicializar {missing_count} productos con control de stock "
+                "en este deposito."
+            )
+        return True
 
 
 class SalesDocumentTypeForm(forms.ModelForm):

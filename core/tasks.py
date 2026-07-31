@@ -3,6 +3,7 @@ from datetime import timedelta
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db.models import Q
+from django.utils import timezone
 
 from core.services.import_execution_runner import run_import_execution
 
@@ -59,14 +60,11 @@ def run_import_execution_task(
 
 @shared_task(name="core.emit_fiscal_document_async_task")
 def emit_fiscal_document_async_task(document_id, actor_id=None):
-    """
-    Emit a fiscal document to ARCA in a background worker.
-    """
-    from django.utils import timezone
+    """Run a first authorization once; never blind-retry an uncertain result."""
     from core.models import (
         FiscalDocument,
-        FISCAL_STATUS_PENDING_RETRY,
         FISCAL_STATUS_SUBMITTING,
+        FISCAL_STATUS_UNCERTAIN,
     )
     from core.services.fiscal_emission import emit_fiscal_document_now
     from django.contrib.auth import get_user_model
@@ -87,89 +85,127 @@ def emit_fiscal_document_async_task(document_id, actor_id=None):
             "message": "; ".join(getattr(exc, "messages", []) or [str(exc)]),
         }
     except Exception as exc:
-        # If something unexpected happened while task was already running,
-        # do not leave the document forever in submitting state.
-        retry_minutes = int(getattr(settings, "FISCAL_RETRY_MINUTES", 10) or 10)
-        locked = FiscalDocument.objects.filter(pk=document_id).first()
-        if locked and locked.status == FISCAL_STATUS_SUBMITTING:
-            locked.status = FISCAL_STATUS_PENDING_RETRY
-            locked.error_code = "task_unexpected_error"
-            locked.error_message = f"Error inesperado en worker: {exc}"
-            locked.next_retry_at = timezone.now() + timedelta(minutes=max(retry_minutes, 1))
-            locked.save(
-                update_fields=[
-                    "status",
-                    "error_code",
-                    "error_message",
-                    "next_retry_at",
-                    "updated_at",
-                ]
+        # A crash after SENDING is ambiguous by definition. Preserve the
+        # operation for FECompConsultar instead of calling authorization again.
+        from django.db import transaction
+        from core.services.sensitive_data import sanitize_sensitive_text
+
+        with transaction.atomic():
+            locked = (
+                FiscalDocument.objects.select_for_update()
+                .filter(pk=document_id)
+                .first()
             )
-        return {"status": "pending_retry", "message": str(exc)}
+            if locked and locked.status == FISCAL_STATUS_SUBMITTING:
+                locked.transition_to(
+                    FISCAL_STATUS_UNCERTAIN,
+                    error_code="task_unexpected_after_sending",
+                    error_message=sanitize_sensitive_text(str(exc)),
+                    next_recovery_at=timezone.now(),
+                )
+        return {"status": "uncertain", "message": "Resultado enviado a recuperacion."}
+
+
+@shared_task(name="core.recover_fiscal_document_async_task")
+def recover_fiscal_document_async_task(document_id, actor_id=None):
+    """Execute one idempotent FECompConsultar recovery attempt."""
+    from django.contrib.auth import get_user_model
+    from core.models import FiscalDocument
+    from core.services.fiscal_recovery import recover_fiscal_document
+
+    document = FiscalDocument.objects.filter(pk=document_id).first()
+    if not document:
+        return {"status": "error", "message": "Documento fiscal no encontrado."}
+    actor = (
+        get_user_model().objects.filter(pk=actor_id).first()
+        if actor_id
+        else None
+    )
+    try:
+        outcome = recover_fiscal_document(
+            fiscal_document=document,
+            actor=actor,
+            allow_stale_sending=True,
+        )
+        return {
+            "status": outcome.state,
+            "message": outcome.message,
+            "consulted": outcome.consulted,
+        }
+    except ValidationError as exc:
+        return {
+            "status": "error",
+            "message": "; ".join(getattr(exc, "messages", []) or [str(exc)]),
+        }
+    except Exception:
+        return {
+            "status": "error",
+            "message": "La consulta de recuperacion no pudo completarse.",
+        }
 
 
 @shared_task(name="core.retry_stuck_fiscal_documents_task")
 def retry_stuck_fiscal_documents_task():
-    """
-    Cron-like task to automatically retry all stuck documents in 'pending_retry'.
-    To be called by Celery Beat every N minutes.
-    """
+    """Compatibility task name: it now performs query-only recovery."""
     from django.utils import timezone
     from core.models import (
         FiscalDocument,
-        FISCAL_STATUS_PENDING_RETRY,
+        FISCAL_STATUS_RECOVERED_NOT_FOUND,
+        FISCAL_STATUS_RECOVERY_PENDING,
         FISCAL_STATUS_SUBMITTING,
+        FISCAL_STATUS_UNCERTAIN,
     )
-    from core.services.fiscal_emission import emit_fiscal_document_now
+    from core.services.fiscal_recovery import recover_fiscal_document
 
-    max_retry_attempts = int(getattr(settings, "FISCAL_MAX_AUTO_RETRIES", 5) or 5)
     submitting_timeout = int(getattr(settings, "FISCAL_SUBMITTING_TIMEOUT_MINUTES", 20) or 20)
     now = timezone.now()
-
-    # Recover docs stuck in submitting beyond timeout.
     stale_cutoff = now - timedelta(minutes=max(submitting_timeout, 5))
-    stale_submitting = FiscalDocument.objects.filter(
+    stale_ids = list(
+        FiscalDocument.objects.filter(
         status=FISCAL_STATUS_SUBMITTING
-    ).filter(
-        Q(last_attempt_at__isnull=False, last_attempt_at__lte=stale_cutoff)
-        | Q(last_attempt_at__isnull=True, updated_at__lte=stale_cutoff)
+        )
+        .filter(
+            Q(authorization_started_at__lte=stale_cutoff)
+            | Q(authorization_started_at__isnull=True, updated_at__lte=stale_cutoff)
+        )
+        .values_list("id", flat=True)
     )
-    recovered_ids = []
-    for doc in stale_submitting:
-        doc.status = FISCAL_STATUS_PENDING_RETRY
-        doc.error_code = "stale_submitting_recovered"
-        doc.error_message = "El documento quedo en submitting y fue recuperado para reintento."
-        doc.next_retry_at = now
-        doc.save(
-            update_fields=[
-                "status",
-                "error_code",
-                "error_message",
-                "next_retry_at",
-                "updated_at",
+    due_ids = list(
+        FiscalDocument.objects.filter(
+            status__in=[
+                FISCAL_STATUS_UNCERTAIN,
+                FISCAL_STATUS_RECOVERY_PENDING,
+                FISCAL_STATUS_RECOVERED_NOT_FOUND,
             ]
         )
-        recovered_ids.append(doc.id)
-
-    stuck_docs = FiscalDocument.objects.filter(
-        status=FISCAL_STATUS_PENDING_RETRY,
-        attempts_count__lt=max_retry_attempts,
-    ).filter(
-        Q(next_retry_at__isnull=True) | Q(next_retry_at__lte=now)
+        .filter(Q(next_recovery_at__isnull=True) | Q(next_recovery_at__lte=now))
+        .values_list("id", flat=True)
     )
 
     results = []
-    for doc in stuck_docs:
+    for document_id in dict.fromkeys([*stale_ids, *due_ids]):
+        doc = FiscalDocument.objects.filter(pk=document_id).first()
+        if not doc:
+            continue
         try:
-            outcome = emit_fiscal_document_now(fiscal_document=doc)
-            results.append({"id": doc.id, "state": outcome.state})
-        except Exception as e:
-            results.append({"id": doc.id, "state": "error", "error": str(e)})
+            outcome = recover_fiscal_document(
+                fiscal_document=doc,
+                allow_stale_sending=True,
+            )
+            results.append(
+                {
+                    "id": doc.id,
+                    "state": outcome.state,
+                    "consulted": outcome.consulted,
+                }
+            )
+        except Exception:
+            results.append({"id": doc.id, "state": "error"})
 
     return {
-        "retried_count": len(results),
-        "recovered_submitting_count": len(recovered_ids),
-        "recovered_submitting_ids": recovered_ids,
+        "authorized_requests": 0,
+        "consulted_count": sum(bool(row.get("consulted")) for row in results),
+        "stale_submitting_ids": stale_ids,
         "details": results,
     }
 

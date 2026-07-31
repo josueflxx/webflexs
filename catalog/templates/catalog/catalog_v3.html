@@ -10,7 +10,7 @@
 {% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="{% static 'core/css/catalog.css' %}?v=20260716-dropdown-stacking">
+<link rel="stylesheet" href="{% static 'core/css/catalog.css' %}?v=20260727-catalog-workspace-1">
 <style>
     @keyframes spin {
         0% { transform: rotate(0deg); }
@@ -207,12 +207,16 @@
     <div class="container">
         <div class="catalog-header">
             <div class="catalog-header-main">
+                <span class="catalog-eyebrow">Catalogo profesional</span>
                 <h1>Catalogo de Productos</h1>
-                <p class="catalog-subtitle">
+                <p class="catalog-lead">
+                    Busca por codigo, nombre o medida y compara rapidamente disponibilidad, categorias y precios.
+                </p>
+                <div class="catalog-notices">
                     {% if current_category and current_category_has_descendants %}
                     <span class="price-notice">
                         Incluye productos de subcategorias de "{{ current_category.display_name }}"
-                    </span><br>
+                    </span>
                     {% endif %}
                     {% if not show_prices %}
                     <span class="price-notice">{{ price_message }}</span>
@@ -224,7 +228,7 @@
                         <span>Tenes un <strong class="discount-percent-highlight">{{ discount|multiply:100|floatformat:0 }}% de descuento</strong> aplicado en todo el catálogo</span>
                     </span>
                     {% endif %}
-                </p>
+                </div>
             </div>
             <div class="catalog-header-stats">
                 <span class="header-stat">
@@ -254,33 +258,50 @@
         </button>
         <div class="catalog-overlay" id="catalogOverlay" onclick="closeCatalogFilters()"></div>
 
+        <section class="catalog-search-panel" aria-label="Buscar productos">
+            <form method="get" class="catalog-primary-search">
+                <input type="hidden" name="category" value="{{ category_slug }}">
+                <input type="hidden" name="order" value="{{ order_by }}">
+                <input type="hidden" name="view" value="{{ view_mode }}">
+                <span class="catalog-search-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none">
+                        <circle cx="11" cy="11" r="7"></circle>
+                        <path d="m16 16 4 4"></path>
+                    </svg>
+                </span>
+                <input
+                    type="search"
+                    name="q"
+                    value="{{ search_query }}"
+                    placeholder="Buscar por SKU, nombre, medida o frase exacta"
+                    class="catalog-primary-search-input"
+                    data-suggest="1"
+                    data-suggest-scope="catalog"
+                    autocomplete="off"
+                >
+                {% if search_query %}
+                <a
+                    href="?{% querystring request q='' page='' %}"
+                    class="catalog-search-clear"
+                    title="Limpiar busqueda"
+                >
+                    Limpiar
+                </a>
+                {% endif %}
+                <button type="submit" class="btn btn-primary catalog-search-submit">Buscar productos</button>
+            </form>
+        </section>
+
         <div class="catalog-layout">
             <aside class="catalog-sidebar" id="catalogSidebar">
                 <div class="catalog-sidebar-head">
-                    <h3>Filtros</h3>
+                    <div>
+                        <span class="catalog-sidebar-kicker">Explorar</span>
+                        <h3>Refinar resultados</h3>
+                    </div>
                     <button type="button" class="catalog-sidebar-close" onclick="closeCatalogFilters()">
                         Cerrar
                     </button>
-                </div>
-
-                <div class="filter-section">
-                    <h3>Buscar</h3>
-                    <form method="get" class="search-form">
-                        <input type="hidden" name="category" value="{{ category_slug }}">
-                        <input type="hidden" name="order" value="{{ order_by }}">
-                        <input type="hidden" name="view" value="{{ view_mode }}">
-                        <input
-                            type="text"
-                            name="q"
-                            value="{{ search_query }}"
-                            placeholder='SKU, nombre, "frase", tipo:trefilada, 7/16x80x220, -termino'
-                            class="form-input"
-                            data-suggest="1"
-                            data-suggest-scope="catalog"
-                            autocomplete="off"
-                        >
-                        <button type="submit" class="btn btn-primary">Buscar</button>
-                    </form>
                 </div>
 
                 <div class="filter-section">
@@ -478,7 +499,8 @@
                 <div class="catalog-toolbar">
                     <div class="toolbar-meta">
                         <span class="result-count">
-                            {{ page_obj.paginator.count }} productos encontrados
+                            <strong>{{ page_obj.paginator.count }}</strong>
+                            <span>productos encontrados</span>
                         </span>
                     </div>
                     <div class="toolbar-actions">
@@ -563,7 +585,10 @@
                         <button class="quick-edit-badge-btn" 
                                 onclick="openQuickEditModal('{{ product.id|unlocalize }}', '{{ product.sku|escapejs }}', '{{ product.name|escapejs }}', '{{ product.base_price|default:product.price|unlocalize }}', '{{ product.stock|unlocalize }}', {% if product.is_active %}true{% else %}false{% endif %})" 
                                 title="Editar producto">
-                            ✏️
+                            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                <path d="M4 20h4l11-11-4-4L4 16v4Z"></path>
+                                <path d="m13.5 6.5 4 4"></path>
+                            </svg>
                         </button>
                         {% endif %}
                         <a class="catalog-list-thumb" href="{% url 'product_detail' product.sku %}">
@@ -662,7 +687,10 @@
                         <button class="quick-edit-badge-btn" 
                                 onclick="openQuickEditModal('{{ product.id|unlocalize }}', '{{ product.sku|escapejs }}', '{{ product.name|escapejs }}', '{{ product.base_price|default:product.price|unlocalize }}', '{{ product.stock|unlocalize }}', {% if product.is_active %}true{% else %}false{% endif %})" 
                                 title="Editar producto">
-                            ✏️
+                            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                <path d="M4 20h4l11-11-4-4L4 16v4Z"></path>
+                                <path d="m13.5 6.5 4 4"></path>
+                            </svg>
                         </button>
                         {% endif %}
                         <a class="product-image" href="{% url 'product_detail' product.sku %}">
@@ -685,6 +713,7 @@
                                         <path d="M 3 29 L 14 17 L 22 25 L 28 19 L 33 25" stroke="rgba(255, 255, 255, 0.12)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none" />
                                     </g>
                                 </svg>
+                                <span class="product-placeholder-label">Imagen no disponible</span>
                             </div>
                             {% endif %}
                         </a>
@@ -750,7 +779,7 @@
 
                             <div class="product-actions">
                                 <a href="{% url 'product_detail' product.sku %}" class="btn btn-outline product-detail-btn">
-                                    Ver detalle
+                                    Ver producto
                                 </a>
                                 {% if user.is_authenticated %}
                                 <button
@@ -765,7 +794,7 @@
                                     onclick="addToCart({{ product.id|unlocalize }})"
                                     {% if product.stock <= 0 %}disabled{% endif %}
                                 >
-                                    Agregar
+                                    {% if product.stock > 0 %}Agregar al carrito{% else %}Sin disponibilidad{% endif %}
                                 </button>
                                 {% endif %}
                             </div>
@@ -1007,6 +1036,7 @@
     function setupCustomSelects() {
         const selects = document.querySelectorAll('.order-select, .form-select-mini');
         selects.forEach(select => {
+            if (select.dataset.smartSelectReady === 'true') return;
             if (select.parentNode.classList.contains('custom-select-wrapper')) return;
             
             const wrapper = document.createElement('div');

@@ -1,4 +1,5 @@
 import json
+from datetime import date
 from decimal import Decimal
 from io import BytesIO
 from types import SimpleNamespace
@@ -31,6 +32,7 @@ from core.models import (
     SalesDocumentType,
 )
 from core.services.company_context import get_default_company, get_default_client_origin_company
+from core.services.fiscal_integrity import fiscal_payload_hash
 from orders.models import ClampQuotation, Order, OrderItem, OrderRequest, OrderStatusHistory
 from orders.services.workflow import ROLE_FACTURACION, ROLE_VENTAS
 
@@ -914,7 +916,7 @@ class DashboardHubRankingTests(AdminPanelTestCase):
             point_of_sale=self.point,
             doc_type='FA',
             issue_mode='manual',
-            status='external_recorded',
+            status='draft',
             issued_at=timezone.now(),
             subtotal_net=Decimal('150.00'),
             total=Decimal('150.00'),
@@ -930,6 +932,8 @@ class DashboardHubRankingTests(AdminPanelTestCase):
             net_amount=Decimal('150.00'),
             total_amount=Decimal('150.00'),
         )
+        self.fiscal_document.transition_to('ready_to_issue')
+        self.fiscal_document.transition_to('external_recorded')
         ClientTransaction.objects.create(
             client_profile=self.client_profile,
             company=self.company,
@@ -962,6 +966,17 @@ class DashboardHubRankingTests(AdminPanelTestCase):
         self.assertContains(response, reverse('admin_client_order_history', args=[self.client_profile.pk]))
         self.assertContains(response, reverse('admin_product_edit', args=[self.product.pk]))
 
+    def test_admin_header_includes_public_catalog_shortcut(self):
+        self.client.force_login(self.staff)
+        self._activate_company()
+
+        response = self.client.get(reverse('admin_dashboard'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Ver catalogo')
+        self.assertContains(response, f'href="{reverse("catalog")}"')
+        self.assertContains(response, 'target="_blank"')
+
 
 class ClientCorePermissionsTests(AdminPanelTestCase):
     def setUp(self):
@@ -984,6 +999,12 @@ class ClientCorePermissionsTests(AdminPanelTestCase):
             user=self.client_user,
             company_name='Cliente Permisos',
         )
+        self.company = get_default_company()
+        ClientCompany.objects.create(
+            client_profile=self.client_profile,
+            company=self.company,
+            is_active=True,
+        )
 
     def test_non_superadmin_staff_can_open_client_edit(self):
         self.client.force_login(self.staff)
@@ -996,7 +1017,7 @@ class ClientCorePermissionsTests(AdminPanelTestCase):
             reverse('admin_client_edit', args=[self.client_profile.pk]),
             data={
                 'company_name': 'Cliente Editado Staff',
-                'cuit_dni': '20-11111111-1',
+                'cuit_dni': '20-12345678-6',
                 'province': 'Buenos Aires',
                 'address': 'Calle 123',
                 'phone': '1111-2222',
@@ -1403,7 +1424,7 @@ class ConfiguredSalesDocumentTypeFlowTests(AdminPanelTestCase):
             user=self.client_user,
             company_name='Cliente Doc Type',
             document_type='cuit',
-            document_number='20123456789',
+            document_number='20123456786',
             iva_condition='responsable_inscripto',
             fiscal_address='Av Test 123',
             fiscal_city='San Martin',
@@ -1412,12 +1433,13 @@ class ConfiguredSalesDocumentTypeFlowTests(AdminPanelTestCase):
         )
         self.company = get_default_company()
         self.company.legal_name = 'Flexs Test SA'
-        self.company.cuit = '30-12345678-9'
+        self.company.cuit = '30-69345023-9'
         self.company.tax_condition = 'responsable_inscripto'
         self.company.fiscal_address = 'Indalecio Gomez 4215'
         self.company.fiscal_city = 'San Martin'
         self.company.fiscal_province = 'Buenos Aires'
         self.company.postal_code = '1650'
+        self.company.activity_start_date = date(2020, 1, 1)
         self.company.point_of_sale_default = '1'
         self.company.save()
         self.client_company = ClientCompany.objects.create(
@@ -1600,11 +1622,12 @@ class ConfiguredSalesDocumentTypeFlowTests(AdminPanelTestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.context['stage'], 'drafts')
-        self.assertContains(response, 'Workspace de ventas')
+        self.assertContains(response, 'Pedidos operativos')
+        self.assertContains(response, 'Flujo comercial')
         self.assertContains(response, 'Solicitud')
         self.assertContains(response, 'Factura')
         self.assertContains(response, 'Cobro')
-        self.assertContains(response, 'Borradores operativos')
+        self.assertContains(response, 'Borrador')
         self.assertEqual(response.context['page_obj'].paginator.count, 1)
 
     def test_order_request_list_stage_filter_shows_sales_workspace(self):
@@ -1622,7 +1645,8 @@ class ConfiguredSalesDocumentTypeFlowTests(AdminPanelTestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.context['stage'], 'waiting')
-        self.assertContains(response, 'Workspace de ventas')
+        self.assertContains(response, 'Solicitudes de compra')
+        self.assertContains(response, 'Flujo comercial')
         self.assertContains(response, 'Esperando cliente')
         self.assertEqual(response.context['page_obj'].paginator.count, 1)
 
@@ -1642,7 +1666,8 @@ class ConfiguredSalesDocumentTypeFlowTests(AdminPanelTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Solicitud comercial')
         self.assertContains(response, 'Pedido operativo')
-        self.assertContains(response, 'Esta vista cruza')
+        self.assertContains(response, 'Seguimiento de ventas')
+        self.assertContains(response, 'Solicitudes y pedidos operativos')
         self.assertEqual(response.context['page_obj'].paginator.count, 2)
         order_rows = [row for row in response.context['page_obj'].object_list if row['kind'] == 'order']
         self.assertEqual(len(order_rows), 1)
@@ -1681,7 +1706,7 @@ class ConfiguredSalesDocumentTypeFlowTests(AdminPanelTestCase):
         self.assertEqual(fiscal_document.sales_document_type.document_behavior, 'Factura')
         self.assertEqual(response.url, reverse('admin_fiscal_document_detail', args=[fiscal_document.pk]))
 
-    def test_order_invoice_open_allows_pending_fiscal_data(self):
+    def test_order_invoice_open_rejects_unvalidated_fiscal_data(self):
         self.sales_document_type.billing_mode = 'ELECTRONIC_AFIP_WSFE'
         self.sales_document_type.save(update_fields=['billing_mode', 'updated_at'])
         self.client_profile.document_type = ''
@@ -1700,11 +1725,11 @@ class ConfiguredSalesDocumentTypeFlowTests(AdminPanelTestCase):
         response = self.client.post(reverse('admin_order_invoice_open', args=[self.order.pk]), follow=True)
 
         self.assertEqual(response.status_code, 200)
-        fiscal_document = FiscalDocument.objects.get(order=self.order)
-        self.assertEqual(fiscal_document.issue_mode, 'arca_wsfe')
-        self.assertContains(response, 'Completa los datos fiscales antes de cerrar o emitir')
+        self.assertFalse(FiscalDocument.objects.filter(order=self.order).exists())
+        response_messages = [str(message) for message in response.context['messages']]
+        self.assertTrue(response_messages)
 
-    def test_manual_fiscal_document_can_close_and_reopen(self):
+    def test_manual_fiscal_document_closes_and_cannot_reopen(self):
         fiscal_document = FiscalDocument.objects.create(
             source_key='detail-manual-close-test',
             company=self.company,
@@ -1731,7 +1756,7 @@ class ConfiguredSalesDocumentTypeFlowTests(AdminPanelTestCase):
         reopen_response = self.client.post(reverse('admin_fiscal_document_reopen', args=[fiscal_document.pk]))
         self.assertEqual(reopen_response.status_code, 302)
         fiscal_document.refresh_from_db()
-        self.assertEqual(fiscal_document.status, 'ready_to_issue')
+        self.assertEqual(fiscal_document.status, 'external_recorded')
 
     def test_manual_fiscal_close_sets_due_date_snapshot(self):
         fiscal_document = FiscalDocument.objects.create(
@@ -1907,7 +1932,7 @@ class ConfiguredSalesDocumentTypeFlowTests(AdminPanelTestCase):
             point_of_sale=self.point,
             doc_type='FA',
             issue_mode='manual',
-            status='ready_to_issue',
+            status='draft',
             sales_document_type=self.sales_document_type,
             subtotal_net=Decimal('100.00'),
             total=Decimal('100.00'),
@@ -2307,7 +2332,7 @@ class FiscalPrintTemplateTests(AdminPanelTestCase):
             user=self.client_user,
             company_name='Cliente Fiscal Print',
             document_type='cuit',
-            document_number='20123456789',
+            document_number='20123456786',
             iva_condition='responsable_inscripto',
             fiscal_address='Av Siempre Viva 123',
             fiscal_city='San Martin',
@@ -2316,7 +2341,7 @@ class FiscalPrintTemplateTests(AdminPanelTestCase):
         )
         self.company = get_default_company()
         self.company.legal_name = 'Flexs Print SA'
-        self.company.cuit = '30-12345678-9'
+        self.company.cuit = '30-69345023-9'
         self.company.tax_condition = 'responsable_inscripto'
         self.company.fiscal_address = 'Indalecio Gomez 4215'
         self.company.fiscal_city = 'San Martin'
@@ -2346,6 +2371,42 @@ class FiscalPrintTemplateTests(AdminPanelTestCase):
             is_active=True,
             is_default=True,
         )
+        snapshot = {
+            'version': 2,
+            'emitter': {
+                'legal_name': 'Flexs Print SA',
+                'cuit': '30693450239',
+                'tax_condition_label': 'Responsable Inscripto',
+                'fiscal_address': 'Indalecio Gomez 4215',
+                'fiscal_city': 'San Martin',
+                'fiscal_province': 'Buenos Aires',
+                'postal_code': '1650',
+                'point_of_sale': '99',
+                'environment': self.point.environment,
+            },
+            'client': {
+                'name': 'Cliente Fiscal Print',
+                'document_type': 'cuit',
+                'document_type_label': 'CUIT',
+                'document_number': '20123456786',
+                'tax_condition_label': 'Responsable Inscripto',
+                'fiscal_address': 'Av Siempre Viva 123',
+                'fiscal_city': 'San Martin',
+                'fiscal_province': 'Buenos Aires',
+                'postal_code': '1650',
+            },
+            'operation': {
+                'order_id': self.order.pk,
+                'notes': 'Observacion visible en factura',
+                'discount_percentage': '10.00',
+            },
+            'totals': {
+                'subtotal_net': '1000.00',
+                'discount_total': '100.00',
+                'tax_total': '0.00',
+                'total': '900.00',
+            },
+        }
         self.document = FiscalDocument.objects.create(
             source_key='test:fiscal:print',
             company=self.company,
@@ -2355,13 +2416,17 @@ class FiscalPrintTemplateTests(AdminPanelTestCase):
             point_of_sale=self.point,
             doc_type='FA',
             issue_mode='manual',
-            status='authorized',
-            number=4869,
+            status='draft',
             subtotal_net=Decimal('1000.00'),
             discount_total=Decimal('100.00'),
             tax_total=Decimal('0.00'),
             total=Decimal('900.00'),
-            cae='12345678901234',
+            fiscal_snapshot=snapshot,
+            snapshot_hash=fiscal_payload_hash(snapshot),
+            prepared_at=timezone.now(),
+            issuer_cuit_snapshot='30693450239',
+            environment_snapshot=self.point.environment,
+            point_of_sale_number_snapshot=self.point.number,
         )
         FiscalDocumentItem.objects.create(
             fiscal_document=self.document,
@@ -2377,6 +2442,7 @@ class FiscalPrintTemplateTests(AdminPanelTestCase):
             iva_amount=Decimal('0.00'),
             total_amount=Decimal('900.00'),
         )
+        self.document.transition_to('ready_to_issue')
 
     def _activate_company(self):
         session = self.client.session
@@ -2384,6 +2450,20 @@ class FiscalPrintTemplateTests(AdminPanelTestCase):
         session.save()
 
     def test_fiscal_print_renders_saas_like_layout_blocks(self):
+        issued_at = timezone.now()
+        self.document.transition_to(
+            'submitting',
+            number=4869,
+            issued_at=issued_at,
+            authorization_started_at=issued_at,
+            payload_hash='a' * 64,
+        )
+        self.document.transition_to(
+            'authorized',
+            cae='12345678901234',
+            cae_due_date=issued_at.date(),
+            resolved_at=issued_at,
+        )
         self.client.force_login(self.staff)
         self._activate_company()
 
@@ -2402,10 +2482,6 @@ class FiscalPrintTemplateTests(AdminPanelTestCase):
     def test_fiscal_print_does_not_invent_number_for_unnumbered_document(self):
         self.client.force_login(self.staff)
         self._activate_company()
-        self.document.number = None
-        self.document.status = 'ready_to_issue'
-        self.document.issued_at = None
-        self.document.save(update_fields=['number', 'status', 'issued_at', 'updated_at'])
         ClientTransaction.objects.create(
             client_profile=self.client_profile,
             company=self.company,
@@ -3928,6 +4004,12 @@ class AdminInputValidationTests(AdminPanelTestCase):
             company_name='Cliente Validacion',
             discount=Decimal('0.00'),
         )
+        self.company = get_default_company()
+        ClientCompany.objects.create(
+            client_profile=self.client_profile,
+            company=self.company,
+            is_active=True,
+        )
 
     def test_client_edit_accepts_discount_with_comma(self):
         self.client.force_login(self.staff)
@@ -4076,6 +4158,8 @@ class ClientManagementViewTests(AdminPanelTestCase):
                 'phone': '11-4444-5555',
                 'iva_condition': 'responsable_inscripto',
                 'client_type': 'taller',
+                'commercial_observation': 'Prefiere seguimiento por correo.',
+                'notes': 'Nota administrativa separada.',
             },
             follow=True,
         )
@@ -4087,6 +4171,11 @@ class ClientManagementViewTests(AdminPanelTestCase):
         self.assertEqual(new_user.first_name, 'Nuevo')
         new_profile = ClientProfile.objects.get(user=new_user)
         self.assertEqual(new_profile.company_name, 'Cliente Nuevo Panel')
+        self.assertEqual(
+            new_profile.commercial_observation,
+            'Prefiere seguimiento por correo.',
+        )
+        self.assertEqual(new_profile.notes, 'Nota administrativa separada.')
         self.assertTrue(new_profile.is_approved)
         client_link = ClientCompany.objects.filter(
             client_profile=new_profile,
@@ -4148,6 +4237,8 @@ class ClientManagementViewTests(AdminPanelTestCase):
                 'company_is_active': 'on',
                 'client_type': 'taller',
                 'iva_condition': 'responsable_inscripto',
+                'commercial_observation': 'Llamar despues de las 14.',
+                'notes': 'Control interno.',
             },
             follow=True,
         )
@@ -4162,6 +4253,11 @@ class ClientManagementViewTests(AdminPanelTestCase):
         self.assertEqual(self.client_user.last_name, 'Editado')
         self.assertEqual(self.client_profile.company_name, 'Cliente Gestion Editado')
         self.assertEqual(self.client_profile.cuit_dni, '20-11111111-1')
+        self.assertEqual(
+            self.client_profile.commercial_observation,
+            'Llamar despues de las 14.',
+        )
+        self.assertEqual(self.client_profile.notes, 'Control interno.')
         self.assertTrue(self.client_user.is_active)
         self.assertTrue(self.client_profile.is_approved)
         self.assertTrue(self.client_company.is_active)

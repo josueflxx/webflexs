@@ -64,7 +64,20 @@
     </td>
 </tr>
 {% empty %}
-<tr>
-    <td colspan="8" class="text-center text-muted">Este pedido todavia no tiene items cargados.</td>
+<tr class="order-record-empty-row">
+    <td colspan="8">
+        <div class="order-record-empty">
+            <span class="order-record-empty-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24">
+                    <path d="M4.75 7.25 12 3.5l7.25 3.75v9.5L12 20.5l-7.25-3.75z"></path>
+                    <path d="m4.75 7.25 7.25 3.8 7.25-3.8M12 11.05v9.45"></path>
+                </svg>
+            </span>
+            <span>
+                <strong>Esta venta todavia no tiene productos</strong>
+                <small>Agrega el primer producto para comenzar a completar la cotizacion.</small>
+            </span>
+        </div>
+    </td>
 </tr>
 {% endfor %}
