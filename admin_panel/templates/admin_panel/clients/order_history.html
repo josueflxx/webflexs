@@ -722,7 +722,7 @@
             </div>
             <div class="client-ledger-actions">
                 {% if active_company and not client_company_missing %}
-                <a href="{% url 'admin_client_tasks' client.pk %}?company_id={{ active_company.pk }}" class="btn btn-primary">
+                <a href="/admin-panel/clientes/{{ client.pk }}/tareas/?company_id={{ active_company.pk }}" class="btn btn-primary">
                     Tareas{% if pending_client_tasks %} ({{ pending_client_tasks }}){% endif %}
                 </a>
                 {% endif %}
