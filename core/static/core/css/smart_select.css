@@ -1,0 +1,407 @@
+/* FLEXS reusable select enhancement. The native control remains in the form. */
+html[data-theme="dark"] select {
+    color-scheme: dark;
+}
+
+html[data-theme="dark"] select option,
+html[data-theme="dark"] select optgroup {
+    color: #eef2f7 !important;
+    background: #111923 !important;
+}
+
+html[data-theme="light"] select {
+    color-scheme: light;
+}
+
+html[data-theme="light"] select option,
+html[data-theme="light"] select optgroup {
+    color: #162033 !important;
+    background: #ffffff !important;
+}
+
+.smart-select-native {
+    position: absolute !important;
+    width: 1px !important;
+    height: 1px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+    clip-path: inset(50%) !important;
+}
+
+.smart-select {
+    position: relative;
+    width: 100%;
+    min-width: 0;
+    font-family: var(--font-family, "Inter", sans-serif);
+}
+
+.smart-select__trigger {
+    width: 100%;
+    min-width: 0;
+    min-height: 40px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 18px;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 11px 9px 13px;
+    color: #eef2f7;
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.022)),
+        #111923;
+    border: 1px solid rgba(255, 255, 255, 0.13);
+    border-radius: 9px;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.025);
+    font: inherit;
+    font-size: 0.82rem;
+    font-weight: 580;
+    line-height: 1.2;
+    text-align: left;
+    cursor: pointer;
+    transition:
+        border-color 150ms ease,
+        box-shadow 150ms ease,
+        background 150ms ease,
+        transform 150ms ease;
+}
+
+.smart-select__trigger:hover {
+    border-color: rgba(255, 107, 53, 0.46);
+    background:
+        linear-gradient(180deg, rgba(255, 107, 53, 0.065), rgba(255, 255, 255, 0.025)),
+        #111923;
+}
+
+.smart-select__trigger:focus-visible,
+.smart-select.is-open .smart-select__trigger {
+    outline: none;
+    border-color: var(--color-primary, #ff6b35);
+    box-shadow:
+        0 0 0 3px rgba(255, 107, 53, 0.16),
+        inset 0 1px 0 rgba(255, 255, 255, 0.035);
+}
+
+.smart-select__value {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.smart-select__chevron {
+    width: 18px;
+    height: 18px;
+    color: #8e99aa;
+    transition: transform 170ms ease, color 170ms ease;
+}
+
+.smart-select__chevron svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.9;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.smart-select.is-open .smart-select__chevron {
+    color: var(--color-primary, #ff6b35);
+    transform: rotate(180deg);
+}
+
+.smart-select.is-disabled .smart-select__trigger,
+.smart-select__trigger:disabled {
+    color: #647084;
+    background: #0d141e;
+    border-color: rgba(255, 255, 255, 0.07);
+    cursor: not-allowed;
+    opacity: 0.72;
+}
+
+.smart-select.has-error .smart-select__trigger {
+    border-color: #ef5b62;
+    box-shadow: 0 0 0 3px rgba(239, 91, 98, 0.13);
+}
+
+.smart-select__popover {
+    position: fixed;
+    z-index: 12000;
+    min-width: 180px;
+    padding: 7px;
+    color: #e9edf4;
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.035), transparent 56px),
+        #111923;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 12px;
+    box-shadow:
+        0 24px 60px rgba(0, 0, 0, 0.48),
+        0 0 0 1px rgba(0, 0, 0, 0.22);
+    overflow: hidden;
+    transform-origin: top center;
+    animation: smart-select-in 145ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.smart-select__popover[hidden] {
+    display: none !important;
+}
+
+.smart-select__popover.is-above {
+    transform-origin: bottom center;
+}
+
+@keyframes smart-select-in {
+    from {
+        opacity: 0;
+        transform: translateY(-4px) scale(0.985);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+.smart-select__search-wrap {
+    position: relative;
+    display: grid;
+    grid-template-columns: 18px minmax(0, 1fr);
+    align-items: center;
+    gap: 7px;
+    margin-bottom: 6px;
+    padding: 0 10px;
+    background: #0b111a;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+}
+
+.smart-select__search-wrap:focus-within {
+    border-color: rgba(255, 107, 53, 0.62);
+    box-shadow: 0 0 0 3px rgba(255, 107, 53, 0.11);
+}
+
+.smart-select__search-icon {
+    width: 16px;
+    height: 16px;
+    color: #748096;
+}
+
+.smart-select__search-icon svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+}
+
+.smart-select__search {
+    width: 100%;
+    min-width: 0;
+    height: 38px;
+    padding: 0;
+    color: #eef2f7;
+    background: transparent;
+    border: 0;
+    outline: 0;
+    font: inherit;
+    font-size: 0.8rem;
+}
+
+.smart-select__search::placeholder {
+    color: #69758a;
+}
+
+.smart-select__options {
+    max-height: 310px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 107, 53, 0.58) rgba(255, 255, 255, 0.035);
+}
+
+.smart-select__options::-webkit-scrollbar {
+    width: 7px;
+}
+
+.smart-select__options::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.035);
+    border-radius: 999px;
+}
+
+.smart-select__options::-webkit-scrollbar-thumb {
+    background: rgba(255, 107, 53, 0.58);
+    border: 2px solid #111923;
+    border-radius: 999px;
+}
+
+.smart-select__group {
+    padding: 10px 10px 5px;
+    color: #738096;
+    font-size: 0.64rem;
+    font-weight: 800;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+}
+
+.smart-select__option {
+    width: 100%;
+    min-height: 36px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 17px;
+    align-items: center;
+    gap: 9px;
+    padding: 8px 10px;
+    color: #dce2eb;
+    background: transparent;
+    border: 0;
+    border-radius: 7px;
+    font: inherit;
+    font-size: 0.78rem;
+    line-height: 1.3;
+    text-align: left;
+    cursor: pointer;
+}
+
+.smart-select__option-label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.smart-select__option:hover,
+.smart-select__option.is-highlighted {
+    color: #ffffff;
+    background: rgba(255, 255, 255, 0.075);
+    outline: none;
+}
+
+.smart-select__option.is-selected {
+    color: #ffffff;
+    background: rgba(255, 107, 53, 0.13);
+}
+
+.smart-select__option.is-selected:hover,
+.smart-select__option.is-selected.is-highlighted {
+    background: rgba(255, 107, 53, 0.2);
+}
+
+.smart-select__option:disabled {
+    color: #586477;
+    cursor: not-allowed;
+}
+
+.smart-select__check {
+    width: 16px;
+    height: 16px;
+    color: transparent;
+}
+
+.smart-select__option.is-selected .smart-select__check {
+    color: var(--color-primary, #ff6b35);
+}
+
+.smart-select__check svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2.2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.smart-select__empty {
+    padding: 22px 12px;
+    color: #7f8a9d;
+    font-size: 0.76rem;
+    text-align: center;
+}
+
+.smart-select__footer {
+    margin-top: 6px;
+    padding: 7px 9px 2px;
+    color: #69758a;
+    border-top: 1px solid rgba(255, 255, 255, 0.07);
+    font-size: 0.65rem;
+    text-align: right;
+}
+
+html[data-theme="light"] .smart-select__trigger {
+    color: #172033;
+    background: linear-gradient(180deg, #ffffff, #f7f9fc);
+    border-color: rgba(15, 23, 42, 0.16);
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.035);
+}
+
+html[data-theme="light"] .smart-select__trigger:hover {
+    background: #ffffff;
+    border-color: rgba(229, 90, 43, 0.48);
+}
+
+html[data-theme="light"] .smart-select__popover {
+    color: #172033;
+    background: #ffffff;
+    border-color: rgba(15, 23, 42, 0.14);
+    box-shadow: 0 24px 54px rgba(15, 23, 42, 0.2);
+}
+
+html[data-theme="light"] .smart-select__search-wrap {
+    background: #f6f8fb;
+    border-color: rgba(15, 23, 42, 0.12);
+}
+
+html[data-theme="light"] .smart-select__search {
+    color: #172033;
+}
+
+html[data-theme="light"] .smart-select__option {
+    color: #263247;
+}
+
+html[data-theme="light"] .smart-select__option:hover,
+html[data-theme="light"] .smart-select__option.is-highlighted {
+    color: #172033;
+    background: rgba(15, 23, 42, 0.065);
+}
+
+html[data-theme="light"] .smart-select__option.is-selected {
+    color: #a63e1d;
+    background: rgba(255, 107, 53, 0.12);
+}
+
+html[data-theme="light"] .smart-select__options {
+    scrollbar-color: rgba(229, 90, 43, 0.6) rgba(15, 23, 42, 0.04);
+}
+
+html[data-theme="light"] .smart-select__options::-webkit-scrollbar-thumb {
+    border-color: #ffffff;
+}
+
+html[data-theme="light"] .smart-select__footer {
+    color: #778297;
+    border-top-color: rgba(15, 23, 42, 0.08);
+}
+
+@media (max-width: 640px) {
+    .smart-select__popover {
+        border-radius: 11px;
+    }
+
+    .smart-select__options {
+        max-height: 260px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .smart-select__popover {
+        animation: none;
+    }
+}

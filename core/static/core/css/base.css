@@ -89,6 +89,7 @@
     --header-offset: 92px;
 }
 
+
 /* Light Theme Overrides */
 html[data-theme="light"] {
     --theme-bg: radial-gradient(circle at top left, rgba(255, 107, 53, 0.06), transparent 28%),
@@ -257,7 +258,7 @@ img {
     color: var(--color-gray);
 }
 
-@media (min-width: 901px) {
+@media (min-width: 1221px) {
     .nav-company-item {
         display: none !important;
     }
@@ -509,35 +510,47 @@ html[data-theme="light"] img.logo-light-theme {
 
 @media (max-width: 1560px) {
     .navbar {
-        padding: 14px 0;
+        padding: 9px 0;
     }
 
     .navbar-content {
-        align-items: flex-start;
+        align-items: center;
+        gap: 10px;
     }
 
     .navbar-content .logo {
-        margin-right: 18px;
+        margin-right: 6px;
     }
 
     .brand-logo.public-brand-logo {
-        height: 48px;
+        height: 40px;
+    }
+
+    .logo {
+        padding: 6px 10px;
+        border-radius: 11px;
     }
 
     .nav-menu {
         flex: 1 1 auto;
         justify-content: flex-start;
         flex-wrap: nowrap;
-        gap: 0.7rem 1rem;
+        gap: 0.5rem;
+        padding-bottom: 0;
     }
 
     .nav-menu a {
-        font-size: 0.92rem;
+        font-size: 0.76rem;
     }
 
     .nav-menu .btn {
-        padding: 0.55rem 0.9rem;
-        font-size: 0.76rem;
+        padding: 0.46rem 0.62rem;
+        font-size: 0.68rem;
+    }
+
+    .cart-link {
+        gap: 0.3rem;
+        padding: 0.3rem 0.45rem;
     }
 
     .nav-company-item {
@@ -580,7 +593,7 @@ html[data-theme="light"] img.logo-light-theme {
     }
 }
 
-@media (max-width: 900px) {
+@media (max-width: 1220px) {
     :root {
         --header-offset: 82px;
     }
@@ -1154,7 +1167,7 @@ select optgroup {
    ============================================ */
 
 /* Mobile Menu Cascade Slide-in */
-@media (max-width: 900px) {
+@media (max-width: 1220px) {
     .nav-menu > li {
         opacity: 0;
         transform: translateY(15px);
