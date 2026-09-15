@@ -296,7 +296,7 @@ def evaluate_homologation_readiness(
         configured_cache_backend = str(
             getattr(settings, "ARCA_TOKEN_CACHE_BACKEND", "") or ""
         )
-        if configured_cache_backend not in {"", "redis", "memcached"}:
+        if configured_cache_backend not in {"", "redis", "memcached", "locmem"}:
             errors.append("cache_backend_setting_invalid")
         if not cache_configuration.valid:
             errors.append(cache_configuration.error_code)

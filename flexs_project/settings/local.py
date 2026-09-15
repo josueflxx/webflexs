@@ -44,3 +44,13 @@ else:
 LOGIN_MAX_FAILED_ATTEMPTS = 10
 LOGIN_LOCKOUT_SECONDS = 60
 LOGIN_ATTEMPT_WINDOW_SECONDS = 5 * 60
+
+# In local development, default to locmem cache so local server runs without requiring external Redis
+local_cache_backend = os.getenv('LOCAL_CACHE_BACKEND', 'locmem').strip().lower()
+if local_cache_backend == 'locmem':
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+            'LOCATION': 'flexs-local-dev-cache',
+        }
+    }

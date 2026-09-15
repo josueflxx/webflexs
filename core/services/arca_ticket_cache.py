@@ -137,6 +137,14 @@ def inspect_arca_cache_configuration() -> ArcaCacheConfiguration:
             error_code="",
         )
 
+    if getattr(settings, "DEBUG", False) and backend_name in {"LocMemCache", "DummyCache"}:
+        return ArcaCacheConfiguration(
+            valid=True,
+            configured=True,
+            backend_kind="locmem",
+            error_code="",
+        )
+
     return ArcaCacheConfiguration(
         valid=False,
         configured=True,

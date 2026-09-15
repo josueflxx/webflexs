@@ -46,7 +46,7 @@ export function attachClampDimensions(viewer, { variant = 'plana', controls, foo
     overlay.setAttribute('aria-hidden', 'true');
     const svg = document.createElementNS(NS, 'svg');
     svg.classList.add('clamp-dimensions-lines');
-    svg.innerHTML = `<defs><marker id="${id}-arrow" viewBox="0 0 6 6" refX="3" refY="3" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M6 0 L0 3 L6 6" fill="none" stroke="currentColor" stroke-width="1.4"/></marker></defs>`;
+    svg.innerHTML = `<defs><marker id="${id}-arrow" viewBox="0 0 8 8" refX="4" refY="4" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><polygon points="0 1, 8 4, 0 7" fill="currentColor"/></marker></defs>`;
     overlay.append(svg);
     viewer.parentElement.append(overlay);
     const definitions = [
