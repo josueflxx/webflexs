@@ -83,6 +83,8 @@ class SalesDocumentTypeForm(forms.ModelForm):
             "prioritize_default_warehouse",
             "billing_mode",
             "use_document_situation",
+            "currency_code",
+            "default_exchange_rate",
             "internal_doc_type",
             "fiscal_doc_type",
             "default_origin_channel",
@@ -100,6 +102,14 @@ class SalesDocumentTypeForm(forms.ModelForm):
     def __init__(self, *args, company=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.company = company
+        self.identity_locked = bool(
+            self.instance
+            and self.instance.pk
+            and (
+                self.instance.internal_documents.exists()
+                or self.instance.fiscal_documents.exists()
+            )
+        )
         if company:
             # Ensure model-level clean() validates against the active company
             # during form.is_valid(), before save() assigns company.
@@ -109,6 +119,11 @@ class SalesDocumentTypeForm(forms.ModelForm):
         self.fields["default_warehouse"].required = False
         self.fields["internal_doc_type"].required = False
         self.fields["fiscal_doc_type"].required = False
+        # Keep existing integrations and bookmarked forms compatible: when
+        # these recently added fields are absent, the commercial document is
+        # treated as an ARS document at parity.
+        self.fields["currency_code"].required = False
+        self.fields["default_exchange_rate"].required = False
 
         if company:
             self.fields["point_of_sale"].queryset = FiscalPointOfSale.objects.filter(
@@ -176,6 +191,7 @@ class SalesDocumentTypeForm(forms.ModelForm):
             "print_address",
             "print_email",
             "print_phones",
+            "default_exchange_rate",
         ]:
             self.fields[name].widget.attrs.update({"class": "form-input"})
         for name in [
@@ -187,6 +203,7 @@ class SalesDocumentTypeForm(forms.ModelForm):
             "fiscal_doc_type",
             "default_origin_channel",
             "base_design",
+            "currency_code",
         ]:
             self.fields[name].widget.attrs.update({"class": "form-select"})
         for name in [
@@ -202,6 +219,19 @@ class SalesDocumentTypeForm(forms.ModelForm):
 
         self.fields["print_signature"].widget.attrs.update({"class": "form-textarea", "rows": 4})
         self.fields["notes"].widget.attrs.update({"class": "form-textarea", "rows": 4})
+        if self.identity_locked:
+            for name in [
+                "code",
+                "letter",
+                "point_of_sale",
+                "last_number",
+                "document_behavior",
+                "billing_mode",
+                "internal_doc_type",
+                "fiscal_doc_type",
+            ]:
+                self.fields[name].disabled = True
+                self.fields[name].widget.attrs["aria-describedby"] = "doc-type-identity-lock-note"
 
     def clean_default_sales_user_selector(self):
         raw = str(self.cleaned_data.get("default_sales_user_selector") or "").strip()
@@ -229,6 +259,12 @@ class SalesDocumentTypeForm(forms.ModelForm):
         default_origin_channel = str(cleaned_data.get("default_origin_channel") or "").strip().lower()
         generate_account_movement = bool(cleaned_data.get("generate_account_movement"))
         generate_stock_movement = bool(cleaned_data.get("generate_stock_movement"))
+        currency_code = str(cleaned_data.get("currency_code") or "ARS")
+        default_exchange_rate = cleaned_data.get("default_exchange_rate")
+        cleaned_data["currency_code"] = currency_code
+        if currency_code == "ARS":
+            default_exchange_rate = 1
+            cleaned_data["default_exchange_rate"] = default_exchange_rate
 
         fiscal_behaviors = {
             SALES_BEHAVIOR_FACTURA,
@@ -259,6 +295,11 @@ class SalesDocumentTypeForm(forms.ModelForm):
             self.add_error(
                 "generate_account_movement",
                 "Cotizacion y Presupuesto no deben impactar cuenta corriente.",
+            )
+        if currency_code != "ARS" and (default_exchange_rate is None or default_exchange_rate <= 0):
+            self.add_error(
+                "default_exchange_rate",
+                "Indica un tipo de cambio mayor que cero para moneda extranjera.",
             )
 
         if self.company and behavior and is_default:

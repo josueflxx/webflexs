@@ -1,0 +1,3 @@
+catalog/templates/catalog/how_to_measure.html
+core/static/core/css/measurement_guide.css
+core/static/core/js/measurement_guide.js

@@ -76,12 +76,22 @@ def _resolve_company_for_record(*, company=None, order=None):
         return None
 
 
+def _document_rule(document, field_name, default=None):
+    snapshot = getattr(document, "sales_rules_snapshot", None) or {}
+    if field_name in snapshot:
+        return snapshot[field_name]
+    sales_document_type = getattr(document, "sales_document_type", None)
+    if sales_document_type is not None and hasattr(sales_document_type, field_name):
+        return getattr(sales_document_type, field_name)
+    return default
+
+
 def get_order_billable_fiscal_document(order):
     if not order:
         return None
     from core.models import FiscalDocument
 
-    return (
+    candidates = (
         FiscalDocument.objects.select_related("sales_document_type", "point_of_sale")
         .filter(
             order=order,
@@ -90,8 +100,13 @@ def get_order_billable_fiscal_document(order):
         )
         .exclude(status="voided")
         .order_by("-issued_at", "-created_at", "-id")
-        .first()
     )
+    for document in candidates:
+        # Legacy fiscal records without a configurable type remain billable.
+        default = document.sales_document_type_id is None and not document.sales_rules_snapshot
+        if bool(_document_rule(document, "generate_account_movement", default)):
+            return document
+    return None
 
 
 def get_order_accountable_internal_document(order):
@@ -100,23 +115,39 @@ def get_order_accountable_internal_document(order):
         return None
     from core.models import InternalDocument
 
-    return (
+    candidates = (
         InternalDocument.objects.select_related("sales_document_type")
         .filter(
             order=order,
             is_cancelled=False,
             sales_document_type__isnull=False,
-            sales_document_type__enabled=True,
-            sales_document_type__generate_account_movement=True,
-            sales_document_type__document_behavior__in=ACCOUNTABLE_INTERNAL_BEHAVIORS,
         )
         .order_by("-issued_at", "-created_at", "-id")
-        .first()
     )
+    for document in candidates:
+        behavior = _document_rule(
+            document,
+            "document_behavior",
+            getattr(document.sales_document_type, "document_behavior", ""),
+        )
+        if behavior not in ACCOUNTABLE_INTERNAL_BEHAVIORS:
+            continue
+        if bool(_document_rule(document, "generate_account_movement", False)):
+            return document
+    return None
 
 
 def resolve_order_charge_snapshot(order):
     """Resolve whether one order should currently impact current account."""
+    if order and order.normalized_status() == Order.STATUS_CANCELLED:
+        cancelled_at = getattr(order, "status_updated_at", None) or timezone.now()
+        return {
+            "amount": Decimal("0.00"),
+            "occurred_at": cancelled_at,
+            "description": f"Pedido #{order.pk} anulado",
+            "movement_state": ClientTransaction.STATE_VOIDED,
+        }
+
     billable_document = get_order_billable_fiscal_document(order)
     if billable_document:
         return {
@@ -178,6 +209,11 @@ def sync_order_charge_transaction(order, actor=None):
 
     company = _resolve_company_for_record(order=order)
     charge_snapshot = resolve_order_charge_snapshot(order)
+    movement_state = charge_snapshot.get(
+        "movement_state",
+        ClientTransaction.STATE_OPEN,
+    )
+    movement_timestamp = charge_snapshot["occurred_at"]
     defaults = {
         "client_profile": client_profile,
         "company": company,
@@ -187,11 +223,13 @@ def sync_order_charge_transaction(order, actor=None):
         "amount": charge_snapshot["amount"],
         "description": charge_snapshot["description"],
         "occurred_at": charge_snapshot["occurred_at"],
-        "movement_state": charge_snapshot.get("movement_state", ClientTransaction.STATE_OPEN),
-        "closed_at": timezone.now()
-        if charge_snapshot.get("movement_state") == ClientTransaction.STATE_CLOSED
+        "movement_state": movement_state,
+        "closed_at": movement_timestamp
+        if movement_state == ClientTransaction.STATE_CLOSED
         else None,
-        "voided_at": None,
+        "voided_at": movement_timestamp
+        if movement_state == ClientTransaction.STATE_VOIDED
+        else None,
         "created_by": actor if getattr(actor, "is_authenticated", False) else None,
     }
     tx, _ = ClientTransaction.objects.update_or_create(
@@ -337,9 +375,16 @@ def _resolve_fiscal_adjustment_client_profile(fiscal_document):
 
 def _resolve_fiscal_adjustment_snapshot(*, fiscal_document):
     sales_document_type = getattr(fiscal_document, "sales_document_type", None)
-    if not fiscal_document or not sales_document_type or not sales_document_type.generate_account_movement:
+    if not fiscal_document or not sales_document_type:
         return None
-    if sales_document_type.document_behavior not in ACCOUNT_ADJUSTMENT_FISCAL_BEHAVIORS:
+    if not bool(_document_rule(fiscal_document, "generate_account_movement", False)):
+        return None
+    behavior = _document_rule(
+        fiscal_document,
+        "document_behavior",
+        sales_document_type.document_behavior,
+    )
+    if behavior not in ACCOUNT_ADJUSTMENT_FISCAL_BEHAVIORS:
         return None
 
     client_profile = _resolve_fiscal_adjustment_client_profile(fiscal_document)
@@ -358,7 +403,7 @@ def _resolve_fiscal_adjustment_snapshot(*, fiscal_document):
     signed_amount = Decimal("0.00")
     if finalized and total_amount != 0:
         signed_amount = total_amount
-        if sales_document_type.document_behavior == SALES_BEHAVIOR_NOTA_CREDITO:
+        if behavior == SALES_BEHAVIOR_NOTA_CREDITO:
             signed_amount = signed_amount * Decimal("-1")
 
     return {

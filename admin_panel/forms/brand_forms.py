@@ -6,6 +6,7 @@ from catalog.models import (
     BrandCatalogRule,
     BrandRubro,
     BrandSubrubro,
+    CategoryBrandMapping,
 )
 
 
@@ -158,3 +159,55 @@ class BrandCatalogRuleForm(forms.ModelForm):
         )
         self.fields["brand_rubro"].required = False
         self.fields["brand_subrubro"].required = False
+
+
+class CategoryBrandMappingForm(forms.ModelForm):
+    class Meta:
+        model = CategoryBrandMapping
+        fields = [
+            "source_category",
+            "canonical_category",
+            "brand",
+            "brand_rubro",
+            "brand_subrubro",
+            "include_descendants",
+            "observation",
+        ]
+        widgets = {
+            "source_category": forms.Select(attrs={"class": "form-select"}),
+            "canonical_category": forms.Select(attrs={"class": "form-select"}),
+            "brand": forms.Select(attrs={"class": "form-select", "data-mapping-brand": "true"}),
+            "brand_rubro": forms.Select(attrs={"class": "form-select", "data-mapping-rubro": "true"}),
+            "brand_subrubro": forms.Select(attrs={"class": "form-select", "data-mapping-subrubro": "true"}),
+            "include_descendants": forms.CheckboxInput(attrs={"class": "form-checkbox"}),
+            "observation": forms.TextInput(
+                attrs={
+                    "class": "form-input",
+                    "maxlength": 300,
+                    "placeholder": "Motivo del vinculo (opcional)",
+                }
+            ),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["source_category"].queryset = Category.objects.select_related("parent").order_by("name")
+        self.fields["canonical_category"].queryset = Category.objects.filter(is_active=True).order_by("name")
+        self.fields["canonical_category"].required = False
+        self.fields["brand"].queryset = Brand.objects.filter(is_active=True).order_by("order", "name")
+        self.fields["brand_rubro"].queryset = BrandRubro.objects.filter(is_active=True).select_related("brand").order_by(
+            "brand__order", "brand__name", "order", "name"
+        )
+        self.fields["brand_subrubro"].queryset = BrandSubrubro.objects.filter(is_active=True).select_related(
+            "brand_rubro__brand"
+        ).order_by(
+            "brand_rubro__brand__order",
+            "brand_rubro__brand__name",
+            "brand_rubro__order",
+            "brand_rubro__name",
+            "order",
+            "name",
+        )
+        self.fields["brand_subrubro"].required = False
+        self.fields["observation"].required = False
+        self.fields["observation"].label = "Observacion (opcional)"

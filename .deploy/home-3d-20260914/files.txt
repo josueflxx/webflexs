@@ -1,0 +1,7 @@
+core/templates/core/home.html
+core/static/core/css/home_clamp.css
+core/static/core/js/home_clamp.js
+core/static/core/models/abrazadera-curva.glb
+core/static/core/models/clamp-studio.hdr
+core/static/core/vendor/model-viewer/model-viewer-4.3.1.min.js
+core/static/core/vendor/model-viewer/LICENSE

@@ -199,18 +199,19 @@
     }
     {% endif %}
 </style>
+<link rel="stylesheet" href="{% static 'core/css/catalog_workspace.css' %}?v=20260915-preview-7">
 {% endblock %}
 
 {% block content %}
-<div class="catalog-page">
+<div class="catalog-page catalog-workspace">
     {% csrf_token %}
     <div class="container">
         <div class="catalog-header">
             <div class="catalog-header-main">
-                <span class="catalog-eyebrow">Catalogo profesional</span>
-                <h1>Catalogo de Productos</h1>
+                <span class="catalog-eyebrow">Repuestos para elásticos</span>
+                <h1>Catálogo de productos</h1>
                 <p class="catalog-lead">
-                    Busca por codigo, nombre o medida y compara rapidamente disponibilidad, categorias y precios.
+                    Encontrá tu repuesto por código, nombre o medida.
                 </p>
                 <div class="catalog-notices">
                     {% if current_category and current_category_has_descendants %}
@@ -230,32 +231,20 @@
                     {% endif %}
                 </div>
             </div>
-            <div class="catalog-header-stats">
-                <span class="header-stat">
-                    <strong>{{ page_obj.paginator.count }}</strong>
-                    productos
-                </span>
-                {% if current_category %}
-                <span class="header-stat">
-                    categoria: <strong>{{ current_category_path_label|default:current_category.display_name }}</strong>
-                </span>
-                {% endif %}
-                {% if search_query %}
-                <span class="header-stat">
-                    busqueda: <strong>{{ search_query }}</strong>
-                </span>
+            <div class="catalog-header-actions">
+                {% if client_catalog_excel_download_enabled %}
+                <div class="catalog-download-action">
+                    <a href="{% url 'catalog_client_excel_download' %}" class="btn btn-outline excel-download-btn" onclick="handleExcelDownload(event, this)" title="{{ client_catalog_excel_download_label }}">
+                        <img src="{% static 'core/img/excel-icon.svg' %}" alt="" class="excel-download-icon" width="20" height="20">
+                        <span>Descargar Excel</span>
+                        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3v12m-4-4 4 4 4-4M5 16v4h14v-4"/></svg>
+                    </a>
+                    <span class="catalog-download-caption">Catálogo completo · Formato XLSX</span>
+                </div>
                 {% endif %}
             </div>
         </div>
 
-        <button
-            type="button"
-            class="catalog-mobile-filter-btn"
-            id="catalogMobileFilterBtn"
-            onclick="openCatalogFilters()"
-        >
-            Filtrar catalogo
-        </button>
         <div class="catalog-overlay" id="catalogOverlay" onclick="closeCatalogFilters()"></div>
 
         <section class="catalog-search-panel" aria-label="Buscar productos">
@@ -288,7 +277,7 @@
                     Limpiar
                 </a>
                 {% endif %}
-                <button type="submit" class="btn btn-primary catalog-search-submit">Buscar productos</button>
+                <button type="submit" class="btn btn-primary catalog-search-submit">Buscar <span aria-hidden="true">→</span></button>
             </form>
         </section>
 
@@ -296,95 +285,33 @@
             <aside class="catalog-sidebar" id="catalogSidebar">
                 <div class="catalog-sidebar-head">
                     <div>
-                        <span class="catalog-sidebar-kicker">Explorar</span>
-                        <h3>Refinar resultados</h3>
+                        <h3>Categorías</h3>
+                        <span class="catalog-sidebar-kicker">Explorá nuestras líneas</span>
                     </div>
                     <button type="button" class="catalog-sidebar-close" onclick="closeCatalogFilters()">
                         Cerrar
                     </button>
                 </div>
 
-                <div class="filter-section">
-                    <h3>Abrazaderas a medida</h3>
-                    <p class="text-muted" style="margin:0 0 8px;">
-                        Si no encontras la medida, calcula y envia una solicitud personalizada.
-                    </p>
-                    {% if can_use_clamp_measure %}
-                    <a href="{% url 'catalog_clamp_request' %}" class="btn btn-outline" style="width:100%;">
-                        Cotizar medida especial
-                    </a>
-                    {% elif user.is_authenticated %}
-                    <p class="text-muted" style="margin:0;">
-                        Disponible solo para clientes aprobados y administradores.
-                    </p>
-                    {% else %}
-                    <a href="{% url 'login' %}?next={% url 'catalog_clamp_request' %}" class="btn btn-outline" style="width:100%;">
-                        Iniciar sesion para cotizar
-                    </a>
-                    {% endif %}
-                </div>
-
-                {% if client_catalog_excel_download_enabled %}
-                <div class="filter-section">
-                    <h3>Catalogo Excel</h3>
-                    <p class="text-muted" style="margin:0 0 8px;">
-                        Descarga la version publicada del catalogo en formato XLSX.
-                    </p>
-                    {% if not user.is_authenticated %}
-                    <a href="{% url 'login' %}?next={{ request.path }}" class="btn btn-outline" style="width:100%;">
-                        Iniciar sesion para descargar
-                    </a>
-                    {% elif not client_catalog_excel_download_enabled %}
-                    <p class="text-muted" style="margin:0; font-size: 0.9em; color: #b45309;">
-                        Disponible solo para clientes aprobados o administradores.
-                    </p>
-                    {% else %}
-                    <p class="text-muted catalog-excel-updated">
-                        {% if client_catalog_excel_has_pending_changes and client_catalog_excel_last_source_change %}
-                        Cambios detectados {{ client_catalog_excel_last_source_change|date:"d/m/Y H:i" }}
-                        {% elif client_catalog_excel_last_generated_at %}
-                        Actualizado {{ client_catalog_excel_last_generated_at|date:"d/m/Y H:i" }}
-                        {% else %}
-                        Se genera actualizado al descargar.
-                        {% endif %}
-                    </p>
-                    <a href="{% url 'catalog_client_excel_download' %}" class="btn btn-outline excel-download-btn" style="width:100%;" onclick="handleExcelDownload(event, this)">
-                        <img
-                            src="{% static 'core/img/excel-icon.svg' %}"
-                            alt="Excel"
-                            class="excel-download-icon"
-                            width="18"
-                            height="18"
-                            loading="lazy"
-                        >
-                        <span>{{ client_catalog_excel_download_label|default:"Descargar catalogo Excel" }}</span>
-                    </a>
-                    {% endif %}
-                </div>
-                {% endif %}
-
-                <div class="filter-section">
-                    <div class="category-filter-header">
-                        <h3>Categorias</h3>
-                        <button type="button" class="cat-toggle-pill" id="toggleCategoriesBtn">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
-                            <span class="cat-toggle-label">Ver</span>
-                        </button>
-                    </div>
-                    <div class="category-tree-controls" id="categoryTreeControls" style="display:none;">
+                <div class="filter-section catalog-category-section">
+                    <label class="category-search">
+                        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/></svg>
+                        <input id="catalogCategorySearch" type="text" role="searchbox" placeholder="Buscar categoría" aria-label="Buscar categoría" autocomplete="off">
+                    </label>
+                    <div class="category-tree-controls" id="categoryTreeControls">
                         <button type="button" class="cat-ctrl-btn" onclick="expandAllCategoryTree()">
                             <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="7 13 12 18 17 13"></polyline><polyline points="7 6 12 11 17 6"></polyline></svg>
-                            Expandir todo
+                            Expandir
                         </button>
                         <button type="button" class="cat-ctrl-btn" onclick="collapseAllCategoryTree()">
                             <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="7 11 12 6 17 11"></polyline><polyline points="7 18 12 13 17 18"></polyline></svg>
-                            Colapsar todo
+                            Contraer
                         </button>
                     </div>
-                    <div id="categoriesWrapper" style="display: none;">
+                    <div id="categoriesWrapper">
                         <div class="category-tree">
                             <a href="{% url 'catalog' %}?{% querystring request category='' page='' %}" class="category-tree-link category-tree-link-root {% if not category_slug %}active{% endif %}">
-                                <span class="category-tree-label">Todas</span>
+                                <span class="category-tree-label">Todos los productos</span>
                             </a>
 
                             {% for row in category_tree_rows %}
@@ -393,6 +320,7 @@
                                 data-category-id="{{ row.category.id }}"
                                 data-parent-id="{{ row.category.parent_id|default:'' }}"
                                 data-depth="{{ row.depth }}"
+                                data-category-path="{{ row.full_path }}"
                                 style="--depth: {{ row.depth }};"
                             >
                                 <div class="category-tree-main">
@@ -416,7 +344,7 @@
                                     >
                                         <span class="category-tree-label">{{ row.category.display_name }}</span>
                                         {% if row.has_children %}
-                                        <span class="category-tree-count">{{ row.children_count }}</span>
+                                        <span class="category-tree-count" title="{{ row.children_count }} subcategorías">{{ row.children_count }}</span>
                                         {% endif %}
                                     </a>
                                 </div>
@@ -491,16 +419,34 @@
                             <p class="text-muted">No hay categorias activas.</p>
                             {% endfor %}
                         </div>
+                        <p id="catalogCategoryEmpty" class="category-search-empty" hidden>No encontramos esa categoría.</p>
+                    </div>
+                </div>
+                <div class="catalog-measure-link">
+                    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m3 15 12-12 6 6L9 21l-6-6Zm9-9 3 3m-6 0 2 2m-5 1 3 3"/></svg>
+                    <div>
+                        <strong>¿Necesitás otra medida?</strong>
+                        {% if can_use_clamp_measure %}
+                        <a href="{% url 'catalog_clamp_request' %}">Cotizar abrazadera a medida <span aria-hidden="true">↗</span></a>
+                        {% elif not user.is_authenticated %}
+                        <a href="{% url 'login' %}?next={% url 'catalog_clamp_request' %}">Iniciá sesión para cotizar <span aria-hidden="true">↗</span></a>
+                        {% else %}
+                        <span>Disponible para clientes aprobados.</span>
+                        {% endif %}
                     </div>
                 </div>
             </aside>
 
             <main class="catalog-main">
                 <div class="catalog-toolbar">
+                    <button type="button" class="catalog-mobile-filter-btn" id="catalogMobileFilterBtn" onclick="openCatalogFilters()" aria-controls="catalogSidebar" aria-expanded="false">
+                        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 7h16M7 12h10m-7 5h4"/></svg>
+                        Categorías
+                    </button>
                     <div class="toolbar-meta">
                         <span class="result-count">
                             <strong>{{ page_obj.paginator.count }}</strong>
-                            <span>productos encontrados</span>
+                            <span>productos{% if search_query or category_slug %} encontrados{% endif %}</span>
                         </span>
                     </div>
                     <div class="toolbar-actions">
@@ -508,17 +454,19 @@
                             <a
                                 href="?{% querystring request view='grid' page='' %}"
                                 class="view-toggle-btn {% if view_mode == 'grid' %}active{% endif %}"
+                                aria-label="Ver como tarjetas" {% if view_mode == 'grid' %}aria-current="true"{% endif %}
                             >
-                                Tarjetas
+                                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><rect x="14" y="14" width="6" height="6" rx="1"/></svg><span>Tarjetas</span>
                             </a>
                             <a
                                 href="?{% querystring request view='list' page='' %}"
                                 class="view-toggle-btn {% if view_mode == 'list' %}active{% endif %}"
+                                aria-label="Ver como lista" {% if view_mode == 'list' %}aria-current="true"{% endif %}
                             >
-                                Lista
+                                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11M4 6h1M4 12h1M4 18h1"/></svg><span>Lista</span>
                             </a>
                         </div>
-                        <select name="order" class="form-select order-select" onchange="updateOrder(this.value)">
+                        <select name="order" class="form-select order-select" aria-label="Ordenar productos" onchange="updateOrder(this.value)">
                             {% if search_query %}
                             <option value="relevance" {% if order_by == 'relevance' %}selected{% endif %}>Mejor coincidencia</option>
                             {% endif %}
@@ -593,23 +541,9 @@
                         {% endif %}
                         <a class="catalog-list-thumb" href="{% url 'product_detail' product.sku %}">
                             {% if product.image %}
-                            <img src="{{ product.image.url }}" alt="{{ product.name }}">
+                            <img src="{{ product.image.url }}" alt="{{ product.name }}" loading="lazy" decoding="async" width="72" height="72">
                             {% else %}
-                            <svg class="blueprint-svg blueprint-list-thumb" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none">
-                                <defs>
-                                    <radialGradient id="camera-glow-list" cx="50%" cy="50%" r="60%">
-                                        <stop offset="0%" stop-color="rgba(255, 107, 53, 0.08)" />
-                                        <stop offset="100%" stop-color="rgba(16, 17, 22, 0.45)" />
-                                    </radialGradient>
-                                </defs>
-                                <rect width="100%" height="100%" fill="url(#camera-glow-list)" />
-                                <rect x="4" y="4" width="92" height="92" rx="8" stroke="rgba(255, 255, 255, 0.02)" stroke-width="1" />
-                                <g transform="translate(32, 32)">
-                                    <rect x="0" y="0" width="36" height="36" rx="6" stroke="rgba(255, 255, 255, 0.12)" stroke-width="1.8" fill="rgba(255, 255, 255, 0.01)" />
-                                    <circle cx="12" cy="12" r="3" fill="rgba(255, 255, 255, 0.1)" stroke="rgba(255, 255, 255, 0.12)" stroke-width="1.8" />
-                                    <path d="M 3 29 L 14 17 L 22 25 L 28 19 L 33 25" stroke="rgba(255, 255, 255, 0.12)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none" />
-                                </g>
-                            </svg>
+                            {% include 'catalog/_product_placeholder.html' with compact=True %}
                             {% endif %}
                         </a>
 
@@ -647,6 +581,7 @@
 
                         <div class="catalog-list-pricebox">
                             {% if show_prices %}
+                                <span class="catalog-price-caption">Precio unitario</span>
                                 {% if discount %}
                                 <span class="catalog-list-muted">Lista ${{ product.base_price|default:product.price|floatformat:2 }}</span>
                                 <span class="catalog-list-discount">{{ discount|multiply:100|floatformat:0 }}% OFF</span>
@@ -661,22 +596,24 @@
 
                         <div class="catalog-list-actions">
                             <a href="{% url 'product_detail' product.sku %}" class="btn btn-outline product-detail-btn">
-                                Detalle
+                                Ver detalle <span aria-hidden="true">↗</span>
                             </a>
                             {% if user.is_authenticated %}
                             <button
-                                class="btn btn-outline"
+                                class="btn btn-outline catalog-favorite-btn"
                                 onclick="toggleFavorite({{ product.id|unlocalize }}, this)"
                                 data-favorite="{% if product.is_favorite %}1{% else %}0{% endif %}"
+                                aria-label="Guardar {{ product.name }} en favoritos" aria-pressed="{% if product.is_favorite %}true{% else %}false{% endif %}" title="Guardar en favoritos"
                             >
-                                {% if product.is_favorite %}Favorito{% else %}Guardar{% endif %}
+                                {% include 'catalog/_favorite_icon.html' %}
+                                <span class="favorite-label">{% if product.is_favorite %}Favorito{% else %}Guardar{% endif %}</span>
                             </button>
                             <button
                                 class="btn btn-primary btn-add-cart btn-animate-shine"
                                 onclick="addToCart({{ product.id|unlocalize }})"
                                 {% if product.stock <= 0 %}disabled{% endif %}
                             >
-                                Agregar
+                                {% if product.stock > 0 %}+ Agregar{% else %}Sin stock{% endif %}
                             </button>
                             {% endif %}
                         </div>
@@ -695,26 +632,9 @@
                         {% endif %}
                         <a class="product-image" href="{% url 'product_detail' product.sku %}">
                             {% if product.image %}
-                            <img src="{{ product.image.url }}" alt="{{ product.name }}">
+                            <img src="{{ product.image.url }}" alt="{{ product.name }}" loading="lazy" decoding="async" width="320" height="220">
                             {% else %}
-                            <div class="product-placeholder-premium">
-                                <svg class="blueprint-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none">
-                                    <defs>
-                                        <radialGradient id="camera-glow-grid" cx="50%" cy="50%" r="60%">
-                                            <stop offset="0%" stop-color="rgba(255, 107, 53, 0.08)" />
-                                            <stop offset="100%" stop-color="rgba(16, 17, 22, 0.45)" />
-                                        </radialGradient>
-                                    </defs>
-                                    <rect width="100%" height="100%" fill="url(#camera-glow-grid)" />
-                                    <rect x="4" y="4" width="92" height="92" rx="8" stroke="rgba(255, 255, 255, 0.02)" stroke-width="1" />
-                                    <g transform="translate(32, 32)">
-                                        <rect x="0" y="0" width="36" height="36" rx="6" stroke="rgba(255, 255, 255, 0.12)" stroke-width="1.8" fill="rgba(255, 255, 255, 0.01)" />
-                                        <circle cx="12" cy="12" r="3" fill="rgba(255, 255, 255, 0.1)" stroke="rgba(255, 255, 255, 0.12)" stroke-width="1.8" />
-                                        <path d="M 3 29 L 14 17 L 22 25 L 28 19 L 33 25" stroke="rgba(255, 255, 255, 0.12)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none" />
-                                    </g>
-                                </svg>
-                                <span class="product-placeholder-label">Imagen no disponible</span>
-                            </div>
+                            {% include 'catalog/_product_placeholder.html' with compact=False %}
                             {% endif %}
                         </a>
                         <div class="product-info">
@@ -783,11 +703,13 @@
                                 </a>
                                 {% if user.is_authenticated %}
                                 <button
-                                    class="btn btn-outline"
+                                    class="btn btn-outline catalog-favorite-btn"
                                     onclick="toggleFavorite({{ product.id|unlocalize }}, this)"
                                     data-favorite="{% if product.is_favorite %}1{% else %}0{% endif %}"
+                                    aria-label="Guardar {{ product.name }} en favoritos" aria-pressed="{% if product.is_favorite %}true{% else %}false{% endif %}" title="Guardar en favoritos"
                                 >
-                                    {% if product.is_favorite %}Favorito{% else %}Guardar{% endif %}
+                                    {% include 'catalog/_favorite_icon.html' %}
+                                    <span class="favorite-label">{% if product.is_favorite %}Favorito{% else %}Guardar{% endif %}</span>
                                 </button>
                                 <button
                                     class="btn btn-primary btn-add-cart btn-animate-shine"
@@ -836,6 +758,7 @@
 {% endblock %}
 
 {% block extra_js %}
+<script src="{% static 'core/js/catalog_excel_download.js' %}?v=20260914-1"></script>
 <script>
     function updateOrder(orderValue) {
         const params = new URLSearchParams(window.location.search);
@@ -883,7 +806,12 @@
             }
             const isFavorite = !!data.is_favorite;
             btn.dataset.favorite = isFavorite ? '1' : '0';
-            btn.textContent = isFavorite ? 'Favorito' : 'Guardar';
+            const favoriteLabel = btn.querySelector('.favorite-label');
+            if (favoriteLabel) favoriteLabel.textContent = isFavorite ? 'Favorito' : 'Guardar';
+            else btn.textContent = isFavorite ? 'Favorito' : 'Guardar';
+            btn.setAttribute('aria-pressed', String(isFavorite));
+            btn.setAttribute('aria-label', isFavorite ? 'Quitar de favoritos' : 'Guardar en favoritos');
+            btn.title = isFavorite ? 'Quitar de favoritos' : 'Guardar en favoritos';
             
             // Heart pop micro-interaction
             btn.classList.add('pop');
@@ -997,31 +925,6 @@
             toggleBtn.classList.toggle('open', isHidden);
             if (label) label.textContent = isHidden ? 'Ocultar' : 'Ver';
         });
-    }
-
-    function handleExcelDownload(event, element) {
-        if (element.classList.contains('disabled')) {
-            event.preventDefault();
-            return;
-        }
-        element.classList.add('disabled');
-        const icon = element.querySelector('.excel-download-icon');
-        const label = element.querySelector('span');
-        if (icon) {
-            icon.style.animation = 'spin 1.5s linear infinite';
-        }
-        if (label) {
-            label.textContent = 'Preparando archivo...';
-        }
-        setTimeout(() => {
-            element.classList.remove('disabled');
-            if (icon) {
-                icon.style.animation = 'none';
-            }
-            if (label) {
-                label.textContent = '{{ client_catalog_excel_download_label|default:"Descargar catalogo Excel" }}';
-            }
-        }, 8000);
     }
 
     function showCatalogLoading() {
@@ -1296,4 +1199,5 @@ function updateProductCardOnPage(productId, productData) {
 }
 </script>
 {% endif %}
+<script src="{% static 'core/js/catalog_workspace.js' %}?v=20260915-preview-2"></script>
 {% endblock %}

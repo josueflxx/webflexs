@@ -215,6 +215,7 @@ from core.services.sales_documents import (
     create_fiscal_document_from_sales_type,
     create_internal_document_from_sales_type,
     resolve_sales_document_type,
+    resolve_sales_document_seller,
 )
 from core.services.advanced_search import (
     apply_compact_text_search,
@@ -1207,9 +1208,13 @@ def _build_related_sales_document_actions(*, company, operations_locked=False, q
         relation_help_text = ""
         relation_css_class = ""
 
-        if behavior in {SALES_BEHAVIOR_COTIZACION, SALES_BEHAVIOR_PRESUPUESTO}:
+        if behavior == SALES_BEHAVIOR_COTIZACION:
             relation_action_value = "quote"
-            relation_help_text = "Copia productos del movimiento base y crea un nuevo borrador."
+            relation_help_text = "Copia productos del movimiento base y crea una nueva cotizacion."
+            relation_css_class = "is-quote"
+        elif behavior == SALES_BEHAVIOR_PRESUPUESTO:
+            relation_action_value = "budget"
+            relation_help_text = "Copia productos del movimiento base y crea un nuevo presupuesto."
             relation_css_class = "is-quote"
         elif behavior == SALES_BEHAVIOR_PEDIDO:
             relation_action_value = "order"
@@ -1274,6 +1279,7 @@ def _create_related_order_from_source(
         related_order = Order.objects.create(
             user=client.user or source_order.user,
             company=company,
+            sales_document_type=selected_sales_document_type,
             origin_channel=origin_channel or Order.ORIGIN_ADMIN,
             status=Order.STATUS_DRAFT,
             priority=source_order.priority or Order.PRIORITY_NORMAL,
@@ -1292,9 +1298,10 @@ def _create_related_order_from_source(
             saas_document_number="",
             saas_document_cae="",
             follow_up_note="",
-            assigned_to=(
-                source_order.assigned_to
-                or (actor if getattr(actor, "is_staff", False) else None)
+            assigned_to=resolve_sales_document_seller(
+                sales_document_type=selected_sales_document_type,
+                actor=actor,
+                fallback=source_order.assigned_to,
             ),
         )
 
@@ -1341,6 +1348,7 @@ def _create_draft_order_for_client(
     created_label="Pedido",
     admin_note="",
     history_note="",
+    selected_sales_document_type=None,
 ):
     """Create a new draft order for a client using current commercial rules."""
     if not company:
@@ -1370,6 +1378,7 @@ def _create_draft_order_for_client(
     order = Order.objects.create(
         user=client.user,
         company=company,
+        sales_document_type=selected_sales_document_type,
         origin_channel=origin_channel or Order.ORIGIN_ADMIN,
         status=Order.STATUS_DRAFT,
         priority=Order.PRIORITY_NORMAL,
@@ -1388,7 +1397,11 @@ def _create_draft_order_for_client(
         saas_document_number="",
         saas_document_cae="",
         follow_up_note="",
-        assigned_to=actor if getattr(actor, "is_staff", False) else None,
+        assigned_to=resolve_sales_document_seller(
+            sales_document_type=selected_sales_document_type,
+            actor=actor,
+            fallback=actor if getattr(actor, "is_staff", False) else None,
+        ),
     )
     OrderStatusHistory.objects.create(
         order=order,

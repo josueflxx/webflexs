@@ -559,12 +559,32 @@ def convert_request_to_order(*, order_request, actor=None, source_proposal=None,
         if locked_request.status != OrderRequest.STATUS_CONFIRMED:
             raise ValidationError("Solo pueden convertirse solicitudes confirmadas.")
         order_request = locked_request
+        # Resolve the configured Pedido for the request channel at creation
+        # time.  This makes the seller/default-channel criteria effective in
+        # the same place where the operational order is born.
+        from core.models import SALES_BEHAVIOR_PEDIDO
+        from core.services.sales_documents import (
+            resolve_sales_document_seller,
+            resolve_sales_document_type,
+        )
+
+        sales_document_type = resolve_sales_document_type(
+            company=order_request.company,
+            behavior=SALES_BEHAVIOR_PEDIDO,
+            origin_channel=order_request.origin_channel,
+        )
+        assigned_seller = resolve_sales_document_seller(
+            sales_document_type=sales_document_type,
+            actor=actor,
+            fallback=actor if getattr(actor, "is_staff", False) else None,
+        )
         order = Order.objects.create(
             user=order_request.user,
             company=order_request.company,
             origin_channel=order_request.origin_channel,
             source_request=order_request,
             source_proposal=source_proposal,
+            sales_document_type=sales_document_type,
             status=status,
             priority=Order.PRIORITY_NORMAL,
             notes=order_request.client_note or "",
@@ -593,7 +613,7 @@ def convert_request_to_order(*, order_request, actor=None, source_proposal=None,
             saas_document_number="",
             saas_document_cae="",
             follow_up_note="",
-            assigned_to=actor if getattr(actor, "is_staff", False) else None,
+            assigned_to=assigned_seller,
         )
         OrderItem.objects.bulk_create(
             [

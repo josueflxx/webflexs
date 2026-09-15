@@ -2,13 +2,14 @@
 {% load static l10n %}
 
 {% block title %}Productos sin Categoría | Panel de Administración{% endblock %}
+{% block page_title %}Productos sin categoría{% endblock %}
 
 {% block content %}
 <div class="uncategorized-container">
     <!-- Rollback Banner -->
     <div id="movigom-rollback-banner" style="display: none; background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 8px; padding: 15px; margin-bottom: 20px; justify-content: space-between; align-items: center; gap: 15px; width: 100%; box-sizing: border-box;">
         <div style="display: flex; align-items: center; gap: 10px; color: #f59e0b;">
-            <span style="font-size: 20px;">⚠️</span>
+            <svg class="nav-icon-svg" aria-hidden="true"><use href="#ui-icon-alert"></use></svg>
             <div>
                 <strong style="display: block; font-size: 14px; margin-bottom: 2px;">Última Importación de Fotos Movigom</strong>
                 <span style="font-size: 13px; color: #cbd5e1;">Puedes deshacer los cambios realizados en el catálogo si fue un error. Se quitarán las fotos asociadas a los productos actualizados.</span>
@@ -16,7 +17,7 @@
         </div>
         <div style="display: flex; gap: 10px; align-items: center; flex-shrink: 0;">
             <button id="btn-movigom-rollback" type="button" class="btn" style="background: #f59e0b; border: 1px solid #d97706; color: #0b0f19; font-weight: 600; padding: 8px 16px; border-radius: 6px; cursor: pointer;" onclick="triggerMovigomRollback()">
-                ⏪ Deshacer Cambios
+                Deshacer cambios
             </button>
             <button type="button" style="background: transparent; border: none; color: #94a3b8; cursor: pointer; font-size: 18px; padding: 5px;" onclick="dismissMovigomRollback()">
                 ✕
@@ -33,7 +34,8 @@
         <div class="header-actions" style="display: flex; gap: 10px; align-items: center;">
             <input type="file" id="triler-file-input" accept=".xlsx, .xls" style="display: none;" onchange="handleTrilerExcelUpload(this)">
             <button type="button" class="btn btn-primary" onclick="document.getElementById('triler-file-input').click()">
-                📂 Importar Catálogo y Fotos Movigom
+                <svg class="nav-icon-svg" aria-hidden="true"><use href="#ui-icon-folder"></use></svg>
+                Importar catálogo y fotos Movigom
             </button>
             <a href="{% url 'admin_category_list' %}" class="btn btn-secondary">
                 ← Volver a Categorías
@@ -62,6 +64,14 @@
                         {% endfor %}
                     </select>
                 </div>
+                <div class="form-group page-size-group">
+                    <label class="form-label" for="page-size-select">Filas por página</label>
+                    <select id="page-size-select" name="per_page" class="form-select" onchange="this.form.submit()">
+                        {% for size in page_size_options %}
+                        <option value="{{ size }}" {% if per_page == size %}selected{% endif %}>{{ size }} productos</option>
+                        {% endfor %}
+                    </select>
+                </div>
                 <div class="form-actions-inline">
                     <button type="submit" class="btn btn-primary">Buscar</button>
                     {% if q or selected_supplier_id %}
@@ -76,17 +86,20 @@
     <div id="bulk-actions-bar" class="bulk-actions-bar" style="display: none;">
         <div class="bulk-info">
             <span class="bulk-badge" id="bulk-count-badge">0</span>
-            <span class="bulk-text">productos seleccionados</span>
+            <span class="bulk-text">productos seleccionados en esta página</span>
         </div>
         <div class="bulk-buttons">
             <button type="button" class="btn btn-primary" onclick="openBulkCategorizeModal()">
-                📂 Categorizar en Lote
+                <svg class="nav-icon-svg" aria-hidden="true"><use href="#ui-icon-folder"></use></svg>
+                Categorizar en lote
             </button>
             <button type="button" class="btn btn-warning" onclick="executeBulkAction('bulk_deactivate')">
-                👁️ Desactivar
+                <svg class="nav-icon-svg" aria-hidden="true"><use href="#ui-icon-eye"></use></svg>
+                Desactivar
             </button>
             <button type="button" class="btn btn-danger" onclick="executeBulkAction('bulk_delete')">
-                🗑️ Eliminar
+                <svg class="nav-icon-svg" aria-hidden="true"><use href="#ui-icon-trash"></use></svg>
+                Eliminar
             </button>
         </div>
     </div>
@@ -94,12 +107,21 @@
     <!-- Main Content Table -->
     <div class="table-card">
         {% if products %}
+        <div class="table-card-toolbar">
+            <div class="table-result-summary">
+                <strong>{{ total_count }} producto{{ total_count|pluralize }} sin categoría</strong>
+                <span>Mostrando {{ page_obj.start_index }}–{{ page_obj.end_index }} de {{ total_count }}</span>
+            </div>
+            <span class="table-page-indicator">Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
+        </div>
         <div class="table-responsive">
             <table class="products-table" id="products-table">
                 <thead>
                     <tr>
                         <th width="40" class="text-center">
-                            <input type="checkbox" id="select-all-checkbox" onclick="toggleSelectAll(this)">
+                            <input type="checkbox" id="select-all-checkbox" onclick="toggleSelectAll(this)"
+                                title="Seleccionar todos los productos de esta página"
+                                aria-label="Seleccionar todos los productos de esta página">
                         </th>
                         <th width="60" class="text-center">Imagen</th>
                         <th width="150">SKU / Código</th>
@@ -118,9 +140,10 @@
                         <td class="text-center">
                             <div class="product-img-wrapper">
                                 {% if prod.image %}
-                                <img src="{{ prod.image.url }}" alt="{{ prod.name }}" class="product-thumb">
+                                <img src="{{ prod.image.url }}" alt="{{ prod.name }}" class="product-thumb"
+                                    loading="lazy" decoding="async" fetchpriority="low" width="38" height="38">
                                 {% else %}
-                                <div class="product-thumb-placeholder">📦</div>
+                                <div class="product-thumb-placeholder"><svg class="nav-icon-svg" aria-hidden="true"><use href="#ui-icon-box"></use></svg></div>
                                 {% endif %}
                             </div>
                         </td>
@@ -145,7 +168,8 @@
                                     class="btn-smart-suggestion" 
                                     onclick="applySmartSuggestion('{{ prod.pk|unlocalize }}', '{{ prod.suggested_category.id|unlocalize }}', '{{ prod.suggested_category.name|escapejs }}')"
                                     title="Hacer clic para asignar directamente la categoría '{{ prod.suggested_category.name }}'">
-                                💡 Sugerir: {{ prod.suggested_category.name }}
+                                <svg class="nav-icon-svg" aria-hidden="true"><use href="#ui-icon-bulb"></use></svg>
+                                Sugerir: {{ prod.suggested_category.name }}
                             </button>
                             {% else %}
                             <span class="text-muted text-xs">Sin sugerencia clara</span>
@@ -161,10 +185,36 @@
                 </tbody>
             </table>
         </div>
+        {% if page_obj.paginator.num_pages > 1 %}
+        <nav class="uncategorized-pagination" aria-label="Paginación de productos sin categoría">
+            <div class="pagination-status">
+                {{ per_page }} productos por página
+            </div>
+            <div class="pagination-actions">
+                {% if page_obj.has_previous %}
+                <a class="pagination-link pagination-edge" href="?{{ pagination_query }}&page=1">Primera</a>
+                <a class="pagination-link" href="?{{ pagination_query }}&page={{ page_obj.previous_page_number }}">Anterior</a>
+                {% else %}
+                <span class="pagination-link is-disabled">Primera</span>
+                <span class="pagination-link is-disabled">Anterior</span>
+                {% endif %}
+
+                <span class="pagination-current">Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
+
+                {% if page_obj.has_next %}
+                <a class="pagination-link" href="?{{ pagination_query }}&page={{ page_obj.next_page_number }}">Siguiente</a>
+                <a class="pagination-link pagination-edge" href="?{{ pagination_query }}&page={{ page_obj.paginator.num_pages }}">Última</a>
+                {% else %}
+                <span class="pagination-link is-disabled">Siguiente</span>
+                <span class="pagination-link is-disabled">Última</span>
+                {% endif %}
+            </div>
+        </nav>
+        {% endif %}
         {% else %}
         <!-- Empty State -->
         <div class="empty-state-card">
-            <div class="empty-state-icon">🎉</div>
+            <div class="empty-state-icon"><svg class="nav-icon-svg" aria-hidden="true"><use href="#ui-icon-check"></use></svg></div>
             <h2>¡Todo al día!</h2>
             <p>No se encontraron productos activos sin categoría. Todos los artículos están clasificados correctamente.</p>
             {% if q or selected_supplier_id %}
@@ -177,16 +227,16 @@
 <!-- Categories Sidebar -->
 <div id="categoriesSidebar" class="categories-sidebar">
     <div class="sidebar-header">
-        <h3 class="sidebar-title">📁 Categorías</h3>
+        <h3 class="sidebar-title"><svg class="nav-icon-svg" aria-hidden="true"><use href="#ui-icon-folder"></use></svg> Categorías</h3>
         <div style="display: flex; gap: 8px; align-items: center;">
-            <button type="button" class="btn btn-primary btn-sm" style="padding: 4px 8px; font-size: 11px; height: 26px; line-height: 1; background: rgba(255, 107, 53, 0.2); border-color: rgba(255, 107, 53, 0.4); color: #ff6b35; font-weight: 600;" onclick="toggleSidebarNewCatForm()">➕ Nueva</button>
+            <button type="button" class="btn btn-primary btn-sm" style="padding: 4px 8px; font-size: 11px; height: 26px; line-height: 1; background: rgba(255, 107, 53, 0.2); border-color: rgba(255, 107, 53, 0.4); color: #ff6b35; font-weight: 600;" onclick="toggleSidebarNewCatForm()"><svg class="nav-icon-svg" aria-hidden="true"><use href="#ui-icon-plus"></use></svg> Nueva</button>
             <button class="sidebar-close-btn" onclick="toggleCategoriesSidebar(false)">✕</button>
         </div>
     </div>
     
     <!-- New Category Inline Form (initially hidden) -->
     <div id="sidebarNewCatForm" style="display: none; padding: 16px 24px; border-bottom: 1px solid rgba(255, 107, 53, 0.15); background: rgba(255, 107, 53, 0.03); flex-shrink: 0;">
-        <h4 style="margin: 0 0 12px 0; font-size: 13px; color: #ff6b35; font-weight: 600;">➕ Crear Categoría o Subcategoría</h4>
+        <h4 style="margin: 0 0 12px 0; font-size: 13px; color: #ff6b35; font-weight: 600;">Crear categoría o subcategoría</h4>
         
         <div style="margin-bottom: 8px;">
             <label style="display: block; font-size: 11px; color: #94a3b8; margin-bottom: 4px;">Nombre:</label>
@@ -227,7 +277,8 @@
 
 <!-- Floating Toggle Button -->
 <button type="button" id="sidebarToggleFloating" class="sidebar-toggle-floating" onclick="toggleCategoriesSidebar()">
-    📁 CATEGORÍAS
+    <svg class="nav-icon-svg" aria-hidden="true"><use href="#ui-icon-folder"></use></svg>
+    CATEGORÍAS
 </button>
 
 <!-- Modal de Categorización -->
@@ -262,7 +313,8 @@
                 <div class="flex-between mb-2">
                     <label class="form-label font-bold">Categorías Vinculadas (Múltiple Selección)</label>
                     <button type="button" class="btn-inline-add" onclick="toggleInlineCategoryForm()">
-                        ➕ Nueva Categoría
+                        <svg class="nav-icon-svg" aria-hidden="true"><use href="#ui-icon-plus"></use></svg>
+                        Nueva categoría
                     </button>
                 </div>
 
@@ -412,6 +464,9 @@
     }
     .flex-2 { flex: 2; }
     .flex-1 { flex: 1; }
+    .page-size-group {
+        flex: 0 0 155px;
+    }
     .form-actions-inline {
         display: flex;
         gap: 8px;
@@ -466,7 +521,7 @@
         max-height: 68vh;
         overflow-y: scroll;
         overflow-x: auto;
-        direction: rtl;
+        direction: ltr;
         scrollbar-width: thin;
         scrollbar-color: rgba(255, 107, 53, 0.4) rgba(255, 255, 255, 0.02);
     }
@@ -510,6 +565,7 @@
         border-bottom: 1px solid rgba(255, 255, 255, 0.04);
         vertical-align: middle;
         font-size: 0.9rem;
+        color: #e2e8f0;
         transition: background-color 0.2s;
     }
     .products-table tr {
@@ -524,6 +580,83 @@
         pointer-events: none;
     }
     .text-center { text-align: center; }
+
+    .table-card-toolbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        margin: -4px 0 14px;
+        padding: 0 2px 14px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .table-result-summary {
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+    }
+    .table-result-summary strong {
+        color: #f8fafc;
+        font-size: 0.95rem;
+    }
+    .table-result-summary span,
+    .table-page-indicator,
+    .pagination-status {
+        color: #94a3b8;
+        font-size: 0.78rem;
+    }
+    .table-page-indicator {
+        padding: 6px 10px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 999px;
+        white-space: nowrap;
+    }
+    .uncategorized-pagination {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding-top: 16px;
+        border-top: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .pagination-actions {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 7px;
+        flex-wrap: wrap;
+    }
+    .pagination-link,
+    .pagination-current {
+        min-height: 32px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 6px 11px;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 7px;
+        color: #e2e8f0;
+        background: rgba(255, 255, 255, 0.035);
+        font-size: 0.78rem;
+        font-weight: 700;
+        line-height: 1;
+        text-decoration: none;
+        box-sizing: border-box;
+    }
+    .pagination-link:hover {
+        color: #ffffff;
+        border-color: rgba(255, 107, 53, 0.6);
+        background: rgba(255, 107, 53, 0.12);
+    }
+    .pagination-link.is-disabled {
+        opacity: 0.38;
+        pointer-events: none;
+    }
+    .pagination-current {
+        color: #ff8a5c;
+        border-color: rgba(255, 107, 53, 0.35);
+        background: rgba(255, 107, 53, 0.08);
+    }
     
     /* Imágen del Producto */
     .product-img-wrapper {
@@ -557,7 +690,7 @@
         border-radius: 4px;
     }
     .editable-cell::after {
-        content: '✏️';
+        content: 'Editar';
         position: absolute;
         right: 8px;
         top: 50%;
@@ -1002,6 +1135,171 @@
     .sidebar-toggle-floating.pulse {
         animation: floating-pulse 2s infinite;
     }
+
+    /*
+       La vista mantiene una tabla oscura propia. En modo claro no debe
+       heredar los colores oscuros globales sobre ese fondo, porque el
+       contenido pierde contraste. Estas reglas dejan ambos temas completos.
+    */
+    html[data-theme="light"] .uncategorized-container {
+        color: #172033;
+    }
+    html[data-theme="light"] .uncategorized-container .page-title {
+        color: #172033;
+    }
+    html[data-theme="light"] .uncategorized-container .page-subtitle {
+        color: #5f6f86;
+    }
+    html[data-theme="light"] .uncategorized-container .filters-card,
+    html[data-theme="light"] .uncategorized-container .table-card {
+        background: #ffffff;
+        border-color: #dce4ee;
+        box-shadow: 0 14px 32px rgba(15, 23, 42, 0.08);
+    }
+    html[data-theme="light"] .uncategorized-container .form-label {
+        color: #475569;
+    }
+    html[data-theme="light"] .uncategorized-container .form-input,
+    html[data-theme="light"] .uncategorized-container .form-select {
+        color: #172033;
+        background: #f8fafc;
+        border-color: #cbd5e1;
+    }
+    html[data-theme="light"] .uncategorized-container .form-input::placeholder {
+        color: #7b8799;
+        opacity: 1;
+    }
+    html[data-theme="light"] .uncategorized-container .form-input:focus,
+    html[data-theme="light"] .uncategorized-container .form-select:focus {
+        background: #ffffff;
+        border-color: #ff6b35;
+        box-shadow: 0 0 0 3px rgba(255, 107, 53, 0.13);
+    }
+    html[data-theme="light"] .uncategorized-container .table-responsive {
+        scrollbar-color: rgba(234, 88, 12, 0.5) #eef2f7;
+    }
+    html[data-theme="light"] .uncategorized-container .table-responsive::-webkit-scrollbar-track {
+        background: #eef2f7;
+    }
+    html[data-theme="light"] .uncategorized-container .table-responsive::-webkit-scrollbar-thumb {
+        background: rgba(234, 88, 12, 0.5);
+    }
+    html[data-theme="light"] .uncategorized-container .products-table th {
+        background: #f1f5f9;
+        color: #52627a;
+        border-bottom-color: #d8e1ec;
+    }
+    html[data-theme="light"] .uncategorized-container .products-table td {
+        color: #253044;
+        border-bottom-color: #e6ebf2;
+        background: #ffffff;
+    }
+    html[data-theme="light"] .uncategorized-container .products-table tbody tr:nth-child(even) td {
+        background: #fbfcfe;
+    }
+    html[data-theme="light"] .uncategorized-container .products-table tr:hover td {
+        background: #fff7ed;
+    }
+    html[data-theme="light"] .uncategorized-container .table-card-toolbar,
+    html[data-theme="light"] .uncategorized-container .uncategorized-pagination {
+        border-color: #e1e7ef;
+    }
+    html[data-theme="light"] .uncategorized-container .table-result-summary strong {
+        color: #172033;
+    }
+    html[data-theme="light"] .uncategorized-container .table-result-summary span,
+    html[data-theme="light"] .uncategorized-container .table-page-indicator,
+    html[data-theme="light"] .uncategorized-container .pagination-status {
+        color: #64748b;
+    }
+    html[data-theme="light"] .uncategorized-container .table-page-indicator,
+    html[data-theme="light"] .uncategorized-container .pagination-link,
+    html[data-theme="light"] .uncategorized-container .pagination-current {
+        border-color: #d7e0eb;
+        background: #f8fafc;
+    }
+    html[data-theme="light"] .uncategorized-container .pagination-link {
+        color: #3c4a60;
+    }
+    html[data-theme="light"] .uncategorized-container .pagination-link:hover {
+        color: #9a3412;
+        border-color: #fdba74;
+        background: #fff7ed;
+    }
+    html[data-theme="light"] .uncategorized-container .pagination-current {
+        color: #9a3412;
+        border-color: #fdba74;
+        background: #fff7ed;
+    }
+    html[data-theme="light"] .uncategorized-container .cell-name .cell-text {
+        color: #111827;
+        font-weight: 700;
+    }
+    html[data-theme="light"] .uncategorized-container .cell-sku .cell-text,
+    html[data-theme="light"] .uncategorized-container .supplier-text {
+        color: #3f4c61;
+        font-weight: 600;
+    }
+    html[data-theme="light"] .uncategorized-container .text-muted {
+        color: #68758a !important;
+    }
+    html[data-theme="light"] .uncategorized-container .product-img-wrapper {
+        background: #f8fafc;
+        border-color: #d8e1ec;
+    }
+    html[data-theme="light"] .uncategorized-container .editable-cell:hover {
+        background: #fff7ed !important;
+    }
+    html[data-theme="light"] .uncategorized-container .btn-outline-primary {
+        color: #9a3412;
+        background: #fff7ed;
+        border-color: #fdba74;
+    }
+    html[data-theme="light"] .uncategorized-container .btn-outline-primary:hover {
+        color: #ffffff;
+        background: #ea580c;
+        border-color: #ea580c;
+    }
+    html[data-theme="light"] .uncategorized-container input[type="checkbox"] {
+        accent-color: #ea580c;
+    }
+
+    @media (max-width: 980px) {
+        .filters-form .form-row {
+            flex-wrap: wrap;
+        }
+        .filters-form .flex-2 {
+            flex: 1 1 100%;
+        }
+        .filters-form .flex-1 {
+            flex: 1 1 260px;
+        }
+        .page-size-group {
+            flex: 1 1 155px;
+        }
+        .uncategorized-pagination {
+            align-items: flex-start;
+            flex-direction: column;
+        }
+        .pagination-actions {
+            justify-content: flex-start;
+        }
+    }
+
+    @media (max-width: 620px) {
+        .table-card-toolbar {
+            align-items: flex-start;
+            flex-direction: column;
+        }
+        .pagination-edge {
+            display: none;
+        }
+        .pagination-current {
+            order: -1;
+            width: 100%;
+        }
+    }
+
     @keyframes floating-pulse {
         0% { box-shadow: 0 0 0 0 rgba(255, 107, 53, 0.7); }
         70% { box-shadow: 0 0 0 15px rgba(255, 107, 53, 0); }
@@ -1151,14 +1449,14 @@
             bar.style.display = 'flex';
             if (floatingBtn) {
                 floatingBtn.classList.add('pulse');
-                floatingBtn.innerHTML = `📁 ASIGNAR (${selected.length})`;
+                floatingBtn.innerHTML = `<svg class="nav-icon-svg" aria-hidden="true"><use href="#ui-icon-folder"></use></svg> ASIGNAR (${selected.length})`;
             }
         } else {
             bar.style.display = 'none';
             document.getElementById('select-all-checkbox').checked = false;
             if (floatingBtn) {
                 floatingBtn.classList.remove('pulse');
-                floatingBtn.innerHTML = `📁 CATEGORÍAS`;
+                floatingBtn.innerHTML = `<svg class="nav-icon-svg" aria-hidden="true"><use href="#ui-icon-folder"></use></svg> CATEGORÍAS`;
             }
         }
     }
@@ -1182,7 +1480,7 @@
             const card = document.querySelector('.table-card');
             card.innerHTML = `
                 <div class="empty-state-card">
-                    <div class="empty-state-icon">🎉</div>
+                    <div class="empty-state-icon"><svg class="nav-icon-svg" aria-hidden="true"><use href="#ui-icon-check"></use></svg></div>
                     <h2>¡Todo al día!</h2>
                     <p>No quedan productos sin categoría en esta lista.</p>
                 </div>
@@ -1402,7 +1700,7 @@
                 if (strong) {
                     const toggleSpan = document.createElement('span');
                     toggleSpan.className = 'tree-toggle';
-                    toggleSpan.innerHTML = categoryExpanded[id] ? '▼' : '▶';
+                    toggleSpan.innerHTML = categoryExpanded[id] ? '&minus;' : '+';
                     toggleSpan.style.cursor = 'pointer';
                     toggleSpan.style.marginRight = '8px';
                     toggleSpan.style.color = '#ff6b35';
@@ -1414,7 +1712,7 @@
                         e.preventDefault();
                         e.stopPropagation();
                         categoryExpanded[id] = !categoryExpanded[id];
-                        toggleSpan.innerHTML = categoryExpanded[id] ? '▼' : '▶';
+                        toggleSpan.innerHTML = categoryExpanded[id] ? '&minus;' : '+';
                         updateTreeVisibility();
                     });
                 }
@@ -1531,7 +1829,7 @@
             const toggleSpan = item.querySelector('.tree-toggle');
             if (toggleSpan) {
                 const isExpanded = forceExpand[id] || categoryExpanded[id];
-                toggleSpan.innerHTML = isExpanded ? '▼' : '▶';
+                toggleSpan.innerHTML = isExpanded ? '&minus;' : '+';
             }
         });
     }
@@ -1559,7 +1857,7 @@
         if (action === 'bulk_deactivate') {
             confirmMsg = `¿Estás seguro de que deseas desactivar los ${ids.length} productos seleccionados?`;
         } else if (action === 'bulk_delete') {
-            confirmMsg = `⚠️ ¡ATENCIÓN! ¿Estás completamente seguro de que deseas eliminar permanentemente los ${ids.length} productos seleccionados? Esta acción no se puede deshacer.`;
+            confirmMsg = `ATENCIÓN: ¿Estás completamente seguro de que deseas eliminar permanentemente los ${ids.length} productos seleccionados? Esta acción no se puede deshacer.`;
         }
 
         if (!confirm(confirmMsg)) return;
@@ -1784,7 +2082,7 @@
         const btn = document.querySelector('button[onclick*="triler-file-input"]');
         const originalText = btn.innerHTML;
         btn.disabled = true;
-        btn.innerHTML = '⏳ Procesando...';
+        btn.innerHTML = 'Procesando...';
         
         const formData = new FormData();
         formData.append('excel_file', file);
@@ -1851,7 +2149,7 @@
         const btn = document.getElementById('btn-movigom-rollback');
         const originalText = btn.innerHTML;
         btn.disabled = true;
-        btn.innerHTML = '⏳ Revirtiendo...';
+        btn.innerHTML = 'Revirtiendo...';
         
         fetch('{% url "admin_products_uncategorized_import_rollback" %}', {
             method: 'POST',
@@ -2305,7 +2603,7 @@
             
             if (cat.hasChildren) {
                 const isCollapsed = collapsedCategories.has(cat.id);
-                toggleSpan.textContent = isCollapsed ? "▶" : "▼";
+                toggleSpan.textContent = isCollapsed ? "+" : "−";
                 toggleSpan.style.cursor = "pointer";
                 toggleSpan.addEventListener("click", function (e) {
                     e.stopPropagation();

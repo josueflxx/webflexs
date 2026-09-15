@@ -275,7 +275,8 @@
                 <label class="form-label" style="margin-bottom: 0;">Categorias vinculadas (multi-categoria)</label>
                 {% if user.is_superuser %}
                 <button type="button" onclick="openCategoryModal()" class="btn btn-sm" style="font-size: 0.75rem; padding: 4px 10px; background: rgba(255, 107, 53, 0.1); border: 1px solid rgba(255, 107, 53, 0.3); color: #ff6b35; border-radius: 4px; cursor: pointer; transition: all 0.2s; font-weight: 600;">
-                    ➕ Nueva Categoría
+                    <svg class="nav-icon-svg" aria-hidden="true"><use href="#ui-icon-plus"></use></svg>
+                    Nueva categoría
                 </button>
                 {% endif %}
             </div>
@@ -335,7 +336,7 @@
                         class="btn btn-sm btn-info" 
                         onclick="autoDetectAttributes()" 
                         {% if not user.is_superuser %}disabled style="display:none;"{% endif %}>
-                    ✨ Auto-detectar desde Descripción
+                    <svg class="nav-icon-svg" aria-hidden="true"><use href="#ui-bulb"></use></svg> Auto-detectar desde Descripción
                 </button>
             </div>
             <div id="attributes-fields">
@@ -1276,7 +1277,7 @@
                 if (strong) {
                     const toggleSpan = document.createElement('span');
                     toggleSpan.className = 'tree-toggle';
-                    toggleSpan.innerHTML = categoryExpanded[id] ? '▼' : '▶';
+                    toggleSpan.innerHTML = categoryExpanded[id] ? '&minus;' : '+';
                     toggleSpan.style.cursor = 'pointer';
                     toggleSpan.style.marginRight = '8px';
                     toggleSpan.style.color = '#ff6b35';
@@ -1288,7 +1289,7 @@
                         e.preventDefault();
                         e.stopPropagation();
                         categoryExpanded[id] = !categoryExpanded[id];
-                        toggleSpan.innerHTML = categoryExpanded[id] ? '▼' : '▶';
+                        toggleSpan.innerHTML = categoryExpanded[id] ? '&minus;' : '+';
                         updateTreeVisibility();
                     });
                 }
@@ -1426,7 +1427,7 @@
             const toggleSpan = item.querySelector('.tree-toggle');
             if (toggleSpan) {
                 const isExpanded = forceExpand[id] || categoryExpanded[id];
-                toggleSpan.innerHTML = isExpanded ? '▼' : '▶';
+                toggleSpan.innerHTML = isExpanded ? '&minus;' : '+';
             }
         });
     }
@@ -1558,7 +1559,7 @@
             alert('Error al conectar con el servidor.');
         } finally {
             btn.disabled = false;
-            btn.innerHTML = '✨ Auto-detectar desde Descripción';
+            btn.innerHTML = '<svg class="nav-icon-svg" aria-hidden="true"><use href="#ui-bulb"></use></svg> Auto-detectar desde Descripción';
         }
     }
 

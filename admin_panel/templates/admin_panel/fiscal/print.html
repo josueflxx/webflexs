@@ -231,34 +231,36 @@
         .doc-items {
             width: 100%;
             border-collapse: collapse;
+            table-layout: fixed;
             margin-top: 4.5mm;
-            font-size: 10px;
+            font-size: 9px;
         }
 
         .doc-items thead th {
             text-align: left;
             border-bottom: 1px solid var(--line);
-            padding: 0 0 2mm;
-            font-size: 10px;
+            padding: 0 1mm 2mm;
+            font-size: 9px;
         }
 
         .doc-items tbody td {
             vertical-align: top;
-            padding: 1.2mm 0;
+            padding: 1.4mm 1mm;
             border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+            overflow-wrap: anywhere;
         }
 
         .doc-items tbody tr:last-child td {
             border-bottom: none;
         }
 
-        .sku-col { width: 18%; }
-        .qty-col { width: 8%; text-align: right; padding-right: 2mm; }
-        .price-col,
-        .iva-col,
-        .disc-col,
-        .total-col { width: 11%; text-align: right; }
-        .desc-col { width: 41%; padding-right: 3mm; }
+        .sku-col { width: 14%; }
+        .qty-col { width: 7%; text-align: right; }
+        .desc-col { width: 34%; }
+        .price-col { width: 12%; text-align: right; }
+        .iva-col { width: 8%; text-align: right; }
+        .disc-col { width: 10%; text-align: right; }
+        .total-col { width: 15%; text-align: right; }
 
         .item-description {
             line-height: 1.25;
@@ -412,7 +414,8 @@
             <a href="?copy=triplicado">Triplicado</a>
         </div>
         <div class="print-toolbar-actions">
-            <a class="print-toolbar-link" href="?copy={{ copy_type }}&format=pdf">PDF</a>
+            <a class="print-toolbar-link" href="?copy={{ copy_type }}&format=pdf">Descargar PDF</a>
+            <a class="print-toolbar-link" href="{% url 'admin_fiscal_document_excel' fiscal_document.pk %}">Descargar Excel</a>
             <button type="button" onclick="window.print()">Imprimir</button>
         </div>
     </div>
@@ -593,5 +596,14 @@
             Comprobante fiscal generado desde FLEXS.
         </div>
     </main>
+    {% if auto_print %}
+    <script>
+        window.addEventListener("load", function () {
+            window.setTimeout(function () {
+                window.print();
+            }, 150);
+        });
+    </script>
+    {% endif %}
 </body>
 </html>

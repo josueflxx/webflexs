@@ -1,0 +1,107 @@
+/* Keep the product in the content layer, above the homepage's dark overlay. */
+.hero.hero--clamp .hero-content {
+    grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+    gap: clamp(24px, 4vw, 72px);
+    align-items: center;
+}
+.hero--clamp .hero-text { width: 100%; }
+.home-clamp {
+    width: 100%;
+    min-width: 0;
+    position: relative;
+    align-self: center;
+    isolation: isolate;
+    color: #d5dde8;
+}
+.home-clamp::before {
+    content: '';
+    position: absolute;
+    inset: 8% -8% 0;
+    z-index: -1;
+    pointer-events: none;
+    background: radial-gradient(ellipse at 72% 45%, #ff6b351c, transparent 58%),
+                radial-gradient(ellipse at 25% 40%, #91bfff13, transparent 60%);
+}
+.home-clamp-heading {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    padding: 0 12px 14px;
+    border-bottom: 1px solid #ffffff14;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #a6afbd;
+}
+.home-clamp-heading span:last-child { color: #ffad8d; letter-spacing: 0.04em; }
+.home-clamp-stage { position: relative; height: clamp(390px, 35vw, 570px); }
+.home-clamp-stage model-viewer {
+    display: block;
+    height: 100%;
+    width: 100%;
+    opacity: 0;
+    transition: opacity 350ms ease;
+    --progress-bar-color: #ff6b35;
+    --progress-bar-height: 2px;
+}
+.home-clamp.is-ready model-viewer { opacity: 1; }
+.home-clamp-poster {
+    position: absolute;
+    inset: 7% 10%;
+    width: 80%;
+    height: 86%;
+    object-fit: contain;
+    filter: drop-shadow(0 20px 30px #0008);
+}
+.home-clamp-footer {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 0 0;
+    text-align: center;
+}
+.home-clamp-footer p { margin: 0; font-size: 0.75rem; color: #a6afbd; }
+.home-clamp-controls { display: flex; gap: 8px; }
+.home-clamp button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 44px;
+    min-height: 44px;
+    padding: 8px 14px;
+    border: 1px solid #ffffff26;
+    border-radius: 8px;
+    background: #ffffff06;
+    color: #dce3ed;
+    cursor: pointer;
+    font: inherit;
+    font-size: 0.8rem;
+}
+.home-clamp button:hover { border-color: #ff9b73; background: #ff6b3515; }
+.home-clamp button:focus-visible { outline: 2px solid #ffad8d; outline-offset: 3px; }
+.home-clamp [hidden] { display: none !important; }
+@media (max-width: 900px) {
+    .hero.hero--clamp .hero-content { grid-template-columns: minmax(0, 1fr); gap: 40px; }
+    .hero--clamp .hero-text { max-width: 680px; }
+    .home-clamp { max-width: 580px; justify-self: center; }
+    .home-clamp-stage { height: 420px; }
+    .hero--clamp .hero-scroll { display: none; }
+}
+@media (max-width: 480px) {
+    .home-clamp-stage { height: 340px; }
+    .home-clamp-heading { font-size: 0.62rem; padding-inline: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .home-clamp-stage model-viewer { transition: none; }
+}
+html[data-theme='light'] .home-clamp-heading,
+html[data-theme='light'] .home-clamp-footer p { color: #495365; }
+html[data-theme='light'] .home-clamp-heading { border-color: #17223824; }
+html[data-theme='light'] .home-clamp-heading span:last-child { color: #ad3c15; }
+html[data-theme='light'] .home-clamp button { color: #263349; border-color: #17223840; background: #ffffff60; }
+
+.home-clamp-profiles { display: flex; justify-content: center; gap: 8px; padding-top: 16px; }
+.home-clamp-profiles button[aria-pressed="true"] { background: #ff6b35; color: #fff; border-color: #ff6b35; }

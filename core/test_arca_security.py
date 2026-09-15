@@ -227,6 +227,8 @@ class ArcaCredentialValidationTests(SimpleTestCase):
             "expected_fingerprint_sha256": hashlib.sha256(
                 self.der_certificate
             ).hexdigest(),
+            "expected_subject_cn": "fixture-homologation",
+            "expected_issuer_cn": "fixture-homologation-ca",
         }
         values.update(overrides)
         return ArcaCredentialSpec(**values)
@@ -247,6 +249,8 @@ class ArcaCredentialValidationTests(SimpleTestCase):
                 b"subject=serialNumber=CUIT 30712345678,"
                 b"CN=fixture-homologation\n"
             )
+        elif "x509" in command and "-issuer" in command:
+            stdout = b"issuer=CN=fixture-homologation-ca,O=ARCA TEST\n"
         elif "x509" in command and "-pubkey" in command:
             stdout = self.public_key
         elif "pkey" in command and "-pubout" in command:
@@ -269,6 +273,32 @@ class ArcaCredentialValidationTests(SimpleTestCase):
             hashlib.sha256(self.der_certificate).hexdigest(),
         )
         self.assertTrue(metadata.subject_cuit_matches)
+        self.assertTrue(metadata.subject_cn_matches)
+        self.assertTrue(metadata.issuer_cn_matches)
+
+    def test_expected_subject_cn_must_match(self):
+        with self.assertRaises(ArcaCredentialError) as context:
+            validate_credential_offline(
+                self._spec(expected_subject_cn="unexpected-subject"),
+                now=datetime(2026, 1, 1, tzinfo=timezone.utc),
+                runner=self._runner,
+            )
+        self.assertEqual(
+            context.exception.error_code,
+            "credential_subject_cn_mismatch",
+        )
+
+    def test_expected_issuer_cn_must_match(self):
+        with self.assertRaises(ArcaCredentialError) as context:
+            validate_credential_offline(
+                self._spec(expected_issuer_cn="unexpected-issuer"),
+                now=datetime(2026, 1, 1, tzinfo=timezone.utc),
+                runner=self._runner,
+            )
+        self.assertEqual(
+            context.exception.error_code,
+            "credential_issuer_cn_mismatch",
+        )
 
     def test_certificate_subject_must_match_configured_cuit(self):
         def wrong_subject_runner(command, **kwargs):
@@ -1105,12 +1135,18 @@ class ArcaTraTests(SimpleTestCase):
         client = object.__new__(ArcaWsfeClient)
         client.service_name = "wsfe"
         values = set()
-        for _index in range(500):
-            xml = client._build_tra()
-            unique_id = xml.split("<uniqueId>", 1)[1].split("</uniqueId>", 1)[0]
-            values.add(unique_id)
+        with patch(
+            "core.services.arca_wsaa.secrets.randbelow",
+            side_effect=range(500),
+        ):
+            for _index in range(500):
+                xml = client._build_tra()
+                unique_id = xml.split("<uniqueId>", 1)[1].split(
+                    "</uniqueId>", 1
+                )[0]
+                values.add(unique_id)
         self.assertEqual(len(values), 500)
-        self.assertTrue(all(0 < int(value) < (1 << 63) for value in values))
+        self.assertTrue(all(0 < int(value) < (1 << 32) for value in values))
 
 
 class ArcaQueryMethodTests(SimpleTestCase):

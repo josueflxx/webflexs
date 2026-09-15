@@ -12,6 +12,18 @@ Los únicos endpoints admitidos son los fijos de homologación. Producción y
 Los pasos 9 a 15 forman una única ejecución del probe. No ejecutar el probe más
 de una vez para “probar valores” ni repetir pasos individuales.
 
+## Política del Ticket de Acceso
+
+- Un TA válido se conserva exclusivamente en el Redis compartido y efímero.
+- La caché aplica un TTL calculado desde `expirationTime` y descuenta el margen
+  de renovación configurado. No hay persistencia RDB/AOF ni salida a logs.
+- Todos los comandos read-only reutilizan el mismo TA por CUIT, ambiente,
+  servicio y fingerprint mientras siga vigente.
+- No se elimina el TA al terminar una consulta exitosa o fallida. Borrarlo
+  localmente no lo invalida en WSAA y puede impedir una nueva autenticación.
+- `clear_ticket()` queda reservado para una acción operativa explícita ante
+  compromiso o rotación de credencial; nunca forma parte del flujo normal.
+
 ## 1. Verificar el estado de Git
 
 - Comando orientativo: `git status --short` y `git rev-parse HEAD`.
@@ -105,8 +117,8 @@ de una vez para “probar valores” ni repetir pasos individuales.
   solicita valores fiscales por argumento.
 - Evidencia sanitizada: `token_obtained=True` y `sign_obtained=True`; nunca sus
   valores.
-- Reversión: el comando invalida su entrada exacta de caché; ante duda,
-  deshabilitar flags y detener el backend local.
+- Reversión: deshabilitar flags y detener el backend local. El TA permanece
+  protegido por Redis hasta su ventana de renovación.
 
 ## 10. Ejecutar FEDummy
 
@@ -115,7 +127,7 @@ de una vez para “probar valores” ni repetir pasos individuales.
 - Resultado esperado: `service_status_ok=True`.
 - Detenerse si: el estado no es verdadero; el probe corta antes de catálogos.
 - Evidencia sanitizada: sólo el booleano del estado de servicio.
-- Reversión: limpieza automática del Ticket, flags en `false` y cierre.
+- Reversión: conservar el Ticket con TTL, dejar flags en `false` y cerrar.
 
 ## 11. Consultar parámetros
 
@@ -125,16 +137,21 @@ de una vez para “probar valores” ni repetir pasos individuales.
   documento, IVA, monedas y conceptos.
 - Detenerse si: falla un catálogo o aparece un método fuera de la allowlist.
 - Evidencia sanitizada: líneas `catalog_count_*`; no respuestas SOAP completas.
-- Reversión: limpieza automática del Ticket y cierre sin fallback.
+- Reversión: conservar el Ticket con TTL y cerrar sin fallback.
 
 ## 12. Consultar puntos de venta
 
-- Comando orientativo: ninguno adicional; se usa `FEParamGetPtosVenta` dentro
-  del mismo probe.
-- Resultado esperado: `catalog_count_points_of_sale` mayor que cero.
+- Comando cerrado, con autorización humana separada:
+  `python manage.py arca_wsfe_points_of_sale_probe --company-id <ID> --point-of-sale-id <ID_CANDIDATO>`.
+- Alcance exacto: WSAA sólo si no existe TA válido y
+  `FEParamGetPtosVenta`. No ejecuta `FEDummy`, otros catálogos,
+  `FECompUltimoAutorizado`, padrón ni emisión.
+- Resultado esperado: `ARCA_WSFE_POINTS_OF_SALE_PROBE=PASS`, contador y filas
+  sanitizadas con número, tipo de emisión y estado de bloqueo.
 - Detenerse si: la consulta falla o devuelve una lista no interpretable.
-- Evidencia sanitizada: contador y no la lista completa.
-- Reversión: limpieza automática del Ticket y flags en `false`.
+- Evidencia sanitizada: sólo los tres campos allowlisted; nunca XML, Auth,
+  Token o Sign.
+- Reversión: conservar el Ticket con TTL y dejar flags en `false`.
 
 ## 13. Confirmar el punto configurado
 
@@ -148,25 +165,31 @@ de una vez para “probar valores” ni repetir pasos individuales.
 
 ## 14. Ejecutar FECompUltimoAutorizado
 
-- Comando orientativo: ninguno adicional; se ejecuta una vez para el tipo
-  configurado y previamente confirmado.
+- Comando cerrado, con autorización humana separada:
+  `python manage.py arca_wsfe_last_authorized_probe --company-id 1 --point-of-sale-id 3`.
+- Alcance exacto: Company 1, POS ID 3/número 3 y Factura A
+  (`CbteTipo=1`). Usa WSAA sólo si no existe TA válido y llama únicamente
+  `FECompUltimoAutorizado`. No ejecuta `FEDummy`, catálogos,
+  `FECAESolicitar`, padrón ni escrituras locales.
 - Resultado esperado: `last_authorized_number` entero no negativo y
-  `configured_voucher_type_found=True`.
-- Detenerse si: el tipo no fue confirmado, la respuesta falla o se intenta
-  emitir.
-- Evidencia sanitizada: tipo confirmado y último número; sin XML ni Auth.
-- Reversión: limpieza automática del Ticket y cierre sin reintento aleatorio.
+  `ARCA_WSFE_LAST_AUTHORIZED_PROBE=PASS`.
+- Detenerse si: cambia cualquier identidad fija, el gate falla, la respuesta
+  no es un entero no negativo o se intenta ampliar el alcance.
+- Evidencia sanitizada: IDs fijos, tipo, etiqueta, último número y
+  `local_state_updated=no`; sin XML ni Auth.
+- Reversión: conservar el Ticket con TTL y cerrar sin reintento aleatorio.
 
-## 15. Eliminar Token y Sign del caché
+## 15. Conservar Token y Sign sólo hasta la ventana de renovación
 
-- Comando orientativo: ninguno adicional; el `finally` del comando elimina la
-  clave exacta, sin enumerar el backend.
-- Resultado esperado: `ticket_cache_cleared=True`.
-- Detenerse si: la limpieza falla; el comando devuelve error aunque las
-  lecturas hayan sido correctas.
-- Evidencia sanitizada: booleano de limpieza, nunca clave, Token ni Sign.
-- Reversión: detener el backend local, conservar flags en `false` y solicitar
-  limpieza administrada antes de cualquier repetición.
+- Comando orientativo: ninguno adicional; `ArcaTicketCoordinator` conserva la
+  entrada exacta con TTL y la reutiliza sin imprimirla.
+- Resultado esperado:
+  `ticket_cache_policy=retain_until_renewal_window`.
+- Detenerse si: Redis no está disponible, el backend no es compartido o se
+  propone copiar el TA a un archivo, log o chat.
+- Evidencia sanitizada: nombre de la política, nunca clave, Token ni Sign.
+- Reversión: deshabilitar flags y detener el backend. La limpieza manual sólo
+  procede ante un incidente o rotación explícitamente autorizada.
 
 ## 16. Revisar logs
 
@@ -199,8 +222,8 @@ de una vez para “probar valores” ni repetir pasos individuales.
   `python manage.py arca_homologation_gate`.
 - Resultado esperado: doctor `WAITING_FOR_USER` y gate `FAIL` por banderas
   deshabilitadas; `FECAESolicitar` nunca fue invocado.
-- Detenerse si: el gate permanece en `PASS`, emisión está habilitada o hay una
-  entrada de caché sin limpiar.
+- Detenerse si: el gate permanece en `PASS`, emisión está habilitada o Redis
+  no respeta el TTL configurado.
 - Evidencia sanitizada: estados finales, HEAD y confirmación
   `emission_disabled=yes`.
 - Reversión: forzar el estado seguro local, detener el caché de homologación y

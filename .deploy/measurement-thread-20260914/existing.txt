@@ -1,0 +1,1 @@
+catalog/templates/catalog/how_to_measure.html

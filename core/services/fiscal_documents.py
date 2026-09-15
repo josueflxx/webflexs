@@ -31,6 +31,8 @@ from core.models import (
     FiscalDocument,
     FiscalDocumentItem,
     FiscalPointOfSale,
+    DOCUMENT_SITUATION_NOT_APPLICABLE,
+    DOCUMENT_SITUATION_PENDING,
 )
 from core.services.fiscal import (
     is_invoice_ready,
@@ -52,6 +54,7 @@ from core.services.fiscal_integrity import (
 )
 from core.services.sales_documents import (
     apply_sales_document_type_to_fiscal_document,
+    build_sales_document_rule_snapshot,
     resolve_sales_document_type_for_fiscal_doc,
 )
 
@@ -158,7 +161,7 @@ def _apply_item_tax_breakdown(*, base_amount, iva_rate):
     return net_amount, iva_amount, total_amount
 
 
-def _build_order_items_payload(order, *, doc_type, issue_mode):
+def _build_order_items_payload(order, *, doc_type, issue_mode, group_equal_products=False):
     payload = []
     line_number = 1
     apply_tax = _should_apply_item_tax(issue_mode)
@@ -218,7 +221,37 @@ def _build_order_items_payload(order, *, doc_type, issue_mode):
             }
         )
         line_number += 1
-    return payload
+    if not group_equal_products:
+        return payload
+
+    grouped = {}
+    for row in payload:
+        key = (
+            row["product_id"],
+            row["sku"],
+            row["description"],
+            row["unit_price_net"],
+            row["discount_percentage"],
+            row["iva_rate"],
+            row.get("arca_iva_id"),
+            row.get("tax_treatment"),
+        )
+        if key not in grouped:
+            grouped[key] = dict(row)
+            continue
+        target = grouped[key]
+        for field in (
+            "quantity",
+            "discount_amount",
+            "net_amount",
+            "iva_amount",
+            "total_amount",
+        ):
+            target[field] = target[field] + row[field]
+    result = list(grouped.values())
+    for index, row in enumerate(result, start=1):
+        row["line_number"] = index
+    return result
 
 
 def _compute_totals_from_payload(payload):
@@ -388,6 +421,9 @@ def _build_fiscal_snapshot_payload(
             "issue_mode": str(issue_mode or ""),
             "sales_document_type_id": getattr(sales_document_type, "id", None),
             "sales_document_type_name": str(getattr(sales_document_type, "name", "") or ""),
+            "sales_rules_version": int(getattr(sales_document_type, "rules_version", 1) or 1),
+            "currency": str(getattr(sales_document_type, "currency_code", "ARS") or "ARS"),
+            "exchange_rate": str(getattr(sales_document_type, "default_exchange_rate", "1") or "1"),
             "external_system": str(external_system or ""),
             "external_id": str(external_id or ""),
             "external_number": str(external_number or ""),
@@ -475,10 +511,16 @@ def create_local_fiscal_document_from_order(
         point_of_sale_id=point_of_sale.id,
         doc_type=doc_type,
     )
+    resolved_type = sales_document_type or resolve_sales_document_type_for_fiscal_doc(
+        company=company,
+        doc_type=doc_type,
+        origin_channel=getattr(order, "origin_channel", ""),
+    )
     payload = _build_order_items_payload(
         order,
         doc_type=doc_type,
         issue_mode=issue_mode,
+        group_equal_products=bool(getattr(resolved_type, "group_equal_products", False)),
     )
     totals = _compute_totals_from_payload(payload)
     client_company_ref = getattr(order, "client_company_ref", None)
@@ -491,11 +533,7 @@ def create_local_fiscal_document_from_order(
             client_profile=client_profile,
             doc_type=doc_type,
         )
-    resolved_type = sales_document_type or resolve_sales_document_type_for_fiscal_doc(
-        company=company,
-        doc_type=doc_type,
-        origin_channel=getattr(order, "origin_channel", ""),
-    )
+    sales_rules_snapshot = build_sales_document_rule_snapshot(resolved_type)
     snapshot_payload = _build_fiscal_snapshot_payload(
         order=order,
         company=company,
@@ -566,12 +604,19 @@ def create_local_fiscal_document_from_order(
                 status=FISCAL_STATUS_DRAFT,
                 payment_due_date=resolve_payment_due_date(order=order),
                 sales_document_type=resolved_type,
+                sales_rules_snapshot=sales_rules_snapshot,
+                sales_rules_version=int(getattr(resolved_type, "rules_version", 1) or 1),
+                commercial_situation=(
+                    DOCUMENT_SITUATION_PENDING
+                    if bool(getattr(resolved_type, "use_document_situation", False))
+                    else DOCUMENT_SITUATION_NOT_APPLICABLE
+                ),
                 subtotal_net=totals["subtotal_net"],
                 discount_total=totals["discount_total"],
                 tax_total=totals["tax_total"],
                 total=totals["total"],
-                currency="ARS",
-                exchange_rate=Decimal("1.000000"),
+                currency=getattr(resolved_type, "currency_code", "ARS") or "ARS",
+                exchange_rate=getattr(resolved_type, "default_exchange_rate", Decimal("1.000000")),
                 fiscal_snapshot=snapshot_payload,
                 snapshot_schema_version=2,
                 snapshot_hash=snapshot_hash,
@@ -647,10 +692,16 @@ def register_external_fiscal_document_for_order(
         external_id=external_id,
         external_number=external_number,
     )
+    resolved_type = sales_document_type or resolve_sales_document_type_for_fiscal_doc(
+        company=company,
+        doc_type=doc_type,
+        origin_channel=getattr(order, "origin_channel", ""),
+    )
     payload = _build_order_items_payload(
         order,
         doc_type=doc_type,
         issue_mode=FISCAL_ISSUE_MODE_EXTERNAL_SAAS,
+        group_equal_products=bool(getattr(resolved_type, "group_equal_products", False)),
     )
     totals = _compute_totals_from_payload(payload)
     client_company_ref = getattr(order, "client_company_ref", None)
@@ -662,7 +713,7 @@ def register_external_fiscal_document_for_order(
         point_of_sale=point_of_sale,
         doc_type=doc_type,
         issue_mode=FISCAL_ISSUE_MODE_EXTERNAL_SAAS,
-        sales_document_type=sales_document_type,
+        sales_document_type=resolved_type,
         actor=actor,
         client_company_ref=client_company_ref,
         items_payload=payload,
@@ -672,11 +723,7 @@ def register_external_fiscal_document_for_order(
         external_number=external_number,
     )
     snapshot_hash = fiscal_payload_hash(snapshot_payload)
-    resolved_type = sales_document_type or resolve_sales_document_type_for_fiscal_doc(
-        company=company,
-        doc_type=doc_type,
-        origin_channel=getattr(order, "origin_channel", ""),
-    )
+    sales_rules_snapshot = build_sales_document_rule_snapshot(resolved_type)
 
     with transaction.atomic():
         existing = FiscalDocument.objects.select_for_update().filter(source_key=source_key).first()
@@ -732,12 +779,19 @@ def register_external_fiscal_document_for_order(
             status=FISCAL_STATUS_DRAFT,
             payment_due_date=resolve_payment_due_date(order=order, issued_at=issued_now),
             sales_document_type=resolved_type,
+            sales_rules_snapshot=sales_rules_snapshot,
+            sales_rules_version=int(getattr(resolved_type, "rules_version", 1) or 1),
+            commercial_situation=(
+                DOCUMENT_SITUATION_PENDING
+                if bool(getattr(resolved_type, "use_document_situation", False))
+                else DOCUMENT_SITUATION_NOT_APPLICABLE
+            ),
             subtotal_net=totals["subtotal_net"],
             discount_total=totals["discount_total"],
             tax_total=totals["tax_total"],
             total=totals["total"],
-            currency="ARS",
-            exchange_rate=Decimal("1.000000"),
+            currency=getattr(resolved_type, "currency_code", "ARS") or "ARS",
+            exchange_rate=getattr(resolved_type, "default_exchange_rate", Decimal("1.000000")),
             external_system=external_system,
             external_id=external_id,
             external_number=external_number,
@@ -815,13 +869,11 @@ def close_fiscal_document(*, fiscal_document, actor=None):
         payment_due_date=payment_due_date,
         resolved_at=timezone.now(),
     )
-    try:
-        sync_fiscal_document_account_movement(
-            fiscal_document=fiscal_document,
-            actor=actor,
-        )
-    except Exception:
-        pass
+    apply_sales_document_type_to_fiscal_document(
+        document=fiscal_document,
+        sales_document_type=fiscal_document.sales_document_type,
+        actor=actor,
+    )
     return fiscal_document, True
 
 

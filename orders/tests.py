@@ -648,6 +648,7 @@ class OrderRequestReviewActionsTests(TestCase):
             billing_mode=SALES_BILLING_MODE_MANUAL_FISCAL,
             fiscal_doc_type=FISCAL_DOC_TYPE_FB,
             point_of_sale=self.point_of_sale,
+            generate_account_movement=True,
             is_default=False,
         )
         self.product = Product.objects.create(

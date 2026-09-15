@@ -1,0 +1,26 @@
+[Unit]
+Description=FLEXS dedicated catalog Excel worker
+After=network.target redis-server.service
+Requires=redis-server.service
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/webflexs
+Environment=DJANGO_SETTINGS_MODULE=flexs_project.settings.production
+ExecStart=/var/www/webflexs/venv/bin/celery -A flexs_project worker --include=core.catalog_excel_tasks --queues=flexs-catalog-excel --hostname=catalog-excel@%%h --concurrency=1 --prefetch-multiplier=1 --max-tasks-per-child=20 --loglevel=INFO --without-gossip --without-mingle
+Restart=always
+RestartSec=5
+TimeoutStopSec=650
+KillMode=mixed
+Nice=10
+CPUWeight=20
+MemoryHigh=768M
+MemoryMax=1G
+PrivateTmp=true
+NoNewPrivileges=true
+UMask=0027
+
+[Install]
+WantedBy=multi-user.target

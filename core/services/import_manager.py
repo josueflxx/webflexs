@@ -66,7 +66,7 @@ class ImportTaskManager:
         cache.set(key, state, ImportTaskManager.CACHE_TIMEOUT)
         
     @staticmethod
-    def fail_task(task_id, error_message):
+    def fail_task(task_id, error_message, result_data=None):
         """Marks task as failed."""
         key = f'import_task_{task_id}'
         state = cache.get(key) or {}
@@ -74,6 +74,8 @@ class ImportTaskManager:
             'status': 'failed',
             'message': error_message
         })
+        if result_data is not None:
+            state['result'] = result_data
         cache.set(key, state, ImportTaskManager.CACHE_TIMEOUT)
 
     @staticmethod

@@ -1,0 +1,707 @@
+{% extends 'admin_panel/base.html' %}
+
+{% block page_title %}Catálogo de Marcas{% endblock %}
+
+{% block extra_css %}
+<style>
+    .brand-container {
+        max-width: 1200px;
+    }
+    .brand-toolbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+        flex-wrap: wrap;
+        gap: 15px;
+    }
+    .brand-toolbar h2 {
+        margin: 0;
+    }
+    .brand-toolbar p {
+        margin: 5px 0 0 0;
+        color: var(--color-gray-light);
+        font-size: 0.9rem;
+    }
+    .brand-tree {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }
+    .brand-tree-controls {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 16px;
+        padding: 12px 14px;
+        margin-bottom: 12px;
+        background: rgba(255, 255, 255, 0.025);
+        border: 1px solid rgba(255, 255, 255, 0.07);
+        border-radius: 10px;
+    }
+    .brand-tree-controls-copy {
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+    }
+    .brand-tree-controls-copy strong {
+        color: #f5f7fa;
+        font-size: 0.9rem;
+    }
+    .brand-tree-controls-copy span {
+        color: var(--color-gray-light);
+        font-size: 0.78rem;
+    }
+    .brand-tree-control-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+    .brand-tree-control {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 7px;
+        min-height: 34px;
+        padding: 7px 11px;
+        color: #dce2ea;
+        background: rgba(255, 255, 255, 0.035);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 7px;
+        font: inherit;
+        font-size: 0.76rem;
+        font-weight: 700;
+        cursor: pointer;
+        transition: border-color 0.18s, background-color 0.18s, color 0.18s;
+    }
+    .brand-tree-control:hover {
+        color: #fff;
+        border-color: rgba(255, 107, 53, 0.45);
+        background: rgba(255, 107, 53, 0.09);
+    }
+    .brand-tree-control:focus-visible,
+    .brand-toggle:focus-visible {
+        outline: 2px solid var(--color-primary);
+        outline-offset: 3px;
+    }
+    .brand-tree-control svg {
+        width: 15px;
+        height: 15px;
+    }
+    .brand-card {
+        background: rgba(255, 255, 255, 0.02);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 12px;
+        overflow: hidden;
+        transition: border-color 0.2s, background-color 0.2s;
+    }
+    .brand-card:hover {
+        border-color: rgba(255, 107, 53, 0.3);
+    }
+    .brand-card.is-expanded {
+        background: rgba(255, 255, 255, 0.025);
+        border-color: rgba(255, 107, 53, 0.28);
+    }
+    .brand-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 14px;
+        padding: 13px 16px;
+        transition: border-color 0.18s;
+    }
+    .brand-card.is-expanded .brand-header {
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .brand-toggle {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 18px;
+        padding: 0;
+        color: inherit;
+        text-align: left;
+        background: transparent;
+        border: 0;
+        font: inherit;
+        cursor: pointer;
+    }
+    .brand-toggle:hover .brand-name {
+        color: #fff;
+    }
+    .brand-toggle-control {
+        flex: 0 0 auto;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        color: #aab3c0;
+        font-size: 0.75rem;
+        font-weight: 700;
+        white-space: nowrap;
+    }
+    .brand-toggle-chevron {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 28px;
+        height: 28px;
+        color: #ff8c42;
+        background: rgba(255, 107, 53, 0.08);
+        border: 1px solid rgba(255, 107, 53, 0.2);
+        border-radius: 7px;
+    }
+    .brand-toggle-chevron svg {
+        width: 15px;
+        height: 15px;
+        transition: transform 0.2s ease;
+    }
+    .brand-card.is-expanded .brand-toggle-chevron svg {
+        transform: rotate(180deg);
+    }
+    .brand-identity {
+        display: flex;
+        align-items: center;
+        gap: 15px;
+        min-width: 0;
+    }
+    .brand-logo-preview {
+        width: 50px;
+        height: 50px;
+        object-fit: contain;
+        background: #fff;
+        border-radius: 8px;
+        padding: 5px;
+    }
+    .brand-logo-placeholder {
+        width: 50px;
+        height: 50px;
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.05);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+    }
+    .brand-name {
+        font-size: 1.3rem;
+        font-weight: 600;
+        margin: 0;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    .badge {
+        font-size: 0.75rem;
+        padding: 3px 8px;
+        border-radius: 20px;
+        font-weight: 500;
+    }
+    .badge-active {
+        background: rgba(40, 167, 69, 0.15);
+        color: #28a745;
+        border: 1px solid rgba(40, 167, 69, 0.3);
+    }
+    .badge-inactive {
+        background: rgba(220, 53, 69, 0.15);
+        color: #dc3545;
+        border: 1px solid rgba(220, 53, 69, 0.3);
+    }
+    .rubro-container {
+        margin: 16px 18px 18px 38px;
+        display: flex;
+        flex-direction: column;
+        gap: 15px;
+        border-left: 2px solid rgba(255, 107, 53, 0.15);
+        padding-left: 20px;
+    }
+    .brand-structure[hidden] {
+        display: none !important;
+    }
+    .rubro-row {
+        background: rgba(255, 255, 255, 0.01);
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        border-radius: 8px;
+        padding: 12px 16px;
+    }
+    .rubro-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 10px;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+    .rubro-title {
+        font-weight: 600;
+        font-size: 1.05rem;
+        margin: 0;
+        color: #ff8c42;
+    }
+    .subrubro-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+        gap: 12px;
+        margin-top: 10px;
+    }
+    .subrubro-card {
+        background: rgba(255, 255, 255, 0.02);
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        border-radius: 6px;
+        padding: 12px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        transition: background-color 0.2s;
+    }
+    .subrubro-card:hover {
+        background: rgba(255, 255, 255, 0.04);
+    }
+    .subrubro-info h5 {
+        margin: 0 0 5px 0;
+        font-size: 0.95rem;
+        font-weight: 600;
+    }
+    .subrubro-info p {
+        margin: 0;
+        font-size: 0.8rem;
+        color: var(--color-gray-light);
+    }
+    .action-group {
+        display: flex;
+        gap: 6px;
+        align-items: center;
+    }
+    .btn-sm-icon {
+        padding: 5px 10px;
+        font-size: 0.85rem;
+        border-radius: 4px;
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+    }
+    .btn-trash {
+        background: rgba(220, 53, 69, 0.1);
+        color: #dc3545;
+        border: 1px solid rgba(220, 53, 69, 0.2);
+    }
+    .btn-trash:hover {
+        background: #dc3545;
+        color: #fff;
+    }
+    .btn-edit {
+        background: rgba(255, 255, 255, 0.05);
+        color: #fff;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    .btn-edit:hover {
+        background: rgba(255, 255, 255, 0.15);
+    }
+    .btn-primary-soft {
+        background: rgba(255, 107, 53, 0.1);
+        color: var(--color-primary);
+        border: 1px solid rgba(255, 107, 53, 0.2);
+    }
+    .btn-primary-soft:hover {
+        background: var(--color-primary);
+        color: #fff;
+    }
+    .filter-bar {
+        background: rgba(255, 255, 255, 0.02);
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        border-radius: 8px;
+        padding: 12px;
+        margin-bottom: 20px;
+    }
+    .filter-form {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+    .filter-form input[type="text"] {
+        flex: 1;
+        min-width: 200px;
+    }
+    .brand-toolbar-actions {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+    }
+    .brand-quality {
+        display: grid;
+        grid-template-columns: repeat(6, minmax(130px, 1fr));
+        gap: 1px;
+        overflow: hidden;
+        border: 1px solid rgba(255, 255, 255, .08);
+        border-radius: 12px;
+        background: rgba(255, 255, 255, .08);
+        margin-bottom: 20px;
+    }
+    .brand-quality-card {
+        padding: 15px 17px;
+        background: #101722;
+    }
+    .brand-quality-card span {
+        display: block;
+        color: #8f98a8;
+        font-size: .72rem;
+        margin-bottom: 7px;
+    }
+    .brand-quality-card strong {
+        display: block;
+        color: #f5f7fa;
+        font-size: 1.25rem;
+    }
+    .brand-quality-card small {
+        color: #697486;
+        display: block;
+        margin-top: 5px;
+        font-size: .67rem;
+    }
+    .brand-quality-card.is-warning strong { color: #ff9a6c; }
+    .brand-quality-card.is-good strong { color: #4ade80; }
+    a.brand-quality-card { color: inherit; text-decoration: none; transition: background .2s ease; }
+    a.brand-quality-card:hover { background: #162130; }
+    @media (max-width: 850px) {
+        .brand-quality { grid-template-columns: repeat(2, 1fr); }
+        .brand-tree-controls {
+            align-items: flex-start;
+            flex-direction: column;
+        }
+        .brand-header {
+            align-items: stretch;
+            flex-direction: column;
+        }
+        .brand-header > .action-group {
+            justify-content: flex-end;
+        }
+        .brand-toggle {
+            width: 100%;
+        }
+        .rubro-container {
+            margin-left: 16px;
+        }
+    }
+    @media (max-width: 560px) {
+        .brand-toggle-label {
+            display: none;
+        }
+        .brand-logo-preview,
+        .brand-logo-placeholder {
+            width: 42px;
+            height: 42px;
+        }
+        .brand-name {
+            font-size: 1.08rem;
+        }
+        .brand-tree-control-actions,
+        .brand-tree-control {
+            width: 100%;
+        }
+        .brand-tree-control-actions {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="brand-container">
+    <div class="brand-toolbar">
+        <div class="brand-toolbar-title">
+            <h2>Catálogo por Marcas</h2>
+            <p>Estructura alterna comercial: Marca -> Rubro -> Subrubro (ej. FORD -> BUJES -> BUJES ARMADOS)</p>
+        </div>
+        <div class="brand-toolbar-actions">
+            <a href="{% url 'admin_brand_category_integration' %}" class="btn btn-secondary">
+                Integrar categorias
+            </a>
+            <a href="{% url 'admin_brand_catalog_inbox' %}" class="btn btn-primary">
+                Catalogar productos
+            </a>
+            <a href="{% url 'admin_brand_catalog_settings' %}" class="btn btn-secondary">
+                Alias y reglas
+            </a>
+            <a href="{% url 'admin_brand_create' %}" class="btn btn-primary">
+                + Nueva Marca
+            </a>
+        </div>
+    </div>
+
+    <section class="brand-quality" aria-label="Estado de catalogación">
+        <div class="brand-quality-card is-good">
+            <span>Cobertura</span>
+            <strong>{{ quality_metrics.coverage }}%</strong>
+            <small>{{ quality_metrics.assigned }} de {{ quality_metrics.total }} activos</small>
+        </div>
+        <div class="brand-quality-card is-warning">
+            <span>Sin marca</span>
+            <strong>{{ quality_metrics.unassigned }}</strong>
+            <small>Pendientes de catalogar</small>
+        </div>
+        <div class="brand-quality-card">
+            <span>Con subrubro</span>
+            <strong>{{ quality_metrics.with_subrubro }}</strong>
+            <small>Clasificación detallada</small>
+        </div>
+        <div class="brand-quality-card">
+            <span>Alias activos</span>
+            <strong>{{ quality_metrics.aliases }}</strong>
+            <small>Variantes reconocibles</small>
+        </div>
+        <div class="brand-quality-card {% if quality_metrics.ambiguous %}is-warning{% endif %}">
+            <span>En varias marcas</span>
+            <strong>{{ quality_metrics.ambiguous }}</strong>
+            <small>Requieren control</small>
+        </div>
+        <a href="{% url 'admin_brand_category_integration' %}" class="brand-quality-card {% if category_brand_metrics.conflicts %}is-warning{% endif %}">
+            <span>Categorias heredadas</span>
+            <strong>{{ category_brand_metrics.candidate_categories }}</strong>
+            <small>{{ category_brand_metrics.mapped_categories }} vinculos confirmados</small>
+        </a>
+    </section>
+
+    <!-- Filtro de Búsqueda -->
+    <div class="filter-bar">
+        <form method="GET" class="filter-form">
+            <input type="text" name="q" value="{{ search }}" class="form-input" placeholder="Buscar marcas...">
+            <select name="status" class="form-select" onchange="this.form.submit()">
+                <option value="all" {% if status == 'all' %}selected{% endif %}>Todos los estados</option>
+                <option value="active" {% if status == 'active' %}selected{% endif %}>Activas</option>
+                <option value="inactive" {% if status == 'inactive' %}selected{% endif %}>Inactivas</option>
+            </select>
+            <button type="submit" class="btn btn-primary">Buscar</button>
+            {% if search or status != 'all' %}
+                <a href="{% url 'admin_brand_list' %}" class="btn btn-secondary">Limpiar</a>
+            {% endif %}
+        </form>
+    </div>
+
+    <div class="brand-tree-controls" aria-label="Controles de las estructuras de marcas">
+        <div class="brand-tree-controls-copy">
+            <strong>Estructuras de marcas</strong>
+            <span>Las marcas permanecen compactas hasta que necesites consultar sus rubros.</span>
+        </div>
+        <div class="brand-tree-control-actions">
+            <button type="button" class="brand-tree-control" id="expandAllBrands">
+                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path d="m6 9 6 6 6-6M6 4l6 6 6-6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                Expandir todas
+            </button>
+            <button type="button" class="brand-tree-control" id="collapseAllBrands">
+                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path d="m6 15 6-6 6 6M6 20l6-6 6 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                Ocultar todas
+            </button>
+        </div>
+    </div>
+
+    <!-- Tree View Hierarchical -->
+    <div class="brand-tree">
+        {% for brand in brands %}
+            <div class="brand-card is-collapsed" data-brand-card data-brand-id="{{ brand.id }}" data-brand-name="{{ brand.name }}">
+                <!-- Marca Header -->
+                <div class="brand-header">
+                    <button
+                        type="button"
+                        class="brand-toggle"
+                        aria-expanded="false"
+                        aria-controls="brandStructure{{ brand.id }}"
+                        aria-label="Mostrar estructura de {{ brand.name }}"
+                    >
+                        <div class="brand-identity">
+                            {% if brand.logo %}
+                                <img src="{{ brand.logo.url }}" alt="" class="brand-logo-preview">
+                            {% else %}
+                                <div class="brand-logo-placeholder" aria-hidden="true">{{ brand.name|slice:":2"|upper }}</div>
+                            {% endif %}
+                            <div>
+                                <h3 class="brand-name">
+                                    {{ brand.name }}
+                                    <span class="badge {% if brand.is_active %}badge-active{% else %}badge-inactive{% endif %}">
+                                        {% if brand.is_active %}Activa{% else %}Inactiva{% endif %}
+                                    </span>
+                                </h3>
+                                <span style="font-size: 0.8rem; color: var(--color-gray-light)">Orden: {{ brand.order }} | Rubros: {{ brand.rubros.all.count }}</span>
+                            </div>
+                        </div>
+                        <span class="brand-toggle-control" aria-hidden="true">
+                            <span class="brand-toggle-label">Ver estructura</span>
+                            <span class="brand-toggle-chevron">
+                                <svg viewBox="0 0 24 24" fill="none">
+                                    <path d="m6.5 9 5.5 5.5L17.5 9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                </svg>
+                            </span>
+                        </span>
+                    </button>
+                    <div class="action-group">
+                        <a href="{% url 'admin_brand_rubro_create' %}?brand={{ brand.id }}" class="btn-sm-icon btn btn-primary-soft">
+                            + Agregar Rubro
+                        </a>
+                        <a href="{% url 'admin_brand_edit' brand.id %}" class="btn-sm-icon btn btn-edit">
+                            ✏️ Editar
+                        </a>
+                        <form action="{% url 'admin_brand_delete' brand.id %}" method="POST" style="display:inline;" onsubmit="return confirm('¿Seguro quieres eliminar esta marca y todos sus rubros/subrubros?')">
+                            {% csrf_token %}
+                            <button type="submit" class="btn-sm-icon btn btn-trash" aria-label="Eliminar marca">🗑️</button>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Rubros List -->
+                <div class="rubro-container brand-structure" id="brandStructure{{ brand.id }}" hidden>
+                    {% for rubro in brand.rubros.all %}
+                        <div class="rubro-row">
+                            <div class="rubro-header">
+                                <h4 class="rubro-title">📂 {{ rubro.name }}</h4>
+                                <div class="action-group">
+                                    <a href="{% url 'admin_brand_rubro_products' rubro.id %}" class="btn btn-primary" style="padding: 3px 8px; font-size:0.8rem;">
+                                        📦 Productos ({{ rubro.products.all.count }})
+                                    </a>
+                                    <a href="{% url 'admin_brand_subrubro_create' %}?rubro={{ rubro.id }}" class="btn-sm-icon btn btn-primary-soft" style="padding: 3px 8px; font-size:0.8rem;">
+                                        + Subrubro
+                                    </a>
+                                    <a href="{% url 'admin_brand_rubro_edit' rubro.id %}" class="btn-sm-icon btn btn-edit" style="padding: 3px 8px; font-size:0.8rem;">
+                                        ✏️
+                                    </a>
+                                    <form action="{% url 'admin_brand_rubro_delete' rubro.id %}" method="POST" style="display:inline;" onsubmit="return confirm('¿Seguro quieres eliminar este rubro y todos sus subrubros?')">
+                                        {% csrf_token %}
+                                        <button type="submit" class="btn-sm-icon btn btn-trash" style="padding: 3px 8px; font-size:0.8rem;" aria-label="Eliminar rubro">🗑️</button>
+                                    </form>
+                                </div>
+                            </div>
+
+                            <!-- Subrubros Grid -->
+                            <div class="subrubro-grid">
+                                {% for subrubro in rubro.subrubros.all %}
+                                    <div class="subrubro-card">
+                                        <div class="subrubro-info">
+                                            <h5>🔧 {{ subrubro.name }}</h5>
+                                            <p>Productos: {{ subrubro.products.all.count }} | Ayudantes: {{ subrubro.helper_categories.all.count }}</p>
+                                        </div>
+                                        <div class="action-group">
+                                            <a href="{% url 'admin_brand_subrubro_products' subrubro.id %}" class="btn btn-primary" style="padding: 4px 8px; font-size:0.8rem;">
+                                                📦 Productos
+                                            </a>
+                                            <a href="{% url 'admin_brand_subrubro_edit' subrubro.id %}" class="btn-sm-icon btn btn-edit" style="padding: 4px 8px; font-size:0.8rem;">
+                                                ✏️
+                                            </a>
+                                            <form action="{% url 'admin_brand_subrubro_delete' subrubro.id %}" method="POST" style="display:inline;" onsubmit="return confirm('¿Seguro quieres eliminar este subrubro?')">
+                                                {% csrf_token %}
+                                                <button type="submit" class="btn-sm-icon btn btn-trash" style="padding: 4px 8px; font-size:0.8rem;" aria-label="Eliminar subrubro">🗑️</button>
+                                            </form>
+                                        </div>
+                                    </div>
+                                {% empty %}
+                                    <div style="font-size:0.85rem; color:var(--color-gray-light); grid-column: 1/-1;">No hay subrubros creados en este rubro.</div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    {% empty %}
+                        <div style="font-size:0.9rem; color:var(--color-gray-light);">No hay rubros creados para esta marca.</div>
+                    {% endfor %}
+                </div>
+            </div>
+        {% empty %}
+            <div class="brand-card" style="text-align: center; padding: 40px;">
+                <p style="font-size: 1.1rem; color: var(--color-gray-light); margin-bottom: 20px;">No se encontraron marcas configuradas.</p>
+                <a href="{% url 'admin_brand_create' %}" class="btn btn-primary">Crear Primera Marca</a>
+            </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    (function () {
+        const cards = Array.from(document.querySelectorAll('[data-brand-card]'));
+        const expandAllButton = document.getElementById('expandAllBrands');
+        const collapseAllButton = document.getElementById('collapseAllBrands');
+        const storageKey = 'flexs.admin.expandedBrandStructures';
+
+        if (!cards.length) {
+            return;
+        }
+
+        function readExpandedIds() {
+            try {
+                const stored = JSON.parse(sessionStorage.getItem(storageKey) || '[]');
+                return new Set(Array.isArray(stored) ? stored.map(String) : []);
+            } catch (error) {
+                return new Set();
+            }
+        }
+
+        const expandedIds = readExpandedIds();
+
+        function saveExpandedIds() {
+            try {
+                sessionStorage.setItem(storageKey, JSON.stringify(Array.from(expandedIds)));
+            } catch (error) {
+                // La interfaz sigue funcionando aunque el navegador bloquee el almacenamiento.
+            }
+        }
+
+        function setCardExpanded(card, expanded, persist) {
+            const id = String(card.dataset.brandId);
+            const toggle = card.querySelector('.brand-toggle');
+            const structure = card.querySelector('.brand-structure');
+            const label = card.querySelector('.brand-toggle-label');
+
+            if (!toggle || !structure) {
+                return;
+            }
+
+            card.classList.toggle('is-expanded', expanded);
+            card.classList.toggle('is-collapsed', !expanded);
+            toggle.setAttribute('aria-expanded', String(expanded));
+            toggle.setAttribute('aria-label', `${expanded ? 'Ocultar' : 'Mostrar'} estructura de ${card.dataset.brandName || 'la marca'}`);
+            structure.hidden = !expanded;
+
+            if (label) {
+                label.textContent = expanded ? 'Ocultar estructura' : 'Ver estructura';
+            }
+
+            if (expanded) {
+                expandedIds.add(id);
+            } else {
+                expandedIds.delete(id);
+            }
+
+            if (persist) {
+                saveExpandedIds();
+            }
+        }
+
+        cards.forEach(function (card) {
+            setCardExpanded(card, expandedIds.has(String(card.dataset.brandId)), false);
+            const toggle = card.querySelector('.brand-toggle');
+            toggle?.addEventListener('click', function () {
+                setCardExpanded(card, toggle.getAttribute('aria-expanded') !== 'true', true);
+            });
+        });
+
+        expandAllButton?.addEventListener('click', function () {
+            cards.forEach(function (card) {
+                setCardExpanded(card, true, false);
+            });
+            saveExpandedIds();
+        });
+
+        collapseAllButton?.addEventListener('click', function () {
+            cards.forEach(function (card) {
+                setCardExpanded(card, false, false);
+            });
+            saveExpandedIds();
+        });
+    })();
+</script>
+{% endblock %}

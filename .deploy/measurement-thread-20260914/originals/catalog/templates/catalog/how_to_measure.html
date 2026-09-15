@@ -1,0 +1,91 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Cómo medir una abrazadera | FLEXS{% endblock %}
+{% block meta_description %}Guía visual de medición de abrazaderas curvas, semicurvas y planas: diámetro, ancho interior, largo útil y rosca.{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'core/css/measurement_guide.css' %}?v=20260914-1">{% endblock %}
+{% block extra_js %}<script src="{% static 'core/js/measurement_guide.js' %}?v=20260914-1" defer></script>{% endblock %}
+
+{% block content %}
+<div class="measure-guide" id="measurementGuide" data-shape="curva" data-measure="all">
+    <div class="container">
+        <header class="mg-header">
+            <div>
+                <p class="mg-eyebrow">FLEXS / GUÍA DE MEDICIÓN</p>
+                <h1>Cómo medir una abrazadera</h1>
+                <p class="mg-intro">Elegí la forma y ubicá las cuatro medidas que necesitamos para cotizar tu abrazadera.</p>
+            </div>
+            <a class="mg-link" href="{% url 'catalog_clamp_request' %}">Cotizar a medida <span aria-hidden="true">↗</span></a>
+        </header>
+
+        <div class="mg-layout">
+            <section class="mg-board" aria-labelledby="mgBoardTitle">
+                <div class="mg-board-heading"><h2 id="mgBoardTitle">01 <span>Elegí el perfil</span></h2><span class="mg-badge">GUÍA 2D</span></div>
+                <div class="mg-profiles" role="group" aria-label="Forma de la abrazadera" hidden>
+                    <button type="button" data-shape="curva" aria-pressed="true"><svg viewBox="0 0 40 36" aria-hidden="true"><path d="M7 32V17a13 13 0 0 1 26 0v15"/></svg><span>Curva<small>Redonda</small></span></button>
+                    <button type="button" data-shape="semicurva" aria-pressed="false"><svg viewBox="0 0 40 36" aria-hidden="true"><path d="M7 32V13a13 8 0 0 1 26 0v19"/></svg><span>Semicurva<small>Arco bajo</small></span></button>
+                    <button type="button" data-shape="plana" aria-pressed="false"><svg viewBox="0 0 40 36" aria-hidden="true"><path d="M7 32V11a6 6 0 0 1 6-6h14a6 6 0 0 1 6 6v21"/></svg><span>Plana<small>Techo plano</small></span></button>
+                </div>
+                <div class="mg-drawing">
+                    <div class="mg-drawing-heading"><span id="shapeTitle">Abrazadera curva</span><span>Sin escala</span></div>
+                    <svg id="guideSvg" viewBox="0 0 520 500" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="mgSvgTitle mgSvgDesc">
+                        <title id="mgSvgTitle">Medidas de una abrazadera curva</title>
+                        <desc id="mgSvgDesc">A: diámetro de varilla. B: ancho entre caras internas. C: desde el extremo interior de una pata hasta el centro interior del arco. D: longitud de la rosca.</desc>
+                        <defs>
+                            <pattern id="guideGrid" width="26" height="26" patternUnits="userSpaceOnUse"><path d="M26 0H0V26" class="mg-grid"/></pattern>
+                            <pattern id="guideThreads" width="22" height="7" patternUnits="userSpaceOnUse"><path d="M0 4L22 1" stroke="#243246" stroke-width="1.4"/></pattern>
+                            <linearGradient id="guideSteel" x1="160" x2="360" gradientUnits="userSpaceOnUse"><stop stop-color="#94a7bd"/><stop offset=".17" stop-color="#eff5fc"/><stop offset=".5" stop-color="#b7c5d7"/><stop offset=".83" stop-color="#f8fafc"/><stop offset="1" stop-color="#899aaf"/></linearGradient>
+                            <marker id="guideArrow" viewBox="0 0 8 8" refX="1" refY="4" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M7 1L1 4L7 7" fill="none" stroke="#ffa77f" stroke-width="1.5"/></marker>
+                        </defs>
+                        <rect x="24" y="24" width="472" height="452" fill="url(#guideGrid)" rx="12"/>
+                        <path d="M260 40V474" class="mg-centerline"/>
+                        <path id="uBoltBody" d="M174 450V168A86 86 0 0 1 346 168V450" stroke="url(#guideSteel)" stroke-width="22"/>
+                        <path id="uBoltShine" d="M174 450V168A86 86 0 0 1 346 168V450" stroke="#ffffff" stroke-opacity=".32" stroke-width="5"/>
+                        <g class="mg-threads"><path d="M163 344H185V450H163ZM335 344H357V450H335Z" fill="url(#guideThreads)"/></g>
+                        <rect x="132" y="399" width="256" height="17" rx="3" fill="#64748b" stroke="#b4c1d1"/>
+                        <path d="M133 400H387" stroke="#d7e1ec"/>
+                        <g fill="#8595a9" stroke="#c4d1df" stroke-width="1.5"><path d="M154 426L158 422H190L194 426V440L190 444H158L154 440Z"/><path d="M326 426L330 422H362L366 426V440L362 444H330L326 440Z"/></g>
+                        <g class="mg-dimension" data-dimension="c">
+                            <g id="lengthWitnesses" visibility="hidden" class="mg-witness"><path d="M90 93H260M90 450H185"/></g>
+                            <line id="lengthLine" x1="185" y1="450" x2="260" y2="93" class="mg-cota"/>
+                            <circle id="lengthStart" cx="185" cy="450" r="3" class="mg-endpoint"/><circle id="lengthEnd" cx="260" cy="93" r="3" class="mg-endpoint"/>
+                            <g id="lengthLabel" transform="translate(220 195)" class="mg-svg-label"><rect x="-43" y="-15" width="86" height="30" rx="6"/><text class="mg-label-long" text-anchor="middle" y="5">Largo (C)</text><text class="mg-label-short" text-anchor="middle" y="7" aria-hidden="true">C</text></g>
+                        </g>
+                        <g class="mg-dimension" data-dimension="b"><line id="widthLine" x1="185" y1="294" x2="335" y2="294" class="mg-cota"/><g transform="translate(260 273)" class="mg-svg-label"><rect x="-47" y="-15" width="94" height="30" rx="6"/><text class="mg-label-long" text-anchor="middle" y="5">Ancho (B)</text><text class="mg-label-short" text-anchor="middle" y="7" aria-hidden="true">B</text></g></g>
+                        <g class="mg-dimension" data-dimension="a"><line id="diameterLine" x1="335" y1="226" x2="357" y2="226" class="mg-cota"/><path d="M357 226L385 208H416" class="mg-witness"/><g transform="translate(433 193)" class="mg-svg-label"><rect x="-52" y="-15" width="104" height="30" rx="6"/><text class="mg-label-long" text-anchor="middle" y="5">Diámetro (A)</text><text class="mg-label-short" text-anchor="middle" y="7" aria-hidden="true">A</text></g></g>
+                        <g class="mg-dimension" data-dimension="d"><path d="M357 344H432M357 450H432" class="mg-witness"/><line id="threadLengthLine" x1="422" y1="344" x2="422" y2="450" class="mg-cota"/><g transform="translate(448 382)" class="mg-svg-label"><rect x="-44" y="-15" width="88" height="30" rx="6"/><text class="mg-label-long" text-anchor="middle" y="5">Rosca (D)</text><text class="mg-label-short" text-anchor="middle" y="7" aria-hidden="true">D</text></g></g>
+                    </svg>
+                    <div class="mg-measures" role="group" aria-label="Resaltar una medida" hidden>
+                        <button type="button" data-focus="all" aria-pressed="true">Todas</button>
+                        <button type="button" data-focus="a" aria-pressed="false" aria-label="Resaltar diámetro A">A</button>
+                        <button type="button" data-focus="b" aria-pressed="false" aria-label="Resaltar ancho B">B</button>
+                        <button type="button" data-focus="c" aria-pressed="false" aria-label="Resaltar largo C">C</button>
+                        <button type="button" data-focus="d" aria-pressed="false" aria-label="Resaltar rosca D">D</button>
+                    </div>
+                </div>
+                <div class="mg-tip" aria-live="polite" aria-atomic="true"><span id="mgTipLetter" class="mg-letter">C</span><div><h3 id="mgTipTitle">Cómo tomar el largo en la curva</h3><p id="shapeDesc">Desde el extremo interior de una pata hasta el punto medio de la cara interior del arco, siguiendo la línea inclinada.</p></div></div>
+                <noscript><p class="mg-static-note">Este esquema muestra la abrazadera curva. Activá JavaScript para comparar las otras formas.</p></noscript>
+            </section>
+
+            <section class="mg-instructions" aria-labelledby="mgStepsTitle">
+                <div class="mg-section-heading"><p class="mg-eyebrow">02 / TOMÁ LAS MEDIDAS</p><h2 id="mgStepsTitle">Cuatro datos, una medida correcta.</h2><p>Usá un calibre para el diámetro y una regla o cinta para las longitudes. Tocá una medida para resaltarla en el esquema.</p></div>
+                <div class="mg-steps" role="group" aria-label="Instrucciones de cada medida">
+                    <button type="button" class="mg-step" data-focus="a" aria-pressed="false"><span class="mg-letter">A</span><span class="mg-step-copy"><strong>Diámetro de varilla</strong><span>Medí el diámetro de la sección roscada con un calibre. Anotá la medida en pulgadas.</span><small>Ejemplo: 1/2″ equivale a 12,70 mm.</small></span><span class="mg-step-arrow" aria-hidden="true">↗</span></button>
+                    <button type="button" class="mg-step" data-focus="b" aria-pressed="false"><span class="mg-letter">B</span><span class="mg-step-copy"><strong>Ancho interior o luz útil</strong><span>Medí la distancia libre entre las caras internas de las dos patas.</span><small>Tomá el ancho interior, sin incluir el espesor de la varilla.</small></span><span class="mg-step-arrow" aria-hidden="true">↗</span></button>
+                    <button type="button" class="mg-step mg-length-step" data-focus="c" aria-pressed="false"><span class="mg-letter">C</span><span class="mg-step-copy"><strong>Largo útil <em id="mgLengthBadge">Curva</em></strong><span id="mgLengthInstruction">Desde el extremo interior de una pata hasta el punto medio de la cara interior del arco, siguiendo la línea inclinada.</span><small id="mgLengthHint">Los dos puntos de referencia están sobre la cara interior.</small></span><span class="mg-step-arrow" aria-hidden="true">↗</span></button>
+                    <button type="button" class="mg-step" data-focus="d" aria-pressed="false"><span class="mg-letter">D</span><span class="mg-step-copy"><strong>Largo de rosca</strong><span>Medí desde el extremo de la pata hasta donde termina el tramo roscado.</span><small>La plaqueta y la tuerca no marcan el límite de la rosca.</small></span><span class="mg-step-arrow" aria-hidden="true">↗</span></button>
+                </div>
+                <div class="mg-order-note"><span aria-hidden="true">↳</span><p><strong>Para tu pedido</strong><br>Indicá el perfil, el diámetro y las longitudes B, C y D en milímetros. El dibujo es una guía y no representa una medida de fabricación.</p></div>
+            </section>
+        </div>
+
+        <section class="mg-equivalences" aria-labelledby="mgEquivalencesTitle">
+            <div><p class="mg-eyebrow">REFERENCIA RÁPIDA</p><h2 id="mgEquivalencesTitle">Equivalencias de diámetro</h2><p>Pulgadas → milímetros · Valores redondeados a dos decimales.</p></div>
+            <dl class="mg-equivalence-grid">
+                <div><dt>7/16″</dt><dd>11,11 <span>mm</span></dd></div><div><dt>1/2″</dt><dd>12,70 <span>mm</span></dd></div><div><dt>9/16″</dt><dd>14,29 <span>mm</span></dd></div><div><dt>5/8″</dt><dd>15,88 <span>mm</span></dd></div><div><dt>3/4″</dt><dd>19,05 <span>mm</span></dd></div><div><dt>7/8″</dt><dd>22,23 <span>mm</span></dd></div><div><dt>1″</dt><dd>25,40 <span>mm</span></dd></div>
+            </dl>
+        </section>
+        <div class="mg-cta"><div><h2>¿Ya tenés las medidas?</h2><p>Elegí el perfil y completá tu solicitud de abrazadera a medida.</p></div><a href="{% url 'catalog_clamp_request' %}" class="btn btn-primary">Cotizar mi abrazadera <span aria-hidden="true">↗</span></a></div>
+    </div>
+</div>
+{% endblock %}

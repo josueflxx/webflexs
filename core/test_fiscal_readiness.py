@@ -37,6 +37,7 @@ from core.services.arca_client import (
     ArcaEmissionResult,
     ArcaTemporaryError,
 )
+from core.services.arca_homologation import ARCAEmissionDisabledError
 from core.services.fiscal_documents import create_local_fiscal_document_from_order
 from core.services.fiscal_emission import emit_fiscal_document_now
 from core.services.fiscal_integrity import fiscal_payload_hash
@@ -575,6 +576,10 @@ class FiscalEmissionRecoveryTests(FiscalFixtureMixin, TestCase):
             patch(
                 "core.services.fiscal_emission.ensure_stock_movements_for_order_document"
             ),
+            patch(
+                "core.services.fiscal_emission.require_homologation_emission_access",
+                return_value=object(),
+            ),
         )
 
     def test_pre_dispatch_failure_can_return_to_ready_without_second_document(self):
@@ -593,7 +598,7 @@ class FiscalEmissionRecoveryTests(FiscalFixtureMixin, TestCase):
 
         document = self._ready_document()
         contexts = self._emission_patches()
-        with contexts[0], contexts[1], contexts[2], contexts[3]:
+        with contexts[0], contexts[1], contexts[2], contexts[3], contexts[4]:
             outcome = emit_fiscal_document_now(
                 fiscal_document=document,
                 client_factory=PredispatchFailureClient,
@@ -605,6 +610,34 @@ class FiscalEmissionRecoveryTests(FiscalFixtureMixin, TestCase):
         self.assertFalse(attempt.request_may_have_been_sent)
         self.assertIsNone(document.number)
         self.assertEqual(FiscalDocument.objects.count(), 1)
+
+    def test_expired_gate_at_dispatch_returns_to_ready_without_network_uncertainty(self):
+        class ClosedGateClient:
+            def __init__(self, **kwargs):
+                pass
+
+            def fetch_last_authorized_number(self, **kwargs):
+                return 0
+
+            def emit_fiscal_document(self, **kwargs):
+                raise ARCAEmissionDisabledError(
+                    "Compuerta de despacho cerrada.",
+                    error_code="arca_homologation_emission_approval_expired",
+                )
+
+        document = self._ready_document()
+        contexts = self._emission_patches()
+        with contexts[0], contexts[1], contexts[2], contexts[3], contexts[4]:
+            outcome = emit_fiscal_document_now(
+                fiscal_document=document,
+                client_factory=ClosedGateClient,
+            )
+
+        self.assertEqual(outcome.state, FISCAL_STATUS_READY_TO_ISSUE)
+        document.refresh_from_db()
+        attempt = document.emission_attempts.get()
+        self.assertFalse(attempt.request_may_have_been_sent)
+        self.assertIsNone(document.number)
 
     def test_persistence_failure_after_simulated_authorization_keeps_boundary(self):
         class AuthorizedClient:
@@ -630,6 +663,7 @@ class FiscalEmissionRecoveryTests(FiscalFixtureMixin, TestCase):
             contexts[1],
             contexts[2],
             contexts[3],
+            contexts[4],
             patch.object(
                 FiscalEmissionAttempt,
                 "finalize",
@@ -683,7 +717,7 @@ class FiscalEmissionRecoveryTests(FiscalFixtureMixin, TestCase):
 
         document = self._ready_document()
         contexts = self._emission_patches()
-        with contexts[0], contexts[1], contexts[2], contexts[3]:
+        with contexts[0], contexts[1], contexts[2], contexts[3], contexts[4]:
             emission = emit_fiscal_document_now(
                 fiscal_document=document,
                 client_factory=UncertainClient,

@@ -1896,7 +1896,7 @@ class BrandCatalogBatch(models.Model):
         blank=True,
         help_text="Asociaciones de subrubro retiradas por el lote para poder restaurarlas.",
     )
-    observation = models.TextField(verbose_name="Observacion")
+    observation = models.TextField(blank=True, verbose_name="Observacion")
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -1928,8 +1928,6 @@ class BrandCatalogBatch(models.Model):
     def clean(self):
         super().clean()
         errors = {}
-        if not str(self.observation or "").strip():
-            errors["observation"] = "La observacion es obligatoria."
         if self.brand_rubro_id and self.brand_rubro.brand_id != self.brand_id:
             errors["brand_rubro"] = "El rubro debe pertenecer a la marca seleccionada."
         if self.brand_subrubro_id:
@@ -1942,3 +1940,148 @@ class BrandCatalogBatch(models.Model):
 
     def __str__(self):
         return f"Lote {self.pk or '-'} | {self.brand.name} | {len(self.product_ids or [])} productos"
+
+
+class CategoryBrandMapping(models.Model):
+    """Auditable bridge from a legacy category branch to the brand catalog."""
+
+    STATUS_CONFIRMED = "confirmed"
+    STATUS_REJECTED = "rejected"
+    STATUS_CHOICES = [
+        (STATUS_CONFIRMED, "Confirmado"),
+        (STATUS_REJECTED, "Descartado"),
+    ]
+
+    source_category = models.ForeignKey(
+        Category,
+        on_delete=models.CASCADE,
+        related_name="brand_mappings",
+        verbose_name="Categoria de origen",
+    )
+    canonical_category = models.ForeignKey(
+        Category,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="legacy_brand_mappings",
+        verbose_name="Familia canonica",
+        help_text="Categoria de familia que quedara como referencia cuando se retire la rama heredada de marca.",
+    )
+    brand = models.ForeignKey(
+        Brand,
+        on_delete=models.PROTECT,
+        related_name="category_mappings",
+        verbose_name="Marca",
+    )
+    brand_rubro = models.ForeignKey(
+        BrandRubro,
+        on_delete=models.PROTECT,
+        related_name="category_mappings",
+        verbose_name="Rubro de destino",
+    )
+    brand_subrubro = models.ForeignKey(
+        BrandSubrubro,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="category_mappings",
+        verbose_name="Subrubro de destino",
+    )
+    include_descendants = models.BooleanField(
+        default=True,
+        verbose_name="Incluir subcategorias",
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default=STATUS_CONFIRMED,
+        db_index=True,
+        verbose_name="Estado",
+    )
+    observation = models.CharField(
+        max_length=300,
+        blank=True,
+        verbose_name="Observacion",
+    )
+    last_batch = models.ForeignKey(
+        BrandCatalogBatch,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="category_mappings",
+        verbose_name="Ultimo lote aplicado",
+    )
+    last_applied_at = models.DateTimeField(null=True, blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_category_brand_mappings",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["source_category__name", "brand__name"]
+        verbose_name = "Vinculo entre categoria y marca"
+        verbose_name_plural = "Vinculos entre categorias y marcas"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["source_category"],
+                name="uniq_source_category_brand_bridge",
+            )
+        ]
+
+    def clean(self):
+        super().clean()
+        errors = {}
+        if self.brand_rubro_id and self.brand_rubro.brand_id != self.brand_id:
+            errors["brand_rubro"] = "El rubro debe pertenecer a la marca seleccionada."
+        if self.brand_subrubro_id:
+            if self.brand_subrubro.brand_rubro_id != self.brand_rubro_id:
+                errors["brand_subrubro"] = "El subrubro debe pertenecer al rubro seleccionado."
+        if self.canonical_category_id and self.canonical_category_id == self.source_category_id:
+            errors["canonical_category"] = "La familia canonica debe ser distinta de la categoria heredada."
+        if errors:
+            raise ValidationError(errors)
+
+    def save(self, *args, **kwargs):
+        if not kwargs.get("raw", False):
+            self.full_clean()
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.source_category.get_full_path()} -> {self.brand_rubro}"
+
+
+class BrandStructureBatch(models.Model):
+    """Preview and before/after history for a multi-brand structure operation."""
+
+    STATUS_CHOICES = [("preview", "Vista previa"), ("applied", "Aplicado"), ("undone", "Deshecho")]
+    OPERATION_CHOICES = [
+        ("create_rubro", "Crear rubros"),
+        ("create_subrubro", "Crear subrubros"),
+        ("update_rubro", "Editar rubros"),
+        ("update_subrubro", "Editar subrubros"),
+    ]
+    operation = models.CharField(max_length=24, choices=OPERATION_CHOICES)
+    status = models.CharField(max_length=12, choices=STATUS_CHOICES, default="preview", db_index=True)
+    spec = models.JSONField(default=dict)
+    plan = models.JSONField(default=dict)
+    changes = models.JSONField(default=list)
+    image = models.ImageField(upload_to="brands/structure_batches/%Y/%m/", blank=True)
+    observation = models.CharField(max_length=300)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name="brand_structure_batches")
+    created_at = models.DateTimeField(auto_now_add=True)
+    applied_at = models.DateTimeField(null=True, blank=True)
+    undone_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="undone_brand_structure_batches")
+    undone_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at", "-pk"]
+        verbose_name = "Lote de estructura de marcas"
+        verbose_name_plural = "Lotes de estructura de marcas"
+
+    def __str__(self):
+        return f"Lote {self.pk} · {self.get_operation_display()}"

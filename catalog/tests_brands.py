@@ -2,6 +2,8 @@ from django.test import TestCase, Client
 from django.urls import reverse
 from django.contrib.auth.models import User
 from decimal import Decimal
+from html.parser import HTMLParser
+import json
 
 from catalog.models import (
     Brand,
@@ -102,10 +104,12 @@ class BrandViewsTestCase(TestCase):
         self.brand = Brand.objects.create(name="Peugeot")
         self.rubro = BrandRubro.objects.create(brand=self.brand, name="Opticas")
         self.subrubro = BrandSubrubro.objects.create(brand_rubro=self.rubro, name="Opticas Delanteras")
+        self.category = Category.objects.create(name="Opticas publicadas")
         self.product = Product.objects.create(
             sku="OPT-PGT-01",
             name="Optica Peugeot 208",
             price=Decimal("350.00"),
+            category=self.category,
             is_active=True
         )
         BrandSubrubroProductOrder.objects.create(
@@ -137,6 +141,79 @@ class BrandViewsTestCase(TestCase):
         self.assertContains(response, "Opticas")
         self.assertContains(response, "Opticas Delanteras")
         self.assertContains(response, "OPT-PGT-01")
+
+    def test_brand_catalog_uses_scoped_styles_and_compact_list(self):
+        response = self.client.get(reverse("brand_detail", args=[self.brand.slug]), {"rubro": self.rubro.slug})
+        self.assertContains(response, "core/css/brand_catalog.css")
+        self.assertNotContains(response, "core/css/catalog.css")
+        self.assertContains(response, 'id="brandProducts" data-view="list"')
+        self.assertContains(response, 'aria-label="Presentación de productos"')
+        self.assertContains(response, 'data-bc-view="grid"')
+        self.assertContains(response, "Buscar en los productos mostrados")
+        self.assertContains(response, "Sin imagen")
+        self.assertContains(response, reverse("product_detail", args=[self.product.sku]))
+
+    def test_brand_catalog_marks_the_displayed_subrubro(self):
+        second = BrandSubrubro.objects.create(brand_rubro=self.rubro, name="Opticas Traseras")
+        product = Product.objects.create(sku="OPT-PGT-02", name="Optica trasera Peugeot", price=400, category=self.category, is_active=True)
+        second.products.add(product)
+        response = self.client.get(reverse("brand_detail", args=[self.brand.slug]), {"subrubro": second.slug})
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'href="?subrubro=opticas-traseras" aria-current="true"')
+        self.assertContains(response, product.sku)
+        self.assertNotContains(response, self.product.sku)
+
+    def test_brand_catalog_private_prices_and_guest_actions_remain_hidden(self):
+        from core.models import SiteSettings
+        site = SiteSettings.get_settings()
+        site.show_public_prices = False
+        site.save()
+        response = self.client.get(reverse("brand_detail", args=[self.brand.slug]), {"rubro": self.rubro.slug})
+        self.assertContains(response, "Consultá el precio")
+        self.assertNotContains(response, "350,00")
+        self.assertNotContains(response, 'data-bc-action="cart"')
+        self.assertNotContains(response, 'data-bc-action="favorite"')
+
+    def test_brand_catalog_authenticated_actions_include_csrf_and_stock_guard(self):
+        User.objects.create_superuser("josueflexs", "catalog@example.test", "test-only")
+        self.client.login(username="josueflexs", password="test-only")
+        response = self.client.get(reverse("brand_detail", args=[self.brand.slug]), {"rubro": self.rubro.slug})
+        self.assertContains(response, 'data-bc-action="cart" disabled')
+        self.assertContains(response, 'data-bc-action="favorite"')
+        self.assertContains(response, 'name="csrfmiddlewaretoken"')
+        self.assertNotContains(response, 'onclick="addToCart')
+
+    def test_brand_catalog_hides_products_that_cannot_be_added_to_cart(self):
+        hidden = Product.objects.create(
+            sku="OPT-PGT-PRIVATE",
+            name="Optica interna sin publicar",
+            price=220,
+            is_active=True,
+        )
+        self.subrubro.products.add(hidden)
+        response = self.client.get(reverse("brand_detail", args=[self.brand.slug]), {"rubro": self.rubro.slug})
+        self.assertContains(response, self.product.sku)
+        self.assertNotContains(response, hidden.sku)
+
+    def test_brand_catalog_products_can_be_added_to_cart(self):
+        available = Product.objects.create(
+            sku="OPT-PGT-AVAILABLE",
+            name="Optica Peugeot publicada con stock",
+            price=275,
+            category=self.category,
+            stock=1,
+            is_active=True,
+        )
+        self.subrubro.products.add(available)
+        User.objects.create_superuser("josueflexs", "catalog@example.test", "test-only")
+        self.client.login(username="josueflexs", password="test-only")
+        response = self.client.post(
+            reverse("add_to_cart"),
+            data=json.dumps({"product_id": available.pk, "quantity": 1}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()["success"])
 
 
 class BrandRubroAdminTestCase(TestCase):
@@ -236,6 +313,7 @@ class ProductGridBrandAssocTestCase(TestCase):
         self.subrubro = BrandSubrubro.objects.create(brand_rubro=self.rubro, name="Alfombras")
         
         self.product = Product.objects.create(
+            id=6203,
             sku="ACC-FRD-01",
             name="Alfombra de Goma Ford Fiesta",
             price=Decimal("80.00"),
@@ -254,6 +332,7 @@ class ProductGridBrandAssocTestCase(TestCase):
         import json
         payload = {
             "product_id": self.product.id,
+            "product_sku": self.product.sku,
             "rubro_id": self.rubro.id,
             "subrubro_id": self.subrubro.id
         }
@@ -266,8 +345,42 @@ class ProductGridBrandAssocTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         data = response.json()
         self.assertEqual(data['status'], 'success')
+        self.assertEqual(data['product_sku'], self.product.sku)
         self.assertEqual(self.rubro.products.count(), 1)
         self.assertEqual(self.subrubro.products.count(), 1)
+
+    def test_grid_renders_technical_ids_without_localization(self):
+        response = self.client.get(
+            reverse('admin_product_grid_editor'),
+            {'f_sku': self.product.sku},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'id="row-6203"')
+        self.assertContains(response, 'data-product-id="6203"')
+        self.assertContains(response, 'openAddAssociationPopover(6203, event)')
+        self.assertNotContains(response, 'openAddAssociationPopover(6.203, event)')
+
+    def test_ajax_add_brand_association_rejects_stale_product_row(self):
+        url = reverse('admin_product_grid_add_brand_association')
+        import json
+        payload = {
+            "product_id": self.product.id,
+            "product_sku": "SKU-QUE-YA-NO-CORRESPONDE",
+            "rubro_id": self.rubro.id,
+            "subrubro_id": self.subrubro.id,
+        }
+
+        response = self.client.post(
+            url,
+            data=json.dumps(payload),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.json()['status'], 'error')
+        self.assertEqual(self.rubro.products.count(), 0)
+        self.assertEqual(self.subrubro.products.count(), 0)
 
     def test_ajax_remove_brand_association(self):
         # Associate first
@@ -559,17 +672,107 @@ class BrandPremiumSPAAndPaginationTestCase(TestCase):
         self.assertTrue(result["has_conflict"])
         self.assertTrue(result["assignments"])
 
-    def test_workspace_bulk_assignment_requires_observation_and_is_undoable(self):
-        url = reverse("admin_brand_rubro_bulk_assign", args=[self.rubro.pk])
-        response = self.client.post(
-            url,
-            data='{"product_ids": [%d], "observation": ""}' % self.products[10].pk,
-            content_type="application/json",
+    def test_workspace_search_splits_words_and_understands_target_context(self):
+        response = self.client.get(
+            reverse("admin_brand_rubro_products", args=[self.rubro.pk]),
+            {
+                "q": "honda piston 10",
+                "ajax": "1",
+            },
             HTTP_X_REQUESTED_WITH="XMLHttpRequest",
         )
-        self.assertEqual(response.status_code, 400)
-        self.assertFalse(BrandCatalogBatch.objects.exists())
 
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["total_count"], 1)
+        self.assertEqual(payload["results"][0]["id"], self.products[10].pk)
+
+    def test_workspace_search_includes_primary_and_additional_categories(self):
+        bujes = Category.objects.create(name="Bujes de cabina")
+        primary = Product.objects.create(
+            sku="CAT-PRIMARY",
+            name="Soporte principal",
+            price=Decimal("100.00"),
+            category=bujes,
+            is_active=True,
+        )
+        additional = Product.objects.create(
+            sku="CAT-ADDITIONAL",
+            name="Soporte adicional",
+            price=Decimal("100.00"),
+            is_active=True,
+        )
+        additional.categories.add(bujes)
+
+        response = self.client.get(
+            reverse("admin_brand_rubro_products", args=[self.rubro.pk]),
+            {
+                "q": "honda bujes",
+                "ajax": "1",
+            },
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        result_ids = {item["id"] for item in response.json()["results"]}
+        self.assertEqual(result_ids, {primary.pk, additional.pk})
+
+    def test_workspace_search_prefers_strict_brand_and_category_matches(self):
+        bujes = Category.objects.create(name="Bujes")
+        honda_category = Category.objects.create(name="Honda", parent=bujes)
+        toyota_category = Category.objects.create(name="Toyota", parent=bujes)
+        honda_product = Product.objects.create(
+            sku="STRICT-HONDA",
+            name="Componente especial",
+            price=Decimal("100.00"),
+            category=honda_category,
+            is_active=True,
+        )
+        Product.objects.create(
+            sku="STRICT-TOYOTA",
+            name="Componente especial",
+            price=Decimal("100.00"),
+            category=toyota_category,
+            is_active=True,
+        )
+
+        response = self.client.get(
+            reverse("admin_brand_rubro_products", args=[self.rubro.pk]),
+            {
+                "q": "honda bujes",
+                "ajax": "1",
+            },
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        result_ids = {item["id"] for item in response.json()["results"]}
+        self.assertEqual(result_ids, {honda_product.pk})
+
+    def test_workspace_context_only_query_still_filters_the_catalog(self):
+        generic = Product.objects.create(
+            sku="GENERIC-01",
+            name="Soporte universal",
+            price=Decimal("100.00"),
+            is_active=True,
+        )
+
+        response = self.client.get(
+            reverse("admin_brand_rubro_products", args=[self.rubro.pk]),
+            {
+                "q": "honda",
+                "ajax": "1",
+            },
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        result_ids = {item["id"] for item in response.json()["results"]}
+        self.assertNotIn(generic.pk, result_ids)
+        self.assertEqual(len(result_ids), 30)
+
+    def test_workspace_bulk_assignment_preserves_optional_observation(self):
+        url = reverse("admin_brand_rubro_bulk_assign", args=[self.rubro.pk])
         response = self.client.post(
             url,
             data='{"product_ids": [%d], "observation": "Revision manual"}'
@@ -582,12 +785,111 @@ class BrandPremiumSPAAndPaginationTestCase(TestCase):
         payload = response.json()
         self.assertEqual(payload["created_count"], 1)
         self.assertTrue(payload["can_undo"])
+        self.assertEqual(BrandCatalogBatch.objects.get(pk=payload["batch_id"]).observation, "Revision manual")
         self.assertTrue(
             BrandRubroProductOrder.objects.filter(
                 brand_rubro=self.rubro,
                 product=self.products[10],
             ).exists()
         )
+
+    def test_workspace_assignment_without_observation_keeps_audit_and_undo(self):
+        for kind, target in (("rubro", self.rubro), ("subrubro", self.subrubro)):
+            for observation in (None, "", "   "):
+                with self.subTest(kind=kind, observation=observation):
+                    data = {"product_ids": [self.products[0].pk, self.products[10].pk, self.products[10].pk]}
+                    if observation is not None:
+                        data["observation"] = observation
+                    response = self.client.post(
+                        reverse(f"admin_brand_{kind}_bulk_assign", args=[target.pk]),
+                        data=data, content_type="application/json",
+                        HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+                    )
+                    self.assertEqual(response.status_code, 200, response.content)
+                    payload = response.json()
+                    self.assertEqual(payload["created_count"], 1)
+                    self.assertEqual(payload["existing_count"], 1)
+                    self.assertTrue(payload["can_undo"])
+                    batch = BrandCatalogBatch.objects.get(pk=payload["batch_id"])
+                    self.assertEqual(batch.observation, "")
+                    self.assertEqual(batch.created_by, self.user)
+                    self.assertIsNotNone(batch.created_at)
+                    self.assertTrue(target.products.filter(pk=self.products[10].pk).exists())
+                    response = self.client.post(
+                        reverse("admin_brand_catalog_batch_undo", args=[batch.pk]),
+                        data={}, content_type="application/json",
+                        HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+                    )
+                    self.assertEqual(response.status_code, 200, response.content)
+                    batch.refresh_from_db()
+                    self.assertEqual(batch.status, BrandCatalogBatch.STATUS_UNDONE)
+                    self.assertEqual(batch.undone_by, self.user)
+                    self.assertTrue(target.products.filter(pk=self.products[0].pk).exists())
+                    self.assertFalse(target.products.filter(pk=self.products[10].pk).exists())
+
+    def test_workspace_optional_observation_move_is_reversible(self):
+        other_brand = Brand.objects.create(name="Otra marca")
+        other_rubro = BrandRubro.objects.create(brand=other_brand, name="Motor")
+        existing = BrandRubroProductOrder.objects.create(
+            brand_rubro=other_rubro, product=self.products[10], sort_order=40,
+        )
+        response = self.client.post(
+            reverse("admin_brand_subrubro_bulk_assign", args=[self.subrubro.pk]),
+            data={"product_ids": [self.products[10].pk], "mode": "move"},
+            content_type="application/json", HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+        self.assertEqual(response.status_code, 200, response.content)
+        batch = BrandCatalogBatch.objects.get(pk=response.json()["batch_id"])
+        self.assertEqual(batch.operation, BrandCatalogBatch.OPERATION_MOVE)
+        self.assertEqual(batch.observation, "")
+        self.assertFalse(BrandRubroProductOrder.objects.filter(pk=existing.pk).exists())
+        self.assertTrue(self.subrubro.products.filter(pk=self.products[10].pk).exists())
+        response = self.client.post(
+            reverse("admin_brand_catalog_batch_undo", args=[batch.pk]),
+            data={}, content_type="application/json", HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+        self.assertEqual(response.status_code, 200, response.content)
+        restored = BrandRubroProductOrder.objects.get(brand_rubro=other_rubro, product=self.products[10])
+        self.assertEqual(restored.sort_order, 40)
+        self.assertFalse(self.subrubro.products.filter(pk=self.products[10].pk).exists())
+
+    def test_workspace_html_assignment_observation_is_not_required(self):
+        class TextareaParser(HTMLParser):
+            def __init__(self):
+                super().__init__()
+                self.fields = {}
+
+            def handle_starttag(self, tag, attrs):
+                if tag == "textarea":
+                    attrs = dict(attrs)
+                    self.fields[attrs.get("id")] = attrs
+
+        for kind, target in (("rubro", self.rubro), ("subrubro", self.subrubro)):
+            with self.subTest(kind=kind):
+                response = self.client.get(reverse(f"admin_brand_{kind}_products", args=[target.pk]))
+                self.assertContains(response, "Observación (opcional)")
+                parser = TextareaParser()
+                parser.feed(response.content.decode())
+                self.assertNotIn("required", parser.fields["brandAssignObservation"])
+                self.assertIn("required", parser.fields["brandSyncObservation"])
+                self.assertIn("required", parser.fields["brandRemoveObservation"])
+                self.assertContains(response, "?v=20260831-optional-assignment")
+
+    def test_workspace_other_operations_still_require_observation(self):
+        self.subrubro.helper_categories.add(self.category)
+        for route, data in (
+            ("admin_brand_subrubro_bulk_remove", {"product_ids": [self.products[0].pk]}),
+            ("admin_brand_subrubro_sync", {"action": "confirm", "mode": "add"}),
+        ):
+            with self.subTest(route=route):
+                response = self.client.post(
+                    reverse(route, args=[self.subrubro.pk]), data=data,
+                    content_type="application/json", HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+                )
+                self.assertEqual(response.status_code, 400, response.content)
+                self.assertIn("observacion", response.json()["error"])
+                self.assertFalse(BrandCatalogBatch.objects.exists())
+                self.assertEqual(self.subrubro.products.count(), 5)
 
     def test_sync_preview_does_not_change_data_and_confirm_creates_batch(self):
         self.subrubro.helper_categories.add(self.category)

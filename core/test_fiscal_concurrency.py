@@ -137,6 +137,12 @@ class PostgreSQLFiscalConcurrencyTests(FiscalFixtureMixin, TransactionTestCase):
                 "core.services.fiscal_emission.ensure_stock_movements_for_order_document"
             )
         )
+        stack.enter_context(
+            patch(
+                "core.services.fiscal_emission.require_homologation_emission_access",
+                return_value=object(),
+            )
+        )
         return stack
 
     def _recovery_stack(self):
@@ -726,6 +732,10 @@ class PostgreSQLFiscalConcurrencyTests(FiscalFixtureMixin, TransactionTestCase):
             patch(
                 "core.services.fiscal_emission.is_company_fiscal_ready",
                 return_value=(True, []),
+            ),
+            patch(
+                "admin_panel.views.fiscal.require_homologation_emission_access",
+                return_value=object(),
             ),
             patch(
                 "core.tasks.emit_fiscal_document_async_task.delay",

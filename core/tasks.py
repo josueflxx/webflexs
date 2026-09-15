@@ -90,6 +90,7 @@ def emit_fiscal_document_async_task(document_id, actor_id=None):
         from django.db import transaction
         from core.services.sensitive_data import sanitize_sensitive_text
 
+        moved_to_recovery = False
         with transaction.atomic():
             locked = (
                 FiscalDocument.objects.select_for_update()
@@ -103,7 +104,16 @@ def emit_fiscal_document_async_task(document_id, actor_id=None):
                     error_message=sanitize_sensitive_text(str(exc)),
                     next_recovery_at=timezone.now(),
                 )
-        return {"status": "uncertain", "message": "Resultado enviado a recuperacion."}
+                moved_to_recovery = True
+        if moved_to_recovery:
+            return {
+                "status": "uncertain",
+                "message": "Resultado enviado a recuperacion.",
+            }
+        return {
+            "status": "error",
+            "message": "La emision fue bloqueada antes del envio.",
+        }
 
 
 @shared_task(name="core.recover_fiscal_document_async_task")

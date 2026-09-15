@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+  <soap:Body>
+    <getPersona_v2Response>
+      <personaReturn>
+        <metadata>
+          <fechaHora>2026-08-11T12:00:00-03:00</fechaHora>
+          <servidor>fixture</servidor>
+        </metadata>
+        <datosGenerales>
+          <idPersona>30693450239</idPersona>
+          <tipoPersona>JURIDICA</tipoPersona>
+          <tipoClave>CUIT</tipoClave>
+          <estadoClave>ACTIVO</estadoClave>
+          <razonSocial>EMPRESA DE PRUEBA SA</razonSocial>
+          <domicilioFiscal>
+            <direccion>CALLE DE PRUEBA 100</direccion>
+            <localidad>LOCALIDAD DE PRUEBA</localidad>
+            <codPostal>1000</codPostal>
+            <descripcionProvincia>BUENOS AIRES</descripcionProvincia>
+          </domicilioFiscal>
+          <caracterizacion>
+            <idCaracterizacion>1</idCaracterizacion>
+            <descripcionCaracterizacion>CARACTERIZACION DE PRUEBA</descripcionCaracterizacion>
+            <fechaSolicitud>2026-02-11</fechaSolicitud>
+          </caracterizacion>
+        </datosGenerales>
+        <datosRegimenGeneral>
+          <impuesto>
+            <idImpuesto>30</idImpuesto>
+            <descripcionImpuesto>IVA</descripcionImpuesto>
+            <estado>AC</estado>
+          </impuesto>
+          <actividad>
+            <idActividad>999999</idActividad>
+            <descripcionActividad>ACTIVIDAD DE PRUEBA</descripcionActividad>
+          </actividad>
+        </datosRegimenGeneral>
+      </personaReturn>
+    </getPersona_v2Response>
+  </soap:Body>
+</soap:Envelope>

@@ -1,0 +1,36 @@
+{% extends 'admin_panel/base.html' %}
+{% load static %}
+{% block page_title %}Lote de estructura #{{ batch.pk }}{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'core/css/brand_structure.css' %}">{% endblock %}
+{% block content %}
+<div class="brand-structure-page">
+    <header class="structure-heading"><div><span class="structure-eyebrow">LOTE #{{ batch.pk }} · {{ batch.get_status_display }}</span><h1>{{ batch.get_operation_display }}</h1><p>{{ batch.observation }}</p></div><a class="structure-button" href="{% url 'admin_brand_structure' %}">← Volver al gestor</a></header>
+    <div class="structure-notice"><strong>Alcance: {{ batch.plan.brands|length }} marcas del catálogo compartido.</strong> Se conservan los productos y sus vínculos. No se modifica la categorización canónica de artículos.</div>
+    <section class="structure-card">
+        <div class="structure-batch-meta"><span>Preparado por <strong>{{ batch.created_by.username|default:'Usuario eliminado' }}</strong> · {{ batch.created_at|date:'d/m/Y H:i' }}</span>{% if batch.applied_at %}<span>Aplicado: {{ batch.applied_at|date:'d/m/Y H:i' }}</span>{% endif %}{% if batch.undone_at %}<span>Deshecho por {{ batch.undone_by.username|default:'Usuario eliminado' }}: {{ batch.undone_at|date:'d/m/Y H:i' }}</span>{% endif %}</div>
+        <div class="structure-brand-tags">{% for brand in batch.plan.brands %}<span>{{ brand.name }}{% if not brand.active %} · Inactiva{% endif %}</span>{% endfor %}</div>
+        {% if batch.image %}<div class="structure-image-preview"><img src="{{ batch.image.url }}" alt="Imagen del lote"><span>Imagen compartida por las estructuras afectadas.</span></div>{% endif %}
+    </section>
+    <div class="structure-metrics"><div><strong>{{ batch.plan.counts.create }}</strong><span>A crear</span></div><div><strong>{{ batch.plan.counts.update }}</strong><span>A editar</span></div><div><strong>{{ batch.plan.counts.skip }}</strong><span>Sin cambios / omitidos</span></div><div><strong>{{ batch.plan.counts.conflict }}</strong><span>Conflictos</span></div></div>
+    <section class="structure-card">
+        <div class="structure-section-title"><h2>{% if batch.status == 'preview' %}Vista previa por marca{% else %}Detalle del lote original{% endif %}</h2></div>
+        <div class="structure-table-wrap"><table class="structure-table structure-preview-table"><thead><tr><th>Marca</th><th>Estructura</th><th>Acción</th><th>Cambios y observaciones</th></tr></thead><tbody>
+        {% for row in rows %}<tr><td>{{ row.brand_name }}</td><td>{{ row.path }}<small>{{ row.kind|capfirst }}</small></td><td><span class="structure-status status-{{ row.status }}">{{ row.status_label }}</span></td><td>{% for field in row.fields %}<div class="structure-diff"><strong>{{ field.label }}</strong><span>{{ field.before }}</span><span aria-label="cambia a">→</span><span>{{ field.after }}</span></div>{% endfor %}<small>{{ row.message }}</small></td></tr>{% endfor %}
+        </tbody></table></div>
+    </section>
+    {% if batch.status == 'preview' %}
+    <section class="structure-card">
+        {% if expired %}<p class="structure-errors">Esta vista previa venció. Generá otra para comprobar la estructura actual.</p>{% elif batch.plan.counts.conflict %}<p class="structure-errors">El lote tiene conflictos. No se puede aplicar parcialmente: corregí la selección o los nombres y generá otra vista previa.</p>{% elif not batch.plan.can_apply %}<p class="structure-hint">No hay cambios para aplicar. Las estructuras ya existen o no coinciden con los nombres indicados.</p>{% else %}<p class="structure-hint">La vista previa vence a los 30 minutos. Si la estructura cambia, se pedirá una nueva revisión.</p>{% endif %}
+        <form method="post" action="{% url 'admin_brand_structure_apply' batch.pk %}">{% csrf_token %}
+            {% if can_apply %}<label class="structure-check structure-confirm"><input type="checkbox" name="confirm_scope" required> Revisé las marcas y entiendo que esta estructura se comparte entre empresas.</label>{% endif %}
+            <div class="structure-form-footer"><a class="structure-button" href="{% url 'admin_brand_structure' %}?draft={{ batch.pk }}">Ajustar / regenerar vista previa</a>{% if can_apply %}<button class="structure-button structure-primary" type="submit">Aplicar lote en {{ batch.plan.brands|length }} marcas</button>{% endif %}</div>
+        </form>
+    </section>
+    {% elif batch.status == 'applied' and can_manage_structure %}
+    <section class="structure-card">
+        <h2>Deshacer este lote</h2><p class="structure-hint">Se restauran los valores anteriores. Las estructuras creadas sólo se eliminan si siguen sin uso. Si hubo cambios posteriores o nuevos vínculos, se bloquea la operación completa para protegerlos.</p>
+        <form method="post" action="{% url 'admin_brand_structure_undo' batch.pk %}">{% csrf_token %}<label class="structure-check structure-confirm"><input type="checkbox" name="confirm_undo" required> Quiero revertir los cambios de este lote en todas sus marcas.</label><button class="structure-button structure-danger" type="submit">Deshacer lote</button></form>
+    </section>
+    {% endif %}
+</div>
+{% endblock %}

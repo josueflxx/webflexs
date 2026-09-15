@@ -7,6 +7,7 @@ import subprocess
 import tempfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from types import SimpleNamespace
 from unittest import mock
 import xml.etree.ElementTree as ET
 
@@ -21,6 +22,7 @@ from core.services.arca_client import (
 )
 from core.services.arca_homologation import (
     ARCAEmissionDisabledError,
+    evaluate_homologation_emission_readiness,
     evaluate_homologation_readiness,
 )
 
@@ -65,8 +67,209 @@ SAFE_READ_SETTINGS = {
     "ARCA_PRIVATE_KEY_PATH": _external_fixture_path("arca-test-only.key"),
     "ARCA_PRIVATE_KEY_PASSPHRASE_FILE": "",
     "ARCA_EXPECTED_CERT_SHA256": "",
+    "ARCA_EXPECTED_CERT_SUBJECT_CN": "fixture-homologation",
+    "ARCA_EXPECTED_CERT_ISSUER_CN": "fixture-homologation-ca",
     "CACHES": SHARED_CACHE,
 }
+
+
+class _AttemptHistory:
+    def __init__(self, count=0):
+        self.value = count
+
+    def filter(self, **kwargs):
+        if kwargs != {"operation": "authorize"}:
+            raise AssertionError("Only sanitized authorization history is allowed.")
+        return self
+
+    def count(self):
+        return self.value
+
+
+def _emission_fixture(*, attempt_count=0):
+    company = SimpleNamespace(id=1, pk=1, cuit="30693450239")
+    point = SimpleNamespace(
+        id=3,
+        pk=3,
+        company_id=1,
+        number="3",
+        environment="homologation",
+        is_active=True,
+    )
+    document = SimpleNamespace(
+        id=77,
+        pk=77,
+        company_id=1,
+        point_of_sale_id=3,
+        snapshot_hash="a" * 64,
+        issue_mode="arca_wsfe",
+        status="ready_to_issue",
+        environment_snapshot="homologation",
+        doc_type="FA",
+        number=None,
+        emission_attempts=_AttemptHistory(attempt_count),
+    )
+    return company, point, document
+
+
+def _safe_emission_settings():
+    return {
+        **SAFE_READ_SETTINGS,
+        "ARCA_HOMOLOGATION_EMISSION_ENABLED": True,
+        "READY_ARCA_HOMOLOGACION_EMISSION": True,
+        "ARCA_PTO_VTA": "3",
+        "ARCA_DEFAULT_CBTE_TIPO": "1",
+        "ARCA_HOMOLOGATION_EMISSION_COMPANY_ID": "1",
+        "ARCA_HOMOLOGATION_EMISSION_POINT_OF_SALE_ID": "3",
+        "ARCA_HOMOLOGATION_EMISSION_DOCUMENT_ID": "77",
+        "ARCA_HOMOLOGATION_EMISSION_SNAPSHOT_HASH": "a" * 64,
+        "ARCA_HOMOLOGATION_EMISSION_APPROVED_ATTEMPT": "1",
+        "ARCA_HOMOLOGATION_EMISSION_APPROVAL_EXPIRES_AT": (
+            datetime.now(timezone.utc) + timedelta(minutes=30)
+        ).isoformat(),
+    }
+
+
+class ArcaHomologationEmissionGateTests(SimpleTestCase):
+    def test_exact_one_attempt_factura_a_canary_passes_offline(self):
+        company, point, document = _emission_fixture()
+        with override_settings(**_safe_emission_settings()), mock.patch(
+            "socket.create_connection"
+        ) as network:
+            result = evaluate_homologation_emission_readiness(
+                fiscal_document=document,
+                company=company,
+                point_of_sale=point,
+                check_credentials=False,
+            )
+        self.assertTrue(result.passed, result.error_codes)
+        self.assertIsNotNone(result.authorization)
+        network.assert_not_called()
+
+    def test_default_read_only_configuration_blocks_emission(self):
+        company, point, document = _emission_fixture()
+        with override_settings(**SAFE_READ_SETTINGS):
+            result = evaluate_homologation_emission_readiness(
+                fiscal_document=document,
+                company=company,
+                point_of_sale=point,
+                check_credentials=False,
+            )
+        self.assertFalse(result.passed)
+        self.assertIn("homologation_emission_disabled", result.error_codes)
+
+    def test_exact_document_identity_and_snapshot_are_required(self):
+        company, point, document = _emission_fixture()
+        cases = (
+            ({"ARCA_HOMOLOGATION_EMISSION_COMPANY_ID": "2"}, "homologation_emission_company_mismatch"),
+            ({"ARCA_HOMOLOGATION_EMISSION_POINT_OF_SALE_ID": "4"}, "homologation_emission_point_of_sale_mismatch"),
+            ({"ARCA_HOMOLOGATION_EMISSION_DOCUMENT_ID": "78"}, "homologation_emission_document_mismatch"),
+            ({"ARCA_HOMOLOGATION_EMISSION_SNAPSHOT_HASH": "b" * 64}, "homologation_emission_snapshot_mismatch"),
+        )
+        for changed, expected in cases:
+            settings_override = {**_safe_emission_settings(), **changed}
+            with self.subTest(expected=expected), override_settings(**settings_override):
+                result = evaluate_homologation_emission_readiness(
+                    fiscal_document=document,
+                    company=company,
+                    point_of_sale=point,
+                    check_credentials=False,
+                )
+                self.assertFalse(result.passed)
+                self.assertIn(expected, result.error_codes)
+
+    def test_only_factura_a_is_permitted_for_the_first_canary(self):
+        company, point, document = _emission_fixture()
+        document.doc_type = "FB"
+        with override_settings(**_safe_emission_settings()):
+            result = evaluate_homologation_emission_readiness(
+                fiscal_document=document,
+                company=company,
+                point_of_sale=point,
+                check_credentials=False,
+            )
+        self.assertIn("homologation_emission_voucher_not_factura_a", result.error_codes)
+
+    def test_expired_or_overlong_approval_window_is_blocked(self):
+        company, point, document = _emission_fixture()
+        cases = (
+            (
+                datetime.now(timezone.utc) - timedelta(seconds=1),
+                "arca_homologation_emission_approval_expired",
+            ),
+            (
+                datetime.now(timezone.utc) + timedelta(hours=3),
+                "arca_homologation_emission_approval_window_too_large",
+            ),
+        )
+        for expiry, expected in cases:
+            values = {
+                **_safe_emission_settings(),
+                "ARCA_HOMOLOGATION_EMISSION_APPROVAL_EXPIRES_AT": expiry.isoformat(),
+            }
+            with self.subTest(expected=expected), override_settings(**values):
+                result = evaluate_homologation_emission_readiness(
+                    fiscal_document=document,
+                    company=company,
+                    point_of_sale=point,
+                    check_credentials=False,
+                )
+                self.assertIn(expected, result.error_codes)
+
+    def test_used_attempt_cannot_be_prepared_again(self):
+        company, point, document = _emission_fixture(attempt_count=1)
+        with override_settings(**_safe_emission_settings()):
+            result = evaluate_homologation_emission_readiness(
+                fiscal_document=document,
+                company=company,
+                point_of_sale=point,
+                check_credentials=False,
+            )
+        self.assertIn("homologation_emission_attempt_not_approved", result.error_codes)
+
+    def test_dispatch_requires_same_capability_and_consumed_attempt(self):
+        company, point, document = _emission_fixture()
+        with override_settings(**_safe_emission_settings()):
+            prepared = evaluate_homologation_emission_readiness(
+                fiscal_document=document,
+                company=company,
+                point_of_sale=point,
+                check_credentials=False,
+            )
+            document.status = "submitting"
+            document.number = 1
+            document.emission_attempts.value = 1
+            dispatched = evaluate_homologation_emission_readiness(
+                fiscal_document=document,
+                company=company,
+                point_of_sale=point,
+                phase="dispatch",
+                authorization=prepared.authorization,
+                check_credentials=False,
+            )
+            rejected = evaluate_homologation_emission_readiness(
+                fiscal_document=document,
+                company=company,
+                point_of_sale=point,
+                phase="dispatch",
+                authorization=None,
+                check_credentials=False,
+            )
+        self.assertTrue(dispatched.passed, dispatched.error_codes)
+        self.assertIn("homologation_emission_capability_mismatch", rejected.error_codes)
+
+    def test_production_flag_is_never_permitted(self):
+        company, point, document = _emission_fixture()
+        with override_settings(
+            **{**_safe_emission_settings(), "ARCA_PRODUCTION_ENABLED": True}
+        ):
+            result = evaluate_homologation_emission_readiness(
+                fiscal_document=document,
+                company=company,
+                point_of_sale=point,
+                check_credentials=False,
+            )
+        self.assertIn("production_enabled", result.error_codes)
 
 
 @override_settings(**SAFE_READ_SETTINGS)
@@ -185,6 +388,7 @@ class ArcaHomologationGateTests(SimpleTestCase):
             "ARCA_HOMOLOGATION_EMISSION_ENABLED",
             "ARCA_PRODUCTION_ENABLED",
             "READY_ARCA_HOMOLOGACION_READONLY",
+            "READY_ARCA_HOMOLOGACION_EMISSION",
             "ARCA_WSASS_AUTHORIZATION_CONFIRMED",
             "ARCA_TLS_VERIFY",
             "ARCA_REDACT_SECRETS",
@@ -217,6 +421,17 @@ class ArcaHomologationGateTests(SimpleTestCase):
             )
         self.assertIn("file_ticket_cache_forbidden", result.error_codes)
         self.assertIn("passphrase_file_not_supported", result.error_codes)
+
+    def test_expected_certificate_identity_is_mandatory(self):
+        with override_settings(
+            ARCA_EXPECTED_CERT_SUBJECT_CN="",
+            ARCA_EXPECTED_CERT_ISSUER_CN="",
+        ):
+            result = evaluate_homologation_readiness(
+                check_credentials=False
+            )
+        self.assertIn("certificate_subject_cn_missing", result.error_codes)
+        self.assertIn("certificate_issuer_cn_missing", result.error_codes)
 
     def test_database_ticket_cache_is_rejected(self):
         with override_settings(

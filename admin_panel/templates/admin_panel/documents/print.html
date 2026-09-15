@@ -354,4 +354,9 @@
         {% endif %}
     </main>
 </body>
+{% if request.GET.autoprint == '1' %}
+<script>
+window.addEventListener('load', () => window.setTimeout(() => window.print(), 120));
+</script>
+{% endif %}
 </html>

@@ -54,9 +54,6 @@ class Command(BaseCommand):
                 f"ARCA_HOMOLOGATION_READINESS_GATE=FAIL reasons={reasons}"
             )
 
-        client = None
-        result = None
-        probe_error = None
         try:
             client = ArcaWsfeClient(
                 company=company,
@@ -64,28 +61,18 @@ class Command(BaseCommand):
             )
             result = client.run_preflight()
         except Exception as exc:
-            probe_error = exc
-
-        if client is not None:
-            try:
-                client.ticket_coordinator.clear_ticket()
-            except Exception as exc:
-                raise CommandError(
-                    "La limpieza del cache de solo lectura fallo: "
-                    + sanitize_sensitive_text(str(exc))
-                ) from exc
-
-        if probe_error is not None:
             raise CommandError(
                 "La prueba de solo lectura fallo: "
-                + sanitize_sensitive_text(str(probe_error))
-            ) from probe_error
+                + sanitize_sensitive_text(str(exc))
+            ) from exc
 
         self.stdout.write(
             "ARCA_HOMOLOGATION_READONLY_PROBE="
             + ("PASS" if result.get("ok") else "FAIL")
         )
-        self.stdout.write("ticket_cache_cleared=True")
+        self.stdout.write(
+            "ticket_cache_policy=retain_until_renewal_window"
+        )
         self.stdout.write(f"environment={result.get('environment')}")
         self.stdout.write(
             "service_status_ok="

@@ -14,117 +14,14 @@
 
 {% block extra_css %}
 <link rel="stylesheet" href="{% static 'core/css/home.css' %}?v=20260724-industrial-media">
+<link rel="stylesheet" href="{% static 'core/css/home_clamp.css' %}?v=20260914-2">
+<link rel="stylesheet" href="{% static 'core/css/clamp_dimensions.css' %}?v=20260914-1">
 {% endblock %}
 
 {% block content %}
 <!-- Hero Section -->
 <!-- Hero Section -->
-<section id="inicio" class="hero theme-{{ active_theme }}">
-    <div class="hero-media" aria-hidden="true">
-        {% if active_theme == 'blueprint' %}
-        <div class="blueprint-grid">
-            <div class="blueprint-vector-circle"></div>
-            <div class="blueprint-vector-lines"></div>
-        </div>
-        <svg class="blueprint-svg-media" viewBox="0 0 500 500" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <!-- Grid background lines inside SVG for depth -->
-            <line x1="50" y1="0" x2="50" y2="500" stroke="rgba(255, 107, 53, 0.04)" stroke-width="1" />
-            <line x1="150" y1="0" x2="150" y2="500" stroke="rgba(255, 107, 53, 0.04)" stroke-width="1" />
-            <line x1="250" y1="0" x2="250" y2="500" stroke="rgba(255, 107, 53, 0.04)" stroke-width="1" stroke-dasharray="5,5" />
-            <line x1="350" y1="0" x2="350" y2="500" stroke="rgba(255, 107, 53, 0.04)" stroke-width="1" />
-            <line x1="450" y1="0" x2="450" y2="500" stroke="rgba(255, 107, 53, 0.04)" stroke-width="1" />
-            
-            <line x1="0" y1="50" x2="500" y2="50" stroke="rgba(255, 107, 53, 0.04)" stroke-width="1" />
-            <line x1="0" y1="150" x2="500" y2="150" stroke="rgba(255, 107, 53, 0.04)" stroke-width="1" />
-            <line x1="0" y1="250" x2="500" y2="250" stroke="rgba(255, 107, 53, 0.04)" stroke-width="1" stroke-dasharray="5,5" />
-            <line x1="0" y1="350" x2="500" y2="350" stroke="rgba(255, 107, 53, 0.04)" stroke-width="1" />
-            <line x1="0" y1="450" x2="500" y2="450" stroke="rgba(255, 107, 53, 0.04)" stroke-width="1" />
-
-            <!-- Center lines of the part (dashed orange) -->
-            <line x1="250" y1="30" x2="250" y2="450" stroke="rgba(255, 107, 53, 0.3)" stroke-width="1.5" stroke-dasharray="12,6,3,6" />
-            <line x1="50" y1="130" x2="450" y2="130" stroke="rgba(255, 107, 53, 0.3)" stroke-width="1.5" stroke-dasharray="12,6,3,6" />
-
-            <!-- Outer loop -->
-            <path d="M 170 380 L 170 130 A 80 80 0 0 1 330 130 L 330 380" stroke="#ffffff" stroke-width="4" stroke-linecap="round" />
-            <!-- Inner loop -->
-            <path d="M 200 380 L 200 130 A 50 50 0 0 1 300 130 L 300 380" stroke="#ffffff" stroke-width="3" stroke-linecap="round" />
-            
-            <!-- Threads on left leg (slanting up-right) -->
-            <path d="M 170 280 L 200 278" stroke="#ffffff" stroke-width="1.5" />
-            <path d="M 170 288 L 200 286" stroke="#ffffff" stroke-width="1.5" />
-            <path d="M 170 296 L 200 294" stroke="#ffffff" stroke-width="1.5" />
-            <path d="M 170 304 L 200 302" stroke="#ffffff" stroke-width="1.5" />
-            <path d="M 170 312 L 200 310" stroke="#ffffff" stroke-width="1.5" />
-            <path d="M 170 320 L 200 318" stroke="#ffffff" stroke-width="1.5" />
-            <path d="M 170 328 L 200 326" stroke="#ffffff" stroke-width="1.5" />
-            <path d="M 170 336 L 200 334" stroke="#ffffff" stroke-width="1.5" />
-            <path d="M 170 344 L 200 342" stroke="#ffffff" stroke-width="1.5" />
-            <path d="M 170 352 L 200 350" stroke="#ffffff" stroke-width="1.5" />
-            <path d="M 170 360 L 200 358" stroke="#ffffff" stroke-width="1.5" />
-            <path d="M 170 368 L 200 366" stroke="#ffffff" stroke-width="1.5" />
-            <path d="M 170 376 L 200 374" stroke="#ffffff" stroke-width="1.5" />
-
-            <!-- Threads on right leg (slanting up-right) -->
-            <path d="M 300 280 L 330 278" stroke="#ffffff" stroke-width="1.5" />
-            <path d="M 300 288 L 330 286" stroke="#ffffff" stroke-width="1.5" />
-            <path d="M 300 296 L 330 294" stroke="#ffffff" stroke-width="1.5" />
-            <path d="M 300 304 L 330 302" stroke="#ffffff" stroke-width="1.5" />
-            <path d="M 300 312 L 330 310" stroke="#ffffff" stroke-width="1.5" />
-            <path d="M 300 320 L 330 318" stroke="#ffffff" stroke-width="1.5" />
-            <path d="M 300 328 L 330 326" stroke="#ffffff" stroke-width="1.5" />
-            <path d="M 300 336 L 330 334" stroke="#ffffff" stroke-width="1.5" />
-            <path d="M 300 344 L 330 342" stroke="#ffffff" stroke-width="1.5" />
-            <path d="M 300 352 L 330 350" stroke="#ffffff" stroke-width="1.5" />
-            <path d="M 300 360 L 330 358" stroke="#ffffff" stroke-width="1.5" />
-            <path d="M 300 368 L 330 366" stroke="#ffffff" stroke-width="1.5" />
-            <path d="M 300 376 L 330 374" stroke="#ffffff" stroke-width="1.5" />
-
-            <!-- Clamp Plate (FLEXS Orange) -->
-            <rect x="140" y="380" width="220" height="24" rx="4" fill="rgba(255, 107, 53, 0.2)" stroke="#FF6B35" stroke-width="3" />
-            <circle cx="170" cy="392" r="4" fill="#FF6B35" />
-            <circle cx="330" cy="392" r="4" fill="#FF6B35" />
-
-            <!-- Washers & Nuts at bottom -->
-            <rect x="150" y="404" width="40" height="18" fill="none" stroke="#FF6B35" stroke-width="2.5" />
-            <rect x="310" y="404" width="40" height="18" fill="none" stroke="#FF6B35" stroke-width="2.5" />
-
-            <!-- Dimension line: Width -->
-            <line x1="200" y1="130" x2="300" y2="130" stroke="#FF6B35" stroke-width="1.5" />
-            <path d="M 200 130 L 210 126 L 210 134 Z" fill="#FF6B35" />
-            <path d="M 300 130 L 290 126 L 290 134 Z" fill="#FF6B35" />
-            
-            <!-- Dimension text -->
-            <rect x="200" y="118" width="100" height="20" fill="#0b1329" rx="2" />
-            <text x="250" y="132" fill="#FF6B35" font-family="monospace" font-size="11" font-weight="bold" text-anchor="middle">Ancho: 3.25"</text>
-
-            <!-- Dimension line: Length/Height -->
-            <line x1="100" y1="80" x2="100" y2="380" stroke="#FF6B35" stroke-width="1.5" />
-            <path d="M 100 80 L 96 90 L 104 90 Z" fill="#FF6B35" />
-            <path d="M 100 380 L 96 370 L 104 370 Z" fill="#FF6B35" />
-            <line x1="90" y1="80" x2="200" y2="80" stroke="#FF6B35" stroke-width="1" stroke-dasharray="4,4" />
-            <line x1="90" y1="380" x2="200" y2="380" stroke="#FF6B35" stroke-width="1" stroke-dasharray="4,4" />
-            
-            <rect x="50" y="220" width="100" height="20" fill="#0b1329" rx="2" transform="rotate(-90 100 230)" />
-            <text x="100" y="234" fill="#FF6B35" font-family="monospace" font-size="11" font-weight="bold" text-anchor="middle" transform="rotate(-90 100 230)">Largo: 12.00"</text>
-
-            <!-- Dimension pointer: Diameter (A) -->
-            <path d="M 315 250 L 360 210 L 400 210" stroke="#FF6B35" stroke-width="1.5" fill="none" />
-            <path d="M 315 250 L 323 248 L 317 242 Z" fill="#FF6B35" />
-            <text x="405" y="214" fill="#FF6B35" font-family="monospace" font-size="11" font-weight="bold" text-anchor="start">Diám: 7/16"</text>
-
-            <!-- Title / Label -->
-            <text x="350" y="450" fill="rgba(255, 255, 255, 0.4)" font-family="monospace" font-size="10" font-weight="bold" text-anchor="end">DWG NO: FXS-716-U</text>
-            <text x="350" y="465" fill="#FF6B35" font-family="monospace" font-size="11" font-weight="bold" text-anchor="end">FLEXS MANUFACTURING</text>
-        </svg>
-        {% elif active_theme == 'elasticos' %}
-        <div class="elasticos-atmosphere">
-            <div class="elasticos-radial-glow"></div>
-        </div>
-        <img src="{% static 'core/img/home-hero-elasticos.png' %}" alt="Elásticos de suspensión FLEXS" class="hero-img-elasticos">
-        {% else %}
-        <img src="{% static 'core/img/home-hero-abrazadera.webp' %}" alt="Abrazaderas U-bolt FLEXS" class="hero-img-classic">
-        {% endif %}
-    </div>
+<section id="inicio" class="hero theme-{{ active_theme }} hero--clamp">
     <div class="hero-overlay"></div>
     <div class="container hero-content">
         <div class="hero-text">
@@ -154,6 +51,31 @@
                 <span><strong>8.000+</strong> productos</span>
                 <span><strong>30+</strong> a&ntilde;os</span>
                 <span><strong>2.000+</strong> clientes</span>
+            </div>
+        </div>
+        <div id="homeClamp" class="home-clamp" data-variant="plana" role="region" aria-label="Abrazadera FLEXS en 3D"
+             data-runtime="{% static 'core/vendor/model-viewer/model-viewer-4.3.1.min.js' %}"
+             data-model="{% static 'core/models/abrazadera-plaqueta-tuercas.glb' %}"
+             data-model-curva="{% static 'core/models/abrazadera-curva-plaqueta-tuercas.glb' %}"
+             data-model-semicurva="{% static 'core/models/abrazadera-semicurva-plaqueta-tuercas.glb' %}"
+             data-environment="{% static 'core/models/clamp-studio.hdr' %}">
+            <div class="home-clamp-heading"><span>Abrazaderas · Fabricación FLEXS</span><span>Vista 3D</span></div>
+            <div class="home-clamp-profiles" role="group" aria-label="Forma de la abrazadera" hidden>
+                <button type="button" data-profile="plana" aria-pressed="true">Plana</button>
+                <button type="button" data-profile="curva" aria-pressed="false">Curva</button>
+                <button type="button" data-profile="semicurva" aria-pressed="false">Semicurva</button>
+            </div>
+            <div class="home-clamp-stage">
+                <img class="home-clamp-poster" src="{% static 'core/img/home-hero-abrazadera.webp' %}" alt="Abrazadera curva FLEXS" width="600" height="600">
+            </div>
+            <div class="home-clamp-footer">
+                <p role="status" aria-live="polite">Explorá nuestra abrazadera desde todos los ángulos.</p>
+                <button type="button" data-load hidden>Explorar en 3D</button>
+                <div class="home-clamp-controls" role="group" aria-label="Controles de la vista 3D" hidden>
+                    <button type="button" data-zoom="out" aria-label="Alejar">−</button>
+                    <button type="button" data-reset>Restablecer vista</button>
+                    <button type="button" data-zoom="in" aria-label="Acercar">+</button>
+                </div>
             </div>
         </div>
     </div>
@@ -602,6 +524,7 @@
 {% endblock %}
 
 {% block extra_js %}
+<script src="{% static 'core/js/home_clamp.js' %}?v=20260914-3" defer></script>
 <script
     src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
     integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="

@@ -1,12 +1,26 @@
 {% extends 'admin_panel/base.html' %}
 
-{% block page_title %}Importar {{ import_type|title }}{% endblock %}
+{% block page_title %}Importar {% if import_type == 'products' %}productos{% elif import_type == 'clients' %}clientes{% elif import_type == 'categories' %}categorias{% elif import_type == 'abrazaderas' %}abrazaderas{% else %}{{ import_type|title }}{% endif %}{% endblock %}
 
 {% block extra_css %}
 <style>
     .import-form-shell {
         max-width: 760px;
         margin: 0 auto;
+    }
+
+    html[data-theme="light"] .import-form-shell {
+        color: #0f172a;
+        background: linear-gradient(160deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.98));
+        border-color: #dbe3ee;
+        box-shadow: 0 18px 45px rgba(15, 23, 42, 0.08);
+    }
+
+    html[data-theme="light"] .import-form-shell h2,
+    html[data-theme="light"] .import-form-shell h4,
+    html[data-theme="light"] .import-form-shell strong,
+    html[data-theme="light"] .import-form-shell label {
+        color: #0f172a;
     }
 
     .import-help {
@@ -55,6 +69,98 @@
         margin-top: 6px;
     }
 
+    .import-feedback-grid {
+        display: grid;
+        gap: 10px;
+        margin-top: 12px;
+    }
+
+    .import-feedback {
+        border: 1px solid var(--color-border);
+        border-radius: 10px;
+        background: var(--color-bg-card);
+        overflow: hidden;
+    }
+
+    .import-feedback.is-error {
+        border-color: color-mix(in srgb, var(--color-danger) 52%, var(--color-border));
+    }
+
+    .import-feedback.is-warning {
+        border-color: rgba(255, 193, 7, 0.42);
+    }
+
+    .import-feedback summary {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 12px 14px;
+        cursor: pointer;
+        color: var(--color-text);
+        font-weight: 700;
+        list-style: none;
+    }
+
+    .import-feedback summary::-webkit-details-marker {
+        display: none;
+    }
+
+    .import-feedback-count {
+        flex: 0 0 auto;
+        min-width: 30px;
+        padding: 3px 8px;
+        border-radius: 999px;
+        text-align: center;
+        font-size: 0.76rem;
+        background: rgba(255, 255, 255, 0.08);
+    }
+
+    .import-feedback-body {
+        padding: 0 14px 14px;
+        border-top: 1px solid var(--color-border);
+    }
+
+    .import-feedback-body > p {
+        margin: 10px 0;
+        color: var(--color-text-muted);
+        font-size: 0.84rem;
+    }
+
+    .import-issue-list {
+        max-height: 280px;
+        margin: 0;
+        padding: 0;
+        overflow: auto;
+        list-style: none;
+    }
+
+    .import-issue-list li {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr);
+        gap: 10px;
+        padding: 9px 0;
+        border-bottom: 1px solid var(--color-border);
+        color: var(--color-text);
+        line-height: 1.4;
+    }
+
+    .import-issue-list li:last-child {
+        border-bottom: 0;
+    }
+
+    .import-row-badge {
+        color: var(--color-text-muted);
+        font-size: 0.76rem;
+        font-weight: 700;
+        white-space: nowrap;
+    }
+
+    .import-result-lead {
+        margin: 0 0 10px;
+        color: var(--color-text-muted);
+    }
+
     .import-template-action {
         margin-top: 12px;
         display: flex;
@@ -75,7 +181,7 @@
 
 {% block content %}
 <div class="admin-form-container import-form-shell">
-    <h2 class="mb-3">Importar {{ import_type|title }}</h2>
+    <h2 class="mb-3">Importar {% if import_type == 'products' %}productos{% elif import_type == 'clients' %}clientes{% elif import_type == 'categories' %}categorias{% elif import_type == 'abrazaderas' %}abrazaderas{% else %}{{ import_type|title }}{% endif %}</h2>
 
     <div class="alert alert-info import-help">
         <strong>Instrucciones</strong>
@@ -228,6 +334,7 @@
             <div id="errorZone" class="error-zone"></div>
             <div class="form-actions" style="margin-top: 10px;">
                 <a href="{% url 'admin_import_dashboard' %}" class="btn btn-primary">Volver al historial</a>
+                <button type="button" id="btnReviewImport" class="btn btn-outline" style="display:none;">Revisar archivo</button>
             </div>
         </div>
     </div>
@@ -238,6 +345,39 @@
     const diagnosticUrl = "{% url 'admin_import_diagnostic_download' import_type %}";
     const dryRunCheckbox = document.getElementById('{{ form.dry_run.id_for_label }}');
     const confirmApplyCheckbox = document.getElementById('{{ form.confirm_apply.id_for_label }}');
+    const importForm = document.getElementById('importForm');
+
+    function escapeImportText(value) {
+        return String(value ?? '')
+            .replaceAll('&', '&amp;')
+            .replaceAll('<', '&lt;')
+            .replaceAll('>', '&gt;')
+            .replaceAll('"', '&quot;')
+            .replaceAll("'", '&#039;');
+    }
+
+    function renderImportIssues(kind, title, items, description, openByDefault) {
+        const safeItems = Array.isArray(items) ? items : [];
+        if (!safeItems.length) return '';
+        const rows = safeItems.map((item) => `
+            <li>
+                <span class="import-row-badge">Fila ${escapeImportText(item.row || '-')}</span>
+                <span>${escapeImportText(item.message || 'Observacion sin detalle.')}</span>
+            </li>
+        `).join('');
+        return `
+            <details class="import-feedback is-${escapeImportText(kind)}" ${openByDefault ? 'open' : ''}>
+                <summary>
+                    <span>${escapeImportText(title)}</span>
+                    <span class="import-feedback-count">${safeItems.length}</span>
+                </summary>
+                <div class="import-feedback-body">
+                    <p>${escapeImportText(description)}</p>
+                    <ul class="import-issue-list">${rows}</ul>
+                </div>
+            </details>
+        `;
+    }
 
     function syncConfirmApplyVisibility() {
         if (!dryRunCheckbox || !confirmApplyCheckbox) return;
@@ -257,7 +397,7 @@
 
     document.getElementById('btnPreview').addEventListener('click', async function (e) {
         e.preventDefault();
-        const form = document.getElementById('importForm');
+        const form = importForm;
         const formData = new FormData(form);
         formData.append('preview_only', '1');
         const previewContainer = document.getElementById('previewContainer');
@@ -288,28 +428,37 @@
                 <strong>Duplicados con aviso:</strong> ${preview.duplicate_count || 0}<br>
                 <strong>Categorias no encontradas:</strong> ${(preview.category_warnings || []).length}
             `;
-            const hasErrors = preview.row_errors && preview.row_errors.length > 0;
-            const hasDuplicateWarnings = preview.duplicate_warnings && preview.duplicate_warnings.length > 0;
-            const hasCategoryWarnings = preview.category_warnings && preview.category_warnings.length > 0;
+            const rowErrors = preview.row_errors || [];
+            const duplicateWarnings = preview.duplicate_warnings || [];
+            const categoryWarnings = preview.category_warnings || [];
+            const hasErrors = rowErrors.length > 0;
+            const hasDuplicateWarnings = duplicateWarnings.length > 0;
+            const hasCategoryWarnings = categoryWarnings.length > 0;
             if (hasErrors || hasDuplicateWarnings || hasCategoryWarnings) {
-                let html = '';
-                previewErrors.classList.toggle('has-only-warnings', !hasErrors && (hasDuplicateWarnings || hasCategoryWarnings));
-                if (hasErrors) {
-                    html += '<h5>Errores detectados:</h5><ul>' +
-                        preview.row_errors.map((err) => `<li>Fila ${err.row}: ${err.message}</li>`).join('') +
-                        '</ul>';
-                }
-                if (hasCategoryWarnings) {
-                    html += '<h5>Avisos de categorias:</h5><ul>' +
-                        preview.category_warnings.map((err) => `<li>Fila ${err.row}: ${err.message}</li>`).join('') +
-                        '</ul><small>Con el modo recomendado no se crean categorias nuevas: solo se vinculan las que ya existen.</small>';
-                }
-                if (hasDuplicateWarnings) {
-                    html += '<h5>Avisos de duplicados:</h5><ul>' +
-                        preview.duplicate_warnings.map((err) => `<li>Fila ${err.row}: ${err.message}</li>`).join('') +
-                        '</ul><small>La importacion real continua: se usa la primera aparicion del codigo y se guarda una alerta en el producto.</small>';
-                }
-                previewErrors.innerHTML = html;
+                previewErrors.classList.toggle('has-only-warnings', !hasErrors);
+                previewErrors.innerHTML = '<div class="import-feedback-grid">' +
+                    renderImportIssues(
+                        'error',
+                        'Filas que se omitiran',
+                        rowErrors,
+                        'Estas filas tienen datos invalidos. En una importacion real se omiten y las filas validas continuan.',
+                        hasErrors,
+                    ) +
+                    renderImportIssues(
+                        'warning',
+                        'Categorias no encontradas',
+                        categoryWarnings,
+                        'No se crean categorias nuevas con el modo recomendado; solo se vinculan las existentes.',
+                        !hasErrors && hasCategoryWarnings,
+                    ) +
+                    renderImportIssues(
+                        'warning',
+                        'SKUs repetidos',
+                        duplicateWarnings,
+                        'Se usa la primera aparicion de cada codigo y se registra una observacion en el producto.',
+                        !hasErrors && !hasCategoryWarnings,
+                    ) +
+                    '</div>';
                 previewReportActions.style.display = 'flex';
             } else {
                 previewErrors.classList.remove('has-only-warnings');
@@ -323,7 +472,7 @@
 
     document.getElementById('btnDownloadDiagnostic').addEventListener('click', async function (e) {
         e.preventDefault();
-        const form = document.getElementById('importForm');
+        const form = importForm;
         const formData = new FormData(form);
         const button = e.currentTarget;
         const previousText = button.innerText;
@@ -450,9 +599,9 @@
                         showResult(status.result || {});
                     } else if (status.status === 'failed') {
                         clearInterval(interval);
-                        progressStatus.innerText = 'Fallo';
+                        progressStatus.innerText = 'Requiere revision';
                         progressBar.style.backgroundColor = '#dc3545';
-                        alert(status.message || 'La importacion fallo.');
+                        showFailure(status);
                     } else if (status.status === 'unknown') {
                         progressStatus.innerText = status.message || 'Esperando estado de importacion...';
                     }
@@ -465,9 +614,32 @@
                     clearInterval(interval);
                     const message = err && err.message ? err.message : 'No se pudo consultar el estado de la importacion.';
                     progressStatus.innerText = 'Error de estado';
-                    alert(message);
+                    showFailure({message});
                 }
             }, 1000);
+        }
+
+        function showFailure(status) {
+            const result = status.result || {};
+            const rowErrors = result.row_errors || result.preflight_errors || [];
+            resultContainer.style.display = 'block';
+            document.getElementById('resultTitle').innerText = 'La importacion no comenzo';
+            document.getElementById('resultSummary').innerHTML = `
+                <p class="import-result-lead">${escapeImportText(status.message || result.message || 'Revisa el archivo antes de volver a intentar.')}</p>
+                <strong>Filas para revisar:</strong> ${rowErrors.length}
+            `;
+            const errorZone = document.getElementById('errorZone');
+            errorZone.classList.remove('has-only-warnings');
+            errorZone.innerHTML = rowErrors.length
+                ? '<div class="import-feedback-grid">' + renderImportIssues(
+                    'error',
+                    'Errores bloqueantes',
+                    rowErrors,
+                    'Corrige la estructura o los datos indicados y vuelve a validar el archivo.',
+                    true,
+                ) + '</div>'
+                : '<p class="import-result-lead">No se recibio el detalle del error. Puedes volver al formulario y ejecutar otra vista previa.</p>';
+            document.getElementById('btnReviewImport').style.display = 'inline-flex';
         }
 
         function showResult(result) {
@@ -480,6 +652,14 @@
             const executionId = result.execution_id || '-';
             const deactivated = result.deactivated_count || 0;
 
+            if (errors > 0) {
+                progressStatus.innerText = 'Completado con observaciones';
+                progressBar.style.backgroundColor = '#d97706';
+            }
+
+            document.getElementById('resultTitle').innerText = errors > 0
+                ? 'Completado con filas omitidas'
+                : 'Importacion completada';
             document.getElementById('resultSummary').innerHTML = `
                 <strong>Ejecucion:</strong> ${executionId}<br>
                 <strong>Creados:</strong> ${created}<br>
@@ -491,35 +671,46 @@
             `;
 
             const errorZone = document.getElementById('errorZone');
-            if (result.row_errors && result.row_errors.length > 0) {
-                errorZone.classList.remove('has-only-warnings');
-                let errorHtml = '<h5>Detalle de errores:</h5><ul>';
-                result.row_errors.forEach((err) => {
-                    errorHtml += `<li>Fila ${err.row}: ${err.message}</li>`;
-                });
-                errorHtml += '</ul>';
-                errorZone.innerHTML = errorHtml;
-            } else if (result.duplicate_warnings && result.duplicate_warnings.length > 0) {
-                errorZone.classList.add('has-only-warnings');
-                let warningHtml = '<h5>Avisos de duplicados registrados:</h5><ul>';
-                result.duplicate_warnings.forEach((err) => {
-                    warningHtml += `<li>Fila ${err.row}: ${err.message}</li>`;
-                });
-                warningHtml += '</ul>';
-                errorZone.innerHTML = warningHtml;
-            } else if (result.category_warnings && result.category_warnings.length > 0) {
-                errorZone.classList.add('has-only-warnings');
-                let warningHtml = '<h5>Avisos de categorias:</h5><ul>';
-                result.category_warnings.forEach((err) => {
-                    warningHtml += `<li>Fila ${err.row}: ${err.message}</li>`;
-                });
-                warningHtml += '</ul>';
-                errorZone.innerHTML = warningHtml;
+            const rowErrors = result.row_errors || [];
+            const duplicateWarnings = result.duplicate_warnings || [];
+            const categoryWarningsResult = result.category_warnings || [];
+            if (rowErrors.length || duplicateWarnings.length || categoryWarningsResult.length) {
+                errorZone.classList.toggle('has-only-warnings', !rowErrors.length);
+                errorZone.innerHTML = '<div class="import-feedback-grid">' +
+                    renderImportIssues(
+                        'error',
+                        'Filas omitidas',
+                        rowErrors,
+                        'Estas filas no se modificaron; el resto del archivo se proceso normalmente.',
+                        rowErrors.length > 0,
+                    ) +
+                    renderImportIssues(
+                        'warning',
+                        'SKUs repetidos registrados',
+                        duplicateWarnings,
+                        'Se conservo la primera aparicion del codigo.',
+                        !rowErrors.length && duplicateWarnings.length > 0,
+                    ) +
+                    renderImportIssues(
+                        'warning',
+                        'Categorias no encontradas',
+                        categoryWarningsResult,
+                        'Estos productos no se vincularon a categorias inexistentes.',
+                        !rowErrors.length && !duplicateWarnings.length,
+                    ) +
+                    '</div>';
             } else {
                 errorZone.classList.remove('has-only-warnings');
                 errorZone.innerHTML = '';
             }
         }
+    });
+
+    document.getElementById('btnReviewImport').addEventListener('click', function () {
+        importForm.style.display = 'block';
+        document.getElementById('progressContainer').style.display = 'none';
+        this.style.display = 'none';
+        importForm.scrollIntoView({behavior: 'smooth', block: 'start'});
     });
 </script>
 {% endblock %}

@@ -329,7 +329,7 @@
 <div class="client-flat-page">
     <div class="client-flat-card">
         <div class="client-flat-heading">
-        <div class="client-flat-heading-icon" aria-hidden="true">&#128100;</div>
+        <div class="client-flat-heading-icon" aria-hidden="true"><svg class="nav-icon-svg"><use href="#ui-icon-users"></use></svg></div>
         <div>
             <h2>{% if is_create %}Agregar un cliente{% else %}Editar cliente{% endif %}</h2>
             <p>
@@ -654,7 +654,6 @@
             <button type="submit" class="btn btn-primary">{% if is_create %}Agregar{% else %}Guardar cambios{% endif %}</button>
             {% if not is_create %}
             <a href="{% url 'admin_client_order_history' client.pk %}" class="btn btn-warning-outline">Ver historial</a>
-            <a href="{% url 'admin_client_tasks' client.pk %}" class="btn btn-outline">Tareas y recordatorios</a>
             <a href="{% url 'admin_payment_list' %}?client_id={{ client.pk }}" class="btn btn-primary">Ver pagos</a>
             {% if can_manage_client_credentials and client.user %}
             <a href="{% url 'admin_client_password' client.pk %}" class="btn btn-outline">Cambiar clave</a>

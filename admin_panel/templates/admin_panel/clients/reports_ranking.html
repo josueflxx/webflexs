@@ -2,119 +2,566 @@
 
 {% block page_title %}Ranking de clientes{% endblock %}
 
+{% block extra_css %}
+<style>
+    .client-ranking-page {
+        --ranking-border: rgba(255, 255, 255, 0.09);
+        --ranking-surface: rgba(12, 18, 28, 0.88);
+        display: grid;
+        gap: 16px;
+    }
+
+    .client-ranking-page .client-module-shell {
+        margin-bottom: 0;
+    }
+
+    .client-ranking-page .client-reports-nav {
+        gap: 8px;
+        margin: 0;
+        padding: 6px;
+        width: fit-content;
+        max-width: 100%;
+        border: 1px solid var(--ranking-border);
+        border-radius: 13px;
+        background: rgba(8, 14, 24, 0.62);
+    }
+
+    .client-ranking-page .client-reports-nav-item {
+        min-height: 38px;
+        padding: 8px 14px;
+        border-color: transparent;
+        background: transparent;
+        font-size: 0.78rem;
+    }
+
+    .client-ranking-page .client-reports-nav-item:hover,
+    .client-ranking-page .client-reports-nav-item:focus-visible,
+    .client-ranking-page .client-reports-nav-item.is-active {
+        transform: none;
+        border-color: rgba(255, 107, 53, 0.32);
+        background: rgba(255, 107, 53, 0.1);
+    }
+
+    .ranking-workbench {
+        overflow: hidden;
+        border: 1px solid var(--ranking-border);
+        border-radius: 17px;
+        background:
+            linear-gradient(118deg, rgba(255, 107, 53, 0.065), transparent 36%),
+            var(--ranking-surface);
+        box-shadow: 0 15px 34px rgba(0, 0, 0, 0.16);
+    }
+
+    .ranking-workbench-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 18px;
+        padding: 19px 21px;
+        border-bottom: 1px solid var(--ranking-border);
+    }
+
+    .ranking-workbench-title {
+        display: flex;
+        align-items: center;
+        min-width: 0;
+        gap: 13px;
+    }
+
+    .ranking-workbench-icon {
+        display: inline-flex;
+        flex: 0 0 auto;
+        align-items: center;
+        justify-content: center;
+        width: 44px;
+        height: 44px;
+        color: #ff8f63;
+        border: 1px solid rgba(255, 107, 53, 0.28);
+        border-radius: 12px;
+        background: rgba(255, 107, 53, 0.1);
+    }
+
+    .ranking-workbench-icon svg {
+        width: 22px;
+        height: 22px;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 1.8;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+    }
+
+    .ranking-workbench-copy {
+        display: grid;
+        min-width: 0;
+        gap: 3px;
+    }
+
+    .ranking-workbench-kicker {
+        color: #ff9c73;
+        font-size: 0.67rem;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+    }
+
+    .ranking-workbench-copy h2 {
+        margin: 0;
+        color: #f8fafc;
+        font-size: 1.16rem;
+        letter-spacing: -0.018em;
+    }
+
+    .ranking-workbench-copy p {
+        margin: 0;
+        color: #98a5b6;
+        font-size: 0.78rem;
+        line-height: 1.5;
+    }
+
+    .ranking-company-badge {
+        display: grid;
+        flex: 0 0 auto;
+        min-width: 150px;
+        gap: 3px;
+        padding: 9px 12px;
+        border: 1px solid var(--ranking-border);
+        border-radius: 10px;
+        background: rgba(255, 255, 255, 0.025);
+        text-align: right;
+    }
+
+    .ranking-company-badge span {
+        color: #748094;
+        font-size: 0.62rem;
+        font-weight: 800;
+        letter-spacing: 0.07em;
+        text-transform: uppercase;
+    }
+
+    .ranking-company-badge strong {
+        color: #f8fafc;
+        font-size: 0.84rem;
+    }
+
+    .ranking-filter-form {
+        display: grid;
+        gap: 16px;
+        padding: 19px 21px 21px;
+    }
+
+    .ranking-filter-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 11px;
+    }
+
+    .ranking-filter-field {
+        display: grid;
+        min-width: 0;
+        gap: 8px;
+        padding: 12px;
+        border: 1px solid var(--ranking-border);
+        border-radius: 12px;
+        background: rgba(255, 255, 255, 0.018);
+    }
+
+    .ranking-filter-label {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        color: #cbd5e1;
+        font-size: 0.76rem;
+        font-weight: 750;
+    }
+
+    .ranking-filter-step {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 21px;
+        height: 21px;
+        color: #ff9c73;
+        border: 1px solid rgba(255, 107, 53, 0.24);
+        border-radius: 6px;
+        background: rgba(255, 107, 53, 0.075);
+        font-size: 0.58rem;
+        font-weight: 850;
+    }
+
+    .ranking-filter-field .form-select,
+    .ranking-filter-field .form-input {
+        min-height: 42px;
+        font-size: 0.8rem;
+    }
+
+    .ranking-filter-field small {
+        min-height: 30px;
+        color: #748094;
+        font-size: 0.66rem;
+        line-height: 1.4;
+    }
+
+    .ranking-filter-footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding-top: 15px;
+        border-top: 1px solid var(--ranking-border);
+    }
+
+    .ranking-filter-help {
+        display: flex;
+        align-items: center;
+        max-width: 600px;
+        gap: 9px;
+        color: #8290a3;
+        font-size: 0.7rem;
+        line-height: 1.45;
+    }
+
+    .ranking-filter-help svg {
+        flex: 0 0 auto;
+        width: 18px;
+        height: 18px;
+        fill: none;
+        stroke: #ff8f63;
+        stroke-width: 1.8;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+    }
+
+    .ranking-actions {
+        display: flex;
+        flex: 0 0 auto;
+        gap: 9px;
+    }
+
+    .ranking-actions .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 7px;
+        min-height: 40px;
+        padding-inline: 14px;
+        font-size: 0.75rem;
+    }
+
+    .ranking-actions .btn svg {
+        width: 16px;
+        height: 16px;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 1.8;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+    }
+
+    .ranking-company-required {
+        margin: 19px 21px 21px;
+        padding: 17px;
+        border: 1px solid rgba(245, 158, 11, 0.26);
+        border-radius: 12px;
+        background: rgba(245, 158, 11, 0.065);
+        color: #fcd34d;
+        font-size: 0.78rem;
+    }
+
+    .ranking-results {
+        margin: 0 21px 21px;
+        padding: 0;
+        overflow: hidden;
+        border-radius: 13px;
+    }
+
+    .ranking-results-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 13px 15px;
+        border-bottom: 1px solid var(--ranking-border);
+        background: rgba(255, 255, 255, 0.025);
+    }
+
+    .ranking-results-head strong {
+        color: #f8fafc;
+        font-size: 0.86rem;
+    }
+
+    .ranking-results-head span {
+        color: #8f9bad;
+        font-size: 0.72rem;
+    }
+
+    .ranking-table-wrap {
+        overflow-x: auto;
+    }
+
+    .ranking-table {
+        min-width: 1040px;
+        margin: 0;
+    }
+
+    .ranking-position {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 32px;
+        height: 28px;
+        padding: 0 7px;
+        color: #ff9c73;
+        border: 1px solid rgba(255, 107, 53, 0.22);
+        border-radius: 8px;
+        background: rgba(255, 107, 53, 0.075);
+        font-size: 0.72rem;
+        font-weight: 850;
+    }
+
+    .ranking-client-name {
+        color: #f8fafc;
+        font-size: 0.8rem;
+    }
+
+    .ranking-money {
+        white-space: nowrap;
+        font-weight: 750;
+    }
+
+    html[data-theme="light"] .client-ranking-page {
+        --ranking-border: rgba(15, 23, 42, 0.1);
+        --ranking-surface: #ffffff;
+    }
+
+    html[data-theme="light"] .client-ranking-page .client-reports-nav,
+    html[data-theme="light"] .ranking-filter-field,
+    html[data-theme="light"] .ranking-company-badge {
+        background: #ffffff;
+    }
+
+    html[data-theme="light"] .ranking-workbench-copy h2,
+    html[data-theme="light"] .ranking-company-badge strong,
+    html[data-theme="light"] .ranking-results-head strong,
+    html[data-theme="light"] .ranking-client-name {
+        color: #172033;
+    }
+
+    html[data-theme="light"] .ranking-workbench-copy p,
+    html[data-theme="light"] .ranking-filter-help,
+    html[data-theme="light"] .ranking-results-head span {
+        color: #526074;
+    }
+
+    html[data-theme="light"] .ranking-filter-label {
+        color: #334155;
+    }
+
+    html[data-theme="light"] .ranking-results-head {
+        background: #f8fafc;
+    }
+
+    @media (max-width: 1180px) {
+        .ranking-filter-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+    }
+
+    @media (max-width: 760px) {
+        .client-ranking-page .client-reports-nav {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            width: 100%;
+        }
+
+        .ranking-workbench-head,
+        .ranking-filter-footer {
+            align-items: flex-start;
+            flex-direction: column;
+        }
+
+        .ranking-company-badge {
+            width: 100%;
+            text-align: left;
+        }
+
+        .ranking-actions {
+            width: 100%;
+        }
+
+        .ranking-actions .btn {
+            flex: 1 1 0;
+        }
+    }
+
+    @media (max-width: 560px) {
+        .client-ranking-page .client-reports-nav,
+        .ranking-filter-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .ranking-workbench-head,
+        .ranking-filter-form {
+            padding-left: 15px;
+            padding-right: 15px;
+        }
+
+        .ranking-actions {
+            flex-direction: column;
+        }
+
+        .ranking-results {
+            margin-right: 15px;
+            margin-left: 15px;
+        }
+    }
+</style>
+{% endblock %}
+
 {% block content %}
-{% include 'admin_panel/clients/_module_panel.html' with client_panel='reports' client_module_subtitle='Medicion comercial de la cartera por periodos y volumen de ventas.' %}
-{% include 'admin_panel/clients/_reports_nav.html' with client_report_panel=client_report_panel client_report_nav_items=client_report_nav_items %}
+<div class="client-ranking-page">
+    {% include 'admin_panel/clients/_module_panel.html' with client_panel='reports' client_module_subtitle='Medicion comercial de la cartera por periodos y volumen de ventas.' %}
+    {% include 'admin_panel/clients/_reports_nav.html' with client_report_panel=client_report_panel client_report_nav_items=client_report_nav_items %}
 
-<section class="admin-table-container compact-top-gap">
-    <div class="report-frame-header">
-        <div>
-            <span class="client-module-kicker">Filtro por fechas</span>
-            <h2>Ranking de clientes</h2>
-            <p>Analiza los clientes con mayor o menor volumen de ventas dentro del periodo elegido.</p>
+    <section class="ranking-workbench">
+        <header class="ranking-workbench-head">
+            <div class="ranking-workbench-title">
+                <span class="ranking-workbench-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><path d="M4 19.5V14M10 19.5V10M16 19.5V5M3 19.5h18"></path></svg>
+                </span>
+                <div class="ranking-workbench-copy">
+                    <span class="ranking-workbench-kicker">Análisis comercial</span>
+                    <h2>Ranking de clientes</h2>
+                    <p>Define el período y el criterio para identificar los clientes con mayor o menor volumen de ventas.</p>
+                </div>
+            </div>
+            {% if active_company %}
+            <div class="ranking-company-badge">
+                <span>Empresa analizada</span>
+                <strong>{{ active_company.name }}</strong>
+            </div>
+            {% endif %}
+        </header>
+
+        {% if reports_requires_company %}
+        <div class="ranking-company-required">Elegí una empresa activa para generar este informe.</div>
+        {% else %}
+        <form method="get" class="ranking-filter-form" aria-label="Filtros del ranking de clientes">
+            <input type="hidden" name="standalone" value="0" class="report-standalone-flag">
+            <div class="ranking-filter-grid">
+                <label class="ranking-filter-field">
+                    <span class="ranking-filter-label"><span class="ranking-filter-step">01</span>Período</span>
+                    <select name="date_range" class="form-select">
+                        {% for value, label in date_range_choices %}
+                        <option value="{{ value }}" {% if selected_range == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                    <small>Selecciona un período rápido o utiliza las fechas personalizadas.</small>
+                </label>
+
+                <label class="ranking-filter-field">
+                    <span class="ranking-filter-label"><span class="ranking-filter-step">02</span>Orden del ranking</span>
+                    <select name="ranking" class="form-select">
+                        {% for value, label in ranking_choices %}
+                        <option value="{{ value }}" {% if selected_ranking == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                    <small>Define si quieres ver los clientes con mayor o menor facturación.</small>
+                </label>
+
+                <label class="ranking-filter-field">
+                    <span class="ranking-filter-label"><span class="ranking-filter-step">03</span>Desde</span>
+                    <input type="date" name="start_date" value="{{ start_date }}" class="form-input">
+                    <small>Fecha inicial para un período personalizado.</small>
+                </label>
+
+                <label class="ranking-filter-field">
+                    <span class="ranking-filter-label"><span class="ranking-filter-step">04</span>Hasta</span>
+                    <input type="date" name="end_date" value="{{ end_date }}" class="form-input">
+                    <small>Fecha final incluida en el análisis.</small>
+                </label>
+            </div>
+
+            <footer class="ranking-filter-footer">
+                <div class="ranking-filter-help">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 10v6M12 7.5v.5"></path></svg>
+                    <span>Generar abre una vista independiente lista para revisar o imprimir. Descargar crea el archivo con el mismo criterio seleccionado.</span>
+                </div>
+                <div class="ranking-actions">
+                    <button
+                        type="submit"
+                        name="action"
+                        value="generate"
+                        class="btn btn-primary"
+                        formtarget="_blank"
+                        onclick="this.form.querySelector('.report-standalone-flag').value='1';"
+                    >
+                        <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 4h14v12H3zM6 8h8M6 12h5"></path></svg>
+                        Generar informe
+                    </button>
+                    <button
+                        type="submit"
+                        name="action"
+                        value="download"
+                        class="btn btn-outline"
+                        onclick="this.form.querySelector('.report-standalone-flag').value='0';"
+                    >
+                        <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 3v9M6.5 8.5 10 12l3.5-3.5M4 16h12"></path></svg>
+                        Descargar
+                    </button>
+                </div>
+            </footer>
+        </form>
+
+        {% if report_requested %}
+        <div class="client-report-results ranking-results">
+            <div class="ranking-results-head">
+                <strong>{{ rows|length }} registros encontrados</strong>
+                <span>Período: {{ range_label }}</span>
+            </div>
+            <div class="ranking-table-wrap">
+                <table class="admin-table ranking-table">
+                    <thead>
+                        <tr>
+                            <th>Posición</th>
+                            <th>Cliente</th>
+                            <th>Usuario</th>
+                            <th>CUIT/DNI</th>
+                            <th>Categoría</th>
+                            <th>Pedidos</th>
+                            <th>Total comprado</th>
+                            <th>Ticket promedio</th>
+                            <th>Último pedido</th>
+                            <th>Acción</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in rows %}
+                        <tr>
+                            <td><span class="ranking-position">#{{ row.position }}</span></td>
+                            <td><strong class="ranking-client-name">{{ row.company_name }}</strong></td>
+                            <td>{{ row.username }}</td>
+                            <td>{{ row.cuit_dni }}</td>
+                            <td>{{ row.category }}</td>
+                            <td>{{ row.orders_count }}</td>
+                            <td class="ranking-money">${{ row.total_sales|floatformat:2 }}</td>
+                            <td class="ranking-money">${{ row.average_ticket|floatformat:2 }}</td>
+                            <td>{{ row.last_order_at|date:'d/m/Y H:i'|default:'-' }}</td>
+                            <td>
+                                <a href="{% url 'admin_client_order_history' row.client_id %}" class="btn btn-outline btn-sm">Abrir historial</a>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="10" class="text-center text-muted">No hubo ventas en el período seleccionado.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
         </div>
-    </div>
-
-    {% if reports_requires_company %}
-    <p class="text-muted">Elegí una empresa activa para generar este informe.</p>
-    {% else %}
-    <form method="get" class="client-report-form">
-        <input type="hidden" name="standalone" value="0" class="report-standalone-flag">
-        <div class="client-report-filter-grid">
-            <label class="client-report-field">
-                <span>Seleccione fechas</span>
-                <select name="date_range" class="form-select">
-                    {% for value, label in date_range_choices %}
-                    <option value="{{ value }}" {% if selected_range == value %}selected{% endif %}>{{ label }}</option>
-                    {% endfor %}
-                </select>
-            </label>
-
-            <label class="client-report-field">
-                <span>Mostrar</span>
-                <select name="ranking" class="form-select">
-                    {% for value, label in ranking_choices %}
-                    <option value="{{ value }}" {% if selected_ranking == value %}selected{% endif %}>{{ label }}</option>
-                    {% endfor %}
-                </select>
-            </label>
-
-            <label class="client-report-field">
-                <span>Desde</span>
-                <input type="date" name="start_date" value="{{ start_date }}" class="form-input">
-            </label>
-
-            <label class="client-report-field">
-                <span>Hasta</span>
-                <input type="date" name="end_date" value="{{ end_date }}" class="form-input">
-            </label>
-        </div>
-
-        <div class="client-report-actions">
-            <button
-                type="submit"
-                name="action"
-                value="generate"
-                class="btn btn-primary"
-                formtarget="_blank"
-                onclick="this.form.querySelector('.report-standalone-flag').value='1';"
-            >Generar informe</button>
-            <button
-                type="submit"
-                name="action"
-                value="download"
-                class="btn btn-outline"
-                onclick="this.form.querySelector('.report-standalone-flag').value='0';"
-            >Descargar informe</button>
-        </div>
-    </form>
-
-    {% if report_requested %}
-    <div class="client-report-results">
-        <div class="report-results-meta">
-            <strong>{{ rows|length }} registros</strong>
-            <span class="text-muted">Periodo: {{ range_label }}</span>
-        </div>
-        <table class="admin-table">
-            <thead>
-                <tr>
-                    <th>#</th>
-                    <th>Cliente</th>
-                    <th>Usuario</th>
-                    <th>CUIT/DNI</th>
-                    <th>Categoria</th>
-                    <th>Pedidos</th>
-                    <th>Total comprado</th>
-                    <th>Ticket promedio</th>
-                    <th>Ultimo pedido</th>
-                    <th>Accion</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for row in rows %}
-                <tr>
-                    <td>{{ row.position }}</td>
-                    <td><strong>{{ row.company_name }}</strong></td>
-                    <td>{{ row.username }}</td>
-                    <td>{{ row.cuit_dni }}</td>
-                    <td>{{ row.category }}</td>
-                    <td>{{ row.orders_count }}</td>
-                    <td>${{ row.total_sales|floatformat:2 }}</td>
-                    <td>${{ row.average_ticket|floatformat:2 }}</td>
-                    <td>{{ row.last_order_at|date:'d/m/Y H:i'|default:'-' }}</td>
-                    <td>
-                        <a href="{% url 'admin_client_order_history' row.client_id %}" class="btn btn-outline btn-sm">Historial</a>
-                    </td>
-                </tr>
-                {% empty %}
-                <tr>
-                    <td colspan="10" class="text-center text-muted">No hubo ventas en el periodo seleccionado.</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-    {% endif %}
-    {% endif %}
-</section>
+        {% endif %}
+        {% endif %}
+    </section>
+</div>
 {% endblock %}

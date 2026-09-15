@@ -6,6 +6,7 @@
     const API_URL = window.FLEXS_SEARCH_SUGGEST_URL || '/api/search-suggestions/';
 
     let openInstance = null;
+    let instanceCounter = 0;
 
     function escapeHtml(value) {
         return String(value || '')
@@ -14,6 +15,77 @@
             .replaceAll('>', '&gt;')
             .replaceAll('"', '&quot;')
             .replaceAll("'", '&#39;');
+    }
+
+    function highlightMatch(value, query) {
+        const text = String(value || '');
+        const needle = String(query || '').trim();
+        if (!needle) {
+            return escapeHtml(text);
+        }
+
+        const index = text.toLocaleLowerCase().indexOf(needle.toLocaleLowerCase());
+        if (index < 0) {
+            return escapeHtml(text);
+        }
+
+        return [
+            escapeHtml(text.slice(0, index)),
+            `<mark>${escapeHtml(text.slice(index, index + needle.length))}</mark>`,
+            escapeHtml(text.slice(index + needle.length)),
+        ].join('');
+    }
+
+    function cleanDetail(value) {
+        const text = String(value || '').trim();
+        if (['nan', 'none', 'null', 'undefined', '-'].includes(text.toLocaleLowerCase())) {
+            return '';
+        }
+        return text;
+    }
+
+    function getKindLabel(kind) {
+        const labels = {
+            query: 'Búsqueda',
+            client: 'Cliente',
+            product: 'Producto',
+            category: 'Categoría',
+            order: 'Pedido',
+            supplier: 'Proveedor',
+            payment: 'Cobro',
+            clamp_request: 'Solicitud',
+            admin_user: 'Usuario',
+        };
+        return labels[String(kind || '').toLowerCase()] || 'Resultado';
+    }
+
+    function getItemInitials(item) {
+        const kind = String(item.kind || '').toLowerCase();
+        if (kind !== 'client') {
+            const shortLabels = {
+                query: 'IR',
+                product: 'PR',
+                category: 'CA',
+                order: 'PE',
+                supplier: 'PV',
+                payment: 'CO',
+                clamp_request: 'SO',
+                admin_user: 'US',
+            };
+            return shortLabels[kind] || 'RE';
+        }
+
+        const words = String(item.label || item.value || '')
+            .trim()
+            .split(/\s+/)
+            .filter(Boolean);
+        if (!words.length) {
+            return 'CL';
+        }
+        if (words.length === 1) {
+            return words[0].slice(0, 2).toUpperCase();
+        }
+        return `${words[0][0]}${words[1][0]}`.toUpperCase();
     }
 
     function detectScopeFromPath(pathname) {
@@ -75,9 +147,13 @@
             this.debounceTimer = null;
             this.lastQuery = '';
             this.maxItems = this.resolveMaxItems();
+            this.instanceId = ++instanceCounter;
 
             this.dropdown = document.createElement('div');
             this.dropdown.className = 'flex-search-suggest';
+            this.dropdown.id = `flex-search-suggest-${this.instanceId}`;
+            this.dropdown.setAttribute('role', 'listbox');
+            this.dropdown.setAttribute('aria-label', 'Sugerencias de búsqueda');
             this.dropdown.style.display = 'none';
             this.dropdown.innerHTML = '<div class="flex-search-suggest-list"></div>';
             this.listEl = this.dropdown.querySelector('.flex-search-suggest-list');
@@ -89,6 +165,10 @@
             this.input.setAttribute('autocapitalize', 'off');
             this.input.setAttribute('autocorrect', 'off');
             this.input.setAttribute('spellcheck', 'false');
+            this.input.setAttribute('role', 'combobox');
+            this.input.setAttribute('aria-autocomplete', 'list');
+            this.input.setAttribute('aria-controls', this.dropdown.id);
+            this.input.setAttribute('aria-expanded', 'false');
             if (this.form) {
                 this.form.setAttribute('autocomplete', 'off');
             }
@@ -183,8 +263,8 @@
                 ? {
                       value: query,
                       input_value: query,
-                      label: `Buscar "${query}"`,
-                      meta: 'Busqueda exacta',
+                      label: `Ver resultados para "${query}"`,
+                      meta: 'Aplicar la búsqueda completa',
                       kind: 'query',
                   }
                 : null;
@@ -205,10 +285,14 @@
                 });
 
                 if (!response.ok) {
-                    this.items = [queryItem];
+                    this.items = queryItem ? [queryItem] : [];
                     this.highlightIndex = -1;
                     this.render();
-                    this.open();
+                    if (this.items.length) {
+                        this.open();
+                    } else {
+                        this.close();
+                    }
                     return;
                 }
 
@@ -254,17 +338,75 @@
                 return;
             }
 
+            const resultCount = this.items.filter((item) => item.kind !== 'query').length;
             this.listEl.innerHTML = this.items
                 .map((item, index) => {
+                    const kind = String(item.kind || '').toLowerCase();
                     const activeClass = index === this.highlightIndex ? ' is-active' : '';
-                    const label = escapeHtml(item.label || item.value || '');
+                    const queryClass = kind === 'query' ? ' is-query' : '';
+                    const label = highlightMatch(item.label || item.value || '', this.lastQuery);
                     const value = escapeHtml(item.value || '');
                     const meta = escapeHtml(item.meta || '');
                     const price = item.price ? escapeHtml(item.price) : '';
+                    const username = escapeHtml(cleanDetail(item.username));
+                    const documentNumber = escapeHtml(cleanDetail(item.document));
+                    const kindLabel = escapeHtml(getKindLabel(kind));
+                    const initials = escapeHtml(getItemInitials(item));
+                    const itemId = `${this.dropdown.id}-option-${index}`;
+
+                    const clientDetails = kind === 'client'
+                        ? (
+                            username || documentNumber
+                                ? `
+                                    <span class="flex-search-suggest-details">
+                                        ${username ? `<span><strong>Usuario</strong>${username}</span>` : ''}
+                                        ${documentNumber ? `<span><strong>Documento</strong>${documentNumber}</span>` : ''}
+                                    </span>
+                                `
+                                : (meta ? `<span class="flex-search-suggest-meta">${meta}</span>` : '')
+                        )
+                        : (meta ? `<span class="flex-search-suggest-meta">${meta}</span>` : '');
+
+                    const sectionHeader = (
+                        this.scope === 'admin_clients' &&
+                        resultCount > 0 &&
+                        kind !== 'query' &&
+                        (index === 0 || this.items[index - 1].kind === 'query')
+                    )
+                        ? `
+                            <div class="flex-search-suggest-section" aria-hidden="true">
+                                <span>Clientes encontrados</span>
+                                <strong>${resultCount}</strong>
+                            </div>
+                        `
+                        : '';
+
                     return `
-                        <button type="button" class="flex-search-suggest-item${activeClass}" data-index="${index}" data-value="${value}">
-                            <span class="flex-search-suggest-label">${label}${price ? ` <span class="flex-search-suggest-price">$${price}</span>` : ''}</span>
-                            ${meta ? `<span class="flex-search-suggest-meta">${meta}</span>` : ''}
+                        ${sectionHeader}
+                        <button
+                            id="${itemId}"
+                            type="button"
+                            role="option"
+                            aria-selected="${index === this.highlightIndex ? 'true' : 'false'}"
+                            class="flex-search-suggest-item${activeClass}${queryClass}"
+                            data-index="${index}"
+                            data-value="${value}"
+                            data-kind="${escapeHtml(kind)}"
+                        >
+                            <span class="flex-search-suggest-visual" aria-hidden="true">${initials}</span>
+                            <span class="flex-search-suggest-copy">
+                                <span class="flex-search-suggest-kicker">${kindLabel}</span>
+                                <span class="flex-search-suggest-label">
+                                    ${label}
+                                    ${price ? `<span class="flex-search-suggest-price">$${price}</span>` : ''}
+                                </span>
+                                ${clientDetails}
+                            </span>
+                            <span class="flex-search-suggest-arrow" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" fill="none">
+                                    <path d="m9 5 7 7-7 7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                                </svg>
+                            </span>
                         </button>
                     `;
                 })
@@ -289,14 +431,25 @@
         }
 
         applyHighlight() {
+            let activeButton = null;
             this.listEl.querySelectorAll('.flex-search-suggest-item').forEach((btn) => {
                 const index = Number(btn.dataset.index || -1);
                 if (index === this.highlightIndex) {
                     btn.classList.add('is-active');
+                    btn.setAttribute('aria-selected', 'true');
+                    activeButton = btn;
                 } else {
                     btn.classList.remove('is-active');
+                    btn.setAttribute('aria-selected', 'false');
                 }
             });
+
+            if (activeButton) {
+                this.input.setAttribute('aria-activedescendant', activeButton.id);
+                activeButton.scrollIntoView({ block: 'nearest' });
+            } else {
+                this.input.removeAttribute('aria-activedescendant');
+            }
         }
 
         moveHighlight(direction) {
@@ -382,9 +535,17 @@
                 return;
             }
             const rect = this.input.getBoundingClientRect();
-            this.dropdown.style.left = `${Math.max(rect.left, 8)}px`;
+            const viewportPadding = 8;
+            const preferredMinWidth = this.scope === 'admin_clients' ? 440 : 320;
+            const availableWidth = Math.max(window.innerWidth - (viewportPadding * 2), 280);
+            const width = Math.min(Math.max(rect.width, preferredMinWidth), availableWidth, 720);
+            const left = Math.min(
+                Math.max(rect.left, viewportPadding),
+                Math.max(viewportPadding, window.innerWidth - width - viewportPadding)
+            );
+            this.dropdown.style.left = `${left}px`;
             this.dropdown.style.top = `${rect.bottom + 6}px`;
-            this.dropdown.style.width = `${Math.max(rect.width, 280)}px`;
+            this.dropdown.style.width = `${width}px`;
         }
 
         open() {
@@ -393,6 +554,7 @@
             }
             openInstance = this;
             this.dropdown.style.display = 'block';
+            this.input.setAttribute('aria-expanded', 'true');
             this.reposition();
         }
 
@@ -401,6 +563,8 @@
                 openInstance = null;
             }
             this.dropdown.style.display = 'none';
+            this.input.setAttribute('aria-expanded', 'false');
+            this.input.removeAttribute('aria-activedescendant');
         }
 
         isOpen() {

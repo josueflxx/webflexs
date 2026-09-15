@@ -1,0 +1,20 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}Descargar catalogo Excel - FLEXS{% endblock %}
+{% block content %}
+<section class="container" style="padding-top: 48px; padding-bottom: 48px;">
+    <h1>Catalogo Excel</h1>
+    <p>El archivo se prepara en segundo plano, sin bloquear el catalogo.</p>
+    {% if export_state.status == 'failed' %}<p role="alert">{{ export_state.message }}</p>{% endif %}
+    <a href="{% url 'catalog_client_excel_download' %}" class="btn btn-primary"
+       onclick="handleExcelDownload(event, this)"
+       {% if export_state.status != 'failed' %}data-excel-auto-download{% endif %}>
+        <span>Descargar catalogo Excel</span>
+    </a>
+    <a href="{% url 'catalog' %}" class="btn btn-outline">Volver al catalogo</a>
+    <noscript><p>Volve a pulsar Descargar catalogo Excel dentro de unos segundos para comprobar si esta listo.</p></noscript>
+</section>
+{% endblock %}
+{% block extra_js %}
+<script src="{% static 'core/js/catalog_excel_download.js' %}?v=20260914-1"></script>
+{% endblock %}

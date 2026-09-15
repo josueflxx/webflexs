@@ -1,0 +1,88 @@
+{% extends 'admin_panel/base.html' %}
+{% load static %}
+{% block page_title %}Rubros y subrubros en lote{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'core/css/brand_structure.css' %}">{% endblock %}
+{% block content %}
+<div class="brand-structure-page">
+    <header class="structure-heading">
+        <div><span class="structure-eyebrow">CATÁLOGO DE MARCAS</span><h1>Rubros y subrubros en lote</h1><p>Una misma operación, en todas las marcas o sólo en las que elijas.</p></div>
+        <a class="structure-button" href="{% url 'admin_brand_list' %}">← Volver a Marcas</a>
+    </header>
+    <div class="structure-notice"><strong>Estructura compartida entre empresas.</strong> No se mueven ni se copian productos. Los rubros nuevos se verán en el panel; en el catálogo público aparecerán cuando tengan productos activos.</div>
+    {% if not can_manage_structure %}<div class="structure-notice">Tenés acceso de consulta. Sólo el administrador principal puede preparar y aplicar cambios.</div>{% endif %}
+    <form method="post" enctype="multipart/form-data" id="brand-structure-form">
+        {% csrf_token %}{{ form.draft }}
+        {% if form.errors %}<div class="structure-errors" role="alert"><strong>Revisá estos datos:</strong><ul>{% for field in form %}{% for error in field.errors %}<li>{{ field.label }}: {{ error }}</li>{% endfor %}{% endfor %}{% for error in form.non_field_errors %}<li>{{ error }}</li>{% endfor %}</ul></div>{% endif %}
+        <fieldset class="structure-form-shell" {% if not can_manage_structure %}disabled{% endif %}>
+            <legend class="structure-sr-only">Configurar lote</legend>
+            <div class="structure-form-grid">
+                <section class="structure-card">
+                    <div class="structure-section-title"><span class="structure-step">01</span><h2>Elegí las marcas</h2></div>
+                    <div class="structure-scope">{{ form.scope }}</div>
+                    <label class="structure-check">{{ form.include_inactive }} {{ form.include_inactive.label }}</label>
+                    <div data-selected-brands>
+                        <label for="structure-brand-search" class="structure-sr-only">Buscar marca</label>
+                        <input id="structure-brand-search" class="structure-input" type="text" placeholder="Buscar marca…" autocomplete="off">
+                        <div class="structure-selection-tools"><button type="button" data-select-visible>Seleccionar visibles</button><button type="button" data-clear-brands>Limpiar selección</button></div>
+                    </div>
+                    <div class="structure-brand-list">
+                        {% for brand in brands %}
+                        <label class="structure-brand-option" data-brand-option data-name="{{ brand.name }}" data-active="{{ brand.is_active|yesno:'true,false' }}">
+                            <input type="checkbox" name="brand_ids" value="{{ brand.pk }}" {% if brand.pk|stringformat:'s' in selected_brand_ids %}checked{% endif %}>
+                            <span data-all-marker hidden aria-hidden="true">✓</span>
+                            <span><strong>{{ brand.name }}</strong><small>{{ brand.rubro_count }} rubros{% if not brand.is_active %} · Inactiva{% endif %}</small></span>
+                        </label>
+                        {% empty %}<p>No hay marcas creadas.</p>{% endfor %}
+                    </div>
+                    <p class="structure-selection-count" aria-live="polite" data-brand-count>Seleccioná las marcas para el lote.</p>
+                    <p class="structure-hint">“Todas” incluye las marcas existentes al generar la vista previa, no las que se creen después.</p>
+                </section>
+                <section class="structure-card">
+                    <div class="structure-section-title"><span class="structure-step">02</span><h2>Definí los cambios</h2></div>
+                    <div class="structure-field">{{ form.operation.label_tag }}{{ form.operation }}</div>
+                    <div class="structure-field" data-modes="create_subrubro update_rubro update_subrubro">{{ form.rubro_name.label_tag }}{{ form.rubro_name }}<small>Se busca el mismo nombre en cada marca, ignorando mayúsculas y acentos.</small></div>
+                    <div class="structure-field" data-modes="update_subrubro">{{ form.subrubro_name.label_tag }}{{ form.subrubro_name }}</div>
+                    <div class="structure-field" data-modes="create_rubro create_subrubro">{{ form.names.label_tag }}{{ form.names }}<small>Hasta 30 nombres. Los que ya existan se omiten sin sobrescribirlos.</small></div>
+                    <div class="structure-field" data-modes="create_subrubro">{{ form.missing_parent.label_tag }}{{ form.missing_parent }}</div>
+                    <div class="structure-patch" data-modes="update_rubro update_subrubro">
+                        <label class="structure-check">{{ form.change_name }} {{ form.change_name.label }}</label>
+                        <div class="structure-field" data-patch-field="name">{{ form.new_name.label_tag }}{{ form.new_name }}</div>
+                    </div>
+                    <div class="structure-field-pair">
+                        <div class="structure-patch">
+                            <label class="structure-check" data-modes="update_rubro update_subrubro">{{ form.change_order }} {{ form.change_order.label }}</label>
+                            <div class="structure-field" data-patch-field="order">{{ form.order.label_tag }}{{ form.order }}</div>
+                        </div>
+                        <div class="structure-patch">
+                            <label class="structure-check" data-modes="update_rubro update_subrubro">{{ form.change_is_active }} {{ form.change_is_active.label }}</label>
+                            <div class="structure-field" data-patch-field="is_active"><span>Estado a aplicar</span><label class="structure-check">{{ form.is_active }} {{ form.is_active.label }}</label></div>
+                        </div>
+                    </div>
+                    <div class="structure-patch">
+                        <label class="structure-check" data-modes="update_rubro update_subrubro">{{ form.change_image }} {{ form.change_image.label }}</label>
+                        <div class="structure-field" data-patch-field="image">
+                            {{ form.image.label_tag }}{{ form.image }}<small>PNG, JPG o WebP · Hasta 5 MB. Se carga una sola imagen para el lote.</small>
+                            {% if previous.image %}<p class="structure-hint">La imagen de la vista previa anterior se conservará si no elegís otra.</p>{% endif %}
+                            <label class="structure-check" data-modes="update_rubro update_subrubro">{{ form.remove_image }} {{ form.remove_image.label }}</label>
+                        </div>
+                    </div>
+                    <p class="structure-hint" data-modes="update_rubro update_subrubro">Sólo se editarán los campos marcados. Se mantienen los enlaces, los productos asociados y las categorías ayudantes. Las coincidencias ambiguas bloquean el lote.</p>
+                    <div class="structure-field">{{ form.observation.label_tag }}{{ form.observation }}</div>
+                    <div class="structure-form-footer"><span>Todavía no se modifica el catálogo.</span><button class="structure-button structure-primary" type="submit">Generar vista previa →</button></div>
+                </section>
+            </div>
+        </fieldset>
+        <datalist id="structure-rubros">{% for name in rubro_names %}<option value="{{ name }}">{% endfor %}</datalist>
+        <datalist id="structure-subrubros">{% for name in subrubro_names %}<option value="{{ name }}">{% endfor %}</datalist>
+    </form>
+    <section class="structure-card">
+        <div class="structure-section-title"><span class="structure-step">↶</span><div><h2>Historial de lotes</h2><p>Consultá los cambios y deshacé un lote si todavía es seguro hacerlo.</p></div></div>
+        <div class="structure-table-wrap"><table class="structure-table"><thead><tr><th>Lote / fecha</th><th>Operación</th><th>Marcas</th><th>Responsable</th><th>Estado</th><th></th></tr></thead><tbody>
+        {% for batch in history %}<tr><td>#{{ batch.pk }}<small>{{ batch.created_at|date:'d/m/Y H:i' }}</small></td><td>{{ batch.get_operation_display }}<small>{{ batch.observation }}</small></td><td>{{ batch.plan.brands|length }}</td><td>{{ batch.created_by.username|default:'Usuario eliminado' }}</td><td><span class="structure-status status-{{ batch.status }}">{{ batch.get_status_display }}</span></td><td><a class="structure-button" href="{% url 'admin_brand_structure_batch' batch.pk %}">Ver lote</a></td></tr>
+        {% empty %}<tr><td colspan="6" class="structure-empty">Todavía no hay lotes registrados.</td></tr>{% endfor %}
+        </tbody></table></div>
+        {% if history.has_other_pages %}<nav class="structure-pagination" aria-label="Historial">{% if history.has_previous %}<a href="?page={{ history.previous_page_number }}">← Anterior</a>{% endif %}<span>{{ history.number }} / {{ history.paginator.num_pages }}</span>{% if history.has_next %}<a href="?page={{ history.next_page_number }}">Siguiente →</a>{% endif %}</nav>{% endif %}
+    </section>
+</div>
+{% endblock %}
+{% block extra_js %}<script src="{% static 'core/js/brand_structure.js' %}" defer></script>{% endblock %}

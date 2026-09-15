@@ -8,6 +8,7 @@ from decimal import Decimal
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db.models import Case, F, IntegerField, Q, Value, When
+from django.utils import timezone
 
 from accounts.services.account_movement_service import (
     sync_fiscal_document_account_movement,
@@ -27,7 +28,17 @@ from core.models import (
     SALES_BILLING_MODE_AFIP_WSFE,
     SALES_BILLING_MODE_INTERNAL_DOCUMENT,
     SALES_BILLING_MODE_MANUAL_FISCAL,
-    FISCAL_STATUS_AUTHORIZED,
+    SALES_DEFAULT_USER_CURRENT,
+    SALES_DEFAULT_USER_NONE,
+    SALES_DEFAULT_USER_SPECIFIC,
+    DOCUMENT_SITUATION_NOT_APPLICABLE,
+    DOCUMENT_SITUATION_PENDING,
+    DOCUMENT_SITUATION_APPROVED,
+    DOCUMENT_SITUATION_OBSERVED,
+    DOCUMENT_SITUATION_REJECTED,
+    FISCAL_AUTHORIZED_STATUSES,
+    FISCAL_STATUS_DRAFT,
+    FISCAL_ISSUE_MODE_ARCA_WSFE,
     STOCK_MOVEMENT_IN,
     STOCK_MOVEMENT_OUT,
     STOCK_MOVEMENT_RELEASE,
@@ -192,6 +203,157 @@ def format_sales_document_number(*, sales_document_type, number=None):
     return sales_document_type.format_number(number=number)
 
 
+def build_sales_document_rule_snapshot(sales_document_type):
+    """Freeze every operational rule used by a generated document."""
+    if not sales_document_type:
+        return {}
+    return {
+        "schema_version": 1,
+        "type_id": sales_document_type.pk,
+        "type_code": sales_document_type.code,
+        "type_name": sales_document_type.name,
+        "rules_version": int(sales_document_type.rules_version or 1),
+        "letter": sales_document_type.letter or "",
+        "point_of_sale_id": sales_document_type.point_of_sale_id,
+        "point_of_sale_number": sales_document_type.point_of_sale_number,
+        "document_behavior": sales_document_type.document_behavior,
+        "billing_mode": sales_document_type.billing_mode,
+        "generate_stock_movement": bool(sales_document_type.generate_stock_movement),
+        "generate_account_movement": bool(sales_document_type.generate_account_movement),
+        "group_equal_products": bool(sales_document_type.group_equal_products),
+        "default_warehouse_id": sales_document_type.default_warehouse_id,
+        "default_warehouse_name": getattr(sales_document_type.default_warehouse, "name", "") or "",
+        "prioritize_default_warehouse": bool(sales_document_type.prioritize_default_warehouse),
+        "default_sales_user_mode": sales_document_type.default_sales_user_mode,
+        "default_sales_user_id": sales_document_type.default_sales_user_id,
+        "use_document_situation": bool(sales_document_type.use_document_situation),
+        "currency_code": sales_document_type.currency_code,
+        "default_exchange_rate": str(sales_document_type.default_exchange_rate or Decimal("1")),
+    }
+
+
+def get_document_rule(document, field_name, default=None):
+    snapshot = getattr(document, "sales_rules_snapshot", None) or {}
+    if field_name in snapshot:
+        return snapshot[field_name]
+    sales_document_type = getattr(document, "sales_document_type", None)
+    if sales_document_type is not None and hasattr(sales_document_type, field_name):
+        return getattr(sales_document_type, field_name)
+    return default
+
+
+def build_internal_document_display_items(document):
+    """Return printable order rows honoring the rules frozen on the document."""
+    if not document or not getattr(document, "order_id", None):
+        return []
+
+    items = list(document.order.items.select_related("product", "price_list").all())
+    if not bool(get_document_rule(document, "group_equal_products", True)):
+        return items
+
+    grouped = {}
+    for item in items:
+        unit_price = Decimal(item.price_at_purchase or 0)
+        discount = Decimal(item.discount_percentage_used or 0)
+        key = (
+            item.product_id,
+            item.product_sku or "",
+            item.product_name or "",
+            unit_price,
+            discount,
+            item.price_list_id,
+        )
+        if key not in grouped:
+            grouped[key] = {
+                "product_sku": item.product_sku or "",
+                "product_name": item.product_name or "",
+                "quantity": Decimal(item.quantity or 0),
+                "price_at_purchase": unit_price,
+                "subtotal": Decimal(item.subtotal or 0),
+            }
+            continue
+        grouped[key]["quantity"] += Decimal(item.quantity or 0)
+        grouped[key]["subtotal"] += Decimal(item.subtotal or 0)
+    return list(grouped.values())
+
+
+def resolve_sales_document_seller(*, sales_document_type, actor=None, fallback=None):
+    """Resolve seller using the configured mode at the moment the movement is created."""
+    if not sales_document_type:
+        return fallback
+    mode = sales_document_type.default_sales_user_mode
+    if mode == SALES_DEFAULT_USER_SPECIFIC:
+        return sales_document_type.default_sales_user
+    if mode == SALES_DEFAULT_USER_NONE:
+        return None
+    if mode == SALES_DEFAULT_USER_CURRENT:
+        if getattr(actor, "is_authenticated", False) and getattr(actor, "is_staff", False):
+            return actor
+        return fallback
+    return fallback
+
+
+def resolve_sales_document_warehouse(*, order, sales_document_type, document=None):
+    configured_id = get_document_rule(
+        document,
+        "default_warehouse_id",
+        getattr(sales_document_type, "default_warehouse_id", None),
+    ) if document else getattr(sales_document_type, "default_warehouse_id", None)
+    prioritize = bool(get_document_rule(
+        document,
+        "prioritize_default_warehouse",
+        getattr(sales_document_type, "prioritize_default_warehouse", True),
+    )) if document else bool(getattr(sales_document_type, "prioritize_default_warehouse", True))
+    if prioritize and configured_id:
+        from core.models import Warehouse
+
+        return Warehouse.objects.filter(pk=configured_id, company=order.company).first()
+    inherited = (
+        StockMovement.objects.filter(order=order, warehouse__isnull=False)
+        .select_related("warehouse")
+        .order_by("-created_at", "-id")
+        .first()
+    )
+    if inherited:
+        return inherited.warehouse
+    if configured_id:
+        from core.models import Warehouse
+
+        return Warehouse.objects.filter(pk=configured_id, company=order.company).first()
+    return None
+
+
+def update_document_situation(*, document, situation, note="", actor=None):
+    """Update the optional commercial-review state without changing fiscal evidence."""
+    allowed = {
+        DOCUMENT_SITUATION_PENDING,
+        DOCUMENT_SITUATION_APPROVED,
+        DOCUMENT_SITUATION_OBSERVED,
+        DOCUMENT_SITUATION_REJECTED,
+    }
+    if not bool(get_document_rule(document, "use_document_situation", False)):
+        raise ValidationError("Este tipo de movimiento no utiliza situacion comercial.")
+    if situation not in allowed:
+        raise ValidationError("Situacion comercial invalida.")
+    normalized_note = str(note or "").strip()
+    if situation in {DOCUMENT_SITUATION_OBSERVED, DOCUMENT_SITUATION_REJECTED} and not normalized_note:
+        raise ValidationError("Debes indicar una observacion para observar o rechazar el movimiento.")
+    document.commercial_situation = situation
+    document.commercial_situation_note = normalized_note
+    document.commercial_situation_updated_at = timezone.now()
+    document.commercial_situation_updated_by = (
+        actor if getattr(actor, "is_authenticated", False) else None
+    )
+    document.save(update_fields=[
+        "commercial_situation",
+        "commercial_situation_note",
+        "commercial_situation_updated_at",
+        "commercial_situation_updated_by",
+        "updated_at",
+    ])
+    return document
+
+
 def _collect_order_quantities(order, *, group_equal_products):
     grouped = defaultdict(int)
     rows = []
@@ -263,29 +425,41 @@ def ensure_stock_movements_for_order_document(
     """Idempotently create stock movements from one configured document."""
     if not order or not company or not sales_document_type:
         return []
-    if (
-        not fiscal_document
-        or fiscal_document.status != FISCAL_STATUS_AUTHORIZED
-        or not str(fiscal_document.cae or "").strip()
-    ):
+    document = fiscal_document or internal_document
+    if not bool(get_document_rule(document, "generate_stock_movement", False)):
         return []
+    if fiscal_document:
+        if fiscal_document.status not in FISCAL_AUTHORIZED_STATUSES:
+            return []
+        if (
+            fiscal_document.issue_mode == FISCAL_ISSUE_MODE_ARCA_WSFE
+            and not str(fiscal_document.cae or "").strip()
+        ):
+            return []
 
     movement_type, direction_sign, mutates_stock = BEHAVIOR_STOCK_RULES.get(
-        sales_document_type.document_behavior,
+        get_document_rule(document, "document_behavior", sales_document_type.document_behavior),
         (None, 0, False),
     )
     if not movement_type:
         return []
 
-    warehouse = sales_document_type.default_warehouse
-    rows = _collect_fiscal_document_quantities(
-        fiscal_document,
-        group_equal_products=bool(sales_document_type.group_equal_products),
+    warehouse = resolve_sales_document_warehouse(
+        order=order,
+        sales_document_type=sales_document_type,
+        document=document,
     )
-    if not rows and not fiscal_document.items.exists():
+    group_equal = bool(get_document_rule(document, "group_equal_products", True))
+    rows = []
+    if fiscal_document:
+        rows = _collect_fiscal_document_quantities(
+            fiscal_document,
+            group_equal_products=group_equal,
+        )
+    if not rows and (not fiscal_document or not fiscal_document.items.exists()):
         rows = _collect_order_quantities(
             order,
-            group_equal_products=bool(sales_document_type.group_equal_products),
+            group_equal_products=group_equal,
         )
     movements = []
 
@@ -356,6 +530,13 @@ def apply_sales_document_type_to_internal_document(*, document, sales_document_t
     if document.sales_document_type_id != sales_document_type.id:
         document.sales_document_type = sales_document_type
         update_fields.append("sales_document_type")
+    if not document.sales_rules_snapshot:
+        document.sales_rules_snapshot = build_sales_document_rule_snapshot(sales_document_type)
+        document.sales_rules_version = int(sales_document_type.rules_version or 1)
+        update_fields.extend(["sales_rules_snapshot", "sales_rules_version"])
+        if sales_document_type.use_document_situation:
+            document.commercial_situation = DOCUMENT_SITUATION_PENDING
+            update_fields.append("commercial_situation")
     if update_fields:
         document.save(update_fields=update_fields + ["updated_at"])
     sync_sales_document_type_counter(sales_document_type=document.sales_document_type, number=document.number)
@@ -392,13 +573,26 @@ def apply_sales_document_type_to_fiscal_document(*, document, sales_document_typ
         return document
 
     update_fields = []
-    if document.sales_document_type_id != sales_document_type.id:
+    # The fiscal payload is frozen as soon as the document leaves draft.  Old
+    # rows are backfilled by the data migration, but callers may still pass a
+    # legacy/finalized object created outside the normal factory (imports,
+    # fixtures or old integrations).  In that case the service can apply the
+    # effective rules without trying to rewrite protected history.
+    can_freeze_rules = document.status == FISCAL_STATUS_DRAFT
+    if can_freeze_rules and document.sales_document_type_id != sales_document_type.id:
         document.sales_document_type = sales_document_type
         update_fields.append("sales_document_type")
+    if can_freeze_rules and not document.sales_rules_snapshot:
+        document.sales_rules_snapshot = build_sales_document_rule_snapshot(sales_document_type)
+        document.sales_rules_version = int(sales_document_type.rules_version or 1)
+        update_fields.extend(["sales_rules_snapshot", "sales_rules_version"])
+        if sales_document_type.use_document_situation:
+            document.commercial_situation = DOCUMENT_SITUATION_PENDING
+            update_fields.append("commercial_situation")
     if update_fields:
         document.save(update_fields=update_fields + ["updated_at"])
     if document.number:
-        sync_sales_document_type_counter(sales_document_type=document.sales_document_type, number=document.number)
+        sync_sales_document_type_counter(sales_document_type=sales_document_type, number=document.number)
 
     if document.order_id:
         ensure_stock_movements_for_order_document(

@@ -31,6 +31,7 @@ class ArcaEnvironment(str, Enum):
 class ArcaEndpointKind(str, Enum):
     WSAA = "wsaa"
     WSFE = "wsfe"
+    TAXPAYER_REGISTRY = "taxpayer_registry"
 
 
 @dataclass(frozen=True)
@@ -61,6 +62,17 @@ _ENDPOINTS: Mapping[ArcaEnvironment, Mapping[ArcaEndpointKind, ArcaEndpoint]] = 
             scheme="https",
             host="wswhomo.afip.gov.ar",
             path="/wsfev1/service.asmx",
+        ),
+        ArcaEndpointKind.TAXPAYER_REGISTRY: ArcaEndpoint(
+            kind=ArcaEndpointKind.TAXPAYER_REGISTRY,
+            environment=ArcaEnvironment.HOMOLOGATION,
+            url=(
+                "https://awshomo.arca.gob.ar/"
+                "sr-padron/webservices/personaServiceA5"
+            ),
+            scheme="https",
+            host="awshomo.arca.gob.ar",
+            path="/sr-padron/webservices/personaServiceA5",
         ),
     },
     # Production endpoints are deliberately present only so validation can

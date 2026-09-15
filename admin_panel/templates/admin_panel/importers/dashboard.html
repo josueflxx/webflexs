@@ -4,100 +4,1059 @@
 
 {% block extra_css %}
 <style>
-    .import-grid {
+    .import-center-page {
+        width: min(1480px, calc(100vw - 36px));
+        max-width: 100%;
+        margin-inline: auto;
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-        gap: 14px;
-        margin-bottom: 22px;
+        gap: 16px;
     }
 
-    .import-card {
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        border-radius: 12px;
-        padding: 14px;
-        background: rgba(255, 255, 255, 0.02);
+    .import-center-hero {
+        position: relative;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 24px;
+        overflow: hidden;
+        align-items: center;
+        padding: 23px 24px;
+        border: 1px solid rgba(255, 255, 255, 0.09);
+        border-radius: 18px;
+        background:
+            radial-gradient(circle at 88% 0%, rgba(255, 107, 53, 0.13), transparent 30%),
+            radial-gradient(circle at 4% 100%, rgba(34, 211, 238, 0.06), transparent 28%),
+            linear-gradient(180deg, rgba(18, 23, 32, 0.98), rgba(11, 15, 22, 0.98));
+        box-shadow: 0 18px 42px rgba(0, 0, 0, 0.2);
+    }
+
+    .import-center-eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 8px;
+        color: #ff9166;
+        font-size: 0.67rem;
+        font-weight: 800;
+        letter-spacing: 0.11em;
+        text-transform: uppercase;
+    }
+
+    .import-center-eyebrow::before {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: #ff6b35;
+        box-shadow: 0 0 0 5px rgba(255, 107, 53, 0.1);
+        content: "";
+    }
+
+    .import-center-hero h1 {
+        margin: 0;
+        color: #f8fafc;
+        font-size: clamp(1.55rem, 2.3vw, 2rem);
+        letter-spacing: -0.04em;
+    }
+
+    .import-center-hero p {
+        max-width: 78ch;
+        margin: 8px 0 0;
+        color: #99a4b3;
+        font-size: 0.84rem;
+        line-height: 1.55;
+    }
+
+    .import-center-context {
         display: flex;
+        gap: 8px;
+    }
+
+    .import-center-context-card {
+        min-width: 132px;
+        padding: 11px 13px;
+        border: 1px solid rgba(255, 255, 255, 0.085);
+        border-radius: 11px;
+        background: rgba(255, 255, 255, 0.028);
+    }
+
+    .import-center-context-card span {
+        display: block;
+        margin-bottom: 5px;
+        color: #7e8998;
+        font-size: 0.59rem;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+    }
+
+    .import-center-context-card strong {
+        display: block;
+        color: #f4f7fa;
+        font-size: 0.79rem;
+    }
+
+    .import-flow-section {
+        display: grid;
+        gap: 11px;
+    }
+
+    .import-section-heading {
+        display: flex;
+        justify-content: space-between;
+        gap: 18px;
+        align-items: end;
+        padding-inline: 2px;
+    }
+
+    .import-section-heading h2 {
+        margin: 0;
+        color: #f5f7fa;
+        font-size: 1rem;
+        letter-spacing: -0.02em;
+    }
+
+    .import-section-heading p {
+        margin: 4px 0 0;
+        color: #7f8997;
+        font-size: 0.7rem;
+        line-height: 1.4;
+    }
+
+    .import-section-note {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        color: #86909d;
+        font-size: 0.66rem;
+        font-weight: 700;
+    }
+
+    .import-section-note::before {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: #22c55e;
+        box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.08);
+        content: "";
+    }
+
+    .import-flow-grid {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 11px;
+    }
+
+    .import-flow-card {
+        position: relative;
+        display: flex;
+        min-width: 0;
+        min-height: 228px;
+        overflow: hidden;
         flex-direction: column;
+        padding: 17px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 14px;
+        color: #f8fafc;
+        text-decoration: none;
+        background:
+            radial-gradient(circle at 100% 0%, rgba(255, 107, 53, 0.085), transparent 38%),
+            linear-gradient(180deg, rgba(18, 23, 32, 0.96), rgba(12, 16, 23, 0.96));
+        box-shadow: 0 12px 28px rgba(0, 0, 0, 0.12);
+        transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .import-flow-card::before {
+        position: absolute;
+        inset: 0 auto 0 0;
+        width: 3px;
+        opacity: 0;
+        background: linear-gradient(180deg, #ff9369, #ff4d00);
+        content: "";
+        transition: opacity 0.2s ease;
+    }
+
+    .import-flow-card:hover,
+    .import-flow-card:focus-visible {
+        outline: none;
+        transform: translateY(-3px);
+        border-color: rgba(255, 107, 53, 0.35);
+        box-shadow: 0 18px 38px rgba(0, 0, 0, 0.22);
+    }
+
+    .import-flow-card:hover::before,
+    .import-flow-card:focus-visible::before {
+        opacity: 1;
+    }
+
+    .import-flow-card-head {
+        display: flex;
+        justify-content: space-between;
         gap: 10px;
+        align-items: flex-start;
     }
 
-    .import-card h3 {
+    .import-flow-icon {
+        display: grid;
+        width: 43px;
+        height: 43px;
+        place-items: center;
+        border: 1px solid rgba(255, 107, 53, 0.22);
+        border-radius: 11px;
+        color: #ff9065;
+        background: rgba(255, 107, 53, 0.085);
+    }
+
+    .import-flow-icon svg {
+        width: 21px;
+        height: 21px;
+    }
+
+    .import-flow-index {
+        color: rgba(255, 255, 255, 0.18);
+        font-size: 1.4rem;
+        font-weight: 900;
+        letter-spacing: -0.08em;
+        line-height: 1;
+    }
+
+    .import-flow-kicker {
+        display: block;
+        margin: 16px 0 6px;
+        color: #ff8d61;
+        font-size: 0.59rem;
+        font-weight: 800;
+        letter-spacing: 0.09em;
+        text-transform: uppercase;
+    }
+
+    .import-flow-card h3 {
         margin: 0;
+        color: #f7f9fb;
+        font-size: 0.91rem;
     }
 
-    .import-card p {
+    .import-flow-card p {
+        margin: 7px 0 16px;
+        color: #909aa8;
+        font-size: 0.69rem;
+        line-height: 1.5;
+    }
+
+    .import-flow-cta {
+        display: flex;
+        justify-content: space-between;
+        gap: 10px;
+        align-items: center;
+        margin-top: auto;
+        padding-top: 12px;
+        border-top: 1px solid rgba(255, 255, 255, 0.07);
+        color: #ff8d61;
+        font-size: 0.65rem;
+        font-weight: 800;
+        letter-spacing: 0.035em;
+        text-transform: uppercase;
+    }
+
+    .import-flow-cta svg {
+        width: 14px;
+        height: 14px;
+        transition: transform 0.2s ease;
+    }
+
+    .import-flow-card:hover .import-flow-cta svg {
+        transform: translateX(3px);
+    }
+
+    .import-flow-card.is-clients .import-flow-icon {
+        color: #4dd8ed;
+        border-color: rgba(34, 211, 238, 0.22);
+        background: rgba(34, 211, 238, 0.075);
+    }
+
+    .import-flow-card.is-categories .import-flow-icon {
+        color: #f6c453;
+        border-color: rgba(245, 158, 11, 0.24);
+        background: rgba(245, 158, 11, 0.075);
+    }
+
+    .import-flow-card.is-clamps .import-flow-icon {
+        color: #c7a7ff;
+        border-color: rgba(168, 85, 247, 0.25);
+        background: rgba(168, 85, 247, 0.075);
+    }
+
+    .import-flow-card.is-suppliers .import-flow-icon {
+        color: #75dda4;
+        border-color: rgba(34, 197, 94, 0.23);
+        background: rgba(34, 197, 94, 0.07);
+    }
+
+    .execution-workspace {
+        overflow: hidden;
+        border: 1px solid rgba(255, 255, 255, 0.09);
+        border-radius: 17px;
+        background: linear-gradient(180deg, rgba(17, 22, 31, 0.98), rgba(10, 14, 21, 0.98));
+        box-shadow: 0 16px 36px rgba(0, 0, 0, 0.17);
+    }
+
+    .execution-workspace-head {
+        display: flex;
+        justify-content: space-between;
+        gap: 18px;
+        align-items: center;
+        padding: 18px 20px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.075);
+    }
+
+    .execution-workspace-title {
+        display: grid;
+        grid-template-columns: 38px minmax(0, 1fr);
+        gap: 11px;
+        align-items: center;
+    }
+
+    .execution-workspace-icon {
+        display: grid;
+        width: 38px;
+        height: 38px;
+        place-items: center;
+        border: 1px solid rgba(255, 107, 53, 0.2);
+        border-radius: 10px;
+        color: #ff8d61;
+        background: rgba(255, 107, 53, 0.075);
+    }
+
+    .execution-workspace-icon svg {
+        width: 18px;
+        height: 18px;
+    }
+
+    .execution-workspace-head h2 {
         margin: 0;
-        color: var(--color-gray-light);
-        font-size: 0.88rem;
-        min-height: 52px;
+        color: #f5f7fa;
+        font-size: 1rem;
     }
 
-    .execution-shell {
-        margin-top: 14px;
+    .execution-workspace-head p {
+        margin: 4px 0 0;
+        color: #828c99;
+        font-size: 0.68rem;
     }
 
-    .execution-shell h2 {
-        margin-bottom: 10px;
+    .execution-total {
+        display: inline-flex;
+        min-width: 105px;
+        justify-content: center;
+        padding: 8px 11px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 9px;
+        color: #c8ced7;
+        background: rgba(255, 255, 255, 0.025);
+        font-size: 0.67rem;
+        font-weight: 800;
+    }
+
+    .execution-toolbar {
+        display: grid;
+        grid-template-columns: minmax(240px, 0.7fr) minmax(0, 1.3fr);
+        gap: 12px;
+        padding: 12px 16px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+        background: rgba(4, 8, 14, 0.28);
+    }
+
+    .execution-search {
+        position: relative;
+        min-width: 0;
+    }
+
+    .execution-search svg {
+        position: absolute;
+        top: 50%;
+        left: 12px;
+        width: 16px;
+        height: 16px;
+        color: #74808f;
+        pointer-events: none;
+        transform: translateY(-50%);
+    }
+
+    .execution-search input {
+        width: 100%;
+        min-height: 38px;
+        box-sizing: border-box;
+        padding: 8px 12px 8px 36px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 9px;
+        outline: none;
+        color: #f0f3f6;
+        background: rgba(255, 255, 255, 0.035);
+        font-size: 0.72rem;
+    }
+
+    .execution-search input:focus {
+        border-color: rgba(255, 107, 53, 0.48);
+        box-shadow: 0 0 0 3px rgba(255, 107, 53, 0.09);
+    }
+
+    .execution-search input::placeholder {
+        color: #6f7987;
+    }
+
+    .execution-filters {
+        display: flex;
+        min-width: 0;
+        justify-content: flex-end;
+        gap: 6px;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+
+    .execution-filter {
+        min-height: 34px;
+        padding: 7px 11px;
+        border: 1px solid rgba(255, 255, 255, 0.085);
+        border-radius: 8px;
+        color: #8f99a7;
+        background: rgba(255, 255, 255, 0.025);
+        cursor: pointer;
+        font: inherit;
+        font-size: 0.65rem;
+        font-weight: 750;
+        transition: border-color 0.18s ease, color 0.18s ease, background 0.18s ease;
+    }
+
+    .execution-filter:hover,
+    .execution-filter:focus-visible {
+        outline: none;
+        color: #f2f5f8;
+        border-color: rgba(255, 107, 53, 0.28);
+    }
+
+    .execution-filter.is-active {
+        color: #fff;
+        border-color: rgba(255, 107, 53, 0.42);
+        background: rgba(255, 107, 53, 0.13);
+        box-shadow: inset 0 -2px 0 #ff6b35;
     }
 
     .execution-table-wrap {
         overflow-x: auto;
+        scrollbar-width: thin;
     }
 
-    .execution-table td,
-    .execution-table th {
-        vertical-align: middle;
+    .execution-table {
+        width: 100%;
+        margin: 0;
+        border: 0;
+        border-collapse: collapse;
+    }
+
+    .execution-table thead th {
+        padding: 10px 12px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        color: #747f8d;
+        background: rgba(255, 255, 255, 0.025);
+        font-size: 0.59rem;
+        font-weight: 800;
+        letter-spacing: 0.075em;
+        text-align: left;
+        text-transform: uppercase;
         white-space: nowrap;
     }
 
-    .execution-result {
-        font-size: 0.83rem;
-        color: var(--color-gray-light);
+    .execution-row {
+        transition: background 0.16s ease;
+    }
+
+    .execution-row:hover {
+        background: rgba(255, 255, 255, 0.018);
+    }
+
+    .execution-row[hidden] {
+        display: none;
+    }
+
+    .execution-table td {
+        padding: 12px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.065);
+        color: #c9cfd8;
+        font-size: 0.7rem;
+        vertical-align: middle;
+    }
+
+    .execution-table tbody tr:last-child td {
+        border-bottom: 0;
+    }
+
+    .execution-date strong,
+    .execution-file strong {
+        display: block;
+        overflow: hidden;
+        color: #e7ebf0;
+        font-size: 0.71rem;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .execution-date small,
+    .execution-file small {
+        display: block;
+        margin-top: 3px;
+        color: #737e8b;
+        font-size: 0.61rem;
+    }
+
+    .execution-file {
+        max-width: 250px;
+    }
+
+    .execution-type {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-weight: 750;
+    }
+
+    .execution-type::before {
+        width: 7px;
+        height: 7px;
+        border-radius: 2px;
+        background: #ff6b35;
+        content: "";
+    }
+
+    .execution-mode,
+    .execution-status {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        min-height: 24px;
+        padding: 4px 8px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 999px;
+        font-size: 0.61rem;
+        font-weight: 800;
+        white-space: nowrap;
+    }
+
+    .execution-mode.is-real {
+        color: #55d9ed;
+        border-color: rgba(34, 211, 238, 0.24);
+        background: rgba(34, 211, 238, 0.075);
+    }
+
+    .execution-mode.is-dry {
+        color: #a9b1bc;
+        background: rgba(255, 255, 255, 0.04);
+    }
+
+    .execution-status::before {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        content: "";
+    }
+
+    .execution-status.is-completed {
+        color: #62dc91;
+        border-color: rgba(34, 197, 94, 0.22);
+        background: rgba(34, 197, 94, 0.075);
+    }
+
+    .execution-status.is-completed::before {
+        background: #22c55e;
+    }
+
+    .execution-status.is-failed {
+        color: #ff7185;
+        border-color: rgba(244, 63, 94, 0.24);
+        background: rgba(244, 63, 94, 0.075);
+    }
+
+    .execution-status.is-failed::before {
+        background: #f43f5e;
+    }
+
+    .execution-status.is-rolled_back {
+        color: #f5ca55;
+        border-color: rgba(234, 179, 8, 0.25);
+        background: rgba(234, 179, 8, 0.075);
+    }
+
+    .execution-status.is-rolled_back::before {
+        background: #eab308;
+    }
+
+    .execution-status.is-processing {
+        color: #54d4e9;
+        border-color: rgba(34, 211, 238, 0.22);
+        background: rgba(34, 211, 238, 0.075);
+    }
+
+    .execution-status.is-processing::before {
+        background: #22d3ee;
+        box-shadow: 0 0 0 4px rgba(34, 211, 238, 0.08);
+    }
+
+    .execution-metrics {
+        display: grid;
+        min-width: 184px;
+        grid-template-columns: repeat(3, minmax(50px, 1fr));
+        gap: 5px;
+    }
+
+    .execution-metric {
+        padding: 6px 7px;
+        border: 1px solid rgba(255, 255, 255, 0.065);
+        border-radius: 7px;
+        background: rgba(255, 255, 255, 0.018);
+    }
+
+    .execution-metric span {
+        display: block;
+        color: #6f7a88;
+        font-size: 0.52rem;
+        font-weight: 750;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+    }
+
+    .execution-metric strong {
+        display: block;
+        margin-top: 3px;
+        color: #dce1e7;
+        font-size: 0.67rem;
+    }
+
+    .execution-metric.is-errors strong {
+        color: #ff7185;
+    }
+
+    .execution-batches {
+        display: block;
+        margin-top: 6px;
+        color: #717c89;
+        font-size: 0.57rem;
+    }
+
+    .execution-action {
+        min-width: 104px;
+    }
+
+    .execution-rollback-btn {
+        display: inline-flex;
+        min-height: 32px;
+        align-items: center;
+        gap: 6px;
+        padding: 7px 10px;
+        border: 1px solid rgba(244, 63, 94, 0.28);
+        border-radius: 8px;
+        color: #ff8494;
+        background: rgba(244, 63, 94, 0.07);
+        cursor: pointer;
+        font: inherit;
+        font-size: 0.6rem;
+        font-weight: 800;
+        letter-spacing: 0.035em;
+        text-transform: uppercase;
+    }
+
+    .execution-rollback-btn:hover,
+    .execution-rollback-btn:focus-visible {
+        outline: none;
+        border-color: rgba(244, 63, 94, 0.48);
+        background: rgba(244, 63, 94, 0.12);
+    }
+
+    .execution-rollback-btn svg {
+        width: 13px;
+        height: 13px;
+    }
+
+    .execution-action-muted {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        color: #737e8b;
+        font-size: 0.62rem;
+        font-weight: 700;
+    }
+
+    .execution-action-muted.is-applied {
+        color: #e5bd4f;
+    }
+
+    .execution-filter-empty,
+    .execution-source-empty {
+        padding: 34px 20px;
+        color: #7f8a98;
+        font-size: 0.72rem;
+        text-align: center;
+    }
+
+    .execution-filter-empty[hidden] {
+        display: none;
+    }
+
+    html[data-theme="light"] .import-center-hero,
+    html[data-theme="light"] .import-flow-card,
+    html[data-theme="light"] .execution-workspace {
+        border-color: rgba(15, 23, 42, 0.09);
+        background:
+            radial-gradient(circle at 90% 0%, rgba(255, 107, 53, 0.06), transparent 28%),
+            #ffffff;
+        box-shadow: 0 14px 34px rgba(15, 23, 42, 0.06);
+    }
+
+    html[data-theme="light"] .import-center-hero h1,
+    html[data-theme="light"] .import-center-context-card strong,
+    html[data-theme="light"] .import-section-heading h2,
+    html[data-theme="light"] .import-flow-card,
+    html[data-theme="light"] .import-flow-card h3,
+    html[data-theme="light"] .execution-workspace-head h2,
+    html[data-theme="light"] .execution-date strong,
+    html[data-theme="light"] .execution-file strong {
+        color: #0f172a;
+    }
+
+    html[data-theme="light"] .import-center-hero p,
+    html[data-theme="light"] .import-flow-card p,
+    html[data-theme="light"] .execution-workspace-head p {
+        color: #64748b;
+    }
+
+    html[data-theme="light"] .import-center-context-card,
+    html[data-theme="light"] .execution-filter,
+    html[data-theme="light"] .execution-metric {
+        border-color: rgba(15, 23, 42, 0.09);
+        background: rgba(248, 250, 252, 0.9);
+    }
+
+    html[data-theme="light"] .execution-toolbar,
+    html[data-theme="light"] .execution-workspace-head,
+    html[data-theme="light"] .execution-table thead th,
+    html[data-theme="light"] .execution-table td {
+        border-color: rgba(15, 23, 42, 0.08);
+    }
+
+    html[data-theme="light"] .execution-search input {
+        color: #0f172a;
+        border-color: #cbd5e1;
+        background: #ffffff;
+    }
+
+    html[data-theme="light"] .execution-table thead th {
+        color: #64748b;
+        background: #f8fafc;
+    }
+
+    html[data-theme="light"] .execution-table td,
+    html[data-theme="light"] .execution-metric strong {
+        color: #334155;
+    }
+
+    @media (max-width: 1220px) {
+        .import-flow-grid {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+
+        .import-center-hero {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    @media (max-width: 860px) {
+        .import-center-page {
+            width: min(100% - 20px, 1480px);
+        }
+
+        .import-flow-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .import-flow-card {
+            min-height: 210px;
+        }
+
+        .execution-toolbar {
+            grid-template-columns: 1fr;
+        }
+
+        .execution-filters {
+            justify-content: flex-start;
+            flex-wrap: nowrap;
+            overflow-x: auto;
+            padding-bottom: 2px;
+        }
+
+        .execution-filter {
+            flex: 0 0 auto;
+        }
+
+        .execution-table-wrap {
+            overflow: visible;
+        }
+
+        .execution-table,
+        .execution-table tbody {
+            display: block;
+        }
+
+        .execution-table thead {
+            display: none;
+        }
+
+        .execution-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0;
+            margin: 12px;
+            overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 12px;
+        }
+
+        .execution-table td {
+            display: block;
+            min-width: 0;
+            padding: 11px 12px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+        }
+
+        .execution-table td::before {
+            display: block;
+            margin-bottom: 6px;
+            color: #687382;
+            content: attr(data-label);
+            font-size: 0.53rem;
+            font-weight: 800;
+            letter-spacing: 0.07em;
+            text-transform: uppercase;
+        }
+
+        .execution-table td[data-label="Archivo"],
+        .execution-table td[data-label="Resultado"] {
+            grid-column: 1 / -1;
+        }
+
+        .execution-file {
+            max-width: none;
+        }
+
+        .execution-metrics {
+            min-width: 0;
+        }
+    }
+
+    @media (max-width: 560px) {
+        .import-center-hero {
+            padding: 18px;
+        }
+
+        .import-center-context {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+        }
+
+        .import-center-context-card {
+            min-width: 0;
+        }
+
+        .execution-workspace-head {
+            align-items: flex-start;
+        }
+
+        .execution-total {
+            min-width: auto;
+        }
+
+        .execution-row {
+            grid-template-columns: 1fr;
+        }
+
+        .execution-table td[data-label] {
+            grid-column: 1;
+        }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .import-flow-card,
+        .import-flow-card::before,
+        .import-flow-cta svg {
+            transition: none;
+        }
     }
 </style>
 {% endblock %}
 
 {% block content %}
-<div style="max-width: 1200px; margin: 0 auto;">
-    <h2 class="mb-4">Centro de importacion</h2>
-
-    <div class="import-grid">
-        <div class="import-card">
-            <h3>Productos</h3>
-            <p>Carga y actualiza productos, precios, stock y categorias.</p>
-            <a href="{% url 'admin_import_process' 'products' %}" class="btn btn-primary">Importar productos</a>
+<div class="import-center-page">
+    <section class="import-center-hero" aria-labelledby="import-center-title">
+        <div>
+            <span class="import-center-eyebrow">Operaciones de datos</span>
+            <h1 id="import-center-title">Centro de importación</h1>
+            <p>Cargá información por módulo, revisá los resultados y controlá cada ejecución antes de aplicar cambios sobre la empresa activa.</p>
         </div>
-
-        <div class="import-card">
-            <h3>Clientes</h3>
-            <p>Importacion masiva de usuarios y perfiles de cliente.</p>
-            <a href="{% url 'admin_import_process' 'clients' %}" class="btn btn-info">Importar clientes</a>
+        <div class="import-center-context" aria-label="Contexto del importador">
+            <div class="import-center-context-card">
+                <span>Empresa</span>
+                <strong>{% if active_company %}{{ active_company.name }}{% else %}Sin seleccionar{% endif %}</strong>
+            </div>
+            <div class="import-center-context-card">
+                <span>Flujos disponibles</span>
+                <strong>5 importadores</strong>
+            </div>
         </div>
+    </section>
 
-        <div class="import-card">
-            <h3>Categorias</h3>
-            <p>Estructura de categorias y subcategorias del catalogo.</p>
-            <a href="{% url 'admin_import_process' 'categories' %}" class="btn btn-warning">Importar categorias</a>
+    <section class="import-flow-section" aria-labelledby="import-flows-title">
+        <header class="import-section-heading">
+            <div>
+                <h2 id="import-flows-title">Elegí qué información querés procesar</h2>
+                <p>Cada flujo utiliza validaciones específicas para el tipo de archivo seleccionado.</p>
+            </div>
+            <span class="import-section-note">Empresa activa requerida</span>
+        </header>
+
+        <div class="import-flow-grid">
+            <a href="{% url 'admin_import_process' 'products' %}" class="import-flow-card is-products">
+                <div class="import-flow-card-head">
+                    <span class="import-flow-icon" aria-hidden="true">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+                            <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+                            <line x1="12" y1="22.08" x2="12" y2="12"></line>
+                        </svg>
+                    </span>
+                    <span class="import-flow-index">01</span>
+                </div>
+                <span class="import-flow-kicker">Catálogo y stock</span>
+                <h3>Productos</h3>
+                <p>Cargá y actualizá productos, precios, existencias y categorías asociadas.</p>
+                <span class="import-flow-cta">
+                    Importar productos
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline>
+                    </svg>
+                </span>
+            </a>
+
+            <a href="{% url 'admin_import_process' 'clients' %}" class="import-flow-card is-clients">
+                <div class="import-flow-card-head">
+                    <span class="import-flow-icon" aria-hidden="true">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                        </svg>
+                    </span>
+                    <span class="import-flow-index">02</span>
+                </div>
+                <span class="import-flow-kicker">Cartera comercial</span>
+                <h3>Clientes</h3>
+                <p>Incorporá usuarios, perfiles y datos comerciales mediante una carga masiva.</p>
+                <span class="import-flow-cta">
+                    Importar clientes
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline>
+                    </svg>
+                </span>
+            </a>
+
+            <a href="{% url 'admin_import_process' 'categories' %}" class="import-flow-card is-categories">
+                <div class="import-flow-card-head">
+                    <span class="import-flow-icon" aria-hidden="true">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M3 3h7v7H3z"></path><path d="M14 3h7v7h-7z"></path><path d="M14 14h7v7h-7z"></path><path d="M3 14h7v7H3z"></path>
+                        </svg>
+                    </span>
+                    <span class="import-flow-index">03</span>
+                </div>
+                <span class="import-flow-kicker">Estructura del catálogo</span>
+                <h3>Categorías</h3>
+                <p>Creá o actualizá categorías, subcategorías y relaciones jerárquicas.</p>
+                <span class="import-flow-cta">
+                    Importar categorías
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline>
+                    </svg>
+                </span>
+            </a>
+
+            <a href="{% url 'admin_import_process' 'abrazaderas' %}" class="import-flow-card is-clamps">
+                <div class="import-flow-card-head">
+                    <span class="import-flow-icon" aria-hidden="true">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M6 19V9a6 6 0 0 1 12 0v10"></path><path d="M3 19h18"></path><path d="M6 15h12"></path>
+                        </svg>
+                    </span>
+                    <span class="import-flow-index">04</span>
+                </div>
+                <span class="import-flow-kicker">Carga especializada</span>
+                <h3>Abrazaderas</h3>
+                <p>Procesá medidas y códigos técnicos con el importador especializado.</p>
+                <span class="import-flow-cta">
+                    Importar abrazaderas
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline>
+                    </svg>
+                </span>
+            </a>
+
+            <a href="{% url 'admin_supplier_price_list_batches' %}" class="import-flow-card is-suppliers">
+                <div class="import-flow-card-head">
+                    <span class="import-flow-icon" aria-hidden="true">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M3 3v18h18"></path><path d="M18 17V9"></path><path d="M13 17V5"></path><path d="M8 17v-3"></path>
+                        </svg>
+                    </span>
+                    <span class="import-flow-index">05</span>
+                </div>
+                <span class="import-flow-kicker">Costos de compra</span>
+                <h3>Listas de proveedor</h3>
+                <p>Compará archivos XLSX o CSV y aplicá solamente las filas confirmadas.</p>
+                <span class="import-flow-cta">
+                    Gestionar listas
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline>
+                    </svg>
+                </span>
+            </a>
         </div>
+    </section>
 
-        <div class="import-card">
-            <h3>Abrazaderas</h3>
-            <p>Importador especializado para parseo tecnico de abrazaderas.</p>
-            <a href="{% url 'admin_import_process' 'abrazaderas' %}" class="btn" style="background: #5d3fd3; color: #fff;">Importar abrazaderas</a>
+    <section class="execution-workspace" aria-labelledby="execution-history-title">
+        <header class="execution-workspace-head">
+            <div class="execution-workspace-title">
+                <span class="execution-workspace-icon" aria-hidden="true">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="3 6 5 6 21 6"></polyline><path d="M3 12h18"></path><path d="M3 18h18"></path>
+                    </svg>
+                </span>
+                <div>
+                    <h2 id="execution-history-title">Historial de ejecuciones</h2>
+                    <p>Revisá archivos procesados, resultados y operaciones disponibles.</p>
+                </div>
+            </div>
+            <span class="execution-total"><span id="executionVisibleCount">{{ executions|length }}</span>&nbsp; visibles</span>
+        </header>
+
+        <div class="execution-toolbar">
+            <label class="execution-search" for="importHistorySearch">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                </svg>
+                <input id="importHistorySearch" type="text" placeholder="Buscar por archivo o tipo de importación..." autocomplete="off">
+            </label>
+            <div class="execution-filters" aria-label="Filtrar ejecuciones por estado">
+                <button type="button" class="execution-filter is-active" data-execution-filter="all" aria-pressed="true">Todas</button>
+                <button type="button" class="execution-filter" data-execution-filter="failed" aria-pressed="false">Fallidas</button>
+                <button type="button" class="execution-filter" data-execution-filter="completed" aria-pressed="false">Completadas</button>
+                <button type="button" class="execution-filter" data-execution-filter="rolled_back" aria-pressed="false">Revertidas</button>
+                <button type="button" class="execution-filter" data-execution-filter="processing" aria-pressed="false">En proceso</button>
+            </div>
         </div>
-
-        <div class="import-card">
-            <h3>Listas de proveedor</h3>
-            <p>Compara costos XLSX/CSV, revisa coincidencias y aplica solo filas confirmadas.</p>
-            <a href="{% url 'admin_supplier_price_list_batches' %}" class="btn btn-success">Gestionar listas</a>
-        </div>
-    </div>
-
-    <div class="execution-shell admin-table-container">
-        <h2>Historial de ejecuciones</h2>
 
         <div class="execution-table-wrap">
-            <table class="admin-table execution-table">
+            <table class="execution-table">
                 <thead>
                     <tr>
                         <th>Fecha</th>
@@ -109,61 +1068,164 @@
                         <th>Acciones</th>
                     </tr>
                 </thead>
-                <tbody>
+                <tbody id="executionRows">
                     {% for execution in executions %}
-                    <tr>
-                        <td>{{ execution.created_at|date:'d/m/Y H:i' }}</td>
-                        <td>{{ execution.import_type }}</td>
-                        <td>{{ execution.file_name|default:'-' }}</td>
-                        <td>
-                            {% if execution.dry_run %}
-                            <span class="badge badge-secondary">Dry run</span>
-                            {% else %}
-                            <span class="badge badge-info">Real</span>
-                            {% endif %}
-                        </td>
-                        <td>
-                            {% if execution.status == 'completed' %}
-                            <span class="badge badge-success">Completado</span>
-                            {% elif execution.status == 'failed' %}
-                            <span class="badge badge-danger">Fallido</span>
-                            {% elif execution.status == 'rolled_back' %}
-                            <span class="badge badge-warning">Rollback</span>
-                            {% else %}
-                            <span class="badge badge-info">Procesando</span>
-                            {% endif %}
-                        </td>
-                        <td>
-                            <div class="execution-result">
-                                Creados: {{ execution.created_count }}<br>
-                                Actualizados: {{ execution.updated_count }}<br>
-                                Errores: {{ execution.error_count }}
-                                {% if execution.result_summary.batch_meta %}
-                                <br>Lotes: {{ execution.result_summary.batch_meta.total_batches }} ({{ execution.result_summary.batch_meta.batch_size }} c/u)
-                                {% endif %}
+                    <tr
+                        class="execution-row"
+                        data-execution-status="{{ execution.status }}"
+                        data-execution-search="{{ execution.import_type }} {{ execution.file_name|default:'' }} {{ execution.get_status_display }}"
+                    >
+                        <td data-label="Fecha">
+                            <div class="execution-date">
+                                <strong>{{ execution.created_at|date:'d/m/Y' }}</strong>
+                                <small>{{ execution.created_at|date:'H:i' }} hs</small>
                             </div>
                         </td>
-                        <td>
+                        <td data-label="Tipo">
+                            <span class="execution-type">
+                                {% if execution.import_type == 'products' %}Productos
+                                {% elif execution.import_type == 'clients' %}Clientes
+                                {% elif execution.import_type == 'categories' %}Categorías
+                                {% elif execution.import_type == 'abrazaderas' %}Abrazaderas
+                                {% elif execution.import_type == 'movigom_photos' %}Fotos Movigom
+                                {% elif execution.import_type == 'supplier_price_list' %}Lista de proveedor
+                                {% else %}{{ execution.import_type }}
+                                {% endif %}
+                            </span>
+                        </td>
+                        <td data-label="Archivo">
+                            <div class="execution-file">
+                                <strong title="{{ execution.file_name|default:'Sin archivo' }}">{{ execution.file_name|default:'Sin archivo' }}</strong>
+                                <small>Ejecución #{{ execution.pk }}{% if execution.user %} · {{ execution.user.username }}{% endif %}</small>
+                            </div>
+                        </td>
+                        <td data-label="Modo">
+                            {% if execution.dry_run %}
+                            <span class="execution-mode is-dry">Simulación</span>
+                            {% else %}
+                            <span class="execution-mode is-real">Aplicación real</span>
+                            {% endif %}
+                        </td>
+                        <td data-label="Estado">
+                            {% if execution.status == 'completed' %}
+                            <span class="execution-status is-completed">Completado</span>
+                            {% elif execution.status == 'failed' %}
+                            <span class="execution-status is-failed">Fallido</span>
+                            {% elif execution.status == 'rolled_back' %}
+                            <span class="execution-status is-rolled_back">Revertido</span>
+                            {% else %}
+                            <span class="execution-status is-processing">Procesando</span>
+                            {% endif %}
+                        </td>
+                        <td data-label="Resultado">
+                            <div class="execution-metrics">
+                                <div class="execution-metric">
+                                    <span>Creados</span>
+                                    <strong>{{ execution.created_count }}</strong>
+                                </div>
+                                <div class="execution-metric">
+                                    <span>Actualizados</span>
+                                    <strong>{{ execution.updated_count }}</strong>
+                                </div>
+                                <div class="execution-metric is-errors">
+                                    <span>Errores</span>
+                                    <strong>{{ execution.error_count }}</strong>
+                                </div>
+                            </div>
+                            {% if execution.result_summary.batch_meta %}
+                            <small class="execution-batches">
+                                {{ execution.result_summary.batch_meta.total_batches }} lotes de {{ execution.result_summary.batch_meta.batch_size }}
+                            </small>
+                            {% endif %}
+                        </td>
+                        <td data-label="Acciones" class="execution-action">
                             {% if not execution.dry_run and execution.status == 'completed' and execution.created_refs %}
-                            <form method="post" action="{% url 'admin_import_rollback' execution.pk %}" onsubmit="return confirm('Aplicar rollback a esta ejecucion?');">
+                            <form method="post" action="{% url 'admin_import_rollback' execution.pk %}" onsubmit="return confirm('¿Aplicar rollback a esta ejecución?');">
                                 {% csrf_token %}
-                                <button type="submit" class="btn btn-danger-outline btn-sm">Rollback</button>
+                                <button type="submit" class="execution-rollback-btn">
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                        <polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 .49-9.39L1 10"></path>
+                                    </svg>
+                                    Revertir
+                                </button>
                             </form>
                             {% elif execution.status == 'rolled_back' %}
-                            <span class="text-muted">Aplicado</span>
+                            <span class="execution-action-muted is-applied">Rollback aplicado</span>
                             {% else %}
-                            <span class="text-muted">-</span>
+                            <span class="execution-action-muted">Sin acciones</span>
                             {% endif %}
                         </td>
                     </tr>
                     {% empty %}
-                    <tr>
-                        <td colspan="7" class="text-center text-muted">No hay ejecuciones registradas.</td>
+                    <tr class="execution-source-empty">
+                        <td colspan="7">Todavía no hay ejecuciones registradas para esta empresa.</td>
                     </tr>
                     {% endfor %}
                 </tbody>
             </table>
+            <div id="executionFilterEmpty" class="execution-filter-empty" hidden>
+                No se encontraron ejecuciones para los filtros seleccionados.
+            </div>
         </div>
-    </div>
+    </section>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    (() => {
+        const rows = Array.from(document.querySelectorAll('.execution-row'));
+        const searchInput = document.getElementById('importHistorySearch');
+        const filterButtons = Array.from(document.querySelectorAll('[data-execution-filter]'));
+        const visibleCount = document.getElementById('executionVisibleCount');
+        const emptyState = document.getElementById('executionFilterEmpty');
+        let selectedStatus = 'all';
+
+        const normalize = (value) => String(value || '')
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .toLocaleLowerCase()
+            .trim();
+
+        const applyFilters = () => {
+            const query = normalize(searchInput ? searchInput.value : '');
+            let shown = 0;
+
+            rows.forEach((row) => {
+                const matchesStatus = selectedStatus === 'all' || row.dataset.executionStatus === selectedStatus;
+                const matchesQuery = !query || normalize(row.dataset.executionSearch).includes(query);
+                const visible = matchesStatus && matchesQuery;
+                row.hidden = !visible;
+                if (visible) {
+                    shown += 1;
+                }
+            });
+
+            if (visibleCount) {
+                visibleCount.textContent = String(shown);
+            }
+            if (emptyState) {
+                emptyState.hidden = shown > 0 || rows.length === 0;
+            }
+        };
+
+        filterButtons.forEach((button) => {
+            button.addEventListener('click', () => {
+                selectedStatus = button.dataset.executionFilter || 'all';
+                filterButtons.forEach((item) => {
+                    const active = item === button;
+                    item.classList.toggle('is-active', active);
+                    item.setAttribute('aria-pressed', active ? 'true' : 'false');
+                });
+                applyFilters();
+            });
+        });
+
+        if (searchInput) {
+            searchInput.addEventListener('input', applyFilters);
+        }
+
+        applyFilters();
+    })();
+</script>
 {% endblock %}

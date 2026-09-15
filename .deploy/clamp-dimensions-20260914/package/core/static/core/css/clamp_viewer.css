@@ -1,0 +1,52 @@
+.clamp-view-controls {
+    display: flex;
+    gap: 8px;
+    margin: 14px 14px 0;
+}
+.clamp-view-controls[hidden], #clampDrawing[hidden], #clamp3dPanel[hidden],
+#clamp3dPanel [hidden] { display: none !important; }
+.clamp-view-button {
+    border: 1px solid #46505f;
+    background: #171d28;
+    color: #dce3ed;
+    border-radius: 8px;
+    padding: 10px 16px;
+    min-height: 44px;
+    font: inherit;
+    font-size: 0.85rem;
+    cursor: pointer;
+}
+.clamp-view-button[aria-pressed="true"] {
+    background: #ff6b35;
+    border-color: #ff6b35;
+    color: #17120f;
+    font-weight: 700;
+}
+.clamp-view-button:hover { border-color: #ffad8f; }
+.clamp-view-button:focus-visible { outline: 2px solid #ffd5c4; outline-offset: 3px; }
+.clamp-3d-panel {
+    margin: 14px;
+    border: 1px solid #293342;
+    border-radius: 8px;
+    overflow: hidden;
+    background: radial-gradient(ellipse at 50% 40%, #263345 0%, #101722 65%, #0a0d13 100%);
+}
+.clamp-3d-stage { height: 390px; position: relative; }
+.clamp-3d-stage model-viewer { width: 100%; height: 100%; --progress-bar-color: #ff6b35; }
+.clamp-3d-status {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    padding: 32px;
+    text-align: center;
+    color: #dce3ed;
+    pointer-events: none;
+}
+.clamp-3d-footer { padding: 0 16px 18px; text-align: center; color: #c7d0dd; }
+.clamp-3d-footer p { margin: 0 0 10px; font-size: 0.84rem; line-height: 1.5; }
+.clamp-3d-footer .clamp-3d-note { font-size: 0.76rem; color: #aab7c8; }
+@media (max-width: 480px) {
+    .clamp-3d-stage { height: 320px; }
+    .clamp-view-controls > button { flex: 1; }
+}

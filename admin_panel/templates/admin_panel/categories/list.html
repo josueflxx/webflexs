@@ -126,7 +126,7 @@
 
     .catalog-diagnostics {
         display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
+        grid-template-columns: repeat(5, minmax(0, 1fr));
         gap: 10px;
         margin: 12px 0 16px;
     }
@@ -563,6 +563,11 @@
             <strong>{{ catalog_diagnostics.active_products_only_hidden }}</strong>
             <small>Productos activos que no tienen ninguna categoria visible para clientes.</small>
         </div>
+        <a href="{% url 'admin_brand_category_integration' %}" class="catalog-diagnostic-card">
+            <span>Categorias y marcas</span>
+            <strong>{{ brand_integration_metrics.candidate_categories }}</strong>
+            <small>{{ brand_integration_metrics.mapped_categories }} vinculos confirmados y {{ brand_integration_metrics.affected_products }} productos alcanzados.</small>
+        </a>
     </div>
     {% endif %}
 
@@ -599,6 +604,7 @@
                     <th>Nombre</th>
                     <th>Subcategorias</th>
                     <th>Productos</th>
+                    <th>Marcas</th>
                     <th>Catalogo cliente</th>
                     <th>Estado</th>
                     <th>Acciones</th>
@@ -669,6 +675,23 @@
                         </div>
                     </td>
                     <td>
+                        {% if row.brand_candidate %}
+                        <div class="metric-chip-wrap">
+                            {% if row.brand_candidate.mapping %}
+                            <span class="badge badge-success">{{ row.brand_candidate.mapping.brand.name }}</span>
+                            <small class="text-muted">Vinculo confirmado</small>
+                            {% elif row.brand_candidate.has_conflict %}
+                            <span class="badge badge-warning">Revision manual</span>
+                            {% else %}
+                            <span class="badge badge-info">Sugerida: {{ row.brand_candidate.suggested_brand.name }}</span>
+                            {% endif %}
+                            <a href="{% url 'admin_brand_category_integration' %}?category={{ row.category.pk }}" class="btn btn-outline btn-inline">Revisar</a>
+                        </div>
+                        {% else %}
+                        <span class="text-muted">-</span>
+                        {% endif %}
+                    </td>
+                    <td>
                         <div class="category-public-meta">
                             <div class="category-public-badges">
                                 {% if row.category.visible_in_catalog and row.category.is_active %}
@@ -706,7 +729,7 @@
                 </tr>
                 {% empty %}
                 <tr>
-                    <td colspan="{% if user.is_superuser %}8{% else %}7{% endif %}" class="text-center text-muted">No hay categorias</td>
+                    <td colspan="{% if user.is_superuser %}9{% else %}8{% endif %}" class="text-center text-muted">No hay categorias</td>
                 </tr>
                 {% endfor %}
             </tbody>

@@ -41,6 +41,13 @@
         {% endif %}
 
         <section class="settings-section">
+            {% if form.identity_locked %}
+            <div class="alert alert-warning" id="doc-type-identity-lock-note" style="margin-bottom:16px;">
+                <strong>Identidad protegida.</strong>
+                Este tipo ya tiene comprobantes. Su letra, numeracion, punto de venta, comportamiento y modo fiscal
+                quedan bloqueados; los cambios operativos se aplican solo a movimientos nuevos.
+            </div>
+            {% endif %}
             <div class="doc-type-saas-grid">
                 <article class="doc-type-saas-card">
                     <h3 class="doc-type-saas-card-title">Datos basicos</h3>
@@ -161,6 +168,22 @@
                         {{ form.is_default }}
                         <span>Tipo predeterminado</span>
                     </label>
+                    {% if document_type %}
+                    <p class="doc-type-inline-help">Version de reglas: {{ document_type.rules_version }}</p>
+                    {% endif %}
+                </article>
+
+                <article class="doc-type-saas-card">
+                    <h3 class="doc-type-saas-card-title">Moneda</h3>
+                    <div class="form-group">
+                        <label for="{{ form.currency_code.id_for_label }}" class="form-label">Moneda del comprobante</label>
+                        {{ form.currency_code }}
+                    </div>
+                    <div class="form-group" id="doc-type-exchange-rate-group">
+                        <label for="{{ form.default_exchange_rate.id_for_label }}" class="form-label">Tipo de cambio predeterminado</label>
+                        {{ form.default_exchange_rate }}
+                    </div>
+                    <p class="doc-type-inline-help">El valor se congela al crear el comprobante.</p>
                 </article>
             </div>
         </section>
@@ -227,6 +250,9 @@ document.addEventListener('DOMContentLoaded', function () {
     const billingHint = document.getElementById('doc-type-billing-hint');
     const internalGroup = document.querySelector('.js-internal-doc-group');
     const fiscalGroup = document.querySelector('.js-fiscal-doc-group');
+    const currencyField = document.getElementById('{{ form.currency_code.id_for_label }}');
+    const exchangeRateField = document.getElementById('{{ form.default_exchange_rate.id_for_label }}');
+    const exchangeRateGroup = document.getElementById('doc-type-exchange-rate-group');
 
     if (!behaviorField || !billingModeField || !stockCheckbox || !accountCheckbox) {
         return;
@@ -272,10 +298,28 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
+    function syncCurrencyRules() {
+        if (!currencyField || !exchangeRateField || !exchangeRateGroup) {
+            return;
+        }
+        const isArs = currencyField.value === 'ARS';
+        if (isArs) {
+            exchangeRateField.value = '1.000000';
+            exchangeRateField.readOnly = true;
+        } else {
+            exchangeRateField.readOnly = false;
+        }
+        exchangeRateGroup.classList.toggle('is-muted', isArs);
+    }
+
     behaviorField.addEventListener('change', syncBehaviorRules);
     billingModeField.addEventListener('change', syncBillingRules);
+    if (currencyField) {
+        currencyField.addEventListener('change', syncCurrencyRules);
+    }
     syncBehaviorRules();
     syncBillingRules();
+    syncCurrencyRules();
 });
 </script>
 {% endblock %}

@@ -32,7 +32,10 @@ WAITING_FOR_USER_CODES = frozenset(
         "voucher_type_missing",
         "certificate_path_missing",
         "private_key_path_missing",
+        "certificate_subject_cn_missing",
+        "certificate_issuer_cn_missing",
         "credential_file_unavailable",
+        "openssl_unavailable",
         "cache_not_configured",
     }
 )
@@ -53,6 +56,9 @@ class ArcaHomologationDoctorResult:
     private_key_path_configured: bool
     certificate_present: bool
     private_key_present: bool
+    certificate_subject_expected: bool
+    certificate_issuer_expected: bool
+    credential_validated: bool
     wsass_authorization_confirmed: bool
     cuit_configured: bool
     point_of_sale_configured: bool
@@ -104,10 +110,18 @@ def _endpoints_allowlisted(
     return not endpoint_errors.intersection(gate.error_codes)
 
 
-def evaluate_homologation_doctor() -> ArcaHomologationDoctorResult:
+def evaluate_homologation_doctor(
+    *,
+    company=None,
+    point_of_sale=None,
+) -> ArcaHomologationDoctorResult:
     """Inspect local readiness without DNS, HTTP, WSAA, WSFE or WSDL I/O."""
 
-    gate = evaluate_homologation_readiness(check_credentials=True)
+    gate = evaluate_homologation_readiness(
+        company=company,
+        point_of_sale=point_of_sale,
+        check_credentials=True,
+    )
     reasons = gate.error_codes
     if gate.passed:
         status = "PASS"
@@ -143,6 +157,18 @@ def evaluate_homologation_doctor() -> ArcaHomologationDoctorResult:
             gate.wsass_authorization_confirmed,
             certificate_path_configured,
             private_key_path_configured,
+            bool(
+                str(
+                    getattr(settings, "ARCA_EXPECTED_CERT_SUBJECT_CN", "")
+                    or ""
+                ).strip()
+            ),
+            bool(
+                str(
+                    getattr(settings, "ARCA_EXPECTED_CERT_ISSUER_CN", "")
+                    or ""
+                ).strip()
+            ),
             cache_enabled,
             cache.valid,
         )
@@ -172,6 +198,17 @@ def evaluate_homologation_doctor() -> ArcaHomologationDoctorResult:
         private_key_path_configured=private_key_path_configured,
         certificate_present=certificate_present,
         private_key_present=private_key_present,
+        certificate_subject_expected=bool(
+            str(
+                getattr(settings, "ARCA_EXPECTED_CERT_SUBJECT_CN", "") or ""
+            ).strip()
+        ),
+        certificate_issuer_expected=bool(
+            str(
+                getattr(settings, "ARCA_EXPECTED_CERT_ISSUER_CN", "") or ""
+            ).strip()
+        ),
+        credential_validated=gate.credential_metadata is not None,
         wsass_authorization_confirmed=(
             gate.wsass_authorization_confirmed
         ),

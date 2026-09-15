@@ -191,6 +191,14 @@ class Order(models.Model):
         related_name="orders",
         verbose_name="Empresa",
     )
+    sales_document_type = models.ForeignKey(
+        "core.SalesDocumentType",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="commercial_orders",
+        verbose_name="Tipo de documento comercial",
+    )
     origin_channel = models.CharField(
         max_length=20,
         choices=ORIGIN_CHOICES,

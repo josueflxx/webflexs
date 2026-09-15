@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+  <soap:Body>
+    <getPersona_v2Response>
+      <personaReturn>
+        <errorConstancia>
+          <mensaje>No existe persona con ese Id</mensaje>
+        </errorConstancia>
+      </personaReturn>
+    </getPersona_v2Response>
+  </soap:Body>
+</soap:Envelope>

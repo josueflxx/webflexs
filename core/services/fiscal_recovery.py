@@ -227,6 +227,8 @@ def recover_fiscal_document(
         client = client_factory(
             company=document.company,
             point_of_sale=document.point_of_sale,
+            operation_mode="recovery",
+            fiscal_document=document,
         )
 
     attempt.mark_dispatched()
@@ -411,6 +413,8 @@ def release_pre_dispatch_manual_review(
         client = client_factory(
             company=document.company,
             point_of_sale=document.point_of_sale,
+            operation_mode="recovery",
+            fiscal_document=document,
         )
         remote_last = int(
             client.fetch_last_authorized_number(doc_type=document.doc_type)

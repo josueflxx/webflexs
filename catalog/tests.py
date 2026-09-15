@@ -17,6 +17,7 @@ from core.models import CatalogExcelTemplate, CatalogExcelTemplateColumn, Catalo
 from core.services.catalog_excel_exporter import build_catalog_workbook
 from core.services.company_context import get_default_company
 from orders.models import CartItem
+from catalog.tests_excel_utils import install_export_test_worker, download_generated_excel, excel_response_bytes
 
 
 def build_import_workbook(headers, rows):
@@ -1380,6 +1381,7 @@ class ProductDetailTemplateTests(CatalogTestCase):
 
 class CatalogClientExcelDownloadTests(CatalogTestCase):
     def setUp(self):
+        install_export_test_worker(self)
         self.category = Category.objects.create(name="Categoria XLSX", slug="categoria-xlsx", is_active=True)
         self.product = Product.objects.create(
             sku="XLSX-001",
@@ -1426,7 +1428,7 @@ class CatalogClientExcelDownloadTests(CatalogTestCase):
 
     def test_approved_client_can_download_published_catalog_excel(self):
         self.client.force_login(self.approved_user)
-        response = self.client.get(reverse("catalog_client_excel_download"))
+        response = download_generated_excel(self)
 
         self.assertEqual(response.status_code, 200)
         self.assertIn("spreadsheetml.sheet", response["Content-Type"])
@@ -1435,7 +1437,7 @@ class CatalogClientExcelDownloadTests(CatalogTestCase):
         self.assertIn("max-age=0", response["Cache-Control"])
         self.assertEqual(response["Pragma"], "no-cache")
         self.assertEqual(response["Expires"], "0")
-        workbook = load_workbook(BytesIO(response.content))
+        workbook = load_workbook(BytesIO(excel_response_bytes(response)))
         self.assertEqual(workbook.sheetnames[0], "INDICE")
         self.assertEqual(workbook["INDICE"]["A1"].value, "Catalogo Plantilla Cliente XLSX")
         self.assertEqual(workbook["INDICE"]["E4"].value, "Vigente desde")
@@ -1467,10 +1469,10 @@ class CatalogClientExcelDownloadTests(CatalogTestCase):
         zero_price.categories.add(self.category)
 
         self.client.force_login(self.approved_user)
-        response = self.client.get(reverse("catalog_client_excel_download"))
+        response = download_generated_excel(self)
 
         self.assertEqual(response.status_code, 200)
-        workbook = load_workbook(BytesIO(response.content))
+        workbook = load_workbook(BytesIO(excel_response_bytes(response)))
         worksheet = workbook["Categoria XLSX"]
         values = [cell.value for row in worksheet.iter_rows() for cell in row if cell.value]
 
@@ -2071,6 +2073,21 @@ class CatalogExcelGroupedExportTests(CatalogTestCase):
 
         self.assertEqual(workbook.sheetnames[:4], ["INDICE", "ABRAZADERAS", "ACERO", "BUJES"])
         self.assertEqual(list(stats["rows_by_sheet"].keys())[:3], ["ABRAZADERAS", "ACERO", "BUJES"])
+        self.assertEqual(len(workbook["ACERO"]._images), 1)
+        self.assertEqual(workbook["ACERO"]._images[0].anchor, "E1")
+        self.assertEqual(workbook["ACERO"]._images[0].width, 760)
+        self.assertEqual(len(workbook["ABRAZADERAS"]._images), 0)
+        self.assertEqual(len(workbook["BUJES"]._images), 0)
+
+        output = BytesIO()
+        workbook.save(output)
+        output.seek(0)
+        saved_workbook = load_workbook(output)
+        saved_image = saved_workbook["ACERO"]._images[0]
+        self.assertEqual(saved_image.anchor._from.col, 4)
+        self.assertEqual(saved_image.anchor._from.row, 0)
+        self.assertEqual(saved_image.anchor.ext.width, 760 * 9525)
+        self.assertEqual(saved_image.anchor.ext.height, 691 * 9525)
 
     def test_client_export_skips_public_sheet_without_scope(self):
         public_root = Category.objects.create(

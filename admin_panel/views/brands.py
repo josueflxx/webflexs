@@ -19,6 +19,7 @@ from catalog.models import (
     BrandSubrubro,
     BrandSubrubroProductOrder,
     BrandRubroProductOrder,
+    CategoryBrandMapping,
     Product,
 )
 from catalog.services.brand_cataloging import (
@@ -29,17 +30,27 @@ from catalog.services.brand_cataloging import (
     uncataloged_products,
     undo_brand_catalog_batch,
 )
+from catalog.services.category_brand_integration import (
+    category_brand_integration_metrics,
+    detect_category_brand_candidates,
+    mapping_assignment_stats,
+)
 from admin_panel.forms.brand_forms import (
     BrandAliasForm,
     BrandCatalogRuleForm,
     BrandForm,
     BrandRubroForm,
     BrandSubrubroForm,
+    CategoryBrandMappingForm,
 )
 from admin_panel.views.helpers import get_cached_category_options
 from core.services.audit import log_admin_action
 from core.decorators import superuser_required_for_modifications
-from core.services.advanced_search import sanitize_search_token
+from core.services.advanced_search import (
+    apply_parsed_text_search,
+    parse_text_search_query,
+    sanitize_search_token,
+)
 
 
 @staff_member_required
@@ -68,7 +79,151 @@ def brand_list(request):
         'recent_batches': BrandCatalogBatch.objects.select_related(
             "brand", "brand_rubro", "brand_subrubro", "created_by"
         )[:5],
+        'category_brand_metrics': category_brand_integration_metrics(),
     })
+
+
+@staff_member_required
+def brand_category_integration(request):
+    """Review and confirm non-destructive links between legacy categories and brands."""
+    search = sanitize_search_token(request.GET.get("q", ""))
+    status = str(request.GET.get("status", "all") or "all").strip().lower()
+    focus = str(request.GET.get("category", "") or "").strip()
+    candidates = detect_category_brand_candidates()
+    metrics = category_brand_integration_metrics(candidates)
+
+    if search:
+        normalized = BrandAlias.normalize(search)
+        candidates = [
+            candidate
+            for candidate in candidates
+            if normalized in BrandAlias.normalize(candidate.category.get_full_path())
+            or any(normalized in BrandAlias.normalize(match["brand"].name) for match in candidate.matches)
+        ]
+    if focus.isdigit():
+        candidates = [candidate for candidate in candidates if candidate.category.pk == int(focus)]
+    if status == "mapped":
+        candidates = [candidate for candidate in candidates if candidate.mapping]
+    elif status == "pending":
+        candidates = [candidate for candidate in candidates if not candidate.mapping and not candidate.has_conflict]
+    elif status == "conflict":
+        candidates = [candidate for candidate in candidates if candidate.has_conflict and not candidate.mapping]
+    elif status == "ready":
+        candidates = [candidate for candidate in candidates if candidate.ready and not candidate.mapping]
+
+    for candidate in candidates:
+        candidate.assignment_stats = (
+            mapping_assignment_stats(candidate.mapping)
+            if candidate.mapping
+            else {
+                "total": candidate.product_count,
+                "assigned": 0,
+                "pending": candidate.product_count,
+            }
+        )
+
+    paginator = Paginator(candidates, 40)
+    page_obj = paginator.get_page(request.GET.get("page"))
+    brands = Brand.objects.filter(is_active=True).prefetch_related(
+        "rubros__subrubros"
+    ).order_by("order", "name")
+
+    return render(
+        request,
+        "admin_panel/brands/category_integration.html",
+        {
+            "page_obj": page_obj,
+            "metrics": metrics,
+            "search": search,
+            "status": status,
+            "focus": focus,
+            "brands": brands,
+            "category_options": get_cached_category_options(
+                only_active=True,
+                include_inactive_suffix=False,
+            ),
+        },
+    )
+
+
+@staff_member_required
+@require_POST
+@superuser_required_for_modifications
+def brand_category_mapping_save(request):
+    """Confirm one bridge and optionally apply its brand assignment as an undoable batch."""
+    source_id = str(request.POST.get("source_category", "") or "").strip()
+    if not source_id.isdigit():
+        messages.error(request, "Selecciona una categoria de origen valida.")
+        return redirect("admin_brand_category_integration")
+
+    source_category = get_object_or_404(Category, pk=int(source_id))
+    mapping = CategoryBrandMapping.objects.filter(source_category=source_category).first()
+    form = CategoryBrandMappingForm(request.POST, instance=mapping)
+    if not form.is_valid():
+        error_text = " ".join(
+            str(message)
+            for messages_list in form.errors.values()
+            for message in messages_list
+        )
+        messages.error(request, error_text or "Revisa los datos del vinculo.")
+        return redirect(f"{reverse('admin_brand_category_integration')}?category={source_category.pk}")
+
+    mapping = form.save(commit=False)
+    mapping.status = CategoryBrandMapping.STATUS_CONFIRMED
+    if not mapping.created_by_id:
+        mapping.created_by = request.user
+    mapping.save()
+
+    action = str(request.POST.get("action", "save") or "save").strip().lower()
+    stats = mapping_assignment_stats(mapping)
+    batch = None
+    if action == "save_apply" and stats["pending_ids"]:
+        try:
+            batch = assign_products_to_brand_catalog(
+                product_ids=stats["pending_ids"],
+                brand=mapping.brand,
+                rubro=mapping.brand_rubro,
+                subrubro=mapping.brand_subrubro,
+                user=request.user,
+                observation=mapping.observation,
+                operation=BrandCatalogBatch.OPERATION_RULE,
+                mode="add",
+                require_observation=False,
+            )
+        except ValueError as exc:
+            messages.error(request, str(exc))
+            return redirect(f"{reverse('admin_brand_category_integration')}?category={source_category.pk}")
+        mapping.last_batch = batch
+        mapping.last_applied_at = timezone.now()
+        mapping.save(update_fields=["last_batch", "last_applied_at", "updated_at"])
+
+    log_admin_action(
+        request,
+        action="category_brand_mapping_save",
+        target_type="category_brand_mapping",
+        target_id=mapping.pk,
+        details={
+            "source_category_id": mapping.source_category_id,
+            "canonical_category_id": mapping.canonical_category_id,
+            "brand_id": mapping.brand_id,
+            "brand_rubro_id": mapping.brand_rubro_id,
+            "brand_subrubro_id": mapping.brand_subrubro_id,
+            "include_descendants": mapping.include_descendants,
+            "batch_id": batch.pk if batch else None,
+            "pending_before_apply": stats["pending"],
+        },
+    )
+    if batch:
+        messages.success(
+            request,
+            f"Vinculo confirmado y {len(batch.created_rubro_row_ids)} producto(s) catalogados. "
+            f"El lote #{batch.pk} se puede deshacer desde Marcas.",
+        )
+    elif action == "save_apply":
+        messages.info(request, "El vinculo quedo confirmado; todos sus productos ya estaban catalogados en ese destino.")
+    else:
+        messages.success(request, "Vinculo entre categoria y marca guardado sin modificar productos.")
+    return redirect(f"{reverse('admin_brand_category_integration')}?category={source_category.pk}")
 
 
 @staff_member_required
@@ -340,6 +495,92 @@ def _brand_workspace_associated_ids(target_info):
     )
 
 
+def _brand_workspace_context_tokens(target_info):
+    """Words already represented by the current brand destination."""
+    values = [
+        target_info["brand"].name,
+        target_info["rubro"].name,
+    ]
+    if target_info["subrubro"] is not None:
+        values.append(target_info["subrubro"].name)
+    values.extend(
+        target_info["brand"].aliases.filter(is_active=True).values_list(
+            "value",
+            flat=True,
+        )
+    )
+    tokens = set()
+    for value in values:
+        tokens.update(BrandAlias.normalize(value).split())
+    return tokens
+
+
+def _brand_workspace_search_products(products, query, target_info):
+    """Apply AND-by-word search across the complete commercial classification."""
+    parsed = parse_text_search_query(
+        query,
+        max_include=10,
+        max_exclude=10,
+        max_phrases=5,
+    )
+    if not parsed["raw"]:
+        return products
+
+    search_fields = [
+        "sku",
+        "name",
+        "supplier",
+        "supplier_ref__name",
+        "category__name",
+        "category__parent__name",
+        "category__parent__parent__name",
+        "category__parent__parent__parent__name",
+        "categories__name",
+        "categories__parent__name",
+        "categories__parent__parent__name",
+        "categories__parent__parent__parent__name",
+        "brand_rubro_orders__brand_rubro__brand__name",
+        "brand_rubro_orders__brand_rubro__name",
+        "brand_subrubro_orders__brand_subrubro__brand_rubro__brand__name",
+        "brand_subrubro_orders__brand_subrubro__brand_rubro__name",
+        "brand_subrubro_orders__brand_subrubro__name",
+    ]
+    context_tokens = _brand_workspace_context_tokens(target_info)
+
+    def is_context_only(value):
+        value_tokens = set(BrandAlias.normalize(value).split())
+        return bool(value_tokens) and value_tokens.issubset(context_tokens)
+
+    positive_values = [*parsed["include_terms"], *parsed["phrases"]]
+    relevant_values = [value for value in positive_values if not is_context_only(value)]
+    strict_result = apply_parsed_text_search(
+        products,
+        parsed,
+        search_fields,
+        order_by_similarity=False,
+    )
+    # Prefer real matches for every word. In a combined query such as
+    # "buje agrale", only treat Agrale as satisfied by the current destination
+    # when the strict catalog search has no result at all.
+    if relevant_values and not strict_result.exists():
+        fallback_parsed = {
+            **parsed,
+            "include_terms": [
+                value for value in parsed["include_terms"] if not is_context_only(value)
+            ],
+            "phrases": [
+                value for value in parsed["phrases"] if not is_context_only(value)
+            ],
+        }
+        return apply_parsed_text_search(
+            products,
+            fallback_parsed,
+            search_fields,
+            order_by_similarity=False,
+        )
+    return strict_result
+
+
 def _brand_workspace_filtered_products(filters, target_info):
     products = (
         Product.objects.select_related("category", "supplier_ref")
@@ -358,12 +599,7 @@ def _brand_workspace_filtered_products(filters, target_info):
     assignment = str(filters.get("assignment", "all") or "all").strip().lower()
 
     if q:
-        products = products.filter(
-            Q(sku__icontains=q)
-            | Q(name__icontains=q)
-            | Q(supplier__icontains=q)
-            | Q(supplier_ref__name__icontains=q)
-        )
+        products = _brand_workspace_search_products(products, q, target_info)
     if category_id.isdigit():
         category = Category.objects.filter(pk=int(category_id)).first()
         if category:
@@ -763,6 +999,7 @@ def _brand_workspace_assign(request, target):
             observation=payload.get("observation", ""),
             operation=operation,
             mode=mode,
+            require_observation=False,
         )
     except ValueError as exc:
         return JsonResponse({"success": False, "error": str(exc)}, status=400)
@@ -1418,8 +1655,8 @@ def brand_rubro_bulk_add_category(request, pk):
     )
     
     products = Product.objects.filter(
+        Q(category_id__in=descendant_ids) | Q(categories__id__in=descendant_ids),
         is_active=True,
-        category_id__in=descendant_ids
     ).exclude(
         id__in=existing_product_ids
     ).distinct().order_by("name", "sku")
@@ -1488,8 +1725,8 @@ def brand_subrubro_bulk_add_category(request, pk):
     )
     
     products = Product.objects.filter(
+        Q(category_id__in=descendant_ids) | Q(categories__id__in=descendant_ids),
         is_active=True,
-        category_id__in=descendant_ids
     ).exclude(
         id__in=existing_product_ids
     ).distinct().order_by("name", "sku")
@@ -1575,8 +1812,8 @@ def brand_rubro_preview_category_bulk(request, pk):
     )
     
     total_products = Product.objects.filter(
+        Q(category_id__in=descendant_ids) | Q(categories__id__in=descendant_ids),
         is_active=True,
-        category_id__in=descendant_ids
     ).distinct()
     
     total_count = total_products.count()
@@ -1610,8 +1847,8 @@ def brand_subrubro_preview_category_bulk(request, pk):
     )
     
     total_products = Product.objects.filter(
+        Q(category_id__in=descendant_ids) | Q(categories__id__in=descendant_ids),
         is_active=True,
-        category_id__in=descendant_ids
     ).distinct()
     
     total_count = total_products.count()

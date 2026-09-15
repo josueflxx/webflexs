@@ -1,0 +1,367 @@
+{% extends 'admin_panel/base.html' %}
+
+{% block page_title %}Integracion de categorias y marcas{% endblock %}
+
+{% block extra_css %}
+<style>
+    .taxonomy-shell {
+        --taxonomy-border: var(--theme-card-border);
+        --taxonomy-surface: rgba(17, 24, 36, .88);
+        --taxonomy-surface-soft: rgba(10, 16, 25, .56);
+        max-width: 1480px;
+        margin: 0 auto;
+        padding: 8px 0 36px;
+        display: grid;
+        gap: 16px;
+    }
+    .taxonomy-hero,
+    .taxonomy-overview,
+    .taxonomy-panel,
+    .taxonomy-row {
+        border: 1px solid var(--taxonomy-border);
+        background: var(--taxonomy-surface);
+        box-shadow: 0 18px 44px rgba(0, 0, 0, .18);
+    }
+    .taxonomy-hero {
+        position: relative;
+        overflow: hidden;
+        min-height: 164px;
+        padding: 26px 28px;
+        border-radius: 20px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 28px;
+        background:
+            radial-gradient(circle at 8% 10%, rgba(255, 107, 53, .18), transparent 30%),
+            linear-gradient(130deg, rgba(24, 28, 39, .98), rgba(13, 22, 34, .96));
+    }
+    .taxonomy-hero::after {
+        content: "";
+        position: absolute;
+        inset: 0 0 auto;
+        height: 2px;
+        background: linear-gradient(90deg, var(--color-primary), rgba(255, 107, 53, 0));
+    }
+    .taxonomy-hero-main { display: flex; align-items: flex-start; gap: 18px; min-width: 0; }
+    .taxonomy-hero-icon {
+        width: 52px;
+        height: 52px;
+        flex: 0 0 52px;
+        border-radius: 15px;
+        display: grid;
+        place-items: center;
+        color: var(--color-primary-light);
+        border: 1px solid rgba(255, 107, 53, .38);
+        background: rgba(255, 107, 53, .12);
+        box-shadow: 0 12px 30px rgba(255, 107, 53, .12);
+    }
+    .taxonomy-hero-icon svg { width: 25px; height: 25px; fill: none; stroke: currentColor; stroke-width: 1.8; }
+    .taxonomy-eyebrow { color: var(--color-primary-light); font-size: .7rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+    .taxonomy-hero h1 { margin: 6px 0 7px; font-size: clamp(1.55rem, 2.2vw, 2.1rem); line-height: 1.15; }
+    .taxonomy-hero p { margin: 0; color: var(--theme-text-muted); max-width: 780px; line-height: 1.55; }
+    .taxonomy-hero-actions { display: flex; flex-wrap: wrap; gap: 9px; flex: 0 0 auto; }
+    .taxonomy-overview { padding: 12px; border-radius: 18px; }
+    .taxonomy-metrics { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 9px; }
+    .taxonomy-metric {
+        position: relative;
+        min-height: 92px;
+        overflow: hidden;
+        border: 1px solid var(--taxonomy-border);
+        border-radius: 13px;
+        padding: 16px 17px;
+        background: var(--taxonomy-surface-soft);
+    }
+    .taxonomy-metric::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 3px; background: #778397; opacity: .7; }
+    .taxonomy-metric.is-primary::before { background: var(--color-primary); }
+    .taxonomy-metric.is-success::before { background: #54d68a; }
+    .taxonomy-metric.is-warning::before { background: #f5c451; }
+    .taxonomy-metric.is-danger::before { background: #ef7182; }
+    .taxonomy-metric span { display: block; color: var(--theme-text-muted); font-size: .69rem; text-transform: uppercase; letter-spacing: .07em; font-weight: 800; }
+    .taxonomy-metric strong { display: block; margin-top: 9px; font-size: 1.5rem; line-height: 1; }
+    .taxonomy-panel { padding: 16px; border-radius: 16px; }
+    .taxonomy-filter-head { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin: 0 0 12px; }
+    .taxonomy-filter-head strong { font-size: .92rem; }
+    .taxonomy-filter-head span { color: var(--theme-text-muted); font-size: .76rem; }
+    .taxonomy-filters { display: grid; grid-template-columns: minmax(280px, 1fr) 230px auto auto; gap: 10px; align-items: center; }
+    .taxonomy-filters .form-input,
+    .taxonomy-filters .form-select { min-height: 41px; }
+    .taxonomy-list { display: grid; gap: 14px; }
+    .taxonomy-row { overflow: hidden; border-radius: 18px; }
+    .taxonomy-row-head {
+        padding: 18px 20px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 18px;
+        border-bottom: 1px solid var(--taxonomy-border);
+        background: linear-gradient(100deg, rgba(255, 107, 53, .065), transparent 44%);
+    }
+    .taxonomy-source { display: flex; align-items: flex-start; gap: 13px; min-width: 0; }
+    .taxonomy-source-icon {
+        width: 38px;
+        height: 38px;
+        flex: 0 0 38px;
+        display: grid;
+        place-items: center;
+        border: 1px solid rgba(255, 107, 53, .25);
+        border-radius: 11px;
+        color: var(--color-primary-light);
+        background: rgba(255, 107, 53, .08);
+    }
+    .taxonomy-source-icon svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; }
+    .taxonomy-path { margin: 4px 0 0; font-size: 1.05rem; line-height: 1.3; }
+    .taxonomy-row-meta, .taxonomy-badges { display: flex; flex-wrap: wrap; gap: 7px; align-items: center; }
+    .taxonomy-row-meta { margin-top: 9px; color: var(--theme-text-muted); font-size: .76rem; }
+    .taxonomy-row-meta span { display: inline-flex; align-items: center; gap: 5px; }
+    .taxonomy-row-meta span + span::before { content: "\2022"; color: rgba(148, 163, 184, .55); margin-right: 2px; }
+    .taxonomy-badges { justify-content: flex-end; max-width: 44%; }
+    .taxonomy-chip { display: inline-flex; align-items: center; border: 1px solid var(--taxonomy-border); border-radius: 999px; padding: 5px 9px; font-size: .69rem; font-weight: 750; background: rgba(255, 255, 255, .025); }
+    .taxonomy-chip.ready { color: #54d68a; border-color: rgba(84, 214, 138, .35); background: rgba(84, 214, 138, .08); }
+    .taxonomy-chip.warning { color: #f5c451; border-color: rgba(245, 196, 81, .4); background: rgba(245, 196, 81, .08); }
+    .taxonomy-chip.info { color: #55c8df; border-color: rgba(85, 200, 223, .35); background: rgba(85, 200, 223, .08); }
+    .taxonomy-form { padding: 19px 20px 20px; display: grid; gap: 15px; background: rgba(7, 12, 20, .18); }
+    .taxonomy-section-label { display: flex; align-items: center; gap: 8px; color: var(--theme-text-muted); font-size: .69rem; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; }
+    .taxonomy-section-label::after { content: ""; height: 1px; flex: 1; background: var(--taxonomy-border); }
+    .taxonomy-fields { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+    .taxonomy-field { min-width: 0; }
+    .taxonomy-field > label:not(.taxonomy-check) { display: block; color: var(--theme-text-muted); font-size: .69rem; font-weight: 800; letter-spacing: .055em; text-transform: uppercase; margin: 0 0 7px; }
+    .taxonomy-field .form-select, .taxonomy-field .form-input { width: 100%; min-width: 0; min-height: 43px; }
+    .taxonomy-form-footer {
+        display: grid;
+        grid-template-columns: minmax(300px, 1fr) auto;
+        gap: 16px;
+        align-items: end;
+        padding: 14px;
+        border: 1px solid var(--taxonomy-border);
+        border-radius: 13px;
+        background: var(--taxonomy-surface-soft);
+    }
+    .taxonomy-actions { display: flex; gap: 9px; justify-content: flex-end; flex-wrap: wrap; }
+    .taxonomy-actions .btn { min-height: 39px; }
+    .taxonomy-check { display: inline-flex; align-items: center; gap: 8px; margin-top: 9px; color: var(--theme-text-muted); font-size: .78rem; cursor: pointer; }
+    .taxonomy-check input { accent-color: var(--color-primary); }
+    .taxonomy-last-batch { display: flex; gap: 7px; align-items: center; color: var(--theme-text-muted); font-size: .74rem; }
+    .taxonomy-empty { padding: 52px 20px; text-align: center; color: var(--theme-text-muted); }
+    .taxonomy-pagination { display: flex; justify-content: center; align-items: center; gap: 10px; padding: 8px; }
+    html[data-theme="light"] .taxonomy-shell { --taxonomy-surface: rgba(255, 255, 255, .94); --taxonomy-surface-soft: rgba(241, 245, 249, .82); }
+    html[data-theme="light"] .taxonomy-hero { background: radial-gradient(circle at 8% 10%, rgba(255, 107, 53, .11), transparent 31%), linear-gradient(130deg, #ffffff, #f1f5f9); }
+    html[data-theme="light"] .taxonomy-form { background: rgba(241, 245, 249, .52); }
+    html[data-theme="light"] .taxonomy-chip { background: rgba(15, 23, 42, .025); }
+    @media (max-width: 1100px) {
+        .taxonomy-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .taxonomy-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .taxonomy-hero { align-items: flex-start; flex-direction: column; }
+        .taxonomy-badges { max-width: 48%; }
+    }
+    @media (max-width: 720px) {
+        .taxonomy-shell { padding-top: 0; }
+        .taxonomy-hero { padding: 21px 18px; }
+        .taxonomy-hero-main { gap: 12px; }
+        .taxonomy-hero-icon { width: 43px; height: 43px; flex-basis: 43px; }
+        .taxonomy-metrics, .taxonomy-fields, .taxonomy-filters, .taxonomy-form-footer { grid-template-columns: 1fr; }
+        .taxonomy-metric:last-child { grid-column: 1 / -1; }
+        .taxonomy-actions { justify-content: stretch; }
+        .taxonomy-actions .btn { flex: 1 1 auto; }
+        .taxonomy-row-head { flex-direction: column; }
+        .taxonomy-badges { justify-content: flex-start; max-width: none; }
+        .taxonomy-filter-head { align-items: flex-start; flex-direction: column; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="taxonomy-shell">
+    <section class="taxonomy-hero">
+        <div class="taxonomy-hero-main">
+            <span class="taxonomy-hero-icon" aria-hidden="true">
+                <svg><use href="#ui-icon-link"></use></svg>
+            </span>
+            <div>
+                <span class="taxonomy-eyebrow">Clasificacion combinada</span>
+                <h1>Integracion de categorias y marcas</h1>
+                <p>Relaciona las ramas heredadas con su familia canonica y su destino de marca. Primero confirma la propuesta y luego aplica la catalogacion en un lote que siempre puede deshacerse.</p>
+            </div>
+        </div>
+        <div class="taxonomy-hero-actions">
+            <a class="btn btn-outline" href="{% url 'admin_category_list' %}">Ver categorias</a>
+            <a class="btn btn-outline" href="{% url 'admin_brand_list' %}">Ver marcas</a>
+            <a class="btn btn-primary" href="{% url 'admin_brand_catalog_settings' %}">Alias y reglas</a>
+        </div>
+    </section>
+
+    <section class="taxonomy-overview" aria-label="Resumen de integracion">
+        <div class="taxonomy-metrics">
+            <div class="taxonomy-metric is-primary"><span>Categorias detectadas</span><strong>{{ metrics.candidate_categories }}</strong></div>
+            <div class="taxonomy-metric"><span>Productos alcanzados</span><strong>{{ metrics.affected_products }}</strong></div>
+            <div class="taxonomy-metric is-success"><span>Vinculos confirmados</span><strong>{{ metrics.mapped_categories }}</strong></div>
+            <div class="taxonomy-metric is-warning"><span>Listas para revisar</span><strong>{{ metrics.ready_categories }}</strong></div>
+            <div class="taxonomy-metric is-danger"><span>Conflictos</span><strong>{{ metrics.conflicts }}</strong></div>
+        </div>
+    </section>
+
+    <section class="taxonomy-panel">
+        <div class="taxonomy-filter-head">
+            <strong>Ramas detectadas</strong>
+            <span>Busca una categoria, una marca o filtra por el estado de revision.</span>
+        </div>
+        <form method="get" class="taxonomy-filters">
+            <input class="form-input" type="search" name="q" value="{{ search }}" placeholder="Buscar por categoria o marca..." aria-label="Buscar por categoria o marca">
+            <select class="form-select" name="status">
+                <option value="all" {% if status == 'all' %}selected{% endif %}>Todos los estados</option>
+                <option value="ready" {% if status == 'ready' %}selected{% endif %}>Listas para revisar</option>
+                <option value="mapped" {% if status == 'mapped' %}selected{% endif %}>Vinculos confirmados</option>
+                <option value="pending" {% if status == 'pending' %}selected{% endif %}>Pendientes</option>
+                <option value="conflict" {% if status == 'conflict' %}selected{% endif %}>Con conflicto</option>
+            </select>
+            <button class="btn btn-primary" type="submit">Filtrar</button>
+            <a class="btn btn-outline" href="{% url 'admin_brand_category_integration' %}">Limpiar</a>
+        </form>
+    </section>
+
+    <section class="taxonomy-list">
+        {% for candidate in page_obj.object_list %}
+        <article class="taxonomy-row" id="category-{{ candidate.category.pk }}">
+            <header class="taxonomy-row-head">
+                <div class="taxonomy-source">
+                    <span class="taxonomy-source-icon" aria-hidden="true">
+                        <svg><use href="#ui-icon-folder"></use></svg>
+                    </span>
+                    <div>
+                        <span class="taxonomy-eyebrow">Categoria de origen</span>
+                        <h2 class="taxonomy-path">{{ candidate.category.get_full_path }}</h2>
+                        <div class="taxonomy-row-meta">
+                            <span>{{ candidate.product_count }} productos activos</span>
+                            <span>Confianza {{ candidate.confidence }}%</span>
+                            <span>{{ candidate.reason }}</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="taxonomy-badges">
+                    {% if candidate.mapping %}
+                    <span class="taxonomy-chip ready">Vinculo confirmado</span>
+                    <span class="taxonomy-chip info">{{ candidate.assignment_stats.assigned }}/{{ candidate.assignment_stats.total }} catalogados</span>
+                    {% elif candidate.has_conflict %}
+                    <span class="taxonomy-chip warning">Revision manual</span>
+                    {% elif candidate.ready %}
+                    <span class="taxonomy-chip ready">Destino sugerido</span>
+                    {% else %}
+                    <span class="taxonomy-chip warning">Falta elegir rubro</span>
+                    {% endif %}
+                    {% for match in candidate.matches %}
+                    <span class="taxonomy-chip">{{ match.brand.name }}</span>
+                    {% endfor %}
+                </div>
+            </header>
+
+            <form class="taxonomy-form js-taxonomy-form" method="post" action="{% url 'admin_brand_category_mapping_save' %}">
+                {% csrf_token %}
+                <input type="hidden" name="source_category" value="{{ candidate.category.pk }}">
+                <div class="taxonomy-section-label">Destino de catalogacion</div>
+                <div class="taxonomy-fields">
+                    <div class="taxonomy-field">
+                        <label>Familia canonica</label>
+                        <select class="form-select" name="canonical_category">
+                            <option value="">Conservar sin referencia</option>
+                            {% for option in category_options %}
+                            {% if option.id != candidate.category.pk %}
+                            <option value="{{ option.id }}" {% if candidate.canonical_category.pk == option.id %}selected{% endif %}>{{ option.label }}</option>
+                            {% endif %}
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="taxonomy-field">
+                        <label>Marca compatible</label>
+                        <select class="form-select js-brand" name="brand" required>
+                            <option value="">Seleccionar marca...</option>
+                            {% for brand in brands %}
+                            <option value="{{ brand.pk }}" {% if candidate.suggested_brand.pk == brand.pk %}selected{% endif %}>{{ brand.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="taxonomy-field">
+                        <label>Rubro de marca</label>
+                        <select class="form-select js-rubro" name="brand_rubro" required>
+                            <option value="">Seleccionar rubro...</option>
+                            {% for brand in brands %}{% for rubro in brand.rubros.all %}
+                            <option value="{{ rubro.pk }}" data-brand="{{ brand.pk }}" {% if candidate.suggested_rubro.pk == rubro.pk %}selected{% endif %}>{{ brand.name }} / {{ rubro.name }}</option>
+                            {% endfor %}{% endfor %}
+                        </select>
+                    </div>
+                    <div class="taxonomy-field">
+                        <label>Subrubro opcional</label>
+                        <select class="form-select js-subrubro" name="brand_subrubro">
+                            <option value="">Sin subrubro</option>
+                            {% for brand in brands %}{% for rubro in brand.rubros.all %}{% for subrubro in rubro.subrubros.all %}
+                            <option value="{{ subrubro.pk }}" data-rubro="{{ rubro.pk }}" {% if candidate.suggested_subrubro.pk == subrubro.pk %}selected{% endif %}>{{ rubro.name }} / {{ subrubro.name }}</option>
+                            {% endfor %}{% endfor %}{% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="taxonomy-form-footer">
+                    <div class="taxonomy-field">
+                        <label>Observacion (opcional)</label>
+                        <input class="form-input" type="text" name="observation" maxlength="300" value="{{ candidate.mapping.observation|default:'' }}" placeholder="Ej. Migracion controlada desde la categoria heredada">
+                        <label class="taxonomy-check">
+                            <input type="checkbox" name="include_descendants" {% if not candidate.mapping or candidate.mapping.include_descendants %}checked{% endif %}>
+                            Incluir productos de todas las subcategorias
+                        </label>
+                    </div>
+                    {% if user.is_superuser %}
+                    <div class="taxonomy-actions">
+                        <button class="btn btn-outline" type="submit" name="action" value="save">Confirmar vinculo</button>
+                        <button class="btn btn-primary" type="submit" name="action" value="save_apply">Vincular y catalogar {{ candidate.assignment_stats.pending }}</button>
+                    </div>
+                    {% endif %}
+                </div>
+                {% if candidate.mapping.last_batch %}
+                <small class="taxonomy-last-batch"><svg class="ui-icon" aria-hidden="true"><use href="#ui-icon-check"></use></svg> Ultimo lote aplicado: #{{ candidate.mapping.last_batch.pk }}. Puede deshacerse desde el panel de Marcas.</small>
+                {% endif %}
+            </form>
+        </article>
+        {% empty %}
+        <div class="taxonomy-panel taxonomy-empty">No se encontraron categorias con marcas para este filtro.</div>
+        {% endfor %}
+    </section>
+
+    {% if page_obj.has_other_pages %}
+    <nav class="taxonomy-pagination" aria-label="Paginacion">
+        {% if page_obj.has_previous %}<a class="btn btn-outline" href="?page={{ page_obj.previous_page_number }}&q={{ search|urlencode }}&status={{ status }}">Anterior</a>{% endif %}
+        <span class="text-muted">Pagina {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
+        {% if page_obj.has_next %}<a class="btn btn-outline" href="?page={{ page_obj.next_page_number }}&q={{ search|urlencode }}&status={{ status }}">Siguiente</a>{% endif %}
+    </nav>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    function refreshTaxonomyForm(form) {
+        const brand = form.querySelector('.js-brand');
+        const rubro = form.querySelector('.js-rubro');
+        const subrubro = form.querySelector('.js-subrubro');
+        const brandId = brand.value;
+
+        Array.from(rubro.options).forEach((option, index) => {
+            option.hidden = index > 0 && option.dataset.brand !== brandId;
+        });
+        if (rubro.selectedOptions[0] && rubro.selectedOptions[0].hidden) rubro.value = '';
+
+        const rubroId = rubro.value;
+        Array.from(subrubro.options).forEach((option, index) => {
+            option.hidden = index > 0 && option.dataset.rubro !== rubroId;
+        });
+        if (subrubro.selectedOptions[0] && subrubro.selectedOptions[0].hidden) subrubro.value = '';
+        rubro.disabled = !brandId;
+        subrubro.disabled = !rubroId;
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        document.querySelectorAll('.js-taxonomy-form').forEach((form) => {
+            refreshTaxonomyForm(form);
+            form.querySelector('.js-brand').addEventListener('change', () => refreshTaxonomyForm(form));
+            form.querySelector('.js-rubro').addEventListener('change', () => refreshTaxonomyForm(form));
+        });
+    });
+</script>
+{% endblock %}

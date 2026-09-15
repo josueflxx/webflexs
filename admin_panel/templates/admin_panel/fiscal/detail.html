@@ -410,7 +410,7 @@
     }
 }
 </style>
-<link rel="stylesheet" href="{% static 'core/css/fiscal_detail.css' %}?v=20260731-1">
+<link rel="stylesheet" href="{% static 'core/css/fiscal_detail.css' %}?v=20260810-2">
 {% endblock %}
 
 {% block content %}
@@ -529,12 +529,18 @@
                 </form>
                 {% endif %}
                 {% if can_print_document %}
-                <a href="{% url 'admin_fiscal_document_print' fiscal_document.pk %}?copy=original" class="fiscal-classic-action">Original</a>
-                <a href="{% url 'admin_fiscal_document_print' fiscal_document.pk %}?copy=duplicado" class="fiscal-classic-action">Duplicado</a>
-                <a href="{% url 'admin_fiscal_document_print' fiscal_document.pk %}?copy=triplicado" class="fiscal-classic-action">Triplicado</a>
-                <a href="{% url 'admin_fiscal_document_print' fiscal_document.pk %}?copy=original&format=pdf" class="fiscal-classic-action">PDF</a>
+                <a href="{% url 'admin_fiscal_document_print' fiscal_document.pk %}?copy=original&amp;autoprint=1" class="fiscal-classic-action" target="_blank" rel="noopener">Imprimir</a>
+                <a href="{% url 'admin_fiscal_document_print' fiscal_document.pk %}?copy=original&amp;format=pdf" class="fiscal-classic-action">Descargar PDF</a>
+                <a href="{% url 'admin_fiscal_document_excel' fiscal_document.pk %}" class="fiscal-classic-action">Descargar Excel</a>
+                <details class="fiscal-related-details">
+                    <summary class="fiscal-classic-action">Otras copias</summary>
+                    <div class="fiscal-related-menu">
+                        <a href="{% url 'admin_fiscal_document_print' fiscal_document.pk %}?copy=duplicado" class="fiscal-related-btn" target="_blank" rel="noopener">Duplicado</a>
+                        <a href="{% url 'admin_fiscal_document_print' fiscal_document.pk %}?copy=triplicado" class="fiscal-related-btn" target="_blank" rel="noopener">Triplicado</a>
+                    </div>
+                </details>
                 {% else %}
-                <span class="fiscal-classic-action is-disabled">Cerrar movimiento para imprimir</span>
+                <span class="fiscal-classic-action is-disabled">Cerrar movimiento para imprimir o descargar</span>
                 {% endif %}
                 <a href="{% url 'admin_fiscal_document_list' %}" class="fiscal-classic-action">Volver</a>
             </div>
@@ -666,7 +672,8 @@
                 <summary>Moneda</summary>
                 <div class="fiscal-detail-box-body">
                     <ul class="fiscal-kv">
-                        <li><span class="fiscal-kv-label">Moneda</span><span class="fiscal-kv-value">Pesos ($)</span></li>
+                        <li><span class="fiscal-kv-label">Moneda</span><span class="fiscal-kv-value">{{ fiscal_document.currency }}</span></li>
+                        <li><span class="fiscal-kv-label">Tipo de cambio</span><span class="fiscal-kv-value">{{ fiscal_document.exchange_rate }}</span></li>
                         <li><span class="fiscal-kv-label">Estado cobranza</span><span class="fiscal-kv-value">{{ collection_snapshot.status_label }}</span></li>
                         <li><span class="fiscal-kv-label">Pagado</span><span class="fiscal-kv-value">${{ collection_snapshot.paid|floatformat:2 }}</span></li>
                         <li><span class="fiscal-kv-label">Pendiente</span><span class="fiscal-kv-value">${{ collection_snapshot.pending|floatformat:2 }}</span></li>
@@ -690,13 +697,36 @@
                 <div class="fiscal-detail-box-body">
                     <ul class="fiscal-kv">
                         <li><span class="fiscal-kv-label">Lista de precios</span><span class="fiscal-kv-value">{% if fiscal_document.order and fiscal_document.order.client_company_ref and fiscal_document.order.client_company_ref.price_list %}{{ fiscal_document.order.client_company_ref.price_list.name }}{% else %}-{% endif %}</span></li>
-                        <li><span class="fiscal-kv-label">Deposito</span><span class="fiscal-kv-value">{% if fiscal_document.sales_document_type and fiscal_document.sales_document_type.default_warehouse %}{{ fiscal_document.sales_document_type.default_warehouse.name }}{% else %}Principal{% endif %}</span></li>
+                        <li><span class="fiscal-kv-label">Deposito</span><span class="fiscal-kv-value">{% if fiscal_document.sales_rules_snapshot.default_warehouse_name %}{{ fiscal_document.sales_rules_snapshot.default_warehouse_name }}{% elif fiscal_document.sales_document_type and fiscal_document.sales_document_type.default_warehouse %}{{ fiscal_document.sales_document_type.default_warehouse.name }}{% else %}Principal{% endif %}</span></li>
                         <li><span class="fiscal-kv-label">Tipo comercial</span><span class="fiscal-kv-value">{{ fiscal_document.commercial_type_label }}</span></li>
                     </ul>
                 </div>
             </details>
         </div>
         </section>
+
+        {% if fiscal_document.commercial_situation != 'not_applicable' %}
+        <section class="fiscal-classic-card">
+            <div class="fiscal-detail-section-head">
+                <div>
+                    <h3>Situacion comercial</h3>
+                    <p>Revision operativa independiente del estado fiscal y del CAE.</p>
+                </div>
+                <span class="fiscal-detail-status">{{ fiscal_document.get_commercial_situation_display }}</span>
+            </div>
+            <form method="post" action="{% url 'admin_commercial_document_situation_update' 'fiscal' fiscal_document.pk %}" class="fiscal-classic-actions">
+                {% csrf_token %}
+                <select name="commercial_situation" class="form-select" aria-label="Situacion comercial">
+                    <option value="pending_review" {% if fiscal_document.commercial_situation == 'pending_review' %}selected{% endif %}>Pendiente de revision</option>
+                    <option value="approved" {% if fiscal_document.commercial_situation == 'approved' %}selected{% endif %}>Aprobada</option>
+                    <option value="observed" {% if fiscal_document.commercial_situation == 'observed' %}selected{% endif %}>Observada</option>
+                    <option value="rejected" {% if fiscal_document.commercial_situation == 'rejected' %}selected{% endif %}>Rechazada</option>
+                </select>
+                <input type="text" name="commercial_situation_note" class="form-input" value="{{ fiscal_document.commercial_situation_note }}" placeholder="Observacion (obligatoria al observar o rechazar)">
+                <button type="submit" class="fiscal-classic-action">Actualizar</button>
+            </form>
+        </section>
+        {% endif %}
 
         <section class="fiscal-classic-card fiscal-products-card">
             <div class="fiscal-products-head">

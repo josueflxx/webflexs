@@ -1,0 +1,8 @@
+core/templates/core/home.html
+catalog/templates/catalog/clamp_request.html
+core/static/core/js/home_clamp.js
+core/static/core/js/clamp_viewer.js
+core/static/core/js/clamp_dimensions.js
+core/static/core/css/clamp_viewer.css
+core/static/core/css/clamp_dimensions.css
+core/static/core/models/abrazadera-plaqueta-tuercas.glb

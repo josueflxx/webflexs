@@ -1,17 +1,13 @@
-"""ARCA WSAA/WSFE client restricted to homologation read-only access."""
+"""ARCA WSAA/WSFE client with fail-closed homologation operation gates."""
 
 from __future__ import annotations
 
-import base64
 import hashlib
 import html
-import os
 import re
-import secrets
 import subprocess
-import tempfile
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta, timezone as dt_timezone
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Any, Dict, List, Optional
 import xml.etree.ElementTree as ET
@@ -25,15 +21,24 @@ from core.services.arca_config import (
     require_homologation_environment,
     resolve_arca_endpoint,
 )
+from core.services.arca_errors import (
+    ArcaClientError,
+    ArcaConfigurationError,
+    ArcaTemporaryError,
+)
 from core.services.arca_credentials import (
     ArcaCredentialError,
     resolve_credential_spec,
     validate_credential_offline,
 )
 from core.services.arca_homologation import (
+    ArcaHomologationEmissionAuthorization,
     ArcaHomologationReadinessError,
     block_arca_emission,
+    require_homologation_emission_access,
+    require_homologation_emission_dispatch_access,
     require_homologation_read_access,
+    require_homologation_recovery_access,
 )
 from core.services.arca_ticket_cache import (
     ArcaAccessTicket,
@@ -45,33 +50,7 @@ from core.services.arca_transport import (
     StrictArcaSoapTransport,
 )
 from core.services.sensitive_data import sanitize_sensitive_text
-
-
-class ArcaClientError(Exception):
-    """Base ARCA error."""
-
-
-class ArcaConfigurationError(ArcaClientError):
-    """Missing or invalid ARCA setup."""
-
-
-class ArcaTemporaryError(ArcaClientError):
-    """ARCA/network issue with explicit delivery uncertainty."""
-
-    def __init__(
-        self,
-        message: str,
-        *,
-        error_code: str = "temporary_error",
-        request_payload: Optional[Dict[str, Any]] = None,
-        response_payload: Optional[Dict[str, Any]] = None,
-        possibly_sent: bool = False,
-    ) -> None:
-        super().__init__(message)
-        self.error_code = error_code
-        self.request_payload = request_payload or {}
-        self.response_payload = response_payload or {}
-        self.possibly_sent = bool(possibly_sent)
+from core.services.arca_wsaa import ArcaWsaaSessionMixin
 
 
 @dataclass
@@ -251,7 +230,7 @@ def _to_date_yyyymmdd(raw: str):
         return None
 
 
-class ArcaWsfeClient:
+class ArcaWsfeClient(ArcaWsaaSessionMixin):
     """Minimal WSAA + WSFEv1 client for FECAESolicitar."""
 
     WSAA_SOAP_ACTION = "loginCms"
@@ -282,13 +261,23 @@ class ArcaWsfeClient:
         credential_runner=None,
         ticket_coordinator=None,
         require_shared_cache: bool = True,
+        operation_mode: str = "read",
+        fiscal_document=None,
+        emission_authorization: Optional[
+            ArcaHomologationEmissionAuthorization
+        ] = None,
     ):
         self.company = company
         self.point_of_sale = point_of_sale
+        self.operation_mode = str(operation_mode or "").strip().lower()
+        self.fiscal_document = fiscal_document
+        self.emission_authorization = emission_authorization
         self.timeout = int(getattr(settings, "ARCA_TIMEOUT_SECONDS", 30) or 30)
         self.openssl_bin = str(getattr(settings, "ARCA_OPENSSL_BIN", "openssl") or "openssl")
         self.service_name = str(
-            getattr(settings, "ARCA_SERVICE_ID", "") or ""
+            getattr(settings, "ARCA_WSFE_SERVICE_ID", "")
+            or getattr(settings, "ARCA_SERVICE_ID", "")
+            or ""
         ).strip()
         try:
             self.environment_enum = require_homologation_environment(
@@ -305,10 +294,7 @@ class ArcaWsfeClient:
         except ArcaSecurityConfigurationError as exc:
             raise ArcaConfigurationError(str(exc)) from exc
         try:
-            require_homologation_read_access(
-                company=self.company,
-                point_of_sale=self.point_of_sale,
-            )
+            self._require_operation_access()
         except ArcaHomologationReadinessError as exc:
             raise ArcaConfigurationError(
                 f"Compuerta ARCA no aprobada ({exc.error_code})."
@@ -365,6 +351,54 @@ class ArcaWsfeClient:
         except ArcaTicketCacheError as exc:
             raise ArcaConfigurationError(str(exc)) from exc
 
+    def _require_operation_access(self) -> None:
+        if self.operation_mode == "read":
+            require_homologation_read_access(
+                company=self.company,
+                point_of_sale=self.point_of_sale,
+            )
+            return
+        if self.operation_mode == "recovery":
+            if self.fiscal_document is None:
+                raise ArcaHomologationReadinessError(
+                    "Documento requerido para recuperacion ARCA.",
+                    error_code="homologation_recovery_document_missing",
+                )
+            require_homologation_recovery_access(
+                fiscal_document=self.fiscal_document,
+                company=self.company,
+                point_of_sale=self.point_of_sale,
+            )
+            return
+        if self.operation_mode == "emission":
+            if self.fiscal_document is None or self.emission_authorization is None:
+                block_arca_emission()
+            status = str(getattr(self.fiscal_document, "status", "") or "")
+            if status == "ready_to_issue":
+                current = require_homologation_emission_access(
+                    fiscal_document=self.fiscal_document,
+                    company=self.company,
+                    point_of_sale=self.point_of_sale,
+                    check_credentials=False,
+                )
+                if current != self.emission_authorization:
+                    raise ArcaHomologationReadinessError(
+                        "La capacidad de emision ARCA no coincide.",
+                        error_code="homologation_emission_capability_mismatch",
+                    )
+            else:
+                require_homologation_emission_dispatch_access(
+                    fiscal_document=self.fiscal_document,
+                    company=self.company,
+                    point_of_sale=self.point_of_sale,
+                    authorization=self.emission_authorization,
+                )
+            return
+        raise ArcaHomologationReadinessError(
+            "Modo de operacion ARCA invalido.",
+            error_code="arca_operation_mode_invalid",
+        )
+
     def _resolve_wsaa_url(self) -> str:
         return self.wsaa_endpoint.url
 
@@ -373,80 +407,6 @@ class ArcaWsfeClient:
 
     def _resolve_company_credentials(self):
         return self.issuer_cuit, self.cert_path, self.key_path
-
-    def _build_tra(self) -> str:
-        now_utc = datetime.now(dt_timezone.utc)
-        generation = now_utc - timedelta(minutes=5)
-        expiration = now_utc + timedelta(minutes=10)
-        # WSAA requires an integer. A cryptographically random positive
-        # 63-bit value avoids the cross-worker collisions caused by epoch
-        # seconds while remaining inside a signed BIGINT.
-        unique_id = secrets.randbelow((1 << 63) - 1) + 1
-        return (
-            '<?xml version="1.0" encoding="UTF-8"?>'
-            "<loginTicketRequest version=\"1.0\">"
-            "<header>"
-            f"<uniqueId>{unique_id}</uniqueId>"
-            f"<generationTime>{generation.isoformat()}</generationTime>"
-            f"<expirationTime>{expiration.isoformat()}</expirationTime>"
-            "</header>"
-            f"<service>{self.service_name}</service>"
-            "</loginTicketRequest>"
-        )
-
-    def _sign_tra(self, tra_xml: str) -> str:
-        fd_in, input_path = tempfile.mkstemp(prefix="arca-tra-", suffix=".xml")
-        fd_out, output_path = tempfile.mkstemp(prefix="arca-cms-", suffix=".bin")
-        os.close(fd_in)
-        os.close(fd_out)
-        try:
-            with open(input_path, "w", encoding="utf-8") as handle:
-                handle.write(tra_xml)
-
-            cmd = [
-                self.openssl_bin,
-                "cms",
-                "-sign",
-                "-in",
-                input_path,
-                "-signer",
-                self.cert_path,
-                "-inkey",
-                self.key_path,
-                "-passin",
-                "pass:",
-                "-nodetach",
-                "-outform",
-                "DER",
-                "-binary",
-                "-out",
-                output_path,
-            ]
-            try:
-                process = subprocess.run(
-                    cmd,
-                    check=False,
-                    capture_output=True,
-                    text=True,
-                    timeout=30,
-                )
-            except (OSError, subprocess.SubprocessError) as exc:
-                raise ArcaConfigurationError(
-                    "No se pudo ejecutar la firma local del TRA."
-                ) from exc
-            if process.returncode != 0:
-                raise ArcaConfigurationError(
-                    "No se pudo firmar TRA con OpenSSL."
-                )
-            with open(output_path, "rb") as handle:
-                cms = handle.read()
-            return base64.b64encode(cms).decode("ascii")
-        finally:
-            for path in (input_path, output_path):
-                try:
-                    os.remove(path)
-                except OSError:
-                    pass
 
     def _soap_post(
         self,
@@ -457,10 +417,7 @@ class ArcaWsfeClient:
         possibly_sent_on_error: bool = False,
     ) -> str:
         try:
-            require_homologation_read_access(
-                company=self.company,
-                point_of_sale=self.point_of_sale,
-            )
+            self._require_operation_access()
         except ArcaHomologationReadinessError as exc:
             raise ArcaConfigurationError(
                 f"Compuerta ARCA no aprobada ({exc.error_code})."
@@ -500,104 +457,6 @@ class ArcaWsfeClient:
                 response_payload=response_payload,
                 possibly_sent=bool(exc.possibly_sent),
             ) from exc
-
-    def _login(self):
-        try:
-            ticket = self.ticket_coordinator.get_or_create(
-                self._request_new_access_ticket
-            )
-        except ArcaTicketCacheError as exc:
-            raise ArcaTemporaryError(
-                str(exc),
-                error_code=exc.error_code,
-                possibly_sent=False,
-            ) from exc
-        return ticket.token, ticket.sign
-
-    def _request_new_access_ticket(self) -> ArcaAccessTicket:
-        tra_xml = self._build_tra()
-        cms = self._sign_tra(tra_xml)
-        body_xml = (
-            '<ns1:loginCms xmlns:ns1="http://wsaa.view.sua.dvadac.desein.afip.gov">'
-            f"<ns1:in0>{html.escape(cms)}</ns1:in0>"
-            "</ns1:loginCms>"
-        )
-        response_xml = self._soap_post(
-            url=self.wsaa_url,
-            soap_action=self.WSAA_SOAP_ACTION,
-            body_xml=body_xml,
-            possibly_sent_on_error=False,
-        )
-        try:
-            root = ET.fromstring(response_xml)
-        except ET.ParseError as exc:
-            raise ArcaTemporaryError(
-                "Respuesta invalida de WSAA.",
-                error_code="wsaa_parse_error",
-                response_payload=_response_evidence(response_xml),
-                possibly_sent=False,
-            ) from exc
-
-        login_return = _node_text(_find_first(root, "loginCmsReturn"))
-        if not login_return:
-            raise ArcaTemporaryError(
-                "WSAA no devolvio loginCmsReturn.",
-                error_code="wsaa_empty_response",
-                response_payload=_response_evidence(response_xml),
-                possibly_sent=False,
-            )
-
-        ticket_xml = html.unescape(login_return)
-        try:
-            ticket_root = ET.fromstring(ticket_xml)
-        except ET.ParseError as exc:
-            raise ArcaTemporaryError(
-                "No se pudo parsear ticket WSAA.",
-                error_code="wsaa_ticket_parse_error",
-                response_payload={
-                    **_response_evidence(response_xml),
-                    "ticket_sha256": hashlib.sha256(
-                        ticket_xml.encode("utf-8", errors="replace")
-                    ).hexdigest(),
-                },
-                possibly_sent=False,
-            ) from exc
-
-        token = _node_text(_find_first(ticket_root, "token"))
-        sign = _node_text(_find_first(ticket_root, "sign"))
-        generation = _node_text(_find_first(ticket_root, "generationTime"))
-        expiration = _node_text(_find_first(ticket_root, "expirationTime"))
-        if not token or not sign or not generation or not expiration:
-            raise ArcaTemporaryError(
-                "WSAA no devolvio un Ticket de Acceso completo.",
-                error_code="wsaa_missing_credentials",
-                response_payload=_response_evidence(response_xml),
-                possibly_sent=False,
-            )
-
-        try:
-            generated_at = datetime.fromisoformat(generation.replace("Z", "+00:00"))
-            expires_at = datetime.fromisoformat(expiration.replace("Z", "+00:00"))
-            if generated_at.tzinfo is None:
-                generated_at = generated_at.replace(tzinfo=dt_timezone.utc)
-            if expires_at.tzinfo is None:
-                expires_at = expires_at.replace(tzinfo=dt_timezone.utc)
-            generated_at = generated_at.astimezone(dt_timezone.utc)
-            expires_at = expires_at.astimezone(dt_timezone.utc)
-        except Exception as exc:
-            raise ArcaTemporaryError(
-                "WSAA devolvio vigencia invalida.",
-                error_code="wsaa_ticket_dates_invalid",
-                response_payload=_response_evidence(response_xml),
-                possibly_sent=False,
-            ) from exc
-
-        return ArcaAccessTicket(
-            token=token,
-            sign=sign,
-            generation_time=generated_at,
-            expiration_time=expires_at,
-        )
 
     def _build_tax_breakdown(self, fiscal_document) -> List[Dict[str, Any]]:
         groups: Dict[Decimal, Dict[str, Decimal]] = {}
@@ -1124,9 +983,20 @@ class ArcaWsfeClient:
         cbte_number: int,
         mark_dispatched=None,
     ) -> ArcaEmissionResult:
-        # This stage permits only WSAA and WSFEv1 read operations. Keep the
-        # block before login, payload construction and dispatch callbacks.
-        block_arca_emission()
+        # Keep this independent guard before login, payload construction and
+        # dispatch callbacks. Direct/default client use remains blocked.
+        if (
+            getattr(self, "operation_mode", "read") != "emission"
+            or getattr(self, "emission_authorization", None) is None
+            or getattr(self, "fiscal_document", None) is not fiscal_document
+        ):
+            block_arca_emission()
+        require_homologation_emission_dispatch_access(
+            fiscal_document=fiscal_document,
+            company=self.company,
+            point_of_sale=self.point_of_sale,
+            authorization=self.emission_authorization,
+        )
         token, sign = self._login()
         wsfe_payload = self._build_wsfe_payload(
             fiscal_document=fiscal_document,

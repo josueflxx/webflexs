@@ -322,6 +322,9 @@ SALES_DOCUMENT_TYPE_SNAPSHOT_FIELDS = [
     "default_sales_user_mode",
     "billing_mode",
     "use_document_situation",
+    "currency_code",
+    "default_exchange_rate",
+    "rules_version",
     "internal_doc_type",
     "fiscal_doc_type",
     "print_address",
@@ -754,10 +757,6 @@ def sales_document_type_edit(request, pk):
                 "No se pudo guardar porque ya existe un predeterminado para ese comportamiento y canal.",
             )
         else:
-            synced_orders = _resync_order_charges_for_sales_document_type(
-                document_type,
-                actor=request.user,
-            )
             log_admin_change(
                 request,
                 action="sales_document_type_update",
@@ -766,13 +765,10 @@ def sales_document_type_edit(request, pk):
                 before=before,
                 after=model_snapshot(document_type, SALES_DOCUMENT_TYPE_SNAPSHOT_FIELDS),
             )
-            if synced_orders:
-                messages.success(
-                    request,
-                    f"Tipo de venta actualizado. Cuenta corriente resincronizada en {synced_orders} pedido(s).",
-                )
-            else:
-                messages.success(request, "Tipo de venta actualizado.")
+            messages.success(
+                request,
+                "Tipo de venta actualizado. Las reglas nuevas se aplican solamente a movimientos futuros.",
+            )
             return redirect("admin_sales_document_type_list")
 
     return render(
@@ -804,10 +800,6 @@ def sales_document_type_toggle_enabled(request, pk):
     before = model_snapshot(document_type, ["enabled"])
     document_type.enabled = not document_type.enabled
     document_type.save(update_fields=["enabled", "updated_at"])
-    synced_orders = _resync_order_charges_for_sales_document_type(
-        document_type,
-        actor=request.user,
-    )
     log_admin_change(
         request,
         action="sales_document_type_toggle_enabled",
@@ -820,11 +812,7 @@ def sales_document_type_toggle_enabled(request, pk):
         request,
         "Tipo de venta habilitado." if document_type.enabled else "Tipo de venta deshabilitado.",
     )
-    if synced_orders:
-        messages.info(
-            request,
-            f"Cuenta corriente resincronizada en {synced_orders} pedido(s).",
-        )
+    messages.info(request, "El cambio no modifica comprobantes ni movimientos anteriores.")
     return redirect("admin_sales_document_type_list")
 
 

@@ -1,0 +1,735 @@
+"""
+Admin Panel views - Custom admin interface.
+"""
+from django.shortcuts import render, redirect, get_object_or_404
+from django.urls import reverse
+from django.contrib.admin.views.decorators import staff_member_required
+from django.contrib.auth.decorators import user_passes_test
+from django.contrib.auth.forms import PasswordResetForm, SetPasswordForm
+from django.contrib.auth.password_validation import validate_password
+from django.contrib import messages
+from django.conf import settings
+from django.core.cache import cache
+from django.core.exceptions import ValidationError
+from django.core.files.base import ContentFile
+from django.core.paginator import Paginator
+from django.template.loader import render_to_string
+from django.db import transaction, connection, IntegrityError
+from django.db import DatabaseError
+from django.db.models import (
+    Q,
+    Case,
+    Count,
+    Sum,
+    Max,
+    Avg,
+    F,
+    When,
+    IntegerField,
+    DecimalField,
+    ExpressionWrapper,
+    Value,
+    Prefetch,
+)
+from django.db.models.functions import Coalesce
+from django.http import JsonResponse, HttpResponse
+from django.views.decorators.csrf import csrf_protect
+from django.views.decorators.http import require_POST
+from django.utils import timezone
+from django.utils.dateparse import parse_date, parse_datetime
+from django.utils.text import slugify
+from django.utils.http import url_has_allowed_host_and_scheme
+import json
+import os
+import re
+from io import BytesIO, StringIO
+from datetime import datetime, time, timedelta
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+from urllib.parse import urlencode, parse_qs
+import csv
+from openpyxl import Workbook
+
+from core.services.operational_timeline import (
+    build_company_activity_timeline,
+    build_operational_snapshot,
+)
+
+from catalog.models import Product, Category, CategoryAttribute, ClampMeasureRequest, Supplier, PriceList
+from accounts.models import (
+    AccountRequest,
+    ClientCategory,
+    ClientCompany,
+    ClientPayment,
+    ClientProfile,
+    ClientTask,
+    ClientTransaction,
+)
+from accounts.services.ledger import (
+    create_adjustment_transaction,
+    sync_order_charge_transaction,
+)
+from accounts.services.movement_lifecycle import (
+    apply_transaction_state_transition,
+    can_transition_transaction_state,
+    is_transaction_reopen_locked as service_is_transaction_reopen_locked,
+    movement_allows_print as service_movement_allows_print,
+)
+from orders.models import (
+    ClampQuotation,
+    Order,
+    OrderItem,
+    OrderProposal,
+    OrderProposalItem,
+    OrderRequest,
+    OrderRequestEvent,
+    OrderRequestItem,
+    OrderStatusHistory,
+)
+from orders.services.workflow import (
+    ROLE_ADMIN,
+    ROLE_DEPOSITO,
+    ROLE_FACTURACION,
+    ROLE_VENTAS,
+    can_user_transition_order,
+    resolve_user_order_role,
+)
+from orders.services.request_workflow import (
+    confirm_order_request,
+    convert_request_to_order,
+    create_order_proposal,
+    record_order_request_event,
+    reject_order_request,
+)
+from core.models import (
+    AdminCompanyAccess,
+    Company,
+    DocumentSeries,
+    FISCAL_BILLABLE_DOC_TYPES,
+    FISCAL_CREDIT_NOTE_DOC_TYPES,
+    FISCAL_DOC_TYPE_FA,
+    FISCAL_DOC_TYPE_FB,
+    FISCAL_DOC_TYPE_FC,
+    FISCAL_INVOICE_DOC_TYPES,
+    FISCAL_ISSUE_MODE_ARCA_WSFE,
+    FISCAL_ISSUE_MODE_EXTERNAL_SAAS,
+    FISCAL_ISSUE_MODE_MANUAL,
+    FISCAL_STATUS_AUTHORIZED,
+    FISCAL_STATUS_EXTERNAL_RECORDED,
+    FISCAL_STATUS_PENDING_RETRY,
+    FISCAL_STATUS_READY_TO_ISSUE,
+    FISCAL_STATUS_REJECTED,
+    FISCAL_STATUS_SUBMITTING,
+    FISCAL_STATUS_VOIDED,
+    FiscalDocument,
+    FiscalDocumentItem,
+    FiscalPointOfSale,
+    InternalDocument,
+    SALES_BEHAVIOR_COTIZACION,
+    SALES_DOCUMENT_BEHAVIOR_CHOICES,
+    SALES_BEHAVIOR_FACTURA,
+    SALES_BEHAVIOR_NOTA_CREDITO,
+    SALES_BEHAVIOR_NOTA_DEBITO,
+    SALES_BEHAVIOR_PEDIDO,
+    SALES_BEHAVIOR_PRESUPUESTO,
+    SALES_BEHAVIOR_RECIBO,
+    SALES_BEHAVIOR_REMITO,
+    SALES_BILLING_MODE_INTERNAL_DOCUMENT,
+    SALES_BILLING_MODE_MANUAL_FISCAL,
+    SalesDocumentType,
+    SiteSettings,
+    CatalogAnalyticsEvent,
+    AdminAuditLog,
+    ImportExecution,
+    CatalogExcelTemplate,
+    CatalogExcelTemplateSheet,
+    CatalogExcelTemplateColumn,
+    StockMovement,
+    Warehouse,
+)
+from core.services.company_context import (
+    admin_company_access_table_available,
+    get_active_company,
+    get_default_company,
+    get_default_client_origin_company,
+    get_preferred_client_company,
+    get_user_companies,
+    set_active_company,
+    user_has_company_access,
+)
+from django.contrib.auth.models import Group, User
+from admin_panel.forms.import_forms import ProductImportForm, ClientImportForm, CategoryImportForm
+from admin_panel.forms.category_forms import CategoryForm
+from admin_panel.fiscal_views import fiscal_health_view, fiscal_report_view
+from admin_panel.forms.export_forms import (
+    CatalogExcelTemplateForm,
+    CatalogExcelTemplateSheetForm,
+    CatalogExcelTemplateColumnForm,
+)
+from admin_panel.forms.sales_document_type_forms import SalesDocumentTypeForm, WarehouseForm
+from catalog.services.product_importer import ProductImporter
+from accounts.services.client_importer import ClientImporter
+from catalog.services.category_importer import CategoryImporter
+from catalog.services.abrazadera_importer import AbrazaderaImporter
+from catalog.services.supplier_sync import ensure_supplier, clean_supplier_name
+from catalog.services.clamp_code import (
+    DIAMETER_HUMAN_TO_COMPACT_DEFAULT,
+    generarCodigo,
+    parsearCodigo,
+)
+from catalog.services.clamp_quoter import (
+    CLAMP_LAMINATED_ALLOWED_DIAMETERS,
+    CLAMP_PRICE_LISTS,
+    CLAMP_WEIGHT_MAP,
+    calculate_clamp_quote,
+    get_allowed_diameter_options,
+    parse_decimal_value,
+    parse_int_value,
+)
+from catalog.services.clamp_request_products import (
+    publish_clamp_request_product,
+)
+from catalog.services.category_assignment import (
+    normalize_category_ids,
+    assign_categories_to_product,
+    add_category_to_products,
+    replace_categories_for_products,
+    remove_category_from_products,
+)
+from core.services.import_manager import ImportTaskManager
+from core.services.background_jobs import dispatch_import_job
+from core.services.fiscal import (
+    is_company_fiscal_ready,
+    is_invoice_ready,
+    resolve_payment_due_date,
+)
+from core.services.fiscal_notifications import send_fiscal_document_email
+from core.services.arca_client import ArcaConfigurationError, ArcaTemporaryError, ArcaWsfeClient
+from core.services.fiscal_documents import (
+    close_fiscal_document,
+    create_local_fiscal_document_from_order,
+    reopen_fiscal_document,
+    register_external_fiscal_document_for_order,
+    void_fiscal_document,
+)
+
+from core.services.documents import (
+    ensure_document_for_adjustment,
+    ensure_document_for_order,
+    ensure_document_for_payment,
+)
+from core.services.sales_documents import (
+    create_fiscal_document_from_sales_type,
+    create_internal_document_from_sales_type,
+    resolve_sales_document_type,
+)
+from core.services.advanced_search import (
+    apply_compact_text_search,
+    apply_text_search,
+    apply_parsed_text_search,
+    compact_search_token,
+    parse_text_search_query,
+    sanitize_search_token,
+)
+from core.services.catalog_excel_exporter import build_catalog_workbook, build_export_filename
+from core.services.audit import log_admin_action, log_admin_change, model_snapshot
+from core.services.pricing import resolve_effective_price_list
+import traceback
+import logging
+from core.decorators import superuser_required_for_modifications
+
+logger = logging.getLogger(__name__)
+PRIMARY_SUPERADMIN_USERNAME = getattr(settings, "ADMIN_PRIMARY_SUPERADMIN_USERNAME", "josueflexs")
+ADMIN_ROLE_CHOICES = [
+    (ROLE_ADMIN, "Administracion"),
+    (ROLE_VENTAS, "Ventas"),
+    (ROLE_DEPOSITO, "Deposito"),
+    (ROLE_FACTURACION, "Facturacion"),
+]
+ADMIN_ROLE_LABELS = dict(ADMIN_ROLE_CHOICES)
+FISCAL_PRINT_DOC_META = {
+    "FA": {"letter": "A", "code": "001"},
+    "FB": {"letter": "B", "code": "006"},
+    "FC": {"letter": "C", "code": "011"},
+    "NCA": {"letter": "A", "code": "003"},
+    "NCB": {"letter": "B", "code": "008"},
+    "NCC": {"letter": "C", "code": "013"},
+    "NDA": {"letter": "A", "code": "002"},
+    "NDB": {"letter": "B", "code": "007"},
+    "NDC": {"letter": "C", "code": "012"},
+}
+FISCAL_PRINT_COPY_LABELS = {
+    "original": "ORIGINAL",
+    "duplicado": "DUPLICADO",
+    "triplicado": "TRIPLICADO",
+}
+INVOICE_FISCAL_DOC_TYPES = tuple(sorted(FISCAL_INVOICE_DOC_TYPES))
+BILLABLE_FISCAL_DOC_TYPES = tuple(sorted(FISCAL_BILLABLE_DOC_TYPES))
+EMITTABLE_FISCAL_DOC_TYPES = tuple(choice[0] for choice in FiscalDocument.DOC_TYPE_CHOICES)
+CLIENT_FACTURABLE_STATUSES = {
+    Order.STATUS_CONFIRMED,
+    Order.STATUS_PREPARING,
+    Order.STATUS_SHIPPED,
+    Order.STATUS_DELIVERED,
+}
+CLIENT_REMITO_READY_STATUSES = {
+    Order.STATUS_SHIPPED,
+    Order.STATUS_DELIVERED,
+}
+ORDER_INTERNAL_DOC_STATUS_RULES = {
+    DocumentSeries.DOC_COT: {
+        Order.STATUS_DRAFT,
+        Order.STATUS_CONFIRMED,
+        Order.STATUS_PREPARING,
+        Order.STATUS_SHIPPED,
+        Order.STATUS_DELIVERED,
+    },
+    DocumentSeries.DOC_PED: {
+        Order.STATUS_CONFIRMED,
+        Order.STATUS_PREPARING,
+        Order.STATUS_SHIPPED,
+        Order.STATUS_DELIVERED,
+    },
+    DocumentSeries.DOC_REM: CLIENT_REMITO_READY_STATUSES,
+}
+
+
+
+from .helpers import *
+
+
+
+@staff_member_required
+def dashboard(request):
+    """Admin dashboard hub with queue metrics, recent activity and commercial rankings."""
+    active_company = get_active_company(request)
+    if not active_company:
+        messages.error(request, "Selecciona una empresa activa para abrir el dashboard.")
+        return redirect("select_company")
+    now = timezone.localtime()
+    today_start = timezone.make_aware(
+        datetime.combine(timezone.localdate(), time.min),
+        timezone.get_current_timezone(),
+    )
+    month_start = timezone.make_aware(
+        datetime.combine(timezone.localdate().replace(day=1), time.min),
+        timezone.get_current_timezone(),
+    )
+    last_30_days = timezone.now() - timedelta(days=30)
+
+    billable_documents_qs = FiscalDocument.objects.filter(
+        doc_type__in=BILLABLE_FISCAL_DOC_TYPES,
+        status__in=[FISCAL_STATUS_AUTHORIZED, FISCAL_STATUS_EXTERNAL_RECORDED],
+        issued_at__gte=last_30_days,
+    )
+    if active_company:
+        billable_documents_qs = billable_documents_qs.filter(company=active_company)
+
+    authorized_documents = FiscalDocument.objects.filter(
+        company=active_company,
+        doc_type__in=BILLABLE_FISCAL_DOC_TYPES,
+        status__in=[FISCAL_STATUS_AUTHORIZED, FISCAL_STATUS_EXTERNAL_RECORDED],
+    )
+    today_sales = authorized_documents.filter(issued_at__gte=today_start).aggregate(
+        sales_total=Coalesce(Sum("total"), Decimal("0.00")),
+        documents_count=Count("id"),
+    )
+    month_sales = authorized_documents.filter(issued_at__gte=month_start).aggregate(
+        sales_total=Coalesce(Sum("total"), Decimal("0.00")),
+        documents_count=Count("id"),
+        average_ticket=Coalesce(Avg("total"), Decimal("0.00")),
+    )
+    month_order_items = OrderItem.objects.filter(
+        order__company=active_company,
+        order__created_at__gte=month_start,
+    ).exclude(order__status=Order.STATUS_CANCELLED).select_related("product")
+    estimated_margin = sum(
+        (
+            Decimal(item.subtotal or 0)
+            - (Decimal(getattr(item.product, "cost", 0) or 0) * item.quantity)
+            for item in month_order_items
+        ),
+        Decimal("0.00"),
+    )
+    pending_orders_count = Order.objects.filter(
+        company=active_company,
+        status__in=[
+            Order.STATUS_DRAFT,
+            Order.STATUS_CONFIRMED,
+            Order.STATUS_PREPARING,
+            Order.STATUS_SHIPPED,
+        ],
+    ).count()
+    critical_stock_threshold = int(getattr(settings, "DASHBOARD_CRITICAL_STOCK_THRESHOLD", 5))
+    critical_stock_count = Product.objects.filter(
+        is_active=True,
+        stock__lte=critical_stock_threshold,
+    ).count()
+    new_clients_month = ClientCompany.objects.filter(
+        company=active_company,
+        is_active=True,
+        created_at__gte=month_start,
+    ).count()
+
+    top_clients_raw = (
+        billable_documents_qs
+        .values(
+            'client_profile__id',
+            'client_profile__company_name',
+            'client_profile__user__username',
+            'client_company_ref__client_profile__id',
+            'client_company_ref__client_profile__company_name',
+        )
+        .annotate(
+            total_billed=Sum('total'),
+            documents_count=Count('id'),
+        )
+        .order_by('-total_billed', '-documents_count')[:5]
+    )
+    top_clients_rank = [
+        {
+            'client_id': item.get('client_profile__id') or item.get('client_company_ref__client_profile__id'),
+            'client_name': item.get('client_profile__company_name')
+            or item.get('client_company_ref__client_profile__company_name')
+            or 'Cliente sin nombre',
+            'username': item.get('client_profile__user__username') or '-',
+            'total_billed': item.get('total_billed') or Decimal('0.00'),
+            'documents_count': item.get('documents_count') or 0,
+            'detail_url': (
+                reverse('admin_client_order_history', args=[item.get('client_profile__id') or item.get('client_company_ref__client_profile__id')])
+                if (item.get('client_profile__id') or item.get('client_company_ref__client_profile__id'))
+                else ''
+            ),
+        }
+        for item in top_clients_raw
+    ]
+
+    top_products_raw = (
+        FiscalDocument.objects.filter(pk__in=billable_documents_qs.values('pk'))
+        .values('items__product_id', 'items__sku', 'items__description')
+        .annotate(
+            total_qty=Sum('items__quantity'),
+            total_amount=Sum('items__total_amount'),
+            documents_count=Count('id', distinct=True),
+        )
+        .order_by('-total_qty', '-total_amount')[:5]
+    )
+    top_products_rank = [
+        {
+            'product_id': item.get('items__product_id'),
+            'sku': item.get('items__sku') or '-',
+            'description': item.get('items__description') or 'Producto sin descripcion',
+            'total_qty': item.get('total_qty') or Decimal('0.00'),
+            'total_amount': item.get('total_amount') or Decimal('0.00'),
+            'documents_count': item.get('documents_count') or 0,
+            'detail_url': (
+                reverse('admin_product_edit', args=[item.get('items__product_id')])
+                if item.get('items__product_id')
+                else (
+                    f"{reverse('admin_product_list')}?{urlencode({'q': item.get('items__sku') or ''})}"
+                    if item.get('items__sku')
+                    else reverse('admin_product_list')
+                )
+            ),
+        }
+        for item in top_products_raw
+    ]
+
+    debt_qs = ClientTransaction.objects.filter(client_profile__isnull=False)
+    if active_company:
+        debt_qs = debt_qs.filter(company=active_company)
+    top_debtors_raw = (
+        debt_qs
+        .values(
+            'client_profile__id',
+            'client_profile__company_name',
+            'client_profile__user__username',
+        )
+        .annotate(balance=Sum('amount'))
+        .filter(balance__gt=0)
+        .order_by('-balance')[:5]
+    )
+    top_debtors_rank = [
+        {
+            'client_id': item.get('client_profile__id'),
+            'client_name': item.get('client_profile__company_name') or 'Cliente sin nombre',
+            'username': item.get('client_profile__user__username') or '-',
+            'balance': item.get('balance') or Decimal('0.00'),
+            'detail_url': (
+                reverse('admin_client_order_history', args=[item.get('client_profile__id')])
+                if item.get('client_profile__id')
+                else ''
+            ),
+        }
+        for item in top_debtors_raw
+    ]
+
+    operational_snapshot_cards = build_operational_snapshot(company=active_company)
+    recent_activity = build_company_activity_timeline(company=active_company, limit=10)
+    my_client_tasks = ClientTask.objects.filter(
+        company=active_company,
+        assigned_to=request.user,
+        status=ClientTask.STATUS_PENDING,
+    )
+    my_client_tasks_count = my_client_tasks.count()
+    my_client_tasks_overdue = my_client_tasks.filter(due_at__lt=timezone.now()).count()
+
+    context = {
+        'active_company': active_company,
+        'operational_snapshot_cards': operational_snapshot_cards,
+        'recent_activity': recent_activity,
+        'my_client_tasks_count': my_client_tasks_count,
+        'my_client_tasks_overdue': my_client_tasks_overdue,
+        'top_clients_rank': top_clients_rank,
+        'top_products_rank': top_products_rank,
+        'top_debtors_rank': top_debtors_rank,
+        'today_sales': today_sales,
+        'month_sales': month_sales,
+        'estimated_margin': estimated_margin,
+        'pending_orders_count': pending_orders_count,
+        'critical_stock_count': critical_stock_count,
+        'critical_stock_threshold': critical_stock_threshold,
+        'new_clients_month': new_clients_month,
+        'dashboard_generated_at': now,
+    }
+    return render(request, 'admin_panel/dashboard.html', context)
+
+
+@staff_member_required
+def seller_performance_report(request):
+    """Read-only seller statistics based on the order's current assignment."""
+    active_company = get_active_company(request)
+    if not active_company:
+        messages.error(request, "Selecciona una empresa para ver vendedores.")
+        return redirect("select_company")
+
+    today = timezone.localdate()
+    default_from = today.replace(day=1)
+    date_from = parse_date(str(request.GET.get("date_from", "")).strip()) or default_from
+    date_to = parse_date(str(request.GET.get("date_to", "")).strip()) or today
+    if date_to < date_from:
+        date_from, date_to = date_to, date_from
+    start_at = timezone.make_aware(
+        datetime.combine(date_from, time.min),
+        timezone.get_current_timezone(),
+    )
+    end_at = timezone.make_aware(
+        datetime.combine(date_to + timedelta(days=1), time.min),
+        timezone.get_current_timezone(),
+    )
+    selected_seller_raw = str(request.GET.get("seller_id", "")).strip()
+    selected_seller_id = int(selected_seller_raw) if selected_seller_raw.isdigit() else None
+
+    orders_qs = (
+        Order.objects.filter(
+            company=active_company,
+            created_at__gte=start_at,
+            created_at__lt=end_at,
+        )
+        .exclude(status=Order.STATUS_CANCELLED)
+    )
+    invoices_qs = FiscalDocument.objects.filter(
+        company=active_company,
+        doc_type__in=FISCAL_BILLABLE_DOC_TYPES,
+        status__in=[FISCAL_STATUS_AUTHORIZED, FISCAL_STATUS_EXTERNAL_RECORDED],
+        issued_at__gte=start_at,
+        issued_at__lt=end_at,
+    )
+    credit_notes_qs = FiscalDocument.objects.filter(
+        company=active_company,
+        doc_type__in=FISCAL_CREDIT_NOTE_DOC_TYPES,
+        status__in=[FISCAL_STATUS_AUTHORIZED, FISCAL_STATUS_EXTERNAL_RECORDED],
+        issued_at__gte=start_at,
+        issued_at__lt=end_at,
+    )
+
+    seller_rows = {}
+
+    def ensure_seller_row(raw):
+        seller_id = raw.get("seller_id")
+        row = seller_rows.setdefault(
+            seller_id,
+            {
+                "seller_id": seller_id,
+                "seller_name": (
+                    raw.get("seller_name")
+                    or raw.get("username")
+                    or "Sin vendedor asignado"
+                ),
+                "username": raw.get("username") or "-",
+                "orders_count": 0,
+                "orders_total": Decimal("0.00"),
+                "invoices_count": 0,
+                "billed_total": Decimal("0.00"),
+                "credit_notes_count": 0,
+                "credit_total": Decimal("0.00"),
+                "clients_count": 0,
+            },
+        )
+        return row
+
+    order_stats = (
+        orders_qs.values(
+            seller_id=F("assigned_to_id"),
+            seller_name=Coalesce(
+                F("assigned_to__first_name"),
+                F("assigned_to__username"),
+                Value(""),
+            ),
+            username=Coalesce(F("assigned_to__username"), Value("")),
+        )
+        .annotate(
+            orders_count=Count("id"),
+            orders_total=Coalesce(
+                Sum("total"),
+                Value(Decimal("0.00")),
+                output_field=DecimalField(max_digits=14, decimal_places=2),
+            ),
+        )
+    )
+    for item in order_stats:
+        row = ensure_seller_row(item)
+        row["orders_count"] = item["orders_count"] or 0
+        row["orders_total"] = item["orders_total"] or Decimal("0.00")
+
+    invoice_stats = (
+        invoices_qs.values(
+            seller_id=F("order__assigned_to_id"),
+            seller_name=Coalesce(
+                F("order__assigned_to__first_name"),
+                F("order__assigned_to__username"),
+                Value(""),
+            ),
+            username=Coalesce(F("order__assigned_to__username"), Value("")),
+        )
+        .annotate(
+            invoices_count=Count("id"),
+            billed_total=Coalesce(
+                Sum("total"),
+                Value(Decimal("0.00")),
+                output_field=DecimalField(max_digits=14, decimal_places=2),
+            ),
+            clients_count=Count("order__user_id", distinct=True),
+        )
+    )
+    for item in invoice_stats:
+        row = ensure_seller_row(item)
+        row["invoices_count"] = item["invoices_count"] or 0
+        row["billed_total"] = item["billed_total"] or Decimal("0.00")
+        row["clients_count"] = item["clients_count"] or 0
+
+    credit_stats = (
+        credit_notes_qs.values(
+            seller_id=F("order__assigned_to_id"),
+            seller_name=Coalesce(
+                F("order__assigned_to__first_name"),
+                F("order__assigned_to__username"),
+                Value(""),
+            ),
+            username=Coalesce(F("order__assigned_to__username"), Value("")),
+        )
+        .annotate(
+            credit_notes_count=Count("id"),
+            credit_total=Coalesce(
+                Sum("total"),
+                Value(Decimal("0.00")),
+                output_field=DecimalField(max_digits=14, decimal_places=2),
+            ),
+        )
+    )
+    for item in credit_stats:
+        row = ensure_seller_row(item)
+        row["credit_notes_count"] = item["credit_notes_count"] or 0
+        row["credit_total"] = item["credit_total"] or Decimal("0.00")
+
+    rows = list(seller_rows.values())
+    for row in rows:
+        row["net_billed"] = (
+            Decimal(row["billed_total"]) - Decimal(row["credit_total"])
+        )
+        if row["seller_id"]:
+            row["detail_url"] = (
+                f"{reverse('admin_seller_performance')}?"
+                f"{urlencode({
+                    'date_from': date_from.isoformat(),
+                    'date_to': date_to.isoformat(),
+                    'seller_id': row['seller_id'],
+                })}"
+            )
+        else:
+            row["detail_url"] = ""
+    rows.sort(
+        key=lambda row: (
+            row["net_billed"],
+            row["orders_total"],
+            row["orders_count"],
+        ),
+        reverse=True,
+    )
+
+    seller_options = User.objects.filter(
+        pk__in=[
+            seller_id
+            for seller_id in seller_rows
+            if seller_id is not None
+        ]
+    ).order_by("first_name", "last_name", "username")
+    selected_seller = (
+        seller_options.filter(pk=selected_seller_id).first()
+        if selected_seller_id
+        else None
+    )
+    top_products = []
+    recent_documents = []
+    if selected_seller:
+        selected_invoices = invoices_qs.filter(order__assigned_to=selected_seller)
+        top_products = list(
+            FiscalDocumentItem.objects.filter(fiscal_document__in=selected_invoices)
+            .values("product_id", "sku", "description")
+            .annotate(
+                quantity_total=Sum("quantity"),
+                amount_total=Sum("total_amount"),
+                documents_count=Count("fiscal_document_id", distinct=True),
+            )
+            .order_by("-quantity_total", "-amount_total")[:15]
+        )
+        recent_documents = list(
+            selected_invoices.select_related(
+                "client_profile",
+                "client_company_ref__client_profile",
+                "point_of_sale",
+            ).order_by("-issued_at", "-id")[:20]
+        )
+
+    summary = {
+        "seller_count": len([row for row in rows if row["seller_id"]]),
+        "orders_count": sum(row["orders_count"] for row in rows),
+        "invoices_count": sum(row["invoices_count"] for row in rows),
+        "billed_total": sum(
+            (Decimal(row["billed_total"]) for row in rows),
+            Decimal("0.00"),
+        ),
+        "credit_total": sum(
+            (Decimal(row["credit_total"]) for row in rows),
+            Decimal("0.00"),
+        ),
+    }
+    summary["net_billed"] = summary["billed_total"] - summary["credit_total"]
+
+    return render(
+        request,
+        "admin_panel/sellers/performance.html",
+        {
+            "active_company": active_company,
+            "date_from": date_from,
+            "date_to": date_to,
+            "seller_rows": rows,
+            "seller_options": seller_options,
+            "selected_seller": selected_seller,
+            "top_products": top_products,
+            "recent_documents": recent_documents,
+            "summary": summary,
+        },
+    )
+
+
+__all__ = ['dashboard', 'seller_performance_report']

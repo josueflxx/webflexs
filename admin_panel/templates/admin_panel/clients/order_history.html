@@ -13,6 +13,7 @@
         }
         
         .client-ledger-panel {
+            position: relative;
             border-radius: 20px;
             border: 1px solid rgba(255, 107, 53, 0.15);
             background: linear-gradient(145deg, rgba(16, 22, 34, 0.95), rgba(11, 15, 25, 0.98));
@@ -20,6 +21,40 @@
             box-shadow: 0 16px 48px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.05);
             overflow: hidden;
             transition: var(--transition-smooth);
+        }
+
+        .client-ledger-panel.is-loading {
+            pointer-events: none;
+        }
+
+        .client-ledger-panel.is-loading::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            z-index: 40;
+            background: rgba(8, 12, 20, 0.52);
+            backdrop-filter: blur(2px);
+        }
+
+        .client-ledger-panel.is-loading::after {
+            content: "";
+            position: absolute;
+            z-index: 41;
+            top: 50%;
+            left: 50%;
+            width: 34px;
+            height: 34px;
+            margin: -17px 0 0 -17px;
+            border: 3px solid rgba(255, 255, 255, 0.18);
+            border-top-color: var(--color-primary);
+            border-radius: 50%;
+            animation: client-ledger-spin 0.72s linear infinite;
+        }
+
+        @keyframes client-ledger-spin {
+            to {
+                transform: rotate(360deg);
+            }
         }
         
         .client-ledger-head,
@@ -567,6 +602,174 @@
         .client-ledger-panel.is-sales .actions .client-ledger-inline {
             gap: 6px;
         }
+
+        .client-ledger-row-actions {
+            display: inline-flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 5px;
+            min-width: 190px;
+        }
+
+        .client-ledger-action-icon {
+            width: 34px;
+            height: 34px;
+            padding: 0;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            flex: 0 0 34px;
+            border: 1px solid rgba(148, 163, 184, 0.28);
+            border-radius: 9px;
+            background: rgba(255, 255, 255, 0.035);
+            color: #dbe5f3;
+            cursor: pointer;
+            transition: border-color .16s ease, background .16s ease, color .16s ease, transform .16s ease;
+        }
+
+        .client-ledger-action-icon svg {
+            width: 17px;
+            height: 17px;
+            fill: none;
+            stroke: currentColor;
+            stroke-width: 1.8;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
+
+        .client-ledger-action-icon:hover {
+            border-color: rgba(255, 107, 53, 0.62);
+            background: rgba(255, 107, 53, 0.12);
+            color: #ff8a60;
+            transform: translateY(-1px);
+        }
+
+        .client-ledger-action-icon.is-primary {
+            border-color: rgba(255, 107, 53, 0.5);
+            color: #ff8a60;
+        }
+
+        .client-ledger-action-icon.is-danger:hover {
+            border-color: rgba(248, 113, 113, 0.58);
+            background: rgba(248, 113, 113, 0.12);
+            color: #fca5a5;
+        }
+
+        .client-ledger-action-icon[disabled],
+        .client-ledger-action-icon.is-disabled {
+            opacity: .32;
+            cursor: not-allowed;
+            pointer-events: none;
+        }
+
+        .client-ledger-row-actions form {
+            margin: 0;
+            display: inline-flex;
+        }
+
+        .client-ledger-row-dialog {
+            width: min(440px, calc(100vw - 28px));
+            max-height: min(660px, calc(100vh - 32px));
+            margin: auto;
+            padding: 0;
+            overflow: hidden;
+            border: 1px solid rgba(255, 107, 53, 0.3);
+            border-radius: 16px;
+            background: #111827;
+            color: #e8eef7;
+            box-shadow: 0 24px 80px rgba(0, 0, 0, .58);
+        }
+
+        .client-ledger-row-dialog:not([open]) {
+            display: none;
+        }
+
+        .client-ledger-row-dialog::backdrop {
+            background: rgba(3, 7, 18, .7);
+            backdrop-filter: blur(3px);
+        }
+
+        .client-ledger-row-dialog-head {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 14px;
+            padding: 18px 18px 14px;
+            border-bottom: 1px solid rgba(255, 255, 255, .08);
+            background: linear-gradient(135deg, rgba(255, 107, 53, .13), rgba(255, 255, 255, .02));
+        }
+
+        .client-ledger-row-dialog-head strong {
+            display: block;
+            margin-bottom: 3px;
+            font-size: .96rem;
+        }
+
+        .client-ledger-row-dialog-head span {
+            color: #94a3b8;
+            font-size: .76rem;
+        }
+
+        .client-ledger-row-dialog-close {
+            width: 31px;
+            height: 31px;
+            border: 1px solid rgba(148, 163, 184, .28);
+            border-radius: 8px;
+            background: transparent;
+            color: #cbd5e1;
+            cursor: pointer;
+        }
+
+        .client-ledger-row-dialog-body {
+            display: grid;
+            gap: 8px;
+            max-height: 500px;
+            padding: 14px;
+            overflow-y: auto;
+        }
+
+        .client-ledger-row-dialog-action {
+            width: 100%;
+            min-height: 46px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 10px 12px;
+            border: 1px solid rgba(148, 163, 184, .2);
+            border-radius: 10px;
+            background: rgba(255, 255, 255, .025);
+            color: #e8eef7;
+            text-align: left;
+            text-decoration: none;
+            cursor: pointer;
+        }
+
+        .client-ledger-row-dialog-action:hover {
+            border-color: rgba(255, 107, 53, .5);
+            background: rgba(255, 107, 53, .09);
+        }
+
+        .client-ledger-row-dialog-action strong,
+        .client-ledger-row-dialog-action small {
+            display: block;
+        }
+
+        .client-ledger-row-dialog-action small {
+            margin-top: 2px;
+            color: #94a3b8;
+            font-size: .72rem;
+        }
+
+        .client-ledger-row-dialog-note {
+            margin: 0;
+            padding: 12px;
+            border: 1px dashed rgba(148, 163, 184, .24);
+            border-radius: 10px;
+            color: #aab6c8;
+            font-size: .78rem;
+            text-align: center;
+        }
         
         .client-ledger-panel.is-sales .client-inline-badge {
             font-size: 0.65rem;
@@ -619,26 +822,78 @@
         }
         
         .client-ledger-popover {
-            position: absolute;
-            top: calc(100% + 8px);
-            right: 0;
-            width: min(420px, 86vw);
-            z-index: 45;
-            padding: 16px;
-            border-radius: 16px;
+            position: fixed;
+            inset: 88px 24px 24px auto;
+            width: min(440px, calc(100vw - 32px));
+            max-width: none;
+            max-height: calc(100dvh - 112px);
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            flex-direction: column;
+            z-index: 1000;
+            border-radius: 18px;
             border: 1px solid rgba(255, 255, 255, 0.12);
             background: radial-gradient(circle at top right, rgba(255, 107, 53, 0.05), transparent 40%), linear-gradient(180deg, rgba(18, 25, 38, 0.98), rgba(11, 18, 30, 0.99));
-            box-shadow: 0 16px 40px rgba(0,0,0,0.38);
+            color: #eef3f8;
+            box-shadow: 0 24px 70px rgba(0, 0, 0, 0.58);
             backdrop-filter: var(--glass-blur);
         }
-        
-        .client-ledger-popover[hidden] {
-            display: none !important;
+
+        .client-ledger-popover:not([open]) {
+            display: none;
+        }
+
+        .client-ledger-popover[open] {
+            display: flex;
+        }
+
+        .client-ledger-popover::backdrop {
+            background: rgba(3, 7, 18, 0.58);
+            backdrop-filter: blur(3px);
+        }
+
+        .client-ledger-popover-head {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 16px;
+            padding: 18px 18px 15px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.09);
+            background: linear-gradient(135deg, rgba(255, 107, 53, 0.12), rgba(255, 255, 255, 0.02));
+        }
+
+        .client-ledger-popover-kicker {
+            display: block;
+            margin-bottom: 5px;
+            color: #ff8c5a;
+            font-size: 0.68rem;
+            font-weight: 800;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+
+        .client-ledger-popover-head strong {
+            display: block;
+            color: #f8fafc;
+            font-size: 1rem;
+            line-height: 1.25;
+        }
+
+        .client-ledger-popover-head p {
+            margin: 5px 0 0;
+            color: #94a3b8;
+            font-size: 0.78rem;
+            line-height: 1.4;
         }
         
         .client-ledger-popover-list {
             display: grid;
             gap: 8px;
+            padding: 14px;
+            overflow-y: auto;
+            overscroll-behavior: contain;
+            scrollbar-gutter: stable;
         }
         
         .client-ledger-popover-item,
@@ -656,6 +911,23 @@
             text-align: left;
             transition: var(--transition-smooth);
             cursor: pointer;
+            min-height: 62px;
+        }
+
+        .client-ledger-popover-item strong,
+        .client-ledger-popover-list button strong {
+            color: inherit;
+            font-size: 0.88rem;
+            line-height: 1.25;
+        }
+
+        .client-ledger-popover-item small,
+        .client-ledger-popover-list button small {
+            display: inline-block;
+            margin-top: 3px;
+            color: #a8b2c1;
+            font-size: 0.74rem;
+            line-height: 1.35;
         }
         
         .client-ledger-popover-item:hover,
@@ -693,6 +965,442 @@
             color: #c9d1de;
             font-size: 0.76rem;
         }
+
+        /* Consola comercial compacta inspirada en el flujo del SaaS. */
+        .client-ledger-panel.is-sales {
+            border-radius: 14px;
+            box-shadow: 0 12px 34px rgba(0, 0, 0, 0.28);
+        }
+
+        .client-ledger-panel.is-sales .client-ledger-sales-head {
+            min-height: 66px;
+            padding: 12px 16px;
+            border-top-width: 2px;
+            border-radius: 14px 14px 0 0;
+        }
+
+        .client-ledger-panel.is-sales .client-ledger-title-row {
+            gap: 11px;
+        }
+
+        .client-ledger-panel.is-sales .client-ledger-icon {
+            width: 38px;
+            height: 38px;
+            border-radius: 10px;
+            box-shadow: none;
+        }
+
+        .client-ledger-panel.is-sales .client-ledger-sales-head h2 {
+            font-size: 1.05rem;
+        }
+
+        .client-ledger-panel.is-sales .client-ledger-sales-head p {
+            margin-top: 2px;
+            font-size: 0.76rem;
+        }
+
+        .client-ledger-panel.is-sales .client-ledger-plus {
+            height: 34px;
+            padding: 0 13px;
+            border-radius: 9px;
+            font-size: 0.78rem;
+        }
+
+        .client-ledger-panel.is-sales .client-ledger-tabs {
+            margin: 0;
+            padding: 0 12px;
+            gap: 2px;
+            min-height: 43px;
+            border: 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 0;
+            background: rgba(15, 23, 42, 0.5);
+            flex-wrap: nowrap;
+        }
+
+        .client-ledger-panel.is-sales .client-ledger-tab {
+            height: 43px;
+            padding: 0 13px;
+            border-radius: 0;
+            border: 0;
+            border-bottom: 2px solid transparent;
+            font-size: 0.78rem;
+        }
+
+        .client-ledger-panel.is-sales .client-ledger-tab.active {
+            color: #fff;
+            border: 0;
+            border-bottom: 2px solid var(--color-primary);
+            background: rgba(255, 107, 53, 0.08);
+            box-shadow: none;
+        }
+
+        .client-ledger-quick {
+            margin: 12px 16px 0;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 10px;
+            background: rgba(15, 23, 42, 0.32);
+            overflow: hidden;
+        }
+
+        .client-ledger-quick[open] {
+            border-color: rgba(255, 107, 53, 0.22);
+        }
+
+        .client-ledger-quick-summary {
+            min-height: 44px;
+            padding: 8px 12px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            cursor: pointer;
+            list-style: none;
+            user-select: none;
+        }
+
+        .client-ledger-quick-summary::-webkit-details-marker {
+            display: none;
+        }
+
+        .client-ledger-quick-title,
+        .client-ledger-quick-meta {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .client-ledger-quick-kicker {
+            color: var(--color-primary-light);
+            font-size: 0.67rem;
+            font-weight: 800;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+        }
+
+        .client-ledger-quick-title strong {
+            color: #f8fafc;
+            font-size: 0.82rem;
+        }
+
+        .client-ledger-count {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 25px;
+            height: 23px;
+            padding: 0 8px;
+            border-radius: 999px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: #cbd5e1;
+            background: rgba(255, 255, 255, 0.04);
+            font-size: 0.7rem;
+            font-weight: 700;
+        }
+
+        .client-ledger-count.is-alert {
+            color: #ffad87;
+            border-color: rgba(255, 107, 53, 0.3);
+            background: rgba(255, 107, 53, 0.1);
+        }
+
+        .client-ledger-quick-chevron {
+            color: #94a3b8;
+            transition: transform 0.2s ease;
+        }
+
+        .client-ledger-quick[open] .client-ledger-quick-chevron {
+            transform: rotate(180deg);
+        }
+
+        .client-ledger-quick-tools {
+            padding: 8px 12px;
+            display: flex;
+            justify-content: flex-end;
+            border-top: 1px solid rgba(255, 255, 255, 0.06);
+        }
+
+        .client-ledger-quick .client-ledger-subtab {
+            padding: 4px 11px;
+            font-size: 0.72rem;
+        }
+
+        .client-ledger-quick .client-ledger-open-grid {
+            grid-template-columns: 1fr;
+            gap: 6px;
+            padding: 0 12px 12px;
+        }
+
+        .client-ledger-quick .client-ledger-open-item {
+            padding: 10px 12px;
+            border-radius: 9px;
+        }
+
+        .client-ledger-quick .client-ledger-open-item.is-empty {
+            min-height: 58px;
+            padding: 12px;
+            flex-direction: row;
+            gap: 10px;
+        }
+
+        .client-ledger-quick .client-ledger-open-item.is-empty .empty-state-icon {
+            width: 30px;
+            height: 30px;
+            margin: 0;
+        }
+
+        .client-ledger-open-line {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .client-ledger-open-line strong {
+            color: #f8fafc;
+            font-size: 0.8rem;
+        }
+
+        .client-ledger-open-line span {
+            color: #94a3b8;
+            font-size: 0.75rem;
+        }
+
+        .client-ledger-panel.is-sales .client-ledger-table-wrap {
+            padding: 12px 16px 0;
+        }
+
+        .client-ledger-panel.is-sales .client-ledger-table-card {
+            border-radius: 10px;
+            overflow-x: auto;
+            box-shadow: none;
+        }
+
+        .client-ledger-panel.is-sales .client-ledger-table-head {
+            min-height: 48px;
+            padding: 9px 12px;
+            flex-wrap: nowrap;
+        }
+
+        .client-ledger-panel.is-sales .client-ledger-table-head h3 {
+            margin: 0;
+            color: #f8fafc;
+            font-size: 0.88rem;
+        }
+
+        .client-ledger-panel.is-sales .client-ledger-table-head p {
+            display: none;
+        }
+
+        .client-ledger-compact-table {
+            width: 100%;
+            min-width: 680px;
+        }
+
+        .client-ledger-compact-table.is-account {
+            min-width: 760px;
+        }
+
+        .client-ledger-panel.is-sales .client-ledger-compact-table thead th {
+            padding: 9px 12px;
+            font-size: 0.72rem;
+        }
+
+        .client-ledger-panel.is-sales .client-ledger-compact-table tbody td {
+            padding: 9px 12px;
+            font-size: 0.78rem;
+        }
+
+        .client-ledger-compact-table small {
+            display: block;
+            margin-top: 2px;
+            color: #94a3b8;
+            line-height: 1.25;
+        }
+
+        .client-ledger-number-stack {
+            display: grid;
+            justify-items: start;
+            gap: 4px;
+        }
+
+        .client-ledger-number-badges {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 4px;
+        }
+
+        .client-ledger-panel.is-sales .client-ledger-table-foot {
+            min-height: 42px;
+            padding: 8px 12px;
+            font-size: 0.75rem;
+        }
+
+        .client-ledger-panel.is-sales .client-ledger-details {
+            margin: 12px 16px 16px;
+            padding: 10px 12px;
+            border-radius: 10px;
+        }
+
+        html[data-theme="light"] .client-ledger-panel.is-sales {
+            border-color: #d8e0ea;
+            background: #ffffff;
+            box-shadow: 0 12px 30px rgba(30, 41, 59, 0.09);
+        }
+
+        html[data-theme="light"] .client-ledger-panel.is-sales .client-ledger-sales-head {
+            border-bottom-color: #e2e8f0;
+            background: linear-gradient(135deg, #fff7f2, #ffffff 58%);
+        }
+
+        html[data-theme="light"] .client-ledger-panel.is-sales .client-ledger-sales-head h2,
+        html[data-theme="light"] .client-ledger-panel.is-sales .client-ledger-table-head h3,
+        html[data-theme="light"] .client-ledger-quick-title strong,
+        html[data-theme="light"] .client-ledger-open-line strong,
+        html[data-theme="light"] .client-ledger-summary {
+            color: #172033;
+        }
+
+        html[data-theme="light"] .client-ledger-panel.is-sales .client-ledger-sales-head p,
+        html[data-theme="light"] .client-ledger-open-line span,
+        html[data-theme="light"] .client-ledger-compact-table small {
+            color: #64748b;
+        }
+
+        html[data-theme="light"] .client-ledger-panel.is-sales .client-ledger-tabs {
+            border-bottom-color: #e2e8f0;
+            background: #f8fafc;
+        }
+
+        html[data-theme="light"] .client-ledger-panel.is-sales .client-ledger-tab {
+            color: #64748b;
+        }
+
+        html[data-theme="light"] .client-ledger-panel.is-sales .client-ledger-tab:hover:not(.active) {
+            color: #172033;
+            background: #eef2f7;
+        }
+
+        html[data-theme="light"] .client-ledger-panel.is-sales .client-ledger-tab.active {
+            color: #b83d11;
+            background: #fff3ec;
+        }
+
+        html[data-theme="light"] .client-ledger-popover {
+            border-color: #d8e0ea;
+            background: #ffffff;
+            color: #172033;
+            box-shadow: 0 24px 70px rgba(30, 41, 59, 0.24);
+        }
+
+        html[data-theme="light"] .client-ledger-popover::backdrop {
+            background: rgba(30, 41, 59, 0.32);
+        }
+
+        html[data-theme="light"] .client-ledger-popover-head {
+            border-bottom-color: #e2e8f0;
+            background: linear-gradient(135deg, #fff3ec, #ffffff);
+        }
+
+        html[data-theme="light"] .client-ledger-popover-head strong {
+            color: #172033;
+        }
+
+        html[data-theme="light"] .client-ledger-popover-head p,
+        html[data-theme="light"] .client-ledger-popover-item small,
+        html[data-theme="light"] .client-ledger-popover-list button small {
+            color: #64748b;
+        }
+
+        html[data-theme="light"] .client-ledger-popover-item,
+        html[data-theme="light"] .client-ledger-popover-list button {
+            border-color: #e2e8f0;
+            background: #f8fafc;
+            color: #172033;
+        }
+
+        html[data-theme="light"] .client-ledger-popover-item:hover,
+        html[data-theme="light"] .client-ledger-popover-list button:hover {
+            border-color: #fdba9a;
+            background: #fff3ec;
+        }
+
+        html[data-theme="light"] .client-ledger-quick,
+        html[data-theme="light"] .client-ledger-panel.is-sales .client-ledger-table-card,
+        html[data-theme="light"] .client-ledger-panel.is-sales .client-ledger-details {
+            border-color: #dbe3ed;
+            background: #ffffff;
+        }
+
+        html[data-theme="light"] .client-ledger-quick-tools,
+        html[data-theme="light"] .client-ledger-panel.is-sales .client-ledger-table-head,
+        html[data-theme="light"] .client-ledger-panel.is-sales .client-ledger-table-foot {
+            border-color: #e2e8f0;
+            background: #f8fafc;
+        }
+
+        html[data-theme="light"] .client-ledger-quick .client-ledger-open-item,
+        html[data-theme="light"] .client-ledger-panel.is-sales .client-ledger-activity-item {
+            border-color: #e2e8f0;
+            background: #f8fafc;
+        }
+
+        html[data-theme="light"] .client-ledger-panel.is-sales .admin-table thead th {
+            color: #475569;
+            border-bottom-color: #dbe3ed;
+            background: #eef3f8;
+        }
+
+        html[data-theme="light"] .client-ledger-panel.is-sales .admin-table tbody td {
+            color: #25324a;
+            border-bottom-color: #e7edf4;
+        }
+
+        html[data-theme="light"] .client-ledger-panel.is-sales .admin-table tbody tr:hover {
+            background: #fff8f4;
+        }
+
+        html[data-theme="light"] .client-ledger-action-icon {
+            border-color: #cbd5e1;
+            background: #ffffff;
+            color: #334155;
+        }
+
+        html[data-theme="light"] .client-ledger-row-dialog {
+            border-color: #f0b49d;
+            background: #ffffff;
+            color: #172033;
+            box-shadow: 0 24px 70px rgba(15, 23, 42, .24);
+        }
+
+        html[data-theme="light"] .client-ledger-row-dialog-head {
+            border-bottom-color: #e2e8f0;
+            background: linear-gradient(135deg, #fff4ef, #ffffff);
+        }
+
+        html[data-theme="light"] .client-ledger-row-dialog-head span,
+        html[data-theme="light"] .client-ledger-row-dialog-action small {
+            color: #64748b;
+        }
+
+        html[data-theme="light"] .client-ledger-row-dialog-close {
+            border-color: #cbd5e1;
+            color: #334155;
+        }
+
+        html[data-theme="light"] .client-ledger-row-dialog-action {
+            border-color: #dbe3ed;
+            background: #f8fafc;
+            color: #172033;
+        }
+
+        html[data-theme="light"] .client-ledger-panel.is-sales .client-ledger-details .client-ledger-box > strong,
+        html[data-theme="light"] .client-ledger-panel.is-sales .client-ledger-activity-item > strong {
+            color: #172033 !important;
+        }
         
         @media (max-width: 1100px) {
             .client-ledger-grid,
@@ -720,6 +1428,33 @@
             .client-ledger-kpis {
                 grid-template-columns: 1fr;
             }
+            .client-ledger-panel.is-sales .client-ledger-sales-head {
+                min-height: auto;
+            }
+            .client-ledger-panel.is-sales .client-ledger-sales-head p {
+                display: none;
+            }
+            .client-ledger-panel.is-sales .client-ledger-tabs {
+                padding-inline: 8px;
+            }
+            .client-ledger-quick-summary {
+                align-items: flex-start;
+            }
+            .client-ledger-quick-meta {
+                justify-content: flex-end;
+            }
+            .client-ledger-popover {
+                inset: auto 10px 10px;
+                width: auto;
+                max-height: min(78dvh, 680px);
+                border-radius: 18px;
+            }
+            .client-ledger-popover-head {
+                padding: 16px;
+            }
+            .client-ledger-popover-list {
+                padding: 10px;
+            }
         }
     </style>
 
@@ -735,12 +1470,6 @@
                 </div>
             </div>
             <div class="client-ledger-actions">
-                {% if active_company and not client_company_missing %}
-                <a href="/admin-panel/clientes/{{ client.pk }}/tareas/?company_id={{ active_company.pk }}" class="btn btn-primary">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9ZM10 21h4"/></svg>
-                    <span>Tareas{% if pending_client_tasks %} ({{ pending_client_tasks }}){% endif %}</span>
-                </a>
-                {% endif %}
                 {% if can_edit_client_profile %}
                 <a href="{% url 'admin_client_edit' client.pk %}" class="btn btn-outline">
                     <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
@@ -851,7 +1580,13 @@
     <div class="alert alert-warning">Este cliente no esta habilitado para operar en la empresa activa. Las acciones comerciales quedan bloqueadas.</div>
     {% endif %}
 
-    <section class="client-ledger-panel is-sales">
+    <section
+        id="client-ledger-fragment"
+        class="client-ledger-panel is-sales"
+        data-client-ledger-fragment
+        aria-live="polite"
+        aria-busy="false"
+    >
         <div class="client-ledger-sales-head">
             <div class="client-ledger-title-row">
                 <div class="client-ledger-icon" aria-hidden="true">
@@ -868,11 +1603,12 @@
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
                     <span>Nuevo movimiento</span>
                 </button>
-                <div class="client-ledger-popover" data-movement-popover hidden>
-                    <div class="client-ledger-head" style="padding:0 0 10px;background:none;border:0;">
+                <dialog class="client-ledger-popover" data-movement-popover aria-labelledby="new-movement-title">
+                    <div class="client-ledger-popover-head">
                         <div>
-                            <strong style="color:#fff">Nuevo movimiento</strong>
-                            <div style="color:rgba(210,217,226,.68);font-size:.8rem">Acciones rapidas para {{ active_company_label }}</div>
+                            <span class="client-ledger-popover-kicker">Acciones comerciales</span>
+                            <strong id="new-movement-title">Nuevo movimiento</strong>
+                            <p>Elegí qué querés generar para {{ active_company_label }}.</p>
                         </div>
                         <button type="button" class="btn btn-outline btn-sm" data-movement-close>Cerrar</button>
                     </div>
@@ -891,53 +1627,62 @@
                             {% endif %}
                         {% endfor %}
                     </div>
-                </div>
+                </dialog>
             </div>
             {% endif %}
         </div>
 
         <nav class="client-ledger-tabs">
             {% for tab in client_tabs %}
-            <a href="{{ tab.url }}" class="client-ledger-tab {% if tab.is_active %}active{% endif %}">{{ tab.label }}</a>
+            <a href="{{ tab.url }}" class="client-ledger-tab {% if tab.is_active %}active{% endif %}" data-client-ledger-nav>{{ tab.label }}</a>
             {% endfor %}
         </nav>
 
-        <div class="client-ledger-open-row">
-            <div>
-                <h3 style="margin:0;color:#fff;font-weight:700;font-size:1.05rem;">Movimientos abiertos</h3>
-                <p>Borradores y anulados quedan aca hasta que se cierren o revisen.</p>
+        <details class="client-ledger-quick" {% if open_movements_count or open_state_tab == 'voided' %}open{% endif %}>
+            <summary class="client-ledger-quick-summary">
+                <span class="client-ledger-quick-title">
+                    <span class="client-ledger-quick-kicker">Atencion rapida</span>
+                    <strong>{% if open_state_tab == 'voided' %}Movimientos anulados{% else %}Movimientos pendientes{% endif %}</strong>
+                </span>
+                <span class="client-ledger-quick-meta">
+                    <span class="client-ledger-count {% if open_movements_count %}is-alert{% endif %}">{{ open_movements_count }} abiertos</span>
+                    <span class="client-ledger-count">{{ voided_movements_count }} anulados</span>
+                    <svg class="client-ledger-quick-chevron" xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                </span>
+            </summary>
+            <div class="client-ledger-quick-tools">
+                <div class="client-ledger-subtabs">
+                    {% for tab in open_state_tabs %}
+                    <a href="{{ tab.url }}" class="client-ledger-subtab {% if tab.is_active %}active{% endif %}" data-client-ledger-nav>{{ tab.label }}</a>
+                    {% endfor %}
+                </div>
             </div>
-            <div class="client-ledger-subtabs">
-                {% for tab in open_state_tabs %}
-                <a href="{{ tab.url }}" class="client-ledger-subtab {% if tab.is_active %}active{% endif %}">{{ tab.label }}</a>
+            <div class="client-ledger-open-grid">
+                {% for row in open_movement_rows %}
+                <article class="client-ledger-open-item">
+                    <div class="client-ledger-open-line">
+                        <div>
+                            <strong>{{ row.type_label }} {{ row.number_label }}</strong>
+                            <span>{{ row.tx.occurred_at|date:"d/m/Y H:i" }} | {{ row.reference_title }} | ${{ row.movement_total|floatformat:2 }}</span>
+                        </div>
+                        <div class="client-ledger-inline">
+                            <span class="badge {{ row.movement_state_badge }}">{{ row.movement_state_label }}</span>
+                            {% if row.edit_url %}<a href="{{ row.edit_url }}" class="btn btn-outline btn-sm">{% if open_state_tab == 'open' %}Modificar{% else %}Ver{% endif %}</a>{% endif %}
+                            {% if open_state_tab == 'open' and row.can_close_movement %}<form method="post" action="{% url 'admin_client_transaction_set_state' client.pk row.tx.pk %}" style="margin:0;">{% csrf_token %}<input type="hidden" name="state" value="closed"><input type="hidden" name="next" value="{{ request.get_full_path }}"><button type="submit" class="btn btn-outline btn-sm">Cerrar</button></form>{% endif %}
+                            {% if open_state_tab == 'open' and row.can_void_movement %}<form method="post" action="{% url 'admin_client_transaction_set_state' client.pk row.tx.pk %}" style="margin:0;">{% csrf_token %}<input type="hidden" name="state" value="voided"><input type="hidden" name="next" value="{{ request.get_full_path }}"><button type="submit" class="btn btn-outline btn-sm">Anular</button></form>{% endif %}
+                        </div>
+                    </div>
+                </article>
+                {% empty %}
+                <article class="client-ledger-open-item is-empty">
+                    <div class="empty-state-icon">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                    </div>
+                    <p>{% if open_state_tab == 'voided' %}No hay movimientos anulados para este cliente.{% else %}No hay movimientos abiertos para este cliente.{% endif %}</p>
+                </article>
                 {% endfor %}
             </div>
-        </div>
-
-        <div class="client-ledger-open-grid">
-            {% for row in open_movement_rows %}
-            <article class="client-ledger-open-item">
-                <div class="client-ledger-open-copy">
-                    <strong style="color:#fff">{{ row.type_label }} {{ row.number_label }}</strong>
-                    <span>{{ row.tx.occurred_at|date:"d/m/Y H:i" }} | {{ row.reference_title }}</span>
-                    <span>Total ${{ row.movement_total|floatformat:2 }} | {{ row.source_origin_label }}</span>
-                </div>
-                <div class="client-ledger-inline" style="margin-top:12px;">
-                    <span class="badge {{ row.movement_state_badge }}">{{ row.movement_state_label }}</span>
-                    {% if row.edit_url %}<a href="{{ row.edit_url }}" class="btn btn-outline btn-sm">{% if open_state_tab == 'open' %}Modificar este movimiento{% else %}Ver movimiento{% endif %}</a>{% endif %}
-                    {% if open_state_tab == 'open' and row.can_close_movement %}<form method="post" action="{% url 'admin_client_transaction_set_state' client.pk row.tx.pk %}" style="margin:0;">{% csrf_token %}<input type="hidden" name="state" value="closed"><input type="hidden" name="next" value="{{ request.get_full_path }}"><button type="submit" class="btn btn-outline btn-sm">Cerrar</button></form>{% endif %}
-                    {% if open_state_tab == 'open' and row.can_void_movement %}<form method="post" action="{% url 'admin_client_transaction_set_state' client.pk row.tx.pk %}" style="margin:0;">{% csrf_token %}<input type="hidden" name="state" value="voided"><input type="hidden" name="next" value="{{ request.get_full_path }}"><button type="submit" class="btn btn-outline btn-sm">Anular</button></form>{% endif %}
-                </div>
-            </article>
-            {% empty %}
-            <article class="client-ledger-open-item is-empty">
-                <div class="empty-state-icon">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
-                </div>
-                <p>{% if open_state_tab == 'voided' %}No hay movimientos anulados para este cliente en la empresa activa.{% else %}No hay movimientos abiertos para este cliente en la empresa activa.{% endif %}</p>
-            </article>
-            {% endfor %}
-        </div>
+        </details>
 
         {% if movement_tab == 'activity' %}
         <div class="client-ledger-activity-list">
@@ -968,7 +1713,7 @@
                 <div class="client-ledger-table-card">
                     <div class="client-ledger-table-head">
                         <div>
-                            <h3 style="margin:0;color:#fff;font-weight:700;font-size:1.05rem;">{{ active_ledger_title }}</h3>
+                            <h3>{{ active_ledger_title }}</h3>
                             <p style="margin:4px 0 0;color:#94a3b8;font-size:0.84rem;">{{ active_ledger_subtitle }}</p>
                         </div>
                         {% if movement_tab == 'account' %}
@@ -978,42 +1723,109 @@
                         </div>
                         {% endif %}
                     </div>
-                    <table class="admin-table">
+                    <table class="admin-table client-ledger-compact-table {% if movement_tab == 'account' %}is-account{% endif %}">
                         <thead>
                             {% if movement_tab == 'account' %}
-                            <tr><th>Fecha</th><th>Tipo comercial</th><th>Numero</th><th>Referencia</th><th>Debe</th><th>Haber</th><th>Saldo</th><th>Estado</th><th>Acciones</th></tr>
+                            <tr><th>Fecha</th><th>Tipo</th><th>Numero</th><th>Deuda</th><th>Pago</th><th>Saldo</th><th>Acciones</th></tr>
                             {% else %}
-                            <tr><th>Fecha</th><th>Tipo</th><th>Numero</th><th>Referencia</th><th>Total</th><th>Estado</th><th>Acciones</th></tr>
+                            <tr><th>Fecha</th><th>Tipo</th><th>Numero</th><th>Total</th><th>Estado</th><th>Acciones</th></tr>
                             {% endif %}
                         </thead>
                         <tbody>
                             {% for row in ledger_rows %}
                             <tr>
                                 <td>{{ row.tx.occurred_at|date:"d/m/Y H:i" }}</td>
-                                <td><strong>{{ row.type_label }}</strong>{% if row.type_family_label and row.type_family_label != row.type_label %}<br><small>{{ row.type_family_label }}</small>{% endif %}</td>
-                                <td><strong>{{ row.number_label }}</strong><br><span class="client-inline-badge {% if row.source_origin_label == 'Fiscal' %}is-fiscal{% elif row.source_origin_label == 'Interno' %}is-internal{% elif row.source_origin_label == 'SaaS' %}is-saas{% elif row.source_origin_label == 'Pago' %}is-payment{% else %}is-movement{% endif %}">{{ row.source_origin_label }}</span></td>
-                                <td><strong>{{ row.reference_title }}</strong>{% if row.reference_meta %}<br><small>{{ row.reference_meta }}</small>{% endif %}</td>
+                                <td><strong>{{ row.type_label }}</strong><small>{{ row.reference_title }}{% if row.reference_meta %} | {{ row.reference_meta }}{% endif %}</small></td>
+                                <td>
+                                    <div class="client-ledger-number-stack">
+                                        <strong>{{ row.number_label }}</strong>
+                                        <span class="client-ledger-number-badges">
+                                            <span class="client-inline-badge {% if row.source_origin_label == 'Fiscal' %}is-fiscal{% elif row.source_origin_label == 'Interno' %}is-internal{% elif row.source_origin_label == 'SaaS' %}is-saas{% elif row.source_origin_label == 'Pago' %}is-payment{% else %}is-movement{% endif %}">{{ row.source_origin_label }}</span>
+                                            {% if movement_tab == 'account' %}<span class="badge {{ row.movement_state_badge }}">{{ row.movement_state_label }}</span>{% endif %}
+                                        </span>
+                                    </div>
+                                </td>
                                 {% if movement_tab == 'account' %}
                                 <td>{% if row.debit > 0 %}${{ row.debit|floatformat:2 }}{% else %}-{% endif %}</td>
                                 <td>{% if row.credit > 0 %}${{ row.credit|floatformat:2 }}{% else %}-{% endif %}</td>
                                 <td><strong>${{ row.running_balance|floatformat:2 }}</strong></td>
                                 {% else %}
                                 <td><strong>${{ row.movement_total|floatformat:2 }}</strong></td>
-                                {% endif %}
                                 <td><span class="badge {{ row.movement_state_badge }}">{{ row.movement_state_label }}</span></td>
+                                {% endif %}
                                 <td class="actions">
-                                    <div class="client-ledger-inline">
-                                        {% if row.edit_url %}<a href="{{ row.edit_url }}" class="btn btn-outline btn-sm">{{ row.edit_label|default:"Abrir" }}</a>{% endif %}
-                                        {% if row.can_reopen_movement and row.movement_state == 'closed' %}<form method="post" action="{% url 'admin_client_transaction_set_state' client.pk row.tx.pk %}" style="margin:0;">{% csrf_token %}<input type="hidden" name="state" value="open"><input type="hidden" name="next" value="{{ request.get_full_path }}"><button type="submit" class="btn btn-outline btn-sm">Dejar abierta</button></form>{% endif %}
-                                        {% if row.can_void_movement %}<form method="post" action="{% url 'admin_client_transaction_set_state' client.pk row.tx.pk %}" style="margin:0;">{% csrf_token %}<input type="hidden" name="state" value="voided"><input type="hidden" name="next" value="{{ request.get_full_path }}"><button type="submit" class="btn btn-outline btn-sm">Anular</button></form>{% endif %}
-                                        {% if row.document_url %}<a href="{{ row.document_url }}" class="btn btn-outline btn-sm" {% if row.document_target_blank %}data-print-window="1" target="_blank" rel="noopener noreferrer"{% endif %}>{{ row.document_action_label|default:"Documento" }}</a>{% elif row.document_locked %}<span class="btn btn-outline btn-sm">Cerrar para imprimir</span>{% endif %}
-                                        {% if row.payment_action_url and movement_tab != 'payments' %}<a href="{{ row.payment_action_url }}" class="btn btn-outline btn-sm">Cobro</a>{% endif %}
+                                    <div class="client-ledger-row-actions" aria-label="Acciones del movimiento {{ row.number_label }}">
+                                        {% if row.can_relate and row.movement_state != 'voided' and related_sales_document_actions %}
+                                        <button type="button" class="client-ledger-action-icon is-primary" title="Agregar venta relacionada" aria-label="Agregar venta relacionada" data-row-action-open="related-{{ row.tx.pk }}">
+                                            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.1.1l2-2a5 5 0 0 0-7.1-7.1l-1.1 1.1"/><path d="M14 11a5 5 0 0 0-7.1-.1l-2 2A5 5 0 0 0 12 20l1.1-1.1"/><path d="M12 8v8M8 12h8"/></svg>
+                                        </button>
+                                        <dialog class="client-ledger-row-dialog" data-row-action-dialog="related-{{ row.tx.pk }}">
+                                            <div class="client-ledger-row-dialog-head"><div><strong>Agregar venta relacionada</strong><span>El nuevo movimiento copiará los productos de {{ row.number_label }}.</span></div><button type="button" class="client-ledger-row-dialog-close" data-row-action-close aria-label="Cerrar">×</button></div>
+                                            <div class="client-ledger-row-dialog-body">
+                                                {% for item in related_sales_document_actions %}
+                                                <form method="post" action="{{ item.url }}">
+                                                    {% csrf_token %}
+                                                    <input type="hidden" name="company_id" value="{{ selected_company_id }}">
+                                                    <input type="hidden" name="action" value="{{ item.action_value }}">
+                                                    <input type="hidden" name="sales_document_type_id" value="{{ item.sales_document_type.pk }}">
+                                                    <input type="hidden" name="origin_channel" value="admin">
+                                                    <input type="hidden" name="source_tx_id" value="{{ row.tx.pk }}">
+                                                    {% if row.related_order_id %}<input type="hidden" name="source_order_id" value="{{ row.related_order_id }}">{% endif %}
+                                                    <button type="submit" class="client-ledger-row-dialog-action" {% if item.disabled %}disabled{% endif %}><span><strong>{{ item.label }}</strong><small>{{ item.help_text }}</small></span><span aria-hidden="true">→</span></button>
+                                                </form>
+                                                {% endfor %}
+                                            </div>
+                                        </dialog>
+                                        {% else %}
+                                        <span class="client-ledger-action-icon is-disabled" title="Este movimiento no admite una venta relacionada" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.1.1l2-2a5 5 0 0 0-7.1-7.1l-1.1 1.1"/><path d="M14 11a5 5 0 0 0-7.1-.1l-2 2A5 5 0 0 0 12 20l1.1-1.1"/></svg></span>
+                                        {% endif %}
+
+                                        {% if row.payment_action_url and movement_tab != 'payments' %}
+                                        <a href="{{ row.payment_action_url }}" class="client-ledger-action-icon" title="Agregar pago relacionado" aria-label="Agregar pago relacionado"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M16 8.5c-.8-.7-2-1-3.2-1-1.8 0-3 .8-3 2.1 0 3.2 6.4 1.4 6.4 4.7 0 1.3-1.2 2.2-3.2 2.2-1.5 0-2.9-.5-3.9-1.3M12.5 5.5v13"/></svg></a>
+                                        {% else %}
+                                        <span class="client-ledger-action-icon is-disabled" title="No hay una venta a la cual aplicar el pago" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9 12h6"/></svg></span>
+                                        {% endif %}
+
+                                        {% if row.edit_url %}
+                                        <a href="{{ row.edit_url }}" class="client-ledger-action-icon" title="Modificar venta" aria-label="Modificar venta"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z"/></svg></a>
+                                        {% else %}
+                                        <span class="client-ledger-action-icon is-disabled" title="Este movimiento no puede modificarse" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5 8 12l-4 1 1-4 8.5-8.5"/></svg></span>
+                                        {% endif %}
+
+                                        {% if row.can_void_movement %}
+                                        <form method="post" action="{% url 'admin_client_transaction_set_state' client.pk row.tx.pk %}" data-movement-delete>
+                                            {% csrf_token %}<input type="hidden" name="state" value="voided"><input type="hidden" name="next" value="{{ request.get_full_path }}">
+                                            <button type="submit" class="client-ledger-action-icon is-danger" title="Eliminar venta (se conservará anulada)" aria-label="Eliminar venta"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m9 9 6 6m0-6-6 6"/></svg></button>
+                                        </form>
+                                        {% else %}
+                                        <span class="client-ledger-action-icon is-disabled" title="Este movimiento no se puede eliminar" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m9 9 6 6m0-6-6 6"/></svg></span>
+                                        {% endif %}
+
+                                        {% if row.share_actions %}
+                                        <button type="button" class="client-ledger-action-icon" title="Compartir" aria-label="Compartir movimiento" data-row-action-open="share-{{ row.tx.pk }}"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 10.5 6.8-4M8.6 13.5l6.8 4"/></svg></button>
+                                        <dialog class="client-ledger-row-dialog" data-row-action-dialog="share-{{ row.tx.pk }}">
+                                            <div class="client-ledger-row-dialog-head"><div><strong>Compartir {{ row.number_label }}</strong><span>Imprime, exporta o comparte una vista pública del documento.</span></div><button type="button" class="client-ledger-row-dialog-close" data-row-action-close aria-label="Cerrar">×</button></div>
+                                            <div class="client-ledger-row-dialog-body">
+                                                {% if row.share_actions.enabled %}
+                                                <a href="{{ row.share_actions.pdf_url }}" class="client-ledger-row-dialog-action"><span><strong>Descargar PDF</strong><small>Guarda una copia del documento.</small></span><span aria-hidden="true">PDF</span></a>
+                                                <a href="{{ row.share_actions.print_url }}" class="client-ledger-row-dialog-action" target="_blank" rel="noopener"><span><strong>Imprimir</strong><small>Abre la vista de impresión.</small></span><span aria-hidden="true">↗</span></a>
+                                                <a href="{{ row.share_actions.web_url }}" class="client-ledger-row-dialog-action" target="_blank" rel="noopener"><span><strong>Ver en la web</strong><small>Vista pública, limpia y apta para compartir.</small></span><span aria-hidden="true">WEB</span></a>
+                                                <a href="{{ row.share_actions.excel_url }}" class="client-ledger-row-dialog-action"><span><strong>Descargar Excel</strong><small>Exporta el detalle y los totales.</small></span><span aria-hidden="true">XLSX</span></a>
+                                                <button type="button" class="client-ledger-row-dialog-action" data-copy-public-link="{{ row.share_actions.public_url }}"><span><strong>Copiar enlace público</strong><small>Cualquier persona con el vínculo podrá verlo.</small></span><span aria-hidden="true">⧉</span></button>
+                                                {% else %}
+                                                <p class="client-ledger-row-dialog-note">{{ row.share_actions.disabled_reason }}</p>
+                                                {% endif %}
+                                            </div>
+                                        </dialog>
+                                        {% else %}
+                                        <span class="client-ledger-action-icon is-disabled" title="Este movimiento no tiene un documento compartible" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 10.5 6.8-4M8.6 13.5l6.8 4"/></svg></span>
+                                        {% endif %}
                                     </div>
                                 </td>
                             </tr>
                             {% empty %}
                             <tr>
-                                <td colspan="{% if movement_tab == 'account' %}9{% else %}7{% endif %}" class="table-empty-cell">
+                                <td colspan="{% if movement_tab == 'account' %}7{% else %}6{% endif %}" class="table-empty-cell">
                                     <div class="empty-table-wrap">
                                         <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
                                         <p>No hay movimientos registrados para este filtro.</p>
@@ -1026,8 +1838,8 @@
                     <div class="client-ledger-table-foot">
                         <span><strong>{{ ledger_rows_total }}</strong> movimientos | mostrando {{ ledger_rows|length }}</span>
                         <div class="client-ledger-inline">
-                            {% if ledger_hidden_count > 0 and ledger_more_url %}<a href="{{ ledger_more_url }}" class="btn btn-outline btn-sm">Mostrar mas</a>{% endif %}
-                            {% if ledger_hidden_count > 0 and ledger_show_all_url %}<a href="{{ ledger_show_all_url }}" class="btn btn-outline btn-sm">Mostrar todo</a>{% endif %}
+                            {% if ledger_hidden_count > 0 and ledger_more_url %}<a href="{{ ledger_more_url }}" class="btn btn-outline btn-sm" data-client-ledger-nav>Mostrar mas</a>{% endif %}
+                            {% if ledger_hidden_count > 0 and ledger_show_all_url %}<a href="{{ ledger_show_all_url }}" class="btn btn-outline btn-sm" data-client-ledger-nav>Mostrar todo</a>{% endif %}
                         </div>
                     </div>
                 </div>
@@ -1054,25 +1866,285 @@
 {{ block.super }}
 <script>
 document.addEventListener('DOMContentLoaded', () => {
-    const menu = document.querySelector('[data-movement-menu]');
-    const toggle = menu ? menu.querySelector('[data-movement-toggle]') : null;
-    const popover = menu ? menu.querySelector('[data-movement-popover]') : null;
-    const close = menu ? menu.querySelector('[data-movement-close]') : null;
-    const hide = () => { if (popover) { popover.hidden = true; } };
-    if (toggle && popover) {
-        toggle.addEventListener('click', (event) => {
-            event.preventDefault();
-            popover.hidden = !popover.hidden;
+    const fragmentSelector = '[data-client-ledger-fragment]';
+    let activeRequest = null;
+
+    const getFragment = () => document.querySelector(fragmentSelector);
+
+    const closeMovementPopover = (popover) => {
+        if (!popover) {
+            return;
+        }
+        if (typeof popover.close === 'function' && popover.open) {
+            popover.close();
+        } else {
+            popover.removeAttribute('open');
+        }
+    };
+
+    const openMovementPopover = (popover) => {
+        if (!popover || popover.open) {
+            return;
+        }
+        if (typeof popover.showModal === 'function') {
+            popover.showModal();
+        } else {
+            popover.setAttribute('open', '');
+        }
+    };
+
+    const closeRowActionDialogs = (exceptDialog = null) => {
+        document.querySelectorAll('[data-row-action-dialog][open]').forEach((dialog) => {
+            if (dialog !== exceptDialog && typeof dialog.close === 'function') {
+                dialog.close();
+            }
         });
-    }
-    if (close) {
-        close.addEventListener('click', () => hide());
-    }
+    };
+
+    const copyText = async (value) => {
+        if (navigator.clipboard && window.isSecureContext) {
+            await navigator.clipboard.writeText(value);
+            return;
+        }
+        const helper = document.createElement('textarea');
+        helper.value = value;
+        helper.setAttribute('readonly', '');
+        helper.style.position = 'fixed';
+        helper.style.opacity = '0';
+        document.body.appendChild(helper);
+        helper.select();
+        document.execCommand('copy');
+        helper.remove();
+    };
+
+    const hideMovementMenus = (exceptMenu = null) => {
+        document.querySelectorAll('[data-movement-menu]').forEach((menu) => {
+            if (menu === exceptMenu) {
+                return;
+            }
+            const popover = menu.querySelector('[data-movement-popover]');
+            if (popover) {
+                closeMovementPopover(popover);
+            }
+        });
+    };
+
+    const showNavigationError = () => {
+        if (typeof window.showFLEXSToast === 'function') {
+            window.showFLEXSToast(
+                'No se pudo cambiar la vista',
+                'La conexión no respondió. Puedes volver a intentarlo sin perder la página actual.',
+                'error'
+            );
+        }
+    };
+
+    const loadLedgerFragment = async (targetUrl, historyMode = 'push') => {
+        const currentFragment = getFragment();
+        if (!currentFragment) {
+            window.location.assign(targetUrl);
+            return;
+        }
+
+        if (activeRequest) {
+            activeRequest.abort();
+        }
+
+        const controller = new AbortController();
+        activeRequest = controller;
+        const scrollPosition = {
+            x: window.scrollX,
+            y: window.scrollY,
+        };
+
+        currentFragment.classList.add('is-loading');
+        currentFragment.setAttribute('aria-busy', 'true');
+
+        try {
+            const response = await fetch(targetUrl, {
+                method: 'GET',
+                credentials: 'same-origin',
+                headers: {
+                    'Accept': 'text/html',
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+                signal: controller.signal,
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+
+            const html = await response.text();
+            const parsedDocument = new DOMParser().parseFromString(html, 'text/html');
+            const incomingFragment = parsedDocument.querySelector(fragmentSelector);
+
+            if (!incomingFragment) {
+                throw new Error('No se encontró el panel de movimientos en la respuesta.');
+            }
+
+            currentFragment.replaceWith(incomingFragment);
+            hideMovementMenus();
+
+            if (historyMode === 'push') {
+                window.history.pushState({ clientLedger: true }, '', targetUrl);
+            } else if (historyMode === 'replace') {
+                window.history.replaceState({ clientLedger: true }, '', targetUrl);
+            }
+
+            window.requestAnimationFrame(() => {
+                window.scrollTo(scrollPosition.x, scrollPosition.y);
+            });
+        } catch (error) {
+            if (error.name !== 'AbortError') {
+                currentFragment.classList.remove('is-loading');
+                currentFragment.setAttribute('aria-busy', 'false');
+                showNavigationError();
+            }
+        } finally {
+            if (activeRequest === controller) {
+                activeRequest = null;
+                const visibleFragment = getFragment();
+                if (visibleFragment) {
+                    visibleFragment.classList.remove('is-loading');
+                    visibleFragment.setAttribute('aria-busy', 'false');
+                }
+            }
+        }
+    };
+
     document.addEventListener('click', (event) => {
-        if (menu && !menu.contains(event.target)) {
-            hide();
+        const rowDialogOpen = event.target.closest('[data-row-action-open]');
+        if (rowDialogOpen) {
+            event.preventDefault();
+            const key = rowDialogOpen.getAttribute('data-row-action-open');
+            const dialog = document.querySelector(`[data-row-action-dialog="${CSS.escape(key)}"]`);
+            if (dialog) {
+                closeRowActionDialogs(dialog);
+                if (typeof dialog.showModal === 'function') {
+                    dialog.showModal();
+                } else {
+                    dialog.setAttribute('open', '');
+                }
+            }
+            return;
+        }
+
+        const rowDialogClose = event.target.closest('[data-row-action-close]');
+        if (rowDialogClose) {
+            event.preventDefault();
+            const dialog = rowDialogClose.closest('[data-row-action-dialog]');
+            if (dialog && typeof dialog.close === 'function') {
+                dialog.close();
+            } else if (dialog) {
+                dialog.removeAttribute('open');
+            }
+            return;
+        }
+
+        const copyPublicLink = event.target.closest('[data-copy-public-link]');
+        if (copyPublicLink) {
+            event.preventDefault();
+            const publicUrl = new URL(copyPublicLink.getAttribute('data-copy-public-link'), window.location.origin).toString();
+            copyText(publicUrl).then(() => {
+                if (typeof window.showFLEXSToast === 'function') {
+                    window.showFLEXSToast('Enlace copiado', 'El vínculo público ya está en el portapapeles.', 'success');
+                }
+                const dialog = copyPublicLink.closest('[data-row-action-dialog]');
+                if (dialog && typeof dialog.close === 'function') {
+                    dialog.close();
+                }
+            }).catch(() => {
+                if (typeof window.showFLEXSToast === 'function') {
+                    window.showFLEXSToast('No se pudo copiar', 'Copia el enlace desde la vista web.', 'error');
+                }
+            });
+            return;
+        }
+
+        const deleteForm = event.target.closest('[data-movement-delete]');
+        if (deleteForm && event.target.closest('button[type="submit"]')) {
+            const confirmed = window.confirm('¿Eliminar esta venta? El movimiento no se borrará: quedará guardado como anulado.');
+            if (!confirmed) {
+                event.preventDefault();
+            }
+            return;
+        }
+
+        const rowDialogBackdrop = event.target.closest('[data-row-action-dialog]');
+        if (rowDialogBackdrop && event.target === rowDialogBackdrop) {
+            if (typeof rowDialogBackdrop.close === 'function') {
+                rowDialogBackdrop.close();
+            }
+            return;
+        }
+
+        const navigationLink = event.target.closest('[data-client-ledger-nav]');
+        if (
+            navigationLink
+            && event.button === 0
+            && !event.metaKey
+            && !event.ctrlKey
+            && !event.shiftKey
+            && !event.altKey
+        ) {
+            const url = new URL(navigationLink.href, window.location.href);
+            if (url.origin === window.location.origin && url.pathname === window.location.pathname) {
+                event.preventDefault();
+                loadLedgerFragment(url.toString(), 'push');
+                return;
+            }
+        }
+
+        const toggle = event.target.closest('[data-movement-toggle]');
+        if (toggle) {
+            const menu = toggle.closest('[data-movement-menu]');
+            const popover = menu ? menu.querySelector('[data-movement-popover]') : null;
+            if (popover) {
+                event.preventDefault();
+                const willOpen = !popover.open;
+                hideMovementMenus(menu);
+                if (willOpen) {
+                    openMovementPopover(popover);
+                } else {
+                    closeMovementPopover(popover);
+                }
+            }
+            return;
+        }
+
+        const closeButton = event.target.closest('[data-movement-close]');
+        if (closeButton) {
+            const menu = closeButton.closest('[data-movement-menu]');
+            const popover = menu ? menu.querySelector('[data-movement-popover]') : null;
+            if (popover) {
+                closeMovementPopover(popover);
+            }
+            return;
+        }
+
+        const activePopover = event.target.closest('[data-movement-popover]');
+        if (activePopover && event.target === activePopover) {
+            closeMovementPopover(activePopover);
+            return;
+        }
+
+        if (!event.target.closest('[data-movement-menu]')) {
+            hideMovementMenus();
         }
     });
+
+    window.addEventListener('popstate', (event) => {
+        if (event.state && event.state.clientLedger) {
+            loadLedgerFragment(window.location.href, 'none');
+        }
+    });
+
+    window.history.replaceState(
+        { ...(window.history.state || {}), clientLedger: true },
+        '',
+        window.location.href
+    );
 });
 </script>
 {% endblock %}

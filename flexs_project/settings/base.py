@@ -291,6 +291,10 @@ READY_ARCA_HOMOLOGACION_READONLY = _env_guard_bool(
     "READY_ARCA_HOMOLOGACION_READONLY",
     False,
 )
+READY_ARCA_HOMOLOGACION_EMISSION = _env_guard_bool(
+    "READY_ARCA_HOMOLOGACION_EMISSION",
+    False,
+)
 ARCA_WSASS_AUTHORIZATION_CONFIRMED = _env_guard_bool(
     "ARCA_WSASS_AUTHORIZATION_CONFIRMED",
     False,
@@ -299,6 +303,16 @@ ARCA_WSASS_AUTHORIZATION_CONFIRMED = _env_guard_bool(
 ARCA_WSAA_URL = str(os.getenv("ARCA_WSAA_URL", "") or "")
 ARCA_WSFE_URL = str(os.getenv("ARCA_WSFE_URL", "") or "")
 ARCA_WSFE_WSDL = str(os.getenv("ARCA_WSFE_WSDL", "") or "")
+ARCA_TAXPAYER_URL = str(os.getenv("ARCA_TAXPAYER_URL", "") or "")
+ARCA_TAXPAYER_WSDL = str(os.getenv("ARCA_TAXPAYER_WSDL", "") or "")
+ARCA_TAXPAYER_READ_ENABLED = _env_guard_bool(
+    "ARCA_TAXPAYER_READ_ENABLED",
+    False,
+)
+READY_ARCA_TAXPAYER_READONLY = _env_guard_bool(
+    "READY_ARCA_TAXPAYER_READONLY",
+    False,
+)
 ARCA_CONNECT_TIMEOUT_SECONDS = max(
     _env_int("ARCA_CONNECT_TIMEOUT_SECONDS", 10),
     5,
@@ -333,11 +347,39 @@ ARCA_TOKEN_CACHE_PATH = str(
 ).strip()
 
 ARCA_CREDENTIAL_ID = str(os.getenv("ARCA_CREDENTIAL_ID", "") or "").strip()
-ARCA_SERVICE_ID = str(os.getenv("ARCA_SERVICE_ID", "") or "").strip()
+ARCA_WSFE_SERVICE_ID = str(
+    os.getenv("ARCA_WSFE_SERVICE_ID", os.getenv("ARCA_SERVICE_ID", "")) or ""
+).strip()
+# Legacy alias retained while local/private environments migrate names.
+ARCA_SERVICE_ID = ARCA_WSFE_SERVICE_ID
+ARCA_TAXPAYER_SERVICE_ID = str(
+    os.getenv("ARCA_TAXPAYER_SERVICE_ID", "") or ""
+).strip()
 ARCA_CUIT = str(os.getenv("ARCA_CUIT", "") or "").strip()
 ARCA_PTO_VTA = str(os.getenv("ARCA_PTO_VTA", "") or "").strip()
 ARCA_DEFAULT_CBTE_TIPO = str(
     os.getenv("ARCA_DEFAULT_CBTE_TIPO", "") or ""
+).strip()
+# One-shot homologation emission approval. Keep raw strings so the gate can
+# distinguish missing and malformed operator input. These settings can never
+# authorize production.
+ARCA_HOMOLOGATION_EMISSION_COMPANY_ID = str(
+    os.getenv("ARCA_HOMOLOGATION_EMISSION_COMPANY_ID", "") or ""
+).strip()
+ARCA_HOMOLOGATION_EMISSION_POINT_OF_SALE_ID = str(
+    os.getenv("ARCA_HOMOLOGATION_EMISSION_POINT_OF_SALE_ID", "") or ""
+).strip()
+ARCA_HOMOLOGATION_EMISSION_DOCUMENT_ID = str(
+    os.getenv("ARCA_HOMOLOGATION_EMISSION_DOCUMENT_ID", "") or ""
+).strip()
+ARCA_HOMOLOGATION_EMISSION_SNAPSHOT_HASH = str(
+    os.getenv("ARCA_HOMOLOGATION_EMISSION_SNAPSHOT_HASH", "") or ""
+).strip()
+ARCA_HOMOLOGATION_EMISSION_APPROVED_ATTEMPT = str(
+    os.getenv("ARCA_HOMOLOGATION_EMISSION_APPROVED_ATTEMPT", "") or ""
+).strip()
+ARCA_HOMOLOGATION_EMISSION_APPROVAL_EXPIRES_AT = str(
+    os.getenv("ARCA_HOMOLOGATION_EMISSION_APPROVAL_EXPIRES_AT", "") or ""
 ).strip()
 ARCA_CERT_PATH = str(os.getenv("ARCA_CERT_PATH", "") or "").strip()
 ARCA_PRIVATE_KEY_PATH = str(
@@ -349,10 +391,23 @@ ARCA_PRIVATE_KEY_PASSPHRASE_FILE = str(
 ARCA_EXPECTED_CERT_SHA256 = str(
     os.getenv("ARCA_EXPECTED_CERT_SHA256", "") or ""
 ).strip()
+ARCA_EXPECTED_CERT_SUBJECT_CN = str(
+    os.getenv("ARCA_EXPECTED_CERT_SUBJECT_CN", "") or ""
+).strip()
+ARCA_EXPECTED_CERT_ISSUER_CN = str(
+    os.getenv("ARCA_EXPECTED_CERT_ISSUER_CN", "") or ""
+).strip()
+# Optional input for a future explicitly authorized registry probe. It is not
+# required by doctor/gates and is never contacted during offline preparation.
+ARCA_TEST_TAXPAYER_CUIT = str(
+    os.getenv("ARCA_TEST_TAXPAYER_CUIT", "") or ""
+).strip()
 
-ARCA_OPENSSL_BIN = "openssl"
+ARCA_OPENSSL_BIN = str(
+    os.getenv("ARCA_OPENSSL_BIN", "openssl") or "openssl"
+).strip()
 # The identifier must be confirmed by the user in WSASS; there is no fallback.
-ARCA_WSAA_SERVICE = ARCA_SERVICE_ID
+ARCA_WSAA_SERVICE = ARCA_WSFE_SERVICE_ID
 ARCA_WSAA_LOCK_SECONDS = max(_env_int("ARCA_WSAA_LOCK_SECONDS", 60), 30)
 ARCA_WSAA_WAIT_SECONDS = max(_env_int("ARCA_WSAA_WAIT_SECONDS", 5), 1)
 # JSON backend-only. Every entry must carry an explicit environment label.

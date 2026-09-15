@@ -1,7 +1,7 @@
 {% extends 'admin_panel/base.html' %}
 {% load static %}
 
-{% block page_title %}Ficha de venta {% if primary_sales_document %}{{ primary_sales_document.commercial_type_label }} {{ primary_sales_document.display_number }}{% elif order.status == 'draft' %}Cotizacion operativa #{{ order.pk }}{% else %}Pedido operativo #{{ order.pk }}{% endif %}{% endblock %}
+{% block page_title %}Ficha de venta {{ order_commercial_type_label }} {% if primary_sales_document %}{{ primary_sales_document.display_number }}{% else %}#{{ order.pk }}{% endif %}{% endblock %}
 
 {% block extra_css %}
 <style>
@@ -403,7 +403,7 @@
     }
 }
 </style>
-<link rel="stylesheet" href="{% static 'core/css/order_detail.css' %}?v=20260731-1">
+<link rel="stylesheet" href="{% static 'core/css/order_detail.css' %}?v=20260825-2">
 {% endblock %}
 
 {% block content %}
@@ -420,13 +420,15 @@
                     </svg>
                 </div>
                 <div>
-                    <p class="sales-record-kicker">Ficha operativa de venta</p>
+                    <p class="sales-record-kicker">
+                        {% if order_movement_state == 'open' %}Modificar movimiento{% else %}Ver movimiento{% endif %}
+                    </p>
                     <div class="order-record-title-line">
                         <h2 class="sales-record-heading">
                             {% if primary_sales_document %}
                                 {{ primary_sales_document.commercial_type_label }} {{ primary_sales_document.display_number }}
                             {% elif order.status == 'draft' %}
-                                Cotizacion #{{ order.pk }}
+                                {{ order_commercial_type_label }} #{{ order.pk }}
                             {% else %}
                                 Pedido #{{ order.pk }}
                             {% endif %}
@@ -447,7 +449,20 @@
                     </div>
                     <div class="order-record-meta" aria-label="Datos principales de la venta">
                         <span>{{ order.company.name|default:"-" }}</span>
-                        <span>{{ order_client_profile.company_name|default:order.client_company|default:order.user.username|default:"-" }}</span>
+                        {% if order_client_profile_id %}
+                        <a
+                            href="{% url 'admin_client_order_history' order_client_profile_id %}?company_id={{ order.company_id }}"
+                            class="order-record-client-pill"
+                            aria-label="Abrir ficha del cliente {{ order_client_profile.company_name|default:order.client_company|default:order.user.username|default:'-' }}"
+                        >
+                            {{ order_client_profile.company_name|default:order.client_company|default:order.user.username|default:"-" }}
+                            <svg viewBox="0 0 20 20" aria-hidden="true">
+                                <path d="M7 5h8v8M15 5l-9 9"></path>
+                            </svg>
+                        </a>
+                        {% else %}
+                        <span>{{ order.client_company|default:order.user.username|default:"-" }}</span>
+                        {% endif %}
                         <span>{{ order.created_at|date:"d/m/Y H:i" }}</span>
                     </div>
                 </div>
@@ -469,12 +484,25 @@
                     href="{% url 'admin_payment_list' %}?order_id={{ order.pk }}&company_id={{ order.company_id }}{% if order_client_profile_id %}&client_id={{ order_client_profile_id }}{% endif %}"
                     class="sales-record-action"
                 >
-                    Registrar cobro
+                    Cobrar
                 </a>
-                {% if order_client_profile_id and related_sales_document_actions %}
-                <details class="sales-record-relate-details">
-                    <summary class="sales-record-action">Generar documento</summary>
-                    <div class="sales-record-relate-menu">
+                <details class="sales-record-relate-details order-record-actions-menu">
+                    <summary class="sales-record-action">
+                        Mas acciones
+                        <svg viewBox="0 0 20 20" aria-hidden="true">
+                            <path d="m5.5 7.5 4.5 4.5 4.5-4.5"></path>
+                        </svg>
+                    </summary>
+                    <div class="sales-record-relate-menu order-record-actions-menu-panel">
+                        {% if order_invoice_document %}
+                        <span class="order-record-actions-menu-label">Factura</span>
+                        <a href="{% url 'admin_fiscal_document_print' order_invoice_document.pk %}?copy=original&amp;autoprint=1" class="sales-record-relate-btn" target="_blank" rel="noopener">Imprimir factura</a>
+                        <a href="{% url 'admin_fiscal_document_print' order_invoice_document.pk %}?copy=original&amp;format=pdf" class="sales-record-relate-btn">Descargar factura PDF</a>
+                        <a href="{% url 'admin_fiscal_document_excel' order_invoice_document.pk %}" class="sales-record-relate-btn">Descargar factura Excel</a>
+                        <span class="order-record-actions-menu-separator"></span>
+                        {% endif %}
+                        {% if order_client_profile_id and related_sales_document_actions %}
+                        <span class="order-record-actions-menu-label">Crear documento</span>
                         {% for item in related_sales_document_actions %}
                         <form method="post" action="{{ item.url }}" style="margin:0;">
                             {% csrf_token %}
@@ -491,11 +519,12 @@
                             </button>
                         </form>
                         {% endfor %}
+                        <span class="order-record-actions-menu-separator"></span>
+                        {% endif %}
+                        <a href="{% url 'admin_fiscal_document_list' %}" class="sales-record-relate-btn">Ir a fiscales</a>
+                        <a href="{% url 'admin_order_list' %}" class="sales-record-relate-btn">Volver a ventas</a>
                     </div>
                 </details>
-                {% endif %}
-                <a href="{% url 'admin_fiscal_document_list' %}" class="sales-record-action">Ir a fiscales</a>
-                <a href="{% url 'admin_order_list' %}" class="sales-record-action">Volver</a>
             </div>
         </div>
 
@@ -522,6 +551,178 @@
             </article>
         </section>
 
+        <section class="order-record-focus-strip" aria-label="Siguiente paso recomendado">
+            <span class="order-record-focus-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24">
+                    <path d="M5 12.5 9.2 17 19 7"></path>
+                </svg>
+            </span>
+            <div class="order-record-focus-copy">
+                <span>Siguiente paso</span>
+                {% if order.status == 'draft' %}
+                <strong>Completa los productos: {{ order_commercial_type_label }}</strong>
+                <small>Busca un producto, indica la cantidad y agregalo. El precio se calcula automaticamente.</small>
+                {% elif order_invoice_document %}
+                <strong>La factura ya esta vinculada</strong>
+                <small>Puedes abrirla, registrar un cobro o consultar el detalle del movimiento.</small>
+                {% elif order_can_invoice %}
+                <strong>La venta esta lista para facturar</strong>
+                <small>Revisa el saldo y los productos antes de abrir el comprobante fiscal.</small>
+                {% else %}
+                <strong>Revisa el avance de la venta</strong>
+                <small>Consulta productos, saldo y acciones disponibles para continuar.</small>
+                {% endif %}
+            </div>
+            {% if order.status == 'draft' %}
+            <a href="#order-products" class="btn btn-primary order-record-focus-action">Ir a productos</a>
+            {% elif order_invoice_document %}
+            <a href="{% url 'admin_fiscal_document_detail' order_invoice_document.pk %}" class="btn btn-primary order-record-focus-action">Abrir factura</a>
+            {% else %}
+            <a href="#order-products" class="btn btn-outline order-record-focus-action">Revisar productos</a>
+            {% endif %}
+        </section>
+
+        <section class="order-sale-console" aria-labelledby="order-sale-console-title">
+            <div class="order-sale-console-head">
+                <div class="order-sale-console-heading">
+                    <span class="order-sale-console-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24">
+                            <path d="M5 4.5h14v15H5z"></path>
+                            <path d="M8 8h8M8 12h8M8 16h5"></path>
+                        </svg>
+                    </span>
+                    <div>
+                        <span class="order-sale-console-kicker">Datos extra</span>
+                        <h3 id="order-sale-console-title">Vendedor y reglas del movimiento</h3>
+                        <p>Asigna el vendedor ahora. Los efectos contables y fiscales se aplican al finalizar.</p>
+                    </div>
+                </div>
+                <span class="order-sale-save-state" id="order-sale-save-state" role="status" aria-live="polite">
+                    {% if order.status == 'draft' %}Venta abierta{% else %}{{ order.get_status_display }}{% endif %}
+                </span>
+            </div>
+
+            {% if order_client_locality_missing %}
+            <div class="order-sale-warning">
+                <span class="order-sale-warning-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24">
+                        <path d="M12 3.5 21 20H3z"></path>
+                        <path d="M12 9v5M12 17.25v.25"></path>
+                    </svg>
+                </span>
+                <div>
+                    <strong>El cliente no tiene localidad fiscal cargada.</strong>
+                    <span>Completa ese dato antes de facturar. La venta puede seguir abierta mientras se prepara.</span>
+                </div>
+            </div>
+            {% endif %}
+
+            <div class="order-sale-console-grid">
+                <article class="order-sale-setting">
+                    <span class="order-sale-setting-label">Cliente</span>
+                    <strong>{{ order_client_profile.company_name|default:order.client_company|default:order.user.username|default:"-" }}</strong>
+                    <small>{{ order_client_profile.cuit_dni|default:"Sin CUIT/DNI" }}</small>
+                </article>
+                <article class="order-sale-setting">
+                    <span class="order-sale-setting-label">Condición de venta</span>
+                    <strong>{{ pricing_snapshot.sale_condition|default:"Sin especificar" }}</strong>
+                    <small>Definida por la categoría del cliente</small>
+                </article>
+                <article class="order-sale-setting">
+                    <span class="order-sale-setting-label">Lista y depósito</span>
+                    <strong>{{ pricing_snapshot.price_list.name|default:"Lista principal" }}</strong>
+                    <small>Depósito principal</small>
+                </article>
+                <article class="order-sale-setting order-sale-setting-seller">
+                    <span class="order-sale-setting-label">Vendedor</span>
+                    <form method="post" id="order-sale-settings-form" class="order-sale-seller-form">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="assign_seller">
+                        <label for="order-sale-seller" class="order-record-visually-hidden">Vendedor asignado</label>
+                        <select name="assigned_to" id="order-sale-seller" class="form-select">
+                            <option value="">Sin especificar</option>
+                            {% for seller in seller_options %}
+                            <option value="{{ seller.pk }}" {% if order.assigned_to_id == seller.pk %}selected{% endif %}>
+                                {{ seller.get_full_name|default:seller.username }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <button type="submit" class="btn btn-outline btn-sm" id="order-sale-seller-save">Guardar</button>
+                    </form>
+                    <small id="order-sale-seller-feedback">Se guarda sin recargar la página</small>
+                </article>
+            </div>
+
+            <details class="order-sale-effects-toggle">
+                <summary>Efectos al cerrar el movimiento</summary>
+                <div class="order-sale-effects" aria-label="Efectos del ciclo de la venta">
+                <article class="order-sale-effect">
+                    <span class="order-sale-effect-mark" aria-hidden="true">
+                        <svg viewBox="0 0 24 24"><path d="M4 7.5h16v10H4zM7 11h4"></path></svg>
+                    </span>
+                    <div>
+                        <strong>Cuenta corriente</strong>
+                        <span>
+                            {% if order_movement_state == 'closed' %}
+                            Movimiento consolidado.
+                            {% elif order_movement_state == 'voided' %}
+                            No genera saldo porque la venta está anulada.
+                            {% else %}
+                            El saldo se consolida al cerrar, cuando corresponda.
+                            {% endif %}
+                        </span>
+                    </div>
+                </article>
+                <article class="order-sale-effect">
+                    <span class="order-sale-effect-mark" aria-hidden="true">
+                        <svg viewBox="0 0 24 24"><path d="M4 8.5 12 4l8 4.5v7L12 20l-8-4.5zM12 12v8M4 8.5l8 3.5 8-3.5"></path></svg>
+                    </span>
+                    <div>
+                        <strong>Stock</strong>
+                        <span>Se descuenta al obtener CAE y sólo en productos con control de stock.</span>
+                    </div>
+                </article>
+                <article class="order-sale-effect">
+                    <span class="order-sale-effect-mark" aria-hidden="true">
+                        <svg viewBox="0 0 24 24"><path d="M6 3.5h9l3 3V20H6zM15 3.5V7h3M9 11h6M9 15h6"></path></svg>
+                    </span>
+                    <div>
+                        <strong>Comprobante fiscal</strong>
+                        <span>
+                            {% if order_invoice_document %}
+                            Factura vinculada a esta venta.
+                            {% elif order_has_external_invoice %}
+                            Comprobante externo registrado.
+                            {% else %}
+                            Este movimiento abierto todavía no genera factura.
+                            {% endif %}
+                        </span>
+                    </div>
+                </article>
+                </div>
+            </details>
+
+            {% if primary_sales_document and primary_sales_document.commercial_situation != 'not_applicable' %}
+            <div class="order-sale-setting" style="margin-top:16px;">
+                <span class="order-sale-setting-label">Situacion comercial</span>
+                <form method="post" action="{% url 'admin_commercial_document_situation_update' primary_sales_document_kind primary_sales_document.pk %}" class="order-sale-seller-form">
+                    {% csrf_token %}
+                    <select name="commercial_situation" class="form-select" aria-label="Situacion comercial">
+                        <option value="pending_review" {% if primary_sales_document.commercial_situation == 'pending_review' %}selected{% endif %}>Pendiente de revision</option>
+                        <option value="approved" {% if primary_sales_document.commercial_situation == 'approved' %}selected{% endif %}>Aprobada</option>
+                        <option value="observed" {% if primary_sales_document.commercial_situation == 'observed' %}selected{% endif %}>Observada</option>
+                        <option value="rejected" {% if primary_sales_document.commercial_situation == 'rejected' %}selected{% endif %}>Rechazada</option>
+                    </select>
+                    <input type="text" name="commercial_situation_note" class="form-input" value="{{ primary_sales_document.commercial_situation_note }}" placeholder="Observacion (obligatoria al observar o rechazar)">
+                    <button type="submit" class="btn btn-outline btn-sm">Actualizar</button>
+                </form>
+                <small>Seguimiento independiente del estado fiscal y del movimiento de cuenta.</small>
+            </div>
+            {% endif %}
+        </section>
+
+        <section class="order-record-primary-data" aria-label="Datos principales del movimiento">
+            <div class="order-record-advanced-body">
         <div class="sales-record-top-grid order-record-top-grid">
             <section class="sales-record-panel">
                 <span class="order-record-visually-hidden">Datos basicos</span>
@@ -540,12 +741,12 @@
                     <div class="sales-record-field">
                         <span class="sales-record-field-label">Tipo de comprobante</span>
                         <span class="sales-record-field-value">
-                            {% if primary_sales_document %}{{ primary_sales_document.commercial_type_label }}{% elif order.status == 'draft' %}Cotizacion operativa{% else %}Pedido operativo{% endif %}
+                            {{ order_commercial_type_label }}
                         </span>
                     </div>
                     <div class="sales-record-field">
                         <span class="sales-record-field-label">Letra</span>
-                        <span class="sales-record-field-value">{{ primary_sales_document.sales_document_type.letter|default:"X" }}</span>
+                        <span class="sales-record-field-value">{{ order_commercial_letter }}</span>
                     </div>
                     <div class="sales-record-field">
                         <span class="sales-record-field-label">Punto de venta</span>
@@ -590,14 +791,39 @@
                 <div class="sales-record-panel-header">
                     <div>
                         <p class="sales-record-panel-eyebrow">Cliente</p>
-                        <h3 class="sales-record-panel-title">Datos fiscales y contacto</h3>
+                        <h3 class="sales-record-panel-title">
+                            {% if order_client_profile_id %}
+                            <a
+                                href="{% url 'admin_client_order_history' order_client_profile_id %}?company_id={{ order.company_id }}"
+                                class="order-record-client-title-link"
+                            >
+                                Datos fiscales y contacto
+                                <span>Abrir ficha</span>
+                                <svg viewBox="0 0 20 20" aria-hidden="true">
+                                    <path d="M7 5h8v8M15 5l-9 9"></path>
+                                </svg>
+                            </a>
+                            {% else %}
+                            Datos fiscales y contacto
+                            {% endif %}
+                        </h3>
                     </div>
                     <span class="sales-record-tag is-info">Empresa {{ order.company.name|default:"-" }}</span>
                 </div>
                 <div class="sales-record-grid">
                     <div class="sales-record-field">
                         <span class="sales-record-field-label">Nombre</span>
-                        <span class="sales-record-field-value">{{ order_client_profile.company_name|default:order.client_company|default:order.user.username|default:"-" }}</span>
+                        <span class="sales-record-field-value">
+                            {% if order_client_profile_id %}
+                            <a
+                                href="{% url 'admin_client_order_history' order_client_profile_id %}?company_id={{ order.company_id }}"
+                                class="order-record-client-name-link"
+                                title="Abrir ficha completa del cliente"
+                            >{{ order_client_profile.company_name|default:order.client_company|default:order.user.username|default:"-" }}</a>
+                            {% else %}
+                            {{ order.client_company|default:order.user.username|default:"-" }}
+                            {% endif %}
+                        </span>
                     </div>
                     <div class="sales-record-field">
                         <span class="sales-record-field-label">N de cliente</span>
@@ -616,12 +842,28 @@
                         <span class="sales-record-field-value">{{ order_client_profile.fiscal_city|default:"-" }}</span>
                     </div>
                     <div class="sales-record-field">
+                        <span class="sales-record-field-label">Provincia</span>
+                        <span class="sales-record-field-value">{{ order_client_profile.fiscal_province|default:order_client_profile.province|default:"-" }}</span>
+                    </div>
+                    <div class="sales-record-field">
+                        <span class="sales-record-field-label">Codigo postal</span>
+                        <span class="sales-record-field-value">{{ order_client_profile.postal_code|default:"-" }}</span>
+                    </div>
+                    <div class="sales-record-field">
                         <span class="sales-record-field-label">Condicion de IVA</span>
                         <span class="sales-record-field-value">{{ order_client_profile.get_iva_condition_display|default:"-" }}</span>
                     </div>
                     <div class="sales-record-field">
                         <span class="sales-record-field-label">Telefono</span>
                         <span class="sales-record-field-value">{{ order_client_profile.phone|default:order.client_phone|default:"-" }}</span>
+                    </div>
+                    <div class="sales-record-field">
+                        <span class="sales-record-field-label">Email</span>
+                        <span class="sales-record-field-value">{{ order_client_profile.user.email|default:order.user.email|default:"-" }}</span>
+                    </div>
+                    <div class="sales-record-field">
+                        <span class="sales-record-field-label">Usuario</span>
+                        <span class="sales-record-field-value">{{ order_client_profile.user.username|default:order.user.username|default:"-" }}</span>
                     </div>
                     <div class="sales-record-field">
                         <span class="sales-record-field-label">Categoria</span>
@@ -635,26 +877,32 @@
             </section>
         </div>
 
-        <section class="sales-record-card sales-flow-strip">
-            <div class="sales-record-card-head">
-                <div>
-                    <h3>Flujo comercial</h3>
-                    <p>Estado de la operacion desde la solicitud hasta el cobro.</p>
+        <details class="order-record-flow-toggle">
+            <summary>
+                <span>Movimientos a generar</span>
+                <small>Solicitud, pedido, remito, factura y cobro</small>
+            </summary>
+            <section class="sales-record-card sales-flow-strip">
+                <div class="sales-record-card-head">
+                    <div>
+                        <h3>Flujo comercial</h3>
+                        <p>Estado de la operacion desde la solicitud hasta el cobro.</p>
+                    </div>
+                    <span class="order-record-section-number">02</span>
                 </div>
-                <span class="order-record-section-number">02</span>
-            </div>
-            <div class="sales-flow-grid">
-                {% for step in order_flow_steps %}
-                <article class="sales-flow-step is-{{ step.state }}">
-                    <span class="sales-flow-step-label">{{ step.label }}</span>
-                    <strong>{{ step.summary }}</strong>
-                    {% if step.action_url and step.action_label %}
-                    <a href="{{ step.action_url }}" class="btn btn-outline btn-sm"{% if step.action_target_blank %} data-print-window="1" target="_blank" rel="noopener noreferrer"{% endif %}>{{ step.action_label }}</a>
-                    {% endif %}
-                </article>
-                {% endfor %}
-            </div>
-        </section>
+                <div class="sales-flow-grid">
+                    {% for step in order_flow_steps %}
+                    <article class="sales-flow-step is-{{ step.state }}">
+                        <span class="sales-flow-step-label">{{ step.label }}</span>
+                        <strong>{{ step.summary }}</strong>
+                        {% if step.action_url and step.action_label %}
+                        <a href="{{ step.action_url }}" class="btn btn-outline btn-sm"{% if step.action_target_blank %} data-print-window="1" target="_blank" rel="noopener noreferrer"{% endif %}>{{ step.action_label }}</a>
+                        {% endif %}
+                    </article>
+                    {% endfor %}
+                </div>
+            </section>
+        </details>
 
         <section class="sales-record-card order-record-secondary-card">
             <div class="sales-record-card-head">
@@ -665,7 +913,7 @@
                 <span class="order-record-section-number">03</span>
             </div>
             <div class="order-classic-collapsible-grid">
-                <details class="order-classic-toggle" open>
+                <details class="order-classic-toggle">
                     <summary>Datos adicionales</summary>
                     <div class="order-classic-toggle-body">
                         <div class="sales-record-grid order-record-mini-fields">
@@ -763,20 +1011,8 @@
                         <div class="sales-record-grid order-record-mini-fields">
                             <div class="sales-record-field">
                                 <span class="sales-record-field-label">Vendedor</span>
-                                <span class="sales-record-field-value">
-                                    <form method="post" style="display:flex;gap:6px;align-items:center;">
-                                        {% csrf_token %}
-                                        <input type="hidden" name="action" value="assign_seller">
-                                        <select name="assigned_to" class="form-select" style="min-width:170px;">
-                                            <option value="">Sin especificar</option>
-                                            {% for seller in seller_options %}
-                                            <option value="{{ seller.pk }}" {% if order.assigned_to_id == seller.pk %}selected{% endif %}>
-                                                {{ seller.get_full_name|default:seller.username }}
-                                            </option>
-                                            {% endfor %}
-                                        </select>
-                                        <button type="submit" class="btn btn-outline btn-sm">Guardar</button>
-                                    </form>
+                                <span class="sales-record-field-value" id="order-sale-seller-label">
+                                    {% if order.assigned_to %}{{ order.assigned_to.get_full_name|default:order.assigned_to.username }}{% else %}Sin especificar{% endif %}
                                 </span>
                             </div>
                             <div class="sales-record-field">
@@ -792,12 +1028,15 @@
                 </details>
             </div>
         </section>
+            </div>
+        </section>
 
         <section class="sales-record-card order-record-products-card" id="order-products">
+            <span class="order-record-visually-hidden">Productos de la venta</span>
             <div class="sales-record-card-head">
                 <div>
                     <h3>Productos de la venta</h3>
-                    <p>Detalle comercial con cantidades, descuentos y acciones del documento.</p>
+                    <p>Busca un producto, indica la cantidad y agregalo al movimiento.</p>
                 </div>
                 <div class="order-record-card-meta">
                     <span class="order-record-section-number">04</span>
@@ -841,7 +1080,7 @@
             >
                 {% csrf_token %}
                 <div id="order-item-add-feedback" class="alert" style="display:none; grid-column: 1 / -1; margin: 0;"></div>
-                <div class="form-group form-group-tight">
+                <div class="form-group form-group-tight order-record-product-search">
                     <label for="sku" class="form-label">Producto</label>
                     <input
                         type="search"
@@ -856,32 +1095,39 @@
                         data-suggest-target="#order-product-id"
                         autocomplete="off">
                     <input type="hidden" name="product_id" id="order-product-id">
+                    <small class="order-record-field-help">Selecciona un resultado. Luego usa Enter para avanzar por cantidad, precio y agregar.</small>
                 </div>
-                <div class="form-group form-group-tight">
-                    <label for="quantity" class="form-label">Cant.</label>
+                <div class="form-group form-group-tight order-record-product-quantity">
+                    <label for="quantity" class="form-label">Cantidad</label>
                     <input type="number" min="1" name="quantity" id="quantity" class="form-input" value="1">
                 </div>
-                <div class="form-group form-group-tight">
-                    <label for="price" class="form-label">Precio</label>
-                    <input type="number" step="0.01" min="0" name="price" id="order-item-price" class="form-input" placeholder="Auto">
-                </div>
-                <div class="form-group form-group-tight">
-                    <label for="price_override_note" class="form-label">Observacion de precio</label>
-                    <input type="text" name="price_override_note" id="order-item-price-note" class="form-input" placeholder="Obligatoria si queda bajo costo">
-                </div>
-                <button type="submit" class="btn btn-primary" id="order-add-item-btn">+ Agregar</button>
+                <details class="order-record-price-options">
+                    <summary>Ajustar precio</summary>
+                    <div class="order-record-price-options-body">
+                        <div class="form-group form-group-tight">
+                            <label for="order-item-price" class="form-label">Precio manual</label>
+                            <input type="number" step="0.01" min="0" name="price" id="order-item-price" class="form-input" placeholder="Automatico">
+                        </div>
+                        <div class="form-group form-group-tight">
+                            <label for="order-item-price-note" class="form-label">Motivo del cambio</label>
+                            <input type="text" name="price_override_note" id="order-item-price-note" class="form-input" placeholder="Obligatorio si queda bajo costo">
+                        </div>
+                    </div>
+                </details>
+                <button type="submit" class="btn btn-primary order-record-add-product-btn" id="order-add-item-btn">Agregar producto</button>
             </form>
             {% endif %}
         </section>
 
         <div class="order-record-foot-grid">
-            <section class="sales-record-card">
-                <div class="sales-record-card-head">
+            <details class="sales-record-card order-record-notes-card" open>
+                <summary class="sales-record-card-head">
                     <div>
                         <h3>Observaciones</h3>
-                        <p>Notas del cliente y del equipo interno sobre la venta.</p>
+                        <p>Notas del cliente y del equipo interno.</p>
                     </div>
-                </div>
+                    <span class="order-record-notes-state">Ver</span>
+                </summary>
                 <div class="sales-record-note-box">
                     {% if order.notes %}
                     <strong>Cliente</strong><br>
@@ -894,9 +1140,9 @@
                     Sin observaciones registradas para esta venta.
                     {% endif %}
                 </div>
-            </section>
+            </details>
 
-            <section class="sales-record-card">
+            <section class="sales-record-card order-record-totals-card">
                 <div class="sales-record-card-head">
                     <div>
                         <h3>Totales</h3>
@@ -929,111 +1175,131 @@
                         <strong id="order-total-grand">${{ order.total|floatformat:2 }}</strong>
                     </div>
                 </div>
-                {% if order_movement_can_manage %}
-                <div class="order-movement-inline">
-                    <div class="order-movement-inline-head">
-                        <span class="order-movement-inline-label">Estado del movimiento</span>
-                        <span class="order-movement-inline-state">{{ order_movement_state_label }}</span>
-                    </div>
-                    <div class="order-movement-inline-actions">
-                        {% if order_movement_state == 'open' %}
-                            {% if order_movement_can_close %}
-                            <form method="post" action="{% url 'admin_client_transaction_set_state' order_client_profile_id order_movement_transaction.pk %}" style="margin:0;">
-                                {% csrf_token %}
-                                <input type="hidden" name="next" value="{{ order_detail_next_url }}">
-                                <input type="hidden" name="state" value="closed">
-                                <button type="submit" class="btn btn-outline">Cerrar</button>
-                            </form>
-                            {% else %}
-                            <button type="button" class="btn btn-outline" disabled title="{{ order_movement_close_block_reason|default:'No disponible' }}">Cerrar</button>
-                            {% endif %}
-                            <button type="button" class="btn btn-outline" disabled title="El movimiento ya esta abierto.">Dejar abierta</button>
-                            {% if order_movement_can_void %}
-                            <form method="post" action="{% url 'admin_client_transaction_set_state' order_client_profile_id order_movement_transaction.pk %}" style="margin:0;">
-                                {% csrf_token %}
-                                <input type="hidden" name="next" value="{{ order_detail_next_url }}">
-                                <input type="hidden" name="state" value="voided">
-                                <button type="submit" class="btn btn-danger-outline" onclick="return confirm('Anular este movimiento?');">Anular</button>
-                            </form>
-                            {% else %}
-                            <button type="button" class="btn btn-danger-outline" disabled title="{{ order_movement_void_block_reason|default:'No disponible' }}">Anular</button>
-                            {% endif %}
-                        {% elif order_movement_state == 'closed' %}
-                            <button type="button" class="btn btn-outline" disabled title="El movimiento ya esta cerrado.">Cerrar</button>
-                            {% if order_movement_can_open %}
-                            <form method="post" action="{% url 'admin_client_transaction_set_state' order_client_profile_id order_movement_transaction.pk %}" style="margin:0;">
-                                {% csrf_token %}
-                                <input type="hidden" name="next" value="{{ order_detail_next_url }}">
-                                <input type="hidden" name="state" value="open">
-                                <button type="submit" class="btn btn-outline">Dejar abierta</button>
-                            </form>
-                            {% else %}
-                            <button type="button" class="btn btn-outline" disabled title="{{ order_movement_open_block_reason|default:'No disponible' }}">Dejar abierta</button>
-                            {% endif %}
-                            {% if order_movement_can_void %}
-                            <form method="post" action="{% url 'admin_client_transaction_set_state' order_client_profile_id order_movement_transaction.pk %}" style="margin:0;">
-                                {% csrf_token %}
-                                <input type="hidden" name="next" value="{{ order_detail_next_url }}">
-                                <input type="hidden" name="state" value="voided">
-                                <button type="submit" class="btn btn-danger-outline" onclick="return confirm('Anular este movimiento?');">Anular</button>
-                            </form>
-                            {% else %}
-                            <button type="button" class="btn btn-danger-outline" disabled title="{{ order_movement_void_block_reason|default:'No disponible' }}">Anular</button>
-                            {% endif %}
-                        {% else %}
-                        <button type="button" class="btn btn-outline" disabled>Cerrar</button>
-                        <button type="button" class="btn btn-outline" disabled>Dejar abierta</button>
-                        <button type="button" class="btn btn-danger-outline" disabled>Anulado</button>
-                        {% endif %}
-                    </div>
-                    {% if status_history %}
-                    <details class="order-movement-inline-history">
-                        <summary>Ver historial ({{ status_history|length }})</summary>
-                        <div class="order-movement-inline-history-list">
-                            {% for row in status_history %}
-                            <div>{{ row.created_at|date:"d/m/Y H:i" }} - {{ row.from_status|default:"-" }} -> {{ row.to_status }} - {{ row.changed_by.username|default:"Sistema" }}</div>
-                            {% endfor %}
-                        </div>
-                    </details>
-                    {% endif %}
-                </div>
-                {% else %}
-                <div class="order-movement-inline">
-                    <div class="order-movement-inline-head">
-                        <span class="order-movement-inline-label">Estado del movimiento</span>
-                        <span class="order-movement-inline-state">Sin movimiento vinculado</span>
-                    </div>
-                    <div class="order-movement-inline-actions">
-                        <button type="button" class="btn btn-outline" disabled>Cerrar</button>
-                        <button type="button" class="btn btn-outline" disabled>Dejar abierta</button>
-                        <button type="button" class="btn btn-danger-outline" disabled>Anular</button>
-                    </div>
-                </div>
-                {% endif %}
-
-                <details class="order-record-timeline">
-                    <summary>
-                        <span>
-                            <span class="order-movement-inline-label">Historial completo del pedido</span>
-                            <strong>Actividad y cambios registrados</strong>
-                        </span>
-                        <span class="order-movement-inline-state">{{ order_timeline|length }} eventos</span>
-                    </summary>
-                    <div class="order-movement-inline-history-list order-record-timeline-list">
-                        {% for event in order_timeline %}
-                        <div class="order-record-timeline-event is-{{ event.state|default:'info' }}">
-                            <strong>{{ event.title }}</strong>
-                            <div class="text-muted">{{ event.occurred_at|date:"d/m/Y H:i" }} &middot; {{ event.actor }}{% if event.amount is not None %} &middot; ${{ event.amount|floatformat:2 }}{% endif %}</div>
-                            {% if event.summary %}<small>{{ event.summary }}</small>{% endif %}
-                        </div>
-                        {% empty %}
-                        <span class="text-muted">Todavia no hay eventos registrados.</span>
-                        {% endfor %}
-                    </div>
-                </details>
-
             </section>
         </div>
+
+        <section class="sales-record-card order-movement-footer" aria-labelledby="order-movement-footer-title">
+            {% if order_movement_can_manage %}
+            <div class="order-movement-footer-copy">
+                <div class="order-movement-inline-head">
+                    <div>
+                        <span class="order-movement-inline-label">Estado del movimiento</span>
+                        <h3 id="order-movement-footer-title">Guardar o finalizar</h3>
+                    </div>
+                    <span class="order-movement-inline-state is-{{ order_movement_state }}">{{ order_movement_state_label }}</span>
+                </div>
+                <p class="order-movement-inline-help">
+                    {% if order_movement_state == 'open' %}
+                    <strong>Cerrar</strong> confirma el movimiento y bloquea su edición. <strong>Dejar abierta</strong> guarda el trabajo para continuarlo después. <strong>Anular</strong> lo cancela sin borrarlo y lo conserva en Movimientos anulados.
+                    {% elif order_movement_state == 'closed' %}
+                    Este movimiento ya fue confirmado. Sólo puede volver a abrirse cuando las reglas contables y fiscales lo permiten; si se anula, el registro se conservará para auditoría.
+                    {% else %}
+                    Este movimiento fue anulado. No se borró: continúa disponible en la ficha del cliente, dentro de Movimientos anulados.
+                    {% endif %}
+                </p>
+            </div>
+            <div class="order-movement-inline-actions" aria-label="Acciones del movimiento">
+                {% if order_movement_state == 'open' %}
+                    {% if order_movement_can_close %}
+                    <form method="post" action="{% url 'admin_client_transaction_set_state' order_client_profile_id order_movement_transaction.pk %}">
+                        {% csrf_token %}
+                        <input type="hidden" name="next" value="{{ order_detail_next_url }}">
+                        <input type="hidden" name="state" value="closed">
+                        <button type="submit" class="btn btn-primary" onclick="return confirm('¿Cerrar el movimiento? Se confirmará la operación y los productos dejarán de ser editables.');">Cerrar</button>
+                    </form>
+                    {% else %}
+                    <button type="button" class="btn btn-primary" disabled title="{{ order_movement_close_block_reason|default:'No disponible' }}">Cerrar</button>
+                    {% endif %}
+                    <form method="post" action="{% url 'admin_client_transaction_set_state' order_client_profile_id order_movement_transaction.pk %}">
+                        {% csrf_token %}
+                        <input type="hidden" name="next" value="{{ order_detail_next_url }}">
+                        <input type="hidden" name="state" value="open">
+                        <button type="submit" class="btn btn-outline">Dejar abierta</button>
+                    </form>
+                    {% if order_movement_can_void %}
+                    <form method="post" action="{% url 'admin_client_transaction_set_state' order_client_profile_id order_movement_transaction.pk %}">
+                        {% csrf_token %}
+                        <input type="hidden" name="next" value="{{ order_detail_next_url }}">
+                        <input type="hidden" name="state" value="voided">
+                        <button type="submit" class="btn btn-danger-outline" onclick="return confirm('¿Anular el movimiento? No se eliminará: quedará guardado en Movimientos anulados de la ficha del cliente.');">Anular</button>
+                    </form>
+                    {% else %}
+                    <button type="button" class="btn btn-danger-outline" disabled title="{{ order_movement_void_block_reason|default:'No disponible' }}">Anular</button>
+                    {% endif %}
+                {% elif order_movement_state == 'closed' %}
+                    <button type="button" class="btn btn-outline" disabled title="El movimiento ya está cerrado.">Movimiento cerrado</button>
+                    {% if order_movement_can_open %}
+                    <form method="post" action="{% url 'admin_client_transaction_set_state' order_client_profile_id order_movement_transaction.pk %}">
+                        {% csrf_token %}
+                        <input type="hidden" name="next" value="{{ order_detail_next_url }}">
+                        <input type="hidden" name="state" value="open">
+                        <button type="submit" class="btn btn-outline" onclick="return confirm('¿Volver a abrir este movimiento para modificarlo?');">Volver a abrir</button>
+                    </form>
+                    {% else %}
+                    <button type="button" class="btn btn-outline" disabled title="{{ order_movement_open_block_reason|default:'No disponible' }}">Volver a abrir</button>
+                    {% endif %}
+                    {% if order_movement_can_void %}
+                    <form method="post" action="{% url 'admin_client_transaction_set_state' order_client_profile_id order_movement_transaction.pk %}">
+                        {% csrf_token %}
+                        <input type="hidden" name="next" value="{{ order_detail_next_url }}">
+                        <input type="hidden" name="state" value="voided">
+                        <button type="submit" class="btn btn-danger-outline" onclick="return confirm('¿Anular el movimiento cerrado? Se conservará en el historial y la acción quedará auditada.');">Anular</button>
+                    </form>
+                    {% else %}
+                    <button type="button" class="btn btn-danger-outline" disabled title="{{ order_movement_void_block_reason|default:'No disponible' }}">Anular</button>
+                    {% endif %}
+                {% else %}
+                    <button type="button" class="btn btn-outline" disabled>Movimiento anulado</button>
+                    {% url 'admin_client_order_history' order_client_profile_id as client_history_url %}
+                    <a href="{{ client_history_url }}?client_tab=account&amp;open_state=voided" class="btn btn-outline">Ver movimientos anulados</a>
+                {% endif %}
+            </div>
+            {% if status_history %}
+            <details class="order-movement-inline-history">
+                <summary>Ver cambios de estado ({{ status_history|length }})</summary>
+                <div class="order-movement-inline-history-list">
+                    {% for row in status_history %}
+                    <div>{{ row.created_at|date:"d/m/Y H:i" }} - {{ row.from_status|default:"-" }} → {{ row.to_status }} - {{ row.changed_by.username|default:"Sistema" }}</div>
+                    {% endfor %}
+                </div>
+            </details>
+            {% endif %}
+            {% else %}
+            <div class="order-movement-footer-copy">
+                <div class="order-movement-inline-head">
+                    <div>
+                        <span class="order-movement-inline-label">Estado del movimiento</span>
+                        <h3 id="order-movement-footer-title">Sin movimiento vinculado</h3>
+                    </div>
+                </div>
+                <p class="order-movement-inline-help">No hay un movimiento comercial asociado que pueda guardarse, cerrarse o anularse desde esta ficha.</p>
+            </div>
+            <div class="order-movement-inline-actions">
+                <button type="button" class="btn btn-outline" disabled>Sin acciones disponibles</button>
+            </div>
+            {% endif %}
+
+            <details class="order-record-timeline">
+                <summary>
+                    <span>
+                        <span class="order-movement-inline-label">Historial completo del pedido</span>
+                        <strong>Actividad y cambios registrados</strong>
+                    </span>
+                    <span class="order-movement-inline-state">{{ order_timeline|length }} eventos</span>
+                </summary>
+                <div class="order-movement-inline-history-list order-record-timeline-list">
+                    {% for event in order_timeline %}
+                    <div class="order-record-timeline-event is-{{ event.state|default:'info' }}">
+                        <strong>{{ event.title }}</strong>
+                        <div class="text-muted">{{ event.occurred_at|date:"d/m/Y H:i" }} &middot; {{ event.actor }}{% if event.amount is not None %} &middot; ${{ event.amount|floatformat:2 }}{% endif %}</div>
+                        {% if event.summary %}<small>{{ event.summary }}</small>{% endif %}
+                    </div>
+                    {% empty %}
+                    <span class="text-muted">Todavía no hay eventos registrados.</span>
+                    {% endfor %}
+                </div>
+            </details>
+        </section>
 </section>
 </div>
 {% endblock %}
@@ -1041,11 +1307,17 @@
 {% block extra_js %}
 <script>
 document.addEventListener('DOMContentLoaded', () => {
+    const sellerForm = document.getElementById('order-sale-settings-form');
+    const sellerSaveButton = document.getElementById('order-sale-seller-save');
+    const sellerFeedback = document.getElementById('order-sale-seller-feedback');
+    const sellerLabel = document.getElementById('order-sale-seller-label');
+    const saleSaveState = document.getElementById('order-sale-save-state');
     const addForm = document.getElementById('order-item-add-form');
     const skuInput = document.getElementById('sku');
     const quantityInput = document.getElementById('quantity');
     const priceInput = document.getElementById('order-item-price');
     const priceNoteInput = document.getElementById('order-item-price-note');
+    const priceOptions = document.querySelector('.order-record-price-options');
     const productIdInput = document.getElementById('order-product-id');
     const submitButton = document.getElementById('order-add-item-btn');
     const feedbackBox = document.getElementById('order-item-add-feedback');
@@ -1061,6 +1333,57 @@ document.addEventListener('DOMContentLoaded', () => {
     const heroPaidEl = document.getElementById('order-hero-paid');
     const heroPendingEl = document.getElementById('order-hero-pending');
     const heroItemsCountEl = document.getElementById('order-hero-items-count');
+
+    if (sellerForm && sellerSaveButton && window.fetch) {
+        sellerForm.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const originalLabel = sellerSaveButton.textContent;
+            const csrfInput = sellerForm.querySelector('[name=csrfmiddlewaretoken]');
+            sellerSaveButton.disabled = true;
+            sellerSaveButton.textContent = 'Guardando...';
+            if (sellerFeedback) {
+                sellerFeedback.textContent = 'Guardando vendedor...';
+                sellerFeedback.classList.remove('is-error', 'is-success');
+            }
+
+            try {
+                const response = await fetch(sellerForm.action || window.location.href, {
+                    method: 'POST',
+                    body: new FormData(sellerForm),
+                    credentials: 'same-origin',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'X-CSRFToken': csrfInput ? csrfInput.value : '',
+                    },
+                });
+                const payload = await response.json();
+                if (!response.ok || !payload.ok) {
+                    throw new Error(payload.error || 'No se pudo guardar el vendedor.');
+                }
+                if (sellerFeedback) {
+                    sellerFeedback.textContent = payload.message;
+                    sellerFeedback.classList.add('is-success');
+                }
+                if (sellerLabel) sellerLabel.textContent = payload.seller_label;
+                if (saleSaveState) {
+                    saleSaveState.textContent = 'Cambios guardados';
+                    saleSaveState.classList.add('is-saved');
+                    window.setTimeout(() => {
+                        saleSaveState.textContent = 'Venta abierta';
+                        saleSaveState.classList.remove('is-saved');
+                    }, 2200);
+                }
+            } catch (error) {
+                if (sellerFeedback) {
+                    sellerFeedback.textContent = error.message || 'No se pudo guardar el vendedor.';
+                    sellerFeedback.classList.add('is-error');
+                }
+            } finally {
+                sellerSaveButton.disabled = false;
+                sellerSaveButton.textContent = originalLabel;
+            }
+        });
+    }
 
     const formatArs = (value) => {
         const num = Number(value || 0);
@@ -1125,25 +1448,50 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Enter on Quantity -> Price
+    const focusPriceInput = () => {
+        if (!priceInput) return;
+        if (priceOptions) priceOptions.open = true;
+        window.requestAnimationFrame(() => {
+            priceInput.focus();
+            priceInput.select();
+        });
+    };
+
+    const submitProductFromKeyboard = () => {
+        if (!addForm || !submitButton || submitButton.disabled) return;
+        if (typeof addForm.requestSubmit === 'function') {
+            addForm.requestSubmit(submitButton);
+            return;
+        }
+        submitButton.click();
+    };
+
+    // Enter on Quantity -> open price adjustment and focus Price
     if (quantityInput) {
         quantityInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') {
+            if (e.key === 'Enter' && !e.isComposing) {
                 e.preventDefault();
-                if (priceInput) {
-                    priceInput.focus();
-                    priceInput.select();
-                }
+                focusPriceInput();
             }
         });
     }
 
-    // Enter on Price -> price observation
+    // Enter on Price -> add the product without reloading the page
     if (priceInput) {
         priceInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') {
+            if (e.key === 'Enter' && !e.isComposing) {
                 e.preventDefault();
-                if (priceNoteInput) priceNoteInput.focus();
+                submitProductFromKeyboard();
+            }
+        });
+    }
+
+    // If a price reason is required, Enter there also completes the row.
+    if (priceNoteInput) {
+        priceNoteInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.isComposing) {
+                e.preventDefault();
+                submitProductFromKeyboard();
             }
         });
     }
@@ -1196,11 +1544,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (quantityInput) quantityInput.value = '1';
                 if (priceInput) priceInput.value = '';
                 if (priceNoteInput) priceNoteInput.value = '';
+                if (priceOptions) priceOptions.open = false;
                 if (skuInput) skuInput.focus();
 
                 showFeedback(payload.message || 'Item agregado al documento.', 'success');
             } catch (error) {
-                showFeedback(error && error.message ? error.message : 'No se pudo agregar el item.', 'error');
+                const errorMessage = error && error.message ? error.message : 'No se pudo agregar el item.';
+                showFeedback(errorMessage, 'error');
+                if (priceNoteInput && /observacion|observación|motivo|costo/i.test(errorMessage)) {
+                    if (priceOptions) priceOptions.open = true;
+                    window.requestAnimationFrame(() => priceNoteInput.focus());
+                }
             } finally {
                 submitButton.disabled = false;
                 submitButton.textContent = submitLabel;

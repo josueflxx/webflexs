@@ -9,6 +9,9 @@ from django.test import TestCase, override_settings
 from accounts.models import ClientCompany, ClientProfile
 from catalog.models import Product
 from core.models import (
+    DOCUMENT_SITUATION_APPROVED,
+    DOCUMENT_SITUATION_OBSERVED,
+    DocumentSeries,
     FISCAL_DOC_TYPE_FA,
     FISCAL_DOC_TYPE_FC,
     FISCAL_DOC_TYPE_NCB,
@@ -18,6 +21,9 @@ from core.models import (
     FISCAL_STATUS_SUBMITTING,
     SALES_BEHAVIOR_FACTURA,
     SALES_BEHAVIOR_NOTA_CREDITO,
+    SALES_BEHAVIOR_PEDIDO,
+    SALES_BEHAVIOR_REMITO,
+    SALES_BILLING_MODE_INTERNAL_DOCUMENT,
     SALES_BILLING_MODE_AFIP_WSFE,
     Company,
     FiscalDocument,
@@ -31,6 +37,12 @@ from core.services.fiscal_documents import (
     create_local_fiscal_document_from_order,
 )
 from core.services.sales_documents import ensure_stock_movements_for_order_document
+from core.services.documents import ensure_document_for_order
+from core.services.sales_documents import (
+    apply_sales_document_type_to_internal_document,
+    build_internal_document_display_items,
+    update_document_situation,
+)
 from orders.models import Order, OrderItem
 
 
@@ -266,3 +278,179 @@ class StockAfterCaeRulesTests(TestCase):
         self.untracked.refresh_from_db()
         self.assertEqual(self.tracked.stock, 9)
         self.assertEqual(self.untracked.stock, 20)
+
+
+class ConfigurableMovementRulesTests(TestCase):
+    def setUp(self):
+        self.company = Company.objects.create(name="Reglas de movimiento test")
+        self.operator = User.objects.create_user(
+            username="movement-rules-operator",
+            is_staff=True,
+        )
+        self.client_user = User.objects.create_user(username="movement-rules-client")
+        self.profile = ClientProfile.objects.create(
+            user=self.client_user,
+            company_name="Cliente reglas",
+        )
+        self.client_company = ClientCompany.objects.create(
+            client_profile=self.profile,
+            company=self.company,
+        )
+        self.order = Order.objects.create(
+            user=self.client_user,
+            company=self.company,
+            client_company_ref=self.client_company,
+            client_company=self.profile.company_name,
+            status=Order.STATUS_SHIPPED,
+        )
+
+    def _type(self, **overrides):
+        values = {
+            "company": self.company,
+            "code": "movement-rules-type",
+            "name": "Movimiento configurable",
+            "letter": "M",
+            "document_behavior": SALES_BEHAVIOR_PEDIDO,
+            "billing_mode": SALES_BILLING_MODE_INTERNAL_DOCUMENT,
+            "internal_doc_type": DocumentSeries.DOC_PED,
+            "generate_stock_movement": False,
+            "generate_account_movement": False,
+            "use_document_situation": True,
+            "currency_code": "USD",
+            "default_exchange_rate": Decimal("1200.000000"),
+        }
+        values.update(overrides)
+        return SalesDocumentType.objects.create(**values)
+
+    def test_document_freezes_rules_and_type_changes_only_affect_future_documents(self):
+        document_type = self._type()
+        document = ensure_document_for_order(
+            self.order,
+            doc_type=DocumentSeries.DOC_PED,
+            sales_document_type=document_type,
+            actor=self.operator,
+        )
+
+        self.assertEqual(document.sales_rules_snapshot["currency_code"], "USD")
+        self.assertEqual(document.sales_rules_snapshot["default_exchange_rate"], "1200.000000")
+        self.assertTrue(document.sales_rules_snapshot["use_document_situation"])
+        frozen_version = document.sales_rules_version
+
+        document_type.currency_code = "ARS"
+        document_type.default_exchange_rate = Decimal("1.000000")
+        document_type.use_document_situation = False
+        document_type.save()
+        document_type.refresh_from_db()
+        document.refresh_from_db()
+
+        self.assertGreater(document_type.rules_version, frozen_version)
+        self.assertEqual(document.sales_rules_version, frozen_version)
+        self.assertEqual(document.sales_rules_snapshot["currency_code"], "USD")
+        self.assertTrue(document.sales_rules_snapshot["use_document_situation"])
+
+        document_type.letter = "N"
+        with self.assertRaisesMessage(ValidationError, "identidad de un tipo"):
+            document_type.save()
+
+    def test_situation_requires_observation_when_document_is_observed(self):
+        document_type = self._type(code="movement-situation-type")
+        document = ensure_document_for_order(
+            self.order,
+            doc_type=DocumentSeries.DOC_PED,
+            sales_document_type=document_type,
+            actor=self.operator,
+        )
+
+        with self.assertRaisesMessage(ValidationError, "Debes indicar una observacion"):
+            update_document_situation(
+                document=document,
+                situation=DOCUMENT_SITUATION_OBSERVED,
+                actor=self.operator,
+            )
+
+        update_document_situation(
+            document=document,
+            situation=DOCUMENT_SITUATION_APPROVED,
+            actor=self.operator,
+        )
+        document.refresh_from_db()
+        self.assertEqual(document.commercial_situation, DOCUMENT_SITUATION_APPROVED)
+        self.assertEqual(document.commercial_situation_updated_by, self.operator)
+
+    def test_disabled_stock_rule_stays_disabled_for_existing_document(self):
+        product = Product.objects.create(
+            sku="RULE-STOCK-1",
+            name="Producto reglas stock",
+            price=Decimal("100.00"),
+            stock=8,
+            tracks_stock=True,
+        )
+        OrderItem.objects.create(
+            order=self.order,
+            product=product,
+            product_sku=product.sku,
+            product_name=product.name,
+            quantity=2,
+            unit_price_base=product.price,
+            price_at_purchase=product.price,
+        )
+        document_type = self._type(
+            code="movement-stock-freeze-type",
+            document_behavior=SALES_BEHAVIOR_REMITO,
+            internal_doc_type=DocumentSeries.DOC_REM,
+            generate_stock_movement=False,
+        )
+        document = ensure_document_for_order(
+            self.order,
+            doc_type=DocumentSeries.DOC_REM,
+            sales_document_type=document_type,
+            actor=self.operator,
+        )
+        self.assertFalse(StockMovement.objects.filter(internal_document=document).exists())
+
+        document_type.generate_stock_movement = True
+        document_type.save()
+        apply_sales_document_type_to_internal_document(
+            document=document,
+            sales_document_type=document_type,
+            actor=self.operator,
+        )
+        product.refresh_from_db()
+
+        self.assertEqual(product.stock, 8)
+        self.assertFalse(StockMovement.objects.filter(internal_document=document).exists())
+
+    def test_internal_print_groups_equal_products_using_frozen_rule(self):
+        product = Product.objects.create(
+            sku="RULE-GROUP-1",
+            name="Producto repetido",
+            price=Decimal("125.00"),
+        )
+        for quantity in (1, 2):
+            OrderItem.objects.create(
+                order=self.order,
+                product=product,
+                product_sku=product.sku,
+                product_name=product.name,
+                quantity=quantity,
+                unit_price_base=product.price,
+                price_at_purchase=product.price,
+            )
+        document_type = self._type(
+            code="movement-group-type",
+            group_equal_products=True,
+        )
+        document = ensure_document_for_order(
+            self.order,
+            doc_type=DocumentSeries.DOC_PED,
+            sales_document_type=document_type,
+            actor=self.operator,
+        )
+
+        document_type.group_equal_products = False
+        document_type.save()
+        rows = build_internal_document_display_items(document)
+
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["quantity"], Decimal("3"))
+        self.assertEqual(rows[0]["subtotal"], Decimal("375.00"))

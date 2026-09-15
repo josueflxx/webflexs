@@ -1,0 +1,2 @@
+core/static/core/models/abrazadera-curva-plaqueta-tuercas.glb
+core/static/core/models/abrazadera-semicurva-plaqueta-tuercas.glb

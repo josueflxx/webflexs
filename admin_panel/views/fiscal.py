@@ -201,6 +201,7 @@ from core.services.fiscal import (
 )
 from core.services.fiscal_notifications import send_fiscal_document_email
 from core.services.arca_client import ArcaConfigurationError, ArcaTemporaryError, ArcaWsfeClient
+from core.services.arca_homologation import require_homologation_emission_access
 from core.services.fiscal_documents import (
     close_fiscal_document,
     create_local_fiscal_document_from_order,
@@ -219,7 +220,40 @@ from core.services.sales_documents import (
     create_fiscal_document_from_sales_type,
     create_internal_document_from_sales_type,
     resolve_sales_document_type,
+    update_document_situation,
 )
+
+
+@staff_member_required
+@require_POST
+def commercial_document_situation_update(request, document_kind, pk):
+    """Update the optional commercial situation for internal or fiscal documents."""
+    active_company = get_active_company(request)
+    model = FiscalDocument if document_kind == "fiscal" else InternalDocument
+    if document_kind not in {"fiscal", "interno"}:
+        messages.error(request, "Tipo de comprobante invalido.")
+        return redirect("admin_order_list")
+    document = get_object_or_404(
+        model.objects.select_related("sales_document_type", "order"),
+        pk=pk,
+        company=active_company,
+    )
+    try:
+        update_document_situation(
+            document=document,
+            situation=str(request.POST.get("commercial_situation") or "").strip(),
+            note=request.POST.get("commercial_situation_note") or "",
+            actor=request.user,
+        )
+    except ValidationError as exc:
+        messages.error(request, " ".join(exc.messages))
+    else:
+        messages.success(request, "Situacion comercial actualizada.")
+    if document_kind == "fiscal":
+        return redirect("admin_fiscal_document_detail", pk=document.pk)
+    if document.order_id:
+        return redirect("admin_order_detail", pk=document.order_id)
+    return redirect("admin_order_list")
 from core.services.advanced_search import (
     apply_compact_text_search,
     apply_text_search,
@@ -229,6 +263,10 @@ from core.services.advanced_search import (
     sanitize_search_token,
 )
 from core.services.catalog_excel_exporter import build_catalog_workbook, build_export_filename
+from core.services.fiscal_excel_exporter import (
+    build_fiscal_export_filename,
+    build_fiscal_workbook,
+)
 from core.services.audit import log_admin_action, log_admin_change, model_snapshot
 from core.services.pricing import resolve_effective_price_list
 import traceback
@@ -658,6 +696,12 @@ def fiscal_document_emit(request, pk):
                 .get(pk=fiscal_document.pk)
             )
             _validate_before_submit(locked)
+            require_homologation_emission_access(
+                fiscal_document=locked,
+                company=locked.company,
+                point_of_sale=locked.point_of_sale,
+                check_credentials=False,
+            )
             duplicate_window = timezone.now() - timedelta(minutes=5)
             if (
                 locked.dispatch_requested_at
@@ -1204,6 +1248,7 @@ def fiscal_document_print(request, pk):
         "is_homologation": is_homologation,
         "frozen_environment": frozen_environment,
         "legal_watermark": legal_watermark,
+        "auto_print": request.GET.get("autoprint") == "1",
     }
 
     if request.GET.get('format') == 'pdf':
@@ -1224,6 +1269,55 @@ def fiscal_document_print(request, pk):
             messages.error(request, f"Error al generar PDF: {str(exc)}")
 
     return render(request, "admin_panel/fiscal/print.html", context)
+
+
+@staff_member_required
+def fiscal_document_excel(request, pk):
+    """Download a fiscal document as a formatted XLSX without mutating it."""
+    active_company = get_active_company(request)
+    if not active_company:
+        messages.error(request, "Selecciona una empresa activa para operar.")
+        return redirect("select_company")
+
+    fiscal_document = get_object_or_404(
+        FiscalDocument.objects.select_related(
+            "company",
+            "point_of_sale",
+            "sales_document_type",
+        ).prefetch_related("items__product"),
+        pk=pk,
+    )
+    if fiscal_document.company_id != active_company.id:
+        messages.error(request, "El comprobante fiscal no pertenece a la empresa activa.")
+        return redirect("admin_fiscal_document_list")
+
+    movement_transaction = _resolve_fiscal_document_transaction(fiscal_document)
+    if movement_transaction and not _movement_allows_print(movement_transaction):
+        messages.warning(
+            request,
+            "Primero cerra el movimiento en cuenta corriente para descargar este comprobante.",
+        )
+        return redirect("admin_fiscal_document_detail", pk=fiscal_document.pk)
+
+    workbook = build_fiscal_workbook(
+        fiscal_document,
+        snapshot=_get_fiscal_snapshot(fiscal_document),
+    )
+    output = BytesIO()
+    workbook.save(output)
+    output.seek(0)
+
+    response = HttpResponse(
+        output.getvalue(),
+        content_type=(
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        ),
+    )
+    response["Content-Disposition"] = (
+        f'attachment; filename="{build_fiscal_export_filename(fiscal_document)}"'
+    )
+    response["X-Content-Type-Options"] = "nosniff"
+    return response
 
 
 def _get_fiscal_active_company(request):
@@ -1637,4 +1731,4 @@ def fiscal_point_set_default(request, pk):
     messages.success(request, f"Punto de venta {point.number} configurado como default.")
     return redirect("admin_fiscal_config")
 
-__all__ = ['_get_fiscal_snapshot', '_get_fiscal_document_number_display', '_get_fiscal_document_delete_blockers', 'fiscal_document_list', 'fiscal_document_detail', 'fiscal_document_emit', 'fiscal_document_recover', 'fiscal_document_close', 'fiscal_document_reopen', 'fiscal_document_void', 'fiscal_document_delete', 'fiscal_document_send_email', 'fiscal_report', 'fiscal_health', 'fiscal_document_print', '_get_fiscal_active_company', '_run_fiscal_pos_preflight', 'fiscal_config', 'fiscal_point_preflight', 'fiscal_point_create', 'fiscal_point_edit', 'fiscal_point_toggle_active', 'fiscal_point_set_default']
+__all__ = ['commercial_document_situation_update', '_get_fiscal_snapshot', '_get_fiscal_document_number_display', '_get_fiscal_document_delete_blockers', 'fiscal_document_list', 'fiscal_document_detail', 'fiscal_document_emit', 'fiscal_document_recover', 'fiscal_document_close', 'fiscal_document_reopen', 'fiscal_document_void', 'fiscal_document_delete', 'fiscal_document_send_email', 'fiscal_report', 'fiscal_health', 'fiscal_document_print', 'fiscal_document_excel', '_get_fiscal_active_company', '_run_fiscal_pos_preflight', 'fiscal_config', 'fiscal_point_preflight', 'fiscal_point_create', 'fiscal_point_edit', 'fiscal_point_toggle_active', 'fiscal_point_set_default']

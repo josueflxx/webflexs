@@ -38,6 +38,7 @@ def arca_security_configuration_check(app_configs, **kwargs):
             "ARCA_HOMOLOGATION_EMISSION_ENABLED",
             "ARCA_PRODUCTION_ENABLED",
             "READY_ARCA_HOMOLOGACION_READONLY",
+            "READY_ARCA_HOMOLOGACION_EMISSION",
             "ARCA_WSASS_AUTHORIZATION_CONFIRMED",
         )
     )
@@ -56,7 +57,12 @@ def arca_security_configuration_check(app_configs, **kwargs):
             )
         ]
 
-    result = evaluate_homologation_readiness(check_credentials=True)
+    result = evaluate_homologation_readiness(
+        check_credentials=True,
+        _emission_mode=bool(
+            getattr(settings, "ARCA_HOMOLOGATION_EMISSION_ENABLED", False)
+        ),
+    )
     for error_code in result.error_codes:
         messages.append(
             Error(

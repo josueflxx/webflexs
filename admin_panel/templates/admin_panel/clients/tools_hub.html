@@ -2,27 +2,657 @@
 
 {% block page_title %}Herramientas de clientes{% endblock %}
 
+{% block extra_css %}
+<style>
+    .client-tools-page {
+        width: min(1480px, calc(100vw - 36px));
+        max-width: 100%;
+        margin-inline: auto;
+        display: grid;
+        gap: 14px;
+    }
+
+    .client-tools-page .client-module-shell {
+        margin-bottom: 0;
+        padding: 16px;
+        overflow: hidden;
+        border: 1px solid rgba(255, 255, 255, 0.09);
+        border-radius: 16px;
+        background:
+            radial-gradient(circle at 92% 8%, rgba(255, 107, 53, 0.11), transparent 26%),
+            radial-gradient(circle at 4% 0%, rgba(0, 197, 255, 0.06), transparent 24%),
+            linear-gradient(180deg, rgba(18, 23, 32, 0.98), rgba(12, 16, 23, 0.98));
+        box-shadow: 0 16px 34px rgba(0, 0, 0, 0.18);
+    }
+
+    .client-tools-page .client-module-ribbon {
+        width: fit-content;
+        margin-bottom: 13px;
+        padding: 5px 9px;
+        border-radius: 999px;
+        font-size: 0.62rem;
+        letter-spacing: 0.08em;
+    }
+
+    .client-tools-page .client-module-head {
+        grid-template-columns: 46px minmax(0, 1fr) auto;
+        gap: 13px;
+        align-items: center;
+        margin-bottom: 15px;
+    }
+
+    .client-tools-page .client-module-icon {
+        width: 46px;
+        height: 46px;
+        color: #ff9368;
+        border: 1px solid rgba(255, 107, 53, 0.26);
+        border-radius: 12px;
+        background: rgba(255, 107, 53, 0.1);
+    }
+
+    .client-tools-page .client-module-icon svg {
+        width: 23px;
+        height: 23px;
+    }
+
+    .client-tools-page .client-module-copy h2 {
+        margin-top: 2px;
+        font-size: 1.28rem;
+        letter-spacing: -0.02em;
+    }
+
+    .client-tools-page .client-module-copy p {
+        max-width: 86ch;
+        font-size: 0.8rem;
+        line-height: 1.45;
+    }
+
+    .client-tools-page .client-module-company {
+        min-width: 135px;
+        padding: 10px 12px;
+        border-radius: 10px;
+        background: rgba(255, 255, 255, 0.03);
+    }
+
+    .client-tools-page .client-module-grid {
+        grid-template-columns: repeat(6, minmax(0, 1fr));
+        gap: 8px;
+    }
+
+    .client-tools-page .client-module-card {
+        min-height: 86px;
+        padding: 11px;
+        border: 1px solid rgba(255, 255, 255, 0.075);
+        border-radius: 11px;
+        background: rgba(255, 255, 255, 0.022);
+    }
+
+    .client-tools-page .client-module-card:hover {
+        transform: translateY(-2px);
+        border-color: rgba(255, 107, 53, 0.34);
+        background: rgba(255, 107, 53, 0.055);
+    }
+
+    .client-tools-page .client-module-card-icon {
+        width: 32px;
+        height: 32px;
+        border-radius: 8px;
+        color: #ff946b;
+        background: rgba(255, 107, 53, 0.09);
+        border-color: rgba(255, 107, 53, 0.2);
+    }
+
+    .client-tools-page .client-module-card-icon svg {
+        width: 17px;
+        height: 17px;
+    }
+
+    .client-tools-page .client-module-card strong {
+        font-size: 0.8rem;
+    }
+
+    .client-tools-page .client-module-card small {
+        display: -webkit-box;
+        overflow: hidden;
+        font-size: 0.65rem;
+        line-height: 1.35;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 2;
+    }
+
+    .client-tools-workspace {
+        overflow: hidden;
+        border: 1px solid rgba(255, 255, 255, 0.09);
+        border-radius: 18px;
+        background:
+            radial-gradient(circle at 85% 0%, rgba(255, 107, 53, 0.08), transparent 30%),
+            linear-gradient(180deg, rgba(17, 22, 31, 0.98), rgba(10, 14, 21, 0.98));
+        box-shadow: 0 18px 40px rgba(0, 0, 0, 0.16);
+    }
+
+    .client-tools-hero {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 24px;
+        align-items: center;
+        padding: 22px 24px 20px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.075);
+    }
+
+    .client-tools-eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 7px;
+        color: #ff9268;
+        font-size: 0.66rem;
+        font-weight: 800;
+        letter-spacing: 0.11em;
+        text-transform: uppercase;
+    }
+
+    .client-tools-eyebrow::before {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: #ff6b35;
+        box-shadow: 0 0 0 5px rgba(255, 107, 53, 0.1);
+        content: "";
+    }
+
+    .client-tools-hero h1 {
+        margin: 0;
+        color: #f8fafc;
+        font-size: clamp(1.45rem, 2vw, 1.85rem);
+        letter-spacing: -0.035em;
+    }
+
+    .client-tools-hero p {
+        max-width: 76ch;
+        margin: 7px 0 0;
+        color: #98a3b3;
+        font-size: 0.82rem;
+        line-height: 1.55;
+    }
+
+    .client-tools-context {
+        display: flex;
+        gap: 8px;
+        align-items: stretch;
+    }
+
+    .client-tools-context-item {
+        min-width: 128px;
+        padding: 10px 12px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 11px;
+        background: rgba(255, 255, 255, 0.025);
+    }
+
+    .client-tools-context-item span {
+        display: block;
+        margin-bottom: 5px;
+        color: #7f8997;
+        font-size: 0.6rem;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+    }
+
+    .client-tools-context-item strong {
+        display: block;
+        color: #f2f5f8;
+        font-size: 0.78rem;
+    }
+
+    .client-tools-page .client-reports-nav {
+        margin: 0;
+        padding: 12px 16px;
+        gap: 7px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+        background: rgba(5, 9, 15, 0.32);
+    }
+
+    .client-tools-page .client-reports-nav-item {
+        min-height: 36px;
+        padding: 8px 13px;
+        border-radius: 9px;
+        font-size: 0.72rem;
+    }
+
+    .client-tools-page .client-reports-nav-item.is-active {
+        box-shadow: inset 0 -2px 0 #ff6b35;
+    }
+
+    .client-tools-alert {
+        display: grid;
+        grid-template-columns: 38px minmax(0, 1fr);
+        gap: 12px;
+        align-items: center;
+        margin: 16px 18px 0;
+        padding: 13px 15px;
+        border: 1px solid rgba(245, 158, 11, 0.28);
+        border-radius: 12px;
+        background: rgba(245, 158, 11, 0.075);
+    }
+
+    .client-tools-alert-icon {
+        display: grid;
+        width: 38px;
+        height: 38px;
+        place-items: center;
+        border-radius: 10px;
+        color: #fbbf24;
+        background: rgba(245, 158, 11, 0.11);
+    }
+
+    .client-tools-alert strong {
+        display: block;
+        margin-bottom: 3px;
+        color: #f8fafc;
+        font-size: 0.8rem;
+    }
+
+    .client-tools-alert p {
+        margin: 0;
+        color: #a8b0bc;
+        font-size: 0.72rem;
+        line-height: 1.45;
+    }
+
+    .client-tools-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 14px;
+        padding: 18px;
+    }
+
+    .client-tool-card {
+        position: relative;
+        display: flex;
+        min-width: 0;
+        min-height: 246px;
+        overflow: hidden;
+        flex-direction: column;
+        padding: 20px;
+        border: 1px solid rgba(255, 255, 255, 0.085);
+        border-radius: 15px;
+        color: #f8fafc;
+        text-decoration: none;
+        background:
+            radial-gradient(circle at 100% 0%, rgba(255, 107, 53, 0.09), transparent 38%),
+            rgba(255, 255, 255, 0.024);
+        transition: transform 0.2s ease, border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .client-tool-card::before {
+        position: absolute;
+        inset: 0 auto 0 0;
+        width: 3px;
+        opacity: 0;
+        background: linear-gradient(180deg, #ff8a5c, #ff4d00);
+        content: "";
+        transition: opacity 0.2s ease;
+    }
+
+    .client-tool-card:hover,
+    .client-tool-card:focus-visible {
+        outline: none;
+        transform: translateY(-3px);
+        border-color: rgba(255, 107, 53, 0.35);
+        background-color: rgba(255, 107, 53, 0.035);
+        box-shadow: 0 18px 35px rgba(0, 0, 0, 0.2);
+    }
+
+    .client-tool-card:hover::before,
+    .client-tool-card:focus-visible::before {
+        opacity: 1;
+    }
+
+    .client-tool-card-head {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        align-items: flex-start;
+    }
+
+    .client-tool-card-icon {
+        display: grid;
+        width: 48px;
+        height: 48px;
+        flex: 0 0 auto;
+        place-items: center;
+        border: 1px solid rgba(255, 107, 53, 0.24);
+        border-radius: 13px;
+        color: #ff8d61;
+        background: rgba(255, 107, 53, 0.095);
+    }
+
+    .client-tool-card-icon svg {
+        width: 23px;
+        height: 23px;
+    }
+
+    .client-tool-card-index {
+        color: rgba(255, 255, 255, 0.2);
+        font-size: 1.8rem;
+        font-weight: 900;
+        letter-spacing: -0.08em;
+        line-height: 1;
+    }
+
+    .client-tool-card-kicker {
+        display: block;
+        margin: 20px 0 7px;
+        color: #ff8b5e;
+        font-size: 0.62rem;
+        font-weight: 800;
+        letter-spacing: 0.09em;
+        text-transform: uppercase;
+    }
+
+    .client-tool-card h2 {
+        margin: 0;
+        color: #f8fafc;
+        font-size: 1.04rem;
+        letter-spacing: -0.015em;
+    }
+
+    .client-tool-card p {
+        margin: 8px 0 18px;
+        color: #929cab;
+        font-size: 0.75rem;
+        line-height: 1.55;
+    }
+
+    .client-tool-card-foot {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        align-items: center;
+        margin-top: auto;
+        padding-top: 14px;
+        border-top: 1px solid rgba(255, 255, 255, 0.07);
+    }
+
+    .client-tool-card-meta {
+        display: inline-flex;
+        min-width: 0;
+        align-items: center;
+        gap: 6px;
+        color: #87919f;
+        font-size: 0.66rem;
+        font-weight: 700;
+    }
+
+    .client-tool-card-meta-dot {
+        width: 6px;
+        height: 6px;
+        flex: 0 0 auto;
+        border-radius: 50%;
+        background: #22c55e;
+        box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.08);
+    }
+
+    .client-tool-card-cta {
+        display: inline-flex;
+        flex: 0 0 auto;
+        align-items: center;
+        gap: 7px;
+        color: #ff8b5e;
+        font-size: 0.7rem;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+    }
+
+    .client-tool-card-cta svg {
+        width: 14px;
+        height: 14px;
+        transition: transform 0.2s ease;
+    }
+
+    .client-tool-card:hover .client-tool-card-cta svg {
+        transform: translateX(3px);
+    }
+
+    .client-tool-card.is-import .client-tool-card-icon {
+        color: #4dd8ed;
+        border-color: rgba(34, 211, 238, 0.22);
+        background: rgba(34, 211, 238, 0.075);
+    }
+
+    .client-tool-card.is-requests .client-tool-card-icon {
+        color: #c8a8ff;
+        border-color: rgba(168, 85, 247, 0.24);
+        background: rgba(168, 85, 247, 0.075);
+    }
+
+    .client-tool-count {
+        display: inline-flex;
+        min-width: 22px;
+        height: 22px;
+        align-items: center;
+        justify-content: center;
+        padding-inline: 7px;
+        border: 1px solid rgba(255, 107, 53, 0.25);
+        border-radius: 999px;
+        color: #ff9a72;
+        background: rgba(255, 107, 53, 0.09);
+        font-size: 0.65rem;
+        font-weight: 800;
+    }
+
+    html[data-theme="light"] .client-tools-page .client-module-shell,
+    html[data-theme="light"] .client-tools-workspace {
+        border-color: rgba(15, 23, 42, 0.09);
+        background:
+            radial-gradient(circle at 90% 0%, rgba(255, 107, 53, 0.07), transparent 28%),
+            #ffffff;
+        box-shadow: 0 14px 34px rgba(15, 23, 42, 0.06);
+    }
+
+    html[data-theme="light"] .client-tools-hero,
+    html[data-theme="light"] .client-tools-page .client-reports-nav {
+        border-color: rgba(15, 23, 42, 0.08);
+    }
+
+    html[data-theme="light"] .client-tools-hero h1,
+    html[data-theme="light"] .client-tools-context-item strong,
+    html[data-theme="light"] .client-tool-card,
+    html[data-theme="light"] .client-tool-card h2,
+    html[data-theme="light"] .client-tools-alert strong {
+        color: #0f172a;
+    }
+
+    html[data-theme="light"] .client-tools-hero p,
+    html[data-theme="light"] .client-tool-card p,
+    html[data-theme="light"] .client-tools-alert p {
+        color: #64748b;
+    }
+
+    html[data-theme="light"] .client-tools-context-item,
+    html[data-theme="light"] .client-tool-card {
+        border-color: rgba(15, 23, 42, 0.09);
+        background: rgba(248, 250, 252, 0.86);
+    }
+
+    html[data-theme="light"] .client-tool-card:hover,
+    html[data-theme="light"] .client-tool-card:focus-visible {
+        border-color: rgba(255, 107, 53, 0.34);
+        background: #ffffff;
+        box-shadow: 0 16px 34px rgba(15, 23, 42, 0.09);
+    }
+
+    html[data-theme="light"] .client-tool-card-index {
+        color: rgba(15, 23, 42, 0.13);
+    }
+
+    html[data-theme="light"] .client-tool-card-foot {
+        border-color: rgba(15, 23, 42, 0.08);
+    }
+
+    @media (max-width: 1180px) {
+        .client-tools-page .client-module-grid,
+        .client-tools-grid {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+
+        .client-tools-hero {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    @media (max-width: 760px) {
+        .client-tools-page {
+            width: min(100% - 20px, 1480px);
+        }
+
+        .client-tools-page .client-module-head {
+            grid-template-columns: 42px minmax(0, 1fr);
+        }
+
+        .client-tools-page .client-module-company {
+            grid-column: 1 / -1;
+            width: 100%;
+        }
+
+        .client-tools-page .client-module-grid,
+        .client-tools-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .client-tools-hero {
+            padding: 18px;
+        }
+
+        .client-tools-context {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+        }
+
+        .client-tools-page .client-reports-nav {
+            flex-wrap: nowrap;
+            overflow-x: auto;
+        }
+
+        .client-tools-page .client-reports-nav-item {
+            flex: 0 0 auto;
+        }
+
+        .client-tools-grid {
+            padding: 14px;
+        }
+
+        .client-tool-card {
+            min-height: 220px;
+        }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .client-tool-card,
+        .client-tool-card::before,
+        .client-tool-card-cta svg {
+            transition: none;
+        }
+    }
+</style>
+{% endblock %}
+
 {% block content %}
-{% include 'admin_panel/clients/_module_panel.html' with client_panel='tools' client_module_subtitle='Exporta base, ejecuta importaciones y resuelve herramientas operativas del modulo.' %}
-{% include 'admin_panel/clients/_tools_nav.html' with client_tools_panel=client_tools_panel client_tools_nav_items=client_tools_nav_items %}
+<div class="client-tools-page">
+    {% include 'admin_panel/clients/_module_panel.html' with client_panel='tools' client_module_subtitle='Exporta la cartera, ejecuta cargas masivas y revisa solicitudes desde un único centro operativo.' %}
 
-{% if tools_requires_company %}
-<div class="dashboard-section compact-top-gap">
-    <h2>Elegi una empresa para usar herramientas</h2>
-    <p class="text-muted">Las herramientas de clientes operan por empresa activa para no mezclar cartera entre Flexs y Ubolt.</p>
-</div>
-{% endif %}
+    <section class="client-tools-workspace" aria-labelledby="client-tools-title">
+        <header class="client-tools-hero">
+            <div>
+                <span class="client-tools-eyebrow">Centro operativo</span>
+                <h1 id="client-tools-title">Herramientas de cartera</h1>
+                <p>Elegí una operación para descargar información, actualizar clientes desde Excel o revisar ingresos pendientes del portal.</p>
+            </div>
+            <div class="client-tools-context" aria-label="Contexto de trabajo">
+                <div class="client-tools-context-item">
+                    <span>Empresa</span>
+                    <strong>{% if active_company %}{{ active_company.name }}{% else %}Sin seleccionar{% endif %}</strong>
+                </div>
+                <div class="client-tools-context-item">
+                    <span>Herramientas</span>
+                    <strong>{{ tool_cards|length }} disponibles</strong>
+                </div>
+            </div>
+        </header>
 
-<div class="client-reports-card-grid compact-top-gap">
-    {% for card in tool_cards %}
-    <a href="{{ card.url }}" class="client-report-card">
-        <div class="client-report-card-icon" aria-hidden="true">{{ card.icon|safe }}</div>
-        <div class="client-report-card-copy">
-            <strong>{{ card.title }}</strong>
-            <p>{{ card.description }}</p>
-            <span class="client-report-card-cta">Abrir herramienta</span>
+        {% include 'admin_panel/clients/_tools_nav.html' with client_tools_panel=client_tools_panel client_tools_nav_items=client_tools_nav_items %}
+
+        {% if tools_requires_company %}
+        <div class="client-tools-alert" role="status">
+            <div class="client-tools-alert-icon" aria-hidden="true">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                    <line x1="12" y1="9" x2="12" y2="13"></line>
+                    <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                </svg>
+            </div>
+            <div>
+                <strong>Seleccioná una empresa para continuar</strong>
+                <p>Estas operaciones trabajan sobre la empresa activa para evitar mezclar las carteras de Flexs y Ubolt.</p>
+            </div>
         </div>
-    </a>
-    {% endfor %}
+        {% endif %}
+
+        <div class="client-tools-grid">
+            {% for card in tool_cards %}
+            <a
+                href="{{ card.url }}"
+                class="client-tool-card {% if forloop.counter == 1 %}is-export{% elif forloop.counter == 2 %}is-import{% else %}is-requests{% endif %}"
+                data-tool-key="{% if forloop.counter == 1 %}export{% elif forloop.counter == 2 %}import{% else %}requests{% endif %}"
+            >
+                <div class="client-tool-card-head">
+                    <div class="client-tool-card-icon" aria-hidden="true">
+                        {% if forloop.counter == 1 %}
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                            <polyline points="7 10 12 15 17 10"></polyline>
+                            <line x1="12" y1="15" x2="12" y2="3"></line>
+                        </svg>
+                        {% elif forloop.counter == 2 %}
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                            <polyline points="17 8 12 3 7 8"></polyline>
+                            <line x1="12" y1="3" x2="12" y2="15"></line>
+                        </svg>
+                        {% else %}
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M9 11l3 3L22 4"></path>
+                            <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
+                        </svg>
+                        {% endif %}
+                    </div>
+                    <span class="client-tool-card-index">0{{ forloop.counter }}</span>
+                </div>
+
+                <span class="client-tool-card-kicker">
+                    {% if forloop.counter == 1 %}Salida de datos{% elif forloop.counter == 2 %}Carga masiva{% else %}Altas del portal{% endif %}
+                </span>
+                <h2>{{ card.title }}</h2>
+                <p>{{ card.description }}</p>
+
+                <div class="client-tool-card-foot">
+                    <span class="client-tool-card-meta">
+                        <span class="client-tool-card-meta-dot" aria-hidden="true"></span>
+                        {% if forloop.counter == 1 %}Descarga segura{% elif forloop.counter == 2 %}Archivo Excel{% else %}Revisión manual{% endif %}
+                    </span>
+                    <span class="client-tool-card-cta">
+                        {% if forloop.counter == 1 %}Configurar{% elif forloop.counter == 2 %}Abrir importador{% else %}Revisar{% endif %}
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                            <polyline points="12 5 19 12 12 19"></polyline>
+                        </svg>
+                    </span>
+                </div>
+            </a>
+            {% endfor %}
+        </div>
+    </section>
 </div>
 {% endblock %}

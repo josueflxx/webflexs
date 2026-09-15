@@ -715,6 +715,11 @@ html[data-theme="light"] .fiscal-classic-table th {
         flex-direction: column;
     }
 
+    .fiscal-classic-title {
+        width: 100%;
+        flex: 0 1 auto;
+    }
+
     .fiscal-classic-actions {
         width: 100%;
         flex-basis: auto;

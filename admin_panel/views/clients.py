@@ -300,6 +300,33 @@ ORDER_INTERNAL_DOC_STATUS_RULES = {
 
 from .helpers import *
 from core.services.operational_timeline import build_client_activity_timeline
+from core.services.document_sharing import build_public_document_token
+
+
+def _build_client_movement_share_actions(source_document, movement_state):
+    """Return the unified share destinations used by a client movement row."""
+    if not isinstance(source_document, (InternalDocument, FiscalDocument)):
+        return {}
+    is_enabled = movement_state == ClientTransaction.STATE_CLOSED
+    if isinstance(source_document, InternalDocument):
+        base_print_url = reverse("admin_internal_document_print", args=[source_document.pk])
+        excel_url = reverse("admin_internal_document_excel", args=[source_document.pk])
+    else:
+        base_print_url = reverse("admin_fiscal_document_print", args=[source_document.pk])
+        excel_url = reverse("admin_fiscal_document_excel", args=[source_document.pk])
+    public_url = reverse(
+        "public_document_share",
+        args=[build_public_document_token(source_document)],
+    )
+    return {
+        "enabled": is_enabled,
+        "disabled_reason": "Cierra el movimiento para habilitar las opciones de compartir.",
+        "print_url": f"{base_print_url}?copy=original&autoprint=1",
+        "pdf_url": f"{base_print_url}?copy=original&format=pdf",
+        "web_url": public_url,
+        "excel_url": excel_url,
+        "public_url": public_url,
+    }
 
 
 
@@ -935,7 +962,16 @@ def client_list(request):
     clients, search = apply_admin_text_search(
         clients,
         request.GET.get('q', ''),
-        ["company_name", "user__username", "cuit_dni", "user__email"],
+        [
+            "company_name",
+            "user__username",
+            "user__first_name",
+            "user__last_name",
+            "user__email",
+            "cuit_dni",
+            "document_number",
+            "phone",
+        ],
     )
 
     paginator = Paginator(clients.order_by('-created_at'), 50)
@@ -1938,14 +1974,14 @@ def client_quick_order(request, pk):
             return _redirect_client_history(client, active_company)
         action = {
             SALES_BEHAVIOR_COTIZACION: "quote",
-            SALES_BEHAVIOR_PRESUPUESTO: "quote",
+            SALES_BEHAVIOR_PRESUPUESTO: "budget",
             SALES_BEHAVIOR_PEDIDO: "order",
             SALES_BEHAVIOR_REMITO: "remito",
             SALES_BEHAVIOR_FACTURA: "invoice",
             SALES_BEHAVIOR_NOTA_CREDITO: "credit_note",
         }.get(selected_sales_document_type.document_behavior, action)
 
-    if action not in {"quote", "order", "remito", "invoice", "credit_note"}:
+    if action not in {"quote", "budget", "order", "remito", "invoice", "credit_note"}:
         messages.error(request, "Accion rapida invalida.")
         return _redirect_client_history(client, active_company)
     if action in {"invoice", "credit_note"}:
@@ -2234,10 +2270,14 @@ def client_quick_order(request, pk):
     created_label = (
         selected_sales_document_type.name
         if selected_sales_document_type
-        else ("Cotizacion" if action == "quote" else "Pedido")
+        else (
+            "Cotizacion"
+            if action == "quote"
+            else ("Presupuesto" if action == "budget" else "Pedido")
+        )
     )
 
-    if source_order and action in {"quote", "order"}:
+    if source_order and action in {"quote", "budget", "order"}:
         try:
             order = _create_related_order_from_source(
                 source_order=source_order,
@@ -2289,6 +2329,7 @@ def client_quick_order(request, pk):
             created_label=created_label,
             admin_note=f"{created_label} creada desde ficha cliente.",
             history_note=f"{created_label} creado desde ficha cliente",
+            selected_sales_document_type=selected_sales_document_type,
         )
     except ValidationError as exc:
         messages.error(request, "; ".join(exc.messages))
@@ -2495,10 +2536,10 @@ def client_fiscal_review_resolve(request, pk):
 
 
 CLIENT_HISTORY_MOVEMENT_TABS = {
-    "sales": {
-        "label": "Ventas",
-        "title": "Ventas del cliente",
-        "subtitle": "Movimientos ya cerrados que forman parte del historial comercial del cliente.",
+    "account": {
+        "label": "Cuenta corriente",
+        "title": "Cuenta corriente",
+        "subtitle": "Saldo, debe/haber y movimientos que afectan la deuda del cliente.",
     },
     "quotes": {
         "label": "Presupuestos",
@@ -2515,11 +2556,6 @@ CLIENT_HISTORY_MOVEMENT_TABS = {
         "title": "Cobros del cliente",
         "subtitle": "Recibos y pagos ya registrados, con acceso directo a su comprobante y aplicación.",
     },
-    "account": {
-        "label": "Cuenta corriente",
-        "title": "Cuenta corriente",
-        "subtitle": "Saldo, debe/haber y movimientos que afectan la deuda del cliente.",
-    },
     "activity": {
         "label": "Actividad",
         "title": "Actividad reciente",
@@ -2528,11 +2564,12 @@ CLIENT_HISTORY_MOVEMENT_TABS = {
 }
 
 CLIENT_HISTORY_LEGACY_TAB_MAP = {
-    "overview": "sales",
-    "documents": "sales",
-    "facturas": "sales",
-    "invoices": "sales",
-    "orders": "sales",
+    "overview": "account",
+    "documents": "account",
+    "facturas": "account",
+    "invoices": "account",
+    "orders": "account",
+    "sales": "account",
     "payments": "payments",
     "remitos": "remitos",
     "quotes": "quotes",
@@ -2549,13 +2586,13 @@ def _resolve_client_history_movement_tab(request):
 
     legacy_ledger_tab = str(request.GET.get("ledger_tab", "")).strip().lower()
     if legacy_ledger_tab:
-        return CLIENT_HISTORY_LEGACY_TAB_MAP.get(legacy_ledger_tab, "sales")
+        return CLIENT_HISTORY_LEGACY_TAB_MAP.get(legacy_ledger_tab, "account")
 
     legacy_client_tab = str(request.GET.get("client_tab", "")).strip().lower()
     if legacy_client_tab:
-        return CLIENT_HISTORY_LEGACY_TAB_MAP.get(legacy_client_tab, "sales")
+        return CLIENT_HISTORY_LEGACY_TAB_MAP.get(legacy_client_tab, "account")
 
-    return "sales"
+    return "account"
 
 
 def _row_has_visible_amount(row):
@@ -3122,7 +3159,14 @@ def client_order_history(request, pk):
         ledger_entries = list(
             client.get_ledger_queryset(company=active_company)
             .filter(company__in=company_scope)
-            .select_related('order', 'payment', 'payment__order', 'created_by', 'company')
+            .select_related(
+                'order',
+                'order__sales_document_type',
+                'payment',
+                'payment__order',
+                'created_by',
+                'company',
+            )
         )
         ledger_order_ids = {tx.order_id for tx in ledger_entries if tx.order_id}
         ledger_payment_ids = {tx.payment_id for tx in ledger_entries if tx.payment_id}
@@ -3185,6 +3229,16 @@ def client_order_history(request, pk):
                 ClientTransaction.STATE_VOIDED,
             }:
                 movement_state = ClientTransaction.STATE_OPEN
+            # Older cancellation paths could leave the linked ledger row open.
+            # The cancelled order is authoritative for display, so these rows
+            # remain visible in the auditable "Movimientos anulados" bucket.
+            if (
+                tx.transaction_type == ClientTransaction.TYPE_ORDER_CHARGE
+                and tx.order_id
+                and tx.order
+                and tx.order.normalized_status() == Order.STATUS_CANCELLED
+            ):
+                movement_state = ClientTransaction.STATE_VOIDED
             effective_amount = (
                 tx.amount
                 if movement_state == ClientTransaction.STATE_CLOSED
@@ -3250,9 +3304,19 @@ def client_order_history(request, pk):
                             number_label = source_document.display_number
                             source_origin_label = "Interno"
                         else:
-                            type_label = 'Cotizacion'
-                            number_label = f'CT{order_obj.pk:07d}'
-                            source_origin_label = "Pedido"
+                            configured_type = getattr(order_obj, 'sales_document_type', None)
+                            type_label = (
+                                configured_type.name
+                                if configured_type
+                                else 'Cotizacion'
+                            )
+                            number_prefix = (
+                                (configured_type.letter or '').strip()
+                                if configured_type
+                                else 'CT'
+                            ) or 'CT'
+                            number_label = f'{number_prefix}{order_obj.pk:07d}'
+                            source_origin_label = "Movimiento"
                     elif order_obj.pk in order_documents_by_order:
                         source_document = order_documents_by_order.get(order_obj.pk)
                         doc_category = 'order'
@@ -3391,7 +3455,7 @@ def client_order_history(request, pk):
                     reference_meta_parts.extend(request_origin_parts)
                     reference_meta = " | ".join(part for part in reference_meta_parts if part)
                 elif doc_category == 'quote':
-                    reference_title = "Cotizacion comercial"
+                    reference_title = f"{type_label} comercial"
                     reference_meta_parts = [f"Pedido #{tx.order_id}", getattr(tx.company, "name", "") or "-"]
                     if tx.order:
                         reference_meta_parts.append(tx.order.get_status_display())
@@ -3440,6 +3504,11 @@ def client_order_history(request, pk):
             if isinstance(source_document, FiscalDocument):
                 edit_url = reverse("admin_fiscal_document_detail", args=[source_document.pk])
                 edit_label = "Abrir comprobante"
+
+            share_actions = _build_client_movement_share_actions(
+                source_document,
+                movement_state,
+            )
 
             flag_actions = []
             copy_variants = (
@@ -3558,6 +3627,7 @@ def client_order_history(request, pk):
                 'actor_label': actor_label,
                 'movement_total': abs(movement_display_amount),
                 'flag_actions': flag_actions,
+                'share_actions': share_actions,
             })
 
         for payment in payments_recent:
@@ -3650,7 +3720,7 @@ def client_order_history(request, pk):
     }
 
     ledger_tab = movement_tab
-    ledger_rows_filtered = list(movement_rows_by_tab.get(movement_tab, movement_rows_by_tab["sales"]))
+    ledger_rows_filtered = list(movement_rows_by_tab.get(movement_tab, movement_rows_by_tab["account"]))
 
     ledger_show_all = request.GET.get('show_all') == '1'
     limit_raw = request.GET.get('limit', '80').strip()
@@ -3732,32 +3802,37 @@ def client_order_history(request, pk):
                 "target_blank": False,
                 "css_class": "",
             }
-            if behavior in {SALES_BEHAVIOR_COTIZACION, SALES_BEHAVIOR_PRESUPUESTO}:
+            if behavior == SALES_BEHAVIOR_COTIZACION:
                 action_meta["action_value"] = "quote"
-                action_meta["label"] = "Presupuesto / Cotizacion"
-                action_meta["help_text"] = "Crea un borrador comercial desde la ficha del cliente."
+                action_meta["label"] = item.name or "Cotizacion"
+                action_meta["help_text"] = "Crea una cotizacion comercial desde la ficha del cliente."
+                action_meta["css_class"] = "is-quote"
+            elif behavior == SALES_BEHAVIOR_PRESUPUESTO:
+                action_meta["action_value"] = "budget"
+                action_meta["label"] = item.name or "Presupuesto"
+                action_meta["help_text"] = "Crea un presupuesto comercial independiente para el cliente."
                 action_meta["css_class"] = "is-quote"
             elif behavior == SALES_BEHAVIOR_REMITO:
                 action_meta["action_value"] = "remito"
-                action_meta["label"] = "Remito"
+                action_meta["label"] = item.name or "Remito"
                 action_meta["help_text"] = "Busca el pedido mas reciente listo para remito."
                 action_meta["disabled"] = operations_locked or not quick_remito_available
                 action_meta["css_class"] = "is-remito"
             elif behavior == SALES_BEHAVIOR_FACTURA:
                 action_meta["action_value"] = "invoice"
-                action_meta["label"] = "Factura electronica"
+                action_meta["label"] = item.name or "Factura electronica"
                 action_meta["help_text"] = "Usa el pedido facturable mas reciente y aplica el tipo elegido."
                 action_meta["disabled"] = operations_locked or not quick_invoice_available
                 action_meta["css_class"] = "is-fiscal"
             elif behavior == SALES_BEHAVIOR_NOTA_CREDITO:
                 action_meta["action_value"] = "credit_note"
-                action_meta["label"] = "Nota de credito"
+                action_meta["label"] = item.name or "Nota de credito"
                 action_meta["help_text"] = "Abre el comprobante base mas reciente para gestionar la nota."
                 action_meta["disabled"] = operations_locked or not quick_credit_note_available
                 action_meta["css_class"] = "is-credit-note"
             elif behavior == SALES_BEHAVIOR_RECIBO:
                 action_meta["method"] = "get"
-                action_meta["label"] = "Recibo"
+                action_meta["label"] = item.name or "Recibo"
                 action_meta["url"] = (
                     f"{reverse('admin_payment_list')}?"
                     f"{urlencode({'client_id': client.pk, 'company_id': selected_company_id, 'sales_document_type_id': item.pk, 'suggested_action': 'create'})}"
@@ -3843,7 +3918,7 @@ def client_order_history(request, pk):
         )
 
     orders_clear_url = build_history_url(
-        movement_tab='sales',
+        movement_tab='account',
         status=None,
         page=None,
     )
@@ -3877,15 +3952,6 @@ def client_order_history(request, pk):
         build_client_activity_timeline(client, company=active_company, limit=12)
         if active_company
         else []
-    )
-    pending_client_tasks = (
-        ClientTask.objects.filter(
-            client_profile=client,
-            company=active_company,
-            status=ClientTask.STATUS_PENDING,
-        ).count()
-        if active_company
-        else 0
     )
     active_ledger_title_map = {
         key: meta["title"] for key, meta in CLIENT_HISTORY_MOVEMENT_TABS.items()
@@ -3924,7 +3990,6 @@ def client_order_history(request, pk):
         },
         'payments_recent': payments_recent,
         'activity_timeline': activity_timeline,
-        'pending_client_tasks': pending_client_tasks,
         'payment_history_rows': payment_history_rows,
         'payments_summary': {
             'total_paid': payments_summary.get('total_paid') or Decimal('0.00'),
@@ -4021,10 +4086,16 @@ def client_transaction_set_state(request, pk, tx_id):
         return redirect(redirect_url)
 
     if not transition_result.changed:
-        messages.info(
-            request,
-            f"El movimiento ya estaba en estado {dict(ClientTransaction.STATE_CHOICES).get(target_state, target_state)}.",
-        )
+        if target_state == ClientTransaction.STATE_OPEN:
+            messages.success(
+                request,
+                "Movimiento guardado y dejado abierto. Puedes volver a modificarlo en cualquier momento.",
+            )
+        else:
+            messages.info(
+                request,
+                f"El movimiento ya estaba en estado {dict(ClientTransaction.STATE_CHOICES).get(target_state, target_state)}.",
+            )
         return redirect(redirect_url)
 
     if linked_order:

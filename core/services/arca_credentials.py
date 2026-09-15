@@ -34,6 +34,8 @@ class ArcaCredentialSpec:
     cert_path: Path = field(repr=False)
     key_path: Path = field(repr=False)
     expected_fingerprint_sha256: str = field(default="", repr=False)
+    expected_subject_cn: str = field(default="", repr=False)
+    expected_issuer_cn: str = field(default="", repr=False)
 
 
 @dataclass(frozen=True)
@@ -45,6 +47,8 @@ class ArcaCredentialMetadata:
     not_before: datetime
     not_after: datetime
     subject_cuit_matches: bool
+    subject_cn_matches: bool
+    issuer_cn_matches: bool
 
 
 def _digits(value: Any) -> str:
@@ -96,6 +100,16 @@ def resolve_credential_spec(
             "fingerprint_sha256": getattr(
                 settings,
                 "ARCA_EXPECTED_CERT_SHA256",
+                "",
+            ),
+            "expected_subject_cn": getattr(
+                settings,
+                "ARCA_EXPECTED_CERT_SUBJECT_CN",
+                "",
+            ),
+            "expected_issuer_cn": getattr(
+                settings,
+                "ARCA_EXPECTED_CERT_ISSUER_CN",
                 "",
             ),
         }
@@ -151,6 +165,26 @@ def resolve_credential_spec(
             error_code="credential_fingerprint_invalid",
         )
 
+    expected_subject_cn = str(
+        env_config.get("expected_subject_cn")
+        or getattr(settings, "ARCA_EXPECTED_CERT_SUBJECT_CN", "")
+        or ""
+    ).strip()
+    expected_issuer_cn = str(
+        env_config.get("expected_issuer_cn")
+        or getattr(settings, "ARCA_EXPECTED_CERT_ISSUER_CN", "")
+        or ""
+    ).strip()
+    for value, error_code in (
+        (expected_subject_cn, "credential_subject_cn_invalid"),
+        (expected_issuer_cn, "credential_issuer_cn_invalid"),
+    ):
+        if value and (len(value) > 120 or "\n" in value or "\r" in value):
+            raise ArcaCredentialError(
+                "Nombre esperado de certificado ARCA invalido.",
+                error_code=error_code,
+            )
+
     return ArcaCredentialSpec(
         credential_id=credential_id,
         environment=environment,
@@ -158,6 +192,8 @@ def resolve_credential_spec(
         cert_path=cert_path,
         key_path=key_path,
         expected_fingerprint_sha256=expected_fingerprint,
+        expected_subject_cn=expected_subject_cn,
+        expected_issuer_cn=expected_issuer_cn,
     )
 
 
@@ -303,6 +339,23 @@ def _parse_openssl_date(raw: str) -> datetime:
         ) from exc
 
 
+def _rfc2253_attribute(raw: str, name: str) -> str:
+    distinguished_name = re.sub(
+        r"^\s*(?:subject|issuer)\s*=\s*",
+        "",
+        str(raw or "").strip(),
+        flags=re.IGNORECASE,
+    )
+    match = re.search(
+        rf"(?:^|,){re.escape(name)}=([^,\r\n]+)",
+        distinguished_name,
+        flags=re.IGNORECASE,
+    )
+    if not match:
+        return ""
+    return match.group(1).replace(r"\,", ",").strip()
+
+
 def validate_credential_offline(
     spec: ArcaCredentialSpec,
     *,
@@ -397,6 +450,41 @@ def validate_credential_offline(
             "El subject del certificado no coincide con el CUIT configurado.",
             error_code="credential_subject_cuit_mismatch",
         )
+    subject_cn = _rfc2253_attribute(subject_output, "CN")
+    if spec.expected_subject_cn and subject_cn != spec.expected_subject_cn:
+        raise ArcaCredentialError(
+            "El CN del certificado ARCA no coincide con el esperado.",
+            error_code="credential_subject_cn_mismatch",
+        )
+
+    issuer_process = _safe_run(
+        runner,
+        [
+            openssl_bin,
+            "x509",
+            "-in",
+            str(cert_path),
+            "-noout",
+            "-issuer",
+            "-nameopt",
+            "RFC2253",
+        ],
+    )
+    issuer_output = bytes(issuer_process.stdout or b"").decode(
+        "utf-8",
+        errors="replace",
+    )
+    issuer_cn = _rfc2253_attribute(issuer_output, "CN")
+    if issuer_process.returncode != 0 or not issuer_cn:
+        raise ArcaCredentialError(
+            "No se pudo validar el emisor del certificado ARCA.",
+            error_code="credential_issuer_invalid",
+        )
+    if spec.expected_issuer_cn and issuer_cn != spec.expected_issuer_cn:
+        raise ArcaCredentialError(
+            "El emisor del certificado ARCA no coincide con el esperado.",
+            error_code="credential_issuer_cn_mismatch",
+        )
 
     cert_public = _safe_run(
         runner,
@@ -477,6 +565,14 @@ def validate_credential_offline(
         not_before=not_before,
         not_after=not_after,
         subject_cuit_matches=True,
+        subject_cn_matches=(
+            bool(spec.expected_subject_cn)
+            and subject_cn == spec.expected_subject_cn
+        ),
+        issuer_cn_matches=(
+            bool(spec.expected_issuer_cn)
+            and issuer_cn == spec.expected_issuer_cn
+        ),
     )
 
 

@@ -211,6 +211,7 @@ from core.services.documents import (
     ensure_document_for_payment,
 )
 from core.services.sales_documents import (
+    build_internal_document_display_items,
     create_fiscal_document_from_sales_type,
     create_internal_document_from_sales_type,
     resolve_sales_document_type,
@@ -224,6 +225,10 @@ from core.services.advanced_search import (
     sanitize_search_token,
 )
 from core.services.catalog_excel_exporter import build_catalog_workbook, build_export_filename
+from core.services.internal_document_excel_exporter import (
+    build_internal_export_filename,
+    build_internal_workbook,
+)
 from core.services.audit import log_admin_action, log_admin_change, model_snapshot
 from core.services.pricing import resolve_effective_price_list
 import traceback
@@ -2859,8 +2864,11 @@ def order_detail(request, pk):
     order = get_object_or_404(
         orders_visible_to(request.user, company=active_company).select_related(
             "company",
+            "sales_document_type",
             "client_company_ref",
             "client_company_ref__client_profile",
+            "client_company_ref__client_profile__user",
+            "user",
             "assigned_to",
         ).prefetch_related("status_history__changed_by"),
         pk=pk,
@@ -2873,6 +2881,7 @@ def order_detail(request, pk):
         invoice_ready, invoice_errors = False, ["No se pudo validar estado fiscal."]
 
     if request.method == "POST" and request.POST.get("action") == "assign_seller":
+        is_ajax = _is_ajax_request(request)
         seller_id = str(request.POST.get("assigned_to", "")).strip()
         seller = None
         if seller_id:
@@ -2882,6 +2891,11 @@ def order_detail(request, pk):
                 is_staff=True,
             ).first()
             if not seller:
+                if is_ajax:
+                    return JsonResponse(
+                        {"ok": False, "error": "Selecciona un vendedor activo valido."},
+                        status=400,
+                    )
                 messages.error(request, "Selecciona un vendedor activo valido.")
                 return redirect("admin_order_detail", pk=order.pk)
         with transaction.atomic():
@@ -2901,6 +2915,20 @@ def order_detail(request, pk):
             before=before,
             after=after,
         )
+        seller_label = (
+            (seller.get_full_name() or seller.username).strip()
+            if seller
+            else "Sin especificar"
+        )
+        if is_ajax:
+            return JsonResponse(
+                {
+                    "ok": True,
+                    "message": "Vendedor actualizado sin recargar la venta.",
+                    "seller_id": seller.pk if seller else "",
+                    "seller_label": seller_label,
+                }
+            )
         messages.success(request, "Vendedor actualizado.")
         return redirect("admin_order_detail", pk=order.pk)
 
@@ -3027,6 +3055,13 @@ def order_detail(request, pk):
         if order_movement_transaction
         else ClientTransaction.STATE_OPEN
     )
+    if (
+        order_movement_transaction
+        and order.normalized_status() == Order.STATUS_CANCELLED
+    ):
+        # Keep legacy cancelled orders visually consistent when their ledger
+        # row predates cancellation-state synchronization.
+        order_movement_state = ClientTransaction.STATE_VOIDED
     order_movement_state_label = dict(ClientTransaction.STATE_CHOICES).get(order_movement_state, "Abierto")
     order_items_edit_locked = _is_order_items_edit_locked(order)
     order_items_edit_lock_reason = (
@@ -3055,6 +3090,24 @@ def order_detail(request, pk):
         InternalDocument.objects.select_related('sales_document_type').filter(order=order).order_by('issued_at')
     )
     primary_sales_document = order_invoice_document or (order_documents[0] if order_documents else None)
+    primary_sales_document_kind = (
+        "fiscal" if primary_sales_document and isinstance(primary_sales_document, FiscalDocument) else "interno"
+    )
+    order_commercial_type_label = (
+        primary_sales_document.commercial_type_label
+        if primary_sales_document
+        else (
+            order.sales_document_type.name
+            if order.sales_document_type_id
+            else ("Cotizacion operativa" if order.status == Order.STATUS_DRAFT else "Pedido operativo")
+        )
+    )
+    order_commercial_letter = (
+        (getattr(primary_sales_document, "sales_rules_snapshot", None) or {}).get("letter", "")
+        or getattr(getattr(primary_sales_document, "sales_document_type", None), "letter", "")
+        or getattr(order.sales_document_type, "letter", "")
+        or "X"
+    )
     for doc in order_documents:
         doc.can_safe_delete = not _get_internal_document_delete_blockers(doc)
         doc.can_print = order_movement_closed
@@ -3100,6 +3153,9 @@ def order_detail(request, pk):
         'order_client_profile': order_client_profile,
         'order_documents': order_documents,
         'primary_sales_document': primary_sales_document,
+        'primary_sales_document_kind': primary_sales_document_kind,
+        'order_commercial_type_label': order_commercial_type_label,
+        'order_commercial_letter': order_commercial_letter,
         'document_company': order.company,
         'pricing_snapshot': pricing_snapshot,
         'sales_internal_document_types': sales_internal_document_types,
@@ -3131,6 +3187,10 @@ def order_detail(request, pk):
         'order_related_source_tx_id': order_movement_transaction.pk if order_movement_transaction else '',
         'order_related_source_order_id': order.pk,
         'seller_options': seller_options,
+        'order_client_locality_missing': bool(
+            order_client_profile
+            and not str(order_client_profile.fiscal_city or "").strip()
+        ),
     })
 
 
@@ -3879,11 +3939,7 @@ def internal_document_print(request, doc_id):
     if copy_key not in copy_labels:
         copy_key = "original"
     copy_label = copy_labels.get(copy_key, "ORIGINAL")
-    order_items = []
-    if document.order_id:
-        order_items = list(
-            document.order.items.select_related("product").all()
-        )
+    order_items = build_internal_document_display_items(document)
 
     context = {
         "document": document,
@@ -3917,6 +3973,51 @@ def internal_document_print(request, doc_id):
     if request.GET.get("download") == "1":
         filename = f"{document.doc_type}_{document.number:07d}.html"
         response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    return response
+
+
+@staff_member_required
+def internal_document_excel(request, doc_id):
+    """Download an internal commercial document as a formatted XLSX."""
+    active_company = get_active_company(request)
+    if not active_company:
+        messages.error(request, "Selecciona una empresa activa para operar.")
+        return redirect("select_company")
+    document = get_object_or_404(
+        InternalDocument.objects.select_related(
+            "company",
+            "client_company_ref__client_profile",
+            "client_profile",
+            "order",
+            "sales_document_type",
+        ).prefetch_related("order__items"),
+        pk=doc_id,
+        company=active_company,
+    )
+    movement_transaction = _resolve_internal_document_transaction(document)
+    if movement_transaction and not _movement_allows_print(movement_transaction):
+        messages.warning(
+            request,
+            "Primero cerra el movimiento en cuenta corriente para descargar este documento.",
+        )
+        if document.order_id:
+            return redirect("admin_order_detail", pk=document.order_id)
+        if document.client_profile_id:
+            return redirect("admin_client_order_history", pk=document.client_profile_id)
+        return redirect("admin_order_list")
+
+    workbook = build_internal_workbook(document)
+    output = BytesIO()
+    workbook.save(output)
+    output.seek(0)
+    response = HttpResponse(
+        output.getvalue(),
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+    response["Content-Disposition"] = (
+        f'attachment; filename="{build_internal_export_filename(document)}"'
+    )
+    response["X-Content-Type-Options"] = "nosniff"
     return response
 
 
@@ -4118,4 +4219,4 @@ def order_delete(request, pk):
         'reason_name': 'cancel_reason',
     })
 
-__all__ = ['_get_order_active_invoice', '_parse_order_item_manual_price', '_build_order_detail_items', '_parse_payment_amount', '_parse_adjustment_amount', '_parse_paid_at', 'payment_list', 'payment_export_saas', '_build_clamp_quote_download_response', 'clamp_quoter', 'clamp_quote_close', 'clamp_quote_download', '_find_admin_clamp_request_matches', 'clamp_request_list', 'clamp_request_detail', '_get_order_request_admin_queryset', '_get_order_request_for_admin', '_parse_order_request_money', '_parse_order_request_quantity', '_get_order_request_proposal_source_rows', '_get_order_request_quote_document_types', '_get_order_request_invoice_document_types', '_count_legacy_client_account_documents_for_order', '_clear_legacy_client_account_documents_for_order', '_get_order_request_delete_blockers', '_get_internal_document_delete_blockers', '_get_order_hard_delete_blockers', '_ensure_request_operational_order', '_build_order_request_proposal_payloads', 'sales_workspace', 'order_request_list', 'order_request_detail', 'order_request_confirm_view', 'order_request_reject_view', 'order_request_propose_view', 'order_request_convert_view', 'order_request_generate_quote_view', 'order_request_generate_invoice_view', 'order_request_delete_view', 'order_list', 'order_create_from_panel', 'order_export_saas', 'order_detail', 'order_invoice_open', 'order_internal_document_create', 'order_fiscal_create_local', 'order_fiscal_register_external', 'order_item_add', 'order_item_edit', 'order_item_delete', 'order_hard_delete', 'internal_document_print', 'internal_document_delete', 'order_item_publish_clamp', 'order_delete']
+__all__ = ['_get_order_active_invoice', '_parse_order_item_manual_price', '_build_order_detail_items', '_parse_payment_amount', '_parse_adjustment_amount', '_parse_paid_at', 'payment_list', 'payment_export_saas', '_build_clamp_quote_download_response', 'clamp_quoter', 'clamp_quote_close', 'clamp_quote_download', '_find_admin_clamp_request_matches', 'clamp_request_list', 'clamp_request_detail', '_get_order_request_admin_queryset', '_get_order_request_for_admin', '_parse_order_request_money', '_parse_order_request_quantity', '_get_order_request_proposal_source_rows', '_get_order_request_quote_document_types', '_get_order_request_invoice_document_types', '_count_legacy_client_account_documents_for_order', '_clear_legacy_client_account_documents_for_order', '_get_order_request_delete_blockers', '_get_internal_document_delete_blockers', '_get_order_hard_delete_blockers', '_ensure_request_operational_order', '_build_order_request_proposal_payloads', 'sales_workspace', 'order_request_list', 'order_request_detail', 'order_request_confirm_view', 'order_request_reject_view', 'order_request_propose_view', 'order_request_convert_view', 'order_request_generate_quote_view', 'order_request_generate_invoice_view', 'order_request_delete_view', 'order_list', 'order_create_from_panel', 'order_export_saas', 'order_detail', 'order_invoice_open', 'order_internal_document_create', 'order_fiscal_create_local', 'order_fiscal_register_external', 'order_item_add', 'order_item_edit', 'order_item_delete', 'order_hard_delete', 'internal_document_print', 'internal_document_excel', 'internal_document_delete', 'order_item_publish_clamp', 'order_delete']

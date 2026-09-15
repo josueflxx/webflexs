@@ -6,6 +6,7 @@ from . import views
 
 urlpatterns = [
     path('', views.home, name='home'),
+    path('compartir/documento/<str:token>/', views.public_document_share, name='public_document_share'),
     path('api/search-suggestions/', views.search_suggestions, name='search_suggestions'),
     path('api/admin-presence/', views.admin_presence, name='admin_presence'),
     path('api/admin-presence-touch/', views.admin_presence_touch, name='admin_presence_touch'),

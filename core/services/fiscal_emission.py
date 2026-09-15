@@ -48,6 +48,10 @@ from core.services.arca_client import (
     ArcaTemporaryError,
     ArcaWsfeClient,
 )
+from core.services.arca_homologation import (
+    ARCAEmissionDisabledError,
+    require_homologation_emission_access,
+)
 from core.services.fiscal import (
     is_company_fiscal_ready,
     validate_credit_note_relationship,
@@ -338,6 +342,12 @@ def emit_fiscal_document_now(
                 message="El comprobante ya estaba autorizado.",
             )
         _validate_before_submit(document)
+        emission_authorization = require_homologation_emission_access(
+            fiscal_document=document,
+            company=document.company,
+            point_of_sale=document.point_of_sale,
+            check_credentials=True,
+        )
 
         identity = _series_identity(document)
         series, _ = FiscalDocumentSeries.objects.get_or_create(
@@ -379,6 +389,9 @@ def emit_fiscal_document_now(
         client = client_factory(
             company=document.company,
             point_of_sale=document.point_of_sale,
+            operation_mode="emission",
+            fiscal_document=document,
+            emission_authorization=emission_authorization,
         )
         local_before = int(series.next_number or 1)
         try:
@@ -550,6 +563,13 @@ def emit_fiscal_document_now(
             document_id=document_id,
             attempt_id=attempt.id,
             error_code="arca_configuration",
+            message=str(exc),
+        )
+    except ARCAEmissionDisabledError as exc:
+        return _finalize_safe_predispatch_failure(
+            document_id=document_id,
+            attempt_id=attempt.id,
+            error_code=exc.error_code,
             message=str(exc),
         )
     except Exception as exc:

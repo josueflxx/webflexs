@@ -1,0 +1,36 @@
+import { createRequire } from 'node:module';
+import assert from 'node:assert/strict';
+const require=createRequire('C:/Users/Brian/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/package.json');
+const {chromium}=require('playwright');
+const browser=await chromium.launch({executablePath:'C:/Program Files/Google/Chrome/Application/chrome.exe',headless:true,args:['--enable-unsafe-swiftshader']});
+try{
+ const context=await browser.newContext({viewport:{width:1440,height:1050},reducedMotion:'reduce'});
+ await context.route('**/*',r=>r.request().url().startsWith('http://127.0.0.1:8774')?r.continue():r.abort());
+ const page=await context.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.goto('http://127.0.0.1:8774/propuesta',{waitUntil:'domcontentloaded'});
+ await page.waitForFunction(()=>document.querySelector('#homeClamp')?.classList.contains('is-ready'),null,{timeout:45000});
+ const model=page.locator('model-viewer');
+ assert.ok((await model.evaluate(e=>e.src)).includes('plaqueta-tuercas'));
+ await page.screenshot({path:'output/clamp-assembly-review/home-desktop.png'});
+ await page.locator('#homeClamp').screenshot({path:'output/clamp-assembly-review/assembly-detail.png'});
+ await page.waitForTimeout(900);
+ const start=await model.evaluate(e=>({...e.getCameraOrbit()}));
+ const b=await model.boundingBox();
+ await page.mouse.move(b.x+b.width*.35,b.y+b.height*.4);await page.mouse.down();
+ await page.mouse.move(b.x+b.width*.7,b.y+b.height*.7,{steps:12});await page.mouse.up();
+ await page.waitForTimeout(500);
+ const rotated=await model.evaluate(e=>({...e.getCameraOrbit()}));assert.ok(Math.abs(rotated.theta-start.theta)>.1);
+ await page.getByRole('button',{name:'Acercar',exact:true}).click();await page.waitForTimeout(500);
+ assert.ok((await model.evaluate(e=>e.getCameraOrbit().radius))<start.radius);
+ await page.locator('#homeClamp').screenshot({path:'output/clamp-assembly-review/assembly-rotated.png'});
+ await page.getByRole('button',{name:'Restablecer vista'}).click();
+ await page.setViewportSize({width:390,height:844});
+ await page.locator('#homeClamp').scrollIntoViewIfNeeded();await page.waitForTimeout(500);
+ assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
+ await page.locator('#homeClamp').screenshot({path:'output/clamp-assembly-review/assembly-mobile.png'});
+ await page.getByRole('link',{name:'Modelo publicado',exact:true}).click();
+ await page.waitForFunction(()=>document.querySelector('#homeClamp')?.classList.contains('is-ready'),null,{timeout:45000});
+ assert.ok((await page.locator('model-viewer').evaluate(e=>e.src)).includes('abrazadera-curva.glb'));
+ assert.deepEqual(errors,[]);
+ console.log(JSON.stringify({passed:true,errors}));
+}finally{await browser.close();}

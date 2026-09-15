@@ -1,0 +1,279 @@
+/* FLEXS shared legibility and theme-consistency layer.
+   Loaded after page-specific styles so public and admin views share the same
+   minimum readable sizes without changing application behavior. */
+
+html {
+    font-size: 87.5%;
+}
+
+:root {
+    --font-size-xs: 0.86rem;
+    --font-size-sm: 0.93rem;
+    --theme-text-muted: #aeb8c6;
+    --color-gray-light: #a3adba;
+}
+
+html[data-theme="light"] {
+    --theme-text-muted: #475569;
+    --color-gray-light: #526176;
+}
+
+.ui-icon-sprite {
+    position: absolute;
+    width: 0;
+    height: 0;
+    overflow: hidden;
+    pointer-events: none;
+}
+
+:where(a, button, input, select, textarea, summary):focus-visible {
+    outline: 3px solid rgba(255, 107, 53, 0.36);
+    outline-offset: 2px;
+}
+
+/* Public navigation and catalog */
+body:not(.admin-body) :is(.header-contact, .header-company, .nav-company-label) {
+    font-size: max(var(--font-size-sm), 12px);
+}
+
+body:not(.admin-body) .header-contact :is(a, span),
+body:not(.admin-body) .header-company :is(a, span, strong) {
+    font-size: max(0.86rem, 12px);
+}
+
+body:not(.admin-body) .nav-menu > li > a,
+body:not(.admin-body) .nav-menu .btn,
+body:not(.admin-body) .cart-link {
+    font-size: max(0.86rem, 12px);
+}
+
+body:not(.admin-body) :is(.btn, .form-input, .form-select, .form-textarea) {
+    font-size: max(0.9rem, 13px);
+}
+
+.catalog-page :is(
+    .catalog-eyebrow,
+    .catalog-lead,
+    .catalog-sidebar-head,
+    .filter-section h3,
+    .filter-mini-group label,
+    .category-inline-title,
+    .category-list a,
+    .category-tree-toggle,
+    .result-count,
+    .product-sku,
+    .product-category-path,
+    .product-category,
+    .product-stock-badge,
+    .product-placeholder-label,
+    .price-hidden
+) {
+    font-size: max(0.82rem, 11.5px);
+    line-height: 1.42;
+}
+
+.catalog-page .product-name {
+    font-size: max(0.96rem, 13.5px);
+    line-height: 1.42;
+}
+
+.catalog-page :is(.catalog-sidebar-kicker, .cat-toggle-label, .category-tree-count, .text-muted) {
+    font-size: max(0.82rem, 11.5px);
+    line-height: 1.42;
+}
+
+.catalog-page .product-actions .btn {
+    min-height: 38px;
+    font-size: max(0.84rem, 12px);
+}
+
+/* Admin typography, contrast and controls */
+.admin-body {
+    --font-size-xs: 0.8rem;
+    --font-size-sm: 0.9rem;
+    --font-size-base: 1rem;
+    --admin-text-muted: #aeb8c6;
+    --admin-text-subtle: #909dad;
+}
+
+html[data-theme="light"] .admin-body {
+    --admin-text-muted: #526176;
+    --admin-text-subtle: #64748b;
+}
+
+.admin-body :is(.btn, button.btn, a.btn) {
+    min-height: 34px;
+    font-size: max(0.82rem, 12px);
+}
+
+.admin-body :is(.form-input, .form-select, .form-textarea, input, select, textarea) {
+    font-size: max(0.9rem, 13px);
+}
+
+.admin-body .form-label {
+    font-size: max(0.86rem, 12px);
+}
+
+.admin-body .admin-table th {
+    font-size: max(0.76rem, 11px);
+    letter-spacing: 0.055em;
+}
+
+.admin-body .admin-table td {
+    font-size: max(0.9rem, 13px);
+    line-height: 1.45;
+}
+
+.admin-body small:not(.badge):not(.status-badge) {
+    font-size: max(0.76rem, 11px);
+    line-height: 1.45;
+}
+
+.admin-body :is(
+    .page-subtitle,
+    .section-subtitle,
+    .section-description,
+    .card-description,
+    .form-help,
+    .help-text,
+    .empty-state p,
+    .admin-empty-state p
+) {
+    color: var(--admin-text-muted);
+}
+
+/* Main admin navigation keeps every module direct, with readable controls. */
+.admin-quick-nav {
+    display: grid;
+    grid-template-columns: 34px minmax(0, 1fr) 34px;
+    align-items: end;
+    gap: 7px;
+}
+
+.admin-nav-groups {
+    min-width: 0;
+    scroll-padding-inline: 10px;
+    overscroll-behavior-inline: contain;
+    scrollbar-width: auto;
+}
+
+.admin-nav-groups::-webkit-scrollbar {
+    height: 7px;
+}
+
+.admin-nav-group-label {
+    color: rgba(222, 228, 236, 0.74);
+    font-size: max(0.76rem, 11px);
+}
+
+.admin-quick-nav .top-nav-item {
+    min-height: 38px;
+    padding-inline: 11px;
+    font-size: max(0.82rem, 12px);
+}
+
+.admin-nav-scroll-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 38px;
+    margin-bottom: 7px;
+    border: 1px solid rgba(255, 255, 255, 0.11);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.045);
+    color: #e8edf4;
+    cursor: pointer;
+    transition: border-color 0.18s ease, background 0.18s ease, color 0.18s ease;
+}
+
+.admin-nav-scroll-button:hover:not(:disabled) {
+    border-color: rgba(255, 107, 53, 0.38);
+    background: rgba(255, 107, 53, 0.12);
+    color: #fff;
+}
+
+.admin-nav-scroll-button:disabled {
+    opacity: 0.28;
+    cursor: default;
+}
+
+.admin-nav-scroll-button svg,
+.nav-icon-svg {
+    width: 17px;
+    height: 17px;
+    flex: 0 0 17px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.nav-icon-svg > use {
+    width: 100%;
+    height: 100%;
+}
+
+.admin-sidebar .nav-icon-svg {
+    width: 18px;
+    height: 18px;
+}
+
+html[data-theme="light"] .admin-nav-group-label {
+    color: #526176;
+}
+
+html[data-theme="light"] .admin-nav-scroll-button {
+    border-color: rgba(15, 23, 42, 0.12);
+    background: rgba(15, 23, 42, 0.035);
+    color: #334155;
+}
+
+html[data-theme="light"] .admin-nav-scroll-button:hover:not(:disabled) {
+    border-color: rgba(234, 88, 12, 0.3);
+    background: rgba(255, 107, 53, 0.09);
+    color: #9a3412;
+}
+
+@media (max-width: 760px) {
+    html {
+        font-size: 87.5%;
+    }
+
+    :is(input, select, textarea) {
+        font-size: 16px !important;
+    }
+
+    .admin-quick-nav {
+        display: none;
+    }
+
+    .admin-body .admin-table th {
+        font-size: 11px;
+    }
+
+    .admin-body .admin-table td {
+        font-size: 12px;
+    }
+}
+
+@media (max-width: 520px) {
+    .catalog-primary-search {
+        grid-template-columns: 20px minmax(0, 1fr) !important;
+        gap: 6px 9px;
+        min-height: 0;
+        padding: 7px !important;
+    }
+
+    .catalog-primary-search-input {
+        height: 40px;
+    }
+
+    .catalog-search-submit {
+        grid-column: 1 / -1;
+        width: 100% !important;
+        min-height: 40px;
+        font-size: 12px !important;
+    }
+}

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+  <soap:Body>
+    <getPersona_v2Response>
+      <personaReturn>
+        <datosGenerales>
+          <idPersona>30693450239</idPersona>
+          <tipoPersona>FISICA</tipoPersona>
+          <estadoClave>INACTIVO</estadoClave>
+          <nombre>NOMBRE PRUEBA</nombre>
+          <apellido>APELLIDO PRUEBA</apellido>
+        </datosGenerales>
+        <datosMonotributo>
+          <categoriaMonotributo>
+            <descripcionCategoria>TEST</descripcionCategoria>
+          </categoriaMonotributo>
+        </datosMonotributo>
+        <errorRegimenGeneral>
+          <mensaje>Seccion de regimen general no disponible en fixture</mensaje>
+        </errorRegimenGeneral>
+      </personaReturn>
+    </getPersona_v2Response>
+  </soap:Body>
+</soap:Envelope>

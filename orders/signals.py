@@ -54,11 +54,30 @@ def order_post_save_orchestrator(sender, instance, created, **kwargs):
 
     try:
         with transaction.atomic():
-            from core.models import DocumentSeries
+            from core.models import (
+                DocumentSeries,
+                SALES_BEHAVIOR_COTIZACION,
+                SALES_BEHAVIOR_PRESUPUESTO,
+            )
             from core.services.documents import ensure_document_for_order
 
             if instance.status == Order.STATUS_DRAFT:
-                ensure_document_for_order(instance, doc_type=DocumentSeries.DOC_COT)
+                selected_sales_document_type = getattr(instance, "sales_document_type", None)
+                selected_behavior = getattr(
+                    selected_sales_document_type,
+                    "document_behavior",
+                    "",
+                )
+                if selected_behavior != SALES_BEHAVIOR_PRESUPUESTO:
+                    ensure_document_for_order(
+                        instance,
+                        doc_type=DocumentSeries.DOC_COT,
+                        sales_document_type=(
+                            selected_sales_document_type
+                            if selected_behavior == SALES_BEHAVIOR_COTIZACION
+                            else None
+                        ),
+                    )
             if instance.status in {
                 Order.STATUS_CONFIRMED,
                 Order.STATUS_PREPARING,

@@ -2,27 +2,413 @@
 
 {% block page_title %}Informes de clientes{% endblock %}
 
-{% block content %}
-{% include 'admin_panel/clients/_module_panel.html' with client_panel='reports' client_module_subtitle='Centro de reportes comerciales para analizar cartera, volumen y deuda por empresa.' %}
-{% include 'admin_panel/clients/_reports_nav.html' with client_report_panel=client_report_panel client_report_nav_items=client_report_nav_items %}
+{% block extra_css %}
+<style>
+    .client-reports-hub-page {
+        --reports-border: rgba(255, 255, 255, 0.09);
+        --reports-surface: rgba(13, 19, 29, 0.9);
+        display: grid;
+        gap: 16px;
+    }
 
-{% if reports_requires_company %}
-<div class="dashboard-section compact-top-gap">
-    <h2>Elegi una empresa para generar informes</h2>
-    <p class="text-muted">Los reportes se calculan por empresa activa para evitar mezclar cartera, ranking y saldos entre Flexs y Ubolt.</p>
-</div>
-{% else %}
-<div class="client-reports-card-grid compact-top-gap">
-    {% for card in report_cards %}
-    <a href="{{ card.url }}" class="client-report-card">
-        <div class="client-report-card-icon" aria-hidden="true">{{ card.icon|safe }}</div>
-        <div class="client-report-card-copy">
-            <strong>{{ card.title }}</strong>
-            <p>{{ card.description }}</p>
-            <span class="client-report-card-cta">Abrir reporte</span>
+    .client-reports-hub-page .client-module-shell {
+        margin-bottom: 0;
+    }
+
+    .client-reports-hub-page .client-reports-nav {
+        gap: 8px;
+        margin: 0;
+        padding: 6px;
+        width: fit-content;
+        max-width: 100%;
+        border: 1px solid var(--reports-border);
+        border-radius: 13px;
+        background: rgba(8, 14, 24, 0.62);
+    }
+
+    .client-reports-hub-page .client-reports-nav-item {
+        min-height: 38px;
+        padding: 8px 14px;
+        border-color: transparent;
+        background: transparent;
+        font-size: 0.78rem;
+    }
+
+    .client-reports-hub-page .client-reports-nav-item:hover,
+    .client-reports-hub-page .client-reports-nav-item:focus-visible,
+    .client-reports-hub-page .client-reports-nav-item.is-active {
+        transform: none;
+        border-color: rgba(255, 107, 53, 0.32);
+        background: rgba(255, 107, 53, 0.1);
+    }
+
+    .reports-hub-intro {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 18px;
+        padding: 18px 20px;
+        border: 1px solid var(--reports-border);
+        border-radius: 16px;
+        background:
+            linear-gradient(110deg, rgba(255, 107, 53, 0.08), transparent 42%),
+            var(--reports-surface);
+    }
+
+    .reports-hub-intro-copy {
+        display: grid;
+        gap: 5px;
+    }
+
+    .reports-hub-eyebrow {
+        color: #ff9c73;
+        font-size: 0.69rem;
+        font-weight: 800;
+        letter-spacing: 0.085em;
+        text-transform: uppercase;
+    }
+
+    .reports-hub-intro h2 {
+        margin: 0;
+        color: #f8fafc;
+        font-size: clamp(1.2rem, 1.7vw, 1.52rem);
+        letter-spacing: -0.02em;
+    }
+
+    .reports-hub-intro p {
+        max-width: 760px;
+        margin: 0;
+        color: #9ba8ba;
+        font-size: 0.82rem;
+        line-height: 1.55;
+    }
+
+    .reports-hub-company {
+        display: grid;
+        flex: 0 0 auto;
+        min-width: 170px;
+        gap: 3px;
+        padding: 11px 14px;
+        border: 1px solid var(--reports-border);
+        border-radius: 11px;
+        background: rgba(255, 255, 255, 0.025);
+        text-align: right;
+    }
+
+    .reports-hub-company span {
+        color: #7f8b9c;
+        font-size: 0.64rem;
+        font-weight: 800;
+        letter-spacing: 0.07em;
+        text-transform: uppercase;
+    }
+
+    .reports-hub-company strong {
+        color: #f8fafc;
+        font-size: 0.88rem;
+    }
+
+    .client-reports-hub-page .client-reports-card-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 13px;
+        margin-top: 0;
+    }
+
+    .client-reports-hub-page .client-report-card {
+        position: relative;
+        grid-template-columns: 48px minmax(0, 1fr);
+        gap: 14px;
+        min-height: 215px;
+        overflow: hidden;
+        padding: 19px;
+        border-radius: 15px;
+        background:
+            linear-gradient(145deg, rgba(255, 107, 53, 0.065), transparent 38%),
+            rgba(13, 19, 29, 0.92);
+        box-shadow: 0 14px 30px rgba(0, 0, 0, 0.15);
+    }
+
+    .client-reports-hub-page .client-report-card::after {
+        content: "";
+        position: absolute;
+        inset: auto 0 0;
+        height: 2px;
+        background: linear-gradient(90deg, #ff6b35, rgba(255, 107, 53, 0));
+        opacity: 0;
+        transition: opacity 0.18s ease;
+    }
+
+    .client-reports-hub-page .client-report-card:hover::after,
+    .client-reports-hub-page .client-report-card:focus-visible::after {
+        opacity: 1;
+    }
+
+    .client-reports-hub-page .client-report-card:hover,
+    .client-reports-hub-page .client-report-card:focus-visible {
+        transform: translateY(-2px);
+        border-color: rgba(255, 107, 53, 0.32);
+        box-shadow: 0 18px 36px rgba(0, 0, 0, 0.22);
+    }
+
+    .client-reports-hub-page .client-report-card-icon {
+        width: 48px;
+        height: 48px;
+        border-radius: 12px;
+        font-size: 0;
+    }
+
+    .client-reports-hub-page .client-report-card-icon svg {
+        width: 23px;
+        height: 23px;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 1.8;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+    }
+
+    .client-reports-hub-page .client-report-card-copy {
+        min-width: 0;
+        gap: 7px;
+    }
+
+    .reports-card-topline {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+    }
+
+    .reports-card-type,
+    .reports-card-number {
+        font-size: 0.65rem;
+        font-weight: 800;
+        letter-spacing: 0.07em;
+        text-transform: uppercase;
+    }
+
+    .reports-card-type {
+        color: #ff9c73;
+    }
+
+    .reports-card-number {
+        color: #667386;
+    }
+
+    .client-reports-hub-page .client-report-card-copy strong {
+        color: #f8fafc;
+        font-size: 1rem;
+    }
+
+    .client-reports-hub-page .client-report-card-copy p {
+        min-height: 48px;
+        color: #9ba8ba;
+        font-size: 0.76rem;
+        line-height: 1.55;
+    }
+
+    .reports-card-features {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: 1px;
+    }
+
+    .reports-card-feature {
+        padding: 5px 7px;
+        border: 1px solid rgba(148, 163, 184, 0.14);
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.025);
+        color: #aeb8c7;
+        font-size: 0.64rem;
+        font-weight: 700;
+    }
+
+    .client-reports-hub-page .client-report-card-cta {
+        display: inline-flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        width: 100%;
+        margin-top: auto;
+        padding-top: 10px;
+        border-top: 1px solid var(--reports-border);
+        color: #ff8f63;
+        font-size: 0.76rem;
+    }
+
+    .client-reports-hub-page .client-report-card-cta svg {
+        width: 16px;
+        height: 16px;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 1.9;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        transition: transform 0.18s ease;
+    }
+
+    .client-reports-hub-page .client-report-card:hover .client-report-card-cta svg {
+        transform: translateX(3px);
+    }
+
+    .reports-company-required {
+        padding: 22px;
+        border: 1px solid rgba(245, 158, 11, 0.24);
+        border-radius: 15px;
+        background: rgba(245, 158, 11, 0.06);
+    }
+
+    .reports-company-required h2 {
+        margin: 0 0 6px;
+        font-size: 1.08rem;
+    }
+
+    .reports-company-required p {
+        margin: 0;
+        line-height: 1.55;
+    }
+
+    html[data-theme="light"] .client-reports-hub-page {
+        --reports-border: rgba(15, 23, 42, 0.1);
+        --reports-surface: #ffffff;
+    }
+
+    html[data-theme="light"] .client-reports-hub-page .client-reports-nav {
+        background: #ffffff;
+    }
+
+    html[data-theme="light"] .reports-hub-intro h2,
+    html[data-theme="light"] .reports-hub-company strong,
+    html[data-theme="light"] .client-reports-hub-page .client-report-card-copy strong {
+        color: #172033;
+    }
+
+    html[data-theme="light"] .reports-hub-intro p,
+    html[data-theme="light"] .client-reports-hub-page .client-report-card-copy p {
+        color: #526074;
+    }
+
+    html[data-theme="light"] .reports-hub-company,
+    html[data-theme="light"] .client-reports-hub-page .client-report-card {
+        background: #ffffff !important;
+    }
+
+    html[data-theme="light"] .reports-card-feature {
+        border-color: rgba(15, 23, 42, 0.1);
+        background: #f8fafc;
+        color: #526074;
+    }
+
+    @media (max-width: 1080px) {
+        .client-reports-hub-page .client-reports-card-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+    }
+
+    @media (max-width: 720px) {
+        .reports-hub-intro {
+            align-items: flex-start;
+            flex-direction: column;
+        }
+
+        .reports-hub-company {
+            width: 100%;
+            text-align: left;
+        }
+
+        .client-reports-hub-page .client-reports-nav {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            width: 100%;
+        }
+
+        .client-reports-hub-page .client-reports-card-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    @media (max-width: 460px) {
+        .client-reports-hub-page .client-reports-nav {
+            grid-template-columns: 1fr;
+        }
+
+        .client-reports-hub-page .client-report-card {
+            min-height: 0;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="client-reports-hub-page">
+    {% include 'admin_panel/clients/_module_panel.html' with client_panel='reports' client_module_subtitle='Centro de reportes comerciales para analizar cartera, volumen y deuda por empresa.' %}
+    {% include 'admin_panel/clients/_reports_nav.html' with client_report_panel=client_report_panel client_report_nav_items=client_report_nav_items %}
+
+    <section class="reports-hub-intro">
+        <div class="reports-hub-intro-copy">
+            <span class="reports-hub-eyebrow">Centro de análisis</span>
+            <h2>Elegí el informe según lo que necesitás revisar</h2>
+            <p>Consulta la composición de la cartera, compara el rendimiento comercial o controla saldos pendientes sin mezclar información entre empresas.</p>
         </div>
-    </a>
-    {% endfor %}
+        {% if active_company %}
+        <div class="reports-hub-company">
+            <span>Empresa analizada</span>
+            <strong>{{ active_company.name }}</strong>
+        </div>
+        {% endif %}
+    </section>
+
+    {% if reports_requires_company %}
+    <section class="reports-company-required">
+        <h2>Elegí una empresa para generar informes</h2>
+        <p class="text-muted">Los reportes se calculan por empresa activa para evitar mezclar cartera, ranking y saldos entre Flexs y Ubolt.</p>
+    </section>
+    {% else %}
+    <div class="client-reports-card-grid">
+        {% for card in report_cards %}
+        <a href="{{ card.url }}" class="client-report-card">
+            <div class="client-report-card-icon" aria-hidden="true">
+                {% if forloop.counter == 1 %}
+                <svg viewBox="0 0 24 24"><path d="M6 3.5h9l3 3V20H6zM15 3.5V7h3M9 11h6M9 15h6"></path></svg>
+                {% elif forloop.counter == 2 %}
+                <svg viewBox="0 0 24 24"><path d="M4 19.5V14M10 19.5V10M16 19.5V5M3 19.5h18"></path></svg>
+                {% else %}
+                <svg viewBox="0 0 24 24"><path d="M4 7h16v11H4zM7 11h5M17 4v6M14 7h6"></path></svg>
+                {% endif %}
+            </div>
+            <div class="client-report-card-copy">
+                <div class="reports-card-topline">
+                    <span class="reports-card-type">
+                        {% if forloop.counter == 1 %}Cartera{% elif forloop.counter == 2 %}Rendimiento{% else %}Cuenta corriente{% endif %}
+                    </span>
+                    <span class="reports-card-number">0{{ forloop.counter }}</span>
+                </div>
+                <strong>{{ card.title }}</strong>
+                <p>{{ card.description }}</p>
+                <div class="reports-card-features" aria-hidden="true">
+                    {% if forloop.counter == 1 %}
+                    <span class="reports-card-feature">Filtros</span>
+                    <span class="reports-card-feature">Columnas</span>
+                    <span class="reports-card-feature">Descarga</span>
+                    {% elif forloop.counter == 2 %}
+                    <span class="reports-card-feature">Periodos</span>
+                    <span class="reports-card-feature">Volumen</span>
+                    <span class="reports-card-feature">Comparación</span>
+                    {% else %}
+                    <span class="reports-card-feature">Deudores</span>
+                    <span class="reports-card-feature">Acreedores</span>
+                    <span class="reports-card-feature">Saldos</span>
+                    {% endif %}
+                </div>
+                <span class="client-report-card-cta">
+                    Abrir informe
+                    <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 10h12M12 6l4 4-4 4"></path></svg>
+                </span>
+            </div>
+        </a>
+        {% endfor %}
+    </div>
+    {% endif %}
 </div>
-{% endif %}
 {% endblock %}

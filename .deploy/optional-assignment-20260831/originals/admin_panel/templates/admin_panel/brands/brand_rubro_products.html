@@ -1,0 +1,16 @@
+{% extends 'admin_panel/base.html' %}
+{% load static l10n %}
+
+{% block page_title %}Productos de {{ rubro.name }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'core/css/brand_product_workspace.css' %}?v=20260731-1">
+{% endblock %}
+
+{% block content %}
+{% include 'admin_panel/brands/_brand_product_workspace.html' %}
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'core/js/brand_product_workspace.js' %}?v=20260825-search-1"></script>
+{% endblock %}

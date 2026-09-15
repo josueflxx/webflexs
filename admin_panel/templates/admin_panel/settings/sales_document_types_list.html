@@ -230,6 +230,14 @@
                         <span class="doc-type-info-label">Situacion</span>
                         <strong>{% if item.use_document_situation %}Activa{% else %}No aplica{% endif %}</strong>
                     </div>
+                    <div>
+                        <span class="doc-type-info-label">Moneda</span>
+                        <strong>{{ item.currency_code }}{% if item.currency_code != "ARS" %} · TC {{ item.default_exchange_rate }}{% endif %}</strong>
+                    </div>
+                    <div>
+                        <span class="doc-type-info-label">Version de reglas</span>
+                        <strong>v{{ item.rules_version }}</strong>
+                    </div>
                 </div>
 
                 <div class="doc-type-rule-strip">

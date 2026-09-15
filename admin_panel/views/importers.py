@@ -605,27 +605,35 @@ def run_background_import(task_id, execution_id, import_type, ImporterClass, fil
     execution = ImportExecution.objects.filter(pk=execution_id).first()
     try:
         preflight_errors = []
+        preflight_warnings = []
         import_options = import_options or {}
         if not dry_run:
             preflight_importer = _build_importer(ImporterClass, file_path, import_type, import_options)
             preflight_result = preflight_importer.run(dry_run=True)
             preflight_errors = _import_row_errors(preflight_result)
-            if preflight_result.has_errors:
+            if import_type in {'products', 'abrazaderas'}:
+                preflight_warnings = preflight_errors
+                preflight_errors = []
+            if preflight_result.has_errors and preflight_errors:
                 result_data = {
                     'created': 0,
                     'updated': 0,
-                    'errors': preflight_result.errors,
+                    'errors': len(preflight_errors),
                     'has_errors': True,
                     'row_errors': preflight_errors,
                     'execution_id': execution_id,
                     'import_type': import_type,
-                    'message': 'Validacion previa fallida. No se aplicaron cambios.',
+                    'message': 'Validacion estructural fallida. No se aplicaron cambios.',
                 }
-                ImportTaskManager.fail_task(task_id, 'La validacion previa detecto errores.')
+                ImportTaskManager.fail_task(
+                    task_id,
+                    'La validacion previa detecto errores estructurales.',
+                    result_data,
+                )
                 if execution:
                     execution.status = ImportExecution.STATUS_FAILED
                     execution.result_summary = result_data
-                    execution.error_count = preflight_result.errors
+                    execution.error_count = len(preflight_errors)
                     execution.finished_at = timezone.now()
                     execution.save(update_fields=['status', 'result_summary', 'error_count', 'finished_at'])
                 return
@@ -647,6 +655,7 @@ def run_background_import(task_id, execution_id, import_type, ImporterClass, fil
             'duplicate_warnings': _import_duplicate_warnings(result),
             'category_warnings': _import_category_warnings(result),
             'preflight_errors': preflight_errors,
+            'preflight_warnings': preflight_warnings,
             'execution_id': execution_id,
             'import_type': import_type,
         }
@@ -729,8 +738,13 @@ def import_status(request, task_id):
                 return JsonResponse({'status': 'completed', 'result': result})
 
             if execution.status == ImportExecution.STATUS_FAILED:
-                error_msg = str((execution.result_summary or {}).get('error') or 'La importacion fallo.')
-                return JsonResponse({'status': 'failed', 'message': error_msg})
+                result = execution.result_summary or {}
+                error_msg = str(
+                    result.get('error')
+                    or result.get('message')
+                    or 'La importacion fallo.'
+                )
+                return JsonResponse({'status': 'failed', 'message': error_msg, 'result': result})
 
             if execution.status == ImportExecution.STATUS_ROLLED_BACK:
                 result = execution.result_summary or {

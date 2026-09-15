@@ -4,247 +4,1194 @@
 
 {% block content %}
 {% include 'admin_panel/clients/_module_panel.html' with client_panel='search' client_module_subtitle='Acceso central a la cartera: buscar clientes y abrir su ficha comercial completa.' %}
-<div class="admin-table-container clients-list-shell no-drag-scroll">
+
+<section class="client-directory" aria-labelledby="clientDirectoryTitle">
     <style>
-        .client-history-link {
-            color: inherit;
+        .client-directory {
+            --client-line: rgba(148, 163, 184, .16);
+            --client-panel: rgba(15, 23, 42, .56);
+            --client-panel-strong: rgba(15, 23, 42, .82);
+            --client-muted: #98a4b7;
+            margin-top: 16px;
+            overflow: visible;
+            border: 1px solid var(--client-line);
+            border-radius: 20px;
+            background:
+                radial-gradient(circle at 100% 0, rgba(255, 106, 55, .08), transparent 32%),
+                rgba(10, 16, 28, .74);
+            box-shadow: 0 20px 55px rgba(0, 0, 0, .18);
+        }
+
+        .client-directory-head {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 22px;
+            padding: 22px 24px 18px;
+            border-bottom: 1px solid var(--client-line);
+        }
+
+        .client-directory-eyebrow {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 7px;
+            color: var(--color-primary);
+            font-size: 11px;
+            font-weight: 800;
+            letter-spacing: .09em;
+            text-transform: uppercase;
+        }
+
+        .client-directory-eyebrow::before {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: currentColor;
+            box-shadow: 0 0 0 5px rgba(255, 106, 55, .12);
+            content: "";
+        }
+
+        .client-directory-title {
+            margin: 0;
+            color: #f8fafc;
+            font-size: clamp(20px, 2vw, 28px);
+            line-height: 1.15;
+        }
+
+        .client-directory-copy {
+            max-width: 680px;
+            margin: 7px 0 0;
+            color: var(--client-muted);
+            font-size: 13px;
+            line-height: 1.55;
+        }
+
+        .client-directory-count {
+            flex: 0 0 auto;
+            min-width: 126px;
+            padding: 12px 15px;
+            border: 1px solid var(--client-line);
+            border-radius: 14px;
+            background: rgba(255, 255, 255, .025);
+            text-align: right;
+        }
+
+        .client-directory-count strong,
+        .client-directory-count span {
+            display: block;
+        }
+
+        .client-directory-count strong {
+            color: #f8fafc;
+            font-size: 22px;
+            line-height: 1;
+        }
+
+        .client-directory-count span {
+            margin-top: 6px;
+            color: var(--client-muted);
+            font-size: 10px;
+            font-weight: 800;
+            letter-spacing: .07em;
+            text-transform: uppercase;
+        }
+
+        .client-directory-controls {
+            display: grid;
+            grid-template-columns: minmax(320px, 1fr) auto;
+            gap: 18px;
+            padding: 18px 24px;
+            border-bottom: 1px solid var(--client-line);
+            background: rgba(255, 255, 255, .018);
+        }
+
+        .client-directory-search {
+            display: flex;
+            align-items: center;
+            gap: 9px;
+            min-width: 0;
+        }
+
+        .client-directory-search-field {
+            position: relative;
+            flex: 1 1 auto;
+            min-width: 0;
+        }
+
+        .client-directory-search-field svg {
+            position: absolute;
+            top: 50%;
+            left: 14px;
+            width: 18px;
+            height: 18px;
+            color: #7f8da2;
+            transform: translateY(-50%);
+            pointer-events: none;
+        }
+
+        .client-directory-search .form-input {
+            width: 100%;
+            min-height: 44px;
+            padding-left: 43px;
+            border-radius: 12px;
+            font-size: 14px;
+        }
+
+        .client-directory-search-clear {
+            position: absolute;
+            top: 50%;
+            right: 12px;
+            display: grid;
+            width: 27px;
+            height: 27px;
+            place-items: center;
+            border-radius: 8px;
+            color: var(--client-muted);
             text-decoration: none;
-            font-weight: 700;
+            transform: translateY(-50%);
+        }
+
+        .client-directory-search-clear:hover,
+        .client-directory-search-clear:focus-visible {
+            background: rgba(255, 255, 255, .07);
+            color: #fff;
+        }
+
+        .client-directory-tools {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .client-directory-tools .btn,
+        .client-directory-search .btn {
+            min-height: 42px;
+            white-space: nowrap;
+        }
+
+        .client-filter-link {
+            position: relative;
+        }
+
+        .client-filter-link.is-active {
+            border-color: var(--color-primary);
+            color: var(--color-primary);
+            background: rgba(255, 106, 55, .1);
+        }
+
+        .client-filter-count {
+            display: inline-grid;
+            min-width: 20px;
+            height: 20px;
+            margin-left: 5px;
+            padding: 0 5px;
+            place-items: center;
+            border-radius: 999px;
+            background: rgba(148, 163, 184, .12);
+            font-size: 10px;
+        }
+
+        .client-directory-notice {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            margin: 16px 24px 0;
+            padding: 13px 15px;
+            border: 1px solid rgba(245, 158, 11, .28);
+            border-radius: 13px;
+            background: rgba(245, 158, 11, .075);
+            color: #f7d58a;
+            font-size: 12px;
+            line-height: 1.5;
+        }
+
+        .client-directory-notice svg {
+            flex: 0 0 auto;
+            width: 19px;
+            height: 19px;
+            margin-top: 1px;
+        }
+
+        .client-directory-notice strong {
+            color: #fff3ce;
+        }
+
+        .client-directory-notice a:not(.btn) {
+            color: #fff;
+            font-weight: 800;
+        }
+
+        .client-email-samples {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-top: 8px;
+            flex-wrap: wrap;
+        }
+
+        .client-directory-table-wrap {
+            width: 100%;
+            padding: 18px 24px 8px;
+            overflow-x: auto;
+            scrollbar-width: thin;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .client-directory-table-wrap::-webkit-scrollbar {
+            height: 8px;
+        }
+
+        .client-directory-table-wrap::-webkit-scrollbar-thumb {
+            border-radius: 999px;
+            background: rgba(148, 163, 184, .28);
+        }
+
+        .client-directory-table {
+            width: 100%;
+            min-width: 1050px;
+            border-collapse: separate;
+            border-spacing: 0;
+            overflow: hidden;
+            border: 1px solid var(--client-line);
+            border-radius: 15px;
+            background: var(--client-panel);
+        }
+
+        .client-directory-table th,
+        .client-directory-table td {
+            padding: 14px 16px;
+            border-bottom: 1px solid var(--client-line);
+            text-align: left;
+            vertical-align: middle;
+        }
+
+        .client-directory-table th {
+            background: rgba(255, 255, 255, .045);
+            color: #aab5c6;
+            font-size: 10px;
+            font-weight: 800;
+            letter-spacing: .07em;
+            text-transform: uppercase;
+        }
+
+        .client-directory-table tbody tr {
+            transition: background-color .18s ease, transform .18s ease;
+        }
+
+        .client-directory-table tbody tr:hover {
+            background: rgba(255, 106, 55, .045);
+        }
+
+        .client-directory-table tbody tr:last-child td {
+            border-bottom: 0;
+        }
+
+        .client-identity {
+            display: flex;
+            align-items: center;
+            gap: 11px;
+            min-width: 235px;
+        }
+
+        .client-avatar {
+            display: grid;
+            flex: 0 0 38px;
+            width: 38px;
+            height: 38px;
+            place-items: center;
+            border: 1px solid rgba(255, 106, 55, .25);
+            border-radius: 11px;
+            background: rgba(255, 106, 55, .08);
+            color: #ff9369;
+            font-size: 11px;
+            font-weight: 900;
+            letter-spacing: .04em;
+        }
+
+        .client-identity-copy {
+            min-width: 0;
+        }
+
+        .client-history-link {
+            display: inline-block;
+            max-width: 300px;
+            overflow: hidden;
+            color: #f8fafc;
+            font-size: 13px;
+            font-weight: 800;
+            line-height: 1.3;
+            text-decoration: none;
+            text-overflow: ellipsis;
+            white-space: nowrap;
         }
 
         .client-history-link:hover,
         .client-history-link:focus-visible {
             color: var(--color-primary);
             text-decoration: underline;
+            text-underline-offset: 3px;
         }
 
-        .clients-list-shell {
-            overflow-x: hidden;
+        .client-username {
+            display: block;
+            max-width: 300px;
+            margin-top: 3px;
+            overflow: hidden;
+            color: var(--client-muted);
+            font-size: 11px;
+            text-overflow: ellipsis;
+            white-space: nowrap;
         }
 
-        .clients-list-scroll {
+        .client-data-main,
+        .client-data-muted {
+            display: block;
+        }
+
+        .client-data-main {
+            color: #e8edf5;
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        .client-data-muted {
+            margin-top: 3px;
+            color: var(--client-muted);
+            font-size: 10px;
+        }
+
+        .client-type-badge,
+        .client-discount-badge {
+            display: inline-flex;
+            align-items: center;
+            min-height: 26px;
+            padding: 4px 9px;
+            border-radius: 999px;
+            font-size: 10px;
+            font-weight: 800;
+            white-space: nowrap;
+        }
+
+        .client-type-badge {
+            border: 1px solid rgba(56, 189, 248, .22);
+            background: rgba(56, 189, 248, .08);
+            color: #7dd3fc;
+        }
+
+        .client-discount-badge {
+            border: 1px solid rgba(34, 197, 94, .28);
+            background: rgba(34, 197, 94, .1);
+            color: #6ee7a0;
+        }
+
+        .client-row-actions {
+            display: grid;
+            grid-template-columns: max-content max-content 142px;
+            align-items: start;
+            justify-content: flex-end;
+            gap: 7px;
+            min-width: 355px;
+        }
+
+        .client-row-actions .btn {
+            min-height: 34px;
+            padding: 8px 11px;
+            font-size: 10px;
+            white-space: nowrap;
+        }
+
+        .client-action-menu {
+            position: relative;
+            width: 142px;
+        }
+
+        .client-action-menu summary {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
             width: 100%;
-            overflow-x: auto;
-            overflow-y: hidden;
-            scrollbar-width: thin;
-            -webkit-overflow-scrolling: touch;
+            min-height: 34px;
+            padding: 8px 11px;
+            box-sizing: border-box;
+            border: 1px solid rgba(148, 163, 184, .27);
+            border-radius: 8px;
+            color: #dce3ed;
+            font-size: 10px;
+            font-weight: 800;
+            cursor: pointer;
+            list-style: none;
+            user-select: none;
         }
 
-        .clients-list-scroll::-webkit-scrollbar {
-            height: 8px;
+        .client-action-menu summary::-webkit-details-marker {
+            display: none;
         }
 
-        .clients-list-scroll::-webkit-scrollbar-track {
-            background: rgba(255, 255, 255, 0.06);
-            border-radius: 999px;
+        .client-action-menu summary::after {
+            width: 6px;
+            height: 6px;
+            border-right: 1.5px solid currentColor;
+            border-bottom: 1.5px solid currentColor;
+            content: "";
+            transform: rotate(45deg) translateY(-2px);
+            transition: transform .18s ease;
         }
 
-        .clients-list-scroll::-webkit-scrollbar-thumb {
-            background: rgba(255, 255, 255, 0.22);
-            border-radius: 999px;
+        .client-action-menu[open] summary {
+            border-color: rgba(255, 106, 55, .45);
+            background: rgba(255, 106, 55, .08);
+            color: #ff9369;
+        }
+
+        .client-action-menu[open] summary::after {
+            transform: rotate(225deg) translate(-1px, -1px);
+        }
+
+        .client-action-menu-content {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr);
+            gap: 6px;
+            width: 100%;
+            margin-top: 8px;
+            padding: 8px;
+            box-sizing: border-box;
+            border: 1px solid var(--client-line);
+            border-radius: 10px;
+            background: var(--client-panel-strong);
+            box-shadow: 0 12px 26px rgba(0, 0, 0, .18);
+        }
+
+        .client-action-menu-content form {
+            display: block;
+            grid-column: 1 / -1;
+            width: 100%;
+            margin: 0;
+        }
+
+        .client-action-menu-content > .client-action-link {
+            grid-column: 1 / -1;
+        }
+
+        .client-action-menu-label {
+            grid-column: 1 / -1;
+            padding: 1px 2px 4px;
+            color: var(--client-muted);
+            font-size: 9px;
+            font-weight: 800;
+            letter-spacing: .08em;
+            text-transform: uppercase;
+        }
+
+        .client-action-link {
+            display: flex;
+            align-items: center;
+            justify-content: flex-start;
+            width: 100%;
+            min-height: 31px;
+            padding: 7px 9px;
+            box-sizing: border-box;
+            border: 1px solid var(--client-line);
+            border-radius: 8px;
+            background: rgba(255, 255, 255, .025);
+            color: #dce3ed;
+            font: inherit;
+            font-size: 10px;
+            font-weight: 750;
+            line-height: 1.25;
+            text-align: left;
+            text-decoration: none;
+            cursor: pointer;
+        }
+
+        .client-action-link:hover,
+        .client-action-link:focus-visible {
+            border-color: rgba(255, 106, 55, .38);
+            color: #fff;
+        }
+
+        .client-action-link.is-disabled {
+            opacity: .45;
+            cursor: not-allowed;
+        }
+
+        .client-action-link.is-danger {
+            margin-top: 2px;
+            border-color: rgba(244, 63, 94, .26);
+            color: #fda4af;
+        }
+
+        .client-empty-state {
+            padding: 44px 20px !important;
+            color: var(--client-muted);
+            text-align: center !important;
+        }
+
+        .client-empty-state strong {
+            display: block;
+            margin-bottom: 5px;
+            color: #e8edf5;
+            font-size: 14px;
+        }
+
+        .client-pagination {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 14px;
+            padding: 16px 24px 22px;
+        }
+
+        .client-pagination-info {
+            color: var(--client-muted);
+            font-size: 11px;
+        }
+
+        .client-pagination-info strong {
+            color: #e8edf5;
+        }
+
+        .client-pagination-controls {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+
+        .client-danger-button {
+            border-color: rgba(244, 63, 94, .35) !important;
+            color: #fda4af !important;
+            background: rgba(244, 63, 94, .07) !important;
+        }
+
+        .client-danger-button:hover,
+        .client-danger-button:focus-visible {
+            background: rgba(244, 63, 94, .14) !important;
+        }
+
+        .client-modal {
+            position: fixed;
+            inset: 0;
+            z-index: 1100;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            background: rgba(2, 6, 14, .78);
+            backdrop-filter: blur(7px);
+        }
+
+        .client-modal.is-open {
+            display: flex;
+        }
+
+        .client-modal-dialog {
+            width: min(100%, 480px);
+            padding: 24px;
+            border: 1px solid rgba(244, 63, 94, .3);
+            border-radius: 18px;
+            background: #111827;
+            color: #e8edf5;
+            box-shadow: 0 26px 80px rgba(0, 0, 0, .5);
+        }
+
+        .client-modal-icon {
+            display: grid;
+            width: 44px;
+            height: 44px;
+            margin-bottom: 16px;
+            place-items: center;
+            border: 1px solid rgba(244, 63, 94, .3);
+            border-radius: 13px;
+            background: rgba(244, 63, 94, .1);
+            color: #fda4af;
+        }
+
+        .client-modal-dialog h3 {
+            margin: 0 0 9px;
+            color: #fff;
+            font-size: 20px;
+        }
+
+        .client-modal-dialog p {
+            margin: 0 0 12px;
+            color: #aab5c6;
+            font-size: 13px;
+            line-height: 1.55;
+        }
+
+        .client-modal-dialog code {
+            color: #fecdd3;
+        }
+
+        .client-modal-form .form-input {
+            width: 100%;
+            margin: 4px 0 16px;
+        }
+
+        .client-modal-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 9px;
+        }
+
+        html[data-theme="light"] .client-directory {
+            --client-line: rgba(100, 116, 139, .18);
+            --client-panel: rgba(255, 255, 255, .82);
+            --client-panel-strong: #fff;
+            --client-muted: #64748b;
+            background:
+                radial-gradient(circle at 100% 0, rgba(255, 106, 55, .075), transparent 32%),
+                rgba(255, 255, 255, .88);
+            box-shadow: 0 18px 50px rgba(15, 23, 42, .08);
+        }
+
+        html[data-theme="light"] .client-directory-title,
+        html[data-theme="light"] .client-directory-count strong,
+        html[data-theme="light"] .client-history-link,
+        html[data-theme="light"] .client-data-main,
+        html[data-theme="light"] .client-empty-state strong,
+        html[data-theme="light"] .client-pagination-info strong {
+            color: #172033;
+        }
+
+        html[data-theme="light"] .client-directory-count,
+        html[data-theme="light"] .client-directory-controls {
+            background: rgba(248, 250, 252, .72);
+        }
+
+        html[data-theme="light"] .client-directory-search-clear:hover,
+        html[data-theme="light"] .client-directory-search-clear:focus-visible {
+            background: rgba(15, 23, 42, .06);
+            color: #172033;
+        }
+
+        html[data-theme="light"] .client-directory-notice {
+            background: #fffbeb;
+            color: #92400e;
+        }
+
+        html[data-theme="light"] .client-directory-notice strong,
+        html[data-theme="light"] .client-directory-notice a:not(.btn) {
+            color: #78350f;
+        }
+
+        html[data-theme="light"] .client-directory-table th {
+            background: #f1f5f9;
+            color: #58677b;
+        }
+
+        html[data-theme="light"] .client-directory-table tbody tr:hover {
+            background: #fff7f2;
+        }
+
+        html[data-theme="light"] .client-avatar {
+            background: #fff3ed;
+            color: #c2410c;
+        }
+
+        html[data-theme="light"] .client-type-badge {
+            background: #ecfeff;
+            color: #0e7490;
+        }
+
+        html[data-theme="light"] .client-discount-badge {
+            background: #ecfdf3;
+            color: #15803d;
+        }
+
+        html[data-theme="light"] .client-action-menu summary,
+        html[data-theme="light"] .client-action-link {
+            background: #fff;
+            color: #334155;
+        }
+
+        html[data-theme="light"] .client-action-menu-content {
+            background: #f8fafc;
+            box-shadow: 0 12px 26px rgba(15, 23, 42, .1);
+        }
+
+        html[data-theme="light"] .client-action-menu[open] summary {
+            background: #fff3ed;
+            color: #c2410c;
+        }
+
+        html[data-theme="light"] .client-action-link.is-danger {
+            color: #be123c;
+        }
+
+        html[data-theme="light"] .client-modal-dialog {
+            background: #fff;
+            color: #172033;
+        }
+
+        html[data-theme="light"] .client-modal-dialog h3 {
+            color: #172033;
+        }
+
+        html[data-theme="light"] .client-modal-dialog p {
+            color: #64748b;
+        }
+
+        html[data-theme="light"] .client-modal-dialog code {
+            color: #be123c;
+        }
+
+        @media (max-width: 1180px) {
+            .client-directory-controls {
+                grid-template-columns: 1fr;
+            }
+
+            .client-directory-tools {
+                justify-content: flex-start;
+            }
+        }
+
+        @media (max-width: 760px) {
+            .client-directory {
+                border-radius: 15px;
+            }
+
+            .client-directory-head,
+            .client-directory-controls,
+            .client-pagination {
+                padding-right: 16px;
+                padding-left: 16px;
+            }
+
+            .client-directory-head {
+                align-items: stretch;
+                flex-direction: column;
+            }
+
+            .client-directory-count {
+                min-width: 0;
+                text-align: left;
+            }
+
+            .client-directory-search {
+                align-items: stretch;
+                flex-direction: column;
+            }
+
+            .client-directory-search .btn {
+                width: 100%;
+            }
+
+            .client-directory-tools {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+            }
+
+            .client-directory-tools .btn {
+                width: 100%;
+            }
+
+            .client-directory-notice {
+                margin-right: 16px;
+                margin-left: 16px;
+            }
+
+            .client-directory-table-wrap {
+                padding-right: 16px;
+                padding-left: 16px;
+                overflow: visible;
+            }
+
+            .client-directory-table,
+            .client-directory-table tbody,
+            .client-directory-table tr,
+            .client-directory-table td {
+                display: block;
+                width: 100%;
+            }
+
+            .client-directory-table {
+                min-width: 0;
+                border: 0;
+                background: transparent;
+            }
+
+            .client-directory-table thead {
+                position: absolute;
+                width: 1px;
+                height: 1px;
+                overflow: hidden;
+                clip: rect(0 0 0 0);
+                clip-path: inset(50%);
+            }
+
+            .client-directory-table tbody {
+                display: grid;
+                gap: 12px;
+            }
+
+            .client-directory-table tbody tr {
+                overflow: hidden;
+                border: 1px solid var(--client-line);
+                border-radius: 14px;
+                background: var(--client-panel);
+            }
+
+            .client-directory-table tbody tr:hover {
+                transform: none;
+            }
+
+            .client-directory-table td {
+                display: grid;
+                grid-template-columns: 105px minmax(0, 1fr);
+                gap: 12px;
+                min-height: 43px;
+                padding: 10px 13px;
+                text-align: right;
+            }
+
+            .client-directory-table td::before {
+                align-self: center;
+                color: var(--client-muted);
+                content: attr(data-label);
+                font-size: 9px;
+                font-weight: 800;
+                letter-spacing: .07em;
+                text-align: left;
+                text-transform: uppercase;
+            }
+
+            .client-directory-table td:first-child {
+                display: block;
+                padding: 14px;
+                text-align: left;
+            }
+
+            .client-directory-table td:first-child::before,
+            .client-directory-table td.client-empty-state::before {
+                display: none;
+            }
+
+            .client-directory-table td:last-child {
+                display: block;
+                border-bottom: 0;
+            }
+
+            .client-row-actions {
+                grid-template-columns: 1fr 1fr;
+                justify-content: stretch;
+                min-width: 0;
+            }
+
+            .client-row-actions > .btn {
+                width: 100%;
+            }
+
+            .client-row-actions > .client-action-menu {
+                grid-column: 1 / -1;
+                width: 100%;
+            }
+
+            .client-action-menu-content {
+                grid-template-columns: minmax(0, 1fr);
+            }
+
+            .client-pagination {
+                align-items: stretch;
+                flex-direction: column;
+            }
+
+            .client-pagination-controls .btn {
+                flex: 1 1 calc(50% - 6px);
+            }
+        }
+
+        @media (max-width: 470px) {
+            .client-directory-tools {
+                grid-template-columns: 1fr;
+            }
+
+            .client-directory-table td {
+                grid-template-columns: 88px minmax(0, 1fr);
+            }
+
+            .client-action-menu-content {
+                grid-template-columns: minmax(0, 1fr);
+            }
         }
     </style>
 
-    <div class="admin-toolbar">
-        <form method="get" class="toolbar-search">
-            <input type="text" name="q" value="{{ search }}" placeholder="Buscar empresa, usuario o CUIT..." class="form-input">
-            <button type="submit" class="btn btn-primary">Buscar</button>
+    <header class="client-directory-head">
+        <div>
+            <span class="client-directory-eyebrow">Directorio comercial</span>
+            <h2 class="client-directory-title" id="clientDirectoryTitle">Buscar y gestionar clientes</h2>
+            <p class="client-directory-copy">
+                Encontrá una cuenta por empresa, usuario o CUIT y accedé a su ficha, cobros y configuración desde una vista ordenada.
+            </p>
+        </div>
+        <div class="client-directory-count" aria-label="Cantidad de resultados">
+            <strong>{{ page_obj.paginator.count }}</strong>
+            <span>{% if search or missing_email_only %}resultados{% else %}clientes{% endif %}</span>
+        </div>
+    </header>
+
+    <div class="client-directory-controls">
+        <form method="get" class="client-directory-search" role="search">
+            <div class="client-directory-search-field">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                    <circle cx="11" cy="11" r="7"></circle>
+                    <path d="m20 20-4-4"></path>
+                </svg>
+                <label class="sr-only" for="clientDirectorySearch">Buscar cliente</label>
+                <input id="clientDirectorySearch" type="search" name="q" value="{{ search }}"
+                    placeholder="Empresa, usuario o CUIT..." class="form-input" autocomplete="off">
+                {% if search %}
+                <a href="{% url 'admin_client_list' %}{% if missing_email_only %}?missing_email=1{% endif %}"
+                    class="client-directory-search-clear" aria-label="Limpiar búsqueda" title="Limpiar búsqueda">×</a>
+                {% endif %}
+            </div>
+            {% if missing_email_only %}<input type="hidden" name="missing_email" value="1">{% endif %}
+            <button type="submit" class="btn btn-primary">Buscar cliente</button>
         </form>
-        <div class="toolbar-actions">
+
+        <nav class="client-directory-tools" aria-label="Herramientas de clientes">
             {% if can_create_client %}
             <a href="{% url 'admin_client_create' %}" class="btn btn-primary">Nuevo cliente</a>
             {% endif %}
             {% if can_manage_client_categories %}
             <a href="{% url 'admin_client_category_list' %}" class="btn btn-outline">Tipos de cliente</a>
             {% endif %}
-            <a href="{% url 'admin_client_fiscal_review_list' %}" class="btn btn-outline">
-                Revisiones CUIT ({{ pending_fiscal_review_total }})
+            <a href="{% url 'admin_client_fiscal_review_list' %}" class="btn btn-outline client-filter-link">
+                Revisiones CUIT <span class="client-filter-count">{{ pending_fiscal_review_total }}</span>
             </a>
-            <a href="{% url 'admin_client_list' %}?missing_email=1" class="btn btn-outline {% if missing_email_only %}is-active{% endif %}" title="Filtrar clientes sin email para corregirlos rapido">
-                Sin email ({{ missing_email_total }})
+            <a href="{% url 'admin_client_list' %}?missing_email=1"
+                class="btn btn-outline client-filter-link {% if missing_email_only %}is-active{% endif %}"
+                aria-label="Sin email ({{ missing_email_total }})"
+                title="Mostrar clientes que necesitan completar su email">
+                Sin email <span class="client-filter-count">{{ missing_email_total }}</span>
+                <span class="sr-only">{{ missing_email_total }} cliente(s) sin email</span>
             </a>
             {% if user.is_superuser %}
-            <button type="button" class="btn btn-danger" onclick="openDeleteModal()">Desactivar Todos</button>
+            <button type="button" class="btn btn-outline client-danger-button" onclick="openDeleteModal()">Acción masiva</button>
+            {% endif %}
+        </nav>
+    </div>
+
+    {% if missing_email_total > 0 and missing_email_only %}
+    <aside class="client-directory-notice" aria-label="Clientes sin email">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+            <path d="M12 9v4"></path><path d="M12 17h.01"></path>
+            <path d="M10.3 3.5 2.6 17a2 2 0 0 0 1.7 3h15.4a2 2 0 0 0 1.7-3L13.7 3.5a2 2 0 0 0-3.4 0Z"></path>
+        </svg>
+        <div>
+            <strong>{{ missing_email_total }} cliente(s) necesitan completar su email.</strong>
+            Este dato es necesario para recuperar la clave del portal.
+            <a href="{% url 'admin_client_list' %}">Quitar filtro</a>
+            {% if missing_email_sample %}
+            <div class="client-email-samples">
+                {% for item in missing_email_sample %}
+                <a href="{% url 'admin_client_edit' item.pk %}" class="btn btn-outline btn-sm">
+                    Completar: {{ item.company_name|default:item.user.username|default:"Cliente" }}
+                </a>
+                {% endfor %}
+            </div>
             {% endif %}
         </div>
-    </div>
-
-    <div class="alert alert-info" style="margin-bottom:14px;">
-        Usa esta vista para encontrar clientes y abrir su <strong>ficha comercial</strong>.
-        La ficha reúne pedidos, cuenta corriente, cobros y documentos del cliente en un solo lugar.
-    </div>
-
-    {% if missing_email_total > 0 %}
-    <div class="alert alert-warning" style="margin-bottom:14px;">
-        <strong>{{ missing_email_total }} cliente(s) sin email.</strong>
-        {% if missing_email_only %}
-        Mostrando solo clientes sin email. <a href="{% url 'admin_client_list' %}" class="btn btn-outline btn-sm" style="margin-left:8px;">Ver todos</a>
-        {% else %}
-        Usa "Sin email" para filtrar y corregirlos rapido.
-        {% endif %}
-        {% if missing_email_sample %}
-        <div style="margin-top:8px;">
-            <div class="text-muted" style="margin-bottom:6px;">
-                Cada boton abre la ficha del cliente para editar y guardar su email.
-            </div>
-            {% for item in missing_email_sample %}
-            <a href="{% url 'admin_client_edit' item.pk %}" class="btn btn-outline btn-sm" style="margin:2px;" title="Abrir ficha para completar email">
-                Editar email: {{ item.company_name|default:item.user.username|default:"Cliente" }}
-            </a>
-            {% endfor %}
-        </div>
-        {% endif %}
-    </div>
+    </aside>
     {% endif %}
 
-    <div id="deleteModal" class="modal"
-        style="display:none; position:fixed; z-index:1000; left:0; top:0; width:100%; height:100%; background-color:rgba(0,0,0,0.5);">
-        <div class="modal-content"
-            style="background-color:#fff; margin:15% auto; padding:20px; border:1px solid #888; width:400px; border-radius:5px;">
-            <h3 style="color: #dc3545; margin-top: 0;">Accion Masiva</h3>
-            <p>Estas a punto de desactivar <strong>TODOS</strong> los perfiles de clientes y sus usuarios.</p>
-            <p>No se borra historial. Para confirmar, escribe: <code>delete clientes</code></p>
-
-            <form method="post" action="{% url 'admin_client_delete_all' %}">
-                {% csrf_token %}
-                <input type="text" name="confirmation" class="form-input" style="width: 100%; margin-bottom: 15px;"
-                    placeholder="delete clientes" autocomplete="off"
-                    onkeyup="checkDeleteInput(this, 'delete clientes')">
-
-                <div style="display: flex; justify-content: flex-end; gap: 10px;">
-                    <button type="button" class="btn btn-outline" onclick="closeDeleteModal()">Cancelar</button>
-                    <button type="submit" id="deleteSubmitBtn" class="btn btn-danger" disabled>Confirmar Desactivacion</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <script>
-        function openDeleteModal() { document.getElementById('deleteModal').style.display = 'block'; }
-        function closeDeleteModal() { document.getElementById('deleteModal').style.display = 'none'; }
-        function checkDeleteInput(input, expected) {
-            const btn = document.getElementById('deleteSubmitBtn');
-            input.value.trim().toLowerCase() === expected ? btn.removeAttribute('disabled') : btn.setAttribute('disabled', 'true');
-        }
-        window.onclick = function (e) { if (e.target == document.getElementById('deleteModal')) closeDeleteModal(); }
-    </script>
-
-    <div class="clients-list-scroll" data-drag-scroll>
-        <table class="admin-table">
+    <div class="client-directory-table-wrap">
+        <table class="client-directory-table">
             <thead>
                 <tr>
-                    <th>Usuario</th>
-                    <th>Empresa / ficha</th>
-                    <th>CUIT/DNI</th>
+                    <th>Cliente</th>
+                    <th>CUIT / DNI</th>
                     <th>Provincia</th>
                     <th>Tipo</th>
                     <th>Descuento</th>
-                    <th>Acciones</th>
+                    <th style="text-align:right;">Acciones</th>
                 </tr>
             </thead>
             <tbody>
                 {% for client in page_obj %}
                 <tr>
-                    <td>{{ client.user.username }}</td>
-                    <td>
-                        <a href="{% url 'admin_client_order_history' client.pk %}" class="client-history-link">
-                            {{ client.company_name }}
-                        </a>
+                    <td data-label="Cliente">
+                        <div class="client-identity">
+                            <span class="client-avatar" aria-hidden="true">
+                                {{ client.company_name|default:client.user.username|default:"CL"|slice:":2"|upper }}
+                            </span>
+                            <span class="client-identity-copy">
+                                <a href="{% url 'admin_client_order_history' client.pk %}" class="client-history-link">
+                                    {{ client.company_name|default:client.user.username|default:"Cliente sin nombre" }}
+                                </a>
+                                <span class="client-username">Usuario: {{ client.user.username|default:"sin usuario" }}</span>
+                            </span>
+                        </div>
                     </td>
-                    <td>{{ client.cuit_dni|default:"-" }}</td>
-                    <td>{{ client.province|default:"-" }}</td>
-                    <td>{{ client.client_category.name|default:"-" }}</td>
-                    <td>
+                    <td data-label="CUIT / DNI">
+                        {% if not client.cuit_dni or client.cuit_dni == "nan" or client.cuit_dni == "NaN" %}
+                        <span class="client-data-muted">Sin informar</span>
+                        {% else %}
+                        <span class="client-data-main">{{ client.cuit_dni }}</span>
+                        {% endif %}
+                    </td>
+                    <td data-label="Provincia">
+                        <span class="client-data-main">{{ client.province|default:"Sin especificar" }}</span>
+                    </td>
+                    <td data-label="Tipo">
+                        <span class="client-type-badge">{{ client.client_category.name|default:"Sin especificar" }}</span>
+                    </td>
+                    <td data-label="Descuento">
                         {% if client.get_effective_discount_percentage %}
-                        <span class="badge badge-success">{{ client.get_effective_discount_percentage|floatformat:0 }}%</span>
+                        <span class="client-discount-badge">{{ client.get_effective_discount_percentage|floatformat:0 }}%</span>
                         {% else %}
-                        -
+                        <span class="client-data-muted">Sin descuento</span>
                         {% endif %}
                     </td>
-                    <td class="actions">
-                        <a href="{% url 'admin_payment_list' %}?client_id={{ client.pk }}" class="btn btn-primary btn-sm"
-                            title="Cobros y pagos del cliente">
-                            Cobros
-                        </a>
-                        {% if can_edit_client_profile %}
-                        <a href="{% url 'admin_client_edit' client.pk %}" class="btn btn-outline"
-                            title="Editar">
-                            Editar
-                        </a>
-                        {% if can_manage_client_credentials and client.user %}
-                        <a href="{% url 'admin_client_password' client.pk %}" class="btn btn-warning-outline"
-                            title="Cambiar clave de acceso al portal">Clave portal</a>
-                        {% if client.user.email %}
-                        <form method="post" action="{% url 'admin_client_password_reset_email' client.pk %}" style="display:inline; margin:0;">
-                            {% csrf_token %}
-                            <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                            <button type="submit" class="btn btn-outline" title="Enviar link para que el cliente cree o recupere su clave">Link portal</button>
-                        </form>
-                        {% else %}
-                        <span class="btn btn-outline" style="opacity:.55; cursor:not-allowed;" title="Carga un email para habilitar recuperacion">Portal sin email</span>
-                        {% endif %}
-                        {% endif %}
-                        {% if can_delete_client_record %}
-                        <a href="{% url 'admin_client_delete' client.pk %}" class="btn btn-danger-outline" title="Desactivar cliente">Desactivar cliente</a>
-                        {% endif %}
-                        {% endif %}
+                    <td data-label="Acciones">
+                        <div class="client-row-actions">
+                            <a href="{% url 'admin_client_order_history' client.pk %}" class="btn btn-primary btn-sm"
+                                title="Abrir ficha comercial completa">Abrir ficha</a>
+                            <a href="{% url 'admin_payment_list' %}?client_id={{ client.pk }}" class="btn btn-outline btn-sm"
+                                title="Ver cobros y pagos del cliente">Cobros</a>
+                            {% if can_edit_client_profile or can_manage_client_credentials or can_delete_client_record %}
+                            <details class="client-action-menu">
+                                <summary>Más</summary>
+                                <div class="client-action-menu-content">
+                                    <span class="client-action-menu-label">Cuenta y acceso</span>
+                                    {% if can_edit_client_profile %}
+                                    <a href="{% url 'admin_client_edit' client.pk %}" class="client-action-link">Editar datos</a>
+                                    {% endif %}
+                                    {% if can_manage_client_credentials and client.user %}
+                                    <a href="{% url 'admin_client_password' client.pk %}" class="client-action-link">Cambiar clave</a>
+                                    {% if client.user.email %}
+                                    <form method="post" action="{% url 'admin_client_password_reset_email' client.pk %}">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                                        <button type="submit" class="client-action-link">Enviar acceso</button>
+                                    </form>
+                                    {% else %}
+                                    <span class="client-action-link is-disabled" title="Primero cargá un email">Sin email</span>
+                                    {% endif %}
+                                    {% endif %}
+                                    {% if can_delete_client_record %}
+                                    <a href="{% url 'admin_client_delete' client.pk %}" class="client-action-link is-danger">Desactivar</a>
+                                    {% endif %}
+                                </div>
+                            </details>
+                            {% endif %}
+                        </div>
                     </td>
                 </tr>
                 {% empty %}
                 <tr>
-                    <td colspan="7" class="text-center text-muted">No hay clientes</td>
+                    <td colspan="6" class="client-empty-state">
+                        <strong>No encontramos clientes</strong>
+                        Probá con otro nombre, usuario o número de CUIT.
+                    </td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
     </div>
 
-    {% if page_obj.paginator.num_pages > 1 %}
-    <div class="pagination-container">
-        <div class="pagination-info">
-            Pagina {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}
+    <footer class="client-pagination">
+        <div class="client-pagination-info">
+            {% if page_obj.paginator.num_pages > 1 %}
+            Página <strong>{{ page_obj.number }}</strong> de <strong>{{ page_obj.paginator.num_pages }}</strong>
+            {% else %}
+            <strong>{{ page_obj.paginator.count }}</strong> cliente(s) en esta vista
+            {% endif %}
         </div>
 
-        <div class="pagination-controls">
+        {% if page_obj.paginator.num_pages > 1 %}
+        <nav class="client-pagination-controls" aria-label="Paginación de clientes">
             {% if page_obj.has_previous %}
-            <a href="?page=1{% if search %}&q={{ search }}{% endif %}" class="btn btn-outline btn-sm"><< Primera</a>
-            <a href="?page={{ page_obj.previous_page_number }}{% if search %}&q={{ search }}{% endif %}"
+            <a href="?page=1{% if search %}&q={{ search|urlencode }}{% endif %}{% if missing_email_only %}&missing_email=1{% endif %}"
+                class="btn btn-outline btn-sm">Primera</a>
+            <a href="?page={{ page_obj.previous_page_number }}{% if search %}&q={{ search|urlencode }}{% endif %}{% if missing_email_only %}&missing_email=1{% endif %}"
                 class="btn btn-outline btn-sm">Anterior</a>
             {% else %}
-            <button class="btn btn-outline btn-sm" disabled><< Primera</button>
+            <button class="btn btn-outline btn-sm" disabled>Primera</button>
             <button class="btn btn-outline btn-sm" disabled>Anterior</button>
             {% endif %}
 
             {% if page_obj.has_next %}
-            <a href="?page={{ page_obj.next_page_number }}{% if search %}&q={{ search }}{% endif %}"
+            <a href="?page={{ page_obj.next_page_number }}{% if search %}&q={{ search|urlencode }}{% endif %}{% if missing_email_only %}&missing_email=1{% endif %}"
                 class="btn btn-outline btn-sm">Siguiente</a>
-            <a href="?page={{ page_obj.paginator.num_pages }}{% if search %}&q={{ search }}{% endif %}"
-                class="btn btn-outline btn-sm">Ultima >></a>
+            <a href="?page={{ page_obj.paginator.num_pages }}{% if search %}&q={{ search|urlencode }}{% endif %}{% if missing_email_only %}&missing_email=1{% endif %}"
+                class="btn btn-outline btn-sm">Última</a>
             {% else %}
             <button class="btn btn-outline btn-sm" disabled>Siguiente</button>
-            <button class="btn btn-outline btn-sm" disabled>Ultima >></button>
+            <button class="btn btn-outline btn-sm" disabled>Última</button>
             {% endif %}
-        </div>
+        </nav>
+        {% endif %}
+    </footer>
+</section>
+
+{% if user.is_superuser %}
+<div id="deleteModal" class="client-modal" role="dialog" aria-modal="true" aria-labelledby="deleteModalTitle" aria-hidden="true">
+    <div class="client-modal-dialog">
+        <span class="client-modal-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8">
+                <path d="M12 9v4"></path><path d="M12 17h.01"></path>
+                <path d="M10.3 3.5 2.6 17a2 2 0 0 0 1.7 3h15.4a2 2 0 0 0 1.7-3L13.7 3.5a2 2 0 0 0-3.4 0Z"></path>
+            </svg>
+        </span>
+        <h3 id="deleteModalTitle">Desactivar todos los clientes</h3>
+        <p>Esta acción desactiva todos los perfiles y sus usuarios. El historial comercial se conserva.</p>
+        <p>Para confirmar, escribí <code>delete clientes</code>.</p>
+
+        <form method="post" action="{% url 'admin_client_delete_all' %}" class="client-modal-form">
+            {% csrf_token %}
+            <label class="sr-only" for="deleteConfirmation">Texto de confirmación</label>
+            <input id="deleteConfirmation" type="text" name="confirmation" class="form-input"
+                placeholder="delete clientes" autocomplete="off"
+                oninput="checkDeleteInput(this, 'delete clientes')">
+            <div class="client-modal-actions">
+                <button type="button" class="btn btn-outline" onclick="closeDeleteModal()">Cancelar</button>
+                <button type="submit" id="deleteSubmitBtn" class="btn btn-danger" disabled>Desactivar todos</button>
+            </div>
+        </form>
     </div>
-
-    <style>
-        .pagination-container {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-top: 20px;
-            padding: 10px;
-            background-color: var(--color-secondary);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            color: var(--color-gray-light);
-            border-radius: 5px;
-        }
-
-        .pagination-controls {
-            display: flex;
-            gap: 5px;
-        }
-    </style>
-    {% endif %}
 </div>
+
+<script>
+    (function () {
+        const modal = document.getElementById('deleteModal');
+        const confirmation = document.getElementById('deleteConfirmation');
+
+        window.openDeleteModal = function () {
+            if (!modal) return;
+            modal.classList.add('is-open');
+            modal.setAttribute('aria-hidden', 'false');
+            document.body.style.overflow = 'hidden';
+            window.setTimeout(function () { confirmation && confirmation.focus(); }, 50);
+        };
+
+        window.closeDeleteModal = function () {
+            if (!modal) return;
+            modal.classList.remove('is-open');
+            modal.setAttribute('aria-hidden', 'true');
+            document.body.style.overflow = '';
+        };
+
+        window.checkDeleteInput = function (input, expected) {
+            const button = document.getElementById('deleteSubmitBtn');
+            if (!button) return;
+            button.disabled = input.value.trim().toLowerCase() !== expected;
+        };
+
+        modal && modal.addEventListener('click', function (event) {
+            if (event.target === modal) window.closeDeleteModal();
+        });
+
+        document.addEventListener('keydown', function (event) {
+            if (event.key === 'Escape' && modal && modal.classList.contains('is-open')) {
+                window.closeDeleteModal();
+            }
+        });
+    })();
+</script>
+{% endif %}
 {% endblock %}

@@ -137,6 +137,19 @@ def _run_preflight(import_type, importer_class, file_path, import_options=None):
     return preflight_errors
 
 
+def _partition_preflight_issues(import_type, issues):
+    """Separate fatal file problems from row-level observations.
+
+    Product importers are intentionally resilient: a bad row is skipped while
+    the remaining valid rows continue. The previous preflight treated those
+    row errors as fatal and prevented that behavior from ever running.
+    """
+    normalized = list(issues or [])
+    if import_type in {"products", "abrazaderas"}:
+        return [], normalized
+    return normalized, []
+
+
 def _build_batch_meta(total_rows, batch_size=500):
     total = int(total_rows or 0)
     if total <= 0:
@@ -164,7 +177,11 @@ def run_import_execution(
     try:
         importer_class = _resolve_importer_class(importer_class_path)
         import_options = import_options or {}
-        preflight_errors = _run_preflight(import_type, importer_class, file_path, import_options)
+        preflight_issues = _run_preflight(import_type, importer_class, file_path, import_options)
+        preflight_errors, preflight_warnings = _partition_preflight_issues(
+            import_type,
+            preflight_issues,
+        )
 
         if preflight_errors:
             result_data = {
@@ -177,7 +194,11 @@ def run_import_execution(
                 "execution_id": execution_id,
                 "import_type": import_type,
             }
-            ImportTaskManager.fail_task(task_id, "La validacion previa detecto errores.")
+            ImportTaskManager.fail_task(
+                task_id,
+                "La validacion previa detecto errores estructurales.",
+                result_data,
+            )
             if execution:
                 execution.status = ImportExecution.STATUS_FAILED
                 execution.result_summary = result_data
@@ -209,6 +230,7 @@ def run_import_execution(
             "duplicate_warnings": _duplicate_warnings(result),
             "category_warnings": _category_warnings(result),
             "preflight_errors": preflight_errors,
+            "preflight_warnings": preflight_warnings,
             "execution_id": execution_id,
             "import_type": import_type,
             "total_rows": result.total_rows,

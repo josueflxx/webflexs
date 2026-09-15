@@ -1,0 +1,1102 @@
+{% extends 'admin_panel/base.html' %}
+
+{% block page_title %}Dashboard{% endblock %}
+
+{% block extra_css %}
+{{ block.super }}
+<style>
+    /* Premium Design System Utilities */
+    .dashboard-ops-layout {
+        display: grid;
+        grid-template-columns: minmax(0, 1.35fr) minmax(300px, .82fr);
+        gap: 12px;
+        margin-bottom: 12px;
+    }
+    
+    .dashboard-ops-card,
+    .dashboard-activity-card,
+    .dashboard-panel,
+    .dashboard-function-section,
+    .dashboard-rankings-section {
+        padding: 16px;
+        border-radius: 16px;
+        border: 1px solid var(--glass-border-light);
+        background: radial-gradient(circle at top right, rgba(255, 107, 53, 0.04), transparent 45%), var(--glass-bg);
+        backdrop-filter: var(--glass-blur);
+        box-shadow: var(--glass-shadow);
+        transition: var(--transition-smooth);
+    }
+    
+    .dashboard-ops-head,
+    .dashboard-activity-head,
+    .dashboard-panel-head,
+    .dashboard-function-head {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        align-items: flex-start;
+        margin-bottom: 14px;
+        padding-bottom: 10px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+    
+    .dashboard-ops-head h3,
+    .dashboard-activity-head h3,
+    .dashboard-panel-head h3,
+    .dashboard-function-head h3 {
+        margin: 2px 0 0;
+        font-size: 1rem;
+        font-weight: 600;
+        color: #fff;
+    }
+    
+    .dashboard-ops-head p,
+    .dashboard-activity-head p,
+    .dashboard-panel-head p,
+    .dashboard-function-head p {
+        margin: 4px 0 0;
+        color: rgba(208, 216, 226, 0.7);
+        font-size: 0.78rem;
+        line-height: 1.4;
+    }
+    
+    .dashboard-ops-kicker,
+    .dashboard-ops-value,
+    .dashboard-command-kicker,
+    .dashboard-section-kicker {
+        display: inline-flex;
+        align-items: center;
+        padding: 4px 10px;
+        border-radius: 8px;
+        border: 1px solid rgba(255, 107, 53, 0.25);
+        background: rgba(255, 107, 53, 0.12);
+        color: var(--color-primary-light);
+        font-size: 0.62rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+    }
+    
+    .dashboard-ops-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 10px;
+    }
+    
+    .dashboard-ops-item {
+        display: grid;
+        gap: 6px;
+        padding: 14px;
+        border-radius: 12px;
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        background: rgba(8, 14, 26, 0.4);
+        color: inherit;
+        text-decoration: none;
+        transition: var(--transition-smooth);
+    }
+    
+    .dashboard-ops-item:hover {
+        transform: translateY(-2px);
+        border-color: rgba(255, 107, 53, 0.35);
+        background: rgba(10, 18, 31, 0.72);
+        box-shadow: 0 8px 24px rgba(255, 107, 53, 0.08);
+    }
+    
+    .dashboard-ops-label {
+        font-size: 0.76rem;
+        color: rgba(208, 216, 226, 0.8);
+        line-height: 1.35;
+    }
+    
+    .dashboard-ops-value {
+        font-size: 1.35rem;
+        color: #fff;
+        line-height: 1;
+        background: none;
+        border: none;
+        padding: 0;
+    }
+    
+    .dashboard-ops-item small {
+        color: rgba(208, 216, 226, 0.6);
+        line-height: 1.35;
+        font-size: 0.72rem;
+    }
+    
+    .dashboard-activity-list {
+        display: grid;
+        gap: 10px;
+    }
+    
+    .dashboard-activity-item {
+        display: grid;
+        gap: 6px;
+        padding: 12px 14px;
+        border-radius: 12px;
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        background: rgba(8, 14, 26, 0.4);
+        transition: var(--transition-smooth);
+    }
+    
+    .dashboard-activity-item:hover {
+        border-color: rgba(255, 255, 255, 0.12);
+        background: rgba(10, 18, 31, 0.6);
+    }
+    
+    .dashboard-activity-top {
+        display: flex;
+        justify-content: space-between;
+        gap: 10px;
+        align-items: center;
+    }
+    
+    .dashboard-activity-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 3px 8px;
+        border-radius: 8px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        background: rgba(255, 255, 255, 0.04);
+        color: #f4f7fb;
+        font-size: 0.65rem;
+        font-weight: 500;
+    }
+    
+    .dashboard-activity-time {
+        font-size: 0.68rem;
+        color: rgba(208, 216, 226, 0.6);
+    }
+    
+    .dashboard-activity-item strong {
+        color: #fff;
+        font-size: 0.85rem;
+    }
+    
+    .dashboard-activity-item p {
+        margin: 0;
+        color: rgba(208, 216, 226, 0.75);
+        font-size: 0.76rem;
+        line-height: 1.4;
+    }
+    
+    .dashboard-activity-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
+        color: rgba(208, 216, 226, 0.6);
+        font-size: 0.7rem;
+        margin-top: 4px;
+    }
+    
+    .dashboard-activity-amount {
+        font-weight: 700;
+        color: #fff;
+    }
+    
+    .dashboard-command-header {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 16px;
+        align-items: center;
+        padding: 22px 26px;
+        border-top: 3px solid var(--color-primary);
+        border: 1px solid rgba(255, 107, 53, 0.18);
+        border-radius: 20px;
+        background: linear-gradient(135deg, rgba(255, 107, 53, 0.1), rgba(15, 23, 42, 0.75));
+        backdrop-filter: var(--glass-blur);
+        box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
+        margin-bottom: 16px;
+    }
+    
+    .dashboard-command-header h2 {
+        margin: 6px 0;
+        font-size: 1.45rem;
+        font-weight: 700;
+        line-height: 1.15;
+        color: #f8fafc;
+        letter-spacing: -0.01em;
+    }
+    
+    .dashboard-command-header p {
+        margin: 0;
+        max-width: 96ch;
+        color: #94a3b8;
+        font-size: 0.84rem;
+        line-height: 1.45;
+    }
+    
+    .dashboard-command-actions {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        align-items: center;
+    }
+    
+    .dashboard-command-meta {
+        display: grid;
+        gap: 4px;
+        min-width: 160px;
+        padding: 10px 14px;
+        border-radius: 12px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        background: rgba(15, 23, 42, 0.6);
+        color: #94a3b8;
+        font-size: 0.72rem;
+    }
+    
+    .dashboard-command-meta strong {
+        color: #f8fafc;
+        font-size: 0.9rem;
+        font-weight: 700;
+    }
+    
+    .dashboard-control-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1.1fr) minmax(340px, 0.74fr);
+        gap: 16px;
+        margin-bottom: 16px;
+    }
+
+    .dashboard-manager-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 12px;
+        margin-bottom: 16px;
+    }
+
+    .dashboard-manager-card {
+        display: grid;
+        gap: 6px;
+        padding: 16px;
+        border-radius: 16px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        background: rgba(15, 23, 42, 0.45);
+        backdrop-filter: var(--glass-blur);
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+        color: inherit;
+        text-decoration: none;
+        transition: var(--transition-smooth);
+    }
+
+    .dashboard-manager-card span { color: #94a3b8; font-size: 0.72rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; }
+    .dashboard-manager-card small { color: #64748b; font-size: 0.72rem; }
+    .dashboard-manager-card strong { color: #f8fafc; font-size: 1.3rem; font-weight: 700; }
+    .dashboard-manager-card:hover {
+        border-color: rgba(255, 107, 53, 0.35);
+        background: rgba(15, 23, 42, 0.7);
+        transform: translateY(-2px);
+        box-shadow: 0 10px 28px rgba(255, 107, 53, 0.12);
+    }
+    
+    .dashboard-priority-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 10px;
+        padding: 4px 0 0;
+    }
+    
+    .dashboard-priority-item {
+        position: relative;
+        overflow: hidden;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 6px;
+        align-items: start;
+        padding: 16px;
+        border-radius: 14px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        background: rgba(15, 23, 42, 0.45);
+        backdrop-filter: var(--glass-blur);
+        color: inherit;
+        text-decoration: none;
+        transition: var(--transition-smooth);
+    }
+
+    .dashboard-priority-item.has-work {
+        border-color: rgba(255, 107, 53, 0.28);
+        background: linear-gradient(135deg, rgba(255, 107, 53, 0.1), rgba(15, 23, 42, 0.55));
+    }
+    
+    .dashboard-priority-item:hover {
+        background: rgba(15, 23, 42, 0.7);
+        border-color: rgba(255, 107, 53, 0.4);
+        transform: translateY(-2px);
+        box-shadow: 0 10px 24px rgba(255, 107, 53, 0.12);
+    }
+    
+    .dashboard-priority-item span {
+        color: #e2e8f0;
+        font-size: 0.8rem;
+        font-weight: 600;
+        line-height: 1.25;
+    }
+    
+    .dashboard-priority-item strong {
+        color: #f8fafc;
+        font-size: 1.5rem;
+        line-height: 1;
+        letter-spacing: -0.02em;
+        font-weight: 700;
+    }
+
+    .dashboard-priority-item.has-work strong {
+        color: #ff8c5a;
+    }
+    
+    .dashboard-priority-item small {
+        grid-column: 1 / -1;
+        color: #64748b;
+        font-size: 0.72rem;
+        line-height: 1.35;
+        margin-top: 4px;
+    }
+    
+    .dashboard-activity-compact {
+        display: grid;
+        gap: 10px;
+        padding: 4px 0 0;
+        max-height: 380px;
+        overflow-y: auto;
+    }
+    
+    .dashboard-activity-compact::-webkit-scrollbar {
+        width: 5px;
+    }
+    
+    .dashboard-activity-compact::-webkit-scrollbar-thumb {
+        background: rgba(255, 107, 53, 0.3);
+        border-radius: 99px;
+    }
+    
+    .dashboard-activity-compact .dashboard-activity-item {
+        position: relative;
+        padding: 14px 16px;
+        border-radius: 14px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        background: rgba(15, 23, 42, 0.45);
+        backdrop-filter: var(--glass-blur);
+        transition: var(--transition-smooth);
+    }
+
+    .dashboard-activity-compact .dashboard-activity-item:hover {
+        border-color: rgba(255, 107, 53, 0.25);
+        background: rgba(15, 23, 42, 0.65);
+    }
+    
+    .dashboard-activity-compact .dashboard-activity-badge {
+        border-color: rgba(255, 107, 53, 0.3);
+        background: rgba(255, 107, 53, 0.12);
+        color: #ff8c5a;
+        font-weight: 700;
+        padding: 3px 10px;
+        border-radius: 99px;
+    }
+    
+    .dashboard-activity-compact .dashboard-activity-meta .btn {
+        min-height: 26px;
+        padding: 4px 10px;
+        font-size: 0.7rem;
+        border-radius: 8px;
+    }
+    
+    .dashboard-function-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 10px;
+        padding-top: 4px;
+    }
+    
+    .dashboard-mini-card {
+        position: relative;
+        overflow: hidden;
+        display: grid;
+        grid-template-columns: 36px minmax(0, 1fr);
+        grid-template-areas:
+            "icon tag"
+            "icon title"
+            "copy copy"
+            "actions actions";
+        gap: 8px 10px;
+        padding: 16px;
+        border-radius: 14px;
+        border: 1px solid color-mix(in srgb, var(--mini-accent, #ff6b35) 16%, rgba(255, 255, 255, 0.07));
+        background: radial-gradient(circle at top left, color-mix(in srgb, var(--mini-accent, #ff6b35) 10%, transparent), transparent 40%), rgba(16, 22, 31, 0.55);
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+        min-height: 145px;
+        transition: var(--transition-smooth);
+    }
+    
+    .dashboard-mini-card:hover {
+        transform: translateY(-2px);
+        border-color: color-mix(in srgb, var(--mini-accent, #ff6b35) 32%, rgba(255, 255, 255, 0.14));
+        box-shadow: 0 10px 24px color-mix(in srgb, var(--mini-accent, #ff6b35) 6%, rgba(0, 0, 0, 0.25));
+    }
+    
+    .dashboard-mini-card::after {
+        content: "";
+        position: absolute;
+        inset: auto 12px 0 12px;
+        height: 2px;
+        border-radius: 99px 99px 0 0;
+        background: linear-gradient(90deg, var(--mini-accent, #ff6b35), transparent);
+        opacity: 0.85;
+    }
+    
+    .dashboard-mini-icon {
+        grid-area: icon;
+        width: 32px;
+        height: 32px;
+        border-radius: 8px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid color-mix(in srgb, var(--mini-accent, #ff6b35) 35%, transparent);
+        background: color-mix(in srgb, var(--mini-accent, #ff6b35) 14%, rgba(255, 255, 255, 0.04));
+        color: color-mix(in srgb, var(--mini-accent, #ff6b35) 75%, white);
+        font-weight: 800;
+        font-size: 0.72rem;
+    }
+    
+    .dashboard-mini-tag {
+        grid-area: tag;
+        align-self: center;
+        color: color-mix(in srgb, var(--mini-accent, #ff6b35) 70%, white);
+        font-size: 0.6rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+    }
+    
+    .dashboard-mini-card h4 {
+        grid-area: title;
+        margin: 0;
+        font-size: 0.92rem;
+        font-weight: 600;
+        line-height: 1.15;
+        color: #fff;
+    }
+    
+    .dashboard-mini-card p {
+        grid-area: copy;
+        margin: 0;
+        color: rgba(210, 217, 226, 0.7);
+        font-size: 0.74rem;
+        line-height: 1.4;
+    }
+    
+    .dashboard-mini-actions {
+        grid-area: actions;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: 10px;
+        position: relative;
+        z-index: 1;
+    }
+    
+    .dashboard-mini-actions .btn {
+        min-height: 28px;
+        padding: 5px 10px;
+        font-size: 0.65rem;
+    }
+    
+    .dashboard-mini-card.is-sales,
+    .dashboard-mini-card.is-web { --mini-accent: var(--color-primary); }
+    .dashboard-mini-card.is-clients,
+    .dashboard-mini-card.is-money { --mini-accent: #ffc947; }
+    .dashboard-mini-card.is-catalog,
+    .dashboard-mini-card.is-supplier { --mini-accent: #2ecc71; }
+    .dashboard-mini-card.is-clamp,
+    .dashboard-mini-card.is-tools { --mini-accent: #00c5ff; }
+    .dashboard-mini-card.is-fiscal { --mini-accent: #7aa2ff; }
+    .dashboard-mini-card.is-company { --mini-accent: #d3dae6; }
+    
+    .dashboard-rankings-section .dashboard-rankings-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
+        padding-top: 4px;
+    }
+    
+    .dashboard-ranking-card {
+        padding: 16px;
+        border-radius: 14px;
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        background: linear-gradient(160deg, rgba(16, 22, 31, 0.8), rgba(10, 14, 20, 0.95));
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+        transition: var(--transition-smooth);
+    }
+    
+    .dashboard-ranking-card:hover {
+        border-color: rgba(255, 107, 53, 0.15);
+    }
+    
+    .dashboard-ranking-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 12px;
+        padding-bottom: 8px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    }
+    
+    .dashboard-ranking-kicker {
+        font-size: 0.58rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--color-primary-light);
+    }
+    
+    .dashboard-ranking-head h3 {
+        margin: 2px 0 0;
+        font-size: 0.92rem;
+        font-weight: 600;
+        color: #fff;
+    }
+    
+    .dashboard-ranking-icon {
+        font-size: 1.25rem;
+    }
+    
+    .dashboard-ranking-list {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+        display: grid;
+        gap: 8px;
+    }
+    
+    .dashboard-ranking-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    
+    .dashboard-ranking-position {
+        width: 22px;
+        height: 22px;
+        border-radius: 6px;
+        background: rgba(255, 255, 255, 0.05);
+        color: rgba(255, 255, 255, 0.7);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.75rem;
+        font-weight: 700;
+    }
+    
+    .dashboard-ranking-item:nth-child(1) .dashboard-ranking-position {
+        background: rgba(255, 107, 53, 0.18);
+        color: var(--color-primary-light);
+    }
+    
+    .dashboard-ranking-link {
+        flex: 1;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 10px;
+        border-radius: 8px;
+        border: 1px solid rgba(255, 255, 255, 0.04);
+        background: rgba(255, 255, 255, 0.02);
+        color: inherit;
+        text-decoration: none;
+        transition: var(--transition-smooth);
+    }
+    
+    .dashboard-ranking-link:hover {
+        background: rgba(255, 255, 255, 0.06);
+        border-color: rgba(255, 107, 53, 0.14);
+        transform: translateX(1px);
+    }
+    
+    .dashboard-ranking-link.is-static {
+        pointer-events: none;
+    }
+    
+    .dashboard-ranking-copy {
+        display: grid;
+        gap: 2px;
+        min-width: 0;
+    }
+    
+    .dashboard-ranking-copy strong {
+        color: #fff;
+        font-size: 0.78rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    
+    .dashboard-ranking-copy small {
+        color: rgba(210, 217, 226, 0.65);
+        font-size: 0.68rem;
+    }
+    
+    .dashboard-ranking-value {
+        color: #fff;
+        font-size: 0.84rem;
+        font-weight: 700;
+    }
+    
+    .dashboard-ranking-empty {
+        text-align: center;
+        color: rgba(210, 217, 226, 0.6);
+        font-size: 0.74rem;
+        padding: 20px 10px;
+    }
+    
+    /* Responsive Media Queries */
+    @media (max-width: 1250px) {
+        .dashboard-manager-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+        .dashboard-control-grid,
+        .dashboard-command-header {
+            grid-template-columns: 1fr;
+        }
+        .dashboard-command-actions {
+            justify-content: flex-start;
+        }
+        .dashboard-function-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+        .dashboard-rankings-section .dashboard-rankings-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+    @media (max-width: 780px) {
+        .dashboard-manager-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .dashboard-priority-grid,
+        .dashboard-function-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="dashboard-compact">
+    <section class="dashboard-command-header">
+        <div>
+            <span class="dashboard-command-kicker">Resumen de hoy</span>
+            <h2>Tu operacion, de un vistazo</h2>
+            <p>
+                Revisa pendientes, ventas y actividad reciente sin perder de vista las herramientas de trabajo.
+                {% if active_company %}Empresa activa: <strong>{{ active_company.name }}</strong>.{% endif %}
+            </p>
+        </div>
+        <div class="dashboard-command-actions">
+            <div class="dashboard-command-meta">
+                <span>Empresa activa</span>
+                <strong>{{ active_company.name|default:"Sin seleccionar" }}</strong>
+            </div>
+            <a href="{% url 'admin_order_list' %}" class="btn btn-primary">
+                <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
+                <span>Pedidos</span>
+            </a>
+            <a href="{% url 'admin_client_dashboard' %}" class="btn btn-outline">
+                <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+                <span>Clientes</span>
+            </a>
+            <a href="{% url 'admin_seller_performance' %}" class="btn btn-outline">
+                <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><polyline points="17 11 19 13 23 9"/></svg>
+                <span>Vendedores</span>
+            </a>
+            <a href="{% url 'admin_payment_list' %}" class="btn btn-outline">
+                <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+                <span>Cobros</span>
+            </a>
+            <a href="{% url 'select_company' %}?next={{ request.get_full_path|urlencode }}" class="btn btn-outline">
+                <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V7l8-4v18"/><path d="M19 21V11l-6-4"/></svg>
+                <span>Cambiar empresa</span>
+            </a>
+        </div>
+    </section>
+
+    <section class="dashboard-summary-section" aria-labelledby="dashboardSummaryTitle">
+        <div class="dashboard-summary-head">
+            <div>
+                <span class="dashboard-section-kicker">Indicadores</span>
+                <h3 id="dashboardSummaryTitle">Resumen comercial</h3>
+            </div>
+            <p>Facturacion, margen, pedidos y stock en el periodo actual.</p>
+        </div>
+        <div class="dashboard-manager-grid" aria-label="Indicadores gerenciales">
+        <a href="{% url 'admin_fiscal_document_list' %}" class="dashboard-manager-card">
+            <span>Facturado hoy</span>
+            <strong>${{ today_sales.sales_total|floatformat:2 }}</strong>
+            <small>{{ today_sales.documents_count }} comprobantes</small>
+        </a>
+        <a href="{% url 'admin_fiscal_report' %}" class="dashboard-manager-card">
+            <span>Facturado este mes</span>
+            <strong>${{ month_sales.sales_total|floatformat:2 }}</strong>
+            <small>{{ month_sales.documents_count }} comprobantes</small>
+        </a>
+        <a href="{% url 'admin_fiscal_report' %}" class="dashboard-manager-card">
+            <span>Ticket promedio</span>
+            <strong>${{ month_sales.average_ticket|floatformat:2 }}</strong>
+            <small>Mes actual</small>
+        </a>
+        <a href="{% url 'admin_order_list' %}" class="dashboard-manager-card">
+            <span>Margen estimado</span>
+            <strong>${{ estimated_margin|floatformat:2 }}</strong>
+            <small>Pedidos del mes a costo actual</small>
+        </a>
+        <a href="{% url 'admin_order_list' %}" class="dashboard-manager-card">
+            <span>Pedidos pendientes</span>
+            <strong>{{ pending_orders_count }}</strong>
+            <small>Hasta entrega</small>
+        </a>
+        <a href="{% url 'admin_client_task_inbox' %}" class="dashboard-manager-card">
+            <span>Mis recordatorios</span>
+            <strong>{{ my_client_tasks_count }}</strong>
+            <small>{{ my_client_tasks_overdue }} vencidos en {{ active_company.name }}</small>
+        </a>
+        <a href="{% url 'admin_product_list' %}?stock=low" class="dashboard-manager-card">
+            <span>Stock critico</span>
+            <strong>{{ critical_stock_count }}</strong>
+            <small>Stock menor o igual a {{ critical_stock_threshold }} · {{ new_clients_month }} clientes nuevos</small>
+        </a>
+        </div>
+    </section>
+
+    <section class="dashboard-control-grid">
+        <article class="dashboard-panel">
+            <div class="dashboard-panel-head">
+                <div>
+                    <span class="dashboard-section-kicker">Prioridad</span>
+                    <h3>Cola operativa</h3>
+                    <p>Pedidos, cobros, facturacion, stock y solicitudes que pueden frenar la operatoria.</p>
+                </div>
+            </div>
+            <div class="dashboard-priority-grid">
+                {% for item in operational_snapshot_cards %}
+                <a href="{{ item.url }}" class="dashboard-priority-item{% if item.count %} has-work{% endif %}">
+                    <span>{{ item.label }}</span>
+                    <strong>{{ item.count }}</strong>
+                    <small>{{ item.help_text }}</small>
+                </a>
+                {% endfor %}
+            </div>
+        </article>
+
+        <article class="dashboard-panel">
+            <div class="dashboard-panel-head">
+                <div>
+                    <span class="dashboard-section-kicker">Actividad</span>
+                    <h3>Actividad reciente</h3>
+                    <p>Mini historial de pedidos, comprobantes, pagos y cambios recientes.</p>
+                </div>
+            </div>
+            <div class="dashboard-activity-compact">
+                {% for event in recent_activity %}
+                <div class="dashboard-activity-item">
+                    <div class="dashboard-activity-top">
+                        <span class="dashboard-activity-badge">{{ event.badge }}</span>
+                        <span class="dashboard-activity-time">{{ event.occurred_at|date:"d/m H:i" }}</span>
+                    </div>
+                    <strong>{{ event.title }}</strong>
+                    {% if event.summary %}<p>{{ event.summary }}</p>{% endif %}
+                    <div class="dashboard-activity-meta">
+                        {% if event.scope_label %}<span>{{ event.scope_label }}</span>{% endif %}
+                        {% if event.actor_label %}<span>{{ event.actor_label }}</span>{% endif %}
+                        {% if event.amount is not None %}<span class="dashboard-activity-amount">${{ event.amount|floatformat:2 }}</span>{% endif %}
+                        {% if event.detail_url %}<a href="{{ event.detail_url }}" class="btn btn-ghost btn-sm">{{ event.detail_label }}</a>{% endif %}
+                    </div>
+                </div>
+                {% empty %}
+                <div class="dashboard-activity-item">
+                    <strong>Sin actividad reciente</strong>
+                    <p>Cuando entren pedidos, comprobantes o cobros, esta columna va a servir como mini timeline operativo.</p>
+                </div>
+                {% endfor %}
+            </div>
+        </article>
+    </section>
+
+    <div class="dashboard-workspace-board" aria-label="Areas de trabajo">
+    <section class="dashboard-function-section is-daily">
+        <div class="dashboard-function-head">
+            <div>
+                <span class="dashboard-section-kicker">Trabajo diario</span>
+                <h3>Ventas, clientes y cobranza</h3>
+                <p>Entradas principales para operar el circuito comercial.</p>
+            </div>
+        </div>
+        <div class="dashboard-function-grid">
+            <article class="dashboard-mini-card is-sales">
+                <span class="dashboard-mini-icon">PV</span>
+                <span class="dashboard-mini-tag">Ventas</span>
+                <h4>Pedidos operativos</h4>
+                <p>Pedidos manuales, convertidos, estados comerciales y documentos asociados.</p>
+                <div class="dashboard-mini-actions">
+                    <a href="{% url 'admin_order_list' %}" class="btn btn-primary">Abrir pedidos</a>
+                    <a href="{% url 'admin_sales_workspace' %}" class="btn btn-ghost">Seguimiento</a>
+                </div>
+            </article>
+            <article class="dashboard-mini-card is-web">
+                <span class="dashboard-mini-icon">PW</span>
+                <span class="dashboard-mini-tag">B2B</span>
+                <h4>Pedidos web</h4>
+                <p>Solicitudes del catalogo, propuestas comerciales y conversiones a pedido final.</p>
+                <div class="dashboard-mini-actions">
+                    <a href="{% url 'admin_order_request_list' %}" class="btn btn-primary">Abrir web</a>
+                    <a href="{% url 'catalog' %}" class="btn btn-ghost">Catalogo</a>
+                </div>
+            </article>
+            <article class="dashboard-mini-card is-clients">
+                <span class="dashboard-mini-icon">CL</span>
+                <span class="dashboard-mini-tag">Clientes</span>
+                <h4>Ficha comercial</h4>
+                <p>Clientes, historial, cuenta corriente, reportes y herramientas del area.</p>
+                <div class="dashboard-mini-actions">
+                    <a href="{% url 'admin_client_dashboard' %}" class="btn btn-primary">Abrir clientes</a>
+                    <a href="{% url 'admin_client_reports_hub' %}" class="btn btn-ghost">Reportes</a>
+                </div>
+            </article>
+            <article class="dashboard-mini-card is-money">
+                <span class="dashboard-mini-icon">CB</span>
+                <span class="dashboard-mini-tag">Cobros</span>
+                <h4>Pagos y saldos</h4>
+                <p>Registro de pagos, ajustes, recibos y movimientos que impactan cuenta corriente.</p>
+                <div class="dashboard-mini-actions">
+                    <a href="{% url 'admin_payment_list' %}" class="btn btn-primary">Abrir cobros</a>
+                </div>
+            </article>
+        </div>
+    </section>
+
+    <section class="dashboard-function-section is-foundation">
+        <div class="dashboard-function-head">
+            <div>
+                <span class="dashboard-section-kicker">Base operativa</span>
+                <h3>Catalogo, tecnica y datos</h3>
+                <p>Productos, proveedores, abrazaderas y cargas masivas.</p>
+            </div>
+        </div>
+        <div class="dashboard-function-grid">
+            <article class="dashboard-mini-card is-catalog">
+                <span class="dashboard-mini-icon">PR</span>
+                <span class="dashboard-mini-tag">Catalogo</span>
+                <h4>Productos</h4>
+                <p>Alta, precios, stock, categorias y visibilidad del catalogo comercial.</p>
+                <div class="dashboard-mini-actions">
+                    <a href="{% url 'admin_product_list' %}" class="btn btn-primary">Productos</a>
+                    <a href="{% url 'admin_category_list' %}" class="btn btn-ghost">Categorias</a>
+                </div>
+            </article>
+            <article class="dashboard-mini-card is-supplier">
+                <span class="dashboard-mini-icon">PV</span>
+                <span class="dashboard-mini-tag">Proveedores</span>
+                <h4>Proveedores</h4>
+                <p>Control de proveedores, productos vinculados y articulos sin proveedor.</p>
+                <div class="dashboard-mini-actions">
+                    <a href="{% url 'admin_supplier_list' %}" class="btn btn-primary">Proveedores</a>
+                </div>
+            </article>
+            <article class="dashboard-mini-card is-clamp">
+                <span class="dashboard-mini-icon">AB</span>
+                <span class="dashboard-mini-tag">Abrazaderas</span>
+                <h4>Solicitudes a medida</h4>
+                <p>Pedidos tecnicos, cotizaciones, codigos y publicacion eventual al catalogo.</p>
+                <div class="dashboard-mini-actions">
+                    <a href="{% url 'admin_clamp_request_list' %}" class="btn btn-primary">Solicitudes</a>
+                    <a href="{% url 'admin_clamp_quoter' %}" class="btn btn-ghost">Cotizador</a>
+                </div>
+            </article>
+            <article class="dashboard-mini-card is-tools">
+                <span class="dashboard-mini-icon">IM</span>
+                <span class="dashboard-mini-tag">Datos</span>
+                <h4>Importaciones</h4>
+                <p>Cargas masivas, seguimiento de tareas, rollback y mantenimiento de datos.</p>
+                <div class="dashboard-mini-actions">
+                    <a href="{% url 'admin_import_dashboard' %}" class="btn btn-primary">Importar</a>
+                </div>
+            </article>
+        </div>
+    </section>
+
+    <section class="dashboard-function-section is-control">
+        <div class="dashboard-function-head">
+            <div>
+                <span class="dashboard-section-kicker">Control</span>
+                <h3>Fiscal, empresa y configuracion</h3>
+                <p>Todo lo que ordena el marco operativo del sistema.</p>
+            </div>
+        </div>
+        <div class="dashboard-function-grid">
+            <article class="dashboard-mini-card is-fiscal">
+                <span class="dashboard-mini-icon">CF</span>
+                <span class="dashboard-mini-tag">Fiscal</span>
+                <h4>Comprobantes</h4>
+                <p>Estado fiscal, comprobantes emitidos, borradores manuales y acciones ARCA.</p>
+                <div class="dashboard-mini-actions">
+                    <a href="{% url 'admin_fiscal_document_list' %}" class="btn btn-primary">Comprobantes</a>
+                    <a href="{% url 'admin_fiscal_report' %}" class="btn btn-ghost">Reportes</a>
+                </div>
+            </article>
+            <article class="dashboard-mini-card is-company">
+                <span class="dashboard-mini-icon">EM</span>
+                <span class="dashboard-mini-tag">Empresa</span>
+                <h4>Contexto activo</h4>
+                <p>Cambio de empresa activa, razones sociales y datos maestros del entorno.</p>
+                <div class="dashboard-mini-actions">
+                    <a href="{% url 'select_company' %}?next={{ request.get_full_path|urlencode }}" class="btn btn-primary">Cambiar</a>
+                    <a href="{% url 'admin_company_list' %}" class="btn btn-ghost">Empresas</a>
+                </div>
+            </article>
+            <article class="dashboard-mini-card is-company">
+                <span class="dashboard-mini-icon">CG</span>
+                <span class="dashboard-mini-tag">Sistema</span>
+                <h4>Configuracion</h4>
+                <p>Preferencias del portal, ventas, depositos, admins y herramientas internas.</p>
+                <div class="dashboard-mini-actions">
+                    {% if user.is_superuser %}
+                    <a href="{% url 'admin_settings' %}" class="btn btn-primary">Configurar</a>
+                    {% endif %}
+                    <a href="{% url 'admin_sales_document_type_list' %}" class="btn btn-ghost">Tipos</a>
+                </div>
+            </article>
+            <article class="dashboard-mini-card is-tools">
+                <span class="dashboard-mini-icon">EX</span>
+                <span class="dashboard-mini-tag">Exportes</span>
+                <h4>Excel y plantillas</h4>
+                <p>Plantillas y estructuras para exportes comerciales del catalogo.</p>
+                <div class="dashboard-mini-actions">
+                    <a href="{% url 'admin_catalog_excel_template_list' %}" class="btn btn-primary">Exportes</a>
+                </div>
+            </article>
+        </div>
+    </section>
+
+    </div>
+
+    <section class="dashboard-rankings-section">
+        <div class="dashboard-function-head">
+            <div>
+                <span class="dashboard-section-kicker">Indicadores</span>
+                <h3>Lectura comercial rapida</h3>
+                <p>Ranking de facturacion, productos y deuda para detectar donde mirar.</p>
+            </div>
+        </div>
+        <div class="dashboard-rankings-grid">
+        <article class="dashboard-ranking-card is-sales">
+            <div class="dashboard-ranking-head">
+                <div>
+                    <span class="dashboard-ranking-kicker">Ranking 30d</span>
+                    <h3>Clientes mas facturados</h3>
+                </div>
+                <span class="dashboard-ranking-icon" aria-hidden="true">&#128200;</span>
+            </div>
+            {% if top_clients_rank %}
+            <ol class="dashboard-ranking-list">
+                {% for item in top_clients_rank %}
+                <li class="dashboard-ranking-item">
+                    <span class="dashboard-ranking-position">{{ forloop.counter }}</span>
+                    {% if item.detail_url %}
+                    <a href="{{ item.detail_url }}" class="dashboard-ranking-link">
+                        <div class="dashboard-ranking-copy">
+                            <strong>{{ item.client_name }}</strong>
+                            <small>{{ item.username }} &middot; {{ item.documents_count }} comprobantes</small>
+                        </div>
+                        <strong class="dashboard-ranking-value">${{ item.total_billed|floatformat:2 }}</strong>
+                    </a>
+                    {% else %}
+                    <div class="dashboard-ranking-link is-static">
+                        <div class="dashboard-ranking-copy">
+                            <strong>{{ item.client_name }}</strong>
+                            <small>{{ item.username }} &middot; {{ item.documents_count }} comprobantes</small>
+                        </div>
+                        <strong class="dashboard-ranking-value">${{ item.total_billed|floatformat:2 }}</strong>
+                    </div>
+                    {% endif %}
+                </li>
+                {% endfor %}
+            </ol>
+            {% else %}
+            <p class="dashboard-ranking-empty">Todavia no hay comprobantes facturados en los ultimos 30 dias.</p>
+            {% endif %}
+        </article>
+
+        <article class="dashboard-ranking-card is-catalog">
+            <div class="dashboard-ranking-head">
+                <div>
+                    <span class="dashboard-ranking-kicker">Ranking 30d</span>
+                    <h3>Productos mas vendidos</h3>
+                </div>
+                <span class="dashboard-ranking-icon" aria-hidden="true">&#128230;</span>
+            </div>
+            {% if top_products_rank %}
+            <ol class="dashboard-ranking-list">
+                {% for item in top_products_rank %}
+                <li class="dashboard-ranking-item">
+                    <span class="dashboard-ranking-position">{{ forloop.counter }}</span>
+                    {% if item.detail_url %}
+                    <a href="{{ item.detail_url }}" class="dashboard-ranking-link">
+                        <div class="dashboard-ranking-copy">
+                            <strong>{{ item.sku }}</strong>
+                            <small>{{ item.description }} &middot; {{ item.documents_count }} comprobantes</small>
+                        </div>
+                        <strong class="dashboard-ranking-value">{{ item.total_qty|floatformat:3 }}</strong>
+                    </a>
+                    {% else %}
+                    <div class="dashboard-ranking-link is-static">
+                        <div class="dashboard-ranking-copy">
+                            <strong>{{ item.sku }}</strong>
+                            <small>{{ item.description }} &middot; {{ item.documents_count }} comprobantes</small>
+                        </div>
+                        <strong class="dashboard-ranking-value">{{ item.total_qty|floatformat:3 }}</strong>
+                    </div>
+                    {% endif %}
+                </li>
+                {% endfor %}
+            </ol>
+            {% else %}
+            <p class="dashboard-ranking-empty">Todavia no hay ventas facturadas para armar este ranking.</p>
+            {% endif %}
+        </article>
+
+        <article class="dashboard-ranking-card is-clients">
+            <div class="dashboard-ranking-head">
+                <div>
+                    <span class="dashboard-ranking-kicker">Ranking actual</span>
+                    <h3>Clientes con mayor deuda</h3>
+                </div>
+                <span class="dashboard-ranking-icon" aria-hidden="true">&#128176;</span>
+            </div>
+            {% if top_debtors_rank %}
+            <ol class="dashboard-ranking-list">
+                {% for item in top_debtors_rank %}
+                <li class="dashboard-ranking-item">
+                    <span class="dashboard-ranking-position">{{ forloop.counter }}</span>
+                    {% if item.detail_url %}
+                    <a href="{{ item.detail_url }}" class="dashboard-ranking-link">
+                        <div class="dashboard-ranking-copy">
+                            <strong>{{ item.client_name }}</strong>
+                            <small>{{ item.username }}</small>
+                        </div>
+                        <strong class="dashboard-ranking-value">${{ item.balance|floatformat:2 }}</strong>
+                    </a>
+                    {% else %}
+                    <div class="dashboard-ranking-link is-static">
+                        <div class="dashboard-ranking-copy">
+                            <strong>{{ item.client_name }}</strong>
+                            <small>{{ item.username }}</small>
+                        </div>
+                        <strong class="dashboard-ranking-value">${{ item.balance|floatformat:2 }}</strong>
+                    </div>
+                    {% endif %}
+                </li>
+                {% endfor %}
+            </ol>
+            {% else %}
+            <p class="dashboard-ranking-empty">No hay deuda activa para mostrar en este momento.</p>
+            {% endif %}
+        </article>
+        </div>
+    </section>
+</div>
+{% endblock %}

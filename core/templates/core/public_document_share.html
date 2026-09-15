@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="robots" content="noindex,nofollow">
+    <meta name="referrer" content="no-referrer">
+    <title>{{ document_label }} {{ document_number }}</title>
+    <style>
+        :root { color-scheme: light; --ink:#172033; --muted:#667085; --line:#dbe2ea; --paper:#fff; --soft:#f5f7fa; --accent:#ff6b35; }
+        * { box-sizing:border-box; }
+        body { margin:0; padding:32px 18px; background:#eef1f5; color:var(--ink); font:14px/1.45 Inter,Segoe UI,Arial,sans-serif; }
+        .document { width:min(940px,100%); margin:auto; overflow:hidden; border:1px solid var(--line); border-radius:18px; background:var(--paper); box-shadow:0 20px 60px rgba(23,32,51,.12); }
+        .header { display:grid; grid-template-columns:1fr auto; gap:24px; padding:28px 32px; border-top:4px solid var(--accent); border-bottom:1px solid var(--line); }
+        .brand { margin:0; font-size:23px; letter-spacing:-.02em; }
+        .company-meta,.muted { color:var(--muted); }
+        .doc-id { min-width:230px; padding-left:24px; border-left:1px solid var(--line); }
+        .doc-kicker,.section-title,.field span { color:var(--muted); font-size:11px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; }
+        .doc-id strong { display:block; margin:5px 0; font-size:21px; }
+        .status { display:inline-flex; padding:5px 10px; border-radius:999px; background:#fff2ec; color:#b33d12; font-size:12px; font-weight:700; }
+        .content { padding:28px 32px 34px; }
+        .section-title { margin:0 0 14px; padding-bottom:10px; border-bottom:1px solid var(--line); color:var(--ink); }
+        .info-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; margin-bottom:28px; }
+        .field { min-width:0; padding:14px; border:1px solid var(--line); border-radius:12px; background:var(--soft); }
+        .field strong { display:block; margin-top:5px; overflow-wrap:anywhere; }
+        .table-wrap { overflow:auto; border:1px solid var(--line); border-radius:12px; }
+        table { width:100%; min-width:720px; border-collapse:collapse; }
+        th,td { padding:12px 14px; border-bottom:1px solid var(--line); text-align:left; }
+        th { background:var(--ink); color:#fff; font-size:11px; letter-spacing:.04em; text-transform:uppercase; }
+        td.num,th.num { text-align:right; }
+        tbody tr:last-child td { border-bottom:0; }
+        .empty { padding:28px; color:var(--muted); text-align:center; }
+        .footer-grid { display:grid; grid-template-columns:minmax(0,1fr) 310px; gap:24px; margin-top:24px; }
+        .observations,.totals { padding:18px; border:1px solid var(--line); border-radius:12px; }
+        .observations p { white-space:pre-line; }
+        .total-row { display:flex; justify-content:space-between; gap:16px; padding:8px 0; border-bottom:1px solid var(--line); }
+        .total-row:last-child { margin-top:5px; border:0; color:var(--accent); font-size:20px; font-weight:800; }
+        .public-note { padding:16px 32px; border-top:1px solid var(--line); background:var(--soft); color:var(--muted); text-align:center; font-size:12px; }
+        @media (max-width:720px) { body{padding:0}.document{border:0;border-radius:0}.header{grid-template-columns:1fr;padding:22px}.doc-id{padding:16px 0 0;border-left:0;border-top:1px solid var(--line)}.content{padding:22px}.info-grid{grid-template-columns:1fr}.footer-grid{grid-template-columns:1fr}.public-note{padding-inline:22px} }
+        @media print { body{padding:0;background:#fff}.document{width:100%;border:0;border-radius:0;box-shadow:none}.public-note{display:none} }
+    </style>
+</head>
+<body>
+<main class="document">
+    <header class="header">
+        <div>
+            <h1 class="brand">{{ company_name }}</h1>
+            <div class="company-meta">CUIT {{ company_cuit }} · {{ company_address }}{% if company_email %} · {{ company_email }}{% endif %}</div>
+        </div>
+        <div class="doc-id">
+            <span class="doc-kicker">Documento comercial</span>
+            <strong>{{ document_label }} {{ document_number }}</strong>
+            <span class="status">{{ status_label }}</span>
+        </div>
+    </header>
+    <div class="content">
+        <h2 class="section-title">Datos básicos</h2>
+        <section class="info-grid">
+            <div class="field"><span>Cliente</span><strong>{{ client_name }}</strong></div>
+            <div class="field"><span>N.º de cliente</span><strong>{{ client_number }}</strong></div>
+            <div class="field"><span>CUIT / DNI</span><strong>{{ client_document }}</strong></div>
+            <div class="field"><span>Fecha</span><strong>{{ issued_at|date:"d/m/Y H:i"|default:"-" }}</strong></div>
+            <div class="field" style="grid-column:span 2"><span>Domicilio</span><strong>{{ client_address }}</strong></div>
+        </section>
+
+        <h2 class="section-title">Productos</h2>
+        <div class="table-wrap">
+            <table>
+                <thead><tr><th>Código</th><th class="num">Cant.</th><th>Producto</th><th class="num">Precio</th><th class="num">Bonif.</th><th class="num">Importe</th></tr></thead>
+                <tbody>
+                {% for row in rows %}
+                    <tr><td>{{ row.sku }}</td><td class="num">{{ row.quantity|floatformat:3 }}</td><td>{{ row.description }}</td><td class="num">${{ row.unit_price|floatformat:2 }}</td><td class="num">{{ row.discount|floatformat:2 }}%</td><td class="num"><strong>${{ row.total|floatformat:2 }}</strong></td></tr>
+                {% empty %}
+                    <tr><td colspan="6" class="empty">Este documento no tiene productos.</td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <section class="footer-grid">
+            <div class="observations"><h2 class="section-title">Observaciones</h2><p>{{ observations|default:"Sin observaciones." }}</p></div>
+            <div class="totals">
+                <div class="total-row"><span>Subtotal</span><strong>${{ subtotal|floatformat:2 }}</strong></div>
+                <div class="total-row"><span>Descuento</span><strong>${{ discount|floatformat:2 }}</strong></div>
+                <div class="total-row"><span>Total</span><strong>${{ total|floatformat:2 }}</strong></div>
+            </div>
+        </section>
+    </div>
+    <footer class="public-note">Documento compartido por {{ company_name }}. Cualquier persona con este enlace puede consultarlo.</footer>
+</main>
+</body>
+</html>

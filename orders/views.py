@@ -272,10 +272,27 @@ def _build_order_from_cart(cart, user, notes="", status=Order.STATUS_CONFIRMED, 
     discount_percentage = pricing["discount_percentage"]
     price_list = pricing["price_list"]
     item_map = pricing["item_map"]
+    from core.models import SALES_BEHAVIOR_PEDIDO
+    from core.services.sales_documents import (
+        resolve_sales_document_seller,
+        resolve_sales_document_type,
+    )
+
+    sales_document_type = resolve_sales_document_type(
+        company=company,
+        behavior=SALES_BEHAVIOR_PEDIDO,
+        origin_channel=Order.ORIGIN_CATALOG,
+    )
+    assigned_seller = resolve_sales_document_seller(
+        sales_document_type=sales_document_type,
+        actor=user,
+        fallback=None,
+    )
     order = Order.objects.create(
         user=user,
         company=company,
         origin_channel=Order.ORIGIN_CATALOG,
+        sales_document_type=sales_document_type,
         status=status,
         priority=Order.PRIORITY_NORMAL,
         notes=(notes or "").strip(),
@@ -292,6 +309,7 @@ def _build_order_from_cart(cart, user, notes="", status=Order.STATUS_CONFIRMED, 
         saas_document_number="",
         saas_document_cae="",
         follow_up_note="",
+        assigned_to=assigned_seller,
     )
     OrderStatusHistory.objects.create(
         order=order,
@@ -813,9 +831,9 @@ def order_internal_document_print(request, doc_id):
     if copy_key not in copy_labels:
         copy_key = "original"
     copy_label = copy_labels.get(copy_key, "ORIGINAL")
-    order_items = []
-    if document.order_id:
-        order_items = list(document.order.items.select_related("product").all())
+    from core.services.sales_documents import build_internal_document_display_items
+
+    order_items = build_internal_document_display_items(document)
 
     context = {
         "document": document,

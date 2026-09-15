@@ -1,0 +1,715 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}FLEXS - Repuestos de El&aacute;sticos en Argentina{% endblock %}
+
+{% block extra_head %}
+<link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+    crossorigin=""
+>
+{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'core/css/home.css' %}?v=20260724-industrial-media">
+<link rel="stylesheet" href="{% static 'core/css/home_clamp.css' %}?v=20260914-2">
+<link rel="stylesheet" href="{% static 'core/css/clamp_dimensions.css' %}?v=20260914-1">
+{% endblock %}
+
+{% block content %}
+<!-- Hero Section -->
+<!-- Hero Section -->
+<section id="inicio" class="hero theme-{{ active_theme }} hero--clamp">
+    <div class="hero-overlay"></div>
+    <div class="container hero-content">
+        <div class="hero-text">
+            <p class="hero-eyebrow">Repuestos para transporte pesado</p>
+            <h1 class="hero-title">
+                <span class="hero-title-line"><span class="hero-title-line-inner">Repuestos FLEXS para</span></span>
+                <span class="hero-title-line text-primary"><span class="hero-title-line-inner">camiones y acoplados</span></span>
+            </h1>
+            <h2 class="hero-subtitle">Stock, fabricaci&oacute;n y atenci&oacute;n comercial para mantener su flota en movimiento.</h2>
+            <p class="hero-description">
+                Cat&aacute;logo especializado en el&aacute;sticos, suspensi&oacute;n, buloner&iacute;a y abrazaderas a medida para talleres, distribuidores y empresas.
+            </p>
+            <div class="hero-buttons">
+                <a href="{% url 'catalog' %}" class="btn btn-primary btn-lg">
+                    Ver Cat&aacute;logo
+                </a>
+                <a href="{% url 'brands_list' %}" class="btn btn-outline btn-lg">
+                    Ver por Marcas
+                </a>
+                {% if not user.is_authenticated %}
+                <a href="{% url 'account_request' %}" class="btn btn-outline btn-lg">
+                    Solicitar Cuenta
+                </a>
+                {% endif %}
+            </div>
+            <div class="hero-proof-row" aria-label="Indicadores principales">
+                <span><strong>8.000+</strong> productos</span>
+                <span><strong>30+</strong> a&ntilde;os</span>
+                <span><strong>2.000+</strong> clientes</span>
+            </div>
+        </div>
+        <div id="homeClamp" class="home-clamp" data-variant="plana" role="region" aria-label="Abrazadera FLEXS en 3D"
+             data-runtime="{% static 'core/vendor/model-viewer/model-viewer-4.3.1.min.js' %}"
+             data-model="{% static 'core/models/abrazadera-plaqueta-tuercas.glb' %}"
+             data-model-curva="{% static 'core/models/abrazadera-curva-plaqueta-tuercas.glb' %}"
+             data-model-semicurva="{% static 'core/models/abrazadera-semicurva-plaqueta-tuercas.glb' %}"
+             data-environment="{% static 'core/models/clamp-studio.hdr' %}">
+            <div class="home-clamp-heading"><span>Abrazaderas · Fabricación FLEXS</span><span>Vista 3D</span></div>
+            <div class="home-clamp-profiles" role="group" aria-label="Forma de la abrazadera" hidden>
+                <button type="button" data-profile="plana" aria-pressed="true">Plana</button>
+                <button type="button" data-profile="curva" aria-pressed="false">Curva</button>
+                <button type="button" data-profile="semicurva" aria-pressed="false">Semicurva</button>
+            </div>
+            <div class="home-clamp-stage">
+                <img class="home-clamp-poster" src="{% static 'core/img/home-hero-abrazadera.webp' %}" alt="Abrazadera curva FLEXS" width="600" height="600">
+            </div>
+            <div class="home-clamp-footer">
+                <p role="status" aria-live="polite">Explorá nuestra abrazadera desde todos los ángulos.</p>
+                <button type="button" data-load hidden>Explorar en 3D</button>
+                <div class="home-clamp-controls" role="group" aria-label="Controles de la vista 3D" hidden>
+                    <button type="button" data-zoom="out" aria-label="Alejar">−</button>
+                    <button type="button" data-reset>Restablecer vista</button>
+                    <button type="button" data-zoom="in" aria-label="Acercar">+</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="hero-scroll">
+        <a href="#nosotros">
+            <span class="scroll-text">Scroll</span>
+            <span class="scroll-arrow">&darr;</span>
+        </a>
+    </div>
+</section>
+
+<!-- Nosotros Section -->
+<section id="nosotros" class="section section-dark">
+    <div class="container">
+        <div class="section-header">
+            <span class="section-number">01</span>
+            <div>
+                <h2 class="section-title">Nosotros</h2>
+                <p class="section-subtitle">Una estructura comercial y productiva preparada para resolver compras rapidas con criterio tecnico.</p>
+            </div>
+        </div>
+        <div class="about-grid reveal-on-scroll">
+            <div class="about-content">
+                <h3>Expertos en Repuestos para Industrias de Transporte</h3>
+                <p>
+                    En <strong>Flexs</strong>, nos dedicamos a ofrecer repuestos de el&aacute;stico de alta calidad
+                    para camiones y acoplados. Nuestro amplio cat&aacute;logo y nuestro compromiso con el servicio
+                    al cliente nos convierten en la opci&oacute;n ideal para talleres, empresas con flotas de
+                    veh&iacute;culos y distribuidoras.
+                </p>
+                <p>
+                    Nuestro equipo dedicado est&aacute; siempre disponible para ayudarte a encontrar las piezas
+                    adecuadas y garantizar una experiencia de compra sin problemas, desde el pedido hasta
+                    la entrega.
+                </p>
+                <div class="about-cta">
+                    <p class="cta-text">
+                        <strong>Estamos esperando su mensaje para conocerlo y brindarle una lista de precios a su
+                            medida</strong>
+                    </p>
+                    <a href="#contacto" class="btn btn-primary">Contactanos</a>
+                </div>
+            </div>
+            <div class="about-stats">
+                <div class="stat-card" data-tilt>
+                    <span class="stat-number">8000+</span>
+                    <span class="stat-label">Productos</span>
+                </div>
+                <div class="stat-card" data-tilt>
+                    <span class="stat-number">2000+</span>
+                    <span class="stat-label">Clientes</span>
+                </div>
+                <div class="stat-card" data-tilt>
+                    <span class="stat-number">30+</span>
+                    <span class="stat-label">A&ntilde;os de experiencia</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Servicios Section -->
+<section id="servicios" class="section">
+    <div class="container">
+        <div class="section-header">
+            <span class="section-number">02</span>
+            <div>
+                <h2 class="section-title">&iquest;C&oacute;mo podemos ayudarlo?</h2>
+                <p class="section-subtitle">Atencion comercial directa, fabricacion propia y un catalogo amplio para operar sin friccion.</p>
+            </div>
+        </div>
+        <div class="services-grid reveal-on-scroll">
+            <div class="service-card" data-tilt>
+                <figure class="service-media">
+                    <img
+                        src="{% static 'core/img/home/service-stock.webp' %}"
+                        alt="Dep&oacute;sito organizado con repuestos para suspensi&oacute;n"
+                        loading="lazy"
+                        decoding="async"
+                    >
+                </figure>
+                <div class="service-card-copy">
+                    <h3>Amplio Cat&aacute;logo, Amplio Stock</h3>
+                    <p>
+                        M&aacute;s de 8.000 productos disponibles con stock permanente para satisfacer
+                        todas sus necesidades de repuestos.
+                    </p>
+                </div>
+            </div>
+            <div class="service-card" data-tilt>
+                <figure class="service-media">
+                    <img
+                        src="{% static 'core/img/home/service-manufacturing.webp' %}?v=20260724-correct-plate-v2"
+                        alt="Abrazadera fabricada con terminaci&oacute;n de precisi&oacute;n"
+                        loading="lazy"
+                        decoding="async"
+                    >
+                </figure>
+                <div class="service-card-copy">
+                    <h3>Fabricaci&oacute;n Propia</h3>
+                    <p>
+                        Producimos nuestras propias abrazaderas U-bolt con la m&aacute;s alta calidad
+                        y especificaciones precisas.
+                    </p>
+                </div>
+            </div>
+            <div class="service-card" data-tilt>
+                <figure class="service-media">
+                    <img
+                        src="{% static 'core/img/home/service-delivery.webp' %}"
+                        alt="Log&iacute;stica preparada para el despacho de repuestos"
+                        loading="lazy"
+                        decoding="async"
+                    >
+                </figure>
+                <div class="service-card-copy">
+                    <h3>Entregas R&aacute;pidas y Atenci&oacute;n Personalizada</h3>
+                    <p>
+                        Env&iacute;os a todo el pa&iacute;s con rapidez y un equipo dedicado a resolver
+                        todas sus consultas.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Productos Section -->
+<section id="productos" class="section section-dark">
+    <div class="container">
+        <div class="section-header">
+            <span class="section-number">03</span>
+            <div>
+                <h2 class="section-title">Nuestros Productos</h2>
+                <p class="section-subtitle">Familias clave del catalogo con foco en transporte, suspension y reposicion cotidiana.</p>
+            </div>
+        </div>
+        <div class="products-grid reveal-on-scroll">
+            <div class="product-category-card">
+                <div class="category-icon" aria-hidden="true">
+                    <svg viewBox="0 0 64 64">
+                        <path d="M8 39c12 13 36 13 48 0M11 31c10 11 32 11 42 0M15 23c8 8 26 8 34 0"/>
+                        <path d="M18 24v23M46 24v23"/>
+                    </svg>
+                </div>
+                <h4>El&aacute;sticos</h4>
+            </div>
+            <div class="product-category-card">
+                <div class="category-icon" aria-hidden="true">
+                    <svg viewBox="0 0 64 64">
+                        <circle cx="32" cy="32" r="18"/>
+                        <circle cx="32" cy="32" r="8"/>
+                        <path d="M16 20l-5-5M48 20l5-5M16 44l-5 5M48 44l5 5"/>
+                    </svg>
+                </div>
+                <h4>Bujes</h4>
+            </div>
+            <div class="product-category-card">
+                <div class="category-icon" aria-hidden="true">
+                    <svg viewBox="0 0 64 64">
+                        <path d="M12 48h40V28L40 35V24l-12 8V20l-16 10z"/>
+                        <path d="M20 48V37h8v11M38 42h6M38 35h6M16 16h9"/>
+                    </svg>
+                </div>
+                <h4>Fundici&oacute;n</h4>
+            </div>
+            <div class="product-category-card">
+                <div class="category-icon" aria-hidden="true">
+                    <svg viewBox="0 0 64 64">
+                        <circle cx="17" cy="32" r="7"/>
+                        <circle cx="47" cy="32" r="7"/>
+                        <path d="M24 32h16M13 22v-6M51 22v-6M13 48v-6M51 48v-6"/>
+                    </svg>
+                </div>
+                <h4>Pernos</h4>
+            </div>
+            <div class="product-category-card">
+                <div class="category-icon" aria-hidden="true">
+                    <svg viewBox="0 0 64 64">
+                        <path d="M18 12h18l7 7-7 7H18l-7-7z"/>
+                        <path d="M27 26v27M20 33h14M20 40h14M20 47h14"/>
+                    </svg>
+                </div>
+                <h4>Buloner&iacute;a</h4>
+            </div>
+            <div class="product-category-card featured">
+                <div class="category-icon" aria-hidden="true">
+                    <svg viewBox="0 0 64 64">
+                        <path d="M16 48V23c0-9 7-15 16-15s16 6 16 15v25"/>
+                        <path d="M11 48h10M43 48h10M13 54h6M45 54h6"/>
+                    </svg>
+                </div>
+                <h4>Abrazaderas</h4>
+                <span class="featured-badge">Fabricaci&oacute;n propia</span>
+            </div>
+            <div class="product-category-card">
+                <div class="category-icon" aria-hidden="true">
+                    <svg viewBox="0 0 64 64">
+                        <path d="M20 15h24M17 23h30M17 41h30M20 49h24"/>
+                        <path d="M20 23c-5 6-5 12 0 18h24c5-6 5-12 0-18z"/>
+                        <path d="M26 31h12M26 36h12"/>
+                    </svg>
+                </div>
+                <h4>Suspensi&oacute;n Neum&aacute;tica</h4>
+            </div>
+            <div class="product-category-card">
+                <div class="category-icon" aria-hidden="true">
+                    <svg viewBox="0 0 64 64">
+                        <path d="M10 24h44l-5 8H15zM14 38h36l-4 8H18z"/>
+                        <path d="M21 18h22M24 52h16"/>
+                    </svg>
+                </div>
+                <h4>Insertos de El&aacute;stico</h4>
+            </div>
+            <div class="product-category-card">
+                <div class="category-icon" aria-hidden="true">
+                    <svg viewBox="0 0 64 64">
+                        <path d="M8 29h48M14 29l8 15h20l8-15"/>
+                        <circle cx="32" cy="48" r="6"/>
+                        <path d="M32 12v30M25 12h14"/>
+                    </svg>
+                </div>
+                <h4>Balancines</h4>
+            </div>
+        </div>
+        <div class="products-cta">
+            <a href="{% url 'catalog' %}" class="btn btn-primary btn-lg">Ver Cat&aacute;logo Completo</a>
+        </div>
+    </div>
+</section>
+
+<!-- Manual de Medición Section -->
+<section id="manual-medicion" class="section section-dark">
+    <div class="container">
+        <div class="section-header">
+            <span class="section-number">04</span>
+            <div>
+                <h2 class="section-title">Manual de Medici&oacute;n</h2>
+                <p class="section-subtitle">Aprenda a tomar las dimensiones correctas de sus abrazaderas para evitar errores de fabricaci&oacute;n.</p>
+            </div>
+        </div>
+        <div class="measurement-manual-grid reveal-on-scroll">
+            <div class="measurement-manual-visual">
+                <div class="manual-preview-svg-container">
+                    <svg id="manualPreviewSvg" viewBox="0 0 400 400" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <!-- Grid lines inside SVG for CAD feel -->
+                        <line x1="40" y1="0" x2="40" y2="400" stroke="rgba(255, 107, 53, 0.04)" stroke-width="1" />
+                        <line x1="120" y1="0" x2="120" y2="400" stroke="rgba(255, 107, 53, 0.04)" stroke-width="1" />
+                        <line x1="200" y1="0" x2="200" y2="400" stroke="rgba(255, 107, 53, 0.04)" stroke-width="1" stroke-dasharray="4,4" />
+                        <line x1="280" y1="0" x2="280" y2="400" stroke="rgba(255, 107, 53, 0.04)" stroke-width="1" />
+                        <line x1="360" y1="0" x2="360" y2="400" stroke="rgba(255, 107, 53, 0.04)" stroke-width="1" />
+                        
+                        <line x1="0" y1="40" x2="400" y2="40" stroke="rgba(255, 107, 53, 0.04)" stroke-width="1" />
+                        <line x1="0" y1="120" x2="400" y2="120" stroke="rgba(255, 107, 53, 0.04)" stroke-width="1" />
+                        <line x1="0" y1="200" x2="400" y2="200" stroke="rgba(255, 107, 53, 0.04)" stroke-width="1" stroke-dasharray="4,4" />
+                        <line x1="0" y1="280" x2="400" y2="280" stroke="rgba(255, 107, 53, 0.04)" stroke-width="1" />
+                        <line x1="0" y1="360" x2="400" y2="360" stroke="rgba(255, 107, 53, 0.04)" stroke-width="1" />
+
+                        <!-- Center lines of the part -->
+                        <line x1="200" y1="20" x2="200" y2="360" stroke="rgba(255, 107, 53, 0.25)" stroke-width="1.2" stroke-dasharray="10,5,2,5" />
+                        <line x1="40" y1="80" x2="360" y2="80" stroke="rgba(255, 107, 53, 0.25)" stroke-width="1.2" stroke-dasharray="10,5,2,5" />
+
+                        <!-- U-bolt body -->
+                        <path class="u-bolt-body" d="M 130 350 L 130 80 A 70 70 0 0 1 270 80 L 270 350" stroke-width="20" stroke-linecap="butt" fill="none" />
+                        
+                        <!-- Thread overlays -->
+                        <g class="u-bolt-threads">
+                            <path class="u-bolt-thread" d="M 120 230 L 140 228" stroke-width="1.5" />
+                            <path class="u-bolt-thread" d="M 120 238 L 140 236" stroke-width="1.5" />
+                            <path class="u-bolt-thread" d="M 120 246 L 140 244" stroke-width="1.5" />
+                            <path class="u-bolt-thread" d="M 120 254 L 140 252" stroke-width="1.5" />
+                            <path class="u-bolt-thread" d="M 120 262 L 140 260" stroke-width="1.5" />
+                            <path class="u-bolt-thread" d="M 120 270 L 140 268" stroke-width="1.5" />
+                            <path class="u-bolt-thread" d="M 120 278 L 140 276" stroke-width="1.5" />
+                            <path class="u-bolt-thread" d="M 120 286 L 140 284" stroke-width="1.5" />
+                            <path class="u-bolt-thread" d="M 120 296 L 140 294" stroke-width="1.5" />
+                            <path class="u-bolt-thread" d="M 120 306 L 140 304" stroke-width="1.5" />
+                            
+                            <path class="u-bolt-thread" d="M 260 230 L 280 228" stroke-width="1.5" />
+                            <path class="u-bolt-thread" d="M 260 238 L 280 236" stroke-width="1.5" />
+                            <path class="u-bolt-thread" d="M 260 246 L 280 244" stroke-width="1.5" />
+                            <path class="u-bolt-thread" d="M 260 254 L 280 252" stroke-width="1.5" />
+                            <path class="u-bolt-thread" d="M 260 262 L 280 260" stroke-width="1.5" />
+                            <path class="u-bolt-thread" d="M 260 270 L 280 268" stroke-width="1.5" />
+                            <path class="u-bolt-thread" d="M 260 278 L 280 276" stroke-width="1.5" />
+                            <path class="u-bolt-thread" d="M 260 286 L 280 284" stroke-width="1.5" />
+                            <path class="u-bolt-thread" d="M 260 296 L 280 294" stroke-width="1.5" />
+                            <path class="u-bolt-thread" d="M 260 306 L 280 304" stroke-width="1.5" />
+                        </g>
+
+                        <!-- Assembly Plate -->
+                        <rect class="assembly-plate" x="90" y="310" width="220" height="18" rx="3" stroke-width="2" />
+                        <circle cx="130" cy="319" r="3" fill="var(--color-primary, #FF6B35)" />
+                        <circle cx="270" cy="319" r="3" fill="var(--color-primary, #FF6B35)" />
+
+                        <!-- Nuts -->
+                        <rect class="assembly-nut" x="113" y="328" width="34" height="15" rx="1.5" stroke-width="1.5" />
+                        <rect class="assembly-nut" x="253" y="328" width="34" height="15" rx="1.5" stroke-width="1.5" />
+                        
+                        <!-- Dimension line: Width (B) inside faces -->
+                        <line x1="140" y1="180" x2="260" y2="180" stroke="#FF6B35" stroke-width="1.2" />
+                        <path d="M 140 180 L 146 177 L 146 183 Z" fill="#FF6B35" />
+                        <path d="M 260 180 L 254 177 L 254 183 Z" fill="#FF6B35" />
+                        <text x="200" y="172" fill="#FF6B35" font-family="monospace" font-size="10" font-weight="bold" text-anchor="middle">Ancho (B)</text>
+ 
+                         <!-- Dimension line: Length (C) inner ceiling to leg end -->
+                        <line x1="65" y1="20" x2="65" y2="350" stroke="#FF6B35" stroke-width="1.2" />
+                        <path d="M 65 20 L 62 26 L 68 26 Z" fill="#FF6B35" />
+                        <path d="M 65 350 L 62 344 L 68 344 Z" fill="#FF6B35" />
+                        <line x1="55" y1="20" x2="140" y2="20" stroke="#FF6B35" stroke-width="0.8" stroke-dasharray="3,3" />
+                        <line x1="55" y1="350" x2="130" y2="350" stroke="#FF6B35" stroke-width="0.8" stroke-dasharray="3,3" />
+                        <text x="52" y="185" fill="#FF6B35" font-family="monospace" font-size="10" font-weight="bold" text-anchor="middle" transform="rotate(-90 52 185)">Largo (C)</text>
+                          <!-- Dimension line: Diameter (A) -->
+                        <path d="M 270 200 L 310 170 L 350 170" stroke="#FF6B35" stroke-width="1.2" fill="none" />
+                        <path d="M 270 200 L 277 198 L 273 193 Z" fill="#FF6B35" />
+                        <text x="315" y="163" fill="#FF6B35" font-family="monospace" font-size="9" font-weight="bold" text-anchor="start">Di&aacute;m. (A)</text>
+
+                        <!-- Dimension line: Thread Length (D) -->
+                        <line x1="320" y1="230" x2="320" y2="350" stroke="#FF6B35" stroke-width="1.2" />
+                        <path d="M 320 230 L 317 236 L 323 236 Z" fill="#FF6B35" />
+                        <path d="M 320 350 L 317 344 L 323 344 Z" fill="#FF6B35" />
+                        <line x1="260" y1="230" x2="330" y2="230" stroke="#FF6B35" stroke-width="0.8" stroke-dasharray="3,3" />
+                        <line x1="260" y1="350" x2="330" y2="350" stroke="#FF6B35" stroke-width="0.8" stroke-dasharray="3,3" />
+                        <text x="325" y="293" fill="#FF6B35" font-family="monospace" font-size="9" font-weight="bold" text-anchor="start">Rosca (D)</text>
+                    </svg>
+                </div>
+            </div>
+            <div class="measurement-manual-info">
+                <h3>&iquest;C&oacute;mo se mide correctamente una abrazadera?</h3>
+                <p>
+                    Evite devoluciones y demoras por errores en las cotas. La fabricaci&oacute;n de abrazaderas U-bolt a medida requiere de 4 medidas fundamentales tomadas con exactitud:
+                </p>
+                <ul class="manual-features-list">
+                    <li>
+                        <strong>Di&aacute;metro de Varilla (A):</strong> El espesor del acero, generalmente expresado en fracciones de pulgada (ej: 1/2", 9/16").
+                    </li>
+                    <li>
+                        <strong>Ancho Interior o Luz &Uacute;til (B):</strong> Se mide <em>siempre</em> entre las caras internas de las patas, representando el di&aacute;metro del tubo o eje.
+                    </li>
+                    <li>
+                        <strong>Largo &Uacute;til (C):</strong> Se toma desde la curva interna (apoyo) hasta el extremo final roscado.
+                    </li>
+                    <li>
+                        <strong>Largo de Rosca (D):</strong> La longitud de la porción roscada en el extremo de las patas, asegurando el correcto recorrido para el apriete de las tuercas.
+                    </li>
+                </ul>
+                <p class="manual-teaser-text">
+                    En nuestra gu&iacute;a completa encontrar&aacute; un <strong>simulador interactivo 2D</strong> para abrazaderas Curvas, Semicurvas y Planas, adem&aacute;s de tablas de equivalencia en mil&iacute;metros.
+                </p>
+                <div class="manual-actions">
+                    <a href="{% url 'catalog_how_to_measure' %}" class="btn btn-primary btn-lg">Ver Manual de Medici&oacute;n</a>
+                    <a href="{% url 'catalog_clamp_request' %}" class="btn btn-outline btn-lg">Cotizar a Medida</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Contacto Section -->
+<section id="contacto" class="section">
+    <div class="container">
+        <div class="section-header">
+            <span class="section-number">05</span>
+            <div>
+                <h2 class="section-title">Contacto</h2>
+                <p class="section-subtitle">Si ya sabes lo que necesitas, te ayudamos a convertir esa busqueda en un pedido concreto.</p>
+            </div>
+        </div>
+        <div class="contact-grid reveal-on-scroll">
+            <div class="contact-info">
+                <div class="contact-item">
+                    <span class="contact-icon" aria-hidden="true">
+                        <svg viewBox="0 0 64 64">
+                            <path d="M32 56s18-17 18-32a18 18 0 1 0-36 0c0 15 18 32 18 32z"/>
+                            <circle cx="32" cy="24" r="6"/>
+                        </svg>
+                    </span>
+                    <div>
+                        <h4>Direcci&oacute;n</h4>
+                        <p>{{ site_settings.company_address }}</p>
+                    </div>
+                </div>
+                <div class="contact-item">
+                    <span class="contact-icon" aria-hidden="true">
+                        <svg viewBox="0 0 64 64">
+                            <path d="M18 10l9 12-6 7c5 9 10 14 19 19l7-6 12 9-5 9c-2 3-6 4-10 2C22 54 10 42 2 20c-2-4-1-8 2-10z" transform="translate(2 -4) scale(.9)"/>
+                        </svg>
+                    </span>
+                    <div>
+                        <h4>Tel&eacute;fonos</h4>
+                        <p>
+                            <a href="tel:{{ site_settings.company_phone }}">{{ site_settings.company_phone }}</a><br>
+                            {% if site_settings.company_phone_2 %}
+                            <a href="tel:{{ site_settings.company_phone_2 }}">{{ site_settings.company_phone_2 }}</a>
+                            {% endif %}
+                        </p>
+                    </div>
+                </div>
+                <div class="contact-item">
+                    <span class="contact-icon" aria-hidden="true">
+                        <svg viewBox="0 0 64 64">
+                            <rect x="8" y="14" width="48" height="36" rx="5"/>
+                            <path d="M10 18l22 18 22-18"/>
+                        </svg>
+                    </span>
+                    <div>
+                        <h4>Email</h4>
+                        <p><a href="mailto:{{ site_settings.company_email }}">{{ site_settings.company_email }}</a></p>
+                    </div>
+                </div>
+            </div>
+            <div class="contact-actions">
+                <h3>&iquest;Listo para empezar?</h3>
+                <p>Solicit&aacute; tu cuenta y acced&eacute; a precios especiales para tu negocio.</p>
+                <div class="contact-buttons">
+                    {% if user.is_authenticated %}
+                    <a href="{% url 'catalog' %}" class="btn btn-primary btn-lg">Ir al Cat&aacute;logo</a>
+                    {% else %}
+                    <a href="{% url 'account_request' %}" class="btn btn-primary btn-lg">Solicitar Cuenta</a>
+                    <a href="{% url 'login' %}" class="btn btn-outline btn-lg">Iniciar Sesi&oacute;n</a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        <div class="contact-map-wrapper reveal-on-scroll">
+            <h3 class="contact-map-title">Ubicaci&oacute;n</h3>
+            <div
+                id="contactMap"
+                class="contact-map-frame"
+                data-address="{{ site_settings.company_address }}"
+                data-company="FLEXS"
+                style="height: 360px; min-height: 360px;">
+            </div>
+            <p id="contactMapStatus" class="contact-map-hint">Cargando mapa interactivo...</p>
+            <div class="contact-map-links">
+                <a
+                    class="contact-map-link"
+                    href="https://www.google.com/maps/search/?api=1&query={{ site_settings.company_address|urlencode }}"
+                    target="_blank"
+                    rel="noopener noreferrer">
+                    Abrir en Google Maps
+                </a>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'core/js/home_clamp.js' %}?v=20260914-3" defer></script>
+<script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+    crossorigin="">
+</script>
+<script>
+    (function () {
+        const mapElement = document.getElementById('contactMap');
+        const statusElement = document.getElementById('contactMapStatus');
+        if (!mapElement || typeof L === 'undefined') return;
+
+        const rawAddress = (mapElement.dataset.address || '').trim();
+        const company = (mapElement.dataset.company || 'FLEXS').trim();
+        const fallbackCoords = [-34.5745, -58.5348];
+
+        function normalizeAddress(addressValue) {
+            let normalized = String(addressValue || '').trim();
+            if (!normalized) {
+                return 'San Martin, Buenos Aires, Argentina';
+            }
+            normalized = normalized
+                .replace(/\bargentin\b/gi, 'Argentina')
+                .replace(/\bbs\.?\s*as\.?\b/gi, 'Buenos Aires')
+                .replace(/\s+/g, ' ')
+                .trim();
+
+            if (!/argentina/i.test(normalized)) {
+                normalized += ', Argentina';
+            }
+            return normalized;
+        }
+
+        function buildAddressVariants(addressValue) {
+            const variants = [];
+
+            function addVariant(value) {
+                const clean = String(value || '')
+                    .replace(/\s+/g, ' ')
+                    .replace(/\s+,/g, ',')
+                    .replace(/,+/g, ',')
+                    .trim()
+                    .replace(/^,|,$/g, '');
+                if (clean && !variants.includes(clean)) {
+                    variants.push(clean);
+                }
+            }
+
+            const base = normalizeAddress(addressValue);
+            addVariant(base);
+            addVariant(base.replace(/\([^)]*\)/g, ' '));
+            addVariant(base.replace(/\./g, ' ').replace(/\([^)]*\)/g, ' '));
+            addVariant(base.replace(/,\s*argentina\b/i, '') + ', Argentina');
+
+            if (/indalecio\s+gomez\s*4215/i.test(base)) {
+                addVariant('Indalecio Gomez 4215, Villa Lynch, San Martin, Buenos Aires, Argentina');
+                addVariant('Indalecio Gomez 4215, San Martin, Buenos Aires, Argentina');
+                addVariant('Indalecio Gomez 4215, General San Martin, Buenos Aires, Argentina');
+                addVariant('Indalecio Gomez 4215, Villa Lynch, Partido de General San Martin, Buenos Aires, Argentina');
+                addVariant('Indalecio Gomez 4215, Villa Lynch, Buenos Aires, Argentina');
+            }
+
+            return variants.slice(0, 8);
+        }
+
+        const address = normalizeAddress(rawAddress);
+        const addressVariants = buildAddressVariants(rawAddress);
+
+        const map = L.map(mapElement, {
+            scrollWheelZoom: true,
+            zoomControl: true,
+        }).setView(fallbackCoords, 13);
+
+        setTimeout(function () {
+            map.invalidateSize();
+        }, 100);
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '&copy; OpenStreetMap',
+        }).addTo(map);
+
+        const marker = L.marker(fallbackCoords).addTo(map);
+        marker.bindPopup('<strong>' + company + '</strong><br>' + address).openPopup();
+
+        function setStatus(text, hasError) {
+            if (!statusElement) return;
+            statusElement.textContent = text;
+            statusElement.classList.toggle('is-error', Boolean(hasError));
+        }
+
+        function extractNominatimCoords(results) {
+            if (!Array.isArray(results) || !results.length) return null;
+            const lat = Number(results[0].lat);
+            const lon = Number(results[0].lon);
+            if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+            return [lat, lon];
+        }
+
+        function extractPhotonCoords(payload) {
+            const features = payload && payload.features;
+            if (!Array.isArray(features) || !features.length) return null;
+            const coords = features[0] && features[0].geometry && features[0].geometry.coordinates;
+            if (!Array.isArray(coords) || coords.length < 2) return null;
+            const lon = Number(coords[0]);
+            const lat = Number(coords[1]);
+            if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+            return [lat, lon];
+        }
+
+        function applyResolvedLocation(coords) {
+            map.setView(coords, 16);
+            marker.setLatLng(coords);
+            marker.bindPopup('<strong>' + company + '</strong><br>' + address).openPopup();
+            setTimeout(function () {
+                map.invalidateSize();
+            }, 100);
+            setStatus('Ubicacion exacta encontrada.');
+        }
+
+        function getKnownAddressCoords(addressValue) {
+            const normalized = String(addressValue || '').toLowerCase();
+            if (/indalecio\s+g[oó]mez/.test(normalized) && /\b4215\b/.test(normalized)) {
+                return [-34.5953311, -58.5255660];
+            }
+            return null;
+        }
+
+        function geocodeWithNominatim(query) {
+            return fetch(
+                'https://nominatim.openstreetmap.org/search?format=json&limit=1&addressdetails=1&countrycodes=ar&q=' + encodeURIComponent(query),
+                { headers: { 'Accept': 'application/json' } }
+            )
+                .then(function (response) {
+                    if (!response.ok) return null;
+                    return response.json();
+                })
+                .then(extractNominatimCoords)
+                .catch(function () {
+                    return null;
+                });
+        }
+
+        function geocodeWithPhoton(query) {
+            return fetch(
+                'https://photon.komoot.io/api/?limit=1&lang=es&q=' + encodeURIComponent(query),
+                { headers: { 'Accept': 'application/json' } }
+            )
+                .then(function (response) {
+                    if (!response.ok) return null;
+                    return response.json();
+                })
+                .then(extractPhotonCoords)
+                .catch(function () {
+                    return null;
+                });
+        }
+
+        setStatus('Mostrando ubicacion aproximada. Buscando ubicacion exacta...');
+
+        (async function resolveExactLocation() {
+            const knownCoords = getKnownAddressCoords(address);
+            if (knownCoords) {
+                applyResolvedLocation(knownCoords);
+                return;
+            }
+
+            for (const candidate of addressVariants) {
+                const coords = await geocodeWithNominatim(candidate);
+                if (coords) {
+                    applyResolvedLocation(coords);
+                    return;
+                }
+            }
+
+            for (const candidate of addressVariants) {
+                const coords = await geocodeWithPhoton(candidate);
+                if (coords) {
+                    applyResolvedLocation(coords);
+                    return;
+                }
+            }
+
+            setStatus('No se pudo obtener ubicacion exacta. Mostrando aproximada.', true);
+        })();
+    })();
+</script>
+{% endblock %}

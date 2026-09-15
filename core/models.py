@@ -4,6 +4,7 @@ Core app models - site-wide settings, analytics, and operation logs.
 import secrets
 import uuid
 import logging
+from decimal import Decimal
 from urllib.parse import urlsplit
 
 from django.db import models, transaction
@@ -179,6 +180,28 @@ SALES_DEFAULT_USER_CHOICES = [
     (SALES_DEFAULT_USER_CURRENT, "El usuario que agrega la venta"),
     (SALES_DEFAULT_USER_SPECIFIC, "Usuario/Vendedor especifico"),
     (SALES_DEFAULT_USER_NONE, "Sin especificar"),
+]
+
+SALES_CURRENCY_ARS = "ARS"
+SALES_CURRENCY_USD = "USD"
+SALES_CURRENCY_EUR = "EUR"
+SALES_CURRENCY_CHOICES = [
+    (SALES_CURRENCY_ARS, "Pesos argentinos ($)"),
+    (SALES_CURRENCY_USD, "Dolares estadounidenses (USD)"),
+    (SALES_CURRENCY_EUR, "Euros (EUR)"),
+]
+
+DOCUMENT_SITUATION_NOT_APPLICABLE = "not_applicable"
+DOCUMENT_SITUATION_PENDING = "pending_review"
+DOCUMENT_SITUATION_APPROVED = "approved"
+DOCUMENT_SITUATION_OBSERVED = "observed"
+DOCUMENT_SITUATION_REJECTED = "rejected"
+DOCUMENT_SITUATION_CHOICES = [
+    (DOCUMENT_SITUATION_NOT_APPLICABLE, "No aplica"),
+    (DOCUMENT_SITUATION_PENDING, "Pendiente de revision"),
+    (DOCUMENT_SITUATION_APPROVED, "Aprobada"),
+    (DOCUMENT_SITUATION_OBSERVED, "Observada"),
+    (DOCUMENT_SITUATION_REJECTED, "Rechazada"),
 ]
 
 SALES_PRINT_BASE_DEFAULT = "default"
@@ -702,6 +725,23 @@ class SalesDocumentType(models.Model):
         verbose_name="Modo de facturacion",
     )
     use_document_situation = models.BooleanField(default=False, verbose_name="Usa funcionalidad de situacion")
+    currency_code = models.CharField(
+        max_length=3,
+        choices=SALES_CURRENCY_CHOICES,
+        default=SALES_CURRENCY_ARS,
+        verbose_name="Moneda",
+    )
+    default_exchange_rate = models.DecimalField(
+        max_digits=14,
+        decimal_places=6,
+        default=1,
+        verbose_name="Tipo de cambio predeterminado",
+    )
+    rules_version = models.PositiveIntegerField(
+        default=1,
+        editable=False,
+        verbose_name="Version de reglas",
+    )
     internal_doc_type = models.CharField(
         max_length=3,
         blank=True,
@@ -780,6 +820,10 @@ class SalesDocumentType(models.Model):
         if self.internal_doc_type and self.billing_mode != SALES_BILLING_MODE_INTERNAL_DOCUMENT:
             # Allow storing the mapping for print/compatibility without blocking.
             pass
+        if self.currency_code == SALES_CURRENCY_ARS:
+            self.default_exchange_rate = Decimal("1.000000")
+        elif Decimal(self.default_exchange_rate or 0) <= 0:
+            raise ValidationError("El tipo de cambio debe ser mayor que cero para moneda extranjera.")
 
     def save(self, *args, **kwargs):
         if not self.code:
@@ -792,6 +836,57 @@ class SalesDocumentType(models.Model):
             self.code = candidate
         if not kwargs.get("raw"):
             self.clean()
+        if self.pk and not kwargs.get("raw"):
+            tracked_fields = {
+                "enabled",
+                "generate_stock_movement",
+                "generate_account_movement",
+                "group_equal_products",
+                "default_warehouse_id",
+                "prioritize_default_warehouse",
+                "default_sales_user_id",
+                "default_sales_user_mode",
+                "use_document_situation",
+                "currency_code",
+                "default_exchange_rate",
+                "document_behavior",
+                "billing_mode",
+                "internal_doc_type",
+                "fiscal_doc_type",
+                "point_of_sale_id",
+                "letter",
+            }
+            identity_fields = {
+                "code",
+                "letter",
+                "point_of_sale_id",
+                "document_behavior",
+                "billing_mode",
+                "internal_doc_type",
+                "fiscal_doc_type",
+            }
+            previous = type(self).objects.filter(pk=self.pk).values(
+                *(tracked_fields | identity_fields | {"rules_version"})
+            ).first()
+            if previous:
+                changed_identity = {
+                    field for field in identity_fields if previous.get(field) != getattr(self, field)
+                }
+                if changed_identity and (
+                    self.internal_documents.exists() or self.fiscal_documents.exists()
+                ):
+                    raise ValidationError(
+                        "La identidad de un tipo que ya tiene comprobantes no puede modificarse. "
+                        "Crea un tipo nuevo para cambiar letra, punto de venta, comportamiento o modo fiscal."
+                    )
+                changed_rules = {
+                    field for field in tracked_fields if previous.get(field) != getattr(self, field)
+                }
+                if changed_rules:
+                    self.rules_version = int(previous.get("rules_version") or 1) + 1
+                    update_fields = kwargs.get("update_fields")
+                    if update_fields is not None:
+                        kwargs["update_fields"] = set(update_fields) | {"rules_version"}
         super().save(*args, **kwargs)
 
     @property
@@ -993,6 +1088,8 @@ FISCAL_DOCUMENT_PROTECTED_FIELDS = {
     "exchange_rate",
     "sales_document_type",
     "sales_document_type_id",
+    "sales_rules_snapshot",
+    "sales_rules_version",
     "series",
     "series_id",
     "fiscal_snapshot",
@@ -1265,6 +1362,40 @@ class FiscalDocument(models.Model):
         blank=True,
         related_name="fiscal_documents",
         verbose_name="Tipo de documento comercial",
+    )
+    sales_rules_snapshot = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name="Reglas comerciales congeladas",
+    )
+    sales_rules_version = models.PositiveIntegerField(
+        default=1,
+        verbose_name="Version de reglas comerciales",
+    )
+    commercial_situation = models.CharField(
+        max_length=24,
+        choices=DOCUMENT_SITUATION_CHOICES,
+        default=DOCUMENT_SITUATION_NOT_APPLICABLE,
+        verbose_name="Situacion comercial",
+    )
+    commercial_situation_note = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        verbose_name="Observacion de situacion",
+    )
+    commercial_situation_updated_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="Situacion actualizada",
+    )
+    commercial_situation_updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="fiscal_document_situations_updated",
+        verbose_name="Situacion actualizada por",
     )
     fiscal_snapshot = models.JSONField(
         default=dict,
@@ -1547,6 +1678,9 @@ class FiscalDocument(models.Model):
 
     @property
     def commercial_type_label(self):
+        snapshot_name = str((self.sales_rules_snapshot or {}).get("type_name") or "").strip()
+        if snapshot_name:
+            return snapshot_name
         if self.sales_document_type_id:
             return self.sales_document_type.name
         return self.get_doc_type_display()
@@ -1555,6 +1689,15 @@ class FiscalDocument(models.Model):
     def display_number(self):
         if self.number is None:
             return self.external_number or "-"
+        snapshot = self.sales_rules_snapshot or {}
+        if snapshot:
+            point = str(snapshot.get("point_of_sale_number") or "").strip()
+            letter = str(snapshot.get("letter") or "").strip()
+            sequence = str(self.number).zfill(8)
+            if point:
+                return f"{letter}{point.zfill(5)}-{sequence}"
+            if letter:
+                return f"{letter}-{sequence}"
         if self.sales_document_type_id:
             return self.sales_document_type.format_number(number=self.number)
         point = getattr(self.point_of_sale, "number", "") or ""
@@ -2123,6 +2266,40 @@ class InternalDocument(models.Model):
         related_name="internal_documents",
         verbose_name="Tipo de documento comercial",
     )
+    sales_rules_snapshot = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name="Reglas comerciales congeladas",
+    )
+    sales_rules_version = models.PositiveIntegerField(
+        default=1,
+        verbose_name="Version de reglas comerciales",
+    )
+    commercial_situation = models.CharField(
+        max_length=24,
+        choices=DOCUMENT_SITUATION_CHOICES,
+        default=DOCUMENT_SITUATION_NOT_APPLICABLE,
+        verbose_name="Situacion comercial",
+    )
+    commercial_situation_note = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        verbose_name="Observacion de situacion",
+    )
+    commercial_situation_updated_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="Situacion actualizada",
+    )
+    commercial_situation_updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="internal_document_situations_updated",
+        verbose_name="Situacion actualizada por",
+    )
     is_cancelled = models.BooleanField(default=False, verbose_name="Anulado")
     cancelled_at = models.DateTimeField(null=True, blank=True, verbose_name="Fecha anulacion")
     cancel_reason = models.CharField(max_length=255, blank=True, verbose_name="Motivo anulacion")
@@ -2145,6 +2322,9 @@ class InternalDocument(models.Model):
 
     @property
     def commercial_type_label(self):
+        snapshot_name = str((self.sales_rules_snapshot or {}).get("type_name") or "").strip()
+        if snapshot_name:
+            return snapshot_name
         if self.sales_document_type_id:
             return self.sales_document_type.name
         return self.get_doc_type_display()
@@ -2153,6 +2333,15 @@ class InternalDocument(models.Model):
     def display_number(self):
         if self.number is None:
             return "-"
+        snapshot = self.sales_rules_snapshot or {}
+        if snapshot:
+            point = str(snapshot.get("point_of_sale_number") or "").strip()
+            letter = str(snapshot.get("letter") or "").strip()
+            sequence = str(self.number).zfill(8)
+            if point:
+                return f"{letter}{point.zfill(5)}-{sequence}"
+            if letter:
+                return f"{letter}-{sequence}"
         if self.sales_document_type_id:
             return self.sales_document_type.format_number(number=self.number)
         return f"{self.number:07d}"

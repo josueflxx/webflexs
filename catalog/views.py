@@ -528,7 +528,7 @@ def get_catalog_product_queryset():
     )
 
 
-def get_public_category_ids_with_products():
+def get_public_category_ids_with_products(all_categories=None):
     """
     Return public category IDs that should appear in the client catalog.
 
@@ -536,10 +536,11 @@ def get_public_category_ids_with_products():
     itself or to a visible descendant. Empty public categories remain hidden from
     the customer-facing tree but still exist in admin.
     """
-    all_categories = {
-        category.id: category
-        for category in Category.objects.select_related("parent")
-    }
+    if all_categories is None:
+        all_categories = {
+            category.id: category
+            for category in Category.objects.select_related("parent")
+        }
     visible_categories = {
         category.id: category
         for category in all_categories.values()
@@ -548,15 +549,19 @@ def get_public_category_ids_with_products():
     if not visible_categories:
         return set()
 
-    products = Product.catalog_visible(
-        Product.objects.all(),
-        include_uncategorized=False,
-    )
+    # A visible linked category itself makes an active, sellable product public.
+    # Query each relationship directly: reapplying catalog_visible here creates
+    # redundant joins and an expensive correlated exclusion on the M2M table.
+    products = Product.objects.filter(is_active=True, is_sellable=True).order_by()
     linked_ids = set(
-        products.exclude(category_id__isnull=True).values_list("category_id", flat=True)
+        products.filter(category_id__in=visible_categories)
+        .values_list("category_id", flat=True).distinct()
     )
     linked_ids.update(
-        products.exclude(categories__id__isnull=True).values_list("categories__id", flat=True)
+        Product.categories.through.objects.filter(
+            product__is_active=True, product__is_sellable=True,
+            category_id__in=visible_categories,
+        ).order_by().values_list("category_id", flat=True).distinct()
     )
 
     public_ids = set()
@@ -636,33 +641,23 @@ def get_cached_category_tree_rows():
     """
     Cache category tree generation to avoid rebuilding on each request.
     """
-    aggregate = Category.objects.filter(is_active=True, visible_in_catalog=True).aggregate(
-        total=Count("id"),
-        max_updated=Max("updated_at"),
-    )
-    total = aggregate.get("total") or 0
-    max_updated = aggregate.get("max_updated")
-    stamp = int(max_updated.timestamp()) if max_updated else 0
-    public_ids = get_public_category_ids_with_products()
-    ids_stamp = hashlib.sha1(
-        ",".join(str(category_id) for category_id in sorted(public_ids)).encode("utf-8")
-    ).hexdigest()[:16]
-    cache_key = f"catalog_tree_rows_v4:{total}:{stamp}:{ids_stamp}"
+    categories = list(Category.objects.select_related("parent").order_by("pk"))
+    public_ids = get_public_category_ids_with_products({cat.pk: cat for cat in categories})
+    # A cheap, content-based signature also detects bulk imports/QuerySet.update
+    # and through-table edits, which bypass save signals and updated_at.
+    fields = [field.attname for field in Category._meta.concrete_fields]
+    signature = [
+        [[getattr(cat, field) for field in fields] for cat in categories],
+        sorted(public_ids),
+    ]
+    stamp = hashlib.sha256(json.dumps(signature, default=str).encode()).hexdigest()
+    cache_key = f"catalog_tree_rows_v5:{stamp}"
 
     rows = cache.get(cache_key)
     if rows is not None:
         return rows
 
-    categories = (
-        Category.objects.filter(
-            id__in=public_ids,
-            is_active=True,
-            visible_in_catalog=True,
-        )
-        .select_related("parent")
-        .order_by("public_order", "order", "name")
-    )
-    rows = build_category_tree_rows(categories)
+    rows = build_category_tree_rows(cat for cat in categories if cat.pk in public_ids)
     cache.set(cache_key, rows, 300)
     return rows
 
@@ -1287,28 +1282,28 @@ def product_detail(request, sku):
 @login_required
 def client_catalog_excel_download(request):
     """Download the published catalog Excel template for approved clients/admins."""
-    import os
-    from datetime import datetime
-    from django.conf import settings
     from django.http import FileResponse
-    from django.utils import timezone
-    from core.services.catalog_excel_status import latest_catalog_excel_source_change
+    from core.services.catalog_excel_jobs import ensure_export, export_path, export_spec
 
+    company = get_active_company(request)
     if not request.user.is_staff:
         profile = getattr(request.user, "client_profile", None)
-        company = get_active_company(request)
         if not profile or not getattr(profile, "is_approved", False):
             messages.warning(
                 request,
                 "La descarga de Excel esta disponible solo para clientes aprobados.",
             )
             return redirect("catalog")
-        if company and not profile.can_operate_in_company(company):
+        if not company or not profile.can_operate_in_company(company):
             messages.warning(
                 request,
                 "Tu cuenta no esta habilitada para descargar el catalogo en esta empresa.",
             )
             return redirect("catalog")
+
+    if not company:
+        messages.warning(request, "Selecciona una empresa habilitada antes de descargar el catalogo.")
+        return redirect("catalog")
 
     template = (
         CatalogExcelTemplate.objects.prefetch_related(
@@ -1342,61 +1337,24 @@ def client_catalog_excel_download(request):
         client_category=pricing_context[2] if pricing_context else None,
     )
 
-    # Resolve caching
-    cache_dir = os.path.join(settings.MEDIA_ROOT, 'catalog_exports')
-    os.makedirs(cache_dir, exist_ok=True)
-    
-    price_list_id = price_list.id if price_list else 0
-    discount_int = int(discount_percentage * 100) if discount_percentage else 0
-    cache_filename = f"catalogo_client_tpl{template.id}_plist{price_list_id}_disc{discount_int}.xlsx"
-    cache_path = os.path.join(cache_dir, cache_filename)
-
-    source_change = latest_catalog_excel_source_change(template)
-    
-    use_cache = False
-    if os.path.exists(cache_path) and os.path.getsize(cache_path) > 15000 and source_change:
-        file_mtime = timezone.make_aware(datetime.fromtimestamp(os.path.getmtime(cache_path)))
-        if file_mtime > source_change:
-            use_cache = True
-
-    file_name = build_export_filename(template)
-
-    if use_cache:
-        with open(cache_path, 'rb') as f:
-            file_data = f.read()
-        response = HttpResponse(
-            file_data,
-            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    spec = export_spec(template, price_list, discount_percentage)
+    state = ensure_export(spec, actor_id=request.user.pk)
+    if request.GET.get("status") == "1":
+        response = JsonResponse(state, status=503 if state["status"] == "failed" else 200)
+    elif state["status"] == "ready":
+        response = FileResponse(
+            export_path(spec).open("rb"), as_attachment=True,
+            filename=build_export_filename(template),
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
-        response["Content-Disposition"] = f'attachment; filename="{file_name}"'
-        response["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
-        response["Pragma"] = "no-cache"
-        response["Expires"] = "0"
-        return response
-
-    # Otherwise, rebuild
-    workbook, stats = build_catalog_workbook(
-        template,
-        price_list=price_list,
-        discount_percentage=discount_percentage,
-    )
-    template.mark_generated(stats, user=request.user)
-    
-    # Save to disk cache atomically
-    temp_cache_path = cache_path + ".tmp"
-    workbook.save(temp_cache_path)
-    os.replace(temp_cache_path, cache_path)
-    
-    with open(cache_path, 'rb') as f:
-        file_data = f.read()
-    response = HttpResponse(
-        file_data,
-        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    )
-    response["Content-Disposition"] = f'attachment; filename="{file_name}"'
+    else:
+        response = render(request, "catalog/excel_pending.html", {"export_state": state},
+                          status=503 if state["status"] == "failed" else 202)
     response["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
     response["Pragma"] = "no-cache"
     response["Expires"] = "0"
+    if state["status"] != "ready":
+        response["Retry-After"] = "3"
     return response
 
 
@@ -1751,14 +1709,19 @@ def brand_detail(request, brand_slug):
     """
     brand = get_object_or_404(Brand, slug=brand_slug, is_active=True)
     
+    # The brand structure is a public catalog entry point, so it must use the
+    # same publication rule as the product detail page and the cart.  Keeping
+    # that rule here prevents displaying a product that cannot be opened or
+    # added to the cart because its category is not published.
+    visible_products = Product.catalog_visible()
     subrubros_queryset = BrandSubrubro.objects.filter(
         is_active=True,
-        products__is_active=True
+        products__in=visible_products,
     ).distinct()
     
     rubros = BrandRubro.objects.filter(brand=brand, is_active=True).filter(
-        Q(products__is_active=True) |
-        Q(subrubros__is_active=True, subrubros__products__is_active=True)
+        Q(products__in=visible_products) |
+        Q(subrubros__is_active=True, subrubros__products__in=visible_products)
     ).prefetch_related(
         Prefetch(
             "subrubros",
@@ -1795,13 +1758,13 @@ def brand_detail(request, brand_slug):
     if selected_subrubro:
         order_rows = BrandSubrubroProductOrder.objects.filter(
             brand_subrubro=selected_subrubro,
-            product__is_active=True
+            product__in=visible_products,
         ).select_related("product").order_by("sort_order", "product__name")
         products = [row.product for row in order_rows]
     elif selected_rubro:
         order_rows = BrandRubroProductOrder.objects.filter(
             brand_rubro=selected_rubro,
-            product__is_active=True
+            product__in=visible_products,
         ).select_related("product").order_by("sort_order", "product__name")
         products = [row.product for row in order_rows]
         

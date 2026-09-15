@@ -1,0 +1,3 @@
+core/templates/core/home.html
+catalog/templates/catalog/clamp_request.html
+core/static/core/js/home_clamp.js

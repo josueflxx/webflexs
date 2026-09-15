@@ -8,12 +8,13 @@ from django.contrib.auth.models import User
 from django.core.cache import cache
 from django.db.models import Q
 from django.shortcuts import render
-from django.http import JsonResponse
+from django.http import Http404, JsonResponse
 from django.views.decorators.http import require_POST
 from django.views.decorators.http import require_GET
+from django.views.decorators.cache import never_cache
 from django.utils import timezone
 
-from accounts.models import AccountRequest, ClientProfile, ClientPayment
+from accounts.models import AccountRequest, ClientPayment
 from catalog.models import Category, ClampMeasureRequest, Product, Supplier
 from orders.models import Order
 from core.models import UserActivity
@@ -24,7 +25,13 @@ from core.services.advanced_search import (
     parse_text_search_query,
     sanitize_search_token,
 )
+from core.services.access_scope import clients_visible_to
+from core.services.company_context import get_active_company
 from core.services.presence import build_admin_presence_payload, get_presence_config
+from core.services.document_sharing import (
+    build_public_document_context,
+    load_public_document,
+)
 
 
 def home(request):
@@ -39,6 +46,23 @@ def home(request):
     
     request.session['last_home_theme'] = theme
     return render(request, 'core/home.html', {'active_theme': theme})
+
+
+@never_cache
+@require_GET
+def public_document_share(request, token):
+    """Anonymous, read-only presentation reached through a signed URL."""
+    document, document_kind = load_public_document(token)
+    if document is None:
+        raise Http404("El enlace compartido no es valido.")
+    response = render(
+        request,
+        "core/public_document_share.html",
+        build_public_document_context(document, document_kind),
+    )
+    response["X-Robots-Tag"] = "noindex, nofollow"
+    response["Referrer-Policy"] = "no-referrer"
+    return response
 
 
 @require_GET
@@ -175,6 +199,13 @@ def _append_suggestion(items, value, label=None, meta="", kind="", **extra):
             continue
         payload[str(key)] = str(extra_value).strip()
     items.append(payload)
+
+
+def _clean_suggestion_detail(value):
+    text = str(value or "").strip()
+    if text.lower() in {"nan", "none", "null", "undefined", "-"}:
+        return ""
+    return text
 
 
 def _unique_trim_suggestions(items, limit=SUGGESTION_LIMIT):
@@ -380,25 +411,47 @@ def _suggest_admin_categories(query):
     return _unique_trim_suggestions(items)
 
 
-def _suggest_admin_clients(query):
+def _suggest_admin_clients(query, request=None):
     items = []
     parsed_query = _parse_suggestion_query(query)
     if not parsed_query.get("raw"):
         return items
+
+    active_company = get_active_company(request)
+    if request is None or active_company is None:
+        return items
+
     rows = (
         apply_parsed_text_search(
-            ClientProfile.objects.all(),
+            clients_visible_to(request.user, company=active_company),
             parsed_query,
-            ["company_name", "user__username", "cuit_dni", "user__email"],
+            [
+                "company_name",
+                "user__username",
+                "user__first_name",
+                "user__last_name",
+                "user__email",
+                "cuit_dni",
+                "document_number",
+                "phone",
+            ],
             order_by_similarity=False,
         )
         .select_related("user")
-        .values_list("id", "company_name", "user__username", "cuit_dni")
+        .values_list(
+            "id",
+            "company_name",
+            "user__username",
+            "cuit_dni",
+            "document_number",
+        )
         .order_by("company_name")[:8]
     )
-    for client_id, company_name, username, cuit in rows:
-        value = company_name or username or cuit
-        meta_bits = [bit for bit in [username, cuit] if bit]
+    for client_id, company_name, username, cuit, document_number in rows:
+        username = _clean_suggestion_detail(username)
+        document = _clean_suggestion_detail(cuit) or _clean_suggestion_detail(document_number)
+        value = company_name or username or document
+        meta_bits = [bit for bit in [username, document] if bit]
         _append_suggestion(
             items,
             value,
@@ -407,6 +460,8 @@ def _suggest_admin_clients(query):
             kind="client",
             target_value=client_id,
             input_value=company_name or username or value,
+            username=username,
+            document=document,
         )
     return _unique_trim_suggestions(items)
 
@@ -551,8 +606,13 @@ def search_suggestions(request):
     if is_admin_scope and (not request.user.is_authenticated or not request.user.is_staff):
         return JsonResponse({"suggestions": []}, status=403)
 
+    active_company = get_active_company(request) if is_admin_scope else None
+    company_cache_key = getattr(active_company, "pk", 0) or 0
     cache_scope = scope or ("admin_fallback" if is_admin_scope else "catalog_fallback")
-    cache_key = f"search_suggest:{cache_scope}:{query.lower()[:80]}"
+    if is_admin_scope:
+        cache_scope = f"{cache_scope}:company:{company_cache_key}"
+    cache_query_key = hashlib.sha256(query.casefold().encode("utf-8")).hexdigest()[:24]
+    cache_key = f"search_suggest:{cache_scope}:{cache_query_key}"
     suggestions = cache.get(cache_key)
 
     if suggestions is None:
@@ -563,7 +623,7 @@ def search_suggestions(request):
         elif scope == "admin_categories":
             suggestions = _suggest_admin_categories(query)
         elif scope == "admin_clients":
-            suggestions = _suggest_admin_clients(query)
+            suggestions = _suggest_admin_clients(query, request=request)
         elif scope == "admin_orders":
             suggestions = _suggest_admin_orders(query)
         elif scope == "admin_suppliers":

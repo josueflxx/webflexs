@@ -1,6 +1,8 @@
 from decimal import Decimal
 from datetime import timedelta
+from types import SimpleNamespace
 from unittest.mock import patch
+import tempfile
 
 from django.contrib.auth.models import Group, User
 from django.template import Context, Template
@@ -30,9 +32,77 @@ from core.services.company_context import get_default_company, get_user_companie
 from core.services.fiscal import validate_credit_note_relationship
 from core.services.fiscal_documents import create_local_fiscal_document_from_order
 from core.services.fiscal_integrity import FiscalPayloadConflict, fiscal_payload_hash
+from core.services.import_execution_runner import _partition_preflight_issues, run_import_execution
+from core.services.import_manager import ImportTaskManager
 from core.services.sales_documents import resolve_sales_document_type
 from orders.models import Order
 from orders.models import OrderItem
+
+
+class ImportPreflightPolicyTests(TestCase):
+    def test_product_row_issues_are_warnings_and_do_not_block_the_batch(self):
+        issues = [{"row": 12, "message": "SKU invalido"}]
+
+        blocking, warnings = _partition_preflight_issues("products", issues)
+
+        self.assertEqual(blocking, [])
+        self.assertEqual(warnings, issues)
+
+    def test_structural_category_issues_remain_blocking(self):
+        issues = [{"row": 0, "message": "Falta la columna nombre"}]
+
+        blocking, warnings = _partition_preflight_issues("categories", issues)
+
+        self.assertEqual(blocking, issues)
+        self.assertEqual(warnings, [])
+
+    def test_failed_task_keeps_the_diagnostic_result(self):
+        task_id = ImportTaskManager.start_task()
+        result = {"row_errors": [{"row": 4, "message": "Dato invalido"}]}
+
+        ImportTaskManager.fail_task(task_id, "Requiere revision", result)
+
+        status = ImportTaskManager.get_status(task_id)
+        self.assertEqual(status["status"], "failed")
+        self.assertEqual(status["result"], result)
+
+    def test_product_runner_continues_when_preflight_only_has_row_issues(self):
+        task_id = ImportTaskManager.start_task()
+        issues = [{"row": 8, "message": "Precio invalido"}]
+        importer = SimpleNamespace(
+            company=None,
+            run=lambda **kwargs: SimpleNamespace(
+                created=2,
+                updated=0,
+                errors=1,
+                has_errors=True,
+                row_results=[],
+                total_rows=3,
+            ),
+        )
+        with tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False) as temp_file:
+            file_path = temp_file.name
+
+        with patch(
+            "core.services.import_execution_runner._resolve_importer_class",
+            return_value=lambda *args, **kwargs: importer,
+        ), patch(
+            "core.services.import_execution_runner._run_preflight",
+            return_value=issues,
+        ):
+            run_import_execution(
+                task_id=task_id,
+                execution_id=999999,
+                import_type="products",
+                importer_class_path="catalog.services.product_importer.ProductImporter",
+                file_path=file_path,
+                dry_run=True,
+                import_options={},
+            )
+
+        status = ImportTaskManager.get_status(task_id)
+        self.assertEqual(status["status"], "completed")
+        self.assertEqual(status["result"]["preflight_warnings"], issues)
 
 
 class GlobalNumberFormatTests(TestCase):
@@ -164,6 +234,103 @@ class SearchSuggestionsTests(TestCase):
         payload = response.json()
         values = [item["value"] for item in payload["suggestions"]]
         self.assertIn("ZZ-ADMIN-LABEL-01", values)
+
+    def test_admin_client_suggestions_are_structured_and_company_scoped(self):
+        company = get_default_company()
+        hidden_company = Company.objects.create(
+            name="Empresa Oculta Sugerencias",
+            slug="empresa-oculta-sugerencias",
+        )
+        visible_user = User.objects.create_user(
+            username="cliente_suggest_visible",
+            email="visible@example.com",
+        )
+        visible_client = ClientProfile.objects.create(
+            user=visible_user,
+            company_name="SuggestReadable Flexs",
+            cuit_dni="20-12345678-9",
+            phone="11 44556677",
+        )
+        ClientCompany.objects.create(
+            client_profile=visible_client,
+            company=company,
+            is_active=True,
+        )
+        hidden_user = User.objects.create_user(username="cliente_suggest_hidden")
+        hidden_client = ClientProfile.objects.create(
+            user=hidden_user,
+            company_name="SuggestReadable Oculta",
+            cuit_dni="27-98765432-1",
+        )
+        ClientCompany.objects.create(
+            client_profile=hidden_client,
+            company=hidden_company,
+            is_active=True,
+        )
+
+        staff = User.objects.create_user(
+            "admin_client_suggest",
+            password="secret123",
+            is_staff=True,
+        )
+        self._grant_company_access(staff)
+        self.client.force_login(staff)
+        self._activate_company()
+
+        response = self.client.get(
+            reverse("search_suggestions"),
+            {"scope": "admin_clients", "q": "SuggestReadable"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        suggestions = response.json()["suggestions"]
+        labels = [item["label"] for item in suggestions]
+        self.assertIn("SuggestReadable Flexs", labels)
+        self.assertNotIn("SuggestReadable Oculta", labels)
+        visible_payload = next(
+            item for item in suggestions if item["label"] == "SuggestReadable Flexs"
+        )
+        self.assertEqual(visible_payload["kind"], "client")
+        self.assertEqual(visible_payload["username"], visible_user.username)
+        self.assertEqual(visible_payload["document"], visible_client.cuit_dni)
+
+    def test_admin_client_suggestions_omit_import_placeholders(self):
+        company = get_default_company()
+        user = User.objects.create_user(username="cliente_suggest_placeholder")
+        client = ClientProfile.objects.create(
+            user=user,
+            company_name="Cliente Placeholder",
+            cuit_dni="nan",
+            document_number="null",
+        )
+        ClientCompany.objects.create(
+            client_profile=client,
+            company=company,
+            is_active=True,
+        )
+        staff = User.objects.create_user(
+            "admin_client_placeholder",
+            password="secret123",
+            is_staff=True,
+        )
+        self._grant_company_access(staff)
+        self.client.force_login(staff)
+        self._activate_company()
+
+        response = self.client.get(
+            reverse("search_suggestions"),
+            {"scope": "admin_clients", "q": "Cliente Placeholder"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        suggestion = next(
+            item
+            for item in response.json()["suggestions"]
+            if item["label"] == "Cliente Placeholder"
+        )
+        self.assertNotIn("document", suggestion)
+        self.assertNotIn("nan", suggestion["meta"].lower())
+        self.assertNotIn("null", suggestion["meta"].lower())
 
 
 class AdminPresenceTests(TestCase):
