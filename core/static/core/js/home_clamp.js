@@ -59,6 +59,9 @@
                 'camera-controls': '', 'disable-pan': '', 'touch-action': 'pan-y',
                 'camera-orbit': orbit, 'min-camera-orbit': 'auto auto 45%',
                 'max-camera-orbit': 'auto auto 180%', 'interaction-prompt': 'none',
+                'auto-rotate': '',
+                'auto-rotate-delay': '2500',
+                'rotation-per-second': '16deg',
                 // Keep the .hdr suffix: the runtime uses it to select its decoder.
                 'environment-image': new URL(showcase.dataset.environment, document.baseURI).href,
                 'tone-mapping': 'aces', exposure: '1.05',
@@ -121,7 +124,13 @@
     loadButton.hidden = false;
     loadButton.addEventListener('click', load);
     showcase.querySelector('[data-reset]').addEventListener('click', () => {
-        if (viewer) viewer.cameraOrbit = orbit;
+        if (viewer) {
+            viewer.cameraOrbit = orbit;
+            const toggle = controls.querySelector('.clamp-dimensions-toggle');
+            if (!toggle || toggle.getAttribute('aria-pressed') !== 'true') {
+                viewer.setAttribute('auto-rotate', '');
+            }
+        }
     });
     showcase.querySelectorAll('[data-zoom]').forEach(button => {
         button.addEventListener('click', () => {

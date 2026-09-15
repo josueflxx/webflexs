@@ -156,9 +156,13 @@ export function attachClampDimensions(viewer, { variant = 'plana', controls, foo
         button.textContent = enabled ? 'Ocultar medidas' : 'Ver medidas';
         button.setAttribute('aria-pressed', String(enabled));
         if (enabled) {
-            // Start with a readable measuring view; free orbit remains enabled.
+            // Start with a stable frontal measuring view; pause auto-rotation for easy reading
+            viewer.removeAttribute('auto-rotate');
             viewer.cameraOrbit = '0deg 90deg 140%';
             schedule();
+        } else {
+            // Resume auto-rotation when measures are hidden
+            viewer.setAttribute('auto-rotate', '');
         }
     });
     viewer.addEventListener('camera-change', schedule);

@@ -2,14 +2,17 @@
 .hero.hero--clamp .hero-content {
     grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
     gap: clamp(24px, 4vw, 72px);
-    align-items: center;
+    align-items: start;
 }
-.hero--clamp .hero-text { width: 100%; }
+.hero--clamp .hero-text {
+    width: 100%;
+    align-self: start;
+}
 .home-clamp {
     width: 100%;
     min-width: 0;
     position: relative;
-    align-self: center;
+    align-self: start;
     isolation: isolate;
     color: #d5dde8;
 }
