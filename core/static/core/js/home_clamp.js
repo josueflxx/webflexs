@@ -1,6 +1,6 @@
 /* Homepage product showcase: reuse the local viewer, load when visible. */
 (() => {
-    const dimensionsModule = new URL('clamp_dimensions.js?v=20260914-2', document.currentScript.src).href;
+    const dimensionsModule = new URL('clamp_dimensions.js?v=20260916-rotation-2', document.currentScript.src).href;
     const showcase = document.getElementById('homeClamp');
     if (!showcase) return;
     const stage = showcase.querySelector('.home-clamp-stage');
@@ -14,6 +14,7 @@
     let generation = 0;
     let profile = 'plana';
     let dimensionsVisible = false;
+    let rotationEnabled = !matchMedia('(prefers-reduced-motion: reduce)').matches;
     const retries = { plana: 0, curva: 0, semicurva: 0 };
     const models = { plana: showcase.dataset.model, curva: showcase.dataset.modelCurva, semicurva: showcase.dataset.modelSemicurva };
     const profiles = showcase.querySelector('.home-clamp-profiles');
@@ -59,7 +60,6 @@
                 'camera-controls': '', 'disable-pan': '', 'touch-action': 'pan-y',
                 'camera-orbit': orbit, 'min-camera-orbit': 'auto auto 45%',
                 'max-camera-orbit': 'auto auto 180%', 'interaction-prompt': 'none',
-                'auto-rotate': '',
                 'auto-rotate-delay': '2500',
                 'rotation-per-second': '16deg',
                 // Keep the .hdr suffix: the runtime uses it to select its decoder.
@@ -68,6 +68,7 @@
                 'shadow-intensity': '1.3', 'shadow-softness': '0.9', loading: 'eager',
             };
             for (const [name, value] of Object.entries(attributes)) viewer.setAttribute(name, value);
+            viewer.toggleAttribute('auto-rotate', rotationEnabled);
             viewer.addEventListener('load', async () => {
                 if (viewer !== currentViewer) return;
                 for (const material of viewer.model.materials) {
@@ -108,6 +109,7 @@
         if (!button || button.dataset.profile === profile) return;
         const toggle = controls.querySelector('.clamp-dimensions-toggle');
         if (toggle) dimensionsVisible = toggle.getAttribute('aria-pressed') === 'true';
+        if (viewer) rotationEnabled = viewer.autoRotate;
         profile = button.dataset.profile;
         showcase.dataset.variant = profile;
         profiles.querySelectorAll('[data-profile]').forEach(item => item.setAttribute('aria-pressed', String(item === button)));
@@ -125,11 +127,8 @@
     loadButton.addEventListener('click', load);
     showcase.querySelector('[data-reset]').addEventListener('click', () => {
         if (viewer) {
+            viewer.resetTurntableRotation();
             viewer.cameraOrbit = orbit;
-            const toggle = controls.querySelector('.clamp-dimensions-toggle');
-            if (!toggle || toggle.getAttribute('aria-pressed') !== 'true') {
-                viewer.setAttribute('auto-rotate', '');
-            }
         }
     });
     showcase.querySelectorAll('[data-zoom]').forEach(button => {

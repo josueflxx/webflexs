@@ -1,6 +1,6 @@
 /* The 3D runtime and model are fetched only after an explicit user action. */
 (() => {
-    const dimensionsModule = new URL('clamp_dimensions.js?v=20260914-2', document.currentScript.src).href;
+    const dimensionsModule = new URL('clamp_dimensions.js?v=20260916-rotation-2', document.currentScript.src).href;
     const panel = document.getElementById('clamp3dPanel');
     if (!panel) return;
     const drawing = document.getElementById('clampDrawing');
@@ -13,6 +13,7 @@
     let loading = false;
     let generation = 0;
     let dimensionsVisible = false;
+    let rotationEnabled = !matchMedia('(prefers-reduced-motion: reduce)').matches;
     const profileInput = document.getElementById('profile_type');
     let profile = profileInput.value.toLowerCase();
     const models = { plana: panel.dataset.model, curva: panel.dataset.modelCurva, semicurva: panel.dataset.modelSemicurva };
@@ -71,6 +72,9 @@
             viewer.setAttribute('min-camera-orbit', 'auto auto 35%');
             viewer.setAttribute('max-camera-orbit', 'auto auto 200%');
             viewer.setAttribute('interaction-prompt', 'none');
+            viewer.setAttribute('auto-rotate-delay', '2500');
+            viewer.setAttribute('rotation-per-second', '16deg');
+            viewer.toggleAttribute('auto-rotate', rotationEnabled);
             viewer.setAttribute('environment-image', 'neutral');
             viewer.setAttribute('exposure', '1.2');
             viewer.setAttribute('loading', 'eager');
@@ -105,6 +109,7 @@
         if (nextProfile === profile) return;
         const toggle = panel.querySelector('.clamp-dimensions-toggle');
         if (toggle) dimensionsVisible = toggle.getAttribute('aria-pressed') === 'true';
+        if (viewer) rotationEnabled = viewer.autoRotate;
         profile = nextProfile;
         generation += 1;
         clearDimensions?.();
@@ -122,7 +127,10 @@
     drawingButton.addEventListener('click', () => selectView(false));
     retry.addEventListener('click', loadViewer);
     reset.addEventListener('click', () => {
-        if (viewer) viewer.cameraOrbit = '30deg 75deg 105%';
+        if (viewer) {
+            viewer.resetTurntableRotation();
+            viewer.cameraOrbit = '30deg 75deg 105%';
+        }
     });
     document.getElementById('clampViewControls').hidden = false;
 })();

@@ -1,5 +1,5 @@
 /* Dimension anchors use model coordinates in metres, never form input values.
- * The GLBs are illustrative fixed models. Screen-space lines follow the camera.
+ * The GLBs are illustrative fixed models. Lines follow camera and turntable motion.
  */
 const NS = 'http://www.w3.org/2000/svg';
 let instance = 0;
@@ -103,6 +103,11 @@ export function attachClampDimensions(viewer, { variant = 'plana', controls, foo
     });
     let enabled = false;
     let frame = 0;
+    let disposed = false;
+    function canDraw() {
+        return !disposed && enabled && !document.hidden && viewer.isConnected
+            && viewer.modelIsVisible && viewer.clientWidth > 0;
+    }
     function coordinates(name) {
         return viewer.queryHotspot(`hotspot-dimension-${name}`)?.canvasPosition;
     }
@@ -120,7 +125,7 @@ export function attachClampDimensions(viewer, { variant = 'plana', controls, foo
     }
     function draw() {
         frame = 0;
-        if (!enabled || viewer.clientWidth === 0) return;
+        if (!canDraw()) return;
         svg.setAttribute('viewBox', `0 0 ${viewer.clientWidth} ${viewer.clientHeight}`);
         for (const { name, line, label } of dimensions) {
             const start = coordinates(`${name}0`);
@@ -145,9 +150,17 @@ export function attachClampDimensions(viewer, { variant = 'plana', controls, foo
             label.style.top = `${y}px`;
         }
         for (const { from, to, line } of witnesses) setLine(line, coordinates(from), coordinates(to));
+        // Turntable rotation changes the model, not the camera, so it does not
+        // emit camera-change. Poll hotspots only while visible rotating cotas need it.
+        if (viewer.autoRotate) schedule();
     }
     function schedule() {
-        if (enabled && !frame) frame = requestAnimationFrame(draw);
+        if (!canDraw()) {
+            cancelAnimationFrame(frame);
+            frame = 0;
+            return;
+        }
+        if (!frame) frame = requestAnimationFrame(draw);
     }
     button.addEventListener('click', () => {
         enabled = !enabled;
@@ -156,23 +169,28 @@ export function attachClampDimensions(viewer, { variant = 'plana', controls, foo
         button.textContent = enabled ? 'Ocultar medidas' : 'Ver medidas';
         button.setAttribute('aria-pressed', String(enabled));
         if (enabled) {
-            // Start with a stable frontal measuring view; pause auto-rotation for easy reading
-            viewer.removeAttribute('auto-rotate');
+            // Begin from the front; dimensions keep following the chosen rotation state.
+            viewer.resetTurntableRotation();
             viewer.cameraOrbit = '0deg 90deg 140%';
-            schedule();
-        } else {
-            // Resume auto-rotation when measures are hidden
-            viewer.setAttribute('auto-rotate', '');
         }
+        schedule();
     });
     viewer.addEventListener('camera-change', schedule);
+    viewer.addEventListener('model-visibility', schedule);
+    document.addEventListener('visibilitychange', schedule);
+    const rotationChanges = new MutationObserver(schedule);
+    rotationChanges.observe(viewer, { attributes: true, attributeFilter: ['auto-rotate'] });
     const resize = new ResizeObserver(schedule);
     resize.observe(viewer);
     if (initiallyVisible) button.click();
     return () => {
+        disposed = true;
         cancelAnimationFrame(frame);
+        rotationChanges.disconnect();
         resize.disconnect();
         viewer.removeEventListener('camera-change', schedule);
+        viewer.removeEventListener('model-visibility', schedule);
+        document.removeEventListener('visibilitychange', schedule);
         anchors.forEach(anchor => anchor.remove());
         overlay.remove();
         button.remove();

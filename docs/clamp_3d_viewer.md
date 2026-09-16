@@ -60,7 +60,7 @@ usa el modelo correspondiente al perfil seleccionado. Los ajustes de material de
 a los dos visores. Se muestran A (diámetro de varilla), B (ancho interior),
 C (largo útil desde la cara interior del arco) y D (rosca). Las líneas se proyectan
 desde anclajes 3D mediante `queryHotspot` y se actualizan en eventos de cámara y
-redimensionado, sin un bucle de animación adicional. En móvil se muestran letras
+redimensionado. Durante el giro automático, un único requestAnimationFrame mantiene las cotas sincronizadas con la rotación del modelo; se detiene cuando las cotas o el visor están ocultos, la pestaña no está visible o se pausa el giro. En móvil se muestran letras
 compactas y la explicación debajo. El control permite ocultarlas.
 
 Son indicaciones de dónde medir, sin valores numéricos: los GLB son ilustrativos
@@ -82,3 +82,9 @@ El inicio permite elegir plana, curva y semicurva. El formulario usa el perfil s
 La plana conserva C exterior. Para curva y semicurva, C une el extremo interior de la pata izquierda (-0.03865, 0) con el centro interior del arco (0, 0.25365), según la referencia del usuario. Las anotaciones siguen la cámara y conservan su visibilidad al cambiar el perfil. Son guías ilustrativas: no modifican las medidas numéricas del formulario ni el cálculo del pedido.
 
 Los tres perfiles se publicaron el 14/09/2026 mediante `.deploy/clamp-profiles-20260914`. Respaldo en `/var/backups/webflexs/clamp-profiles-20260914-r2`. La publicación preserva los cambios ajenos al visor en las plantillas del servidor. Incluye seis archivos actualizados y dos nuevos GLB; no requiere migraciones.
+
+## Giro con las medidas visibles (16/09/2026)
+
+La portada y el formulario usan el giro nativo sobre el eje vertical a 16 grados/s, con una espera de 2,5 segundos tras interactuar. Mostrar u ocultar las cotas mantiene el estado de giro. El giro se mantiene al cambiar de perfil y no se muestra un botón de pausa, según la última indicación del usuario. Restablecer vista reinicia también el ángulo sobre el eje. Con movimiento reducido, se respeta la preferencia del sistema y se conserva el giro manual.
+
+La sincronización usa `queryHotspot`, `modelIsVisible` y el evento `model-visibility`, sin modificar la geometría. Se liberan los observadores y el frame pendiente al cambiar de perfil. El giro del modelo no emite `camera-change`: [implementación oficial de model-viewer 4.3.1](https://github.com/google/model-viewer/blob/v4.3.1/packages/model-viewer/src/features/staging.ts); [anotaciones](https://modelviewer.dev/examples/annotations/).
