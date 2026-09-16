@@ -362,7 +362,7 @@
                                         {% for field, options in clamp_options.items %}
                                         <div class="filter-mini-group">
                                             <label>{{ field_labels|get_item:field|default:field|title }}</label>
-                                            <select name="{{ field }}" class="form-select-mini" onchange="this.form.submit()">
+                                            <select name="{{ field }}" class="form-select-mini" data-smart-select="off">
                                                 <option value="">- Todos -</option>
                                                 {% for opt in options %}
                                                 {% with field_val=active_filters|get_item:field %}
@@ -382,7 +382,7 @@
                                         <div class="filter-mini-group">
                                             <label>{{ attr.name }}</label>
                                             {% if attr.type == 'select' %}
-                                            <select name="{{ attr.slug }}" class="form-select-mini" onchange="this.form.submit()">
+                                            <select name="{{ attr.slug }}" class="form-select-mini" data-smart-select="off">
                                                 <option value="">- Todos -</option>
                                                 {% for opt in attr.options_list %}
                                                 {% with current_val=active_filters|get_item:attr.slug %}
@@ -957,7 +957,7 @@
             
             const triggerText = document.createElement('span');
             const selectedOpt = select.querySelector('option[selected]') || select.querySelector('option');
-            triggerText.textContent = selectedOpt ? selectedOpt.textContent : '';
+            triggerText.textContent = selectedOpt ? selectedOpt.textContent.trim() : '';
             trigger.appendChild(triggerText);
             
             const arrow = document.createElement('div');
@@ -973,7 +973,7 @@
                 const customOpt = document.createElement('div');
                 customOpt.className = 'custom-option';
                 customOpt.dataset.value = opt.value;
-                customOpt.textContent = opt.textContent;
+                customOpt.textContent = opt.textContent.trim();
                 
                 if (opt.value === select.value) {
                     customOpt.classList.add('active');
@@ -982,15 +982,14 @@
                 customOpt.addEventListener('click', (e) => {
                     e.stopPropagation();
                     select.value = opt.value;
-                    triggerText.textContent = opt.textContent;
+                    triggerText.textContent = opt.textContent.trim();
                     
                     optionsContainer.querySelectorAll('.custom-option').forEach(el => el.classList.remove('active'));
                     customOpt.classList.add('active');
                     
                     wrapper.classList.remove('open');
                     
-                    // Dispatch change event to trigger updateOrder
-                    select.dispatchEvent(new Event('change'));
+                    select.dispatchEvent(new Event('change', { bubbles: true }));
                 });
                 optionsContainer.appendChild(customOpt);
             });

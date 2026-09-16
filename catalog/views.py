@@ -1132,7 +1132,7 @@ def catalog(request):
         "parsed_search": parsed_search,
     }
 
-    if clamp_options:
+    if any(clamp_options.values()):
         context["clamp_options"] = clamp_options
 
     return render(request, "catalog/catalog_v3.html", context)

@@ -27,8 +27,8 @@
         if (select.dataset.smartSelectReady === "true") return false;
         if (select.dataset.smartSelect === "off") return false;
         if (select.multiple || Number(select.size || 0) > 1) return false;
-        if (select.matches(".clamp-hidden-select, .filter-select, .col-select, .block-select, [aria-hidden='true']")) return false;
-        if (select.closest(".spreadsheet-cell, .spreadsheet-table, .spreadsheet-wrap, .grid-editor, [data-smart-select-scope='off']")) return false;
+        if (select.matches(".clamp-hidden-select, .filter-select, .col-select, .block-select, .form-select-mini, .order-select, [aria-hidden='true']")) return false;
+        if (select.closest(".catalog-sidebar, .category-inline-filters, .spreadsheet-cell, .spreadsheet-table, .spreadsheet-wrap, .grid-editor, [data-smart-select-scope='off']")) return false;
         const style = window.getComputedStyle(select);
         if (style.display === "none" || style.visibility === "hidden") return false;
         return true;
