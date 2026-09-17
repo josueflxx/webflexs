@@ -1085,7 +1085,6 @@ def catalog(request):
         "current_category_path_label": current_category_path_label,
         "order_by": order_by,
         "view_mode": view_mode,
-        "can_view_catalog_supplier": bool(request.user.is_authenticated and request.user.is_staff),
         "show_prices": show_prices,
         "discount": discount,
         "price_message": settings.public_prices_message,

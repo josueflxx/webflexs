@@ -1,32 +1,252 @@
 /* Native controls: scoped to the technical panel, never to admin tables. */
 .technical-filters {
     margin: 0 0 20px;
-    padding: 14px;
-    border: 1px solid var(--cw-border, #465164);
-    border-radius: 14px;
-    background: var(--cw-panel, #131b27);
-    color: var(--cw-text, #f1f5f9);
+    padding: 16px;
+    border: 1px solid var(--cw-border, #2c3037);
+    border-radius: 12px;
+    background: var(--cw-panel, #181b20);
+    color: var(--cw-text, #f0f2f5);
 }
-.technical-filters-heading h3 { margin: 0 0 6px; font-size: 16px; }
-.technical-filters-heading > span { font-size: 12px; color: var(--cw-accent, #ff773b); }
-.technical-filters-help, .technical-filter-status { font-size: 12px; line-height: 1.6; margin: 12px 0; }
-.technical-filters .inline-filter-form { display: grid; gap: 12px; }
-.technical-filters .technical-filter-field { display: grid; gap: 6px; margin: 0; min-width: 0; }
-.technical-filter-field label { font-size: 13px; font-weight: 600; }
-.technical-filter-field select, .technical-filter-field input {
-    display: block; width: 100%; min-width: 0; min-height: 44px;
-    padding: 10px; border: 1px solid var(--cw-border, #465164);
-    border-radius: 8px; background: var(--cw-bg, #0d141e);
-    color: var(--cw-text, #f1f5f9); font: inherit; font-size: 13px;
+
+.technical-filters-heading {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    padding-bottom: 12px;
+    margin-bottom: 12px;
+    border-bottom: 1px solid var(--cw-border, #2c3037);
 }
-.technical-filter-field select:focus-visible, .technical-filter-field input:focus-visible {
-    outline: 2px solid #ff773b; outline-offset: 2px;
+
+.technical-filters-title-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
-.technical-filter-actions { display: flex; flex-wrap: wrap; gap: 8px; }
-.technical-filter-actions .btn { flex: 1 1 auto; min-height: 42px; justify-content: center; font-size: 12px; }
-.technical-filter-error, .technical-filter-status[data-empty="true"] { color: #ffb68f; }
-[data-theme="light"] .technical-filters { background: #f8fafc; color: #192435; border-color: #c5cddb; }
-[data-theme="light"] .technical-filter-field select, [data-theme="light"] .technical-filter-field input {
-    background: white; color: #192435; border-color: #abb9cd;
+
+.tech-title-icon {
+    width: 16px;
+    height: 16px;
+    stroke: var(--cw-accent, #ff7647);
+    flex-shrink: 0;
 }
-[data-theme="light"] .technical-filter-error, [data-theme="light"] .technical-filter-status[data-empty="true"] { color: #9c3b00; }
+
+.technical-filters-heading h3 {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 650;
+    letter-spacing: -0.015em;
+    color: var(--cw-text, #f0f2f5);
+    line-height: 1.25;
+}
+
+.technical-category-badge {
+    display: inline-flex;
+    align-items: center;
+    width: fit-content;
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: var(--cw-accent, #ff7647);
+    background: rgba(255, 118, 71, 0.12);
+    border: 1px solid rgba(255, 118, 71, 0.28);
+    padding: 3px 8px;
+    border-radius: 6px;
+    line-height: 1.2;
+}
+
+.technical-filters-note {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 9px 11px;
+    margin-bottom: 14px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--cw-border, #2c3037);
+    border-left: 3px solid var(--cw-accent, #ff7647);
+}
+
+.tech-note-icon {
+    width: 15px;
+    height: 15px;
+    flex-shrink: 0;
+    margin-top: 1.5px;
+    color: var(--cw-accent, #ff7647);
+}
+
+.technical-filters-note p {
+    margin: 0;
+    font-size: 11.5px;
+    line-height: 1.45;
+    color: var(--cw-muted, #9ba4b1);
+}
+
+.technical-filters-note strong {
+    color: var(--cw-text, #f0f2f5);
+    font-weight: 600;
+}
+
+.technical-filters .inline-filter-form {
+    display: grid;
+    gap: 12px;
+}
+
+.technical-filters .technical-filter-field {
+    display: grid;
+    gap: 6px;
+    margin: 0;
+    min-width: 0;
+}
+
+.technical-filter-field label {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--cw-text, #f0f2f5);
+}
+
+.technical-filter-field select,
+.technical-filter-field input {
+    display: block;
+    width: 100%;
+    min-width: 0;
+    min-height: 40px;
+    padding: 8px 10px;
+    border: 1px solid var(--cw-border, #2c3037);
+    border-radius: 8px;
+    background: var(--cw-bg, #101216);
+    color: var(--cw-text, #f0f2f5);
+    font: inherit;
+    font-size: 13px;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.technical-filter-field select:focus-visible,
+.technical-filter-field input:focus-visible {
+    outline: none;
+    border-color: var(--cw-accent, #ff7647);
+    box-shadow: 0 0 0 2px rgba(255, 118, 71, 0.2);
+}
+
+.technical-filter-status {
+    font-size: 11.5px;
+    line-height: 1.4;
+    margin: 10px 0 2px;
+    padding: 8px 10px;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.025);
+    border: 1px solid var(--cw-border, #2c3037);
+    color: var(--cw-muted, #9ba4b1);
+}
+
+.technical-filter-status[data-empty="true"] {
+    background: rgba(239, 68, 68, 0.08);
+    border-color: rgba(239, 68, 68, 0.25);
+    color: #fca5a5;
+}
+
+.technical-filter-error {
+    font-size: 12px;
+    margin: 4px 0;
+    color: #fca5a5;
+}
+
+.technical-filter-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 4px;
+}
+
+.technical-filter-actions .btn {
+    flex: 1 1 auto;
+    min-height: 38px;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+/* Light theme overrides */
+[data-theme="light"] .technical-filters,
+html[data-theme="light"] .technical-filters {
+    background: #ffffff;
+    color: #1b2532;
+    border-color: #dce1e7;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+[data-theme="light"] .technical-filters-heading,
+html[data-theme="light"] .technical-filters-heading {
+    border-bottom-color: #edf0f5;
+}
+
+[data-theme="light"] .technical-filters-title-row h3,
+html[data-theme="light"] .technical-filters-title-row h3 {
+    color: #1b2532;
+}
+
+[data-theme="light"] .technical-category-badge,
+html[data-theme="light"] .technical-category-badge {
+    background: rgba(198, 76, 35, 0.08);
+    border-color: rgba(198, 76, 35, 0.22);
+    color: var(--cw-accent, #c64c23);
+}
+
+[data-theme="light"] .technical-filters-note,
+html[data-theme="light"] .technical-filters-note {
+    background: #f8fafc;
+    border-color: #e2e8f0;
+    border-left-color: var(--cw-accent, #c64c23);
+}
+
+[data-theme="light"] .technical-filters-note p,
+html[data-theme="light"] .technical-filters-note p {
+    color: #475569;
+}
+
+[data-theme="light"] .technical-filters-note strong,
+html[data-theme="light"] .technical-filters-note strong {
+    color: #0f172a;
+}
+
+[data-theme="light"] .technical-filter-field label,
+html[data-theme="light"] .technical-filter-field label {
+    color: #1b2532;
+}
+
+[data-theme="light"] .technical-filter-field select,
+[data-theme="light"] .technical-filter-field input,
+html[data-theme="light"] .technical-filter-field select,
+html[data-theme="light"] .technical-filter-field input {
+    background: #f8fafc;
+    color: #0f172a;
+    border-color: #cbd5e1;
+}
+
+[data-theme="light"] .technical-filter-field select:focus-visible,
+[data-theme="light"] .technical-filter-field input:focus-visible,
+html[data-theme="light"] .technical-filter-field select:focus-visible,
+html[data-theme="light"] .technical-filter-field input:focus-visible {
+    background: #ffffff;
+    border-color: var(--cw-accent, #c64c23);
+    box-shadow: 0 0 0 2px rgba(198, 76, 35, 0.15);
+}
+
+[data-theme="light"] .technical-filter-status,
+html[data-theme="light"] .technical-filter-status {
+    background: #f8fafc;
+    border-color: #e2e8f0;
+    color: #64748b;
+}
+
+[data-theme="light"] .technical-filter-status[data-empty="true"],
+html[data-theme="light"] .technical-filter-status[data-empty="true"] {
+    background: #fef2f2;
+    border-color: #fecaca;
+    color: #b91c1c;
+}
+
+[data-theme="light"] .technical-filter-error,
+html[data-theme="light"] .technical-filter-error {
+    color: #b91c1c;
+}

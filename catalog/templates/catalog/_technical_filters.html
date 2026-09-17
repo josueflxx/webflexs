@@ -2,10 +2,30 @@
 {% if clamp_filter_fields or category_attributes %}
 <section class="technical-filters" aria-labelledby="technicalFiltersTitle">
     <div class="technical-filters-heading">
-        <h3 id="technicalFiltersTitle">{% if clamp_filter_fields %}Filtrar por medidas{% else %}Filtrar por atributos{% endif %}</h3>
-        <span>{{ current_category.display_name }}</span>
+        <div class="technical-filters-title-row">
+            <svg class="tech-title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <line x1="4" y1="21" x2="4" y2="14"></line>
+                <line x1="4" y1="10" x2="4" y2="3"></line>
+                <line x1="12" y1="21" x2="12" y2="12"></line>
+                <line x1="12" y1="8" x2="12" y2="3"></line>
+                <line x1="20" y1="21" x2="20" y2="16"></line>
+                <line x1="20" y1="12" x2="20" y2="3"></line>
+                <line x1="1" y1="14" x2="7" y2="14"></line>
+                <line x1="9" y1="8" x2="15" y2="8"></line>
+                <line x1="17" y1="16" x2="23" y2="16"></line>
+            </svg>
+            <h3 id="technicalFiltersTitle">{% if clamp_filter_fields %}Filtrar por medidas{% else %}Filtrar por atributos{% endif %}</h3>
+        </div>
+        <span class="technical-category-badge">{{ current_category.display_name }}</span>
     </div>
-    <p class="technical-filters-help">{% if clamp_filter_fields %}Cada selección muestra solo las opciones compatibles. Entre paréntesis: productos disponibles. Después, presioná Aplicar filtros.{% else %}Elegí las opciones y aplicá los filtros.{% endif %}</p>
+    <div class="technical-filters-note">
+        <svg class="tech-note-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
+            <circle cx="10" cy="10" r="8"></circle>
+            <line x1="10" y1="9" x2="10" y2="13.5" stroke-linecap="round"></line>
+            <circle cx="10" cy="6.2" r="0.8" fill="currentColor"></circle>
+        </svg>
+        <p>{% if clamp_filter_fields %}Mostrando combinaciones compatibles en tiempo real. Elegí tus medidas y presioná <strong>Aplicar filtros</strong>.{% else %}Elegí las opciones deseadas y presioná <strong>Aplicar filtros</strong>.{% endif %}</p>
+    </div>
     <form method="get" action="{% url 'catalog' %}" class="inline-filter-form" id="technicalFiltersForm">
         <input type="hidden" name="q" value="{{ search_query }}">
         <input type="hidden" name="category" value="{{ category_slug }}">
