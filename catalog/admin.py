@@ -5,7 +5,7 @@ from .models import (
     SupplierImportProfile, SupplierPriceListBatch, SupplierPriceListRow,
     Brand, BrandRubro, BrandSubrubro, BrandSubrubroProductOrder, BrandRubroProductOrder
 )
-from .services.clamp_parser import ClampParser
+from .services.clamp_specs import sync_product_clamp_specs
 
 class CategoryAttributeInline(admin.TabularInline):
     model = CategoryAttribute
@@ -41,31 +41,12 @@ class ProductSupplierInline(admin.TabularInline):
 @admin.action(description='Reparsear especificaciones de Abrazaderas')
 def reparse_abrazaderas(modeladmin, request, queryset):
     count = 0
+    reviews = 0
     for product in queryset:
-        is_clamp = product.name.upper().startswith('ABRAZADERA')
-        if not is_clamp:
-            primary_category = product.get_primary_category()
-            if primary_category:
-                is_clamp = 'ABRAZADERA' in primary_category.name.upper()
-            if not is_clamp:
-                is_clamp = product.categories.filter(name__icontains='ABRAZADERA').exists()
-            
-        if is_clamp:
-            specs_data = ClampParser.parse(product.description or product.name)
-            specs, created = ClampSpecs.objects.get_or_create(product=product)
-            
-            if not specs.manual_override:
-                specs.fabrication = specs_data.get('fabrication')
-                specs.diameter = specs_data.get('diameter')
-                specs.width = specs_data.get('width')
-                specs.length = specs_data.get('length')
-                specs.shape = specs_data.get('shape')
-                specs.parse_confidence = specs_data.get('parse_confidence', 0)
-                specs.parse_warnings = specs_data.get('parse_warnings', [])
-                specs.save()
-                count += 1
-                
-    modeladmin.message_user(request, f"{count} productos re-parseados exitosamente.")
+        plan = sync_product_clamp_specs(product)
+        count += bool(plan["changes"])
+        reviews += bool(plan["warnings"])
+    modeladmin.message_user(request, f"{count} fichas actualizadas. {reviews} productos requieren revisión.")
 
 @admin.register(Category)
 class CategoryAdmin(admin.ModelAdmin):

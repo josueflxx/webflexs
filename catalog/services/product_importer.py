@@ -4,8 +4,8 @@ import json
 from django.db import transaction
 
 from core.services.importer import BaseImporter, ImportRowResult
-from catalog.models import Category, Product, ClampSpecs, ProductSupplier
-from catalog.services.clamp_parser import ClampParser
+from catalog.models import Category, Product, ProductSupplier
+from catalog.services.clamp_specs import sync_product_clamp_specs
 from catalog.services.import_utils import (
     is_blank,
     normalize_columns,
@@ -854,36 +854,5 @@ class ProductImporter(BaseImporter):
         return results
 
     def check_and_run_parser(self, product, dry_run=False):
-        """
-        Check if product is 'Abrazadera' and run parser.
-        """
-        if not product or not product.name:
-            return
-
-        is_clamp = product.name.upper().startswith("ABRAZADERA")
-        if not is_clamp:
-            primary_category = product.get_primary_category()
-            if primary_category:
-                is_clamp = "ABRAZADERA" in primary_category.name.upper()
-            if not is_clamp:
-                is_clamp = product.categories.filter(name__icontains="ABRAZADERA").exists()
-
-        if not is_clamp:
-            return
-
-        specs_data = ClampParser.parse(product.description or product.name)
-        if dry_run:
-            return
-
-        specs, _created = ClampSpecs.objects.get_or_create(product=product)
-        if specs.manual_override:
-            return
-
-        specs.fabrication = specs_data.get("fabrication")
-        specs.diameter = specs_data.get("diameter")
-        specs.width = specs_data.get("width")
-        specs.length = specs_data.get("length")
-        specs.shape = specs_data.get("shape")
-        specs.parse_confidence = specs_data.get("parse_confidence", 0)
-        specs.parse_warnings = specs_data.get("parse_warnings", [])
-        specs.save()
+        if product and not dry_run:
+            return sync_product_clamp_specs(product)

@@ -200,6 +200,7 @@
     {% endif %}
 </style>
 <link rel="stylesheet" href="{% static 'core/css/catalog_workspace.css' %}?v=20260915-preview-7">
+<link rel="stylesheet" href="{% static 'core/css/catalog_filters.css' %}?v=20260917-cascade-1">
 {% endblock %}
 
 {% block content %}
@@ -249,6 +250,7 @@
 
         <section class="catalog-search-panel" aria-label="Buscar productos">
             <form method="get" class="catalog-primary-search">
+                {% for key, value in active_filters.items %}<input type="hidden" name="{{ key }}" value="{{ value }}">{% endfor %}
                 <input type="hidden" name="category" value="{{ category_slug }}">
                 <input type="hidden" name="order" value="{{ order_by }}">
                 <input type="hidden" name="view" value="{{ view_mode }}">
@@ -292,6 +294,8 @@
                         Cerrar
                     </button>
                 </div>
+
+                {% include "catalog/_technical_filters.html" %}
 
                 <div class="filter-section catalog-category-section">
                     <label class="category-search">
@@ -349,71 +353,6 @@
                                     </a>
                                 </div>
 
-                                {% if row.category.slug == category_slug and clamp_options or row.category.slug == category_slug and category_attributes %}
-                                <div class="category-inline-filters" style="--depth: {{ row.depth }};">
-                                    <form method="get" action="{% url 'catalog' %}" class="inline-filter-form">
-                                        <input type="hidden" name="q" value="{{ search_query }}">
-                                        <input type="hidden" name="category" value="{{ category_slug }}">
-                                        <input type="hidden" name="order" value="{{ order_by }}">
-                                        <input type="hidden" name="view" value="{{ view_mode }}">
-
-                                        {% if clamp_options %}
-                                        <div class="category-inline-title">Filtros tecnicos</div>
-                                        {% for field, options in clamp_options.items %}
-                                        <div class="filter-mini-group">
-                                            <label>{{ field_labels|get_item:field|default:field|title }}</label>
-                                            <select name="{{ field }}" class="form-select-mini" data-smart-select="off">
-                                                <option value="">- Todos -</option>
-                                                {% for opt in options %}
-                                                {% with field_val=active_filters|get_item:field %}
-                                                {% with opt_str=opt|stringformat:"s" %}
-                                                <option value="{{ opt }}" {% if field_val == opt_str %}selected{% endif %}>{{ opt }}</option>
-                                                {% endwith %}
-                                                {% endwith %}
-                                                {% endfor %}
-                                            </select>
-                                        </div>
-                                        {% endfor %}
-                                        {% endif %}
-
-                                        {% if category_attributes %}
-                                        <div class="category-inline-title">Atributos</div>
-                                        {% for attr in category_attributes %}
-                                        <div class="filter-mini-group">
-                                            <label>{{ attr.name }}</label>
-                                            {% if attr.type == 'select' %}
-                                            <select name="{{ attr.slug }}" class="form-select-mini" data-smart-select="off">
-                                                <option value="">- Todos -</option>
-                                                {% for opt in attr.options_list %}
-                                                {% with current_val=active_filters|get_item:attr.slug %}
-                                                <option value="{{ opt }}" {% if current_val == opt %}selected{% endif %}>{{ opt }}</option>
-                                                {% endwith %}
-                                                {% endfor %}
-                                            </select>
-                                            {% else %}
-                                            <input
-                                                type="text"
-                                                name="{{ attr.slug }}"
-                                                value="{{ active_filters|get_item:attr.slug|default:'' }}"
-                                                class="form-input form-input-sm"
-                                                placeholder="Filtrar..."
-                                            >
-                                            {% endif %}
-                                        </div>
-                                        {% endfor %}
-                                        {% endif %}
-
-                                        <div class="category-inline-actions">
-                                            <button type="submit" class="btn btn-primary btn-sm">Aplicar</button>
-                                            {% if active_filters %}
-                                            <a href="?category={{ category_slug }}&q={{ search_query }}&order={{ order_by }}&view={{ view_mode }}" class="btn btn-outline btn-sm">
-                                                Limpiar
-                                            </a>
-                                            {% endif %}
-                                        </div>
-                                    </form>
-                                </div>
-                                {% endif %}
                             </div>
                             {% empty %}
                             <p class="text-muted">No hay categorias activas.</p>
@@ -441,7 +380,7 @@
                 <div class="catalog-toolbar">
                     <button type="button" class="catalog-mobile-filter-btn" id="catalogMobileFilterBtn" onclick="openCatalogFilters()" aria-controls="catalogSidebar" aria-expanded="false">
                         <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 7h16M7 12h10m-7 5h4"/></svg>
-                        Categorías
+                        {% if clamp_filter_fields or category_attributes %}Filtros{% else %}Categorías{% endif %}
                     </button>
                     <div class="toolbar-meta">
                         <span class="result-count">
@@ -466,7 +405,7 @@
                                 <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11M4 6h1M4 12h1M4 18h1"/></svg><span>Lista</span>
                             </a>
                         </div>
-                        <select name="order" class="form-select order-select" aria-label="Ordenar productos" onchange="updateOrder(this.value)">
+                        <select name="order" class="form-select order-select" data-smart-select="off" aria-label="Ordenar productos" onchange="updateOrder(this.value)">
                             {% if search_query %}
                             <option value="relevance" {% if order_by == 'relevance' %}selected{% endif %}>Mejor coincidencia</option>
                             {% endif %}
@@ -758,6 +697,7 @@
 {% endblock %}
 
 {% block extra_js %}
+<script src="{% static 'core/js/catalog_filters.js' %}?v=20260917-cascade-1" defer></script>
 <script src="{% static 'core/js/catalog_excel_download.js' %}?v=20260914-1"></script>
 <script>
     function updateOrder(orderValue) {
@@ -936,83 +876,9 @@
         }
     }
 
-    function setupCustomSelects() {
-        const selects = document.querySelectorAll('.order-select, .form-select-mini');
-        selects.forEach(select => {
-            if (select.dataset.smartSelectReady === 'true') return;
-            if (select.parentNode.classList.contains('custom-select-wrapper')) return;
-            
-            const wrapper = document.createElement('div');
-            wrapper.className = 'custom-select-wrapper';
-            if (select.classList.contains('form-select-mini')) {
-                wrapper.classList.add('custom-select-mini');
-            }
-            
-            select.parentNode.insertBefore(wrapper, select);
-            wrapper.appendChild(select);
-            select.style.display = 'none';
-            
-            const trigger = document.createElement('div');
-            trigger.className = 'custom-select-trigger';
-            
-            const triggerText = document.createElement('span');
-            const selectedOpt = select.querySelector('option[selected]') || select.querySelector('option');
-            triggerText.textContent = selectedOpt ? selectedOpt.textContent.trim() : '';
-            trigger.appendChild(triggerText);
-            
-            const arrow = document.createElement('div');
-            arrow.className = 'custom-select-arrow';
-            trigger.appendChild(arrow);
-            wrapper.appendChild(trigger);
-            
-            const optionsContainer = document.createElement('div');
-            optionsContainer.className = 'custom-options';
-            
-            const options = select.querySelectorAll('option');
-            options.forEach(opt => {
-                const customOpt = document.createElement('div');
-                customOpt.className = 'custom-option';
-                customOpt.dataset.value = opt.value;
-                customOpt.textContent = opt.textContent.trim();
-                
-                if (opt.value === select.value) {
-                    customOpt.classList.add('active');
-                }
-                
-                customOpt.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    select.value = opt.value;
-                    triggerText.textContent = opt.textContent.trim();
-                    
-                    optionsContainer.querySelectorAll('.custom-option').forEach(el => el.classList.remove('active'));
-                    customOpt.classList.add('active');
-                    
-                    wrapper.classList.remove('open');
-                    
-                    select.dispatchEvent(new Event('change', { bubbles: true }));
-                });
-                optionsContainer.appendChild(customOpt);
-            });
-            wrapper.appendChild(optionsContainer);
-            
-            trigger.addEventListener('click', (e) => {
-                e.stopPropagation();
-                document.querySelectorAll('.custom-select-wrapper').forEach(w => {
-                    if (w !== wrapper) w.classList.remove('open');
-                });
-                wrapper.classList.toggle('open');
-            });
-        });
-        
-        document.addEventListener('click', () => {
-            document.querySelectorAll('.custom-select-wrapper').forEach(w => w.classList.remove('open'));
-        });
-    }
-
     document.addEventListener('DOMContentLoaded', function () {
         initializeCategoryTree();
         setupCategoryVisibilityToggle();
-        setupCustomSelects();
 
         // Bind loading shimmer transitions
         document.querySelectorAll('.search-form, .inline-filter-form').forEach(form => {

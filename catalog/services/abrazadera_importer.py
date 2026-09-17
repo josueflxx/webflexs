@@ -1,4 +1,5 @@
-from catalog.services.clamp_parser import ClampParser
+from types import SimpleNamespace
+from catalog.services.clamp_specs import plan_clamp_specs
 from catalog.services.import_utils import normalize_header, normalize_sku
 from catalog.services.product_importer import ProductImporter
 from core.services.importer import ImportRowResult
@@ -58,14 +59,14 @@ class AbrazaderaImporter(ProductImporter):
 
         result = super().process_row(row, dry_run=dry_run)
         if result.success and dry_run:
-            description = self._text(row.get("descripcion")) or self._text(row.get("nombre"))
-            if description:
-                parsed = ClampParser.parse(description)
-                warnings = parsed.get("parse_warnings") or []
+            name = self._text(row.get("nombre")) or self._text(row.get("descripcion"))
+            if name:
+                parsed = plan_clamp_specs(SimpleNamespace(name=name, description=self._text(row.get("descripcion"))))
+                warnings = parsed.get("warnings") or []
                 if warnings:
                     result.data = {
                         **(result.data or {}),
                         "parser_warnings": "; ".join(warnings),
-                        "parse_confidence": parsed.get("parse_confidence", 0),
+                        "parse_confidence": parsed.get("confidence", 0),
                     }
         return result

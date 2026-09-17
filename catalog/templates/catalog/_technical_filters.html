@@ -1,0 +1,52 @@
+{% load core_extras %}
+{% if clamp_filter_fields or category_attributes %}
+<section class="technical-filters" aria-labelledby="technicalFiltersTitle">
+    <div class="technical-filters-heading">
+        <h3 id="technicalFiltersTitle">{% if clamp_filter_fields %}Filtrar por medidas{% else %}Filtrar por atributos{% endif %}</h3>
+        <span>{{ current_category.display_name }}</span>
+    </div>
+    <p class="technical-filters-help">{% if clamp_filter_fields %}Cada selección muestra solo las opciones compatibles. Entre paréntesis: productos disponibles. Después, presioná Aplicar filtros.{% else %}Elegí las opciones y aplicá los filtros.{% endif %}</p>
+    <form method="get" action="{% url 'catalog' %}" class="inline-filter-form" id="technicalFiltersForm">
+        <input type="hidden" name="q" value="{{ search_query }}">
+        <input type="hidden" name="category" value="{{ category_slug }}">
+        <input type="hidden" name="order" value="{{ order_by }}">
+        <input type="hidden" name="view" value="{{ view_mode }}">
+        {% for field in clamp_filter_fields %}
+        <div class="technical-filter-field">
+            <label for="technical-{{ field.name }}">{{ field.label }}</label>
+            <select id="technical-{{ field.name }}" name="{{ field.name }}" data-clamp-filter data-smart-select="off">
+                <option value="">Todos</option>
+                {% for option in field.options %}
+                <option value="{{ option.value }}" data-label="{{ option.label }}" {% if option.selected %}selected{% endif %}>{{ option.label }} ({{ option.count }})</option>
+                {% endfor %}
+            </select>
+        </div>
+        {% endfor %}
+        {% for attr in category_attributes %}
+        <div class="technical-filter-field">
+            <label for="attribute-{{ attr.slug }}">{{ attr.name }}</label>
+            {% if attr.type == 'select' %}
+            <select id="attribute-{{ attr.slug }}" name="{{ attr.slug }}" data-smart-select="off">
+                <option value="">Todos</option>
+                {% for opt in attr.options_list %}
+                <option value="{{ opt }}" {% if active_filters|get_item:attr.slug == opt %}selected{% endif %}>{{ opt }}</option>
+                {% endfor %}
+            </select>
+            {% else %}
+            <input id="attribute-{{ attr.slug }}" type="text" name="{{ attr.slug }}" value="{{ active_filters|get_item:attr.slug|default:'' }}" placeholder="Filtrar…">
+            {% endif %}
+        </div>
+        {% endfor %}
+        {% for error in clamp_filter_errors %}<p class="technical-filter-error" role="alert">{{ error }}</p>{% endfor %}
+        <p id="technicalFilterStatus" class="technical-filter-status" aria-live="polite">Los cambios se aplican al confirmar.</p>
+        <div class="technical-filter-actions">
+            <button type="submit" class="btn btn-primary">Aplicar filtros</button>
+            <a href="{{ clear_filters_url }}" class="btn btn-outline">Limpiar</a>
+        </div>
+    </form>
+</section>
+{% if clamp_filter_fields %}
+{{ clamp_combinations|json_script:"clampFilterCombinations" }}
+{{ clamp_all_options|json_script:"clampFilterOptions" }}
+{% endif %}
+{% endif %}

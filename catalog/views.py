@@ -673,6 +673,7 @@ def build_active_filter_chips(request, active_filters, category_attributes, fiel
         label = attribute_label_map.get(key) or field_labels.get(key) or key
         params = request.GET.copy()
         params.pop(key, None)
+        params.pop("page", None)
         chips.append(
             {
                 "label": label,
@@ -684,6 +685,7 @@ def build_active_filter_chips(request, active_filters, category_attributes, fiel
     if request.GET.get("q", "").strip():
         params = request.GET.copy()
         params.pop("q", None)
+        params.pop("page", None)
         chips.append(
             {
                 "label": "Busqueda",
@@ -820,7 +822,7 @@ def catalog(request):
     category_ids = []
     category_attributes = []
     active_filters = {}
-    clamp_options = {}
+    clamp_context = {}
 
     if category_slug:
         current_category = Category.objects.filter(
@@ -859,46 +861,9 @@ def catalog(request):
                     active_filters[attr.slug] = value
 
             if is_clamp_category_branch(current_category):
-                spec_fields = ["fabrication", "diameter", "width", "length", "shape"]
-                products_before_specs = products
-
-                for field in spec_fields:
-                    value = request.GET.get(field, "").strip()
-                    if value:
-                        active_filters[field] = value
-                        if field in ["width", "length"]:
-                            try:
-                                products = products.filter(**{f"clamp_specs__{field}": int(value)})
-                            except ValueError:
-                                pass
-                        else:
-                            products = products.filter(**{f"clamp_specs__{field}": value})
-
-                for field in spec_fields:
-                    facet_qs = products_before_specs
-                    for other_field in spec_fields:
-                        if other_field == field:
-                            continue
-                        value = request.GET.get(other_field, "").strip()
-                        if value:
-                            if other_field in ["width", "length"]:
-                                try:
-                                    facet_qs = facet_qs.filter(
-                                        **{f"clamp_specs__{other_field}": int(value)}
-                                    )
-                                except ValueError:
-                                    pass
-                            else:
-                                facet_qs = facet_qs.filter(
-                                    **{f"clamp_specs__{other_field}": value}
-                                )
-                    field_lookup = f"clamp_specs__{field}"
-                    options = (
-                        facet_qs.values_list(field_lookup, flat=True)
-                        .distinct()
-                        .order_by(field_lookup)
-                    )
-                    clamp_options[field] = [option for option in options if option]
+                from .services.clamp_filters import build_clamp_filters
+                products, clamp_context, spec_filters = build_clamp_filters(products, request.GET)
+                active_filters.update(spec_filters)
 
     order_by_default = "relevance" if search_query else ("manual" if current_category else "name")
     order_by = request.GET.get("order", order_by_default)
@@ -1132,8 +1097,11 @@ def catalog(request):
         "parsed_search": parsed_search,
     }
 
-    if any(clamp_options.values()):
-        context["clamp_options"] = clamp_options
+    context.update(clamp_context)
+    clear_params = request.GET.copy()
+    for key in (*active_filters, "page"):
+        clear_params.pop(key, None)
+    context["clear_filters_url"] = f"?{clear_params.urlencode()}"
 
     return render(request, "catalog/catalog_v3.html", context)
 
@@ -1869,7 +1837,11 @@ def product_quick_edit(request, pk):
     
     try:
         product.full_clean()
-        product.save()
+        from django.db import transaction
+        from .services.clamp_specs import sync_product_clamp_specs
+        with transaction.atomic():
+            product.save()
+            sync_product_clamp_specs(product)
     except ValidationError as e:
         errors = "; ".join([f"{k}: {', '.join(v)}" for k, v in e.message_dict.items()])
         return JsonResponse({"success": False, "error": f"Error de validación: {errors}"}, status=400)

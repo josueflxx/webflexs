@@ -1,6 +1,7 @@
 """
 Admin Panel views - Custom admin interface.
 """
+from catalog.services.clamp_specs import sync_product_clamp_specs
 from django.shortcuts import render, redirect, get_object_or_404
 from django.urls import reverse
 from django.contrib.admin.views.decorators import staff_member_required
@@ -671,6 +672,7 @@ def product_create(request):
                         match_method="manual",
                     )
                 assign_categories_to_product(product, selected_category_ids, primary_category_id)
+                sync_product_clamp_specs(product)
                 if settings.warehouse_stock_enabled:
                     now = timezone.now()
                     ProductWarehouseStock.objects.bulk_create(
@@ -937,6 +939,7 @@ def product_edit(request, pk):
                     is_preferred=False
                 )
             assign_categories_to_product(product, selected_category_ids, primary_category_id)
+            sync_product_clamp_specs(product)
             blocks_payload = request.POST.get('product_blocks_json', '{}')
             try:
                 blocks_data = json.loads(blocks_payload or '{}')
@@ -4815,6 +4818,9 @@ def product_grid_update_cell(request):
 
             else:
                 return JsonResponse({'status': 'error', 'message': f'Campo "{field}" no editable.'}, status=400)
+
+            if field in {"name", "sku", "category_id"}:
+                sync_product_clamp_specs(product)
 
             log_admin_action(
                 request,

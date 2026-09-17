@@ -1,181 +1,87 @@
-
+"""Conservative extraction of clamp dimensions from commercial names."""
 import re
-from typing import Dict, Any, List, Optional
-import logging
+import unicodedata
+from fractions import Fraction
 
-logger = logging.getLogger(__name__)
+
+SPEC_FIELDS = ("fabrication", "diameter", "width", "length", "shape")
+DIAMETER_PATTERN = r"(?:\d+[ -]+\d+/\d+|\d+/\d+|\d+(?:[.,]\d+)?)"
+
+
+def normalize_diameter(value):
+    value = str(value).strip().replace(",", ".")
+    mixed = re.fullmatch(r"(\d+)[ -]+(\d+)/(\d+)", value)
+    try:
+        number = (Fraction(mixed[1]) + Fraction(int(mixed[2]), int(mixed[3]))) if mixed else Fraction(value)
+    except (ValueError, ZeroDivisionError):
+        raise ValueError("Diámetro inválido") from None
+    if number <= 0 or number > 100:
+        raise ValueError("Diámetro fuera de rango")
+    if mixed or "/" in value:
+        whole, rest = divmod(number.numerator, number.denominator)
+        return f"{whole} {rest}/{number.denominator}" if whole and rest else str(number)
+    return format(float(number), ".8g")
+
 
 class ClampParser:
-    """
-    Parser especializado para extraer especificaciones técnicas de Abrazaderas
-    a partir de descripciones de texto plano.
-    
-    Implementa la lógica estricta de 8 pasos definida por el usuario.
-    """
-    
     @staticmethod
-    def normalize_text(text: str) -> str:
-        """
-        PASO 1 – Normalizar el texto
-        - Convertir a MAYÚSCULAS
-        - Quitar espacios duplicados
-        - Unificar variantes conocidas (S/CURVA -> SEMICURVA, etc)
-        - Asegurar separadores claros (X rodeado de espacios)
-        """
-        if not text:
-            return ""
-        
-        # 1. Mayúsculas y stripping
-        text = text.upper().strip()
-        
-        # 2. Reemplazos variantes
-        replacements = {
-            'S/CURVA': 'SEMICURVA',
-            'S-CURVA': 'SEMICURVA',
-            'S/C': 'SEMICURVA',
-            'CURV.': 'CURVA',
-            'SC': 'SEMICURVA',  # Shortcut for Forjadas
-        }
-        
-        for k, v in replacements.items():
-            # Use regex for whole word replacement to avoid partial matches if needed,
-            # but for SC/S/C usually direct replace is ok if normalized
-            # Let's be safer with word boundaries for SC
-            if k == 'SC':
-                text = re.sub(r'\bSC\b', v, text)
-            else:
-                text = text.replace(k, v)
-            
-        # 3. Espacios duplicados
-        text = re.sub(r'\s+', ' ', text)
-        
-        # 4. Asegurar separadores claros para X (dimensiones)
-        # "todo X rodeado de espacios -> X"
-        text = re.sub(r'\s*X\s*', ' X ', text)
-        
-        return text.strip()
+    def normalize_text(text):
+        text = unicodedata.normalize("NFKD", str(text or "").upper())
+        text = "".join(c for c in text if not unicodedata.combining(c))
+        text = text.replace("×", "X").replace("*", "X")
+        text = re.sub(r"\bS\s*[/\-]\s*C(?:URV[AO])?\b|\bSC\b", "SEMICURVA", text)
+        text = re.sub(r"\bSEMI[ -]?CURV[AO]\b", "SEMICURVA", text)
+        text = re.sub(r"\bCURVO\b|\bCURV\.", "CURVA", text)
+        text = re.sub(r"\bPLANO\b", "PLANA", text)
+        return re.sub(r"\s+", " ", text).strip()
 
     @classmethod
-    def parse(cls, text: str) -> Dict[str, Any]:
-        """
-        Analiza el texto y retorna estructura con datos y confianza.
-        """
-        # PASO 1 - Normalización
+    def parse(cls, text):
         text = cls.normalize_text(text)
-        
-        result = {
-            'fabrication': None,
-            'diameter': None,
-            'width': None,
-            'length': None,
-            'shape': None,
-            'parse_confidence': 100,
-            'parse_warnings': []
-        }
-        
-        # PASO 2 – Validar que sea una abrazadera
-        if not text.startswith('ABRAZADERA'):
-            result['parse_warnings'].append("Ignorado: No comienza con 'ABRAZADERA'")
-            result['parse_confidence'] = 0
-            return result
-        
-        # PASO 3 – Detectar tipo de fabricación
-        has_trefilada = 'TREFILADA' in text
-        has_laminada = 'LAMINADA' in text
-        has_forjada = 'FORJADA' in text
-        
-        if has_forjada:
-             result['fabrication'] = 'FORJADA'
-             # If ambiguous with others
-             if has_trefilada or has_laminada:
-                 result['parse_warnings'].append("Ambigüedad: Detectadas FORJADA y otros tipos")
-        elif has_trefilada and has_laminada:
-            # Ambiguno
-            result['parse_warnings'].append("Ambigüedad: Detectadas ambas TREFILADA y LAMINADA")
-            result['parse_confidence'] -= 20
-        elif has_trefilada:
-            result['fabrication'] = 'TREFILADA'
-        elif has_laminada:
-            result['fabrication'] = 'LAMINADA'
-        else:
-            # Desconocido
-            pass 
+        result = dict.fromkeys(SPEC_FIELDS)
+        warnings = []
+        if not re.match(r"^ABRAZADERAS?\b", text):
+            return {**result, "parse_confidence": 0, "parse_warnings": ["Ignorado: no es una abrazadera"]}
 
-        # PASO 3.5 - Compact Format Detection (DxWxL) typical in Forjadas
-        # Example: 18 X 82 X 220 -> Diam 18, Width 82, Length 220
-        # Format: Number(fraction?) X Number X Number
-        # Needs to closely precede or follow? Usually in middle.
-        
-        # Regex for D x W x L
-        # ([\d/]+) \sX\s (\d+) \sX\s (\d+)
-        compact_match = re.search(r'([\d/]+)\sX\s(\d+)\sX\s(\d+)', text)
-        
-        if compact_match:
-            # Compact match found, likely forjada style
-            result['diameter'] = compact_match.group(1)
-            result['width'] = int(compact_match.group(2))
-            result['length'] = int(compact_match.group(3))
-            
-            # Skip standard steps 4 & 5 if we found this strong match
-        else:
-            # PASO 4 – Detectar diámetro (Classic "DE ...")
-            # Regla: El diámetro siempre viene después de la palabra DE
-            # Buscar DE, leer token siguiente.
-            match_diam = re.search(r'\bDE\s+([\d/]+|\d+)', text)
-            if match_diam:
-                val = match_diam.group(1)
-                result['diameter'] = val
-            
-            # PASO 5 – Detectar ancho y largo
-            # Buscar todas las ocurrencias del patrón: X <número>
-            matches_dims = re.findall(r'\sX\s(\d+)', text)
-            
-            if len(matches_dims) >= 1:
-                # El primer número encontrado -> ancho
-                result['width'] = int(matches_dims[0])
-                
-                if len(matches_dims) >= 2:
-                    # El segundo número encontrado -> largo
-                    result['length'] = int(matches_dims[1])
+        types = re.findall(r"\b(TREFILADA|LAMINADA|FORJADA)\b", text)
+        if len(set(types)) == 1:
+            result["fabrication"] = types[0]
+        elif types:
+            warnings.append("Ambigüedad: varios tipos de fabricación")
+
+        dimension_re = rf'(?<![\d/.,-])({DIAMETER_PATTERN})\s*(?:["″]|MM)?\s*X\s*(\d+)\s*(?:MM)?\s*X\s*(\d+)(?![\d.,])'
+        matches = list(re.finditer(dimension_re, text))
+        if len(matches) == 1:
+            match = matches[0]
+            try:
+                result["diameter"] = normalize_diameter(match[1])
+            except ValueError as exc:
+                warnings.append(str(exc))
+            for field, token in (("width", match[2]), ("length", match[3])):
+                if 0 < int(token) <= 10000:
+                    result[field] = int(token)
                 else:
-                    # Solo uno
-                    result['parse_warnings'].append("Falta Largo (solo se encontró una medida X)")
-            else:
-                # Ninguno
-                pass
+                    warnings.append(f"Medida inválida: {field}")
+        elif matches:
+            warnings.append("Ambigüedad: más de un conjunto de medidas")
+        else:
+            diameter = re.search(rf"\bDE\s+({DIAMETER_PATTERN})(?![\d/.,])", text)
+            if diameter:
+                try:
+                    result["diameter"] = normalize_diameter(diameter[1])
+                except ValueError as exc:
+                    warnings.append(str(exc))
 
-        # PASO 6 – Detectar tipo (forma)
-        # Prioridad: SEMICURVA > CURVA > PLANA
-        if 'SEMICURVA' in text:
-            result['shape'] = 'SEMICURVA'
-        elif 'CURVA' in text:
-             # Check if it was part of Semicurva (already normalized so S/CURVA is SEMICURVA)
-             # Basic check to ensure we don't double match if the logic was weak, but if/elif handles priority
-             result['shape'] = 'CURVA'
-        elif 'PLANA' in text:
-            result['shape'] = 'PLANA'
-        # else None
+        shapes = set(re.findall(r"\b(SEMICURVA|CURVA|PLANA)\b", text))
+        if len(matches) == 1:
+            suffix = re.match(r"\s*(?:MM\s*)?([CPS])\b", text[matches[0].end():])
+            if suffix:
+                shapes.add({"C": "CURVA", "P": "PLANA", "S": "SEMICURVA"}[suffix[1]])
+        if len(shapes) == 1:
+            result["shape"] = shapes.pop()
+        elif shapes:
+            warnings.append("Ambigüedad: varias formas")
 
-        # PASO 7 – Validar coherencia
-        # Marcar campos faltantes
-        if not result['fabrication']:
-             result['parse_warnings'].append("Falta: Fabricación")
-        if not result['diameter']:
-             result['parse_warnings'].append("Falta: Diámetro")
-             result['parse_warnings'].append("Falta: Diámetro")
-        if not result['width']:
-             result['parse_warnings'].append("Falta: Ancho")
-        if not result['shape']:
-             result['parse_warnings'].append("Falta: Forma")
-
-        # Ajustar confianza
-        if result['parse_warnings']:
-            # Simple penalty logic
-            result['parse_confidence'] -= (len(result['parse_warnings']) * 10)
-            if result['parse_confidence'] < 0:
-                result['parse_confidence'] = 0
-
-        # PASO 8 – Uso para filtros
-        # Los datos estructurados result['fabrication'], etc. se usarán para el modelo.
-        
-        return result
+        labels = ("Fabricación", "Diámetro", "Ancho", "Largo", "Forma")
+        warnings.extend(f"Falta: {label}" for field, label in zip(SPEC_FIELDS, labels) if result[field] is None)
+        return {**result, "parse_confidence": max(0, 100 - 15 * len(warnings)), "parse_warnings": warnings}
