@@ -41,7 +41,7 @@ from catalog.services.clamp_quoter import (
     get_allowed_diameter_options,
 )
 from .models import (
-    Category, CategoryAttribute, CategoryProductOrder, ClampMeasureRequest, Product,
+    Category, CategoryAttribute, CategoryProductOrder, ClampMeasureRequest, Product, ProductImage,
     Brand, BrandRubro, BrandSubrubro, BrandSubrubroProductOrder, BrandRubroProductOrder
 )
 
@@ -503,9 +503,14 @@ def get_catalog_product_queryset():
         ),
         to_attr="prefetched_public_categories",
     )
+    gallery_prefetch = Prefetch(
+        "images",
+        queryset=ProductImage.objects.all().order_by("order", "id"),
+        to_attr="prefetched_images",
+    )
     return Product.catalog_visible(
         Product.objects.select_related("category")
-        .prefetch_related(public_category_prefetch)
+        .prefetch_related(public_category_prefetch, gallery_prefetch)
         .only(
             "id",
             "sku",
@@ -1120,9 +1125,14 @@ def product_detail(request, sku):
         ),
         to_attr="prefetched_public_categories",
     )
+    gallery_prefetch = Prefetch(
+        "images",
+        queryset=ProductImage.objects.all().order_by("order", "id"),
+        to_attr="prefetched_images",
+    )
     product = get_object_or_404(
         Product.catalog_visible(
-            Product.objects.select_related("category").prefetch_related(public_category_prefetch).only(
+            Product.objects.select_related("category").prefetch_related(public_category_prefetch, gallery_prefetch).only(
                 "id",
                 "sku",
                 "name",
@@ -1241,6 +1251,7 @@ def product_detail(request, sku):
         "seo_title": f"{product.name} | FLEXS",
         "seo_description": seo_description,
         "is_favorite": is_favorite,
+        "product_images": product.get_gallery_images(),
     }
 
     return render(request, "catalog/product_detail.html", context)

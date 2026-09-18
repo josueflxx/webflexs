@@ -81,27 +81,68 @@
             <small class="text-muted">Codigo con el que este proveedor identifica el producto.</small>
         </div>
 
-        <div class="form-group">
-            <label for="image" class="form-label">Imagen</label>
-            {% if product and product.image %}
+        <div class="form-group gallery-form-group">
+            <label class="form-label" style="display: flex; justify-content: space-between; align-items: baseline;">
+                <span>Imágenes del producto (Galería)</span>
+                <span class="gallery-count-badge" style="font-size: 0.82rem; font-weight: normal; color: var(--color-muted, #94a3b8);">
+                    <span id="galleryCount">{{ gallery_images|length }}</span>/5 fotos
+                </span>
+            </label>
+
+            {% if gallery_images %}
+            <div class="gallery-grid" id="galleryGrid">
+                {% for img in gallery_images %}
+                <div class="gallery-card {% if img.is_primary %}is-primary-card{% endif %}" id="gallery-card-{{ img.id }}">
+                    <div class="gallery-card-thumb">
+                        <img src="{{ img.image.url }}" alt="Foto {{ forloop.counter }}">
+                        {% if img.is_primary %}
+                        <span class="badge-primary-cover">Portada</span>
+                        {% endif %}
+                    </div>
+                    <div class="gallery-card-controls">
+                        <label class="gallery-control-label">
+                            <input type="radio" name="primary_gallery_image" value="{{ img.id }}" {% if img.is_primary %}checked{% endif %} {% if not user.is_superuser %}disabled{% endif %}>
+                            Portada
+                        </label>
+                        <label class="gallery-control-label danger">
+                            <input type="checkbox" name="delete_gallery_images" value="{{ img.id }}" class="delete-gallery-check" onchange="toggleCardDelete(this, 'gallery-card-{{ img.id }}')" {% if not user.is_superuser %}disabled{% endif %}>
+                            Eliminar
+                        </label>
+                    </div>
+                    <a href="{{ img.image.url }}" target="_blank" rel="noopener" class="gallery-view-link">Ver imagen ↗</a>
+                </div>
+                {% endfor %}
+            </div>
+            {% elif product and product.image %}
             <div class="product-image-preview">
                 <img src="{{ product.image.url }}" alt="{{ product.name }}">
-                <a href="{{ product.image.url }}" target="_blank" rel="noopener" class="btn btn-outline btn-sm">Ver actual</a>
+                <div>
+                    <a href="{{ product.image.url }}" target="_blank" rel="noopener" class="btn btn-outline btn-sm">Ver actual</a>
+                    <label class="form-label" style="margin-top: 8px; color: #ef4444;">
+                        <input type="checkbox" name="remove_image" {% if not user.is_superuser %}disabled{% endif %}>
+                        Quitar imagen actual
+                    </label>
+                </div>
             </div>
             {% endif %}
-            <input type="file"
-                   name="image"
-                   id="image"
-                   class="form-input"
-                   accept="image/png,image/jpeg,image/webp,image/gif"
-                   {% if not user.is_superuser %}disabled{% endif %}>
-            {% if product and product.image %}
-            <label class="form-label" style="margin-top: 8px;">
-                <input type="checkbox" name="remove_image" {% if not user.is_superuser %}disabled{% endif %}>
-                Quitar imagen actual
-            </label>
-            {% endif %}
-            <small class="text-muted">Formatos admitidos: JPG, PNG, WEBP o GIF (max. 8MB).</small>
+
+            <div class="gallery-upload-box">
+                <label for="gallery_images" class="form-label" style="font-size: 0.85rem; margin-bottom: 4px; color: var(--color-muted, #94a3b8);">
+                    Subir fotos (selecciona hasta 5 en total):
+                </label>
+                <input type="file"
+                       name="gallery_images"
+                       id="gallery_images"
+                       class="form-input"
+                       multiple
+                       accept="image/png,image/jpeg,image/webp,image/gif"
+                       {% if not user.is_superuser %}disabled{% endif %}
+                       onchange="previewNewImages(this)">
+                <div id="newImagesPreview" class="gallery-new-preview-grid"></div>
+                <small class="text-muted" style="display: block; margin-top: 4px;">
+                    Formatos admitidos: JPG, PNG, WEBP o GIF (max. 8MB por foto). Límite de 5 fotos por producto.
+                </small>
+            </div>
         </div>
 
         <div class="form-group">
@@ -674,6 +715,97 @@
         border-radius: 8px;
         border: 1px solid rgba(255, 255, 255, 0.16);
         background: rgba(255, 255, 255, 0.04);
+    }
+    .gallery-grid {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-bottom: 12px;
+    }
+    .gallery-card {
+        position: relative;
+        width: 120px;
+        border-radius: 10px;
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        background: rgba(255, 255, 255, 0.04);
+        padding: 8px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 6px;
+        transition: all 0.2s ease;
+    }
+    .gallery-card.is-primary-card {
+        border-color: #10b981;
+        background: rgba(16, 185, 129, 0.08);
+    }
+    .gallery-card-thumb {
+        position: relative;
+        width: 104px;
+        height: 104px;
+        border-radius: 6px;
+        overflow: hidden;
+        background: #0f172a;
+    }
+    .gallery-card-thumb img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+    }
+    .badge-primary-cover {
+        position: absolute;
+        top: 4px;
+        left: 4px;
+        background: #10b981;
+        color: #ffffff;
+        font-size: 0.65rem;
+        font-weight: 700;
+        padding: 2px 6px;
+        border-radius: 4px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    .gallery-card-controls {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        width: 100%;
+        font-size: 0.78rem;
+    }
+    .gallery-control-label {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        cursor: pointer;
+        color: inherit;
+        margin: 0;
+        font-weight: normal;
+    }
+    .gallery-control-label.danger {
+        color: #ef4444;
+    }
+    .gallery-view-link {
+        font-size: 0.72rem;
+        color: #38bdf8;
+        text-decoration: underline;
+    }
+    .gallery-new-preview-grid {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 8px;
+    }
+    html[data-theme="light"] .gallery-card {
+        background: #ffffff;
+        border-color: #e2e8f0;
+    }
+    html[data-theme="light"] .gallery-card.is-primary-card {
+        border-color: #10b981;
+        background: #f0fdf4;
+    }
+    html[data-theme="light"] .gallery-card-thumb {
+        background: #f8fafc;
     }
     .product-source-card {
         border: 1px solid rgba(255, 255, 255, 0.12);
@@ -1591,6 +1723,63 @@
         }
 
         document.getElementById('attributes_json').value = JSON.stringify(attributes);
+    }
+
+    function toggleCardDelete(checkbox, cardId) {
+        const card = document.getElementById(cardId);
+        if (card) {
+            if (checkbox.checked) {
+                card.style.opacity = '0.4';
+                card.style.borderColor = '#ef4444';
+            } else {
+                card.style.opacity = '1';
+                card.style.borderColor = card.classList.contains('is-primary-card') ? '#10b981' : 'rgba(255, 255, 255, 0.14)';
+            }
+        }
+        updateGalleryCount();
+    }
+
+    function updateGalleryCount() {
+        const totalCards = document.querySelectorAll('.gallery-card:not([style*="opacity: 0.4"])').length;
+        const newPreviews = document.querySelectorAll('.gallery-new-thumb-item').length;
+        const countEl = document.getElementById('galleryCount');
+        if (countEl) {
+            countEl.textContent = totalCards + newPreviews;
+        }
+    }
+
+    function previewNewImages(input) {
+        const previewContainer = document.getElementById('newImagesPreview');
+        if (!previewContainer) return;
+        previewContainer.innerHTML = '';
+
+        const activeExisting = document.querySelectorAll('.gallery-card:not([style*="opacity: 0.4"])').length;
+        const maxAllowed = Math.max(0, 5 - activeExisting);
+
+        if (input.files.length > maxAllowed) {
+            alert('Solo puedes subir hasta ' + maxAllowed + ' foto(s) más (máximo 5 fotos en total por producto).');
+        }
+
+        const filesToPreview = Array.from(input.files).slice(0, maxAllowed);
+        filesToPreview.forEach((file, index) => {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const wrap = document.createElement('div');
+                wrap.className = 'gallery-new-thumb-item';
+                const img = document.createElement('img');
+                img.src = e.target.result;
+                img.alt = 'Nueva ' + (index + 1);
+                const badge = document.createElement('span');
+                badge.className = 'gallery-new-thumb-badge';
+                badge.textContent = 'Nueva ' + (index + 1);
+                wrap.appendChild(img);
+                wrap.appendChild(badge);
+                previewContainer.appendChild(wrap);
+                updateGalleryCount();
+            };
+            reader.readAsDataURL(file);
+        });
+        updateGalleryCount();
     }
 </script>
 {% endblock %}

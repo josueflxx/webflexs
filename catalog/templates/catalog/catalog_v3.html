@@ -576,7 +576,10 @@
                         {% endif %}
                         <a class="product-image" href="{% url 'product_detail' product.sku %}">
                             {% if product.image %}
-                            <img src="{{ product.image.url }}" alt="{{ product.name }}" loading="lazy" decoding="async" width="320" height="220">
+                            <img class="product-main-img" src="{{ product.image.url }}" alt="{{ product.name }}" loading="lazy" decoding="async" width="320" height="220">
+                            {% if product.get_secondary_image_url %}
+                            <img class="product-hover-img" src="{{ product.get_secondary_image_url }}" alt="{{ product.name }}" loading="lazy" decoding="async" width="320" height="220">
+                            {% endif %}
                             {% else %}
                             {% include 'catalog/_product_placeholder.html' with compact=False %}
                             {% endif %}

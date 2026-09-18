@@ -56,6 +56,7 @@ from openpyxl import Workbook, load_workbook
 
 from catalog.models import (
     Product,
+    ProductImage,
     Category,
     CategoryAttribute,
     CategoryProductOrder,
@@ -581,6 +582,7 @@ def product_create(request):
             selected_category_ids = normalize_category_ids(request.POST.getlist('categories'))
             description = request.POST.get('description', '').strip()
             attributes_payload = request.POST.get('attributes_json', '{}')
+            uploaded_gallery = request.FILES.getlist('gallery_images')
             uploaded_image = request.FILES.get('image')
             settings = SiteSettings.get_settings()
             if settings.warehouse_stock_enabled and stock_value != 0:
@@ -589,7 +591,9 @@ def product_create(request):
                     "y luego asigna la existencia al deposito correspondiente."
                 )
 
-            if uploaded_image:
+            for img in uploaded_gallery[:5]:
+                _validate_admin_image_upload(img)
+            if uploaded_image and not uploaded_gallery:
                 _validate_admin_image_upload(uploaded_image)
 
             try:
@@ -613,6 +617,7 @@ def product_create(request):
                     'iva_rate_choices': Product.IVA_RATE_CHOICES,
                     'form_iva_rate': iva_rate_raw,
                     'action': 'Crear',
+                    'gallery_images': [],
                     })
 
             missing_required, missing_recommended = validate_attributes_for_category(
@@ -631,6 +636,7 @@ def product_create(request):
                     'iva_rate_choices': Product.IVA_RATE_CHOICES,
                     'form_iva_rate': iva_rate_raw,
                     'action': 'Crear',
+                    'gallery_images': [],
                 })
             if missing_recommended:
                 messages.warning(
@@ -641,6 +647,7 @@ def product_create(request):
             if Product.objects.filter(sku=sku).exists():
                 messages.error(request, f'Ya existe un producto con SKU "{sku}"')
             else:
+                primary_image = uploaded_gallery[0] if uploaded_gallery else uploaded_image
                 product = Product.objects.create(
                     sku=sku,
                     name=name,
@@ -657,8 +664,23 @@ def product_create(request):
                     category_id=int(primary_category_id) if str(primary_category_id).isdigit() else None,
                     description=description,
                     attributes=attributes_data,
-                    image=uploaded_image,
+                    image=primary_image,
                 )
+                if uploaded_gallery:
+                    for idx, img_file in enumerate(uploaded_gallery[:5]):
+                        ProductImage.objects.create(
+                            product=product,
+                            image=img_file,
+                            order=idx,
+                            is_primary=(idx == 0),
+                        )
+                elif uploaded_image:
+                    ProductImage.objects.create(
+                        product=product,
+                        image=uploaded_image,
+                        order=0,
+                        is_primary=True,
+                    )
                 if supplier_obj:
                     upsert_product_supplier_offer(
                         product=product,
@@ -730,6 +752,7 @@ def product_create(request):
         'form_iva_rate': request.POST.get('iva_rate', '') if request.method == 'POST' else '',
         'action': 'Crear',
         'existing_blocks_json': '{}',
+        'gallery_images': [],
     })
 
 
@@ -738,6 +761,13 @@ def product_create(request):
 def product_edit(request, pk):
     """Edit existing product."""
     product = get_object_or_404(Product, pk=pk)
+    if product.image and not product.images.exists():
+        ProductImage.objects.create(
+            product=product,
+            image=product.image,
+            is_primary=True,
+            order=0,
+        )
     product_audit_fields = [
         "sku",
         "name",
@@ -844,12 +874,17 @@ def product_edit(request, pk):
                 product.is_purchasable = request.POST.get('is_purchasable') == 'on'
             product.description = request.POST.get('description', '').strip()
             product.is_active = request.POST.get('is_active') == 'on'
+            uploaded_gallery = request.FILES.getlist('gallery_images')
             uploaded_image = request.FILES.get('image')
+            delete_gallery_ids = request.POST.getlist('delete_gallery_images')
+            primary_image_id = request.POST.get('primary_gallery_image')
             remove_image = request.POST.get('remove_image') == 'on'
             old_image_name = str(product.image.name or '').strip() if product.image else ''
             new_image_applied = False
 
-            if uploaded_image:
+            for f in uploaded_gallery[:5]:
+                _validate_admin_image_upload(f)
+            if uploaded_image and not uploaded_gallery:
                 _validate_admin_image_upload(uploaded_image)
 
             primary_category_id = request.POST.get('category', '')
@@ -872,6 +907,7 @@ def product_edit(request, pk):
                     'iva_rate_choices': Product.IVA_RATE_CHOICES,
                     'action': 'Editar',
                     'existing_blocks_json': existing_blocks_json,
+                    'gallery_images': list(product.images.all().order_by('order', 'id')),
                 })
 
             product.category_id = int(primary_category_id) if str(primary_category_id).isdigit() else None
@@ -902,6 +938,7 @@ def product_edit(request, pk):
                     'iva_rate_choices': Product.IVA_RATE_CHOICES,
                     'action': 'Editar',
                     'existing_blocks_json': existing_blocks_json,
+                    'gallery_images': list(product.images.all().order_by('order', 'id')),
                 })
             if missing_recommended:
                 messages.warning(
@@ -911,12 +948,54 @@ def product_edit(request, pk):
 
             product.attributes = attributes_data
 
-            if remove_image and not uploaded_image:
-                product.image = None
-                new_image_applied = True
-            if uploaded_image:
-                product.image = uploaded_image
-                new_image_applied = True
+            # Process gallery image deletions
+            if delete_gallery_ids:
+                del_ids = [int(i) for i in delete_gallery_ids if i.isdigit()]
+                deleted_images = list(product.images.filter(id__in=del_ids))
+                for del_img in deleted_images:
+                    del_name = str(del_img.image.name or '').strip()
+                    del_img.delete()
+                    if del_name and del_name != old_image_name:
+                        _delete_orphan_product_image(del_name)
+
+            # Process new gallery uploads up to 5 total
+            current_count = product.images.count()
+            slots_available = max(0, 5 - current_count)
+            files_to_add = uploaded_gallery[:slots_available] if uploaded_gallery else ([uploaded_image] if uploaded_image and slots_available > 0 else [])
+            for new_file in files_to_add:
+                max_order = (product.images.aggregate(m=Max('order'))['m'] or 0) + 1
+                ProductImage.objects.create(
+                    product=product,
+                    image=new_file,
+                    order=max_order,
+                    is_primary=False,
+                )
+
+            # Process primary selection
+            if primary_image_id and primary_image_id.isdigit():
+                pid = int(primary_image_id)
+                if product.images.filter(id=pid).exists():
+                    product.images.exclude(id=pid).update(is_primary=False)
+                    chosen_primary = product.images.get(id=pid)
+                    chosen_primary.is_primary = True
+                    chosen_primary.save(update_fields=['is_primary'])
+                    product.image = chosen_primary.image
+                    new_image_applied = True
+
+            # Ensure product.image is synchronized with primary gallery image
+            if product.images.exists():
+                primary_obj = product.images.filter(is_primary=True).first() or product.images.first()
+                if primary_obj:
+                    if not primary_obj.is_primary:
+                        primary_obj.is_primary = True
+                        primary_obj.save(update_fields=['is_primary'])
+                    if product.image != primary_obj.image:
+                        product.image = primary_obj.image
+                        new_image_applied = True
+            else:
+                if remove_image or delete_gallery_ids:
+                    product.image = None
+                    new_image_applied = True
             
             product.save()
             for balance, minimum, ideal in warehouse_threshold_updates:
@@ -996,6 +1075,7 @@ def product_edit(request, pk):
         'warehouse_stock_enabled': SiteSettings.get_settings().warehouse_stock_enabled,
         'action': 'Editar',
         'existing_blocks_json': existing_blocks_json,
+        'gallery_images': list(product.images.all().order_by('order', 'id')),
     })
 
 

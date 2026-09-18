@@ -617,6 +617,93 @@ class Product(models.Model):
             self.attributes.update(extracted)
         return extracted
 
+    def get_gallery_images(self):
+        """Returns all gallery images ordered. Falls back to product.image if gallery is empty."""
+        gallery = list(getattr(self, "prefetched_images", self.images.all()))
+        if gallery:
+            return gallery
+        if self.image:
+            return [{"image": self.image, "url": self.image.url, "is_primary": True, "alt_text": self.name}]
+        return []
+
+    def get_primary_image_url(self):
+        """Returns primary image URL from gallery or product.image fallback."""
+        images_list = list(getattr(self, "prefetched_images", self.images.all()))
+        primary = next((img for img in images_list if img.is_primary), None)
+        if not primary and images_list:
+            primary = images_list[0]
+        if primary and primary.image:
+            return primary.image.url
+        if self.image:
+            return self.image.url
+        return None
+
+    def get_secondary_image_url(self):
+        """Returns second image URL if available for card hover preview."""
+        images_list = list(getattr(self, "prefetched_images", self.images.all()))
+        if len(images_list) > 1:
+            primary = next((img for img in images_list if img.is_primary), images_list[0])
+            secondary = next((img for img in images_list if img.pk != getattr(primary, "pk", None)), None)
+            if secondary and secondary.image:
+                return secondary.image.url
+        return None
+
+
+class ProductImage(models.Model):
+    """Gallery image for a product. Maximum of 5 images per product."""
+    MAX_IMAGES_PER_PRODUCT = 5
+
+    product = models.ForeignKey(
+        Product,
+        on_delete=models.CASCADE,
+        related_name="images",
+        verbose_name="Producto",
+    )
+    image = models.ImageField(
+        upload_to="products/gallery/",
+        verbose_name="Imagen",
+    )
+    alt_text = models.CharField(
+        max_length=255,
+        blank=True,
+        verbose_name="Texto alternativo",
+    )
+    order = models.PositiveIntegerField(
+        default=0,
+        verbose_name="Orden",
+    )
+    is_primary = models.BooleanField(
+        default=False,
+        verbose_name="Es portada",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Imagen de producto"
+        verbose_name_plural = "Imágenes de producto"
+        ordering = ["order", "id"]
+        indexes = [
+            models.Index(fields=["product", "order"]),
+            models.Index(fields=["product", "is_primary"]),
+        ]
+
+    def __str__(self):
+        return f"Imagen {self.id} de {self.product.sku}"
+
+    def clean(self):
+        super().clean()
+        if self.product_id and not self.pk:
+            current_count = self.product.images.count()
+            if current_count >= self.MAX_IMAGES_PER_PRODUCT:
+                raise ValidationError(f"Un producto no puede tener más de {self.MAX_IMAGES_PER_PRODUCT} imágenes.")
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        if self.is_primary and self.product_id:
+            ProductImage.objects.filter(product_id=self.product_id, is_primary=True).exclude(pk=self.pk).update(is_primary=False)
+            if self.image:
+                Product.objects.filter(pk=self.product_id).update(image=self.image.name)
+
 
 class ProductSupplier(models.Model):
     """Commercial data for one product as offered by one supplier."""

@@ -1,6 +1,6 @@
-from django.contrib import admin
+from django.contrib import admin
 from .models import (
-    Category, CategoryAttribute, Product, ClampSpecs, Supplier, PriceList, PriceListItem,
+    Category, CategoryAttribute, Product, ProductImage, ClampSpecs, Supplier, PriceList, PriceListItem,
     ProductSupplier, SupplierCostHistory, ProductDuplicateReview,
     SupplierImportProfile, SupplierPriceListBatch, SupplierPriceListRow,
     Brand, BrandRubro, BrandSubrubro, BrandSubrubroProductOrder, BrandRubroProductOrder
@@ -11,6 +11,13 @@ class CategoryAttributeInline(admin.TabularInline):
     model = CategoryAttribute
     extra = 1
     prepopulated_fields = {'slug': ('name',)}
+
+
+class ProductImageInline(admin.TabularInline):
+    model = ProductImage
+    extra = 1
+    max_num = 5
+    fields = ("image", "is_primary", "order", "alt_text")
 
 
 class ClampSpecsInline(admin.StackedInline):
@@ -62,12 +69,11 @@ class ProductAdmin(admin.ModelAdmin):
     list_filter = ('supplier_ref', 'category', 'categories', 'is_active')
     search_fields = ('sku', 'name', 'supplier', 'description')
     readonly_fields = ('created_at', 'updated_at')
-    inlines = [ClampSpecsInline, ProductSupplierInline]
+    inlines = [ProductImageInline, ClampSpecsInline, ProductSupplierInline]
     actions = [reparse_abrazaderas]
 
     def categories_display(self, obj):
         return ", ".join(obj.categories.values_list('name', flat=True)[:4]) or "-"
-
     categories_display.short_description = "Categorias"
 
 

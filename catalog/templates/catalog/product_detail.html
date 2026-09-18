@@ -9,7 +9,7 @@
 {% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="{% static 'core/css/catalog.css' %}?v=20260716-dropdown-stacking">
+<link rel="stylesheet" href="{% static 'core/css/catalog.css' %}?v=20260917-gallery-arrows-v2">
 <style>
     {% if request.user.is_superuser %}
     /* Modal styles */
@@ -158,6 +158,181 @@
         border-top-color: #f1f5f9;
     }
     {% endif %}
+
+    /* ========================================================
+       Product Detail - Gallery & Navigation Arrows
+       ======================================================== */
+    .product-gallery-wrapper {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        width: 100%;
+    }
+
+    .product-media {
+        position: relative !important;
+        border-radius: 14px !important;
+        overflow: hidden !important;
+        border: 1px solid rgba(255, 255, 255, 0.1) !important;
+        background: #0f172a !important;
+        aspect-ratio: 1 !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+    }
+
+    .product-media img {
+        width: 100% !important;
+        height: 100% !important;
+        object-fit: cover !important;
+        display: block !important;
+        transition: opacity 0.2s ease, transform 0.2s ease;
+    }
+
+    /* Flechas de navegación sobre la foto */
+    .gallery-nav-arrow {
+        position: absolute !important;
+        top: 50% !important;
+        transform: translateY(-50%) !important;
+        width: 44px !important;
+        height: 44px !important;
+        border-radius: 50% !important;
+        background: rgba(15, 23, 42, 0.75) !important;
+        color: #ffffff !important;
+        border: 1px solid rgba(255, 255, 255, 0.25) !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        cursor: pointer !important;
+        z-index: 20 !important;
+        backdrop-filter: blur(8px) !important;
+        -webkit-backdrop-filter: blur(8px) !important;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45) !important;
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+        padding: 0 !important;
+        user-select: none !important;
+    }
+
+    .gallery-nav-arrow:hover {
+        background: rgba(15, 23, 42, 0.95) !important;
+        border-color: var(--color-primary, #00d26a) !important;
+        color: var(--color-primary, #00d26a) !important;
+        transform: translateY(-50%) scale(1.1) !important;
+        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.6) !important;
+    }
+
+    .gallery-nav-arrow:active {
+        transform: translateY(-50%) scale(0.95) !important;
+    }
+
+    .gallery-nav-arrow.prev {
+        left: 12px !important;
+    }
+
+    .gallery-nav-arrow.next {
+        right: 12px !important;
+    }
+
+    /* Contador "1 / 3" */
+    .gallery-counter-badge {
+        position: absolute !important;
+        bottom: 12px !important;
+        right: 12px !important;
+        background: rgba(15, 23, 42, 0.8) !important;
+        color: #ffffff !important;
+        font-size: 0.75rem !important;
+        font-weight: 700 !important;
+        padding: 4px 12px !important;
+        border-radius: 20px !important;
+        border: 1px solid rgba(255, 255, 255, 0.18) !important;
+        backdrop-filter: blur(6px) !important;
+        -webkit-backdrop-filter: blur(6px) !important;
+        z-index: 20 !important;
+        pointer-events: none !important;
+        letter-spacing: 0.5px !important;
+    }
+
+    /* Tira de miniaturas */
+    .product-gallery-thumbs {
+        display: flex !important;
+        gap: 10px !important;
+        overflow-x: auto !important;
+        padding: 4px 2px !important;
+        scrollbar-width: thin !important;
+    }
+
+    .gallery-thumb-btn {
+        flex: 0 0 68px !important;
+        width: 68px !important;
+        height: 68px !important;
+        max-width: 68px !important;
+        max-height: 68px !important;
+        border-radius: 10px !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        border: 2px solid rgba(255, 255, 255, 0.14) !important;
+        background: rgba(255, 255, 255, 0.04) !important;
+        cursor: pointer !important;
+        overflow: hidden !important;
+        transition: all 0.2s ease !important;
+        box-sizing: border-box !important;
+    }
+
+    .gallery-thumb-btn:hover {
+        border-color: rgba(255, 255, 255, 0.5) !important;
+        transform: translateY(-2px) !important;
+    }
+
+    .gallery-thumb-btn.active {
+        border-color: var(--color-primary, #00d26a) !important;
+        box-shadow: 0 0 0 2px rgba(0, 210, 106, 0.35) !important;
+    }
+
+    .gallery-thumb-btn img {
+        width: 100% !important;
+        height: 100% !important;
+        object-fit: cover !important;
+        display: block !important;
+    }
+
+    /* Modo Claro */
+    html[data-theme="light"] .product-media {
+        background: #f1f5f9 !important;
+        border-color: #e2e8f0 !important;
+    }
+
+    html[data-theme="light"] .gallery-nav-arrow {
+        background: rgba(255, 255, 255, 0.9) !important;
+        color: #0f172a !important;
+        border-color: rgba(0, 0, 0, 0.15) !important;
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12) !important;
+    }
+
+    html[data-theme="light"] .gallery-nav-arrow:hover {
+        background: #ffffff !important;
+        border-color: var(--color-primary, #00994d) !important;
+        color: var(--color-primary, #00994d) !important;
+    }
+
+    html[data-theme="light"] .gallery-counter-badge {
+        background: rgba(255, 255, 255, 0.9) !important;
+        color: #0f172a !important;
+        border-color: rgba(0, 0, 0, 0.15) !important;
+    }
+
+    html[data-theme="light"] .gallery-thumb-btn {
+        border-color: rgba(0, 0, 0, 0.12) !important;
+        background: #ffffff !important;
+    }
+
+    html[data-theme="light"] .gallery-thumb-btn:hover {
+        border-color: rgba(0, 0, 0, 0.35) !important;
+    }
+
+    html[data-theme="light"] .gallery-thumb-btn.active {
+        border-color: var(--color-primary, #00994d) !important;
+        box-shadow: 0 0 0 2px rgba(0, 153, 77, 0.25) !important;
+    }
 </style>
 {% endblock %}
 
@@ -179,11 +354,47 @@
         <a href="{% url 'catalog' %}" class="btn btn-outline detail-back-btn">Volver al catalogo</a>
 
         <article class="product-detail-card">
-            <div class="product-media">
-                {% if product.image %}
-                <img src="{{ product.image.url }}" alt="{{ product.name }}">
-                {% else %}
-                <div class="product-placeholder">Sin imagen</div>
+            <div class="product-gallery-wrapper">
+                <div class="product-media" id="productMediaContainer">
+                    {% if product.image %}
+                    <img id="mainProductImage" src="{{ product.get_primary_image_url|default:product.image.url }}" alt="{{ product.name }}">
+                    {% else %}
+                    <div class="product-placeholder">Sin imagen</div>
+                    {% endif %}
+
+                    {% if product_images and product_images|length > 1 %}
+                    <!-- Flechas de navegación para cambiar imágenes -->
+                    <button type="button" class="gallery-nav-arrow prev" id="galleryPrevBtn" aria-label="Foto anterior" title="Foto anterior">
+                        <svg viewBox="0 0 24 24" width="22" height="22" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="15 18 9 12 15 6"></polyline>
+                        </svg>
+                    </button>
+                    <button type="button" class="gallery-nav-arrow next" id="galleryNextBtn" aria-label="Foto siguiente" title="Foto siguiente">
+                        <svg viewBox="0 0 24 24" width="22" height="22" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="9 18 15 12 9 6"></polyline>
+                        </svg>
+                    </button>
+                    <!-- Indicador de foto actual -->
+                    <div class="gallery-counter-badge" id="galleryCounter" aria-live="polite">
+                        <span id="galleryCurrentIdx">1</span> / {{ product_images|length }}
+                    </div>
+                    {% endif %}
+                </div>
+
+                {% if product_images and product_images|length > 1 %}
+                <div class="product-gallery-thumbs" role="tablist" aria-label="Fotos del producto">
+                    {% for img_obj in product_images %}
+                    <button type="button"
+                            class="gallery-thumb-btn {% if forloop.first or img_obj.is_primary %}active{% endif %}"
+                            data-index="{{ forloop.counter0 }}"
+                            data-image-src="{% if img_obj.image %}{{ img_obj.image.url }}{% else %}{{ img_obj.url }}{% endif %}"
+                            data-alt="{{ img_obj.alt_text|default:product.name }}"
+                            aria-label="Ver foto {{ forloop.counter }}"
+                            title="Foto {{ forloop.counter }}">
+                        <img src="{% if img_obj.image %}{{ img_obj.image.url }}{% else %}{{ img_obj.url }}{% endif %}" alt="Miniatura {{ forloop.counter }}">
+                    </button>
+                    {% endfor %}
+                </div>
                 {% endif %}
             </div>
 
@@ -390,6 +601,84 @@
             console.error('Error toggling favorite', error);
         }
     }
+
+    // Product Gallery Navigation (Arrows, Counter, Keyboard & Thumbnails)
+    (function() {
+        const thumbBtns = Array.from(document.querySelectorAll('.gallery-thumb-btn'));
+        const mainImg = document.getElementById('mainProductImage');
+        const prevBtn = document.getElementById('galleryPrevBtn');
+        const nextBtn = document.getElementById('galleryNextBtn');
+        const counterEl = document.getElementById('galleryCurrentIdx');
+
+        if (!mainImg || thumbBtns.length === 0) return;
+
+        let currentIndex = thumbBtns.findIndex(b => b.classList.contains('active'));
+        if (currentIndex < 0) currentIndex = 0;
+
+        function goToImage(index) {
+            if (index < 0) index = thumbBtns.length - 1;
+            if (index >= thumbBtns.length) index = 0;
+
+            currentIndex = index;
+            const targetBtn = thumbBtns[currentIndex];
+            const newSrc = targetBtn.getAttribute('data-image-src');
+            const newAlt = targetBtn.getAttribute('data-alt');
+
+            if (!newSrc) return;
+
+            // Reset cursor magnifier zoom & fade image
+            mainImg.style.transform = 'scale(1)';
+            mainImg.style.transformOrigin = 'center center';
+            mainImg.style.opacity = '0.35';
+
+            setTimeout(() => {
+                mainImg.src = newSrc;
+                if (newAlt) mainImg.alt = newAlt;
+                mainImg.style.opacity = '1';
+            }, 120);
+
+            thumbBtns.forEach(b => b.classList.remove('active'));
+            targetBtn.classList.add('active');
+            targetBtn.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+
+            if (counterEl) {
+                counterEl.textContent = currentIndex + 1;
+            }
+        }
+
+        if (prevBtn) {
+            prevBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                goToImage(currentIndex - 1);
+            });
+        }
+
+        if (nextBtn) {
+            nextBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                goToImage(currentIndex + 1);
+            });
+        }
+
+        thumbBtns.forEach((btn, idx) => {
+            btn.addEventListener('click', function(e) {
+                e.preventDefault();
+                goToImage(idx);
+            });
+        });
+
+        // Keyboard arrow navigation
+        document.addEventListener('keydown', function(e) {
+            if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName)) return;
+            if (e.key === 'ArrowLeft') {
+                goToImage(currentIndex - 1);
+            } else if (e.key === 'ArrowRight') {
+                goToImage(currentIndex + 1);
+            }
+        });
+    })();
 
     {% if request.user.is_superuser %}
     function openQuickEditModal(productId, sku, name, price, stock, isActive) {
