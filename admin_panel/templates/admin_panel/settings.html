@@ -541,6 +541,36 @@
                 </div>
             </article>
 
+            <article class="settings-form-card">
+                <h4>WhatsApp y Botón Flotante</h4>
+                <p class="text-muted" style="font-size: 0.85rem; margin-bottom: 16px;">
+                    Configuración del botón flotante oficial de WhatsApp que permite a los clientes contactarse con un solo clic desde la web o el móvil.
+                </p>
+
+                <label class="settings-checkbox-card" style="margin-bottom: 16px;">
+                    <input type="checkbox" name="whatsapp_floating_enabled" id="whatsapp_floating_enabled" {% if settings.whatsapp_floating_enabled %}checked{% endif %}>
+                    <span class="checkbox-custom"></span>
+                    <span class="settings-checkbox-content">
+                        <strong>Activar botón flotante de WhatsApp</strong>
+                        <small>Muestra el botón flotante en la esquina inferior del sitio en todas las páginas públicas.</small>
+                    </span>
+                </label>
+
+                <div class="settings-two-col">
+                    <div class="form-group">
+                        <label for="whatsapp_phone" class="form-label">Teléfono para WhatsApp</label>
+                        <input type="text" name="whatsapp_phone" id="whatsapp_phone" class="form-input" value="{{ settings.whatsapp_phone }}" placeholder="5491135179090">
+                        <small class="text-muted" style="display:block; margin-top:4px; font-size:0.75rem;">Formato internacional sin signos (+). Ej: 5491135179090. Si se deja vacío toma el teléfono principal.</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="whatsapp_message" class="form-label">Mensaje predeterminado</label>
+                        <input type="text" name="whatsapp_message" id="whatsapp_message" class="form-input" value="{{ settings.whatsapp_message }}" placeholder="¡Hola FLEXS! Quisiera hacer una consulta comercial.">
+                        <small class="text-muted" style="display:block; margin-top:4px; font-size:0.75rem;">Texto predeterminado que verá el cliente al abrir el chat.</small>
+                    </div>
+                </div>
+            </article>
+
             <div class="form-actions settings-form-actions">
                 <button type="submit" class="btn btn-primary">Guardar configuracion</button>
             </div>

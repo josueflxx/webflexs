@@ -2529,6 +2529,25 @@ class SiteSettings(models.Model):
         verbose_name="Activar stock por deposito",
         help_text="Activa la escritura de saldos por deposito despues de inicializar el inventario.",
     )
+    whatsapp_floating_enabled = models.BooleanField(
+        default=True,
+        verbose_name="Activar boton flotante de WhatsApp",
+        help_text="Muestra el boton flotante de contacto directo en todas las paginas publicas.",
+    )
+    whatsapp_phone = models.CharField(
+        max_length=50,
+        default="5491135179090",
+        blank=True,
+        verbose_name="Telefono para WhatsApp",
+        help_text="Formato internacional para enlaces wa.me (ej: 5491135179090). Si se deja vacio, toma el telefono principal.",
+    )
+    whatsapp_message = models.CharField(
+        max_length=255,
+        default="¡Hola FLEXS! Quisiera hacer una consulta comercial.",
+        blank=True,
+        verbose_name="Mensaje predeterminado de WhatsApp",
+        help_text="Texto con el que se abrira el chat automaticamente.",
+    )
 
     class Meta:
         verbose_name = "Configuracion del Sitio"
@@ -2536,6 +2555,31 @@ class SiteSettings(models.Model):
 
     CACHE_KEY = "site_settings_singleton_v1"
     CACHE_TTL = 300
+
+    @property
+    def whatsapp_url(self):
+        raw_phone = (self.whatsapp_phone or "").strip()
+        if not raw_phone:
+            raw_phone = (self.company_phone or "").strip()
+        digits = "".join(ch for ch in raw_phone if ch.isdigit())
+        if not digits:
+            return ""
+
+        # Normalize Argentine phone number to international WhatsApp format: 549 + area code + local number
+        if digits.startswith("549"):
+            phone = digits
+        elif digits.startswith("540"):
+            phone = "549" + digits[3:]
+        elif digits.startswith("54"):
+            phone = "549" + digits[2:]
+        elif digits.startswith("0"):
+            phone = "549" + digits[1:]
+        else:
+            phone = "549" + digits
+
+        msg = (self.whatsapp_message or "").strip() or "¡Hola FLEXS! Quisiera hacer una consulta comercial."
+        import urllib.parse
+        return f"https://wa.me/{phone}?text={urllib.parse.quote(msg)}"
 
     def save(self, *args, **kwargs):
         self.pk = 1

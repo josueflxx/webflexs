@@ -2591,6 +2591,9 @@ def settings_view(request):
         settings.company_phone = request.POST.get('company_phone', '').strip()
         settings.company_phone_2 = request.POST.get('company_phone_2', '').strip()
         settings.company_address = request.POST.get('company_address', '').strip()
+        settings.whatsapp_floating_enabled = request.POST.get('whatsapp_floating_enabled') == 'on'
+        settings.whatsapp_phone = request.POST.get('whatsapp_phone', '').strip()
+        settings.whatsapp_message = request.POST.get('whatsapp_message', '').strip()
         settings.save()
         log_admin_action(
             request,
@@ -2601,6 +2604,7 @@ def settings_view(request):
                 "show_public_prices": settings.show_public_prices,
                 "require_primary_category_for_multicategory": settings.require_primary_category_for_multicategory,
                 "warehouse_stock_enabled": settings.warehouse_stock_enabled,
+                "whatsapp_floating_enabled": settings.whatsapp_floating_enabled,
             },
         )
         
