@@ -2581,6 +2581,30 @@ class SiteSettings(models.Model):
         import urllib.parse
         return f"https://wa.me/{phone}?text={urllib.parse.quote(msg)}"
 
+    @property
+    def google_maps_query(self):
+        address = (self.company_address or "").strip()
+        if not address:
+            return "Indalecio Gomez 4215, Villa Lynch, San Martin, Buenos Aires, Argentina"
+        clean = address.replace("(", ", ").replace(")", ", ").replace(".", " ")
+        parts = [p.strip() for p in clean.split(",") if p.strip()]
+        return ", ".join(parts)
+
+    @property
+    def google_maps_embed_url(self):
+        address = (self.company_address or "").strip()
+        if not address or "indalecio" in address.lower():
+            return (
+                "https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3283.881678129759!2d-58.52814092425983!3d-34.59535097295779"
+                "!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x95bcb788c1b97b0d%3A0x6b84000b2138e4a9"
+                "!2sIndalecio%20G%C3%B3mez%204215%2C%20Villa%20Lynch%2C%20Provincia%20de%20Buenos%20Aires!5e0"
+                "!3m2!1ses-419!2sar!4v1727010000000!5m2!1ses-419!2sar"
+            )
+        import urllib.parse
+        clean = address.replace("(", " ").replace(")", " ").replace(".", " ")
+        q = urllib.parse.quote_plus(" ".join(clean.split()))
+        return f"https://www.google.com/maps/embed?origin=mfe&pb=!1m3!2m1!1s{q}!6i16"
+
     def save(self, *args, **kwargs):
         self.pk = 1
         super().save(*args, **kwargs)

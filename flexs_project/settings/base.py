@@ -225,7 +225,7 @@ SECURITY_CONTENT_SECURITY_POLICY = os.getenv(
     "img-src 'self' data: https:; "
     "connect-src 'self' https://fonts.googleapis.com https://fonts.gstatic.com "
     "https://nominatim.openstreetmap.org https://photon.komoot.io https://dolarapi.com; "
-    "frame-src 'none';",
+    "frame-src 'self' https://www.google.com https://maps.google.com;",
 ).strip()
 SECURITY_CONTENT_SECURITY_POLICY_REPORT_ONLY = os.getenv(
     "DJANGO_CONTENT_SECURITY_POLICY_REPORT_ONLY",

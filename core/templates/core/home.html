@@ -3,17 +3,10 @@
 
 {% block title %}FLEXS - Repuestos de El&aacute;sticos en Argentina{% endblock %}
 
-{% block extra_head %}
-<link
-    rel="stylesheet"
-    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
-    crossorigin=""
->
-{% endblock %}
+{% block extra_head %}{% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="{% static 'core/css/home.css' %}?v=20260724-industrial-media">
+<link rel="stylesheet" href="{% static 'core/css/home.css' %}?v=20260922-gmap-1">
 <link rel="stylesheet" href="{% static 'core/css/home_clamp.css' %}?v=20260915-1">
 <link rel="stylesheet" href="{% static 'core/css/clamp_dimensions.css' %}?v=20260915-contrast-1">
 {% endblock %}
@@ -387,7 +380,8 @@
                         <path d="M 65 350 L 62 344 L 68 344 Z" fill="#FF6B35" />
                         <line x1="55" y1="20" x2="140" y2="20" stroke="#FF6B35" stroke-width="0.8" stroke-dasharray="3,3" />
                         <line x1="55" y1="350" x2="130" y2="350" stroke="#FF6B35" stroke-width="0.8" stroke-dasharray="3,3" />
-                        <text x="52" y="185" fill="#FF6B35" font-family="monospace" font-size="10" font-weight="bold" text-anchor="middle" transform="rotate(-90 52 185)">Largo (C)</text>                          <!-- Dimension line: Diameter (A) -->
+                        <text x="52" y="185" fill="#FF6B35" font-family="monospace" font-size="10" font-weight="bold" text-anchor="middle" transform="rotate(-90 52 185)">Largo (C)</text>
+                          <!-- Dimension line: Diameter (A) -->
                         <path d="M 270 200 L 310 170 L 350 170" stroke="#FF6B35" stroke-width="1.2" fill="none" />
                         <path d="M 270 200 L 277 198 L 273 193 Z" fill="#FF6B35" />
                         <text x="315" y="163" fill="#FF6B35" font-family="monospace" font-size="9" font-weight="bold" text-anchor="start">Di&aacute;m. (A)</text>
@@ -501,20 +495,27 @@
         </div>
         <div class="contact-map-wrapper reveal-on-scroll">
             <h3 class="contact-map-title">Ubicaci&oacute;n</h3>
-            <div
-                id="contactMap"
-                class="contact-map-frame"
-                data-address="{{ site_settings.company_address }}"
-                data-company="FLEXS"
-                style="height: 360px; min-height: 360px;">
+            <div class="contact-map-frame" style="height: 380px; min-height: 380px;">
+                <iframe
+                    src="{{ site_settings.google_maps_embed_url }}"
+                    width="100%"
+                    height="100%"
+                    style="border:0; width:100%; height:100%; display:block;"
+                    allowfullscreen=""
+                    loading="lazy"
+                    referrerpolicy="no-referrer-when-downgrade"
+                    title="Ubicaci&oacute;n de FLEXS en Google Maps">
+                </iframe>
             </div>
-            <p id="contactMapStatus" class="contact-map-hint">Cargando mapa interactivo...</p>
             <div class="contact-map-links">
                 <a
                     class="contact-map-link"
-                    href="https://www.google.com/maps/search/?api=1&query={{ site_settings.company_address|urlencode }}"
+                    href="https://www.google.com/maps/search/?api=1&query={{ site_settings.google_maps_query|urlencode }}"
                     target="_blank"
                     rel="noopener noreferrer">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" style="vertical-align: -2px; margin-right: 4px;" aria-hidden="true">
+                        <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+                    </svg>
                     Abrir en Google Maps
                 </a>
             </div>
@@ -525,190 +526,4 @@
 
 {% block extra_js %}
 <script src="{% static 'core/js/home_clamp.js' %}?v=20260916-rotation-2" defer></script>
-<script
-    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
-    crossorigin="">
-</script>
-<script>
-    (function () {
-        const mapElement = document.getElementById('contactMap');
-        const statusElement = document.getElementById('contactMapStatus');
-        if (!mapElement || typeof L === 'undefined') return;
-
-        const rawAddress = (mapElement.dataset.address || '').trim();
-        const company = (mapElement.dataset.company || 'FLEXS').trim();
-        const fallbackCoords = [-34.5745, -58.5348];
-
-        function normalizeAddress(addressValue) {
-            let normalized = String(addressValue || '').trim();
-            if (!normalized) {
-                return 'San Martin, Buenos Aires, Argentina';
-            }
-            normalized = normalized
-                .replace(/\bargentin\b/gi, 'Argentina')
-                .replace(/\bbs\.?\s*as\.?\b/gi, 'Buenos Aires')
-                .replace(/\s+/g, ' ')
-                .trim();
-
-            if (!/argentina/i.test(normalized)) {
-                normalized += ', Argentina';
-            }
-            return normalized;
-        }
-
-        function buildAddressVariants(addressValue) {
-            const variants = [];
-
-            function addVariant(value) {
-                const clean = String(value || '')
-                    .replace(/\s+/g, ' ')
-                    .replace(/\s+,/g, ',')
-                    .replace(/,+/g, ',')
-                    .trim()
-                    .replace(/^,|,$/g, '');
-                if (clean && !variants.includes(clean)) {
-                    variants.push(clean);
-                }
-            }
-
-            const base = normalizeAddress(addressValue);
-            addVariant(base);
-            addVariant(base.replace(/\([^)]*\)/g, ' '));
-            addVariant(base.replace(/\./g, ' ').replace(/\([^)]*\)/g, ' '));
-            addVariant(base.replace(/,\s*argentina\b/i, '') + ', Argentina');
-
-            if (/indalecio\s+gomez\s*4215/i.test(base)) {
-                addVariant('Indalecio Gomez 4215, Villa Lynch, San Martin, Buenos Aires, Argentina');
-                addVariant('Indalecio Gomez 4215, San Martin, Buenos Aires, Argentina');
-                addVariant('Indalecio Gomez 4215, General San Martin, Buenos Aires, Argentina');
-                addVariant('Indalecio Gomez 4215, Villa Lynch, Partido de General San Martin, Buenos Aires, Argentina');
-                addVariant('Indalecio Gomez 4215, Villa Lynch, Buenos Aires, Argentina');
-            }
-
-            return variants.slice(0, 8);
-        }
-
-        const address = normalizeAddress(rawAddress);
-        const addressVariants = buildAddressVariants(rawAddress);
-
-        const map = L.map(mapElement, {
-            scrollWheelZoom: true,
-            zoomControl: true,
-        }).setView(fallbackCoords, 13);
-
-        setTimeout(function () {
-            map.invalidateSize();
-        }, 100);
-
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            maxZoom: 19,
-            attribution: '&copy; OpenStreetMap',
-        }).addTo(map);
-
-        const marker = L.marker(fallbackCoords).addTo(map);
-        marker.bindPopup('<strong>' + company + '</strong><br>' + address).openPopup();
-
-        function setStatus(text, hasError) {
-            if (!statusElement) return;
-            statusElement.textContent = text;
-            statusElement.classList.toggle('is-error', Boolean(hasError));
-        }
-
-        function extractNominatimCoords(results) {
-            if (!Array.isArray(results) || !results.length) return null;
-            const lat = Number(results[0].lat);
-            const lon = Number(results[0].lon);
-            if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
-            return [lat, lon];
-        }
-
-        function extractPhotonCoords(payload) {
-            const features = payload && payload.features;
-            if (!Array.isArray(features) || !features.length) return null;
-            const coords = features[0] && features[0].geometry && features[0].geometry.coordinates;
-            if (!Array.isArray(coords) || coords.length < 2) return null;
-            const lon = Number(coords[0]);
-            const lat = Number(coords[1]);
-            if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
-            return [lat, lon];
-        }
-
-        function applyResolvedLocation(coords) {
-            map.setView(coords, 16);
-            marker.setLatLng(coords);
-            marker.bindPopup('<strong>' + company + '</strong><br>' + address).openPopup();
-            setTimeout(function () {
-                map.invalidateSize();
-            }, 100);
-            setStatus('Ubicacion exacta encontrada.');
-        }
-
-        function getKnownAddressCoords(addressValue) {
-            const normalized = String(addressValue || '').toLowerCase();
-            if (/indalecio\s+g[oó]mez/.test(normalized) && /\b4215\b/.test(normalized)) {
-                return [-34.5953311, -58.5255660];
-            }
-            return null;
-        }
-
-        function geocodeWithNominatim(query) {
-            return fetch(
-                'https://nominatim.openstreetmap.org/search?format=json&limit=1&addressdetails=1&countrycodes=ar&q=' + encodeURIComponent(query),
-                { headers: { 'Accept': 'application/json' } }
-            )
-                .then(function (response) {
-                    if (!response.ok) return null;
-                    return response.json();
-                })
-                .then(extractNominatimCoords)
-                .catch(function () {
-                    return null;
-                });
-        }
-
-        function geocodeWithPhoton(query) {
-            return fetch(
-                'https://photon.komoot.io/api/?limit=1&lang=es&q=' + encodeURIComponent(query),
-                { headers: { 'Accept': 'application/json' } }
-            )
-                .then(function (response) {
-                    if (!response.ok) return null;
-                    return response.json();
-                })
-                .then(extractPhotonCoords)
-                .catch(function () {
-                    return null;
-                });
-        }
-
-        setStatus('Mostrando ubicacion aproximada. Buscando ubicacion exacta...');
-
-        (async function resolveExactLocation() {
-            const knownCoords = getKnownAddressCoords(address);
-            if (knownCoords) {
-                applyResolvedLocation(knownCoords);
-                return;
-            }
-
-            for (const candidate of addressVariants) {
-                const coords = await geocodeWithNominatim(candidate);
-                if (coords) {
-                    applyResolvedLocation(coords);
-                    return;
-                }
-            }
-
-            for (const candidate of addressVariants) {
-                const coords = await geocodeWithPhoton(candidate);
-                if (coords) {
-                    applyResolvedLocation(coords);
-                    return;
-                }
-            }
-
-            setStatus('No se pudo obtener ubicacion exacta. Mostrando aproximada.', true);
-        })();
-    })();
-</script>
 {% endblock %}

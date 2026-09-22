@@ -71,3 +71,13 @@ class WhatsAppIntegrationTests(TestCase):
         self.assertEqual(updated_settings.whatsapp_message, 'Mensaje actualizado')
         self.assertTrue(updated_settings.whatsapp_floating_enabled)
         self.assertIn('5491199998888', updated_settings.whatsapp_url)
+
+    def test_home_google_maps_embed(self):
+        response = self.client.get(reverse('home'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'google.com/maps/embed')
+        self.assertNotContains(response, 'leaflet')
+        # Ensure CSP allows Google Maps embedding
+        csp = response.headers.get('Content-Security-Policy', '')
+        self.assertIn("frame-src 'self' https://www.google.com https://maps.google.com;", csp)
+
