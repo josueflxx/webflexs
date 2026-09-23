@@ -35,17 +35,10 @@ from core.services.document_sharing import (
 
 
 def home(request):
-    """Home page view with rotating themes."""
-    import random
-    themes = ['classic', 'blueprint', 'elasticos']
-    last_theme = request.session.get('last_home_theme')
-    
-    # Filter out last theme to guarantee a change on reload
-    available_themes = [t for t in themes if t != last_theme]
-    theme = random.choice(available_themes)
-    
-    request.session['last_home_theme'] = theme
-    return render(request, 'core/home.html', {'active_theme': theme})
+    """Public homepage with direct links to the existing catalog families."""
+    from core.services.homepage import home_family_links
+
+    return render(request, 'core/home.html', {'home_families': home_family_links()})
 
 
 @never_cache

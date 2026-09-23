@@ -428,23 +428,48 @@ document.addEventListener('DOMContentLoaded', function () {
     const themeToggleBtn = document.getElementById('themeToggle');
     const themeIcon = document.getElementById('themeIcon');
 
-    // SVGs for Sun and Moon
-    const sunIconPath = `<path d="M12 7a5 5 0 1 0 0 10 5 5 0 0 0 0-10zM12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"></path>`;
-    const moonIconPath = `<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>`;
+    // SVGs for Sun (shown in dark mode to switch to light) and Moon (shown in light mode to switch to dark)
+    const sunIcon = `<circle cx="12" cy="12" r="4.5" fill="currentColor"></circle>` +
+        `<g stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none">` +
+        `<line x1="12" y1="1.5" x2="12" y2="4.2"></line>` +
+        `<line x1="12" y1="19.8" x2="12" y2="22.5"></line>` +
+        `<line x1="1.5" y1="12" x2="4.2" y2="12"></line>` +
+        `<line x1="19.8" y1="12" x2="22.5" y2="12"></line>` +
+        `<line x1="4.5" y1="4.5" x2="6.6" y2="6.6"></line>` +
+        `<line x1="17.4" y1="17.4" x2="19.5" y2="19.5"></line>` +
+        `<line x1="4.5" y1="19.5" x2="6.6" y2="17.4"></line>` +
+        `<line x1="17.4" y1="6.6" x2="19.5" y2="4.5"></line>` +
+        `</g>`;
+    const moonIcon = `<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" fill="currentColor"></path>`;
 
     function getPreferredTheme() {
         return localStorage.getItem('theme') || 'dark';
     }
 
+    function renderThemeIcon(theme) {
+        if (!themeIcon) return;
+        themeIcon.removeAttribute('stroke');
+        themeIcon.removeAttribute('stroke-width');
+        themeIcon.removeAttribute('fill');
+        if (theme === 'dark') {
+            themeIcon.innerHTML = sunIcon;
+            if (themeToggleBtn) {
+                themeToggleBtn.setAttribute('title', 'Cambiar a modo claro');
+                themeToggleBtn.setAttribute('aria-label', 'Cambiar a modo claro');
+            }
+        } else {
+            themeIcon.innerHTML = moonIcon;
+            if (themeToggleBtn) {
+                themeToggleBtn.setAttribute('title', 'Cambiar a modo oscuro');
+                themeToggleBtn.setAttribute('aria-label', 'Cambiar a modo oscuro');
+            }
+        }
+    }
+
     function initTheme() {
         const currentTheme = getPreferredTheme();
         document.documentElement.setAttribute('data-theme', currentTheme);
-        if (themeIcon) {
-            themeIcon.setAttribute('fill', currentTheme === 'dark' ? 'currentColor' : 'none');
-            themeIcon.setAttribute('stroke', 'currentColor');
-            themeIcon.setAttribute('stroke-width', currentTheme === 'dark' ? '0' : '2');
-            themeIcon.innerHTML = currentTheme === 'dark' ? sunIconPath : moonIconPath;
-        }
+        renderThemeIcon(currentTheme);
     }
 
     if (themeToggleBtn && themeIcon) {
@@ -458,10 +483,7 @@ document.addEventListener('DOMContentLoaded', function () {
             // Animate transition of the icon
             themeIcon.style.transform = 'scale(0) rotate(-90deg)';
             setTimeout(() => {
-                themeIcon.setAttribute('fill', newTheme === 'dark' ? 'currentColor' : 'none');
-                themeIcon.setAttribute('stroke', 'currentColor');
-                themeIcon.setAttribute('stroke-width', newTheme === 'dark' ? '0' : '2');
-                themeIcon.innerHTML = newTheme === 'dark' ? sunIconPath : moonIconPath;
+                renderThemeIcon(newTheme);
                 themeIcon.style.transform = 'scale(1) rotate(0deg)';
             }, 180);
         });

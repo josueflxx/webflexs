@@ -1,0 +1,21 @@
+<svg viewBox="0 0 64 64" focusable="false">
+{% if key == 'abrazaderas' %}
+    <path d="M16 48V23c0-9 7-15 16-15s16 6 16 15v25M11 48h10M43 48h10M13 54h6M45 54h6"/>
+{% elif key == 'elasticos' %}
+    <path d="M8 39c12 13 36 13 48 0M11 31c10 11 32 11 42 0M15 23c8 8 26 8 34 0M18 24v23M46 24v23"/>
+{% elif key == 'bujes' %}
+    <circle cx="32" cy="32" r="18"/><circle cx="32" cy="32" r="8"/><path d="M16 20l-5-5M48 20l5-5M16 44l-5 5M48 44l5 5"/>
+{% elif key == 'fundicion' %}
+    <path d="M12 48h40V28L40 35V24l-12 8V20l-16 10zM20 48V37h8v11M38 42h6M38 35h6M16 16h9"/>
+{% elif key == 'pernos' %}
+    <circle cx="17" cy="32" r="7"/><circle cx="47" cy="32" r="7"/><path d="M24 32h16M13 22v-6M51 22v-6M13 48v-6M51 48v-6"/>
+{% elif key == 'buloneria' %}
+    <path d="M18 12h18l7 7-7 7H18l-7-7zM27 26v27M20 33h14M20 40h14M20 47h14"/>
+{% elif key == 'suspension-neumatica' %}
+    <path d="M20 15h24M17 23h30M17 41h30M20 49h24M20 23c-5 6-5 12 0 18h24c5-6 5-12 0-18zM26 31h12M26 36h12"/>
+{% elif key == 'insertos-de-elastico' %}
+    <path d="M10 24h44l-5 8H15zM14 38h36l-4 8H18zM21 18h22M24 52h16"/>
+{% elif key == 'balancines' %}
+    <path d="M8 29h48M14 29l8 15h20l8-15M32 12v30M25 12h14"/><circle cx="32" cy="48" r="6"/>
+{% endif %}
+</svg>
