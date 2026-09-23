@@ -24,7 +24,7 @@
             <line x1="10" y1="9" x2="10" y2="13.5" stroke-linecap="round"></line>
             <circle cx="10" cy="6.2" r="0.8" fill="currentColor"></circle>
         </svg>
-        <p>{% if clamp_filter_fields %}Mostrando combinaciones compatibles en tiempo real. Elegí tus medidas y presioná <strong>Aplicar filtros</strong>.{% else %}Elegí las opciones deseadas y presioná <strong>Aplicar filtros</strong>.{% endif %}</p>
+        <p>Elegí las medidas. Las opciones se ajustan entre sí; el listado cambia al confirmar.</p>
     </div>
     <form method="get" action="{% url 'catalog' %}" class="inline-filter-form" id="technicalFiltersForm">
         <input type="hidden" name="q" value="{{ search_query }}">
@@ -58,9 +58,9 @@
         </div>
         {% endfor %}
         {% for error in clamp_filter_errors %}<p class="technical-filter-error" role="alert">{{ error }}</p>{% endfor %}
-        <p id="technicalFilterStatus" class="technical-filter-status" aria-live="polite">Los cambios se aplican al confirmar.</p>
+        <p id="technicalFilterStatus" class="technical-filter-status" aria-live="polite">Filtros aplicados al listado.</p>
         <div class="technical-filter-actions">
-            <button type="submit" class="btn btn-primary">Aplicar filtros</button>
+            <button type="submit" class="btn btn-primary" id="technicalFilterApply">Ver {{ page_obj.paginator.count }} producto{{ page_obj.paginator.count|pluralize }}</button>
             <a href="{{ clear_filters_url }}" class="btn btn-outline">Limpiar</a>
         </div>
     </form>

@@ -26,7 +26,7 @@ class CatalogWorkspaceTests(TestCase):
                 response = self.client.get(reverse('catalog'), {'view': view, 'q': self.product.sku})
                 self.assertEqual(response.status_code, 200)
                 item = next(iter(response.context['page_obj']))
-                self.assertEqual(item.final_price, Decimal('7250.66'))
+                self.assertEqual(item.final_price, Decimal('8773.30'))
                 self.assertContains(response, 'catalog-favorite-btn')
                 self.assertContains(response, 'aria-pressed="false"')
                 self.assertContains(response, 'catalog_workspace.js')

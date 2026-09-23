@@ -69,7 +69,9 @@ class CurrentCatalogPricingTests(TestCase):
             workbook.close()
         self.fail("Product was not found in the downloaded catalog")
 
-    def assert_client_prices(self, base_price, final_price):
+    def assert_client_prices(self, base_price, final_price, net_base_price=None):
+        if net_base_price is None:
+            net_base_price = base_price
         listing = self.client.get(reverse("catalog"), {"q": self.product.sku})
         self.assertEqual(listing.status_code, 200)
         listed = next(p for p in listing.context["page_obj"] if p.pk == self.product.pk)
@@ -83,22 +85,22 @@ class CurrentCatalogPricingTests(TestCase):
         cart, _ = Cart.objects.get_or_create(user=self.user, company=self.company)
         CartItem.objects.get_or_create(cart=cart, product=self.product, defaults={"quantity": 1})
         cart_pricing = calculate_cart_pricing(cart, user=self.user, company=self.company)
-        self.assertEqual(cart_pricing["items"][0].unit_price, base_price)
-        self.assertEqual(cart_pricing["subtotal"], base_price)
+        self.assertEqual(cart_pricing["items"][0].unit_price, net_base_price)
+        self.assertEqual(cart_pricing["subtotal"], net_base_price)
         self.assertEqual(cart_pricing["discount_percentage"], self.link.discount_percentage)
 
     def test_base_list_follows_admin_across_web_excel_and_cart(self):
-        self.assert_client_prices(Decimal("7250.66"), Decimal("7250.66"))
+        self.assert_client_prices(Decimal("8773.30"), Decimal("8773.30"), net_base_price=Decimal("7250.66"))
         self.product.price = Decimal("8100.50")
         self.product.save(update_fields=["price", "updated_at"])
-        self.assert_client_prices(Decimal("8100.50"), Decimal("8100.50"))
+        self.assert_client_prices(Decimal("9801.61"), Decimal("9801.61"), net_base_price=Decimal("8100.50"))
         self.old_item.refresh_from_db()
         self.assertEqual(self.old_item.price, Decimal("27762.62"))
 
     def test_client_discount_is_preserved_with_matching_excel_rounding(self):
         self.link.discount_percentage = Decimal("25.00")
         self.link.save(update_fields=["discount_percentage"])
-        self.assert_client_prices(Decimal("7250.66"), Decimal("5438.00"))
+        self.assert_client_prices(Decimal("8773.30"), Decimal("6579.98"), net_base_price=Decimal("7250.66"))
 
     def test_custom_list_keeps_negotiated_prices(self):
         custom = PriceList.objects.create(company=self.company, name="Custom", slug="custom")
@@ -106,7 +108,7 @@ class CurrentCatalogPricingTests(TestCase):
         self.link.price_list = custom
         self.link.discount_percentage = Decimal("15.00")
         self.link.save(update_fields=["price_list", "discount_percentage"])
-        self.assert_client_prices(Decimal("6400.00"), Decimal("5440.00"))
+        self.assert_client_prices(Decimal("7744.00"), Decimal("6582.40"), net_base_price=Decimal("6400.00"))
 
     def test_base_list_ignores_previously_loaded_snapshot_map(self):
         stale_map = {self.product.pk: self.old_item}

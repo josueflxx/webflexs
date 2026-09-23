@@ -358,6 +358,7 @@ def _build_order_detail_items(order):
                 base_price * item_discount_percentage / Decimal("100")
             ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
         item.unit_discount_amount = unit_discount_amount
+        item.display_discount_percentage = item_discount_percentage
 
         clamp_request = getattr(item, "clamp_request", None)
         linked_product = getattr(clamp_request, "linked_product", None) if clamp_request else None

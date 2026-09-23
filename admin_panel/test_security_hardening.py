@@ -303,7 +303,7 @@ class ProductCommercialRuleFormTests(TestCase):
 
     def test_grid_bulk_select_all_respects_missing_iva_filter(self):
         missing = Product.objects.create(
-            sku="GRID-MISSING-IVA", name="Missing IVA", price=Decimal("100.00"), cost=Decimal("50.00")
+            sku="GRID-MISSING-IVA", name="Missing IVA", price=Decimal("100.00"), cost=Decimal("50.00"), iva_rate=None
         )
         configured = Product.objects.create(
             sku="GRID-CONFIGURED-IVA",

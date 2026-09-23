@@ -1,6 +1,7 @@
 {% extends 'base.html' %}
 {% load static %}
 {% load l10n %}
+{% load core_extras %}
 
 {% block title %}{{ seo_title|default:product.name }}{% endblock %}
 {% block meta_description %}{{ seo_description }}{% endblock %}
@@ -175,7 +176,7 @@
         overflow: hidden !important;
         border: 1px solid rgba(255, 255, 255, 0.1) !important;
         background: #0f172a !important;
-        aspect-ratio: 1 !important;
+        aspect-ratio: auto !important;
         display: flex !important;
         align-items: center !important;
         justify-content: center !important;
@@ -184,7 +185,7 @@
     .product-media img {
         width: 100% !important;
         height: 100% !important;
-        object-fit: cover !important;
+        object-fit: contain !important;
         display: block !important;
         transition: opacity 0.2s ease, transform 0.2s ease;
     }
@@ -334,6 +335,7 @@
         box-shadow: 0 0 0 2px rgba(0, 153, 77, 0.25) !important;
     }
 </style>
+<link rel="stylesheet" href="{% static 'core/css/catalog_clarity.css' %}?v=20260922-2">
 {% endblock %}
 
 {% block content %}
@@ -351,9 +353,9 @@
         </nav>
         {% endif %}
 
-        <a href="{% url 'catalog' %}" class="btn btn-outline detail-back-btn">Volver al catalogo</a>
+        <a href="{{ catalog_return_url }}" class="btn btn-outline detail-back-btn">← Volver a los resultados</a>
 
-        <article class="product-detail-card">
+        <article class="product-detail-card{% if not product.image %} product-detail-no-image{% endif %}">
             <div class="product-gallery-wrapper">
                 <div class="product-media" id="productMediaContainer">
                     {% if product.image %}
@@ -413,13 +415,6 @@
                     {% endif %}
                 </div>
 
-                {% if primary_category_chip %}
-                <div class="detail-route-panel">
-                    <span>Ruta del producto</span>
-                    <a href="{{ primary_category_chip.url }}">{{ primary_category_chip.path }}</a>
-                </div>
-                {% endif %}
-
                 {% if category_chips %}
                 <div class="detail-categories">
                     {% for chip in category_chips %}
@@ -433,13 +428,22 @@
                     {% if discount %}
                     <p class="detail-list-price">Precio de lista: $<span id="valBasePrice">{{ base_price|default:product.price|floatformat:2 }}</span></p>
                     <p class="detail-discount">Descuento: {{ discount_percentage|floatformat:0 }}%</p>
-                    <p class="price-final">Precio final: $<span id="valFinalPrice">{{ final_price|floatformat:2 }}</span></p>
+                    <p class="price-final">$<span id="valFinalPrice">{{ final_price|floatformat:2 }}</span></p>
                     {% else %}
                     <p class="price-final">$<span id="valFinalPrice">{{ base_price|default:product.price|floatformat:2 }}</span></p>
                     {% endif %}
+                    <small class="detail-price-note">Precio final · IVA incluido{% if discount %} · Descuento aplicado{% endif %}</small>
                 </div>
                 {% else %}
                 <p class="price-hidden">{{ price_message }}</p>
+                {% endif %}
+
+                <div class="detail-availability"><strong>Por encargo</strong><span>Agregalo al carrito. Confirmaremos el plazo de entrega al revisar tu solicitud.</span></div>
+                {% if technical_specs %}
+                <section class="detail-specifications" aria-labelledby="productSpecsTitle">
+                    <h2 id="productSpecsTitle">Medidas y características</h2>
+                    <dl>{% for spec in technical_specs %}<div><dt>{{ spec.label }}</dt><dd>{{ spec.value }}</dd></div>{% endfor %}</dl>
+                </section>
                 {% endif %}
 
                 {% if product.description %}
@@ -451,7 +455,7 @@
 
                 {% if user.is_authenticated %}
                 <div style="display:flex;gap:10px;flex-wrap:wrap;">
-                    <button class="btn btn-primary" id="addToCartBtn" onclick="addToCart({{ product.id|unlocalize }})" {% if product.stock <= 0 %}disabled{% endif %}>
+                    <button class="btn btn-primary" id="addToCartBtn" onclick="addToCart({{ product.id|unlocalize }})">
                         Agregar al carrito
                     </button>
                     <button
@@ -463,6 +467,8 @@
                         {% if is_favorite %}Favorito{% else %}Guardar favorito{% endif %}
                     </button>
                 </div>
+                {% else %}
+                <a class="btn btn-primary" href="{% url 'login' %}?next={{ request.get_full_path|urlencode }}">Iniciar sesión para agregar al carrito</a>
                 {% endif %}
             </div>
         </article>
@@ -481,7 +487,7 @@
             <div class="related-products-grid reveal-on-scroll">
                 {% for related in related_products %}
                 <article class="related-product-card">
-                    <a class="related-product-thumb" href="{% url 'product_detail' related.sku %}">
+                    <a class="related-product-thumb" href="{% product_detail_link related request catalog_return_url %}">
                         {% if related.image %}
                         <img src="{{ related.image.url }}" alt="{{ related.name }}">
                         {% else %}
@@ -490,7 +496,7 @@
                     </a>
                     <div class="related-product-body">
                         <span class="related-product-sku">{{ related.sku }}</span>
-                        <h3><a href="{% url 'product_detail' related.sku %}">{{ related.name }}</a></h3>
+                        <h3><a href="{% product_detail_link related request catalog_return_url %}">{{ related.name }}</a></h3>
                         {% if related.primary_category_chip %}
                         <a class="related-product-path" href="{{ related.primary_category_chip.url }}" title="{{ related.primary_category_chip.path }}">
                             {{ related.primary_category_chip.path }}
@@ -763,15 +769,7 @@
         const skuEl = document.getElementById('productDetailSku');
         if (skuEl) skuEl.textContent = 'SKU: ' + productData.sku;
         
-        // Update Add To Cart state based on stock
-        const addToCartBtn = document.getElementById('addToCartBtn');
-        if (addToCartBtn) {
-            if (productData.stock > 0) {
-                addToCartBtn.removeAttribute('disabled');
-            } else {
-                addToCartBtn.setAttribute('disabled', 'true');
-            }
-        }
+        // Inventory is informative and does not disable orders on request.
         
         // Update price display
         const valBasePrice = document.getElementById('valBasePrice');

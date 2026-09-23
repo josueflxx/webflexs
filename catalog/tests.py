@@ -496,7 +496,7 @@ class ProductImportTests(CatalogTestCase):
 
         self.assertEqual(result.errors, 0)
         product = Product.objects.get(sku="SAAS-001")
-        self.assertEqual(product.price, Decimal("12100.00"))
+        self.assertEqual(product.price, Decimal("10000.00"))
         self.assertEqual(product.cost, Decimal("1000.00"))
         self.assertTrue(product.is_active)
         self.assertEqual(product.attributes["Numero SaaS"], "918")
@@ -584,7 +584,7 @@ class ProductImportTests(CatalogTestCase):
         self.assertEqual(result.errors, 0)
         product = Product.objects.get(sku="SAAS-FIXED-001")
         self.assertEqual(product.name, "Producto SaaS seguro")
-        self.assertEqual(product.price, Decimal("12100.00"))
+        self.assertEqual(product.price, Decimal("10000.00"))
         self.assertEqual(product.cost, Decimal("0.00"))
         self.assertEqual(product.stock, 0)
         self.assertEqual(product.supplier, "Proveedor Seguro")
@@ -1373,7 +1373,6 @@ class ProductDetailTemplateTests(CatalogTestCase):
         response = self.client.get(reverse("product_detail", args=[self.product.sku]))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Ruta del producto")
         self.assertContains(response, "Plantillas")
         self.assertContains(response, "Producto Relacionado")
         self.assertEqual([product.sku for product in response.context["related_products"]], ["TPL-REL"])
@@ -1579,7 +1578,7 @@ class CatalogExcelGroupedExportTests(CatalogTestCase):
         self.assertEqual(worksheet["C2"].value, "Precio")
         self.assertEqual(worksheet["A3"].value, "ABT7880320S")
         self.assertEqual(worksheet["B3"].value, "ABRAZADERA TREFILADA 7/8 X 80 X 320 S/CURVA")
-        self.assertEqual(worksheet["C3"].value, 100)
+        self.assertEqual(worksheet["C3"].value, 121)
         self.assertNotIn("Tipo", values)
         self.assertNotIn("Nombre normalizado", values)
 
@@ -2362,4 +2361,4 @@ class CatalogHowToMeasureTests(CatalogTestCase):
         self.assertContains(response, "Cómo medir una abrazadera")
         self.assertContains(response, "Ancho (B)")
         self.assertContains(response, "Largo (C)")
-        self.assertContains(response, "Diám. (A)")
+        self.assertContains(response, "Diámetro (A)")

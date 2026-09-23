@@ -186,4 +186,4 @@ class ClampCatalogFilterRegressionTests(TestCase):
         self.assertNotContains(response, "function setupCustomSelects")
         self.assertContains(response, 'data-smart-select="off"')
         self.assertContains(response, 'id="clampFilterOptions"')
-        self.assertContains(response, "Cada selección muestra solo las opciones compatibles.")
+        self.assertContains(response, "Las opciones se ajustan entre sí")

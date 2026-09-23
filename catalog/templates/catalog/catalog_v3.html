@@ -201,6 +201,7 @@
 </style>
 <link rel="stylesheet" href="{% static 'core/css/catalog_workspace.css' %}?v=20260917-preview-8">
 <link rel="stylesheet" href="{% static 'core/css/catalog_filters.css' %}?v=20260917-cascade-2">
+<link rel="stylesheet" href="{% static 'core/css/catalog_clarity.css' %}?v=20260922-2">
 {% endblock %}
 
 {% block content %}
@@ -216,7 +217,7 @@
                 </p>
                 <div class="catalog-notices">
                     {% if current_category and current_category_has_descendants %}
-                    <span class="price-notice">
+                    <span class="price-notice catalog-category-scope">
                         Incluye productos de subcategorias de "{{ current_category.display_name }}"
                     </span>
                     {% endif %}
@@ -290,7 +291,7 @@
                         <h3>Categorías</h3>
                         <span class="catalog-sidebar-kicker">Explorá nuestras líneas</span>
                     </div>
-                    <button type="button" class="catalog-sidebar-close" onclick="closeCatalogFilters()">
+                    <button type="button" class="catalog-sidebar-close" onclick="closeCatalogFilters()" aria-label="Cerrar filtros">
                         Cerrar
                     </button>
                 </div>
@@ -478,7 +479,7 @@
                     <article class="catalog-list-item animate-card-reveal" data-product-id="{{ product.id|unlocalize }}" style="animation-delay: {{ forloop.counter0|multiply:0.04 }}s;">
                         {% if request.user.is_superuser %}
                         <button class="quick-edit-badge-btn" 
-                                onclick="openQuickEditModal('{{ product.id|unlocalize }}', '{{ product.sku|escapejs }}', '{{ product.name|escapejs }}', '{{ product.base_price|default:product.price|unlocalize }}', '{{ product.stock|unlocalize }}', {% if product.is_active %}true{% else %}false{% endif %})" 
+                                onclick="openQuickEditModal('{{ product.id|unlocalize }}', '{{ product.sku|escapejs }}', '{{ product.name|escapejs }}', '{{ product.price|unlocalize }}', '{{ product.stock|unlocalize }}', {% if product.is_active %}true{% else %}false{% endif %})" 
                                 title="Editar producto">
                             <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
                                 <path d="M4 20h4l11-11-4-4L4 16v4Z"></path>
@@ -486,7 +487,7 @@
                             </svg>
                         </button>
                         {% endif %}
-                        <a class="catalog-list-thumb" href="{% url 'product_detail' product.sku %}">
+                        <a class="catalog-list-thumb" href="{% product_detail_link product request %}">
                             {% if product.image %}
                             <img src="{{ product.image.url }}" alt="{{ product.name }}" loading="lazy" decoding="async" width="72" height="72">
                             {% else %}
@@ -497,17 +498,10 @@
                         <div class="catalog-list-main">
                             <div class="catalog-list-topline">
                                 <span class="catalog-list-sku">{{ product.sku }}</span>
-                                {% if product.stock > 0 %}
-                                <span class="product-stock in-stock">
-                                    <span class="stock-pulse-dot"></span>
-                                    Stock {{ product.stock }}
-                                </span>
-                                {% else %}
-                                <span class="product-stock out-stock">Sin stock</span>
-                                {% endif %}
+                                <span class="product-stock on-order">Por encargo</span>
                             </div>
                             <h3 class="catalog-list-title">
-                                <a href="{% url 'product_detail' product.sku %}">{{ product.name }}</a>
+                                <a href="{% product_detail_link product request %}">{{ product.name }}</a>
                             </h3>
                             <div class="catalog-list-meta">
                                 {% if product.primary_category_chip %}
@@ -525,7 +519,7 @@
 
                         <div class="catalog-list-pricebox">
                             {% if show_prices %}
-                                <span class="catalog-price-caption">Precio unitario</span>
+                                <span class="catalog-price-caption">Precio final · IVA incluido</span>
                                 {% if discount %}
                                 <span class="catalog-list-muted">Lista ${{ product.base_price|default:product.price|floatformat:2 }}</span>
                                 <span class="catalog-list-discount">{{ discount|multiply:100|floatformat:0 }}% OFF</span>
@@ -539,8 +533,8 @@
                         </div>
 
                         <div class="catalog-list-actions">
-                            <a href="{% url 'product_detail' product.sku %}" class="btn btn-outline product-detail-btn">
-                                Ver detalle <span aria-hidden="true">↗</span>
+                            <a href="{% product_detail_link product request %}" class="btn btn-outline product-detail-btn">
+                                Ver producto <span aria-hidden="true">↗</span>
                             </a>
                             {% if user.is_authenticated %}
                             <button
@@ -550,23 +544,22 @@
                                 aria-label="Guardar {{ product.name }} en favoritos" aria-pressed="{% if product.is_favorite %}true{% else %}false{% endif %}" title="Guardar en favoritos"
                             >
                                 {% include 'catalog/_favorite_icon.html' %}
-                                <span class="favorite-label">{% if product.is_favorite %}Favorito{% else %}Guardar{% endif %}</span>
+                                <span class="favorite-label">{% if product.is_favorite %}Favorito{% else %}Guardar favorito{% endif %}</span>
                             </button>
                             <button
                                 class="btn btn-primary btn-add-cart btn-animate-shine"
                                 onclick="addToCart({{ product.id|unlocalize }})"
-                                {% if product.stock <= 0 %}disabled{% endif %}
                             >
-                                {% if product.stock > 0 %}+ Agregar{% else %}Sin stock{% endif %}
+                                Agregar al carrito
                             </button>
                             {% endif %}
                         </div>
                     </article>
                     {% else %}
-                    <article class="{% if view_mode == 'list' %}product-list-row{% else %}product-card{% endif %} animate-card-reveal" data-product-id="{{ product.id|unlocalize }}" style="animation-delay: {{ forloop.counter0|multiply:0.04 }}s;">
+                    <article class="{% if view_mode == 'list' %}product-list-row{% else %}product-card{% endif %}{% if not product.image %} product-card-no-image{% endif %} animate-card-reveal" data-product-id="{{ product.id|unlocalize }}" style="animation-delay: {{ forloop.counter0|multiply:0.04 }}s;">
                         {% if request.user.is_superuser %}
                         <button class="quick-edit-badge-btn" 
-                                onclick="openQuickEditModal('{{ product.id|unlocalize }}', '{{ product.sku|escapejs }}', '{{ product.name|escapejs }}', '{{ product.base_price|default:product.price|unlocalize }}', '{{ product.stock|unlocalize }}', {% if product.is_active %}true{% else %}false{% endif %})" 
+                                onclick="openQuickEditModal('{{ product.id|unlocalize }}', '{{ product.sku|escapejs }}', '{{ product.name|escapejs }}', '{{ product.price|unlocalize }}', '{{ product.stock|unlocalize }}', {% if product.is_active %}true{% else %}false{% endif %})" 
                                 title="Editar producto">
                             <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
                                 <path d="M4 20h4l11-11-4-4L4 16v4Z"></path>
@@ -574,7 +567,7 @@
                             </svg>
                         </button>
                         {% endif %}
-                        <a class="product-image" href="{% url 'product_detail' product.sku %}">
+                        <a class="product-image" href="{% product_detail_link product request %}">
                             {% if product.image %}
                             <img class="product-main-img" src="{{ product.image.url }}" alt="{{ product.name }}" loading="lazy" decoding="async" width="320" height="220">
                             {% if product.get_secondary_image_url %}
@@ -587,18 +580,11 @@
                         <div class="product-info">
                             <div class="product-head">
                                 <span class="product-sku">{{ product.sku }}</span>
-                                {% if product.stock > 0 %}
-                                <span class="product-stock in-stock">
-                                    <span class="stock-pulse-dot"></span>
-                                    En stock
-                                </span>
-                                {% else %}
-                                <span class="product-stock out-stock">Sin stock</span>
-                                {% endif %}
+                                <span class="product-stock on-order">Por encargo</span>
                             </div>
 
                             <h3 class="product-name">
-                                <a href="{% url 'product_detail' product.sku %}">{{ product.name }}</a>
+                                <a href="{% product_detail_link product request %}">{{ product.name }}</a>
                             </h3>
 
                             {% if product.primary_category_chip %}
@@ -616,7 +602,7 @@
                             {% endif %}
 
                             {% if show_prices %}
-                            <div class="product-pricing-details">
+                            <div class="product-pricing-details"><small class="catalog-price-caption">Precio final · IVA incluido</small>
                                 {% if discount %}
                                 <div class="price-row list-price">
                                     <span class="label">Precio lista</span>
@@ -627,7 +613,7 @@
                                     <span class="value">{{ discount|multiply:100|floatformat:0 }}% OFF</span>
                                 </div>
                                 <div class="price-row final-price">
-                                    <span class="label">Precio final</span>
+                                    <span class="label">Tu precio</span>
                                     <span class="value">${{ product.final_price|floatformat:2 }}</span>
                                 </div>
                                 {% else %}
@@ -645,7 +631,7 @@
                             {% endif %}
 
                             <div class="product-actions">
-                                <a href="{% url 'product_detail' product.sku %}" class="btn btn-outline product-detail-btn">
+                                <a href="{% product_detail_link product request %}" class="btn btn-outline product-detail-btn">
                                     Ver producto
                                 </a>
                                 {% if user.is_authenticated %}
@@ -656,14 +642,13 @@
                                     aria-label="Guardar {{ product.name }} en favoritos" aria-pressed="{% if product.is_favorite %}true{% else %}false{% endif %}" title="Guardar en favoritos"
                                 >
                                     {% include 'catalog/_favorite_icon.html' %}
-                                    <span class="favorite-label">{% if product.is_favorite %}Favorito{% else %}Guardar{% endif %}</span>
+                                    <span class="favorite-label">{% if product.is_favorite %}Favorito{% else %}Guardar favorito{% endif %}</span>
                                 </button>
                                 <button
                                     class="btn btn-primary btn-add-cart btn-animate-shine"
                                     onclick="addToCart({{ product.id|unlocalize }})"
-                                    {% if product.stock <= 0 %}disabled{% endif %}
                                 >
-                                    {% if product.stock > 0 %}Agregar al carrito{% else %}Sin disponibilidad{% endif %}
+                                    Agregar al carrito
                                 </button>
                                 {% endif %}
                             </div>
@@ -707,7 +692,7 @@
                         <h3>Filtros de medidas</h3>
                         <span class="catalog-sidebar-kicker">{{ current_category.display_name|default:'Abrazaderas' }}</span>
                     </div>
-                    <button type="button" class="catalog-sidebar-close" onclick="closeCatalogFilters()">
+                    <button type="button" class="catalog-sidebar-close" onclick="closeCatalogFilters()" aria-label="Cerrar filtros">
                         Cerrar
                     </button>
                 </div>
@@ -735,7 +720,7 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="{% static 'core/js/catalog_filters.js' %}?v=20260917-cascade-1" defer></script>
+<script src="{% static 'core/js/catalog_filters.js' %}?v=20260921-clarity-1" defer></script>
 <script src="{% static 'core/js/catalog_excel_download.js' %}?v=20260914-1"></script>
 <script>
     function updateOrder(orderValue) {
@@ -785,8 +770,8 @@
             const isFavorite = !!data.is_favorite;
             btn.dataset.favorite = isFavorite ? '1' : '0';
             const favoriteLabel = btn.querySelector('.favorite-label');
-            if (favoriteLabel) favoriteLabel.textContent = isFavorite ? 'Favorito' : 'Guardar';
-            else btn.textContent = isFavorite ? 'Favorito' : 'Guardar';
+            if (favoriteLabel) favoriteLabel.textContent = isFavorite ? 'Favorito' : 'Guardar favorito';
+            else btn.textContent = isFavorite ? 'Favorito' : 'Guardar favorito';
             btn.setAttribute('aria-pressed', String(isFavorite));
             btn.setAttribute('aria-label', isFavorite ? 'Quitar de favoritos' : 'Guardar en favoritos');
             btn.title = isFavorite ? 'Quitar de favoritos' : 'Guardar en favoritos';
@@ -1084,17 +1069,7 @@ function updateProductCardOnPage(productId, productData) {
             skuSpan.textContent = productData.sku;
         }
         
-        // Update stock
-        const stockBadge = card.querySelector('.product-stock');
-        if (stockBadge) {
-            if (productData.stock > 0) {
-                stockBadge.className = 'product-stock in-stock';
-                stockBadge.innerHTML = '<span class="stock-pulse-dot"></span> ' + (card.classList.contains('catalog-list-item') ? 'Stock ' : 'En stock');
-            } else {
-                stockBadge.className = 'product-stock out-stock';
-                stockBadge.textContent = 'Sin stock';
-            }
-        }
+        // Availability is by order; inventory does not block a catalog request.
         
         // Update price
         const priceFinal = card.querySelector('.price-final .value, .catalog-list-pricebox strong');
@@ -1112,5 +1087,5 @@ function updateProductCardOnPage(productId, productData) {
 }
 </script>
 {% endif %}
-<script src="{% static 'core/js/catalog_workspace.js' %}?v=20260915-preview-2"></script>
+<script src="{% static 'core/js/catalog_workspace.js' %}?v=20260921-clarity-1"></script>
 {% endblock %}

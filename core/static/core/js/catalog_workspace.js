@@ -40,31 +40,44 @@
             window.initializeCategoryTree();
         }));
 
-        const sidebar = document.getElementById('catalogSidebar');
-        const opener = document.getElementById('catalogMobileFilterBtn');
-        if (sidebar && opener) {
-            const originalOpen = window.openCatalogFilters;
+        const drawers = [
+            ['catalogSidebar', 'catalogMobileFilterBtn', 'openCatalogFilters', 'Categorías'],
+            ['catalogSidebarRight', 'catalogMobileRightFilterBtn', 'openCatalogRightFilters', 'Filtros técnicos'],
+        ];
+        let activeSidebar = null;
+        let activeOpener = null;
+        if (typeof window.closeCatalogFilters === 'function') {
             const originalClose = window.closeCatalogFilters;
-            window.openCatalogFilters = function () {
-                originalOpen();
-                opener.setAttribute('aria-expanded', 'true');
-                sidebar.setAttribute('role', 'dialog');
-                sidebar.setAttribute('aria-modal', 'true');
-                sidebar.setAttribute('aria-label', 'Categorías y filtros');
-                sidebar.querySelector('.catalog-sidebar-close')?.focus();
-            };
+            drawers.forEach(([sidebarId, openerId, openName, label]) => {
+                const sidebar = document.getElementById(sidebarId);
+                const opener = document.getElementById(openerId);
+                const originalOpen = window[openName];
+                if (!sidebar || !opener || typeof originalOpen !== 'function') return;
+                window[openName] = function () {
+                    if (activeSidebar) window.closeCatalogFilters();
+                    originalOpen();
+                    activeSidebar = sidebar;
+                    activeOpener = opener;
+                    opener.setAttribute('aria-expanded', 'true');
+                    sidebar.setAttribute('role', 'dialog');
+                    sidebar.setAttribute('aria-modal', 'true');
+                    sidebar.setAttribute('aria-label', label);
+                    sidebar.querySelector('.catalog-sidebar-close')?.focus();
+                };
+            });
             window.closeCatalogFilters = function () {
                 originalClose();
-                opener.setAttribute('aria-expanded', 'false');
-                sidebar.removeAttribute('role');
-                sidebar.removeAttribute('aria-modal');
-                opener.focus();
+                activeOpener?.setAttribute('aria-expanded', 'false');
+                activeSidebar?.removeAttribute('role');
+                activeSidebar?.removeAttribute('aria-modal');
+                activeOpener?.focus();
+                activeSidebar = activeOpener = null;
             };
             document.addEventListener('keydown', function (event) {
-                if (!sidebar.classList.contains('is-open')) return;
+                if (!activeSidebar) return;
                 if (event.key === 'Escape') window.closeCatalogFilters();
                 if (event.key !== 'Tab') return;
-                const focusable = Array.from(sidebar.querySelectorAll('a[href], button, input, select')).filter(element => !element.disabled && element.getClientRects().length);
+                const focusable = Array.from(activeSidebar.querySelectorAll('a[href], button, input, select')).filter(element => !element.disabled && element.getClientRects().length);
                 const first = focusable[0], last = focusable[focusable.length - 1];
                 if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
                 else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }

@@ -1,0 +1,5 @@
+<a class="admin-module-link" href="{% url route %}" data-nav-label="{{ label }}">
+    <span class="admin-module-icon"><svg aria-hidden="true"><use href="#ui-icon-{{ icon }}"></use></svg></span>
+    <span class="admin-module-link-copy"><span class="admin-module-link-title">{{ label }}</span>{% if description %}<small>{{ description }}</small>{% endif %}</span>
+    {% if description %}<svg class="admin-module-link-arrow" aria-hidden="true"><use href="#ui-icon-chevron"></use></svg>{% endif %}
+</a>

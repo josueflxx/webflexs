@@ -1,0 +1,96 @@
+<nav class="admin-module-nav" aria-label="Navegación del panel administrativo">
+    <div class="admin-module-nav-inner">
+        <div class="admin-module-primary">
+            <span class="admin-module-eyebrow">Accesos rápidos</span>
+            <div class="admin-module-shortcuts">
+                {% include 'admin_panel/_module_navigation_link.html' with route='admin_dashboard' label='Inicio' icon='chart' only %}
+                {% include 'admin_panel/_module_navigation_link.html' with route='admin_product_list' label='Productos' icon='box' only %}
+                {% include 'admin_panel/_module_navigation_link.html' with route='admin_client_dashboard' label='Clientes' icon='users' only %}
+                {% include 'admin_panel/_module_navigation_link.html' with route='admin_order_list' label='Pedidos' icon='cart' only %}
+            </div>
+        </div>
+        <div class="admin-module-workspace">
+            <span class="admin-module-eyebrow">Áreas de trabajo</span>
+            <div class="admin-module-groups">
+                <details class="admin-module-menu" data-nav-section="Catálogo">
+                    <summary aria-controls="admin-nav-catalog">
+                        <span class="admin-module-icon"><svg aria-hidden="true"><use href="#ui-icon-folder"></use></svg></span>
+                        <span>Catálogo</span><svg class="admin-module-chevron" aria-hidden="true"><use href="#ui-icon-chevron"></use></svg>
+                    </summary>
+                    <div class="admin-module-links" id="admin-nav-catalog">
+                        <header class="admin-module-panel-head"><div><strong>Organizá tu catálogo</strong><p>Artículos, clasificación y herramientas de carga.</p></div><span class="admin-module-panel-tag">Catálogo</span></header>
+                        <div class="admin-module-columns">
+                            <section aria-label="Productos y estructura"><h2>Productos y estructura</h2>
+                                {% include 'admin_panel/_module_navigation_link.html' with route='admin_product_grid_editor' label='Editor masivo' description='Editá varios artículos en una planilla' icon='edit' only %}
+                                {% include 'admin_panel/_module_navigation_link.html' with route='admin_category_list' label='Categorías' description='Ordená familias y subcategorías' icon='folder' only %}
+                                {% include 'admin_panel/_module_navigation_link.html' with route='admin_brand_list' label='Marcas y rubros' description='Administrá la estructura por marca' icon='tag' only %}
+                                {% include 'admin_panel/_module_navigation_link.html' with route='admin_products_uncategorized' label='Productos sin categoría' description='Revisá los artículos por clasificar' icon='alert' only %}
+                            </section>
+                            <section aria-label="Proveedores y a medida"><h2>Proveedores y a medida</h2>
+                                {% include 'admin_panel/_module_navigation_link.html' with route='admin_supplier_list' label='Proveedores' description='Consultá y gestioná tus proveedores' icon='factory' only %}
+                                {% if 'run_imports' in admin_capabilities and 'manage_products' in admin_capabilities %}{% include 'admin_panel/_module_navigation_link.html' with route='admin_supplier_price_list_batches' label='Listas de proveedor' description='Importá y revisá listas de precios' icon='clipboard' only %}{% endif %}
+                                {% include 'admin_panel/_module_navigation_link.html' with route='admin_clamp_request_list' label='Solicitudes a medida' description='Revisá pedidos de fabricación' icon='ruler' only %}
+                                {% include 'admin_panel/_module_navigation_link.html' with route='admin_clamp_quoter' label='Cotizador' description='Calculá abrazaderas a medida' icon='edit' only %}
+                            </section>
+                        </div>
+                    </div>
+                </details>
+                <details class="admin-module-menu" data-nav-section="Comercial">
+                    <summary aria-controls="admin-nav-sales">
+                        <span class="admin-module-icon"><svg aria-hidden="true"><use href="#ui-icon-users"></use></svg></span>
+                        <span>Comercial</span><svg class="admin-module-chevron" aria-hidden="true"><use href="#ui-icon-chevron"></use></svg>
+                    </summary>
+                    <div class="admin-module-links" id="admin-nav-sales">
+                        <header class="admin-module-panel-head"><div><strong>Clientes y operaciones</strong><p>De la ficha del cliente al seguimiento de sus pedidos.</p></div><span class="admin-module-panel-tag">Comercial</span></header>
+                        <div class="admin-module-columns">
+                            <section aria-label="Cartera de clientes"><h2>Cartera de clientes</h2>
+                                {% include 'admin_panel/_module_navigation_link.html' with route='admin_client_list' label='Buscar clientes' description='Fichas, contacto y movimientos' icon='search' only %}
+                                {% include 'admin_panel/_module_navigation_link.html' with route='admin_client_create' label='Nuevo cliente' description='Agregá un cliente a tu cartera' icon='user-plus' only %}
+                                {% include 'admin_panel/_module_navigation_link.html' with route='admin_client_category_list' label='Categorías de clientes' description='Descuentos y condiciones comerciales' icon='tag' only %}
+                                {% include 'admin_panel/_module_navigation_link.html' with route='admin_client_tools_hub' label='Importar y exportar clientes' description='Herramientas de carga y descarga' icon='clipboard' only %}
+                            </section>
+                            <section aria-label="Gestión comercial"><h2>Gestión comercial</h2>
+                                {% include 'admin_panel/_module_navigation_link.html' with route='admin_sales_workspace' label='Seguimiento de ventas' description='Consultá el avance de las operaciones' icon='chart' only %}
+                                {% include 'admin_panel/_module_navigation_link.html' with route='admin_order_request_list' label='Solicitudes de compra' description='Revisá las solicitudes del portal' icon='cart' only %}
+                                {% include 'admin_panel/_module_navigation_link.html' with route='admin_payment_list' label='Cobros y cuenta corriente' description='Pagos, saldos y movimientos' icon='card' only %}
+                                {% include 'admin_panel/_module_navigation_link.html' with route='admin_client_reports_hub' label='Informes de clientes' description='Consultá el resumen de tu cartera' icon='chart' only %}
+                            </section>
+                        </div>
+                    </div>
+                </details>
+                <details class="admin-module-menu" data-nav-section="Fiscal">
+                    <summary aria-controls="admin-nav-fiscal">
+                        <span class="admin-module-icon"><svg aria-hidden="true"><use href="#ui-icon-receipt"></use></svg></span>
+                        <span>Fiscal</span><svg class="admin-module-chevron" aria-hidden="true"><use href="#ui-icon-chevron"></use></svg>
+                    </summary>
+                    <div class="admin-module-links" id="admin-nav-fiscal">
+                        <header class="admin-module-panel-head"><div><strong>Facturación y comprobantes</strong><p>Documentación fiscal de la empresa activa.</p></div><span class="admin-module-panel-tag">Fiscal</span></header>
+                        <div class="admin-module-columns admin-module-columns-flat">
+                            {% include 'admin_panel/_module_navigation_link.html' with route='admin_fiscal_document_list' label='Comprobantes fiscales' description='Consultá documentos y estados de emisión' icon='receipt' only %}
+                            {% if user.is_superuser %}{% include 'admin_panel/_module_navigation_link.html' with route='admin_fiscal_config' label='Configuración fiscal' description='Parámetros e integración de facturación' icon='settings' only %}{% endif %}
+                        </div>
+                    </div>
+                </details>
+                <details class="admin-module-menu" data-nav-section="Configuración">
+                    <summary aria-controls="admin-nav-settings">
+                        <span class="admin-module-icon"><svg aria-hidden="true"><use href="#ui-icon-settings"></use></svg></span>
+                        <span>Configuración</span><svg class="admin-module-chevron" aria-hidden="true"><use href="#ui-icon-chevron"></use></svg>
+                    </summary>
+                    <div class="admin-module-links" id="admin-nav-settings">
+                        <header class="admin-module-panel-head"><div><strong>Administración del sistema</strong><p>Empresa, integraciones y resguardo de información.</p></div><span class="admin-module-panel-tag">Sistema</span></header>
+                        <div class="admin-module-columns admin-module-columns-flat">
+                            {% if user.is_superuser %}{% include 'admin_panel/_module_navigation_link.html' with route='admin_settings' label='Empresa y configuración' description='Preferencias generales de la empresa' icon='settings' only %}{% endif %}
+                            {% if 'manage_backups' in admin_capabilities %}{% include 'admin_panel/_module_navigation_link.html' with route='admin_backup_center' label='Copias de seguridad' description='Administrá los respaldos del sistema' icon='save' only %}{% endif %}
+                            {% if 'manage_integrations' in admin_capabilities %}{% include 'admin_panel/_module_navigation_link.html' with route='admin_webhook_center' label='API y webhooks' description='Conexiones y servicios externos' icon='link' only %}{% endif %}
+                            <a class="admin-module-link" href="{% url 'select_company' %}?next={{ request.get_full_path|urlencode }}" data-nav-label="Cambiar empresa">
+                                <span class="admin-module-icon"><svg aria-hidden="true"><use href="#ui-icon-building"></use></svg></span>
+                                <span class="admin-module-link-copy"><span class="admin-module-link-title">Cambiar empresa</span><small>Elegí tu espacio de trabajo activo</small></span>
+                                <svg class="admin-module-link-arrow" aria-hidden="true"><use href="#ui-icon-chevron"></use></svg>
+                            </a>
+                        </div>
+                    </div>
+                </details>
+            </div>
+        </div>
+    </div>
+</nav>

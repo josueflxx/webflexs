@@ -88,7 +88,7 @@ class AsyncCatalogExcelTests(TestCase):
         self.assertEqual(self.client.get(self.url, {"status": "1"}).json(), {"status": "ready"})
         response = self.client.get(self.url)
         self.assertTrue(response.streaming)
-        self.assertEqual(tests_pricing.CurrentCatalogPricingTests.excel_price(self, response), Decimal("7250.66"))
+        self.assertEqual(tests_pricing.CurrentCatalogPricingTests.excel_price(self, response), Decimal("8773.30"))
         self.link.is_active = False
         self.link.save(update_fields=["is_active"])
         self.assertNotEqual(self.client.get(self.url).status_code, 200)

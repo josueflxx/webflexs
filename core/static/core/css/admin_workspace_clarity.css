@@ -1,0 +1,30 @@
+/* Isolated admin controls. Dashboard content and accounting rules are untouched. */
+.client-compact-overview { display: flex; flex-wrap: wrap; gap: 12px 28px; padding: 16px 24px; border-top: 1px solid var(--theme-card-border, #293343); }
+.client-compact-overview > div { display: grid; gap: 4px; }
+.client-compact-overview small { color: var(--theme-text-muted, #aab6c7); font-size: 12px; }
+.client-compact-overview strong { font-size: 16px; }
+.client-profile-disclosure > summary { padding: 14px 24px; cursor: pointer; color: var(--color-primary); font-size: 13px; font-weight: 650; border-top: 1px solid var(--theme-card-border, #293343); }
+.client-profile-disclosure:not([open]) > .client-ledger-body { display: none; }
+.client-ledger-page .client-ledger-panel:first-of-type .client-ledger-head { padding: 18px 24px; }
+.client-ledger-page .client-ledger-head h2 { font-size: 20px; }
+.brand-container .filter-form { display: grid !important; grid-template-columns: minmax(180px,1fr) minmax(180px,240px) auto; gap: 10px; align-items: center; }
+.brand-container .filter-form > * { margin: 0 !important; min-width: 0; }
+.brand-container .filter-form:has(> a) { grid-template-columns: minmax(180px,1fr) minmax(180px,240px) auto auto; }
+.brand-container .filter-form .form-input { width: 100%; }
+.grid-editor-container .bulk-actions-group { width: 100%; align-items: stretch; }
+.grid-editor-container .bulk-selection-label { flex-basis: 100%; font-size: 13px; color: #cbd5e1; }
+.grid-editor-container .bulk-empty-hint { margin: 0; font-size: 13px; color: #aab6c7; }
+.grid-editor-container .bulk-operation { border: 1px solid #394454; border-radius: 8px; background: #141d2b; padding: 0 12px; flex: 1 1 240px; min-width: 0; }
+.grid-editor-container .bulk-operation > summary { cursor: pointer; padding: 11px 2px; font-weight: 600; color: #e2e8f0; font-size: 13px; }
+.grid-editor-container .bulk-operation[hidden], .grid-editor-container .bulk-empty-hint[hidden] { display: none !important; }
+.grid-editor-container .bulk-operation .bulk-action-item { flex-wrap: wrap; margin: 4px 0 12px; gap: 8px; }
+.grid-editor-container .bulk-operation input:not([type="hidden"]), .grid-editor-container .bulk-operation select { min-height: 36px; min-width: 155px; flex: 1 1 155px; }
+.grid-editor-container .bulk-operation .btn { min-height: 36px; height: auto !important; white-space: normal; }
+html[data-theme="light"] .grid-editor-container .bulk-operation { background: #fff; border-color: #d4dce6; }
+html[data-theme="light"] .grid-editor-container .bulk-operation > summary { color: #25324a; }
+@media(max-width: 760px) {
+    .brand-container .filter-form { grid-template-columns: minmax(0,1fr) auto; }
+    .brand-container .filter-form:has(> a) { grid-template-columns: minmax(0,1fr) auto; }
+    .brand-container .filter-form > :first-child { grid-column: 1 / -1; }
+    .client-compact-overview { gap: 12px 18px; padding: 14px 18px; }
+}

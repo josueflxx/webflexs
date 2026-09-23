@@ -2,6 +2,7 @@
 from fractions import Fraction
 from django.db.models import Count
 from .clamp_parser import SPEC_FIELDS, normalize_diameter
+from .presentation import diameter_label
 
 LABELS = {"fabrication": "Fabricación", "diameter": "Diámetro", "width": "Ancho (mm)", "length": "Largo (mm)", "shape": "Forma"}
 
@@ -56,7 +57,7 @@ def build_clamp_filters(products, params):
             values.add(selected[field])
         ordered = sorted(values, key=lambda value: option_sort(field, value))
         # Keep the full option universe for instant updates when a filter is cleared.
-        all_options[field] = [{"value": value, "label": value.title() if field in ("shape", "fabrication") else value} for value in ordered]
+        all_options[field] = [{"value": value, "label": diameter_label(value) if field == "diameter" else value.title() if field in ("shape", "fabrication") else value} for value in ordered]
         available = [option for option in all_options[field] if counts.get(option["value"], 0) > 0 or option["value"] == selected[field]]
         legacy_options[field] = [int(option["value"]) if field in ("width", "length") and option["value"].isdigit() else option["value"] for option in available]
         fields.append({

@@ -442,7 +442,7 @@
                         {% elif order.status == 'preparing' %}
                         <span class="sales-record-tag is-warning">En preparacion</span>
                         {% elif order.status == 'confirmed' %}
-                        <span class="sales-record-tag is-success">Confirmado</span>
+                        <span class="sales-record-tag is-success">Pedido confirmado</span>
                         {% else %}
                         <span class="sales-record-tag is-info">Borrador</span>
                         {% endif %}
@@ -594,11 +594,11 @@
                     <div>
                         <span class="order-sale-console-kicker">Datos extra</span>
                         <h3 id="order-sale-console-title">Vendedor y reglas del movimiento</h3>
-                        <p>Asigna el vendedor ahora. Los efectos contables y fiscales se aplican al finalizar.</p>
+                        <p>{% if order_movement_state == 'open' %}Asigná el vendedor y revisá las reglas antes de cerrar.{% else %}Vendedor asignado y reglas del documento registrado.{% endif %}</p>
                     </div>
                 </div>
                 <span class="order-sale-save-state" id="order-sale-save-state" role="status" aria-live="polite">
-                    {% if order.status == 'draft' %}Venta abierta{% else %}{{ order.get_status_display }}{% endif %}
+                    Movimiento {{ order_movement_state_label|default:"Abierto"|lower }}
                 </span>
             </div>
 
@@ -612,7 +612,7 @@
                 </span>
                 <div>
                     <strong>El cliente no tiene localidad fiscal cargada.</strong>
-                    <span>Completa ese dato antes de facturar. La venta puede seguir abierta mientras se prepara.</span>
+                    <span>{% if order_movement_state == 'open' %}Completá ese dato antes de facturar. Podés continuar preparando el movimiento.{% else %}Revisá la ficha del cliente para completar sus datos fiscales. Esto no modifica el comprobante registrado.{% endif %}</span>
                 </div>
             </div>
             {% endif %}
@@ -735,7 +735,7 @@
                 </div>
                 <div class="sales-record-grid">
                     <div class="sales-record-field">
-                        <span class="sales-record-field-label">Estado</span>
+                        <span class="sales-record-field-label">Estado del movimiento</span>
                         <span class="sales-record-field-value">{{ order_movement_state_label|default:order.get_status_display }}</span>
                     </div>
                     <div class="sales-record-field">
@@ -1036,7 +1036,7 @@
             <div class="sales-record-card-head">
                 <div>
                     <h3>Productos de la venta</h3>
-                    <p>Busca un producto, indica la cantidad y agregalo al movimiento.</p>
+                    <p>{% if order.status == 'draft' and not order_items_edit_locked %}Buscá un producto, indicá la cantidad y agregalo al movimiento.{% else %}Detalle de los productos registrados. Los importes ya incluyen la bonificación indicada.{% endif %}</p>
                 </div>
                 <div class="order-record-card-meta">
                     <span class="order-record-section-number">04</span>
@@ -1052,8 +1052,8 @@
                             <th>Cant.</th>
                             <th>Producto</th>
                             <th>Solicitud</th>
-                            <th>Precio</th>
-                            <th>Bonif.</th>
+                            <th>Precio neto unit.</th>
+                            <th>Bonif. aplicada</th>
                             <th>Importe</th>
                             <th>Acciones</th>
                         </tr>

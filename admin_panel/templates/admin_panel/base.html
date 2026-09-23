@@ -67,6 +67,8 @@
     </style>
     {% block extra_css %}{% endblock %}
     <link rel="stylesheet" href="{% static 'core/css/ui_refinements.css' %}?v=20260810-legibility-1">
+    <link rel="stylesheet" href="{% static 'core/css/admin_workspace_clarity.css' %}?v=20260923-1">
+    <link rel="stylesheet" href="{% static 'core/css/admin_module_navigation.css' %}?v=20260923-1">
 </head>
 
 <body class="admin-body">
@@ -334,130 +336,7 @@
                 </div>
             </header>
 
-            <nav class="admin-quick-nav-wrap" aria-label="Navegacion del panel administrativo">
-                <div class="admin-quick-nav">
-                    <button type="button" class="admin-nav-scroll-button" data-admin-nav-direction="-1" aria-label="Ver herramientas anteriores">
-                        <svg aria-hidden="true" style="transform: rotate(180deg)"><use href="#ui-icon-chevron"></use></svg>
-                    </button>
-                    <div class="admin-nav-groups">
-                        <section class="admin-nav-group" aria-labelledby="adminNavPrincipal">
-                            <span class="admin-nav-group-label" id="adminNavPrincipal">Principal</span>
-                            <div class="admin-nav-buttons">
-                                <a href="{% url 'admin_dashboard' %}" class="top-nav-item {% if request.resolver_match.url_name == 'admin_dashboard' %}active{% endif %}">
-                                    <svg class="nav-icon-svg" aria-hidden="true"><use href="#ui-icon-chart"></use></svg> Dashboard
-                                </a>
-                                <a href="{% url 'admin_product_list' %}" class="top-nav-item {% if 'product' in request.resolver_match.url_name and 'uncategorized' not in request.resolver_match.url_name and 'grid_editor' not in request.resolver_match.url_name %}active{% endif %}">
-                                    <svg class="nav-icon-svg" aria-hidden="true"><use href="#ui-icon-box"></use></svg> Productos
-                                </a>
-                                <a href="{% url 'admin_client_dashboard' %}" class="top-nav-item {% if 'client' in request.resolver_match.url_name or 'admin_request' in request.resolver_match.url_name %}active{% endif %}">
-                                    <svg class="nav-icon-svg" aria-hidden="true"><use href="#ui-icon-users"></use></svg> Clientes
-                                </a>
-                                <a href="{% url 'admin_order_list' %}" class="top-nav-item {% if 'order' in request.resolver_match.url_name and 'admin_order_request' not in request.resolver_match.url_name %}active{% endif %}">
-                                    <svg class="nav-icon-svg" aria-hidden="true"><use href="#ui-icon-cart"></use></svg> Pedidos
-                                </a>
-                                <a href="{% url 'admin_payment_list' %}" class="top-nav-item {% if 'payment' in request.resolver_match.url_name %}active{% endif %}">
-                                    <svg class="nav-icon-svg" aria-hidden="true"><use href="#ui-icon-card"></use></svg> Cobros
-                                </a>
-                                <a href="{% url 'admin_fiscal_document_list' %}" class="top-nav-item {% if 'admin_fiscal_document' in request.resolver_match.url_name %}active{% endif %}">
-                                    <svg class="nav-icon-svg" aria-hidden="true"><use href="#ui-icon-receipt"></use></svg> Fiscal
-                                </a>
-                            </div>
-                        </section>
-
-                        <section class="admin-nav-group" aria-labelledby="adminNavCatalogo">
-                            <span class="admin-nav-group-label" id="adminNavCatalogo">Catalogo</span>
-                            <div class="admin-nav-buttons">
-                                <a href="{% url 'admin_product_grid_editor' %}" class="top-nav-item {% if 'grid_editor' in request.resolver_match.url_name %}active{% endif %}" title="Editar precios y productos en grilla">
-                                    <svg class="nav-icon-svg" aria-hidden="true"><use href="#ui-icon-chart"></use></svg> Editor masivo
-                                </a>
-                                <a href="{% url 'admin_category_list' %}" class="top-nav-item {% if 'category' in request.resolver_match.url_name and 'uncategorized' not in request.resolver_match.url_name %}active{% endif %}" title="Clasificacion del catalogo">
-                                    <svg class="nav-icon-svg" aria-hidden="true"><use href="#ui-icon-folder"></use></svg> Categorias
-                                </a>
-                                <a href="{% url 'admin_brand_list' %}" class="top-nav-item {% if 'brand' in request.resolver_match.url_name %}active{% endif %}" title="Marcas y rubros asociados">
-                                    <svg class="nav-icon-svg" aria-hidden="true"><use href="#ui-icon-tag"></use></svg> Marcas
-                                </a>
-                                <a href="{% url 'admin_products_uncategorized' %}" class="top-nav-item {% if 'uncategorized' in request.resolver_match.url_name %}active{% endif %}" title="Productos pendientes de ordenar">
-                                    <svg class="nav-icon-svg" aria-hidden="true"><use href="#ui-icon-folder"></use></svg> Sin categoria
-                                </a>
-                                <a href="{% url 'admin_supplier_list' %}" class="top-nav-item {% if 'supplier' in request.resolver_match.url_name %}active{% endif %}" title="Proveedores y articulos vinculados">
-                                    <svg class="nav-icon-svg" aria-hidden="true"><use href="#ui-icon-factory"></use></svg> Proveedores
-                                </a>
-                                {% if 'run_imports' in admin_capabilities and 'manage_products' in admin_capabilities %}
-                                <a href="{% url 'admin_supplier_price_list_batches' %}" class="top-nav-item {% if 'supplier_price_list' in request.resolver_match.url_name %}active{% endif %}" title="Cargas y actualizaciones de precios">
-                                    <svg class="nav-icon-svg" aria-hidden="true"><use href="#ui-icon-chart"></use></svg> Listas proveedor
-                                </a>
-                                {% endif %}
-                            </div>
-                        </section>
-
-                        <section class="admin-nav-group" aria-labelledby="adminNavClientes">
-                            <span class="admin-nav-group-label" id="adminNavClientes">Clientes</span>
-                            <div class="admin-nav-buttons">
-                                <a href="{% url 'admin_client_list' %}" class="top-nav-item {% if request.resolver_match.url_name == 'admin_client_list' %}active{% endif %}" title="Ficha, movimientos y cuenta corriente">
-                                    <svg class="nav-icon-svg" aria-hidden="true"><use href="#ui-icon-search"></use></svg> Buscar
-                                </a>
-                                <a href="{% url 'admin_client_create' %}" class="top-nav-item {% if request.resolver_match.url_name == 'admin_client_create' %}active{% endif %}" title="Alta comercial y fiscal">
-                                    <svg class="nav-icon-svg" aria-hidden="true"><use href="#ui-icon-user-plus"></use></svg> Agregar
-                                </a>
-                                <a href="{% url 'admin_client_reports_hub' %}" class="top-nav-item {% if 'client_report' in request.resolver_match.url_name %}active{% endif %}" title="Ranking, listado y deudores">
-                                    <svg class="nav-icon-svg" aria-hidden="true"><use href="#ui-icon-chart"></use></svg> Informes
-                                </a>
-                                <a href="{% url 'admin_client_category_list' %}" class="top-nav-item {% if 'client_category' in request.resolver_match.url_name %}active{% endif %}" title="Descuentos y reglas comerciales">
-                                    <svg class="nav-icon-svg" aria-hidden="true"><use href="#ui-icon-tag"></use></svg> Categorias clientes
-                                </a>
-                                <a href="{% url 'admin_client_tools_hub' %}" class="top-nav-item {% if request.resolver_match.url_name == 'admin_client_tools_hub' or request.resolver_match.url_name == 'admin_client_export' or request.resolver_match.url_name == 'admin_import_process' %}active{% endif %}" title="Importar, exportar y revisar altas">
-                                    <svg class="nav-icon-svg" aria-hidden="true"><use href="#ui-icon-settings"></use></svg> Importar y exportar
-                                </a>
-                            </div>
-                        </section>
-
-                        <section class="admin-nav-group" aria-labelledby="adminNavVentas">
-                            <span class="admin-nav-group-label" id="adminNavVentas">Ventas y gestion</span>
-                            <div class="admin-nav-buttons">
-                                <a href="{% url 'admin_sales_workspace' %}" class="top-nav-item {% if request.resolver_match.url_name == 'admin_sales_workspace' %}active{% endif %}" title="Actividad y rendimiento comercial">
-                                    <svg class="nav-icon-svg" aria-hidden="true"><use href="#ui-icon-chart"></use></svg> Seguimiento
-                                </a>
-                                <a href="{% url 'admin_order_request_list' %}" class="top-nav-item {% if 'admin_order_request' in request.resolver_match.url_name %}active{% endif %}" title="Pedidos recibidos desde el portal">
-                                    <svg class="nav-icon-svg" aria-hidden="true"><use href="#ui-icon-edit"></use></svg> Solicitudes compra
-                                </a>
-                                <a href="{% url 'admin_clamp_quoter' %}" class="top-nav-item {% if 'clamp_quoter' in request.resolver_match.url_name %}active{% endif %}" title="Calculo para abrazaderas a medida">
-                                    <svg class="nav-icon-svg" aria-hidden="true"><use href="#ui-icon-ruler"></use></svg> Cotizador
-                                </a>
-                            </div>
-                        </section>
-
-                        <section class="admin-nav-group" aria-labelledby="adminNavSistema">
-                            <span class="admin-nav-group-label" id="adminNavSistema">Tecnica y sistema</span>
-                            <div class="admin-nav-buttons">
-                                <a href="{% url 'admin_clamp_request_list' %}" class="top-nav-item {% if 'clamp_request' in request.resolver_match.url_name %}active{% endif %}" title="Trabajos tecnicos personalizados">
-                                    <svg class="nav-icon-svg" aria-hidden="true"><use href="#ui-icon-clipboard"></use></svg> Solicitudes a medida
-                                </a>
-                                {% if user.is_superuser %}
-                                <a href="{% url 'admin_settings' %}" class="top-nav-item {% if request.resolver_match.url_name == 'admin_settings' or request.resolver_match.url_name == 'admin_user_list' or request.resolver_match.url_name == 'admin_user_permissions' or request.resolver_match.url_name == 'admin_company_list' or request.resolver_match.url_name == 'admin_company_edit' or request.resolver_match.url_name == 'admin_fiscal_config' or request.resolver_match.url_name == 'admin_fiscal_point_create' or request.resolver_match.url_name == 'admin_fiscal_point_edit' or request.resolver_match.url_name == 'admin_fiscal_point_toggle_active' or request.resolver_match.url_name == 'admin_fiscal_point_set_default' or 'import' in request.resolver_match.url_name or 'catalog_excel' in request.resolver_match.url_name or 'sales_document_type' in request.resolver_match.url_name or 'sales_type' in request.resolver_match.url_name or 'warehouse' in request.resolver_match.url_name %}active{% endif %}" title="Empresa, permisos y preferencias">
-                                    <svg class="nav-icon-svg" aria-hidden="true"><use href="#ui-icon-settings"></use></svg> Configuracion
-                                </a>
-                                {% endif %}
-                                {% if 'manage_backups' in admin_capabilities %}
-                                <a href="{% url 'admin_backup_center' %}" class="top-nav-item {% if request.resolver_match.url_name == 'admin_backup_center' %}active{% endif %}" title="Copias de seguridad y restauracion">
-                                    <svg class="nav-icon-svg" aria-hidden="true"><use href="#ui-icon-save"></use></svg> Backups
-                                </a>
-                                {% endif %}
-                                {% if 'manage_integrations' in admin_capabilities %}
-                                <a href="{% url 'admin_webhook_center' %}" class="top-nav-item {% if request.resolver_match.url_name == 'admin_webhook_center' %}active{% endif %}" title="Integraciones externas">
-                                    <svg class="nav-icon-svg" aria-hidden="true"><use href="#ui-icon-link"></use></svg> API y webhooks
-                                </a>
-                                {% endif %}
-                                <a href="{% url 'select_company' %}?next={{ request.get_full_path|urlencode }}" class="top-nav-item" title="Cambiar empresa activa">
-                                    <svg class="nav-icon-svg" aria-hidden="true"><use href="#ui-icon-building"></use></svg> Cambiar empresa
-                                </a>
-                            </div>
-                        </section>
-                    </div>
-                    <button type="button" class="admin-nav-scroll-button" data-admin-nav-direction="1" aria-label="Ver más herramientas">
-                        <svg aria-hidden="true"><use href="#ui-icon-chevron"></use></svg>
-                    </button>
-                </div>
-            </nav>
+            {% include 'admin_panel/_module_navigation.html' %}
 
             {% comment %}La navegacion extensa anterior se conserva temporalmente como referencia de rutas.{% endcomment %}
             {% comment %}
@@ -1175,6 +1054,7 @@
         window.addEventListener('pagehide', sendOfflineBeacon);
     </script>
     {% block extra_js %}{% endblock %}
+    <script src="{% static 'core/js/admin_module_navigation.js' %}?v=20260922-nav-3" defer></script>
 </body>
 
 </html>

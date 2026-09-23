@@ -3,7 +3,6 @@
 {% block page_title %}Ficha comercial {{ client.company_name }}{% endblock %}
 
 {% block content %}
-{% include 'admin_panel/clients/_module_panel.html' with client_panel='search' client_module_subtitle='Ficha comercial del cliente: movimientos abiertos, ventas, cobros y cuenta corriente.' %}
 
 <div class="client-ledger-page">
     <style>
@@ -1465,8 +1464,8 @@
                     <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
                 </div>
                 <div>
-                    <h2>Ver el cliente {{ client.company_name }}</h2>
-                    <p>Legajo comercial del cliente con datos de contacto, condición fiscal, situación actual y acceso rápido a ventas, cobros y cuenta corriente.</p>
+                    <h2>{{ client.company_name }}</h2>
+                    <p>Ficha comercial · Cliente {{ client.pk }} · {{ active_company_label }}</p>
                 </div>
             </div>
             <div class="client-ledger-actions">
@@ -1483,6 +1482,14 @@
             </div>
         </div>
 
+        <div class="client-compact-overview" aria-label="Resumen del cliente">
+            <div><small>Saldo actual · ARS</small><strong>${{ balance_summary.current_balance|floatformat:2 }}</strong></div>
+            <div><small>Categoría / descuento</small><strong>{{ effective_category.name|default:"Sin categoría" }} · {{ effective_discount|floatformat:2 }}%</strong></div>
+            <div><small>Movimientos abiertos</small><strong>{{ open_movements_count }}</strong></div>
+            <div><small>Último movimiento</small><strong>{{ activity_timeline.0.occurred_at|date:"d/m/Y"|default:"-" }}</strong></div>
+        </div>
+        <details class="client-profile-disclosure">
+        <summary>Ver datos de contacto, fiscales y resumen completo</summary>
         <div class="client-ledger-body">
             <div class="client-ledger-grid">
                 <article class="client-ledger-box">
@@ -1572,6 +1579,7 @@
                 </article>
             </div>
         </div>
+        </details>
     </section>
 
     {% if not active_company %}

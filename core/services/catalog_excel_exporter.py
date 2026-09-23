@@ -2,7 +2,7 @@
 
 import json
 from types import SimpleNamespace
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 
 from django.db.models import Q
 from django.utils import timezone
@@ -194,7 +194,12 @@ def _resolve_product_export_price(product, price_map=None, discount_percentage=N
         return Decimal("0")
     if not isinstance(base_price, Decimal):
         base_price = Decimal(str(base_price or 0))
-    return calculate_final_price(base_price, discount_percentage)
+    final_net = calculate_final_price(base_price, discount_percentage)
+    iva_rate = getattr(product, "iva_rate", None)
+    if iva_rate is None:
+        iva_rate = Decimal("21.00")
+    tax_multiplier = Decimal("1") + (iva_rate / Decimal("100"))
+    return (final_net * tax_multiplier).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 
 def _product_has_public_export_price(product, price_map=None, discount_percentage=None):

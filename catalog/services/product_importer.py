@@ -1,4 +1,4 @@
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 import json
 
 from django.db import transaction
@@ -456,12 +456,28 @@ class ProductImporter(BaseImporter):
         return list(dict.fromkeys(missing))
 
     def _parse_price(self, row, existing, errors):
-        raw = row.get("precio_final")
-        field_label = "Precio final"
+        raw = row.get("precio")
+        field_label = "Precio"
         if is_blank(raw):
-            raw = row.get("precio")
-            field_label = "Precio"
+            raw = row.get("precio_final")
+            field_label = "Precio final"
+            if not is_blank(raw):
+                try:
+                    val = parse_decimal(raw, field_label=field_label, min_value=0)
+                    return (val / Decimal("1.21")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+                except ValueError as exc:
+                    errors.append(str(exc))
+                    return None
         if is_blank(raw):
+            # Fallback a costo * 2 si costo está presente
+            cost_raw = row.get("costo")
+            if not is_blank(cost_raw):
+                try:
+                    cost_val = parse_decimal(cost_raw, field_label="Costo", min_value=0)
+                    if cost_val > 0:
+                        return (cost_val * Decimal("2")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+                except ValueError:
+                    pass
             if existing:
                 return None
             errors.append("Precio requerido para producto nuevo")
@@ -471,6 +487,26 @@ class ProductImporter(BaseImporter):
         except ValueError as exc:
             errors.append(str(exc))
             return None
+
+    def _parse_iva_rate(self, row):
+        raw = row.get("alicuota_de_iva")
+        if is_blank(raw):
+            raw = row.get("iva")
+        if is_blank(raw):
+            return Decimal("21.00")
+        clean_raw = str(raw).strip().rstrip("%").replace(",", ".")
+        try:
+            val = Decimal(clean_raw)
+            allowed = {choice[0] for choice in Product.IVA_RATE_CHOICES}
+            if val in allowed:
+                return val
+            if val == Decimal("0.21"):
+                return Decimal("21.00")
+            if val == Decimal("0.105"):
+                return Decimal("10.50")
+            return Decimal("21.00")
+        except Exception:
+            return Decimal("21.00")
 
     def _parse_cost(self, row, errors):
         raw = row.get("costo")
@@ -635,6 +671,7 @@ class ProductImporter(BaseImporter):
         price = self._parse_price(row, existing, errors)
         cost = self._parse_cost(row, errors)
         stock = self._parse_stock(row, existing, errors)
+        iva_rate = self._parse_iva_rate(row)
         attributes = self._parse_attributes(row, errors)
         supplier = "" if is_blank(row.get("proveedor")) else clean_supplier_name(row.get("proveedor"))
         supplier_code = self._text(row.get("codigo_proveedor"))
@@ -655,6 +692,7 @@ class ProductImporter(BaseImporter):
             "codigo_proveedor": supplier_code,
             "precio": str(price) if price is not None else "",
             "costo": str(cost) if cost is not None else "",
+            "iva": str(iva_rate),
             "stock": stock if stock is not None else "",
             "categorias": self._get_category_names(row),
             "modo_categorias": self.category_mode,
@@ -687,6 +725,10 @@ class ProductImporter(BaseImporter):
                 if cost is not None and product.cost != cost:
                     product.cost = cost
                     update_fields.append("cost")
+
+                if product.iva_rate is None or (iva_rate is not None and product.iva_rate != iva_rate):
+                    product.iva_rate = iva_rate
+                    update_fields.append("iva_rate")
 
                 if self.update_mode != self.UPDATE_MODE_PRICES:
                     if name and product.name != name:
@@ -751,6 +793,7 @@ class ProductImporter(BaseImporter):
                     supplier_ref=ensure_supplier(supplier) if supplier else None,
                     cost=cost if cost is not None else Decimal("0.00"),
                     price=price if price is not None else Decimal("0.00"),
+                    iva_rate=iva_rate,
                     stock=stock if stock is not None else 0,
                     is_active=True if active is None else active,
                     filter_1=self._text(row.get("filtro_1")),

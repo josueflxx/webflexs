@@ -22,8 +22,8 @@
     </td>
     <td>${{ item.price_at_purchase|floatformat:2 }}</td>
     <td>
-        {% if order.discount_percentage %}
-        {{ order.discount_percentage|floatformat:0 }}%<br>
+        {% if item.display_discount_percentage %}
+        {{ item.display_discount_percentage|floatformat:0 }}%<br>
         <small class="text-muted">-${{ item.unit_discount_amount|floatformat:2 }}</small>
         {% else %}
         0.00%
@@ -75,7 +75,7 @@
             </span>
             <span>
                 <strong>Esta venta todavia no tiene productos</strong>
-                <small>Agrega el primer producto para comenzar a completar la cotizacion.</small>
+                <small>{% if order.status == 'draft' and not order_items_edit_locked %}Agregá el primer producto para completar la cotización.{% else %}Este documento no contiene artículos.{% endif %}</small>
             </span>
         </div>
     </td>

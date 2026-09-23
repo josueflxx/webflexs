@@ -676,6 +676,9 @@ def build_active_filter_chips(request, active_filters, category_attributes, fiel
 
     for key, value in active_filters.items():
         label = attribute_label_map.get(key) or field_labels.get(key) or key
+        if key == "diameter":
+            from .services.presentation import diameter_label
+            value = diameter_label(value)
         params = request.GET.copy()
         params.pop(key, None)
         params.pop("page", None)
@@ -1015,8 +1018,8 @@ def catalog(request):
             item_map=price_item_map,
             context=pricing_context,
         )
-        product.base_price = pricing.base_price
-        product.final_price = pricing.final_price
+        product.base_price = pricing.base_price_with_tax
+        product.final_price = pricing.final_price_with_tax
         attach_product_category_context(product, category_path_map=category_path_map)
 
     expanded_category_ids = []
@@ -1132,7 +1135,7 @@ def product_detail(request, sku):
     )
     product = get_object_or_404(
         Product.catalog_visible(
-            Product.objects.select_related("category").prefetch_related(public_category_prefetch, gallery_prefetch).only(
+            Product.objects.select_related("category", "clamp_specs").prefetch_related(public_category_prefetch, gallery_prefetch).only(
                 "id",
                 "sku",
                 "name",
@@ -1142,6 +1145,7 @@ def product_detail(request, sku):
                 "stock",
                 "image",
                 "attributes",
+                "clamp_specs",
                 "category_id",
                 "category__id",
                 "category__name",
@@ -1192,8 +1196,8 @@ def product_detail(request, sku):
         price_list=price_list,
         context=pricing_context,
     )
-    final_price = pricing.final_price
-    base_price = pricing.base_price
+    final_price = pricing.final_price_with_tax
+    base_price = pricing.base_price_with_tax
     product_category_chips = build_product_category_chips(product, limit=6)
     linked_categories = [chip["category"] for chip in product_category_chips]
     primary_category = linked_categories[0] if linked_categories else None
@@ -1225,10 +1229,23 @@ def product_detail(request, sku):
                 item_map=related_price_map,
                 context=pricing_context,
             )
-            related_product.base_price = related_pricing.base_price
-            related_product.final_price = related_pricing.final_price
+            related_product.base_price = related_pricing.base_price_with_tax
+            related_product.final_price = related_pricing.final_price_with_tax
 
     description = (product.description or "").strip()
+    from .services.presentation import diameter_label, safe_catalog_return_url
+    spec = getattr(product, "clamp_specs", None)
+    technical_specs = []
+    if spec:
+        for label, value in (
+            ("Fabricación", (spec.fabrication or "").title()),
+            ("Diámetro", diameter_label(spec.diameter) if spec.diameter else ""),
+            ("Ancho", f"{spec.width} mm" if spec.width else ""),
+            ("Largo", f"{spec.length} mm" if spec.length else ""),
+            ("Forma", (spec.shape or "").title()),
+        ):
+            if value:
+                technical_specs.append({"label": label, "value": value})
     seo_description = (
         description[:155] + "..." if len(description) > 158 else description
     ) or f"Detalle del producto {product.name} ({product.sku}) en FLEXS."
@@ -1252,6 +1269,8 @@ def product_detail(request, sku):
         "seo_description": seo_description,
         "is_favorite": is_favorite,
         "product_images": product.get_gallery_images(),
+        "technical_specs": technical_specs,
+        "catalog_return_url": safe_catalog_return_url(request.GET.get("next")),
     }
 
     return render(request, "catalog/product_detail.html", context)
@@ -1787,8 +1806,8 @@ def brand_detail(request, brand_slug):
             item_map=price_item_map,
             context=pricing_context,
         )
-        product.base_price = pricing.base_price
-        product.final_price = pricing.final_price
+        product.base_price = pricing.base_price_with_tax
+        product.final_price = pricing.final_price_with_tax
 
     context = {
         "brand": brand,

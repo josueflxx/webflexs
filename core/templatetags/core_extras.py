@@ -2,6 +2,15 @@ from django import template
 
 register = template.Library()
 
+
+@register.simple_tag
+def product_detail_link(product, request, return_url=None):
+    from urllib.parse import urlencode
+    from django.urls import reverse
+    from catalog.services.presentation import safe_catalog_return_url
+    destination = safe_catalog_return_url(return_url or request.get_full_path())
+    return reverse("product_detail", args=[product.sku]) + "?" + urlencode({"next": destination})
+
 @register.filter
 def get_item(dictionary, key):
     """

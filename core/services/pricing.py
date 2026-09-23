@@ -11,6 +11,9 @@ DECIMAL_ZERO = Decimal("0")
 MONEY_QUANT = Decimal("0.01")
 
 
+DEFAULT_IVA_RATE = Decimal("21.00")
+
+
 @dataclass
 class PricingResult:
     product_id: int
@@ -18,6 +21,9 @@ class PricingResult:
     final_price: Decimal
     discount_percentage: Decimal
     price_list_id: int | None
+    iva_rate: Decimal = Decimal("21.00")
+    base_price_with_tax: Decimal = Decimal("0.00")
+    final_price_with_tax: Decimal = Decimal("0.00")
 
 
 def _to_decimal(value):
@@ -148,12 +154,22 @@ def get_product_pricing(product, user=None, company=None, price_list=None, item_
     )
     base_price = get_base_price_for_product(product, price_list=price_list, item_map=item_map)
     final_price = calculate_final_price(base_price, discount_percentage)
+
+    product_iva = getattr(product, "iva_rate", None)
+    iva_rate = _to_decimal(product_iva) if product_iva is not None else DEFAULT_IVA_RATE
+    tax_multiplier = Decimal("1") + (iva_rate / Decimal("100"))
+    base_price_with_tax = (base_price * tax_multiplier).quantize(MONEY_QUANT, rounding=ROUND_HALF_UP)
+    final_price_with_tax = (final_price * tax_multiplier).quantize(MONEY_QUANT, rounding=ROUND_HALF_UP)
+
     return PricingResult(
         product_id=product.id,
         base_price=base_price,
         final_price=final_price,
         discount_percentage=discount_percentage,
         price_list_id=price_list.pk if price_list else None,
+        iva_rate=iva_rate,
+        base_price_with_tax=base_price_with_tax,
+        final_price_with_tax=final_price_with_tax,
     )
 
 

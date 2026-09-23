@@ -11,6 +11,28 @@
     const clear = root.querySelector("#brandClearSearch");
     const feedback = root.querySelector("#brandCatalogFeedback");
     const normalize = value => String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+    const params = new URLSearchParams(location.search);
+    if (search) search.value = params.get("q") || "";
+    function rememberResults() {
+        const url = new URL(location.href);
+        if (search?.value.trim()) url.searchParams.set("q", search.value.trim());
+        else url.searchParams.delete("q");
+        if (products) url.searchParams.set("view", products.dataset.view);
+        history.replaceState(null, "", url.pathname + url.search);
+        root.querySelectorAll('a[href*="/catalogo/producto/"]').forEach(link => {
+            const target = new URL(link.href);
+            target.searchParams.set("next", url.pathname + url.search);
+            link.href = target.pathname + target.search;
+        });
+    }
+    if (products && ["list", "grid"].includes(params.get("view"))) {
+        products.dataset.view = params.get("view");
+        root.querySelectorAll("[data-bc-view]").forEach(button => {
+            const active = button.dataset.bcView === products.dataset.view;
+            button.classList.toggle("is-active", active);
+            button.setAttribute("aria-pressed", String(active));
+        });
+    }
 
     function filterProducts() {
         const query = normalize(search?.value).trim();
@@ -22,9 +44,10 @@
             if (!card.hidden) visible++;
         });
         if (count) count.textContent = visible;
-        if (countLabel) countLabel.textContent = visible === 1 ? "producto disponible" : "productos disponibles";
+        if (countLabel) countLabel.textContent = visible === 1 ? "resultado" : "resultados";
         if (empty) empty.hidden = visible > 0 || !query;
         if (clear) clear.hidden = !search.value;
+        rememberResults();
     }
 
     function showFeedback(message, isError = false) {
@@ -57,6 +80,7 @@
                 button.classList.toggle("is-active", active);
                 button.setAttribute("aria-pressed", String(active));
             });
+            rememberResults();
             return;
         }
         const button = event.target.closest("[data-bc-action]");
@@ -86,7 +110,7 @@
             } else {
                 button.dataset.favorite = data.is_favorite ? "1" : "0";
                 button.setAttribute("aria-pressed", String(!!data.is_favorite));
-                button.textContent = data.is_favorite ? "Guardado" : "Guardar";
+                button.textContent = data.is_favorite ? "Favorito" : "Guardar favorito";
                 showFeedback(data.is_favorite ? "Producto guardado en favoritos." : "Producto retirado de favoritos.");
             }
         } catch (error) {
@@ -96,4 +120,5 @@
             button.disabled = false;
         }
     });
+    if (search && products) filterProducts();
 })();

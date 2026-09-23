@@ -101,12 +101,8 @@
         </article>
         {% endif %}
         <article class="product-center-kpi">
-            <small>Precio neto</small>
+            <small>Precio de venta</small>
             <strong>${{ product.price|floatformat:2 }}</strong>
-        </article>
-        <article class="product-center-kpi">
-            <small>Precio final con IVA</small>
-            <strong>${{ final_price|floatformat:2 }}</strong>
         </article>
         {% if can_view_costs %}
         <article class="product-center-kpi">
@@ -140,7 +136,6 @@
             <div class="product-center-card-body">
                 <dl class="product-center-details">
                     <div><dt>SKU</dt><dd>{{ product.sku }}</dd></div>
-                    <div><dt>IVA</dt><dd>{% if product.iva_rate is not None %}{{ product.iva_rate|floatformat:2 }}%{% else %}<span class="badge badge-warning">Sin definir</span>{% endif %}</dd></div>
                     <div><dt>Categoría principal</dt><dd>{{ product.category.name|default:"Sin categoría" }}</dd></div>
                     <div>
                         <dt>Categorías vinculadas</dt>

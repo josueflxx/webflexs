@@ -8,6 +8,7 @@
     const allOptions = JSON.parse(optionsData.textContent);
     const selects = Array.from(form.querySelectorAll("[data-clamp-filter]"));
     const status = document.getElementById("technicalFilterStatus");
+    const apply = document.getElementById("technicalFilterApply");
     const initial = new URLSearchParams(new FormData(form)).toString();
     function calculate(values) {
         let total = 0;
@@ -69,10 +70,12 @@
             }
         });
         const changed = initial !== new URLSearchParams(new FormData(form)).toString();
+        form.dataset.pending = String(changed);
+        if (apply) apply.textContent = "Ver " + total.toLocaleString("es-AR") + (total === 1 ? " producto" : " productos");
         status.dataset.empty = String(total === 0);
         status.textContent = total === 0
             ? "Sin coincidencias para esta combinación. Cambiá una medida o limpiá los filtros."
-            : total.toLocaleString("es-AR") + (total === 1 ? " producto compatible." : " productos compatibles.") + (changed ? " Presioná Aplicar para verlos." : "");
+            : changed ? "Cambios sin aplicar. Confirmá para actualizar el listado." : "Filtros aplicados al listado.";
     }
     form.addEventListener("change", () => updateCounts(true));
     updateCounts(false);

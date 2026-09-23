@@ -472,6 +472,7 @@ class Product(models.Model):
         max_digits=5,
         decimal_places=2,
         choices=IVA_RATE_CHOICES,
+        default=Decimal("21.00"),
         null=True,
         blank=True,
         verbose_name="Alicuota IVA",

@@ -52,7 +52,7 @@ class ProductWorkspaceTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Historial comercial unificado")
-        self.assertContains(response, "$121,00")
+        self.assertContains(response, "$100,00")
         self.assertContains(response, "Proveedor workspace")
         self.assertContains(response, "Cambio de costo")
 
