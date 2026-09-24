@@ -40,20 +40,8 @@
 .home-redesign h1 em { font-style: normal; color: var(--hm-accent); }
 .home-redesign .hm-intro { margin-top: 23px; font-size: 18px; font-weight: 550; line-height: 1.55; }
 .home-redesign .hm-description { color: var(--hm-muted); max-width: 44ch; margin-top: 13px; font-size: 14px; }
-.home-redesign .hm-search { margin-top: 30px; }
-.home-redesign .hm-search label { display: block; color: var(--hm-text); font-size: 12px; font-weight: 650; margin-bottom: 9px; }
-.home-redesign .hm-search-field { display: flex; align-items: center; padding: 5px; gap: 10px; border: 1px solid #45505e; border-radius: 10px; background: var(--hm-panel); }
-.home-redesign .hm-search-field:focus-within { border-color: var(--hm-accent); box-shadow: 0 0 0 3px #ff713b15; }
-.home-redesign .hm-search-field > svg { width: 20px; height: 20px; flex: 0 0 20px; margin-left: 11px; fill: none; stroke: var(--hm-muted); stroke-width: 1.7; }
-.home-redesign .hm-search input { min-width: 0; flex: 1; width: 100%; height: 44px; padding: 0; border: 0; box-shadow: none; background: transparent; color: var(--hm-text); font: inherit; font-size: 13px; }
-.home-redesign .hm-search input::placeholder { color: var(--hm-muted); opacity: 1; }
-.home-redesign .hm-search input:focus { outline: none; }
-.home-redesign .hm-search .hm-button { flex-shrink: 0; }
 .home-redesign .hm-hero-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 14px 20px; margin-top: 28px; }
 .home-redesign .hm-hero-actions .hm-button { min-height: 48px; padding: 13px 24px; font-size: 14px; gap: 12px; }
-.home-redesign .hm-hero-links { display: flex; flex-wrap: wrap; gap: 10px 27px; margin-top: 12px; }
-.home-redesign .hm-hero-links a { display: inline-flex; align-items: center; gap: 14px; min-height: 40px; color: var(--hm-text); font-size: 13px; font-weight: 650; }
-.home-redesign .hm-hero-links a:hover { color: var(--hm-accent); }
 .home-redesign .hm-availability { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; color: var(--hm-muted); font-size: 11px; margin-top: 20px; }
 .home-redesign .hm-availability strong { color: var(--hm-text); font-weight: 600; }
 .home-redesign .hm-small-dot { width: 5px; height: 5px; background: var(--hm-accent); border-radius: 50%; }
@@ -205,22 +193,15 @@ html[data-theme="light"] .home-redesign .hm-portal { border-color: #e6a58b; }
     .home-redesign h1 { font-size: clamp(32px, 9.5vw, 45px); }
     .home-redesign .hm-intro { font-size: 15px; margin-top: 18px; }
     .home-redesign .hm-description { font-size: 13px; }
-    .home-redesign .hm-search { margin-top: 22px; }
-    .home-redesign .hm-search-field { gap: 7px; }
-    .home-redesign .hm-search-field > svg { margin-left: 5px; width: 16px; flex-basis: 16px; }
-    .home-redesign .hm-search input { font-size: 16px; }
-    .home-redesign .hm-search .hm-button { gap: 10px; padding-inline: 12px; }
     .home-redesign .hm-hero-actions { gap: 10px 14px; margin-top: 20px; }
     .home-redesign .hm-hero-actions .hm-button { width: 100%; justify-content: center; }
-    .home-redesign .hm-hero-links { gap: 6px 22px; }
-    .home-redesign .hm-hero-links a { font-size: 12px; gap: 8px; }
     .home-redesign .hm-availability > span:last-child { flex-basis: 100%; padding-left: 13px; }
     .home-redesign .home-clamp { padding: 14px 12px; }
     .home-redesign .home-clamp-heading { font-size: 9px; }
     .home-redesign .hm-live-badge { font-size: 8px; }
     .home-redesign .home-clamp-stage { height: 275px; }
-    .home-redesign .home-clamp-controls button { min-height: 40px; }
-    .home-redesign .home-clamp-profiles button { min-height: 42px; }
+    .home-redesign .home-clamp-controls button { min-width: 44px; min-height: 44px; }
+    .home-redesign .home-clamp-profiles button { min-height: 44px; }
     .home-redesign .hm-showcase-link { padding: 16px; }
     .home-redesign .hm-assurances { grid-template-columns: 1fr; gap: 0; padding: 6px 0; }
     .home-redesign .hm-assurances > div { padding: 12px 0; border-right: 0; border-bottom: 1px solid var(--hm-line); }

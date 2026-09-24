@@ -1,10 +1,12 @@
 from decimal import Decimal, ROUND_HALF_UP
 import json
 
+from django.core.files.base import ContentFile
 from django.db import transaction
+import openpyxl
 
 from core.services.importer import BaseImporter, ImportRowResult
-from catalog.models import Category, Product, ProductSupplier
+from catalog.models import Category, Product, ProductSupplier, ProductImage
 from catalog.services.clamp_specs import sync_product_clamp_specs
 from catalog.services.import_utils import (
     is_blank,
@@ -238,6 +240,14 @@ class ProductImporter(BaseImporter):
         "controla_stock": "controla_stock",
         "stock_negativo": "stock_negativo",
         "características": "atributos",
+        "foto": "foto",
+        "fotos": "foto",
+        "imagen": "foto",
+        "imagenes": "foto",
+        "image": "foto",
+        "images": "foto",
+        "photo": "foto",
+        "picture": "foto",
     }
 
     ATTRIBUTE_COLUMNS = {
@@ -304,6 +314,7 @@ class ProductImporter(BaseImporter):
         self.required_columns = ["sku"]
         self._seen_skus = {}
         self._seen_row_data = {}
+        self._embedded_images = {}
         self.column_mapping_mode = "headers"
         self.is_global_base = _truthy_option(is_global_base, default=False)
         self.update_mode = update_mode or self.UPDATE_MODE_COMMERCIAL
@@ -327,7 +338,10 @@ class ProductImporter(BaseImporter):
             self.category_mode = self.CATEGORY_MODE_EXISTING
 
     def load_data(self):
+        if hasattr(self.file, "seek"):
+            self.file.seek(0)
         super().load_data()
+        self._load_embedded_images()
         self._drop_ignored_saas_fixed_columns()
         self.df = self.df.dropna(how="all")
         mapped_columns, mapping_mode = normalize_columns(
@@ -339,6 +353,126 @@ class ProductImporter(BaseImporter):
         self.df.columns = mapped_columns
         self.column_mapping_mode = mapping_mode
         return True
+
+    def _load_embedded_images(self):
+        self._embedded_images = {}
+        if not self.file:
+            return
+        try:
+            if hasattr(self.file, "seek"):
+                self.file.seek(0)
+            wb = openpyxl.load_workbook(self.file, data_only=False)
+            ws = wb.active or (wb.worksheets[0] if getattr(wb, "worksheets", None) else None)
+            if ws:
+                for img in getattr(ws, "_images", []):
+                    try:
+                        from_obj = getattr(img.anchor, "_from", None)
+                        row_idx = getattr(from_obj, "row", None) if from_obj else getattr(img.anchor, "row", None)
+                        if row_idx is None:
+                            continue
+                        excel_row = row_idx + 1
+                        raw_bytes = img._data() if callable(getattr(img, "_data", None)) else getattr(img, "_data", None)
+                        if not raw_bytes:
+                            continue
+                        fmt = (getattr(img, "format", "jpg") or "jpg").lower()
+                        if fmt == "jpeg":
+                            fmt = "jpg"
+                        self._embedded_images[excel_row] = {
+                            "bytes": raw_bytes,
+                            "format": fmt,
+                        }
+                    except Exception:
+                        continue
+            wb.close()
+        except Exception:
+            pass
+        finally:
+            if hasattr(self.file, "seek"):
+                self.file.seek(0)
+
+    def _resolve_image_data(self, row, source_row_number):
+        """
+        Returns a dict with {"bytes": bytes, "format": str} or None.
+        Checks embedded Excel drawings first, then cell text (base64, URL).
+        """
+        if source_row_number and source_row_number in self._embedded_images:
+            return self._embedded_images[source_row_number]
+
+        raw = row.get("foto")
+        if is_blank(raw):
+            return None
+
+        raw_str = str(raw).strip()
+        if raw_str.startswith("data:image/") and ";base64," in raw_str:
+            import base64
+            try:
+                header, b64_data = raw_str.split(";base64,", 1)
+                fmt = header.split("/")[-1].lower()
+                if fmt == "jpeg":
+                    fmt = "jpg"
+                return {"bytes": base64.b64decode(b64_data), "format": fmt}
+            except Exception:
+                return None
+
+        if raw_str.startswith(("http://", "https://")):
+            import urllib.request
+            try:
+                req = urllib.request.Request(raw_str, headers={"User-Agent": "Mozilla/5.0"})
+                with urllib.request.urlopen(req, timeout=10) as resp:
+                    data = resp.read()
+                    content_type = resp.headers.get_content_type()
+                    fmt = content_type.split("/")[-1].lower() if "/" in content_type else "jpg"
+                    if fmt == "jpeg":
+                        fmt = "jpg"
+                    return {"bytes": data, "format": fmt}
+            except Exception:
+                return None
+
+        return None
+
+    def _apply_product_image(self, product, image_data):
+        if not image_data or not image_data.get("bytes"):
+            return False
+
+        fmt = image_data.get("format", "jpg")
+        clean_sku = "".join(c for c in (product.sku or "prod") if c.isalnum() or c in "-_")
+        filename = f"{clean_sku}.{fmt}"
+        target_name = f"products/{filename}"
+
+        try:
+            if product.image and product.image.name and product.image.name != target_name:
+                if product.image.storage.exists(product.image.name):
+                    product.image.storage.delete(product.image.name)
+            if product.image.storage.exists(target_name):
+                product.image.storage.delete(target_name)
+        except Exception:
+            pass
+
+        try:
+            product.image.save(filename, ContentFile(image_data["bytes"]), save=True)
+
+            primary_image = product.images.filter(is_primary=True).first()
+            if not primary_image:
+                primary_image = product.images.first()
+
+            if primary_image:
+                primary_image.image = product.image
+                primary_image.is_primary = True
+                if not primary_image.alt_text:
+                    primary_image.alt_text = product.name
+                primary_image.save()
+            else:
+                primary_image = ProductImage.objects.create(
+                    product=product,
+                    image=product.image,
+                    is_primary=True,
+                    order=0,
+                    alt_text=product.name,
+                )
+            product.images.exclude(pk=primary_image.pk).filter(is_primary=True).update(is_primary=False)
+            return True
+        except Exception:
+            return False
 
     def _drop_ignored_saas_fixed_columns(self):
         normalized_headers = [normalize_header(column) for column in self.df.columns]
@@ -635,18 +769,34 @@ class ProductImporter(BaseImporter):
         public_row_data = {key: value for key, value in dict(row).items() if key != "__row_number"}
         result = ImportRowResult(row_number=0, data=public_row_data)
         errors = []
+        image_data = self._resolve_image_data(row, source_row_number)
+
+        if is_blank(public_row_data.get("foto")):
+            public_row_data.pop("foto", None)
+        elif image_data:
+            kb = max(1, len(image_data["bytes"]) // 1024)
+            public_row_data["foto"] = f"Detectada ({kb} KB, {image_data['format'].upper()})"
 
         sku = normalize_sku(row.get("sku"))
         if not sku:
             errors.append("SKU es requerido")
         elif sku in self._seen_skus:
             message = f"SKU duplicado dentro del archivo; primera aparicion en fila {self._seen_skus[sku]}"
+            if image_data:
+                kb = max(1, len(image_data["bytes"]) // 1024)
+                public_row_data["foto"] = f"Detectada ({kb} KB, {image_data['format'].upper()})"
             result.data = self._build_duplicate_result_data(sku, source_row_number, public_row_data)
             result.success = True
             result.errors = [message]
             result.action = "skipped"
             if not dry_run:
                 self._register_duplicate_warning(sku, source_row_number, public_row_data)
+                if image_data and self.update_mode != self.UPDATE_MODE_PRICES:
+                    dup_product = Product.objects.filter(sku=sku).first()
+                    if dup_product and not dup_product.image:
+                        if self._apply_product_image(dup_product, image_data):
+                            kb = max(1, len(image_data["bytes"]) // 1024)
+                            result.data["foto"] = f"Guardada ({kb} KB, {image_data['format'].upper()})"
             return result
         else:
             self._seen_skus[sku] = source_row_number or len(self._seen_skus) + 2
@@ -700,6 +850,9 @@ class ProductImporter(BaseImporter):
             "preservar_categorias_existentes": self.preserve_existing_categories,
             "atributos": attributes or {},
         }
+        if image_data:
+            kb = max(1, len(image_data["bytes"]) // 1024)
+            result.data["foto"] = f"Detectada ({kb} KB, {image_data['format'].upper()})"
         preserve_categories = bool(existing and self.preserve_existing_categories)
 
         if dry_run:
@@ -779,6 +932,13 @@ class ProductImporter(BaseImporter):
                             setattr(product, model_field, value)
                             update_fields.append(model_field)
 
+                    if image_data:
+                        if self._apply_product_image(product, image_data):
+                            kb = max(1, len(image_data["bytes"]) // 1024)
+                            result.data["foto"] = f"Guardada ({kb} KB, {image_data['format'].upper()})"
+                        else:
+                            result.data["foto"] = "Error al guardar imagen"
+
                 if update_fields:
                     update_fields.append("updated_at")
                     product.save(update_fields=list(dict.fromkeys(update_fields)))
@@ -804,6 +964,12 @@ class ProductImporter(BaseImporter):
                     attributes=attributes or {},
                 )
                 created = True
+                if image_data:
+                    if self._apply_product_image(product, image_data):
+                        kb = max(1, len(image_data["bytes"]) // 1024)
+                        result.data["foto"] = f"Guardada ({kb} KB, {image_data['format'].upper()})"
+                    else:
+                        result.data["foto"] = "Error al guardar imagen"
 
             if existing and self.update_mode == self.UPDATE_MODE_PRICES:
                 result.data["categorias_preservadas"] = True
@@ -893,7 +1059,14 @@ class ProductImporter(BaseImporter):
                 
             results.deactivated_count = deactivated_count
             results.deactivated_skus = deactivated_skus
-            
+
+        results.images_count = sum(
+            1
+            for r in results.row_results
+            if "Guardada" in str((getattr(r, "data", {}) or {}).get("foto", ""))
+            or "Detectada" in str((getattr(r, "data", {}) or {}).get("foto", ""))
+        )
+
         return results
 
     def check_and_run_parser(self, product, dry_run=False):

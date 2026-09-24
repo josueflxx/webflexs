@@ -6,7 +6,7 @@
 {% block extra_css %}
 <link rel="stylesheet" href="{% static 'core/css/home_clamp.css' %}?v=20260915-1">
 <link rel="stylesheet" href="{% static 'core/css/clamp_dimensions.css' %}?v=20260915-contrast-1">
-<link rel="stylesheet" href="{% static 'core/css/home_storefront.css' %}?v=20260923-1">
+<link rel="stylesheet" href="{% static 'core/css/home_storefront.css' %}?v=20260924-1">
 {% endblock %}
 
 {% block content %}
@@ -70,7 +70,7 @@
             {% for family in home_families %}
             <a class="hm-family{% if family.key == 'abrazaderas' %} hm-family-featured{% endif %}" href="{{ family.url }}">
                 <span class="category-icon" aria-hidden="true">{% include 'core/_home_family_icon.html' with key=family.key only %}</span>
-                <span class="hm-family-copy"><h3>{{ family.name }}</h3><span>{{ family.description }}</span></span>
+                <div class="hm-family-copy"><h3>{{ family.name }}</h3><span>{{ family.description }}</span></div>
                 <span class="hm-family-arrow" aria-hidden="true">↗</span>
             </a>
             {% endfor %}

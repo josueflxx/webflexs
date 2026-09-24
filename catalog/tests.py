@@ -719,6 +719,105 @@ class ProductImportTests(CatalogTestCase):
         self.assertTrue(matching_product.is_active)
         self.assertEqual(matching_product.price, Decimal("250.00"))
 
+    def test_product_import_with_embedded_image_saves_and_attaches_to_gallery(self):
+        from openpyxl.drawing.image import Image as OpenpyxlImage
+        from PIL import Image as PILImage
+
+        workbook = Workbook()
+        sheet = workbook.active
+        sheet.title = "Importacion"
+        sheet.append(["sku", "nombre", "precio", "foto"])
+        sheet.append(["PROD-IMG-1", "Producto con foto", 150.0, None])
+
+        img_io = BytesIO()
+        PILImage.new("RGB", (20, 20), color="blue").save(img_io, format="JPEG")
+        img_io.seek(0)
+        img = OpenpyxlImage(img_io)
+        sheet.add_image(img, "D2")
+
+        file_obj = BytesIO()
+        workbook.save(file_obj)
+        file_obj.seek(0)
+
+        result = ProductImporter(file_obj).run(dry_run=False)
+        self.assertEqual(result.errors, 0)
+        self.assertEqual(result.created, 1)
+
+        product = Product.objects.get(sku="PROD-IMG-1")
+        self.assertTrue(bool(product.image))
+        self.assertTrue(product.image.name.startswith("products/PROD-IMG-1"))
+        self.assertTrue(product.image.storage.exists(product.image.name))
+
+        # Check ProductImage gallery
+        self.assertEqual(product.images.count(), 1)
+        primary_img = product.images.first()
+        self.assertTrue(primary_img.is_primary)
+        self.assertEqual(primary_img.image.name, product.image.name)
+
+        # Cleanup
+        product.image.storage.delete(product.image.name)
+
+    def test_product_import_with_embedded_image_dry_run_does_not_save_files(self):
+        from openpyxl.drawing.image import Image as OpenpyxlImage
+        from PIL import Image as PILImage
+
+        workbook = Workbook()
+        sheet = workbook.active
+        sheet.title = "Importacion"
+        sheet.append(["sku", "nombre", "precio", "foto"])
+        sheet.append(["PROD-IMG-DRY", "Producto dry run", 200.0, None])
+
+        img_io = BytesIO()
+        PILImage.new("RGB", (20, 20), color="green").save(img_io, format="JPEG")
+        img_io.seek(0)
+        img = OpenpyxlImage(img_io)
+        sheet.add_image(img, "D2")
+
+        file_obj = BytesIO()
+        workbook.save(file_obj)
+        file_obj.seek(0)
+
+        result = ProductImporter(file_obj).run(dry_run=True)
+        self.assertEqual(result.errors, 0)
+        self.assertEqual(result.created, 1)
+        self.assertIn("Detectada", result.row_results[0].data.get("foto", ""))
+        self.assertFalse(Product.objects.filter(sku="PROD-IMG-DRY").exists())
+
+    def test_product_import_duplicate_row_with_image_attaches_to_product(self):
+        from openpyxl.drawing.image import Image as OpenpyxlImage
+        from PIL import Image as PILImage
+
+        workbook = Workbook()
+        sheet = workbook.active
+        sheet.title = "Importacion"
+        sheet.append(["sku", "nombre", "precio", "foto"])
+        # First row has no image
+        sheet.append(["PROD-DUP-IMG", "Producto base", 300.0, None])
+        # Second row is duplicate SKU and has image
+        sheet.append(["PROD-DUP-IMG", "Producto base copia", 300.0, None])
+
+        img_io = BytesIO()
+        PILImage.new("RGB", (20, 20), color="yellow").save(img_io, format="JPEG")
+        img_io.seek(0)
+        img = OpenpyxlImage(img_io)
+        sheet.add_image(img, "D3")
+
+        file_obj = BytesIO()
+        workbook.save(file_obj)
+        file_obj.seek(0)
+
+        result = ProductImporter(file_obj).run(dry_run=False)
+        self.assertEqual(result.errors, 0)
+        self.assertEqual(result.created, 1)
+
+        product = Product.objects.get(sku="PROD-DUP-IMG")
+        self.assertTrue(bool(product.image))
+        self.assertTrue(product.image.storage.exists(product.image.name))
+        self.assertEqual(product.images.count(), 1)
+
+        # Cleanup
+        product.image.storage.delete(product.image.name)
+
     def test_abrazadera_import_accepts_product_style_headers(self):
         file_obj = build_import_workbook(
             ["sku", "nombre", "precio", "stock", "categoria"],
