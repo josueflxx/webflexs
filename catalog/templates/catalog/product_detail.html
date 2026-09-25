@@ -407,7 +407,7 @@
                     {% if request.user.is_superuser %}
                     <button class="btn btn-outline" 
                             id="quickEditDetailBtn"
-                            onclick="openQuickEditModal('{{ product.id|unlocalize }}', '{{ product.sku|escapejs }}', '{{ product.name|escapejs }}', '{{ base_price|default:product.price|unlocalize }}', '{{ product.stock|unlocalize }}', {% if product.is_active %}true{% else %}false{% endif %})" 
+                            onclick="openQuickEditModal('{{ product.id|unlocalize }}', '{{ product.sku|escapejs }}', '{{ product.name|escapejs }}', '{{ product.cost|default:0|unlocalize }}', '{{ base_price|default:product.price|unlocalize }}', '{{ product.stock|unlocalize }}', {% if product.is_active %}true{% else %}false{% endif %})" 
                             title="Editar producto"
                             style="padding: 6px 12px; font-size: 0.85rem; min-height: auto; display: inline-flex; align-items: center; gap: 4px;">
                         ✏️ Editar
@@ -432,7 +432,7 @@
                     {% else %}
                     <p class="price-final">$<span id="valFinalPrice">{{ base_price|default:product.price|floatformat:2 }}</span></p>
                     {% endif %}
-                    <small class="detail-price-note">Precio final · IVA incluido{% if discount %} · Descuento aplicado{% endif %}</small>
+                    <small class="detail-price-note">Precio Neto + IVA{% if discount %} · Descuento aplicado{% endif %}</small>
                 </div>
                 {% else %}
                 <p class="price-hidden">{{ price_message }}</p>
@@ -547,15 +547,20 @@
             
             <div class="form-group-row">
                 <div class="form-group">
-                    <label for="quickEditPrice">Precio de Lista</label>
+                    <label for="quickEditCost">Precio de Costo</label>
+                    <input type="number" id="quickEditCost" name="cost" step="0.01" class="form-control" placeholder="0.00">
+                </div>
+                <div class="form-group">
+                    <label for="quickEditPrice">Precio de Venta (Neto)</label>
                     <input type="number" id="quickEditPrice" name="price" step="0.01" required class="form-control">
                 </div>
-                <div class="form-group checkbox-group">
-                    <label for="quickEditActive">
-                        <input type="checkbox" id="quickEditActive" name="is_active">
-                        <span>Activo en catálogo</span>
-                    </label>
-                </div>
+            </div>
+            
+            <div class="form-group checkbox-group" style="margin-top: 10px;">
+                <label for="quickEditActive">
+                    <input type="checkbox" id="quickEditActive" name="is_active">
+                    <span>Activo en catálogo</span>
+                </label>
             </div>
             
             <div class="quick-edit-modal-footer">
@@ -687,11 +692,12 @@
     })();
 
     {% if request.user.is_superuser %}
-    function openQuickEditModal(productId, sku, name, price, stock, isActive) {
+    function openQuickEditModal(productId, sku, name, cost, price, stock, isActive) {
         document.getElementById('quickEditProductId').value = productId;
         document.getElementById('quickEditSku').value = sku;
         document.getElementById('quickEditName').value = name;
-        document.getElementById('quickEditPrice').value = parseFloat(price).toFixed(2);
+        document.getElementById('quickEditCost').value = (cost !== undefined && cost !== null && cost !== '') ? parseFloat(cost).toFixed(2) : '0.00';
+        document.getElementById('quickEditPrice').value = parseFloat(price || 0).toFixed(2);
         document.getElementById('quickEditStock').value = stock;
         document.getElementById('quickEditActive').checked = isActive;
         
@@ -701,6 +707,19 @@
     function closeQuickEditModal() {
         document.getElementById('quickEditModal').style.display = 'none';
     }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        const costInput = document.getElementById('quickEditCost');
+        const priceInput = document.getElementById('quickEditPrice');
+        if (costInput && priceInput) {
+            costInput.addEventListener('input', function() {
+                const costVal = parseFloat(this.value);
+                if (!isNaN(costVal)) {
+                    priceInput.value = (costVal * 2).toFixed(2);
+                }
+            });
+        }
+    });
 
     function submitQuickEdit(event) {
         event.preventDefault();
@@ -792,7 +811,7 @@
         // Update the edit button data attributes for next clicks!
         const editBtn = document.getElementById('quickEditDetailBtn');
         if (editBtn) {
-            editBtn.setAttribute('onclick', `openQuickEditModal('${productData.id}', '${productData.sku.replace(/'/g, "\\'")}', '${productData.name.replace(/'/g, "\\'")}', '${productData.price}', '${productData.stock}', ${productData.is_active})`);
+            editBtn.setAttribute('onclick', `openQuickEditModal('${productData.id}', '${productData.sku.replace(/'/g, "\\'")}', '${productData.name.replace(/'/g, "\\'")}', '${productData.cost}', '${productData.price}', '${productData.stock}', ${productData.is_active})`);
         }
     }
     {% endif %}

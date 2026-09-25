@@ -4,7 +4,7 @@ Catalog app views - Product listing and detail.
 import hashlib
 import json
 import re
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 from functools import lru_cache
 
 from django.contrib import messages
@@ -1018,8 +1018,8 @@ def catalog(request):
             item_map=price_item_map,
             context=pricing_context,
         )
-        product.base_price = pricing.base_price_with_tax
-        product.final_price = pricing.final_price_with_tax
+        product.base_price = pricing.base_price
+        product.final_price = pricing.final_price
         attach_product_category_context(product, category_path_map=category_path_map)
 
     expanded_category_ids = []
@@ -1196,8 +1196,8 @@ def product_detail(request, sku):
         price_list=price_list,
         context=pricing_context,
     )
-    final_price = pricing.final_price_with_tax
-    base_price = pricing.base_price_with_tax
+    final_price = pricing.final_price
+    base_price = pricing.base_price
     product_category_chips = build_product_category_chips(product, limit=6)
     linked_categories = [chip["category"] for chip in product_category_chips]
     primary_category = linked_categories[0] if linked_categories else None
@@ -1229,8 +1229,8 @@ def product_detail(request, sku):
                 item_map=related_price_map,
                 context=pricing_context,
             )
-            related_product.base_price = related_pricing.base_price_with_tax
-            related_product.final_price = related_pricing.final_price_with_tax
+            related_product.base_price = related_pricing.base_price
+            related_product.final_price = related_pricing.final_price
 
     description = (product.description or "").strip()
     from .services.presentation import diameter_label, safe_catalog_return_url
@@ -1806,8 +1806,8 @@ def brand_detail(request, brand_slug):
             item_map=price_item_map,
             context=pricing_context,
         )
-        product.base_price = pricing.base_price_with_tax
-        product.final_price = pricing.final_price_with_tax
+        product.base_price = pricing.base_price
+        product.final_price = pricing.final_price
 
     context = {
         "brand": brand,
@@ -1834,6 +1834,7 @@ def product_quick_edit(request, pk):
     
     sku = request.POST.get("sku", "").strip()
     name = request.POST.get("name", "").strip()
+    cost_raw = request.POST.get("cost", "").strip()
     price_raw = request.POST.get("price", "").strip()
     stock_raw = request.POST.get("stock", "").strip()
     is_active = request.POST.get("is_active") == "on" or request.POST.get("is_active") == "true"
@@ -1844,11 +1845,23 @@ def product_quick_edit(request, pk):
     # Check SKU uniqueness (excluding current product)
     if Product.objects.filter(sku__iexact=sku).exclude(pk=pk).exists():
         return JsonResponse({"success": False, "error": f"Ya existe un producto con el SKU '{sku}'."}, status=400)
-        
+
+    cost = None
+    if cost_raw:
+        try:
+            cost = Decimal(cost_raw)
+            if cost < 0:
+                raise ValueError
+        except Exception:
+            return JsonResponse({"success": False, "error": "El costo debe ser un número decimal válido mayor o igual a 0."}, status=400)
+
     try:
-        price = Decimal(price_raw)
-        if price < 0:
-            raise ValueError
+        if not price_raw and cost is not None:
+            price = (cost * Decimal("2")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        else:
+            price = Decimal(price_raw)
+            if price < 0:
+                raise ValueError
     except Exception:
         return JsonResponse({"success": False, "error": "El precio debe ser un número decimal válido mayor o igual a 0."}, status=400)
         
@@ -1860,6 +1873,8 @@ def product_quick_edit(request, pk):
     # Update product
     product.sku = sku
     product.name = name
+    if cost is not None:
+        product.cost = cost
     product.price = price
     product.stock = stock
     product.is_active = is_active
@@ -1883,6 +1898,7 @@ def product_quick_edit(request, pk):
             "id": product.id,
             "sku": product.sku,
             "name": product.name,
+            "cost": float(product.cost),
             "price": float(product.price),
             "stock": product.stock,
             "is_active": product.is_active

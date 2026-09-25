@@ -479,7 +479,7 @@
                     <article class="catalog-list-item animate-card-reveal" data-product-id="{{ product.id|unlocalize }}" style="animation-delay: {{ forloop.counter0|multiply:0.04 }}s;">
                         {% if request.user.is_superuser %}
                         <button class="quick-edit-badge-btn" 
-                                onclick="openQuickEditModal('{{ product.id|unlocalize }}', '{{ product.sku|escapejs }}', '{{ product.name|escapejs }}', '{{ product.price|unlocalize }}', '{{ product.stock|unlocalize }}', {% if product.is_active %}true{% else %}false{% endif %})" 
+                                onclick="openQuickEditModal('{{ product.id|unlocalize }}', '{{ product.sku|escapejs }}', '{{ product.name|escapejs }}', '{{ product.cost|default:0|unlocalize }}', '{{ product.price|unlocalize }}', '{{ product.stock|unlocalize }}', {% if product.is_active %}true{% else %}false{% endif %})" 
                                 title="Editar producto">
                             <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
                                 <path d="M4 20h4l11-11-4-4L4 16v4Z"></path>
@@ -519,7 +519,7 @@
 
                         <div class="catalog-list-pricebox">
                             {% if show_prices %}
-                                <span class="catalog-price-caption">Precio final · IVA incluido</span>
+                                <span class="catalog-price-caption">Precio Neto + IVA</span>
                                 {% if discount %}
                                 <span class="catalog-list-muted">Lista ${{ product.base_price|default:product.price|floatformat:2 }}</span>
                                 <span class="catalog-list-discount">{{ discount|multiply:100|floatformat:0 }}% OFF</span>
@@ -559,7 +559,7 @@
                     <article class="{% if view_mode == 'list' %}product-list-row{% else %}product-card{% endif %}{% if not product.image %} product-card-no-image{% endif %} animate-card-reveal" data-product-id="{{ product.id|unlocalize }}" style="animation-delay: {{ forloop.counter0|multiply:0.04 }}s;">
                         {% if request.user.is_superuser %}
                         <button class="quick-edit-badge-btn" 
-                                onclick="openQuickEditModal('{{ product.id|unlocalize }}', '{{ product.sku|escapejs }}', '{{ product.name|escapejs }}', '{{ product.price|unlocalize }}', '{{ product.stock|unlocalize }}', {% if product.is_active %}true{% else %}false{% endif %})" 
+                                onclick="openQuickEditModal('{{ product.id|unlocalize }}', '{{ product.sku|escapejs }}', '{{ product.name|escapejs }}', '{{ product.cost|default:0|unlocalize }}', '{{ product.price|unlocalize }}', '{{ product.stock|unlocalize }}', {% if product.is_active %}true{% else %}false{% endif %})" 
                                 title="Editar producto">
                             <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
                                 <path d="M4 20h4l11-11-4-4L4 16v4Z"></path>
@@ -602,7 +602,7 @@
                             {% endif %}
 
                             {% if show_prices %}
-                            <div class="product-pricing-details"><small class="catalog-price-caption">Precio final · IVA incluido</small>
+                            <div class="product-pricing-details"><small class="catalog-price-caption">Precio Neto + IVA</small>
                                 {% if discount %}
                                 <div class="price-row list-price">
                                     <span class="label">Precio lista</span>
@@ -961,15 +961,20 @@
             
             <div class="form-group-row">
                 <div class="form-group">
-                    <label for="quickEditPrice">Precio de Lista</label>
+                    <label for="quickEditCost">Precio de Costo</label>
+                    <input type="number" id="quickEditCost" name="cost" step="0.01" class="form-control" placeholder="0.00">
+                </div>
+                <div class="form-group">
+                    <label for="quickEditPrice">Precio de Venta (Neto)</label>
                     <input type="number" id="quickEditPrice" name="price" step="0.01" required class="form-control">
                 </div>
-                <div class="form-group checkbox-group">
-                    <label for="quickEditActive">
-                        <input type="checkbox" id="quickEditActive" name="is_active">
-                        <span>Activo en catálogo</span>
-                    </label>
-                </div>
+            </div>
+            
+            <div class="form-group checkbox-group" style="margin-top: 10px;">
+                <label for="quickEditActive">
+                    <input type="checkbox" id="quickEditActive" name="is_active">
+                    <span>Activo en catálogo</span>
+                </label>
             </div>
             
             <div class="quick-edit-modal-footer">
@@ -981,11 +986,12 @@
 </div>
 
 <script>
-function openQuickEditModal(productId, sku, name, price, stock, isActive) {
+function openQuickEditModal(productId, sku, name, cost, price, stock, isActive) {
     document.getElementById('quickEditProductId').value = productId;
     document.getElementById('quickEditSku').value = sku;
     document.getElementById('quickEditName').value = name;
-    document.getElementById('quickEditPrice').value = parseFloat(price).toFixed(2);
+    document.getElementById('quickEditCost').value = (cost !== undefined && cost !== null && cost !== '') ? parseFloat(cost).toFixed(2) : '0.00';
+    document.getElementById('quickEditPrice').value = parseFloat(price || 0).toFixed(2);
     document.getElementById('quickEditStock').value = stock;
     document.getElementById('quickEditActive').checked = isActive;
     
@@ -995,6 +1001,19 @@ function openQuickEditModal(productId, sku, name, price, stock, isActive) {
 function closeQuickEditModal() {
     document.getElementById('quickEditModal').style.display = 'none';
 }
+
+document.addEventListener('DOMContentLoaded', function() {
+    const costInput = document.getElementById('quickEditCost');
+    const priceInput = document.getElementById('quickEditPrice');
+    if (costInput && priceInput) {
+        costInput.addEventListener('input', function() {
+            const costVal = parseFloat(this.value);
+            if (!isNaN(costVal)) {
+                priceInput.value = (costVal * 2).toFixed(2);
+            }
+        });
+    }
+});
 
 function submitQuickEdit(event) {
     event.preventDefault();
@@ -1082,6 +1101,12 @@ function updateProductCardOnPage(productId, productData) {
             card.style.opacity = '0.5';
         } else {
             card.style.opacity = '1';
+        }
+
+        // Update the edit button data attributes for next clicks
+        const editBtn = card.querySelector('.quick-edit-badge-btn');
+        if (editBtn) {
+            editBtn.setAttribute('onclick', `openQuickEditModal('${productData.id}', '${productData.sku.replace(/'/g, "\\'")}', '${productData.name.replace(/'/g, "\\'")}', '${productData.cost}', '${productData.price}', '${productData.stock}', ${productData.is_active})`);
         }
     });
 }

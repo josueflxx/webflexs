@@ -44,7 +44,7 @@ class PublicClarityTests(TestCase):
         for view in ['list', 'grid']:
             response = self.client.get(reverse('catalog'), {'view': view})
             self.assertContains(response, 'Por encargo')
-            self.assertContains(response, 'Precio final · IVA incluido')
+            self.assertContains(response, 'Precio Neto + IVA')
             parser = Buttons()
             parser.feed(response.content.decode())
             self.assertTrue(parser.cart)
@@ -62,7 +62,7 @@ class PublicClarityTests(TestCase):
         response = self.client.get(reverse('product_detail', args=[self.product.sku]), {'next': origin})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.context['catalog_return_url'], origin)
-        self.assertEqual(response.context['final_price'], Decimal('8773.30'))
+        self.assertEqual(response.context['final_price'], Decimal('7250.66'))
         for text in ['3/4″ (pulgadas)', '75 mm', '120 mm', 'Por encargo', 'Volver a los resultados']:
             self.assertContains(response, text)
         self.assertNotContains(response, 'Stock:')

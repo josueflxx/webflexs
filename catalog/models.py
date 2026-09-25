@@ -8,7 +8,7 @@ from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db.models import Q
 from django.utils import timezone
 from django.utils.text import slugify
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 import re
 import uuid
 
@@ -550,6 +550,11 @@ class Product(models.Model):
 
     def __str__(self):
         return f"{self.sku} - {self.name}"
+
+    def save(self, *args, **kwargs):
+        if self.cost and (not self.price or self.price == Decimal("0.00")):
+            self.price = (Decimal(str(self.cost)) * Decimal("2")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        super().save(*args, **kwargs)
 
     def get_discounted_price(self, discount_percentage):
         if discount_percentage:

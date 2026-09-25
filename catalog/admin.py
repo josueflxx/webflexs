@@ -1,3 +1,4 @@
+from decimal import Decimal, ROUND_HALF_UP
 from django.contrib import admin
 from .models import (
     Category, CategoryAttribute, Product, ProductImage, ClampSpecs, Supplier, PriceList, PriceListItem,
@@ -75,6 +76,12 @@ class ProductAdmin(admin.ModelAdmin):
     def categories_display(self, obj):
         return ", ".join(obj.categories.values_list('name', flat=True)[:4]) or "-"
     categories_display.short_description = "Categorias"
+
+    def save_model(self, request, obj, form, change):
+        if 'cost' in form.changed_data and 'price' not in form.changed_data:
+            if obj.cost:
+                obj.price = (Decimal(str(obj.cost)) * Decimal("2")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        super().save_model(request, obj, form, change)
 
 
 @admin.register(Supplier)

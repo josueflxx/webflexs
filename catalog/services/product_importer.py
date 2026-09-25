@@ -101,7 +101,6 @@ class ProductImporter(BaseImporter):
         12,  # M - Stock ideal
         13,  # N - Stock minimo
         14,  # O - Unidad
-        17,  # R - Costo
         18,  # S - Utilidad
         21,  # V - Controla stock
         22,  # W - Stock negativo
@@ -617,7 +616,17 @@ class ProductImporter(BaseImporter):
             errors.append("Precio requerido para producto nuevo")
             return None
         try:
-            return parse_decimal(raw, field_label=field_label, min_value=0)
+            parsed_price = parse_decimal(raw, field_label=field_label, min_value=0)
+            if parsed_price == 0:
+                cost_raw = row.get("costo")
+                if not is_blank(cost_raw):
+                    try:
+                        cost_val = parse_decimal(cost_raw, field_label="Costo", min_value=0)
+                        if cost_val > 0:
+                            return (cost_val * Decimal("2")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+                    except ValueError:
+                        pass
+            return parsed_price
         except ValueError as exc:
             errors.append(str(exc))
             return None

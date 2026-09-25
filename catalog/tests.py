@@ -585,7 +585,7 @@ class ProductImportTests(CatalogTestCase):
         product = Product.objects.get(sku="SAAS-FIXED-001")
         self.assertEqual(product.name, "Producto SaaS seguro")
         self.assertEqual(product.price, Decimal("10000.00"))
-        self.assertEqual(product.cost, Decimal("0.00"))
+        self.assertEqual(product.cost, Decimal("1000.00"))
         self.assertEqual(product.stock, 0)
         self.assertEqual(product.supplier, "Proveedor Seguro")
         self.assertEqual(product.description, "")

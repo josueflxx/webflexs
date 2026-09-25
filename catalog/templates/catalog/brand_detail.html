@@ -172,7 +172,7 @@
                 <div class="bc-product-meta"><span class="bc-sku">{{ product.sku }}</span><span class="bc-stock is-order">Por encargo</span></div>
                 <h3><a href="{% product_detail_link product request %}">{{ product.name }}</a></h3>
             </div>
-            <div class="bc-price">{% if show_prices %}<small>Precio final · IVA incluido</small>{% endif %}
+            <div class="bc-price">{% if show_prices %}<small>Precio Neto + IVA</small>{% endif %}
                 {% if show_prices %}
                     {% if discount %}<span class="bc-list-price">Lista &#36;{{ product.base_price|default:product.price|floatformat:2 }}</span><strong>&#36;{{ product.final_price|floatformat:2 }}</strong><small>{{ discount|multiply:100|floatformat:0 }}% de descuento</small>
                     {% else %}<small>Precio</small><strong>&#36;{{ product.base_price|default:product.price|floatformat:2 }}</strong>{% endif %}

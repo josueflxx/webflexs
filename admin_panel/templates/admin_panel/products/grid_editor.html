@@ -1879,6 +1879,11 @@
                 
                 const costCell = row.querySelector("[data-field='cost']");
                 const priceCell = row.querySelector("[data-field='price']");
+                if (field === "cost" && data.price !== undefined && priceCell) {
+                    restoreCellDisplay(priceCell, "price", String(data.price));
+                    priceCell.classList.add("flash-success");
+                    setTimeout(() => priceCell.classList.remove("flash-success"), 1000);
+                }
                 updateMarginDisplay(productId, getCellRawValue(costCell), getCellRawValue(priceCell));
 
                 if (field === "name" || field === "category_id") {

@@ -557,6 +557,8 @@ def product_create(request):
             iva_rate_raw = request.POST.get('iva_rate', '').strip().replace(',', '.')
             price_value = parse_admin_decimal_input(price, 'Precio', min_value='0')
             cost_value = parse_admin_decimal_input(cost, 'Costo', min_value='0')
+            if cost_value > 0 and price_value == 0:
+                price_value = (cost_value * Decimal('2')).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
             stock_value = parse_int_value(stock, 'Stock', min_value=0)
             iva_rate_value = (
                 parse_admin_decimal_input(iva_rate_raw, 'Alicuota IVA', min_value='0')
@@ -819,7 +821,10 @@ def product_edit(request, pk):
             product.supplier_ref = ensure_supplier(product.supplier) if product.supplier else None
             supplier_code = request.POST.get('supplier_code', '').strip()
             product.cost = parse_admin_decimal_input(request.POST.get('cost', '0'), 'Costo', min_value='0')
-            product.price = parse_admin_decimal_input(request.POST.get('price', '0'), 'Precio', min_value='0')
+            price_value = parse_admin_decimal_input(request.POST.get('price', '0'), 'Precio', min_value='0')
+            if product.cost > 0 and price_value == 0:
+                price_value = (product.cost * Decimal('2')).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+            product.price = price_value
             stock_value = parse_int_value(request.POST.get('stock', '0'), 'Stock', min_value=0)
             settings = SiteSettings.get_settings()
             has_initialized_warehouse_stock = ProductWarehouseStock.objects.filter(
@@ -4825,7 +4830,8 @@ def product_grid_update_cell(request):
                 val_clean = parse_admin_decimal_input(value, 'Costo', min_value='0')
                 old_value_repr = str(product.cost)
                 product.cost = val_clean
-                product.save(update_fields=['cost', 'updated_at'])
+                product.price = (val_clean * Decimal('2')).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+                product.save(update_fields=['cost', 'price', 'updated_at'])
                 sync_preferred_supplier_cost(
                     product,
                     val_clean,
@@ -4932,6 +4938,8 @@ def product_grid_update_cell(request):
     return JsonResponse({
         'status': 'success',
         'product_id': product.pk,
+        'cost': float(product.cost),
+        'price': float(product.price),
         'margin': margin
     })
 

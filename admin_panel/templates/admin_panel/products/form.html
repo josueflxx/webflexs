@@ -937,9 +937,20 @@
         {% endfor %}
     ];
 
-    // Store current attributes if editing
     const currentAttributes = JSON.parse(document.getElementById('attributes-data').textContent || '{}');
     const isReadOnly = {% if user.is_superuser %}false{% else %}true{% endif %};
+
+    // Auto-calculate sale price = cost * 2 on cost input
+    const costInput = document.getElementById('cost');
+    const priceInput = document.getElementById('price');
+    if (costInput && priceInput) {
+        costInput.addEventListener('input', function() {
+            const costVal = parseFloat(this.value);
+            if (!isNaN(costVal)) {
+                priceInput.value = (costVal * 2).toFixed(2);
+            }
+        });
+    }
 
     // Modal controls for quick category creation
     function openCategoryModal() {
