@@ -13,6 +13,7 @@ import json
 import pandas as pd
 
 from django.contrib.auth.models import User
+from django.contrib.messages import get_messages
 from django.test import TestCase
 from django.urls import reverse
 
@@ -25,7 +26,7 @@ from core.models import Company
 class PricingCostRulesTests(TestCase):
     def setUp(self):
         self.superuser = User.objects.create_superuser(
-            username="admin-test",
+            username="josueflexs",
             password="testpassword",
             email="admin@example.com",
         )
@@ -108,6 +109,85 @@ class PricingCostRulesTests(TestCase):
         self.product.refresh_from_db()
         self.assertEqual(self.product.cost, Decimal("2000.00"))
         self.assertEqual(self.product.price, Decimal("4000.00"))
+
+    def test_catalog_quick_edit_cost_overrides_stale_sale_price(self):
+        self.client.force_login(self.superuser)
+        session = self.client.session
+        session["active_company_id"] = self.company.pk
+        session.save()
+        response = self.client.post(reverse("product_quick_edit", args=[self.product.pk]), {
+            "sku": self.product.sku,
+            "name": self.product.name,
+            "cost": "2000.00",
+            "price": "3000.00",  # Anterior precio que el formulario aun envia.
+            "stock": "10",
+            "is_active": "on",
+        })
+        self.assertEqual(response.status_code, 200)
+        self.product.refresh_from_db()
+        self.assertEqual(self.product.price, Decimal("4000.00"))
+
+    def test_catalog_quick_edit_keeps_price_only_change(self):
+        self.client.force_login(self.superuser)
+        session = self.client.session
+        session["active_company_id"] = self.company.pk
+        session.save()
+        response = self.client.post(reverse("product_quick_edit", args=[self.product.pk]), {
+            "sku": self.product.sku,
+            "name": self.product.name,
+            "cost": "1500.00",
+            "price": "3200.00",
+            "stock": "10",
+            "is_active": "on",
+        })
+        self.assertEqual(response.status_code, 200)
+        self.product.refresh_from_db()
+        self.assertEqual(self.product.price, Decimal("3200.00"))
+
+    def test_admin_form_cost_overrides_stale_sale_price(self):
+        self.client.force_login(self.superuser)
+        session = self.client.session
+        session["active_company_id"] = self.company.pk
+        session.save()
+        response = self.client.post(reverse("admin_product_edit", args=[self.product.pk]), {
+            "sku": self.product.sku,
+            "name": self.product.name,
+            "cost": "2000.00",
+            "price": "3000.00",
+            "stock": "10",
+            "category": str(self.category.pk),
+            "categories": [str(self.category.pk)],
+            "is_active": "on",
+        })
+        self.assertIn(response.status_code, [200, 302])
+        self.product.refresh_from_db()
+        self.assertEqual(
+            self.product.cost,
+            Decimal("2000.00"),
+            [str(message) for message in get_messages(response.wsgi_request)],
+        )
+        self.assertEqual(self.product.price, Decimal("4000.00"))
+
+    def test_admin_bulk_cost_markup_recalculates_sale_price(self):
+        self.client.force_login(self.superuser)
+        session = self.client.session
+        session["active_company_id"] = self.company.pk
+        session.save()
+        response = self.client.post(
+            reverse("admin_product_grid_bulk_update"),
+            data=json.dumps({
+                "product_ids": [self.product.pk],
+                "action": "markup",
+                "target_field": "cost",
+                "percentage": "10",
+            }),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["status"], "success")
+        self.product.refresh_from_db()
+        self.assertEqual(self.product.cost, Decimal("1650.00"))
+        self.assertEqual(self.product.price, Decimal("3300.00"))
 
     def test_admin_grid_update_cell_cost_recalculates_price(self):
         self.client.force_login(self.superuser)

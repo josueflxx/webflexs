@@ -967,6 +967,7 @@
                 <div class="form-group">
                     <label for="quickEditPrice">Precio de Venta (Neto)</label>
                     <input type="number" id="quickEditPrice" name="price" step="0.01" required class="form-control">
+                    <small>Al cambiar el costo, la venta se recalcula como costo × 2; el IVA se agrega por separado.</small>
                 </div>
             </div>
             
@@ -1051,7 +1052,8 @@ function submitQuickEdit(event) {
             } else {
                 alert('Producto actualizado correctamente');
             }
-            updateProductCardOnPage(productId, data.product);
+            // Recompute price-list overrides and client discounts on the server.
+            window.location.reload();
         } else {
             if (window.showFLEXSToast) {
                 window.showFLEXSToast('Error', data.error || 'Error al guardar el producto', 'error');

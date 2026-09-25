@@ -1856,7 +1856,7 @@ def product_quick_edit(request, pk):
             return JsonResponse({"success": False, "error": "El costo debe ser un número decimal válido mayor o igual a 0."}, status=400)
 
     try:
-        if not price_raw and cost is not None:
+        if cost is not None and (cost != product.cost or not price_raw):
             price = (cost * Decimal("2")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
         else:
             price = Decimal(price_raw)

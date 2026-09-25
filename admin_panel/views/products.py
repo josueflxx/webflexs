@@ -557,7 +557,7 @@ def product_create(request):
             iva_rate_raw = request.POST.get('iva_rate', '').strip().replace(',', '.')
             price_value = parse_admin_decimal_input(price, 'Precio', min_value='0')
             cost_value = parse_admin_decimal_input(cost, 'Costo', min_value='0')
-            if cost_value > 0 and price_value == 0:
+            if cost_value > 0:
                 price_value = (cost_value * Decimal('2')).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
             stock_value = parse_int_value(stock, 'Stock', min_value=0)
             iva_rate_value = (
@@ -820,9 +820,10 @@ def product_edit(request, pk):
             product.supplier = clean_supplier_name(request.POST.get('supplier', ''))
             product.supplier_ref = ensure_supplier(product.supplier) if product.supplier else None
             supplier_code = request.POST.get('supplier_code', '').strip()
+            previous_cost = product.cost
             product.cost = parse_admin_decimal_input(request.POST.get('cost', '0'), 'Costo', min_value='0')
             price_value = parse_admin_decimal_input(request.POST.get('price', '0'), 'Precio', min_value='0')
-            if product.cost > 0 and price_value == 0:
+            if product.cost != previous_cost or (product.cost > 0 and price_value == 0):
                 price_value = (product.cost * Decimal('2')).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
             product.price = price_value
             stock_value = parse_int_value(request.POST.get('stock', '0'), 'Stock', min_value=0)
@@ -1133,6 +1134,7 @@ def product_supplier_offer_save(request, pk):
         if price_list_date_raw and price_list_date is None:
             raise ValueError("Fecha de lista invalida.")
 
+        previous_cost = product.cost
         offer, history = upsert_product_supplier_offer(
             product=product,
             supplier=supplier,
@@ -1156,6 +1158,10 @@ def product_supplier_offer_save(request, pk):
             match_method="manual",
             notes=request.POST.get("notes", "").strip(),
         )
+        product.refresh_from_db(fields=["cost"])
+        if product.cost != previous_cost:
+            product.price = (product.cost * Decimal('2')).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+            product.save(update_fields=["price", "updated_at"])
     except Exception as exc:
         messages.error(request, f"No se pudo guardar la relacion: {exc}")
         return redirect("admin_product_edit", pk=product.pk)
@@ -5142,7 +5148,11 @@ def product_grid_bulk_update(request):
                     if new_val < Decimal('0.00'):
                         new_val = Decimal('0.00')
                     setattr(prod, target_field, new_val)
-                    prod.save(update_fields=[target_field, 'updated_at'])
+                    update_fields = [target_field, 'updated_at']
+                    if target_field == 'cost':
+                        prod.price = (new_val * Decimal('2')).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+                        update_fields.append('price')
+                    prod.save(update_fields=update_fields)
                     if target_field == 'cost':
                         sync_preferred_supplier_cost(
                             prod,
@@ -5458,5 +5468,4 @@ def product_grid_remove_brand_association(request):
 
 
 __all__ = ['product_list', 'product_workspace', 'product_create', 'product_edit', 'product_supplier_offer_save', 'product_duplicate_reviews', 'product_duplicate_review_decision', 'product_delete', 'product_toggle_active', 'product_bulk_category_update', 'product_bulk_status_update', 'product_bulk_image_update', 'product_bulk_brand_update', 'supplier_list', 'supplier_detail', 'supplier_bulk_action', 'supplier_export', 'supplier_print', 'supplier_unassigned', 'supplier_toggle_active', 'category_list', 'category_reorder', 'category_sort_roots_alpha', 'category_bulk_status', 'category_create', 'category_create_ajax', 'category_edit', 'category_move', 'category_delete', 'category_attribute_create', 'category_attribute_edit', 'category_attribute_delete', 'category_manage_products', 'category_products_reorder', 'get_category_attributes', 'parse_product_description', 'parse_clamp_code_api', 'products_uncategorized', 'import_triler_excel', 'rollback_movigom_import', 'product_grid_editor', 'product_grid_update_cell', 'product_grid_bulk_update', 'product_grid_add_brand_association', 'product_grid_remove_brand_association']
-
 

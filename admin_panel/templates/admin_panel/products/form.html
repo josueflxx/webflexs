@@ -146,7 +146,7 @@
         </div>
 
         <div class="form-group">
-            <label for="price" class="form-label">Precio de venta *</label>
+            <label for="price" class="form-label">Precio de venta neto *</label>
             <input type="number" 
                    step="0.01" 
                    name="price" 
@@ -155,7 +155,7 @@
                    required 
                    value="{% if product %}{{ product.price|unlocalize }}{% else %}0{% endif %}" 
                    {% if not user.is_superuser %}disabled{% endif %}>
-            
+            <small class="text-muted">Al cambiar el costo, la venta se recalcula como costo × 2. El IVA se agrega por separado.</small>
         </div>
 
         <input type="hidden" name="iva_rate" id="iva_rate" value="{% if product and product.iva_rate is not None %}{{ product.iva_rate|unlocalize }}{% else %}21.00{% endif %}">
