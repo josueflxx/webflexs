@@ -571,18 +571,29 @@ CELERY_TASK_DEFAULT_QUEUE = os.getenv("CELERY_TASK_DEFAULT_QUEUE", "flexs-defaul
 CELERY_TASK_ALWAYS_EAGER = os.getenv("CELERY_TASK_ALWAYS_EAGER", "False").lower() == "true"
 CELERY_TASK_EAGER_PROPAGATES = os.getenv("CELERY_TASK_EAGER_PROPAGATES", "False").lower() == "true"
 
+BACKUP_ROOT = Path(os.getenv("BACKUP_ROOT", str(BASE_DIR / "backups" / "automatic")))
+BACKUP_RETENTION_DAYS = max(_env_int("BACKUP_RETENTION_DAYS", 30), 1)
+BACKUP_RETENTION_ENABLED = os.getenv("BACKUP_RETENTION_ENABLED", "True").lower() == "true"
+BACKUP_MIN_COPIES = max(_env_int("BACKUP_MIN_COPIES", 3), 1)
+BACKUP_INCLUDE_MEDIA = os.getenv("BACKUP_INCLUDE_MEDIA", "True").lower() == "true"
+BACKUP_EXECUTION_MODE = os.getenv("BACKUP_EXECUTION_MODE", "worker").strip().lower()
+BACKUP_SCHEDULE_ENABLED = os.getenv("BACKUP_SCHEDULE_ENABLED", "True").lower() == "true"
+BACKUP_SCHEDULE_HOUR = max(min(_env_int("BACKUP_SCHEDULE_HOUR", 2), 23), 0)
+BACKUP_SCHEDULE_MINUTE = max(min(_env_int("BACKUP_SCHEDULE_MINUTE", 30), 59), 0)
+BACKUP_MAX_AGE_HOURS = max(_env_int("BACKUP_MAX_AGE_HOURS", 26), 1)
+BACKUP_TIMEOUT_SECONDS = max(_env_int("BACKUP_TIMEOUT_SECONDS", 1800), 60)
+BACKUP_MIN_FREE_MB = max(_env_int("BACKUP_MIN_FREE_MB", 256), 0)
+BACKUP_PG_DUMP_BINARY = os.getenv("BACKUP_PG_DUMP_BINARY", "pg_dump")
+BACKUP_PG_RESTORE_BINARY = os.getenv("BACKUP_PG_RESTORE_BINARY", "pg_restore")
+BACKUP_RESTIC_BINARY = os.getenv("BACKUP_RESTIC_BINARY", "restic")
+BACKUP_OFFSITE_REPOSITORY = os.getenv("BACKUP_OFFSITE_REPOSITORY", "").strip()
+BACKUP_OFFSITE_PASSWORD_FILE = os.getenv("BACKUP_OFFSITE_PASSWORD_FILE", "").strip()
+
 from celery.schedules import crontab
 CELERY_BEAT_SCHEDULE = {
     "retry_stuck_fiscal_documents": {
         "task": "core.retry_stuck_fiscal_documents_task",
         "schedule": crontab(minute="*/10"),
-    },
-    "automatic_system_backup": {
-        "task": "core.create_automatic_backup_task",
-        "schedule": crontab(
-            hour=max(min(_env_int("BACKUP_SCHEDULE_HOUR", 2), 23), 0),
-            minute=max(min(_env_int("BACKUP_SCHEDULE_MINUTE", 30), 59), 0),
-        ),
     },
     "retry_pending_webhooks": {
         "task": "core.retry_pending_webhooks_task",
@@ -590,9 +601,11 @@ CELERY_BEAT_SCHEDULE = {
     },
 }
 
-BACKUP_ROOT = Path(os.getenv("BACKUP_ROOT", str(BASE_DIR / "backups" / "automatic")))
-BACKUP_RETENTION_DAYS = max(_env_int("BACKUP_RETENTION_DAYS", 30), 1)
-BACKUP_INCLUDE_MEDIA = os.getenv("BACKUP_INCLUDE_MEDIA", "True").lower() == "true"
+if BACKUP_EXECUTION_MODE == "celery" and BACKUP_SCHEDULE_ENABLED:
+    CELERY_BEAT_SCHEDULE["automatic_system_backup"] = {
+        "task": "core.create_automatic_backup_task",
+        "schedule": crontab(hour=BACKUP_SCHEDULE_HOUR, minute=BACKUP_SCHEDULE_MINUTE),
+    }
 WEBHOOK_ALLOW_INSECURE_URLS = os.getenv("WEBHOOK_ALLOW_INSECURE_URLS", str(DEBUG)).lower() == "true"
 WEBHOOK_ALLOW_PRIVATE_TARGETS = os.getenv("WEBHOOK_ALLOW_PRIVATE_TARGETS", "False").lower() == "true"
 WEBHOOK_MAX_ATTEMPTS = max(_env_int("WEBHOOK_MAX_ATTEMPTS", 6), 1)

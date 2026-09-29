@@ -1,0 +1,10 @@
+[Unit]
+Description=Weekly FLEXS recovery test
+
+[Timer]
+OnCalendar=Sun *-*-* 03:30:00 America/Argentina/Buenos_Aires
+Persistent=true
+Unit=webflexs-backup-restore.service
+
+[Install]
+WantedBy=timers.target

@@ -221,9 +221,13 @@ def retry_stuck_fiscal_documents_task():
 
 
 @shared_task(name="core.create_automatic_backup_task")
-def create_automatic_backup_task():
-    """Create the scheduled portable backup and enforce retention."""
-    from core.services.backups import create_system_backup
+def create_automatic_backup_task(run_id=None):
+    """Run a durable request or create a scheduled backup."""
+    from core.services.backups import create_system_backup, execute_backup_job
+
+    if run_id:
+        result = execute_backup_job(run_id)
+        return {key: result.get(key) for key in ('id', 'status', 'manifest_name', 'error')}
 
     result = create_system_backup()
     return {

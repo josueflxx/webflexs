@@ -1,0 +1,11 @@
+[Unit]
+Description=Process pending FLEXS backups every minute
+
+[Timer]
+OnBootSec=45s
+OnUnitInactiveSec=60s
+AccuracySec=10s
+Unit=webflexs-backup.service
+
+[Install]
+WantedBy=timers.target
