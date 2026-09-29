@@ -1,7 +1,7 @@
 {% extends 'admin_panel/base.html' %}
 {% load static %}
 {% block page_title %}Copias de seguridad{% endblock %}
-{% block extra_css %}<link rel="stylesheet" href="{% static 'core/css/admin_backups.css' %}?v=20260929-1">{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'core/css/admin_backups.css' %}?v=20260929-2">{% endblock %}
 {% block content %}
 <div class="backup-center">
     <section class="backup-hero">
@@ -10,7 +10,7 @@
             <h1>Copias de seguridad</h1>
             <p>Consultá qué se guardó, comprobá cada copia y seguí su resultado. Los respaldos incluyen datos de todas las empresas de esta instalación.</p>
         </div>
-        <form method="post" action="{% url 'admin_backup_run' %}" class="backup-create">
+        <form method="post" action="{% url 'admin_backup_run' %}" class="backup-create" onsubmit="const btn=this.querySelector('button'); if(btn){ btn.disabled=true; btn.textContent='Enviando...'; }">
             {% csrf_token %}<input type="hidden" name="action" value="backup">
             <button class="btn btn-primary" type="submit" {% if backup_storage_error or has_active_backup_jobs %}disabled{% endif %}>
                 {% if has_active_backup_jobs %}Solicitud en curso{% else %}Crear copia ahora{% endif %}
@@ -87,7 +87,7 @@
                         {% if row.restore_status == 'running' %}<small class="backup-muted">Prueba de recuperación en curso</small>{% elif row.restore_status == 'failed' %}<small class="backup-warning-text">Falló la prueba de recuperación</small>{% elif row.restore_datetime %}<small class="backup-restore-ok">Recuperación probada: {{ row.restore_datetime|date:"d/m/Y" }}</small>{% else %}<small class="backup-muted">Recuperación todavía no probada</small>{% endif %}
                     </td>
                     <td><div class="backup-files">{% for file in row.artifacts %}<a class="backup-file-link" href="{% url 'admin_backup_center' %}?download={{ row.manifest_name|urlencode }}&amp;file={{ file.name|urlencode }}" title="{{ file.name }}" download><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M5 16v5h14v-5"/></svg>{% if file.format == 'media_tar_gzip' or '_media.' in file.name %}Imágenes y archivos{% else %}Base de datos{% endif %}<small>{{ file.size|filesizeformat }}</small></a>{% endfor %}</div>
-                    <form method="post" action="{% url 'admin_backup_run' %}">{% csrf_token %}<input type="hidden" name="action" value="verify"><input type="hidden" name="manifest" value="{{ row.manifest_name }}"><button type="submit" class="backup-verify" {% if has_active_backup_jobs %}disabled{% endif %}>Comprobar archivos</button></form>
+                    <form method="post" action="{% url 'admin_backup_run' %}" onsubmit="const btn=this.querySelector('button'); if(btn){ btn.disabled=true; btn.textContent='Comprobando...'; }">{% csrf_token %}<input type="hidden" name="action" value="verify"><input type="hidden" name="manifest" value="{{ row.manifest_name }}"><button type="submit" class="backup-verify" {% if has_active_backup_jobs %}disabled{% endif %}>Comprobar archivos</button></form>
                     <a class="backup-manifest" href="{% url 'admin_backup_center' %}?download={{ row.manifest_name|urlencode }}&amp;file={{ row.manifest_name|urlencode }}" download>Descargar comprobante SHA-256</a>
                     </td>
                 </tr>
